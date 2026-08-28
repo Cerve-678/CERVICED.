@@ -11,7 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
 
 const LIGHT = {
   bg:      '#F5F1EC',
@@ -56,6 +55,7 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P }: Option
     <Icon name="chevron-right" size={18} color={P.sub} style={{ opacity: 0.4 }} />
   </TouchableOpacity>
 ));
+SettingsOption.displayName = 'SettingsOption';
 
 export default function BusinessProfileScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
@@ -105,7 +105,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
             <SettingsOption
               icon="badge"
               title="Business Details"
-              subtitle="Business name, Instagram, website, contact"
+              subtitle="Identity, practice, credentials & accessibility"
               onPress={() => navigation.navigate('BusinessDetails')}
               P={P}
             />

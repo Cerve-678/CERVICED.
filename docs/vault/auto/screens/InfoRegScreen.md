@@ -1,13 +1,13 @@
 ---
-tags: [screen, client]
+tags: [screen, provider]
 ---
 # InfoRegScreen
-#screen · `src/screens/shared/InfoRegScreen.tsx`
+#screen · `src/screens/provider/InfoRegScreen.tsx`
 
 **Registered route(s):** `EditProfile`, `InfoReg`
 
 ## → Navigates to
-- _— none —_
+- [[ProviderIntakeFormScreen\|ProviderIntakeForm]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

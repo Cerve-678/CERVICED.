@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   PROVIDER_THEMES,
@@ -27,7 +26,8 @@ import {
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import { uploadToStorage } from '../../services/providerRegistrationService';
-import { getProviderBrandingByUserId, updateProviderBranding } from '../../services/databaseService';
+import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
+import { toUserMessage } from '../../utils/userFacingError';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -79,13 +79,10 @@ export default function BrandingScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        setUserId(user.id);
-
-        const data = await getProviderBrandingByUserId(user.id);
+        const data = await getMyProviderBranding();
 
         if (data) {
+          setUserId(data.userId);
           setProviderId(data.id);
           if (data.gradient && data.gradient.length >= 2) {
             setGradient(data.gradient as [string, string, ...string[]]);
@@ -132,7 +129,7 @@ export default function BrandingScreen({ navigation }: any) {
       const url = await uploadBackgroundImage(userId, result.assets[0].uri);
       setBackgroundImage(url);
     } catch (e: any) {
-      Alert.alert('Upload failed', e.message);
+      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'BrandingScreen.upload'));
     } finally {
       setUploadingImage(false);
     }
@@ -153,11 +150,15 @@ export default function BrandingScreen({ navigation }: any) {
       const isCustom = themeChoice === 'custom';
       const preset = PROVIDER_THEMES.find(t => t.key === themeChoice);
       const resolvedAccent = isCustom ? customAccent : preset?.tokens.accent ?? accentColor;
-      const resolvedBackdrop = isCustom ? customBackdrop : preset?.tokens.hero ?? SHEET_BG;
+      // Presets with a genuine two-tone gradient (Sunset, Aurora, etc.) keep their
+      // own colour-to-colour blend; everything else falls back to backdrop→sheet.
+      const resolvedGradient: [string, string] = isCustom
+        ? [customBackdrop, sheetColor]
+        : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
       await updateProviderBranding(providerId, {
-        gradient: [resolvedBackdrop, sheetColor],
+        gradient: resolvedGradient,
         accent_color: resolvedAccent,
         background_image_url: backgroundImage,
         profile_theme: encodeThemeKey(baseKey, sheetColor),
@@ -166,7 +167,7 @@ export default function BrandingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Save failed', e.message);
+      Alert.alert('Save failed', toUserMessage(e, 'Could not save your changes.', 'BrandingScreen.save'));
     } finally {
       setSaving(false);
     }
@@ -181,9 +182,12 @@ export default function BrandingScreen({ navigation }: any) {
     setSheetColor(next.sheetColor);
     const preset = PROVIDER_THEMES.find(t => t.key === next.themeChoice);
     const accent = next.themeChoice === 'custom' ? next.customAccent : preset?.tokens.accent ?? next.customAccent;
-    const backdrop = next.themeChoice === 'custom' ? next.customBackdrop : preset?.tokens.hero ?? next.customBackdrop;
+    const isCustom = next.themeChoice === 'custom';
+    const resolvedGradient: [string, string] = isCustom
+      ? [next.customBackdrop, next.sheetColor]
+      : preset?.tokens.gradient ?? [preset?.tokens.hero ?? next.customBackdrop, next.sheetColor];
     setAccentColor(accent);
-    setGradient([backdrop, next.sheetColor]);
+    setGradient(resolvedGradient);
   }, []);
 
   if (loading) {
@@ -326,7 +330,7 @@ const styles = StyleSheet.create({
   backBtn:   { marginTop: 12, marginBottom: 24 },
   backArrow: { fontSize: 22, fontWeight: '900' },
   title:     { fontFamily: 'BakbakOne-Regular', fontSize: 26, marginBottom: 6 },
-  subtitle:  { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 28, opacity: 0.8 },
+  subtitle:  { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 13, marginBottom: 28, opacity: 0.8 },
 
   previewWrapper: {
     height: 180,
@@ -364,6 +368,7 @@ const styles = StyleSheet.create({
   },
   previewSub: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
     fontSize: 11,
     color: 'rgba(255,255,255,0.75)',
     marginTop: 2,
@@ -387,6 +392,7 @@ const styles = StyleSheet.create({
   },
   sectionSub: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
     fontSize: 12,
     marginBottom: 16,
     opacity: 0.8,
@@ -399,7 +405,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center', justifyContent: 'center',
   },
-  imagePlaceholderText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, textAlign: 'center' },
+  imagePlaceholderText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 10, textAlign: 'center' },
   imageActions: { flex: 1, gap: 8 },
   imageBtn: {
     paddingVertical: 10, paddingHorizontal: 16,

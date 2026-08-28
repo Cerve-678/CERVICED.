@@ -13,9 +13,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { getMyProviderProfile, updateProviderContactDetails } from '../../services/databaseService';
+import {
+  getMyProviderProfile,
+  getMyProviderMessageTemplates,
+  replaceMyProviderMessageTemplates,
+  updateProviderContactDetails,
+  ProviderMessageTemplate,
+} from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { toUserMessage } from '../../utils/userFacingError';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const CP_DARK = {
@@ -23,6 +30,10 @@ const CP_DARK = {
   surface: '#201D1A',
   card:    '#252220',
   accent:  '#AF9197',
+  // Lighter than `accent` for standalone text (e.g. the "Add" template
+  // label) — the muted dusty rose reads as faint at small sizes against
+  // near-black cards.
+  accentText: '#D9AEB6',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -35,6 +46,7 @@ const CP_LIGHT = {
   surface: '#EDE8E2',
   card:    '#FFFFFF',
   accent:  '#5C4033',
+  accentText: '#5C4033',
   ice:     '#FFFFFF',
   text:    '#1C1A18',
   sub:     '#8A8680',
@@ -47,7 +59,7 @@ const CP = CP_DARK; // static fallback for StyleSheet.create
 type ContactMethod = 'in_app' | 'email' | 'whatsapp' | 'phone';
 
 const METHOD_META: Record<ContactMethod, { icon: string; label: string; description: string }> = {
-  in_app:   { icon: 'chatbubble-ellipses-outline', label: 'In-app messaging',  description: 'Clients chat with you directly inside Cerviced' },
+  in_app:   { icon: 'chatbubble-ellipses-outline', label: 'In-app messaging',  description: 'Booked clients chat with you inside Cerviced. Anyone browsing your profile can also start a general enquiry via Get In Touch' },
   email:    { icon: 'mail-outline',                label: 'Email',              description: 'Clients can email you via your public contact email' },
   whatsapp: { icon: 'logo-whatsapp',               label: 'WhatsApp',           description: 'Clients open a WhatsApp chat with your number' },
   phone:    { icon: 'call-outline',                label: 'Phone call',         description: 'Clients can call your profile phone number' },
@@ -90,9 +102,12 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<Set<ContactMethod>>(new Set(['in_app']));
+  // Read-only here — displayed under the WhatsApp toggle so the provider can
+  // see what's actually published. Edited in Business Profile → Contact.
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
+  const [messageTemplates, setMessageTemplates] = useState<Pick<ProviderMessageTemplate, 'label' | 'content'>[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -106,6 +121,8 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         const methods: ContactMethod[] = (provider as any).preferred_contact_methods ?? ['in_app'];
         setEnabled(new Set(methods));
         setWhatsappNumber((provider as any).whatsapp_number ?? '');
+        const templates = await getMyProviderMessageTemplates();
+        setMessageTemplates(templates.map(({ label, content }) => ({ label, content })));
       } catch {
         flash('Could not load contact preferences', 'error');
       } finally {
@@ -134,16 +151,17 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
   }
 
   async function handleSave() {
-    if (enabled.has('whatsapp') && !whatsappNumber.trim()) {
-      flash('Enter your WhatsApp number or disable WhatsApp', 'error');
-      return;
-    }
-    if (enabled.has('email') && !profileEmail) {
-      flash('Add a public email in Business Email settings first', 'error');
-      return;
-    }
-    if (enabled.has('phone') && !profilePhone) {
-      flash('Add a phone number to your profile first', 'error');
+    // Toggles only — the values themselves are owned by Business Info and
+    // Business Profile → Contact. All this can validate is that you haven't
+    // switched on a channel that has nothing behind it.
+    const missing = ([...enabled] as ContactMethod[]).filter(m =>
+      (m === 'whatsapp' && !whatsappNumber.trim()) ||
+      (m === 'email' && !profileEmail) ||
+      (m === 'phone' && !profilePhone)
+    );
+    const firstMissing = missing[0];
+    if (firstMissing) {
+      flash(`Add your ${METHOD_META[firstMissing].label.toLowerCase()} details before switching it on`, 'error');
       return;
     }
 
@@ -152,15 +170,26 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
     try {
       await updateProviderContactDetails(providerId!, {
         preferred_contact_methods: Array.from(enabled),
-        whatsapp_number: whatsappNumber.trim() || null,
       });
+      await replaceMyProviderMessageTemplates(messageTemplates);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(e.message ?? 'Could not save changes', 'error');
+      flash(toUserMessage(e, 'Could not save your changes.', 'ProviderCommunicationsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
+  }
+
+  function updateTemplate(index: number, field: 'label' | 'content', value: string) {
+    setMessageTemplates(previous => previous.map((template, currentIndex) =>
+      currentIndex === index ? { ...template, [field]: value } : template
+    ));
+  }
+
+  function addTemplate() {
+    if (messageTemplates.length >= 12) return;
+    setMessageTemplates(previous => [...previous, { label: '', content: '' }]);
   }
 
   if (loading) {
@@ -190,7 +219,8 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             style={s.scroll}
             contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="interactive"
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
@@ -198,21 +228,41 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
               <Ionicons name="information-circle-outline" size={18} color={C.accent} />
               <Text style={[s.infoText, { color: C.sub }]}>
-                On appointment day, clients see a Contact button with these options. Enable at least one channel.
+                These are for clients who already have a booking with you — on
+                appointment day they see a Contact button in Booking Details with
+                these options. Enable at least one channel.
+              </Text>
+            </View>
+
+            {/* The other audience. Without this, "contact methods" reads like one
+                global setting and providers assume unticking a channel here also
+                hides it from their public profile — it doesn't, and hasn't since
+                the two surfaces were split. */}
+            <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
+              <Ionicons name="globe-outline" size={18} color={C.accent} />
+              <Text style={[s.infoText, { color: C.sub }]}>
+                Not the same as your public contact details. Anyone browsing your
+                profile uses Get In Touch, which shows the phone, email, Instagram
+                and website you set in Business Profile → Contact — for general
+                enquiries, not booking admin.
               </Text>
             </View>
 
             {/* Contact method toggles */}
             <View style={[s.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Text style={[s.cardTitle, { color: C.text }]}>Client Contact Channels</Text>
+              <Text style={[s.cardTitle, { color: C.text }]}>Booked-Client Contact Channels</Text>
               {ALL_METHODS.map((method, idx) => {
                 const meta = METHOD_META[method];
                 const isOn = enabled.has(method);
                 const isLocked = method === 'in_app';
-                const hasWarning =
-                  (method === 'email' && isOn && !profileEmail) ||
-                  (method === 'phone' && isOn && !profilePhone);
-
+                // The value itself, not a signpost to where it's typed. These
+                // are set in Business Profile → Contact (and Business Info);
+                // this screen only decides which of them booked clients get.
+                const value =
+                  method === 'email'    ? profileEmail :
+                  method === 'phone'    ? profilePhone :
+                  method === 'whatsapp' ? whatsappNumber :
+                  '';
                 return (
                   <View key={method}>
                     {idx > 0 && <View style={[s.divider, { backgroundColor: C.border }]} />}
@@ -234,10 +284,10 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                           )}
                         </View>
                         <Text style={[s.rowDesc, { color: C.sub }]} numberOfLines={2}>{meta.description}</Text>
-                        {hasWarning && (
-                          <Text style={s.rowWarn}>
-                            {method === 'email' ? 'Set email in Business Email settings' : 'Add phone number to your profile'}
-                          </Text>
+                        {method !== 'in_app' && (
+                          value
+                            ? <Text style={[s.rowValue, { color: C.text }]} numberOfLines={1}>{value}</Text>
+                            : <Text style={s.rowWarn}>Not added yet</Text>
                         )}
                       </View>
                       <Switch
@@ -248,32 +298,62 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                         thumbColor={C.ice}
                       />
                     </View>
-
-                    {/* WhatsApp number input */}
-                    {method === 'whatsapp' && isOn && (
-                      <View style={[s.subInput, { borderTopColor: C.border }]}>
-                        <Text style={[s.subInputLabel, { color: C.sub }]}>WhatsApp Number</Text>
-                        <TextInput
-                          style={[s.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-                          value={whatsappNumber}
-                          onChangeText={setWhatsappNumber}
-                          placeholder="+44 7700 900000"
-                          placeholderTextColor={C.sub}
-                          keyboardType="phone-pad"
-                        />
-                      </View>
-                    )}
                   </View>
                 );
               })}
             </View>
 
-            {/* Quick link to Business Email */}
-            <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessDetails')} activeOpacity={0.7}>
-              <Ionicons name="mail-outline" size={16} color={C.accent} />
-              <Text style={[s.linkText, { color: C.text }]}>Manage email addresses</Text>
+            {/* One footer link, not a per-row "go set this elsewhere" nag. The
+                rows above show the real values; this is only for changing them. */}
+            <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessInfo')} activeOpacity={0.7}>
+              <Ionicons name="create-outline" size={16} color={C.accent} />
+              <Text style={[s.linkText, { color: C.text }]}>Edit these contact details</Text>
               <Ionicons name="chevron-forward" size={14} color={C.sub} />
             </TouchableOpacity>
+
+            {/* Saved by the provider and used only to fill the in-app chat composer. */}
+            <View style={[s.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+              <View style={s.templateHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.cardTitle, { color: C.text, marginBottom: 3 }]}>In-app Messaging Templates</Text>
+                  <Text style={[s.rowDesc, { color: C.sub }]}>Private to you. A template fills the in-app message box; you can always edit it before sending.</Text>
+                </View>
+                <TouchableOpacity style={[s.addTemplateBtn, { borderColor: C.accent }]} onPress={addTemplate} disabled={messageTemplates.length >= 12}>
+                  <Ionicons name="add" size={16} color={C.accent} />
+                  <Text style={[s.addTemplateText, { color: C.accentText }]}>Add</Text>
+                </TouchableOpacity>
+              </View>
+              {messageTemplates.length === 0 ? (
+                <Text style={[s.templateEmpty, { color: C.sub }]}>Create reusable replies for confirming an address, availability, or booking details.</Text>
+              ) : messageTemplates.map((template, index) => (
+                <View key={index} style={[s.templateItem, { borderTopColor: C.border }]}>
+                  <View style={s.templateLabelRow}>
+                    <TextInput
+                      style={[s.templateLabelInput, { color: C.text, borderColor: C.border, backgroundColor: C.card }]}
+                      value={template.label}
+                      onChangeText={value => updateTemplate(index, 'label', value)}
+                      placeholder="Template name"
+                      placeholderTextColor={C.sub}
+                      maxLength={60}
+                    />
+                    <TouchableOpacity onPress={() => setMessageTemplates(previous => previous.filter((_, currentIndex) => currentIndex !== index))} hitSlop={10}>
+                      <Ionicons name="trash-outline" size={18} color={C.danger} />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={[s.templateContentInput, { color: C.text, borderColor: C.border, backgroundColor: C.card }]}
+                    value={template.content}
+                    onChangeText={value => updateTemplate(index, 'content', value)}
+                    placeholder="Message text"
+                    placeholderTextColor={C.sub}
+                    maxLength={1000}
+                    multiline
+                    scrollEnabled
+                    textAlignVertical="top"
+                  />
+                </View>
+              ))}
+            </View>
 
             <TouchableOpacity
               style={[s.saveBtn, { backgroundColor: C.accent }, saving && s.saveBtnDim]}
@@ -320,13 +400,19 @@ const s = StyleSheet.create({
   rowLabel: { fontSize: 15, fontWeight: '600', color: CP.text },
   rowDesc:  { fontSize: 12, color: CP.sub, marginTop: 2, lineHeight: 16 },
   rowWarn:  { fontSize: 11, color: '#FF9F0A', marginTop: 3 },
+  rowValue: { fontSize: 12, color: CP.text, marginTop: 3, fontWeight: '600' },
 
   alwaysOnBadge: { backgroundColor: CP.accent, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   alwaysOnText:  { fontSize: 9, fontWeight: '700', color: CP.ice, letterSpacing: 0.3 },
 
-  subInput:      { marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: CP.border },
-  subInputLabel: { fontSize: 11, fontWeight: '600', color: CP.sub, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
-  input:         { backgroundColor: CP.card, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: CP.text, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
+  templateHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  addTemplateBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7 },
+  addTemplateText: { fontSize: 13, fontWeight: '700' },
+  templateEmpty: { fontSize: 12, lineHeight: 17, marginTop: 14 },
+  templateItem: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 14 },
+  templateLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  templateLabelInput: { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13, fontWeight: '600' },
+  templateContentInput: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 10, marginTop: 8, minHeight: 68, fontSize: 13, textAlignVertical: 'top' },
 
   linkRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CP.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
   linkText: { flex: 1, fontSize: 14, color: CP.ice, fontWeight: '500' },

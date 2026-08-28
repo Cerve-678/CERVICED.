@@ -30,7 +30,7 @@ function ExpandableSection({ title, children, theme }: { title: string; children
 }
 
 export default function AboutScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -52,8 +52,8 @@ export default function AboutScreen({ navigation }: any) {
 
         {/* Mission */}
         <View style={[styles.card, {
-          backgroundColor: isDarkMode ? 'rgba(175,145,151,0.1)' : 'rgba(92,64,51,0.06)',
-          borderColor: (isDarkMode ? 'rgba(175,145,151,0.35)' : 'rgba(92,64,51,0.35)'),
+          backgroundColor: P.accentDim,
+          borderColor: P.border,
         }]}>
           <Text style={[styles.cardLabel, { color: theme.accent }]}>OUR MISSION</Text>
           <Text style={[styles.mission, { color: theme.text }]}>
@@ -92,7 +92,7 @@ export default function AboutScreen({ navigation }: any) {
             <Text style={[styles.policySubhead, { color: theme.text }]}>How we use it{'\n'}</Text>
             Your data is used to provide and personalise the Cerviced experience, process bookings, send notifications you've opted into, and improve our platform. We do not sell your personal data to third parties.{'\n\n'}
             <Text style={[styles.policySubhead, { color: theme.text }]}>Who we share it with{'\n'}</Text>
-            We share necessary booking information with the provider you book with. We use trusted third-party services (e.g. Supabase for data storage, Expo for notifications) who process data on our behalf under strict agreements.{'\n\n'}
+            We share necessary booking information with the provider you book with. We also use trusted third-party providers for services such as secure data storage, notifications, and payment processing, who process data on our behalf under strict agreements. You can request the current list of these providers at privacy@cerviced.app.{'\n\n'}
             <Text style={[styles.policySubhead, { color: theme.text }]}>Your rights{'\n'}</Text>
             You have the right to access, correct, or delete your data at any time. Contact us at privacy@cerviced.app. You may also request a full data export.{'\n\n'}
             <Text style={[styles.policySubhead, { color: theme.text }]}>Data retention{'\n'}</Text>

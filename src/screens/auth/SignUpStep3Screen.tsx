@@ -27,15 +27,7 @@ interface FormErrors {
   dob?: string;
   businessName?: string;
   businessEmail?: string;
-  businessType?: string;
 }
-
-const BUSINESS_TYPES = [
-  { v: 'salon', l: 'Salon' },
-  { v: 'studio', l: 'Studio' },
-  { v: 'home_based', l: 'Home Based' },
-  { v: 'mobile', l: 'Mobile' },
-] as const;
 
 
 export default function SignUpStep3Screen({ navigation }: Props) {
@@ -49,7 +41,6 @@ export default function SignUpStep3Screen({ navigation }: Props) {
 
   const [businessName, setBusinessName] = useState(data.businessName);
   const [businessEmail, setBusinessEmail] = useState(data.businessEmail);
-  const [businessType, setBusinessType] = useState(data.businessType);
   const [businessPhone, setBusinessPhone] = useState(data.businessPhone);
   const [instagram, setInstagram] = useState(data.instagram);
   const [tiktok, setTiktok] = useState(data.tiktok);
@@ -59,20 +50,26 @@ export default function SignUpStep3Screen({ navigation }: Props) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const isUser = data.accountType === 'user';
+  // The client→provider upgrade enters the flow at this step, skipping Step 2
+  // where a provider normally gives their date of birth — so it has to be asked
+  // for here. Without it the app creates providers with no DOB at all, and
+  // AuthContext (which reads `dob != null` as the provider's client-hat marker)
+  // drops their client hat on the next launch.
+  const needsDob = isUser || data.fromProviderSwitch;
 
   const validate = useCallback((): FormErrors => {
     const errs: FormErrors = {};
-    if (isUser) {
+    if (needsDob) {
       const dobErr = validateDob(dobDay, dobMonth, dobYear);
       if (dobErr) errs.dob = dobErr;
-    } else {
+    }
+    if (!isUser) {
       if (!businessName.trim()) errs.businessName = 'Business name is required';
       if (!businessEmail.trim()) errs.businessEmail = 'Business email is required';
       else if (!validateEmail(businessEmail)) errs.businessEmail = 'Enter a valid email';
-      if (!businessType) errs.businessType = 'Select your business type';
     }
     return errs;
-  }, [isUser, dobDay, dobMonth, dobYear, businessName, businessEmail, businessType]);
+  }, [isUser, needsDob, dobDay, dobMonth, dobYear, businessName, businessEmail]);
 
   const markTouched = (field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
@@ -91,21 +88,23 @@ export default function SignUpStep3Screen({ navigation }: Props) {
     const errs = validate();
     setErrors(errs);
 
-    if (isUser) setTouched({ dob: true });
-    else setTouched({ businessName: true, businessEmail: true, businessType: true });
+    setTouched({
+      ...(needsDob ? { dob: true } : {}),
+      ...(isUser ? {} : { businessName: true, businessEmail: true }),
+    });
 
     if (Object.keys(errs).length > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    if (isUser) {
+    if (needsDob) {
       updateData({ dobDay, dobMonth, dobYear });
-    } else {
+    }
+    if (!isUser) {
       updateData({
         businessName,
         businessEmail,
-        businessType,
         businessPhone: businessPhone.trim(),
         instagram: instagram.replace(/^@/, '').trim(),
         tiktok: tiktok.replace(/^@/, '').trim(),
@@ -134,16 +133,16 @@ export default function SignUpStep3Screen({ navigation }: Props) {
             <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
           </TouchableOpacity>
 
-          <StepProgressIndicator currentStep={3} totalSteps={totalSteps} />
+          <StepProgressIndicator currentStep={3} totalSteps={totalSteps} stepLabel={isUser ? 'Personal Info' : needsDob ? 'Your Details' : 'Business Details'} />
 
           <View style={styles.header}>
             <Text style={[styles.headerTitle, { color: t.text }]}>
-              {isUser ? 'Personal Details' : 'Business Details'}
+              {isUser ? 'Personal Details' : needsDob ? 'Your Details' : 'Business Details'}
             </Text>
           </View>
 
           <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.border }]}>
-            {isUser ? (
+            {needsDob && (
               <View style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: t.sub }]}>DATE OF BIRTH</Text>
                 <View style={styles.dobRow}>
@@ -173,7 +172,8 @@ export default function SignUpStep3Screen({ navigation }: Props) {
                 </View>
                 {renderError('dob')}
               </View>
-            ) : (
+            )}
+            {!isUser && (
               <>
                 <View style={styles.fieldGroup}>
                   <Text style={[styles.fieldLabel, { color: t.sub }]}>BUSINESS NAME</Text>
@@ -205,34 +205,6 @@ export default function SignUpStep3Screen({ navigation }: Props) {
                     />
                   </View>
                   {renderError('businessEmail')}
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: t.sub }]}>BUSINESS TYPE</Text>
-                  <View style={styles.pillRow}>
-                    {BUSINESS_TYPES.map(({ v, l }) => (
-                      <TouchableOpacity
-                        key={v}
-                        style={[
-                          styles.pill,
-                          { backgroundColor: t.surface, borderColor: touched['businessType'] && errors.businessType ? '#DC2626' : t.border },
-                          businessType === v && { backgroundColor: t.accent, borderColor: t.accent },
-                        ]}
-                        onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
-                          setBusinessType(v);
-                          setTouched(prev => ({ ...prev, businessType: true }));
-                          setErrors(prev => {
-                            const { businessType: _removed, ...rest } = prev;
-                            return rest;
-                          });
-                        }}
-                      >
-                        <Text style={[styles.pillText, { color: businessType === v ? '#FFFFFF' : t.text }]}>{l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {renderError('businessType')}
                 </View>
 
                 <View style={styles.fieldGroup}>
@@ -424,21 +396,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginRight: 4,
     padding: 0,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  pill: {
-    borderRadius: 100,
-    borderWidth: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-  },
-  pillText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    letterSpacing: 0.3,
   },
 });

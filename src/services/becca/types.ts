@@ -24,6 +24,8 @@ export interface ChatMessage {
   timestamp: Date;
   suggestions?: ChatSuggestion[];
   providerRecommendations?: Provider[];
+  /** Real portfolio work shown inline for style and inspiration requests. */
+  inspiration?: BeccaInspiration[];
   imageUri?: string;
   /**
    * Populated only by a vision model. Nothing writes this today — the image
@@ -33,6 +35,17 @@ export interface ChatMessage {
   imageAnalysis?: string;
 }
 
+/** A safe, client-visible slice of an Explore portfolio item. */
+export interface BeccaInspiration {
+  id: string;
+  imageUrl: string;
+  caption?: string;
+  providerName: string;
+  providerSlug: string;
+  /** A short, visible reason this portfolio item belongs in Becca's selection. */
+  whyItFits?: string;
+}
+
 /**
  * A suggestion's payload, keyed by action. Typed rather than `any` so a
  * capability can't emit a navigate chip with no screen, or a message chip
@@ -40,7 +53,16 @@ export interface ChatMessage {
  */
 export type SuggestionData =
   | { screen: string; params?: Record<string, unknown>; message?: never }
-  | { message: string; screen?: never; params?: never };
+  | {
+    message: string;
+    /**
+     * A local, exact selection behind a message chip. This prevents a tap on
+     * a displayed booking from being re-resolved as vague free text.
+     */
+    bookingId?: string;
+    screen?: never;
+    params?: never;
+  };
 
 export interface ChatSuggestion {
   id: string;
@@ -156,6 +178,14 @@ export interface ServiceRef {
   category: string;
   /** e.g. "gel manicure" — present when the user was specific. */
   specific?: string;
+  /**
+   * Detected from an audience phrase ("men's haircut", "for my daughter") —
+   * mirrors services.audience. Set independently of whether the phrase also
+   * drove `category` to MALE/KIDS (see AUDIENCE_OVERRIDES in
+   * entityResolver.ts), so a HAIR provider's individual audience='men'
+   * service can be preferred without discarding a resolved `specific`.
+   */
+  audience?: 'women' | 'men' | 'kids';
 }
 
 export interface DateRef {
@@ -233,6 +263,8 @@ export interface CapabilityResult {
   suggestions?: ChatSuggestion[];
   /** Provider cards to render under the message. */
   providers?: Provider[];
+  /** Portfolio imagery from Explore, only from live providers. */
+  inspiration?: BeccaInspiration[];
   /** A write awaiting confirmation. The engine renders the confirm chips. */
   pendingAction?: PendingAction;
   /**
@@ -324,9 +356,45 @@ export interface ConversationContext {
   entities: EntityBag;
   /** What Becca answered last, so "the first one" knows what list it means. */
   lastCapabilityId?: string;
-  /** Providers Becca last showed, in display order — resolves "the first one". */
+  /** The exact booking most recently discussed, for explicit follow-ups. */
+  lastBooking?: NonNullable<EntityBag["booking"]>;
+  /**
+   * Providers Becca last showed, in display order — resolves "the first one".
+   *
+   * CLIENT HAT ONLY. Provider-hat capabilities list the provider's own
+   * clients, bookings and waitlist entries, none of which are providers, so
+   * this stays empty there and ordinal/pronoun references don't resolve.
+   * Supporting "the first one" over a client list would need its own
+   * `lastClients` field — deliberately not built, since every provider-hat
+   * answer currently names who it means rather than returning a bare list.
+   */
   lastProviders?: { slug: string; dbId?: string; displayName: string }[];
+  /**
+   * Question-chip messages already offered earlier in this conversation.
+   *
+   * Without this the engine only ever compared a chip against the message
+   * JUST sent, so the same follow-ups ("What's on today?", "Find someone")
+   * were re-offered turn after turn — the conversation visibly circled, and
+   * a chip the user had already tapped and answered kept coming back as if
+   * it were new. Held as the sent `message`, not the label, because that's
+   * what identifies the destination: two chips worded differently that ask
+   * the same question are the same suggestion.
+   *
+   * Bounded (see SUGGESTION_MEMORY) — a long conversation must not
+   * eventually suppress every option and leave a reply with nothing to tap.
+   */
+  offeredSuggestions?: string[];
 }
+
+/**
+ * How many recent question-chips to remember when filtering repeats.
+ *
+ * Deliberately a window rather than the whole conversation: re-offering
+ * something from twenty turns ago is helpful, re-offering what was on screen
+ * two turns ago is noise. Navigation chips are exempt from this entirely —
+ * "View booking" SHOULD stay available on every booking answer.
+ */
+export const SUGGESTION_MEMORY = 12;
 
 /** Everything a capability is allowed to read at run time. */
 export interface CapabilityContext {

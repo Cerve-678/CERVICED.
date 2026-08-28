@@ -24,6 +24,7 @@
     "android": {
       "package": "com.cerviced.app",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -80,13 +81,11 @@
           "merchantIdentifier": "merchant.com.cerviced",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-splash-screen",
+      "@react-native-community/datetimepicker"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "124a2960-5455-41f8-bbb5-820013f52951"
       }

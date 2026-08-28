@@ -16,7 +16,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
-import { validateEmail, validatePassword, validatePhone, getPasswordStrength } from '../../utils/validation';
+import { validateEmail, validatePassword, validatePhone, validateDob, getPasswordStrength } from '../../utils/validation';
+import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -30,6 +31,7 @@ interface FormErrors {
   email?: string;
   phone?: string;
   password?: string;
+  dob?: string;
 }
 
 
@@ -43,10 +45,15 @@ export default function SignUpStep2Screen({ navigation }: Props) {
   const [email, setEmail] = useState(data.email);
   const [phone, setPhone] = useState(data.phone);
   const [password, setPassword] = useState(data.password);
+  const [dobDay, setDobDay] = useState(data.dobDay);
+  const [dobMonth, setDobMonth] = useState(data.dobMonth);
+  const [dobYear, setDobYear] = useState(data.dobYear);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [showPassword, setShowPassword] = useState(false);
 
   const isClientSwitch = data.fromClientSwitch;
+  const isProvider = data.accountType === 'provider';
 
   const validate = useCallback((): FormErrors => {
     const errs: FormErrors = {};
@@ -62,8 +69,12 @@ export default function SignUpStep2Screen({ navigation }: Props) {
         if (e) errs.password = e;
       }
     }
+    if (isProvider) {
+      const dobErr = validateDob(dobDay, dobMonth, dobYear);
+      if (dobErr) errs.dob = dobErr;
+    }
     return errs;
-  }, [name, email, phone, password, isClientSwitch]);
+  }, [name, email, phone, password, isClientSwitch, isProvider, dobDay, dobMonth, dobYear]);
 
   const markTouched = (field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
@@ -78,7 +89,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
   const handleContinue = () => {
     const errs = validate();
     setErrors(errs);
-    setTouched({ name: true, email: true, phone: true, password: true });
+    setTouched({ name: true, email: true, phone: true, password: true, dob: true });
     if (Object.keys(errs).length > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       return;
@@ -113,7 +124,11 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    updateData(isClientSwitch ? { name, email, phone } : { name, email, phone, password });
+    updateData({
+      name, email, phone,
+      ...(isClientSwitch ? {} : { password }),
+      ...(isProvider ? { dobDay, dobMonth, dobYear } : {}),
+    });
     navigation.navigate('SignUpStep3');
   };
 
@@ -201,29 +216,69 @@ export default function SignUpStep2Screen({ navigation }: Props) {
               {renderError('phone')}
             </View>
 
+            {/* Date of birth — providers only; client DOB is collected on Step 3 */}
+            {isProvider && (
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: t.sub }]}>DATE OF BIRTH</Text>
+                <View style={styles.dobRow}>
+                  {[
+                    { value: dobDay, set: setDobDay, ph: 'DD', max: 2, flex: 1 },
+                    { value: dobMonth, set: setDobMonth, ph: 'MM', max: 2, flex: 1 },
+                    { value: dobYear, set: setDobYear, ph: 'YYYY', max: 4, flex: 1.5 },
+                  ].map((f, i) => (
+                    <View key={f.ph} style={{ flex: f.flex, flexDirection: 'row', alignItems: 'center' }}>
+                      {i > 0 && <Text style={[styles.dobSlash, { color: t.sub }]}>/</Text>}
+                      <View style={[styles.inputWrap, styles.dobField, { backgroundColor: t.surface, borderColor: inputBorder('dob') }]}>
+                        <TextInput
+                          style={[styles.input, { color: t.text, textAlign: 'center' }]}
+                          value={f.value}
+                          onChangeText={v => { if (v.length <= f.max) f.set(v.replace(/[^0-9]/g, '')); }}
+                          onBlur={() => markTouched('dob')}
+                          placeholder={f.ph}
+                          placeholderTextColor={t.sub}
+                          keyboardType="number-pad"
+                          maxLength={f.max}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+                {renderError('dob')}
+              </View>
+            )}
+
             {/* Password */}
             {!isClientSwitch && (
               <View style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: t.sub }]}>PASSWORD</Text>
-                <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('password') }]}>
+                <View style={[styles.inputWrap, styles.inputWrapRow, { backgroundColor: t.surface, borderColor: inputBorder('password') }]}>
                   <TextInput
-                    style={[styles.input, { color: t.text }]}
+                    style={[styles.input, styles.inputWithEye, { color: t.text }]}
                     value={password}
                     onChangeText={setPassword}
                     onBlur={() => markTouched('password')}
                     placeholder="••••••••"
                     placeholderTextColor={t.sub}
-                    secureTextEntry
+                    secureTextEntry={!showPassword}
                   />
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  </TouchableOpacity>
                 </View>
                 {renderError('password')}
                 {password.length > 0 && (
-                  <View style={styles.strengthRow}>
-                    <View style={[styles.strengthTrack, { backgroundColor: t.border }]}>
-                      <View style={[styles.strengthFill, { width: strength.width as any, backgroundColor: strength.color }]} />
+                  <>
+                    <View style={styles.strengthRow}>
+                      <View style={[styles.strengthTrack, { backgroundColor: t.border }]}>
+                        <View style={[styles.strengthFill, { width: strength.width as any, backgroundColor: strength.color }]} />
+                      </View>
+                      <Text style={[styles.strengthText, { color: t.sub }]}>{strength.label}</Text>
                     </View>
-                    <Text style={[styles.strengthText, { color: t.sub }]}>{strength.label}</Text>
-                  </View>
+                    <PasswordRequirements password={password} goodColor={t.accent} pendingColor={t.sub} />
+                  </>
                 )}
               </View>
             )}
@@ -280,6 +335,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'android' ? 10 : 13,
+  },
+  inputWrapRow: { flexDirection: 'row', alignItems: 'center' },
+  inputWithEye: { flex: 1, paddingRight: 8 },
+  eyeText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dobRow: { flexDirection: 'row', alignItems: 'center' },
+  dobField: { flex: 1, paddingHorizontal: 8 },
+  dobSlash: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    marginHorizontal: 6,
   },
   input: {
     fontFamily: 'Jura-VariableFont_wght',

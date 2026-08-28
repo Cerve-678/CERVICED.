@@ -4,9 +4,9 @@
 `src/services/becca/`. Step 6 (the LLM swap) is not started. Section 2's tables
 describe shipped capabilities; §3 is still forward-looking.
 **Supersedes:** nothing. This is the first doc scoped specifically to Becca.
-Becca is mentioned in passing in `LOGIC.md`, `APP_OVERVIEW.md` and
-`FUTURE_LOGIC.md` — treat *this* file as current for Becca specifically, and
-those as stale where they disagree.
+Becca is mentioned in passing in `APP_STATE.md` and `FUTURE_LOGIC.md` — treat
+*this* file as current for Becca specifically, and those as stale where they
+disagree.
 
 **Scope:** what Becca can do as the app's central intelligence layer using
 **only real app data and deterministic logic** — no LLM. Part 3 covers what an
@@ -61,7 +61,7 @@ src/services/becca/
   registry.ts           the capability list + toToolSchema()
   engine.ts             orchestration, ambiguity, honest fallback
   capabilities/
-    client.ts           34 client capabilities
+    client.ts           37 client capabilities
     provider.ts         22 provider capabilities
     shared.ts           chip builders, £ formatting, the single dbToProvider
 ```
@@ -341,7 +341,7 @@ model is being given too much responsibility — see §3.5.
 
 ## 5. Known gaps (as built)
 
-**Coverage today: 56 capabilities (34 client, 22 provider), 569 trigger
+**Coverage today: 59 capabilities (37 client, 22 provider), ~620 trigger
 phrases, reaching ~55 of
 `databaseService.ts`'s 193 exported functions.** Most of the remaining are
 provider-settings mutations or internals Becca correctly shouldn't touch —
@@ -439,10 +439,52 @@ intent.
 
 ### Behavioural gaps
 
-- **No conversational memory across turns.** Each message resolves
-  independently, so "what about Sunday?" doesn't inherit the previous turn's
-  service. Deliberate — multi-turn state is what an LLM does far better than a
-  hand-rolled slot-filler, and a half-built version gets thrown away at step 6.
+- **Conversational memory: BUILT (2026-08-05).** Each turn returns a
+  `ConversationContext` the caller passes into the next — use `converse()`,
+  not `respond()`. It carries service/provider/money entities, the last
+  capability, and the last shown provider list. Deliberately narrow: a
+  carry-over for reference resolution, not a transcript. `BeccaScreen` holds
+  it in a **ref, not state** — the next turn reads it inside the same async
+  callback, where a state update wouldn't have landed yet.
+  - **Date is never carried** — "what about Saturday?" IS the request to
+    change the date; a sticky one makes every later question silently about
+    the first day mentioned.
+  - **Bookings are never carried** — specific enough that a stale one
+    silently answering a new question is worse than asking.
+  - **The shown list survives turns that show nothing.** "find nails" → "any
+    free Saturday?" → "none" → "the first one" still points at what's on
+    screen.
+  - **Bare entities** ("nails", "under £40") route to search: an answer or a
+    refinement, with nothing in it that looks like a request. Detected by
+    stripping the entity's own words plus filler and requiring nothing
+    meaningful to remain — a naive word-count check hijacked "who's free this
+    week".
+  - **Pronouns** ("are they any good?") resolve to the provider under
+    discussion, but only when exactly ONE was shown. With several, "they" is
+    genuinely ambiguous, so Becca asks which. Without that branch the message
+    fell through to a capability that didn't need a provider and confidently
+    answered a different question.
+  - **`dbId` is re-resolved from the display name.** Provider cards carry slug
+    + name, not the UUID, so a pronoun/ordinal reference has none —
+    `resolveProviderDbId()` in `capabilities/shared.ts` fills it in. Without
+    it all 11 UUID-keyed capabilities silently failed on exactly the
+    phrasings this feature exists to support.
+  - **The assumption prefix is suppressed when redundant** — "Assuming you
+    meant nails — I found 2 nails providers" is noise.
+  - **The PROVIDER hat carries nothing.** Its capabilities are all about the
+    provider's own business ("what's on today", "my clients") and none take a
+    service/provider/money entity — carrying one only produced a spurious
+    "Assuming you meant nails, today —" on an answer that never used it.
+  - **Only CARRIED entities are assumptions.** Something the user just typed
+    isn't an interpretation Becca made; saying "assuming you meant today" back
+    at someone who wrote "today" reads as not listening.
+  - **Ordinal/pronoun references are client-hat only.** Provider capabilities
+    list clients, bookings and waitlist entries — none of which are providers
+    — so `lastProviders` stays empty there. Supporting "the first one" over a
+    client list would need its own `lastClients` field; deliberately not built,
+    since every provider-hat answer already names who it means.
+  - Reset on new chat, loading a past chat, deleting the active chat, and
+    clearing history.
 - **Image uploads still do nothing.** `ChatMessage.imageAnalysis` exists and is
   never populated (§3.3). The picker accepts a photo and the message reads
   "Sent an image."

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ViewProps, StyleSheet, StatusBar } from 'react-native';
+import { View, ViewProps, StatusBar } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface ThemedViewProps extends ViewProps {

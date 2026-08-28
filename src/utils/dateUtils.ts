@@ -37,7 +37,7 @@ export function ordinalSuffix(day: number): string {
  * Parses a "YYYY-MM-DD" string (or any string Date can parse, or a Date) into
  * a local Date at midnight, avoiding UTC-shift-by-one-day bugs from `new Date("YYYY-MM-DD")`.
  */
-function toLocalDate(input: string | Date): Date {
+export function toLocalDate(input: string | Date): Date {
   if (input instanceof Date) return input;
   const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(input);
   if (ymdMatch) {
@@ -127,6 +127,22 @@ export function formatTime12(input: string | Date): string {
   return `${displayHourStr}:${paddedMinute}${period}`;
 }
 
+/**
+ * formatTime12 that returns null instead of throwing on an unparseable value.
+ * For rendering times that came from the database (e.g.
+ * booking_reschedule_requests.requested_times, which is nullable and has
+ * historically held loosely-formatted strings) — a throw inside a render
+ * would take the whole screen down over one bad row.
+ */
+export function formatTime12Safe(input: string | Date | null | undefined): string | null {
+  if (input === null || input === undefined || input === '') return null;
+  try {
+    return formatTime12(input);
+  } catch {
+    return null;
+  }
+}
+
 /** Converts a 12-hour display string ("9:00 AM", "9:00am", etc.) to 24-hour "HH:MM". */
 export function to24HourTime(input: string): string {
   const trimmed = input.trim();
@@ -144,6 +160,19 @@ export function to24HourTime(input: string): string {
   if (isPM && h !== 12) h += 12;
   else if (!isPM && h === 12) h = 0;
   return `${String(h).padStart(2, '0')}:${minutes}`;
+}
+
+/** Minutes → "1h 30m" / "2h" / "45m". Empty string for a non-positive
+ *  length, so a caller with nothing to show renders nothing rather than
+ *  "0m". The single source for this format: mapDbBookingToConfirmed derives
+ *  a booking's duration through it, and the provider screens that recover a
+ *  length for a legacy booking with no end_time format it through it too, so
+ *  a recovered duration is indistinguishable from a stored one. */
+export function formatDurationMinutes(totalMinutes: number): string {
+  if (!(totalMinutes > 0)) return '';
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h > 0 ? `${h}h` : ''}${h > 0 && m > 0 ? ' ' : ''}${m > 0 ? `${m}m` : ''}`;
 }
 
 /** "YYYY-MM-DD" from a Date, in local time (no UTC shift). */
@@ -188,4 +217,18 @@ export function timeAgo(input: string | Date): string {
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}d ago`;
   return formatShortDate(date);
+}
+
+
+/**
+ * Splits a stored `YYYY-MM-DD` date of birth back into the three separate
+ * day/month/year fields the signup flow collects.
+ *
+ * Returns an empty object rather than blank strings when there is nothing to
+ * split, so it can be spread into a registration update without clobbering
+ * values already captured there.
+ */
+export function dobToParts(dob?: string | null): { dobDay: string; dobMonth: string; dobYear: string } | Record<string, never> {
+  const [y, m, d] = (dob ?? '').split('-');
+  return y && m && d ? { dobDay: d, dobMonth: m, dobYear: y } : {};
 }

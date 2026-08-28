@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import Icon from '../../components/IconLibrary';
 import {
@@ -25,29 +26,29 @@ interface ToggleRowProps {
   subtitle: string;
   value: boolean;
   onToggle: () => void;
-  theme: any;
+  palette: AppTheme;
 }
 
-const ToggleRow = ({ icon, title, subtitle, value, onToggle, theme }: ToggleRowProps) => (
-  <View style={[styles.row, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+const ToggleRow = ({ icon, title, subtitle, value, onToggle, palette: P }: ToggleRowProps) => (
+  <View style={[styles.row, { backgroundColor: P.card, borderColor: P.border }]}>
     <View style={styles.rowLeft}>
-      <Icon name={icon} size={20} color={theme.accent} style={{ marginRight: 12 }} />
+      <Icon name={icon} size={20} color={P.accentText} style={{ marginRight: 12 }} />
       <View>
-        <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
-        <Text style={[styles.rowSub, { color: theme.secondaryText }]}>{subtitle}</Text>
+        <Text style={[styles.rowTitle, { color: P.text }]}>{title}</Text>
+        <Text style={[styles.rowSub, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
     <Switch
       value={value}
       onValueChange={() => { Haptics.selectionAsync().catch(() => {}); onToggle(); }}
-      trackColor={{ false: '#D1D1D6', true: theme.accent }}
+      trackColor={{ false: '#D1D1D6', true: P.accent }}
       thumbColor={value ? '#fff' : '#f4f3f4'}
     />
   </View>
 );
 
 export default function NotificationsSettingsScreen({ navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [prefs, setPrefs] = useState<NotificationPreferences>({
@@ -61,23 +62,40 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
   const [saving, setSaving] = useState(false);
   // Debounce: save 800ms after the last toggle
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPrefs = useRef<NotificationPreferences | null>(null);
+  const mounted = useRef(true);
 
   useEffect(() => {
+    mounted.current = true;
     getNotificationPreferences()
-      .then(setPrefs)
+      .then(value => {
+        if (mounted.current && !pendingPrefs.current) setPrefs(value);
+      })
       .catch(() => {});
+    return () => {
+      mounted.current = false;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      // A quick back gesture should not discard the user's last toggle.
+      if (pendingPrefs.current) {
+        void saveNotificationPreferences(pendingPrefs.current).catch(() => {});
+      }
+    };
   }, []);
 
   const toggle = useCallback((key: keyof NotificationPreferences) => {
     setPrefs(prev => {
       const next = { ...prev, [key]: !prev[key] };
+      pendingPrefs.current = next;
       // Debounced save
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         setSaving(true);
         saveNotificationPreferences(next)
+          .then(() => {
+            if (pendingPrefs.current === next) pendingPrefs.current = null;
+          })
           .catch(() => {})
-          .finally(() => setSaving(false));
+          .finally(() => { if (mounted.current) setSaving(false); });
       }, 800);
       return next;
     });
@@ -95,25 +113,25 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+          <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: theme.text }]}>Notifications</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+        <Text style={[styles.title, { color: P.text }]}>Notifications</Text>
+        <Text style={[styles.subtitle, { color: P.sub }]}>
           Choose what you hear from us
         </Text>
 
-        <Text style={[styles.section, { color: theme.accent }]}>BOOKINGS</Text>
-        <ToggleRow icon="event-available" title="Booking Confirmed"   subtitle="Instant confirmation alerts"    value={prefs.bookingConfirm}  onToggle={() => toggle('bookingConfirm')}  theme={theme} />
-        <ToggleRow icon="alarm"           title="Appointment Reminders" subtitle="24h and 1h before"            value={prefs.bookingReminder} onToggle={() => toggle('bookingReminder')} theme={theme} />
-        <ToggleRow icon="update"          title="Booking Updates"     subtitle="Changes, cancellations"          value={prefs.bookingUpdates}  onToggle={() => toggle('bookingUpdates')}  theme={theme} />
+        <Text style={[styles.section, { color: P.accentText }]}>BOOKINGS</Text>
+        <ToggleRow icon="event-available" title="Booking Confirmed"   subtitle="Instant confirmation alerts"    value={prefs.bookingConfirm}  onToggle={() => toggle('bookingConfirm')}  palette={P} />
+        <ToggleRow icon="alarm"           title="Appointment Reminders" subtitle="24h and 1h before"            value={prefs.bookingReminder} onToggle={() => toggle('bookingReminder')} palette={P} />
+        <ToggleRow icon="update"          title="Booking Updates"     subtitle="Changes, cancellations"          value={prefs.bookingUpdates}  onToggle={() => toggle('bookingUpdates')}  palette={P} />
 
-        <Text style={[styles.section, { color: theme.accent }]}>DISCOVER</Text>
-        <ToggleRow icon="local-offer"  title="Offers & Promotions" subtitle="Deals from your saved providers" value={prefs.promotions}    onToggle={() => toggle('promotions')}    theme={theme} />
-        <ToggleRow icon="person-add"   title="New Providers"       subtitle="Professionals near you"          value={prefs.newProviders}  onToggle={() => toggle('newProviders')}  theme={theme} />
-        <ToggleRow icon="bar-chart"    title="Weekly Summary"      subtitle="Your beauty activity recap"      value={prefs.weeklySummary} onToggle={() => toggle('weeklySummary')} theme={theme} />
+        <Text style={[styles.section, { color: P.accentText }]}>DISCOVER</Text>
+        <ToggleRow icon="local-offer"  title="Offers & Promotions" subtitle="Deals from your saved providers" value={prefs.promotions}    onToggle={() => toggle('promotions')}    palette={P} />
+        <ToggleRow icon="person-add"   title="New Providers"       subtitle="Professionals near you"          value={prefs.newProviders}  onToggle={() => toggle('newProviders')}  palette={P} />
+        <ToggleRow icon="bar-chart"    title="Weekly Summary"      subtitle="Your beauty activity recap"      value={prefs.weeklySummary} onToggle={() => toggle('weeklySummary')} palette={P} />
 
-        <Text style={[styles.note, { color: theme.secondaryText }]}>
+        <Text style={[styles.note, { color: P.sub }]}>
           {saving ? 'Saving…' : 'Preferences saved automatically.'}
         </Text>
       </ScrollView>

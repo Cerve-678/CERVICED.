@@ -5,13 +5,12 @@
 // prefilled. The actual claim_provider_profile() RPC call happens later,
 // once the account exists — see the pending-claim pickup in
 // InfoRegScreen.tsx's mount effect.
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   StatusBar,
   StyleSheet,
   Text,
@@ -19,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
@@ -31,21 +31,36 @@ import {
   getUnclaimedProviderDetail,
   requestClaimVerification,
   savePendingClaim,
-  claimProviderProfile,
   type UnclaimedProviderSummary,
   type UnclaimedProviderDetail,
 } from '../../services/providerClaimService';
+import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'ClaimProvider'>;
 
 type Step = 'search' | 'preview' | 'code';
 
-export default function ClaimProviderScreen({ navigation }: Props) {
+/** DB guard messages (P0001) are written for people and safe to show; a coded
+ *  or technical error (RLS, network, missing column…) is not — return null so
+ *  the caller falls back to a calm generic line. */
+function friendlyClaimError(e: any): string | null {
+  const isTechnical = e?.code && e.code !== 'P0001';
+  return typeof e?.message === 'string' && e.message.length > 0 && !isTechnical && !e.message.includes('Network')
+    ? e.message
+    : null;
+}
+
+export default function ClaimProviderScreen({ navigation, route }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const insets = useSafeAreaInsets();
   const { updateData, setCurrentStep } = useRegistration();
 
-  const [step, setStep] = useState<Step>('search');
+  // A known providerId (e.g. from ProviderProfileScreen's "Claim this
+  // business" button on an unclaimed listing) skips straight to the preview
+  // step instead of starting at search — see the mount effect below.
+  const knownProviderId = route.params?.providerId;
+
+  const [step, setStep] = useState<Step>(knownProviderId ? 'preview' : 'search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UnclaimedProviderSummary[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -53,20 +68,65 @@ export default function ClaimProviderScreen({ navigation }: Props) {
   const [maskedEmail, setMaskedEmail] = useState('');
   const [code, setCode] = useState('');
   const [isBusy, setIsBusy] = useState(false);
+  const [isLoadingKnown, setIsLoadingKnown] = useState(!!knownProviderId);
 
-  const runSearch = useCallback(async (text: string) => {
-    setQuery(text);
-    if (text.trim().length < 2) { setResults([]); return; }
-    setIsSearching(true);
-    try {
-      const found = await searchUnclaimedProviders(text);
-      setResults(found);
-    } catch (e: any) {
-      Alert.alert('Search failed', e?.message ?? 'Please try again.');
-    } finally {
+  useEffect(() => {
+    if (!knownProviderId) return;
+    let cancelled = false;
+    getUnclaimedProviderDetail(knownProviderId)
+      .then(detail => {
+        if (cancelled) return;
+        if (!detail) {
+          Alert.alert('No longer available', 'This listing has already been claimed or removed.');
+          setStep('search');
+          return;
+        }
+        setSelected(detail);
+      })
+      .catch((e: any) => {
+        if (cancelled) return;
+        logger.error('[ClaimProvider] load listing failed:', e);
+      Alert.alert("Couldn't load listing", friendlyClaimError(e) ?? 'Please try again.');
+        setStep('search');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingKnown(false);
+      });
+    return () => { cancelled = true; };
+  }, [knownProviderId]);
+
+  // Debounce remote search and ignore stale responses so fast typing neither
+  // floods PostgREST nor lets an older result overwrite the latest query.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
       setIsSearching(false);
+      return;
     }
-  }, []);
+
+    let active = true;
+    const timer = setTimeout(() => {
+      setIsSearching(true);
+      searchUnclaimedProviders(trimmed)
+        .then(found => {
+          if (active) setResults(found);
+        })
+        .catch((e: any) => {
+          if (!active) return;
+          logger.error('[ClaimProvider] search failed:', e);
+          Alert.alert('Search failed', friendlyClaimError(e) ?? 'Please try again.');
+        })
+        .finally(() => {
+          if (active) setIsSearching(false);
+        });
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   const handlePickResult = useCallback(async (result: UnclaimedProviderSummary) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -80,7 +140,8 @@ export default function ClaimProviderScreen({ navigation }: Props) {
       setSelected(detail);
       setStep('preview');
     } catch (e: any) {
-      Alert.alert('Couldn\'t load listing', e?.message ?? 'Please try again.');
+      logger.error('[ClaimProvider] load listing failed:', e);
+      Alert.alert("Couldn't load listing", friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsBusy(false);
     }
@@ -95,7 +156,8 @@ export default function ClaimProviderScreen({ navigation }: Props) {
       setMaskedEmail(masked);
       setStep('code');
     } catch (e: any) {
-      Alert.alert('Couldn\'t send code', e?.message ?? 'Please try again.');
+      logger.error('[ClaimProvider] request code failed:', e);
+      Alert.alert("Couldn't send code", friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsBusy(false);
     }
@@ -125,7 +187,8 @@ export default function ClaimProviderScreen({ navigation }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.navigate('SignUpStep1');
     } catch (e: any) {
-      Alert.alert('Something went wrong', e?.message ?? 'Please try again.');
+      logger.error('[ClaimProvider] confirm claim failed:', e);
+      Alert.alert('Something went wrong', friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsBusy(false);
     }
@@ -136,9 +199,27 @@ export default function ClaimProviderScreen({ navigation }: Props) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView>
         <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
-          <TouchableOpacity onPress={() => (step === 'search' ? navigation.goBack() : setStep('search'))} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => {
+              // Entered directly with a known listing (e.g. from
+              // ProviderProfileScreen's "Claim this business") — there was
+              // never a search step to fall back to, so back should leave
+              // this screen entirely rather than land on an empty search
+              // field the user never used.
+              if (knownProviderId || step === 'search') {
+                navigation.goBack();
+              } else {
+                setStep('search');
+              }
+            }}
+            style={styles.backBtn}
+          >
             <Text style={[styles.backText, { color: t.accent }]}>{'‹ Back'}</Text>
           </TouchableOpacity>
+
+          {step === 'preview' && isLoadingKnown && (
+            <ActivityIndicator style={{ marginTop: 40 }} color={t.accent} />
+          )}
 
           {step === 'search' && (
             <>
@@ -151,7 +232,7 @@ export default function ClaimProviderScreen({ navigation }: Props) {
                 placeholder="Business name or city"
                 placeholderTextColor={t.sub}
                 value={query}
-                onChangeText={runSearch}
+                onChangeText={setQuery}
                 autoCapitalize="words"
               />
               {isSearching && <ActivityIndicator style={{ marginTop: 16 }} color={t.accent} />}

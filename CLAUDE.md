@@ -2,10 +2,10 @@
 
 Read this at the start of every session. It's the standing bar for how work gets
 done in this repo — security, scalability, and functionality — not a description
-of what the app does (see `LOGIC.md` for that, though treat it as aspirational/
-stale, not authoritative — verify against actual code) and not a log of ongoing
-work (see the auto-memory `MEMORY.md`, which tracks facts, bugs, and decisions
-over time).
+of what the app does (see `APP_STATE.md` for that — a living doc, kept current,
+not a one-time snapshot; verify anything load-bearing against actual code
+regardless) and not a log of ongoing work (see the auto-memory `MEMORY.md`,
+which tracks facts, bugs, and decisions over time).
 
 CERVICED is a two-sided beauty & wellness marketplace (React Native/Expo +
 TypeScript, Supabase backend), UK-based (£ pricing), connecting clients with
@@ -54,6 +54,15 @@ instead of re-deriving their knowledge from scratch:
   management-style pass across a change or the whole repo — it's the "does
   this stay manageable at scale" lens, distinct from the security/scalability
   agents' correctness/performance lenses.
+- **`cerviced-feature-coherence`** — finds features that don't talk to
+  each other: copy that asserts an event nothing actually causes, a setting
+  only some of the paths it implies actually read, one concept split across
+  two screens as two contradictable settings, or two features each assuming
+  the other covers a case. One level up from
+  `cerviced-detail-consistency-audit`'s value-level bugs — here every piece
+  is individually correct and the wiring between them is what's missing.
+  Reach for it when a feature spans two screens or hats, and before adding
+  any notification or new user-facing setting.
 - **`cerviced-design-review`** — checks a screen/component against
   `DESIGN_SYSTEM.md`'s actual documented conventions (exact palette hex
   values, mandatory `ThemedBackground` wrapper, accent color, typography,
@@ -134,11 +143,16 @@ visibly slow:
 
 ## Functionality & verification
 
-- `npx tsc --noEmit` is the actual verification standard right now —
-  `npm test` (no `jest-expo` installed) and `npm run lint` (ESLint 9, no
-  config file) are both broken pre-existing, not something your change broke.
-  Don't try to "fix" that as a side effect of an unrelated task without
-  asking; do run `tsc` before calling anything done.
+- Run **both** `npx tsc --noEmit` and `npm test` before calling anything done.
+  `jest-expo` is installed and the suite genuinely passes (20 suites / 44
+  tests, a few seconds) — it covers Becca routing and capability contracts,
+  booking/cart/date presentation, profile mappers, receipts and the platform
+  fee, so it catches real regressions in exactly the areas most likely to
+  break. Add a test alongside new logic in those areas rather than leaving
+  the suite behind.
+- `npm run lint` **is** still broken pre-existing (ESLint 9, no config file
+  anywhere in the repo) — that's not something your change broke. Don't try
+  to "fix" it as a side effect of an unrelated task without asking.
 - For UI changes, actually run the app and exercise the golden path when you
   can (see the `run` skill). Typechecking proves the code compiles, not that
   the feature works.
@@ -203,13 +217,15 @@ agent — these are the standing rules of thumb for every session.
   still imports it, migrate that screen to `<ThemedBackground>` in the same
   pass instead of leaving the shim in place indefinitely.
 - **Root-level docs are already sprawled — don't add to it without
-  consolidating.** `LOGIC.md`, `FEATURE_LOGIC.md`, `FUTURE_LOGIC.md`,
-  `APP_OVERVIEW.md`, `APP_PROGRESS.md`, and `FINAL_STATUS.md` all describe
-  overlapping "what the app does / where it's headed" ground, and several are
-  already explicitly stale. Before adding a new top-level `*.md`, check
-  whether an existing doc should be updated instead — and if a new one is
-  genuinely warranted, note in it which older doc(s) it supersedes so the
-  next person isn't guessing which of six files is current.
+  consolidating.** `LOGIC.md`, `APP_OVERVIEW.md`, `APP_PROGRESS.md`, and
+  `FINAL_STATUS.md` used to describe overlapping "current app state" ground
+  and were consolidated into a single living doc, `APP_STATE.md`, on
+  2026-08-08 (the four originals were deleted). `FEATURE_LOGIC.md` (build
+  methodology) and `FUTURE_LOGIC.md` (roadmap) are a different genre and
+  remain separate on purpose. Before adding a new top-level `*.md`, check
+  whether `APP_STATE.md` or an existing doc should be updated instead — and
+  if a new one is genuinely warranted, note in it which older doc(s) it
+  supersedes so the next person isn't guessing which file is current.
 - **`docs/vault/auto/` is an auto-generated pipeline, not a place to
   hand-edit.** Files landing there as untracked `"<Name> 2.md"` duplicates
   (e.g. `BeautyProfileScreen 2.md`, `ExploreScreen 2.md`) are a generator
@@ -228,8 +244,114 @@ agent — these are the standing rules of thumb for every session.
   version), or, if both must coexist for a migration window, name both for
   what they *are* (`stripeService.ts` vs. the mock flow it's replacing), not
   for their age.
+- **CERVICED's git workflow runs like a professional engineering org's, not
+  like whatever's fastest in the moment — this is a standing decision, not a
+  per-session judgment call.** Concretely, in order:
+  1. **One branch is one reviewable, mergeable unit of work.** Before
+     committing, check whether the currently-checked-out branch's own name and
+     purpose actually describe the work about to go into it. If they don't,
+     that work does not belong on this branch, full stop — not "it's a small
+     fix, it's fine here." This holds even though nothing about the branch
+     being non-`main` forces a new one: a session inherits whatever branch was
+     checked out when it started, and "that's what was already checked out"
+     is not a reason to bundle unrelated work onto it. On 2026-08-28 three
+     unrelated fixes (a booking-calendar bug, a query-caching pass, a
+     coach-mark-tour race) landed on `inforeg/guided-steps-redesign` — a
+     branch named for, and meant to hold only, the InfoReg guided-steps
+     redesign — for exactly that reason. Don't repeat it: branch off `main`
+     for anything the current branch's name doesn't cover
+     (`git checkout main && git pull && git checkout -b fix/<short-name>`),
+     commit and push there, and leave the other branch untouched. This is
+     *on top of*, not a replacement for, "branch first if the repo is on
+     `main`" — that covers the default-branch case; this covers the far more
+     common case of an existing, differently-scoped feature branch already
+     being checked out.
+  2. **Commit messages are `type(scope): a real sentence describing what
+     changed`**, not a terse Conventional-Commits fragment — `git log` is
+     this repo's actual practiced convention, just not written down until
+     now: `fix(bookings): tell the provider where to change what they get
+     asked about`, `feat(reschedule): say plainly when the cancellation
+     window has already passed`, `revert(schedule): put back "Outside your
+     hours by request"`. Types in use: `feat`, `fix`, `refactor`, `style`,
+     `copy`, `chore`, `docs`, `revert`. Keep using it exactly as-is — the
+     rules below (stage only your own paths, disclose a mixed file) still
+     apply underneath it.
+  3. **Each small branch gets its own push and, where the workflow calls for
+     one, its own PR/squash-merge into `main`** — independently of whatever
+     else is in flight, per point 1. Don't hold a finished, unrelated fix
+     hostage to a bigger branch's review timeline just because that's where
+     it happened to get written.
+
+  If you're ever unsure whether something belongs on the current branch, ask
+  rather than default to "it's already checked out" — that default is
+  exactly the failure mode this rule exists to close off.
+- **Commit intentionally; never `git add -A`.** There is no auto-checkpoint
+  hook any more — a `Stop` hook that ran
+  `git add -A && git commit -m "checkpoint: WIP <date>"` on every turn was
+  removed on 2026-08-20. It produced 24 meaningless commits out of 142 and,
+  because this repo is often open in **two Claude sessions at once**, each
+  session kept committing the other's half-written files — which is what made
+  a constant appear to "revert" mid-session and threw `tsc` errors in files
+  nobody was editing. Stage the specific paths you touched, commit when a unit
+  of work is actually done, and write a message that says what changed.
+  `/rewind` covers mid-turn undo without touching git. The branch is
+  squash-merged into `main`, so the existing WIP commits never reach it.
+- **Commit your own work only — `git add <paths>` does not scope a commit.**
+  `git commit` commits everything **staged**, not the paths you just added, so
+  anything the other session left staged rides along under your message. Use
+  the pathspec form instead, which commits only the named paths and leaves a
+  concurrently-staged file untouched and still staged:
+
+  ```
+  git commit -m "..." src/thing.ts src/tests/thing.test.ts
+  ```
+
+  Before committing, read `git status --short` and treat any staged entry in
+  the **left** column (`M `, `A `, `R `) as someone else's work unless you put
+  it there: don't sweep it in. On 2026-08-26 a migration rename another session
+  had staged landed inside an unrelated cart fix exactly this way.
+
+  One exception, and it is not a mistake: `.githooks/pre-commit` regenerates
+  the Obsidian vault and runs `git add docs/vault/auto` on any commit touching
+  `src/` or `supabase/`. Those files appearing in your commit is the hook doing
+  its job — leave them alone rather than hunting for who staged them.
+  Two caveats: the pathspec form commits the working-tree state of those paths,
+  so it ignores a deliberately part-staged hunk; and it only accepts **tracked**
+  paths, so a brand-new file still needs `git add` first — then name it in the
+  commit's pathspec along with everything else.
+- **Don't leave your own work uncommitted "to be safe" either.** The other
+  session's next commit picks it up under an unrelated message — that is how
+  `getBookableServiceIds`, a cart fix, landed inside a business-type refactor
+  on 2026-08-26. Uncommitted is not neutral in a shared tree.
+- **When one file genuinely holds both sessions' changes, say so in the
+  message.** Git can't split a file at commit time, and a silent mixed commit
+  is worse than an acknowledged one. Name the other change and which commit it
+  belongs with, rather than rewriting shared history to separate them —
+  rewriting unpushed commits while another session is mid-edit is how this
+  repo loses work.
+- **One session owns migrations at a time — see `supabase/MIGRATION_OWNER.md`,
+  and check it before writing or applying one.** The commit rules above stop
+  two sessions mixing *files*; they do nothing about two sessions writing
+  schema against one live Supabase project, which is the sharper risk because
+  git mistakes are recoverable and a migration applied out of order isn't
+  always. `CREATE OR REPLACE` succeeds silently against a newer definition, so
+  a correct migration numbered below the applied frontier reverts someone
+  else's work with no error and no conflict. The consent-gate migration was
+  renumbered twice for exactly this before the rule existed. Number above
+  `max(version)` in `supabase_migrations.schema_migrations`, never off the wall
+  clock, and release the lock when the migration is **applied** rather than
+  when the file is written.
+- **This repo lives under `~/Desktop`, so iCloud forks conflicting writes**
+  into numbered copies (`shuffle 2.ts` beside `shuffle.ts`). They are never
+  intentional content, and `.gitignore` now drops them — but only for
+  `ts/tsx/js/jsx/json`. Numbered **asset** files are legitimate here
+  (`assets/logos/iPhone 14 & 15 Pro Max - 3.png`) and `supabase/migrations/`
+  is excluded on purpose, since a real migration must never be silently
+  untracked. Never resolve one of these by filename heuristic: diff it against
+  its counterpart first. 15 unresolved ones are listed in `PRE-LAUNCH-TODO.md`
+  section 8.
 - **"Done" is a program-management gate, not just green output.** For
-  anything non-trivial: `tsc` clean, golden path actually run (not just
+  anything non-trivial: `tsc` clean, `npm test` green, golden path actually run (not just
   typechecked), the relevant specialist review agent(s) invoked (security /
   scalability / legal as applicable), no orphaned files or dead code left
   behind, and — if the change changes a fact worth remembering — the

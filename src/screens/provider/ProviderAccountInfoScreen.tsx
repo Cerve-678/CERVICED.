@@ -13,11 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../../lib/supabase';
-import { getUserBasicInfo, updateUserNamePhone, updateUserDob } from '../../services/databaseService';
+import { getMyProviderAccountEditorInfo, updateUserContactDetails, updateUserDob } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { toUserMessage } from '../../utils/userFacingError';
 
 const CP_DARK = {
   bg: '#1A1815', surface: '#201D1A', card: '#252220',
@@ -48,22 +48,14 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        setUserId(user.id);
-        setAuthEmail(user.email ?? '');
-        const data = await getUserBasicInfo(user.id);
-        if (data) {
-          setName(data.name ?? '');
-          setPhone(data.phone ?? '');
-          setDob(data.dob ?? '');
-        }
-        const { data: prov } = await supabase
-          .from('providers')
-          .select('display_name')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        if (prov) setBusinessName(prov.display_name ?? '');
+        const data = await getMyProviderAccountEditorInfo();
+        if (!data) return;
+        setUserId(data.userId);
+        setAuthEmail(data.email);
+        setName(data.name);
+        setPhone(data.phone);
+        setDob(data.dob);
+        setBusinessName(data.businessName);
       } finally {
         setLoading(false);
       }
@@ -77,7 +69,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     try {
       if (userId) {
         await Promise.all([
-          updateUserNamePhone(userId, name.trim(), phone.trim() || ''),
+          updateUserContactDetails(userId, { name: name.trim(), phone: phone.trim() || '' }),
           updateUserDob(userId, dob.trim() || null),
         ]);
         // Refresh in-memory user so Settings displayName updates immediately
@@ -86,7 +78,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Could not save changes', e.message ?? 'Please try again.');
+      Alert.alert('Could not save changes', toUserMessage(e, 'Please try again.', 'ProviderAccountInfoScreen.save'));
     } finally {
       setSaving(false);
     }
@@ -117,7 +109,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
               // client mode and this screen unmounts the same way.
             } catch (err: any) {
               setDeletingAccount(false);
-              Alert.alert('Error', err?.message || 'Could not delete your account. Please try again.');
+              Alert.alert('Account not deleted', toUserMessage(err, 'Your account is still here — please try again.', 'ProviderAccountInfoScreen.deleteProfile'));
             }
           },
         },

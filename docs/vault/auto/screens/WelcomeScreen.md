@@ -4,12 +4,12 @@ tags: [screen, client]
 # WelcomeScreen
 #screen · `src/screens/auth/WelcomeScreen.tsx`
 
-**Registered route(s):** `Welcome`
+**Registered route(s):** _unregistered_
 
 ## → Navigates to
-- [[SignUpStep1Screen\|SignUpStep1]]
-- [[LoginScreen\|Login]]
-- [[ClaimProviderScreen\|ClaimProvider]]
+- `SignUpStep1` _(navigator / dynamic)_
+- `Login` _(navigator / dynamic)_
+- `ClaimProvider` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

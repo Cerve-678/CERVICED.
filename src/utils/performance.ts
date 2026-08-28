@@ -1,4 +1,4 @@
-`import { Dimensions } from 'react-native';
+import { Dimensions } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -23,10 +23,10 @@ export const PerformanceUtils = {
     func: T,
     wait: number
   ): (...args: Parameters<T>) => void => {
-    let timeout: NodeJS.Timeout;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     
     return (...args: Parameters<T>) => {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       timeout = setTimeout(() => func(...args), wait);
     };
   },
@@ -46,4 +46,4 @@ export const PerformanceUtils = {
       }
     };
   }
-};`
+};

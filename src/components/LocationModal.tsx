@@ -1,16 +1,15 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
-  Animated,
+  TouchableOpacity,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { useEnterpriseTheme } from '../contexts/ThemeContext';
-import TabIcon from './TabIcon';
+import { useTheme } from '../contexts/ThemeContext';
+import type { AppTheme } from '../constants/theme';
 
 interface LocationModalProps {
   visible: boolean;
@@ -21,94 +20,49 @@ interface LocationModalProps {
   onRadiusChange: (radius: number) => void;
 }
 
-const LocationChip = memo<{
+/** One selectable pill. Shared by both the city and radius groups — they
+ *  differ only in their label, so a single chip keeps the two lists visually
+ *  identical rather than drifting apart. */
+const Chip = memo<{
   label: string;
   isSelected: boolean;
+  palette: AppTheme;
   onPress: () => void;
-}>(({ label, isSelected, onPress }) => {
-  const { theme } = useEnterpriseTheme();
+}>(({ label, isSelected, palette: P, onPress }) => (
+  <TouchableOpacity
+    style={[
+      styles.pill,
+      { borderColor: P.border, backgroundColor: P.surface },
+      isSelected && { backgroundColor: P.accent, borderColor: P.accent },
+    ]}
+    onPress={onPress}
+    activeOpacity={0.75}
+  >
+    <Text style={[styles.pillText, { color: isSelected ? P.onAccent : P.text }]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+));
+Chip.displayName = 'Chip';
 
-  const chipStyles = useMemo(() => ({
-    container: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm + 2,
-      borderRadius: theme.borderRadius.xl,
-      borderWidth: 1,
-      backgroundColor: isSelected
-        ? theme.colors.brand.primary
-        : theme.colors.background.elevated,
-      borderColor: isSelected
-        ? theme.colors.brand.primary
-        : theme.colors.border.primary,
-    },
-    text: {
-      fontSize: theme.typography.fontSize.base,
-      fontWeight: theme.typography.fontWeight.semibold,
-      fontFamily: theme.typography.fontFamily.body,
-      color: isSelected ? theme.colors.text.inverse : theme.colors.text.secondary,
-    },
-  }), [theme, isSelected]);
+const LOCATIONS = [
+  'London, UK',
+  'Manchester, UK',
+  'Birmingham, UK',
+  'Leeds, UK',
+  'Glasgow, UK',
+  'Liverpool, UK',
+  'Bristol, UK',
+  'Sheffield, UK',
+];
 
-  return (
-    <TouchableOpacity
-      style={chipStyles.container}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={chipStyles.text}>{label}</Text>
-    </TouchableOpacity>
-  );
-});
-LocationChip.displayName = 'LocationChip';
-
-const RadiusChip = memo<{
-  label: string;
-  value: number;
-  isSelected: boolean;
-  onPress: () => void;
-}>(({ label, value, isSelected, onPress }) => {
-  const { theme } = useEnterpriseTheme();
-
-  const chipStyles = useMemo(() => ({
-    container: {
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-      gap: theme.spacing.xs + 2,
-      paddingHorizontal: theme.spacing.base,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.lg,
-      borderWidth: 1,
-      backgroundColor: isSelected
-        ? theme.colors.text.primary
-        : theme.colors.background.elevated,
-      borderColor: isSelected
-        ? theme.colors.text.primary
-        : theme.colors.border.primary,
-    },
-    text: {
-      fontSize: theme.typography.fontSize.sm,
-      fontWeight: theme.typography.fontWeight.semibold,
-      fontFamily: theme.typography.fontFamily.body,
-      color: isSelected ? theme.colors.text.inverse : theme.colors.text.secondary,
-    },
-  }), [theme, isSelected]);
-
-  return (
-    <TouchableOpacity
-      style={chipStyles.container}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <TabIcon
-        name="earth"
-        size={14}
-        color={isSelected ? theme.colors.text.inverse : theme.colors.text.secondary}
-      />
-      <Text style={chipStyles.text}>{label}</Text>
-    </TouchableOpacity>
-  );
-});
-RadiusChip.displayName = 'RadiusChip';
+const RADIUS_OPTIONS = [
+  { label: '1 mile', value: 1 },
+  { label: '5 miles', value: 5 },
+  { label: '10 miles', value: 10 },
+  { label: '25 miles', value: 25 },
+  { label: '50 miles', value: 50 },
+];
 
 export default function LocationModal({
   visible,
@@ -118,193 +72,143 @@ export default function LocationModal({
   onLocationChange,
   onRadiusChange,
 }: LocationModalProps) {
-  const { theme } = useEnterpriseTheme();
-
-  const locations = [
-    'London, UK',
-    'Manchester, UK',
-    'Birmingham, UK',
-    'Leeds, UK',
-    'Glasgow, UK',
-    'Liverpool, UK',
-    'Bristol, UK',
-    'Sheffield, UK',
-  ];
-
-  const radiusOptions = [
-    { label: '1 mile', value: 1 },
-    { label: '5 miles', value: 5 },
-    { label: '10 miles', value: 10 },
-    { label: '25 miles', value: 25 },
-    { label: '50 miles', value: 50 },
-  ];
-
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  // The hat-aware palette, not useEnterpriseTheme(): this sheet opens over the
+  // client Home, and the enterprise tokens are provider-hat only — they'd paint
+  // brown/dusty-rose chrome inside the client's plum + blue-grey theme.
+  const { palette: P } = useTheme();
 
   return (
     <Modal
       visible={visible}
-      animationType="fade"
-      transparent={true}
+      transparent
+      animationType="slide"
       onRequestClose={onClose}
-      statusBarTranslucent={true}
+      statusBarTranslucent
     >
-      <View style={styles.modalOverlay}>
-        <Animated.View style={styles.backdrop}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={onClose}
-          />
-        </Animated.View>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable
+          style={[styles.sheet, { backgroundColor: P.card, borderColor: P.border }]}
+          onPress={() => {}}
+        >
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: P.text }]}>LOCATION &amp; RADIUS</Text>
+          </View>
 
-        <View style={styles.modalContainer}>
-          <BlurView
-            intensity={theme.blur.intensity.medium}
-            tint={theme.blur.tint}
-            style={styles.modalContent}
-          >
-            {/* Header */}
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>
-                Location & Radius
-              </Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <TabIcon name="x" size={24} color={theme.colors.text.primary} />
-              </TouchableOpacity>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.sectionHead}>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>City</Text>
+            </View>
+            <View style={styles.pillGrid}>
+              {LOCATIONS.map(location => (
+                <Chip
+                  key={location}
+                  label={location}
+                  palette={P}
+                  isSelected={selectedLocation === location}
+                  onPress={() => onLocationChange(location)}
+                />
+              ))}
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContent}
-            >
-              {/* Location Selection */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  Select City
-                </Text>
-                <View style={styles.chipContainer}>
-                  {locations.map((location) => (
-                    <LocationChip
-                      key={location}
-                      label={location}
-                      isSelected={selectedLocation === location}
-                      onPress={() => onLocationChange(location)}
-                    />
-                  ))}
-                </View>
-              </View>
+            <View style={styles.sectionHead}>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>Search radius</Text>
+            </View>
+            <View style={[styles.pillGrid, styles.pillGridLast]}>
+              {RADIUS_OPTIONS.map(option => (
+                <Chip
+                  key={option.value}
+                  label={option.label}
+                  palette={P}
+                  isSelected={selectedRadius === option.value}
+                  onPress={() => onRadiusChange(option.value)}
+                />
+              ))}
+            </View>
+          </ScrollView>
 
-              {/* Radius Selection */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  Search Radius
-                </Text>
-                <View style={styles.chipContainer}>
-                  {radiusOptions.map((option) => (
-                    <RadiusChip
-                      key={option.value}
-                      label={option.label}
-                      value={option.value}
-                      isSelected={selectedRadius === option.value}
-                      onPress={() => onRadiusChange(option.value)}
-                    />
-                  ))}
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* Apply Button */}
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.applyButtonText}>Apply Location</Text>
-            </TouchableOpacity>
-          </BlurView>
-        </View>
-      </View>
+          <TouchableOpacity
+            style={[styles.applyButton, { backgroundColor: P.accent }]}
+            onPress={onClose}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.applyButtonText, { color: P.onAccent }]}>Apply</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useEnterpriseTheme>['theme']) => StyleSheet.create({
-  modalOverlay: {
+const styles = StyleSheet.create({
+  backdrop: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: theme.colors.background.overlay,
-  },
-  modalContainer: {
-    maxHeight: `${theme.components.modal.maxHeightPercent}%`,
-    borderTopLeftRadius: theme.components.modal.borderRadius,
-    borderTopRightRadius: theme.components.modal.borderRadius,
-    overflow: 'hidden',
-    paddingBottom: 0,
-  },
-  modalContent: {
-    borderTopLeftRadius: theme.components.modal.borderRadius,
-    borderTopRightRadius: theme.components.modal.borderRadius,
+  sheet: {
+    maxHeight: '75%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 34,
-    backgroundColor: theme.colors.background.elevated,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.base,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.secondary,
+    paddingVertical: 12,
   },
-  headerTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.bold,
-    fontFamily: theme.typography.fontFamily.heading,
-    color: theme.colors.text.primary,
+  title: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 0.5,
   },
-  closeButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
-  },
-  section: {
-    marginBottom: theme.spacing.xl,
+  sectionHead: {
+    marginTop: 18,
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: theme.typography.fontSize.md,
-    fontWeight: theme.typography.fontWeight.semibold,
-    marginBottom: theme.spacing.md,
-    fontFamily: theme.typography.fontFamily.body,
-    color: theme.colors.text.primary,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
-  chipContainer: {
+  pillGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: 8,
   },
+  pillGridLast: {
+    marginBottom: 4,
+  },
+  pill: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  pillText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Height only — no vertical padding. The previous version set both
+  // (paddingVertical 16 + height 44), so the label needed ~51px inside a 44px
+  // box and got clipped.
   applyButton: {
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.lg,
-    backgroundColor: theme.colors.brand.primary,
-    paddingVertical: theme.spacing.base,
-    borderRadius: theme.components.button.borderRadius,
+    marginTop: 14,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
-    height: theme.components.button.height.md,
     justifyContent: 'center',
   },
   applyButtonText: {
-    fontSize: theme.typography.fontSize.md,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.inverse,
-    fontFamily: theme.typography.fontFamily.heading,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
 });

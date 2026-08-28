@@ -11,10 +11,15 @@ import ProviderClienteleScreen from '../../../screens/provider/ProviderClientele
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
+import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
+import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
+import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import { ProviderHomeStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 const ProviderHomeStack = createNativeStackNavigator<ProviderHomeStackParamList>();
+
+const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
 
 export default function ProviderHomeNavigator() {
   const { theme } = useTheme();
@@ -61,6 +66,22 @@ export default function ProviderHomeNavigator() {
         options={{ headerShown: false }}
       />
 
+      {/* Reached from this screen's profile quick-actions. Registered here so
+          those actions push onto the Home stack (leaving ProviderHomeMain
+          beneath) rather than jumping to the Profile tab root, where the
+          back/save button had no route to return to. */}
+      <ProviderHomeStack.Screen
+        name="EditProfile"
+        component={InfoRegComponent}
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="Branding"
+        component={BrandingScreen}
+        options={{ headerShown: false }}
+      />
+
       <ProviderHomeStack.Screen
         name="ProviderConversation"
         component={ProviderConversationScreen}
@@ -94,6 +115,11 @@ export default function ProviderHomeNavigator() {
         <ProviderHomeStack.Screen
           name="ProviderSchedule"
           component={ProviderScheduleScreen}
+          options={{ headerShown: false }}
+        />
+        <ProviderHomeStack.Screen
+          name="AddBooking"
+          component={AddBookingScreen}
           options={{ headerShown: false }}
         />
       </ProviderHomeStack.Group>

@@ -12,7 +12,9 @@ The map of the whole app. This is an Obsidian vault: every `[[link]]` is a jump 
 
 ## Core features (how they actually work)
 - [[Client vs Provider Hats]] — the dual-hat account model: how switching works, what each hat can/can't do, and the known edge cases
+- [[Cart & Checkout]] — add to cart → grouping → money → slot hold → payment sheet, and how a blocked checkout says which service is wrong
 - [[Booking Flow]] — cart → checkout → booking created → confirmed
+- [[Cancellations]] — notice-window gate, deposit disclosure copy, provider-cancel → client-notify wiring
 - [[Availability & Slots]] — how open times are computed and double-booking is blocked
 - [[Address Release]] — when a client can see the provider's address
 - [[Payments]] — money fields, deposits, who computes them

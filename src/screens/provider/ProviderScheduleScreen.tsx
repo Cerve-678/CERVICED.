@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
+  Keyboard,
   Modal,
   Platform,
   ScrollView,
@@ -22,20 +22,20 @@ import {
   getMyProviderProfile,
   getProviderAvailability,
   getProviderAvailabilityWindows,
-  replaceProviderAvailabilityWindows,
-  upsertProviderAvailability,
+  saveProviderWeeklySchedule,
   getProviderBlockedDates,
   addProviderBlockedDate,
   removeProviderBlockedDate,
+  getProviderBookingsByDate,
   getProviderAvailabilityOverrides,
   addProviderAvailabilityOverride,
   removeProviderAvailabilityOverride,
 } from '../../services/databaseService';
 import type { DbProviderAvailability, DbProviderBlockedDate, DbProviderAvailabilityOverride } from '../../types/database';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../../utils/dateUtils';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -123,7 +123,7 @@ function formatYMD(ymd: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ProviderScheduleScreen() {
   const navigation = useNavigation();
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useProviderDialog();
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -273,7 +273,7 @@ export default function ProviderScheduleScreen() {
     // provider never toggled still render as open Mon-Fri 9-6 (makeDefault())
     // — that's what they see and believe they're saving — but a day with no
     // row in provider_availability is treated as closed everywhere a client
-    // checks availability (AvailabilityService, createBooking). Saving only
+    // checks availability (AvailabilityService, enforce_booking_bookability). Saving only
     // "dirty" days meant a provider who accepted the shown defaults, or only
     // edited one day, ended up with some or all days silently un-persisted:
     // the screen looked fully configured but clients could never book those
@@ -289,18 +289,19 @@ export default function ProviderScheduleScreen() {
           index !== otherIndex && w.day_of_week === other.day_of_week && w.start_time < other.end_time && w.end_time > other.start_time,
         ));
       if (invalid) { showToast('Each working period must be valid and cannot overlap another period.', 'error'); return; }
-      await Promise.all(days.map(d =>
-        upsertProviderAvailability(providerId, d.dow, d.openTime, d.closeTime, !d.isOpen),
-      ));
-      // v2 is the booking source for newly saved schedules. This editor saves
-      // one period per open day; the data model also supports split shifts.
-      await replaceProviderAvailabilityWindows(
+      await saveProviderWeeklySchedule(
         providerId,
+        days.map(d => ({
+          day_of_week: d.dow,
+          open_time: d.openTime,
+          close_time: d.closeTime,
+          is_closed: !d.isOpen,
+        })),
         allWindows,
       );
       setDays(prev => prev.map(d => ({ ...d, dirty: false })));
       navigation.goBack();
-    } catch (e) {
+    } catch {
       showToast('Could not save hours. Please try again.', 'error');
     } finally {
       setSaving(false);
@@ -317,11 +318,40 @@ export default function ProviderScheduleScreen() {
         showToast('This date is already blocked.', 'info');
         return;
       }
+      const existingBookings = await getProviderBookingsByDate(providerId, ymd);
+      if (existingBookings.length > 0) {
+        setAddingBlock(false);
+        showConfirm(
+          existingBookings.length === 1
+            ? 'You have 1 booking on this date'
+            : `You have ${existingBookings.length} bookings on this date`,
+          'Blocking this date will not cancel or notify the client(s). You’ll need to handle those bookings yourself.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Block anyway',
+              style: 'destructive',
+              onPress: () => { void commitBlockDate(providerId, ymd); },
+            },
+          ],
+        );
+        return;
+      }
+      await commitBlockDate(providerId, ymd);
+    } catch {
+      showToast('Could not block date. Please try again.', 'error');
+      setAddingBlock(false);
+    }
+  }
+
+  async function commitBlockDate(providerId: string, ymd: string) {
+    setAddingBlock(true);
+    try {
       await addProviderBlockedDate(providerId, ymd, blockReason.trim() || null);
       setBlockReason('');
       const updated = await getProviderBlockedDates(providerId);
       setBlockedDates(updated);
-    } catch (e) {
+    } catch {
       showToast('Could not block date. Please try again.', 'error');
     } finally {
       setAddingBlock(false);
@@ -330,9 +360,9 @@ export default function ProviderScheduleScreen() {
 
   async function handleRemoveBlock(id: string) {
     try {
-      await removeProviderBlockedDate(id);
+      await removeProviderBlockedDate(id, providerId ?? undefined);
       setBlockedDates(prev => prev.filter(b => b.id !== id));
-    } catch (e) {
+    } catch {
       showToast('Could not remove blocked date.', 'error');
     }
   }
@@ -366,7 +396,7 @@ export default function ProviderScheduleScreen() {
       const updated = await getProviderAvailabilityOverrides(providerId, dateToYMD(new Date()));
       setOverrides(updated);
       showToast('Custom hours saved.', 'success');
-    } catch (e) {
+    } catch {
       showToast('Could not save custom hours.', 'error');
     } finally {
       setAddingOverride(false);
@@ -375,9 +405,9 @@ export default function ProviderScheduleScreen() {
 
   async function handleRemoveOverride(id: string) {
     try {
-      await removeProviderAvailabilityOverride(id);
+      await removeProviderAvailabilityOverride(id, providerId ?? undefined);
       setOverrides(prev => prev.filter(o => o.id !== id));
-    } catch (e) {
+    } catch {
       showToast('Could not remove custom hours.', 'error');
     }
   }
@@ -386,12 +416,15 @@ export default function ProviderScheduleScreen() {
   return (
     <View style={[s.root, { backgroundColor: P.bg }]}>
       <SafeAreaView style={[s.safe, { backgroundColor: P.bg }]} edges={['top']}>
+        <KeyboardDismissView style={s.keyboardView}>
         {/* Header */}
         <View style={s.header}>
           <Text style={[s.headerTitle, { color: P.text }]}>My Schedule</Text>
-          <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={22} color={P.sub} />
-          </TouchableOpacity>
+          <View style={s.headerActions}>
+            <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel="Close schedule">
+              <Ionicons name="close" size={22} color={P.sub} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Segmented control */}
@@ -410,7 +443,13 @@ export default function ProviderScheduleScreen() {
         {/* ── Hours tab ───────────────────────────────────────────────────── */}
         {tab === 'hours' && (
           <>
-            <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={s.list}
+              contentContainerStyle={s.listContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+            >
               {days.map((day, idx) => (
                 <View key={day.dow} style={[s.dayRow, idx < days.length - 1 && [s.dayRowBorder, { borderBottomColor: P.border }]]}>
                   <View style={s.dayLeft}>
@@ -521,7 +560,13 @@ export default function ProviderScheduleScreen() {
 
         {/* ── Blocked Dates tab ────────────────────────────────────────────── */}
         {tab === 'blocked' && (
-          <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={s.list}
+            contentContainerStyle={s.listContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          >
             {/* Add new blocked date */}
             <View style={[s.blockAddCard, { backgroundColor: P.surface }]}>
               <Text style={[s.blockAddTitle, { color: P.text }]}>Block a Date</Text>
@@ -535,6 +580,8 @@ export default function ProviderScheduleScreen() {
                 placeholderTextColor={P.sub}
                 value={blockReason}
                 onChangeText={setBlockReason}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
               />
               <TouchableOpacity
                 style={[s.addBlockBtn, { backgroundColor: P.accent, borderColor: P.ice + '30' }, addingBlock && s.saveBtnDim]}
@@ -716,6 +763,8 @@ export default function ProviderScheduleScreen() {
             )}
           </ScrollView>
         )}
+
+        </KeyboardDismissView>
       </SafeAreaView>
       <DialogHost />
     </View>
@@ -729,11 +778,13 @@ const s = StyleSheet.create({
 
   header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   headerTitle: { flex: 1, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
+  headerActions: { flexDirection: 'row', gap: 8 },
   closeBtn:    { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
 
   segWrap:      { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
 
   safe:        { flex: 1 },
+  keyboardView:{ flex: 1 },
   list:        { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
 

@@ -1,6 +1,7 @@
 // src/screens/auth/WelcomeScreen.tsx
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -9,8 +10,11 @@ import {
   StatusBar,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+import { signInWithAppleIdToken } from '../../services/databaseService';
+import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -19,11 +23,52 @@ type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
+  const { isLoggedIn } = useAuth();
   const insets = useSafeAreaInsets();
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
+  // Guards re-entrant taps synchronously — `disabled={isAppleLoading}` on the
+  // button only takes effect after a re-render, leaving a brief window where
+  // a fast double-tap fires handleAppleLogin twice concurrently. A second
+  // concurrent AppleAuthentication.signInAsync() call while the first is
+  // still in flight rejects (the native sheet is already showing/dismissed),
+  // which used to surface a "Sign in failed" alert even though the FIRST
+  // call's signInWithIdToken had already succeeded and logged the user in.
+  const isAppleInFlightRef = useRef(false);
 
   const handleSocialLogin = (provider: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     Alert.alert('Coming soon', `${provider} login will be available soon.`);
+  };
+
+  const handleAppleLogin = async () => {
+    if (isAppleInFlightRef.current) return;
+    isAppleInFlightRef.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        Alert.alert('Sign in failed', 'No identity token received from Apple.');
+        return;
+      }
+      setIsAppleLoading(true);
+      await signInWithAppleIdToken(credential.identityToken);
+      setIsAppleLoading(false);
+      // On success, AuthContext.onAuthStateChange handles navigation
+    } catch (e: any) {
+      // A concurrent/duplicate attempt (or one that lands after the user is
+      // already signed in via an earlier in-flight call) must not show a
+      // false failure alert — check the real auth state before alerting.
+      if (e.code !== 'ERR_REQUEST_CANCELED' && !isLoggedIn) {
+        Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
+      }
+    } finally {
+      isAppleInFlightRef.current = false;
+    }
   };
 
   return (
@@ -77,7 +122,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
           {/* Social Login */}
           <View style={styles.socialRow}>
-            {['Instagram', 'Google', 'Apple'].map(p => (
+            {(['Instagram', 'Google'] as const).map(p => (
               <TouchableOpacity
                 key={p}
                 style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
@@ -87,6 +132,18 @@ export default function WelcomeScreen({ navigation }: Props) {
                 <Text style={[styles.socialLabel, { color: t.text }]}>{p}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
+              onPress={handleAppleLogin}
+              activeOpacity={0.7}
+              disabled={isAppleLoading}
+            >
+              {isAppleLoading ? (
+                <ActivityIndicator color={t.text} />
+              ) : (
+                <Text style={[styles.socialLabel, { color: t.text }]}>Apple</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Terms */}

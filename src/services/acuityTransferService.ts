@@ -5,30 +5,35 @@
 // extract-provider-profile Edge Function — keeping it server-side means the
 // Anthropic API key never ships inside the app bundle, and the same function
 // is reused by the batch scrape pipeline.
-import { supabase } from '../lib/supabase';
 import { ProviderRegistrationData } from './providerRegistrationService';
+import { extractProviderProfileFromUrl } from './databaseService';
+import { reportError } from '../utils/logger';
 
 interface ExtractedProfile {
   providerName?: string;
   location?: string;
   aboutText?: string;
-  slotsText?: string;
   serviceCategory?: string;
   phone?: string;
   email?: string;
   instagram?: string;
   website?: string;
-  categories?: Record<string, Array<{ name?: string; price?: number | string; duration?: string; description?: string }>>;
+  categories?: Record<string, { name?: string; price?: number | string; duration?: string; description?: string }[]>;
 }
 
 export async function transferFromAcuity(url: string): Promise<ProviderRegistrationData> {
-  const { data, error } = await supabase.functions.invoke('extract-provider-profile', {
-    body: { url, sourceType: 'acuity' },
-  });
+  let data: unknown;
+  try {
+    data = await extractProviderProfileFromUrl(url, 'acuity');
+  } catch (error) {
+    // An edge-function invoke error reads like "Edge Function returned a non-2xx
+    // status code" — true, and useless to a provider. Log the real one, throw copy.
+    reportError(error, 'acuityTransferService.invoke');
+    throw new Error('Could not read that page. Please check the link and try again.');
+  }
 
-  if (error) throw new Error(error.message || 'Could not extract data from that link. Please try again.');
-
-  const extracted: ExtractedProfile = data?.extracted ?? {};
+  const extracted: ExtractedProfile =
+    (data as { extracted?: ExtractedProfile } | null)?.extracted ?? {};
 
   const categories: ProviderRegistrationData['categories'] = {};
   let serviceId = 1;
@@ -55,6 +60,8 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       contraindications: [],
       aftercareNotes: '',
       serviceType: '' as const,
+      hairTypesSuitable: [],
+      audience: '' as const,
     }));
   }
 
@@ -65,7 +72,9 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       extracted.serviceCategory === 'OTHER' ? (extracted.providerName || '') : '',
     location: extracted.location || '',
     aboutText: extracted.aboutText || '',
-    slotsText: extracted.slotsText || '',
+    // Acuity has no equivalent concept to import — provider sets this
+    // themselves afterward via InfoRegScreen/ProviderAutomationsScreen.
+    scheduleReleaseDay: null,
     gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
     hasCustomGradient: false,
     accentColor: '#7B1FA2',
@@ -82,7 +91,15 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     externalBookingUrl: '',
     yearsExperience: '',
     businessType: '',
+    teamSize: '',
+    accessibilityNotes: '',
+    termsAcceptedAt: null,
+    languagesSpoken: [],
+    priceRange: '',
+    serviceLocations: [],
+    preferredPaymentMethods: [],
     fullAddress: '',
+    fullAddressCoordinates: null,
     addressReleasePolicy: 'on_confirmation',
     backgroundImage: null,
     isVerified: false,

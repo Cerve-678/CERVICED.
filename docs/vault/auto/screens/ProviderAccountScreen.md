@@ -11,6 +11,8 @@ tags: [screen, provider]
 - [[ProviderPromotionsScreen\|Promotions]]
 - [[ProviderClienteleScreen\|Clientele]]
 - [[BusinessProfileScreen\|BusinessProfile]]
+- [[ProviderScheduleScreen\|ProviderSchedule]]
+- [[ProviderInboxScreen\|ProviderInbox]]
 - [[ProviderBookingHistoryScreen\|BookingHistory]]
 - [[ChangePasswordScreen\|ChangePassword]]
 - [[ProviderAccountInfoScreen\|AccountInfo]]
@@ -19,8 +21,8 @@ tags: [screen, provider]
 - [[AboutScreen\|About]]
 - [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
-- [[SignUpStep2Screen\|SignUpStep2]]
-- [[SignUpStep1Screen\|SignUpStep1]]
+- `SignUpStep2` _(navigator / dynamic)_
+- `SignUpStep1` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

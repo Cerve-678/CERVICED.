@@ -9,8 +9,6 @@ tags: [screen, provider]
 ## → Navigates to
 - [[ProviderConversationScreen\|ProviderConversation]]
 - [[NotificationsScreen\|Notifications]]
-- [[ProviderScheduleScreen\|ProviderSchedule]]
-- `Profile` _(navigator / dynamic)_
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map

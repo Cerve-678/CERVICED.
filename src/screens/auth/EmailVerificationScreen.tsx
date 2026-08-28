@@ -15,10 +15,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
-import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
+import {
+  invokeSendAccountEmail,
+  resendSignupOtp,
+  upsertVerifiedUserProfile,
+  verifySignupOtp,
+} from '../../services/databaseService';
 import { isBiometricAvailable, getBiometricLabel, enableBiometric } from '../../services/biometricService';
-import { upsertUserAfterVerification } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -70,28 +73,29 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsVerifying(true);
     try {
-      const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
-      if (error) {
+      let session: Awaited<ReturnType<typeof verifySignupOtp>>;
+      try {
+        session = await verifySignupOtp(email, token);
+      } catch {
         Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
         return;
       }
-
-      const session = data?.session;
-      if (!session) {
-        Alert.alert('Verification failed', 'Could not sign in. Please try resending the code.');
-        return;
-      }
-
-      const meta = session.user.user_metadata as Record<string, any>;
+      const meta = session.userMetadata as Record<string, any>;
       const dob = meta['dob'] ?? '';
 
-      const { error: upsertError } = await supabase.from('users').upsert({
-        id: session.user.id,
-        email: session.user.email ?? email,
+      const profilePayload = {
+        id: session.userId,
+        email: session.email ?? email,
         name: meta['name'] ?? '',
         phone: meta['phone'] ?? '',
         dob: dob || null,
         role: meta['role'] ?? 'user',
+        // Set the hat explicitly — the column defaults to false, so a fresh
+        // client signup that leaves it out reads as having no client profile
+        // and loses the client tab. A provider signing up starts without one
+        // until they add it (addClientProfile), which is the point of the
+        // column: it is no longer inferred from whether `dob` happens to be set.
+        has_client_profile: (meta['role'] ?? 'user') !== 'provider',
         login_method: 'email',
         service_interests:     meta['service_interests']     ?? [],
         business_name:         meta['business_name']         ?? null,
@@ -113,20 +117,46 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         maintenance_frequency: meta['maintenance_frequency'] ?? null,
         referral_source:       meta['referral_source']       ?? null,
         gender:                meta['gender']                ?? null,
-        has_kids:              meta['has_kids']              ?? false,
-      }, { onConflict: 'id' });
+        has_kids:              meta['has_kids']               ?? false,
+        team_size:             meta['team_size']               ?? null,
+        accessibility_notes:   meta['accessibility_notes']     ?? null,
+        languages_spoken:      meta['languages_spoken']        ?? [],
+        specialties:           meta['specialties']             ?? [],
+        price_range:               meta['price_range']               ?? null,
+        preferred_contact_methods: meta['preferred_contact_methods'] ?? [],
+        preferred_payment_methods: meta['preferred_payment_methods'] ?? [],
+      };
 
-      if (upsertError) {
-        logger.warn('Profile upsert error:', upsertError.message);
+      try {
+        await upsertVerifiedUserProfile(profilePayload);
+      } catch (upsertError) {
+        // This is the account's only chance to save its signup answers — the
+        // auth user already exists at this point regardless of outcome, and
+        // nothing later retries it. Silently swallowing this (as before,
+        // logger.warn only) left the user signed in with a blank profile and
+        // no indication anything went wrong. Retry once in place; only
+        // surface failure to the user if the retry also fails.
+        logger.error('Profile upsert failed, retrying once:', upsertError);
+        try {
+          await upsertVerifiedUserProfile(profilePayload);
+        } catch (retryError) {
+          logger.error('Profile upsert retry also failed:', retryError);
+          Alert.alert(
+            'Almost there',
+            "Your account was created, but we couldn't save some of your details just now. " +
+            'You can fill in anything missing from Settings.'
+          );
+        }
       }
 
-      const toEmail = meta['role'] === 'provider'
-        ? (meta['business_email'] || session.user.email!)
-        : session.user.email!;
-      const template = meta['role'] === 'provider'
-        ? providerWelcomeEmail({ name: meta['name'] ?? '', ...(meta['business_name'] ? { businessName: meta['business_name'] } : {}) })
-        : clientWelcomeEmail({ name: meta['name'] ?? '' });
-      sendEmail(toEmail, template.subject, template.html).catch(() => {});
+      // Non-blocking: the account exists either way and nothing here should
+      // stand between the user and being signed in. The template, recipient
+      // and name are all resolved server-side — this only says which welcome.
+      invokeSendAccountEmail(
+        meta['role'] === 'provider' ? 'provider_welcome' : 'client_welcome',
+      ).catch((e) => {
+        logger.error('[email] welcome email failed to send:', e);
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       // onAuthStateChange fires after verifyOtp and handles login state via loadUserProfile.
@@ -138,8 +168,8 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       // Alert.alert (not a custom modal) because RootNavigation unmounts this
       // whole screen the instant isLoggedIn flips true — a native Alert is
       // OS-level and survives that unmount, a React modal wouldn't.
-      if (session.refresh_token) {
-        const refreshToken = session.refresh_token;
+      if (session.refreshToken) {
+        const refreshToken = session.refreshToken;
         isBiometricAvailable().then(async (available) => {
           if (!available) return;
           const label = await getBiometricLabel();
@@ -165,15 +195,16 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
   const handleResend = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setResending(true);
-    const { error } = await supabase.auth.resend({ type: 'signup', email });
-    setResending(false);
-    if (error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Error', "Couldn't resend the code. Please try again.");
-    } else {
+    try {
+      await resendSignupOtp(email);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
       Alert.alert('Sent!', 'A new code has been sent to your email.');
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Error', "Couldn't resend the code. Please try again.");
+    } finally {
+      setResending(false);
     }
   };
 

@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -9,16 +11,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../../lib/supabase';
 import {
   updateProviderAutoAccept,
-  updateProviderScheduleSettings,
-  updateProviderMaxBookingsPerDay,
   updateProviderCancellationPolicy,
   updateProviderAutomationSettings,
-  getMyProviderProfile,
+  getMyProviderProfileContext,
+  updateCurrentUserMetadata,
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -29,6 +30,9 @@ const C_DARK = {
   surface: '#201D1A',
   card:    '#252220',
   accent:  '#AF9197',
+  // Lighter than `accent` for standalone text (section labels, "Done" links) —
+  // the muted dusty rose reads as faint at small sizes against near-black cards.
+  accentText: '#D9AEB6',
   text:    '#F0ECE7',
   sub:     '#7E6667',
   border:  'rgba(255,255,255,0.08)',
@@ -40,6 +44,7 @@ const C_LIGHT = {
   surface: '#EDE8E2',
   card:    '#FFFFFF',
   accent:  '#5C4033',
+  accentText: '#5C4033',
   text:    '#1C1A18',
   sub:     '#8A8680',
   border:  'rgba(0,0,0,0.08)',
@@ -52,6 +57,7 @@ interface ProviderAutomations {
   // What CERVICED sends on your behalf — you choose when/if
   clientReminderTiming:   string[];   // ['24h', '48h', '72h'] — push to clients
   rebookingNudgeWeeks:    string;     // 'never' | '2' | '4' | '6' | '8' | '12'
+  scheduleReleaseDay:     number | null; // 1-31, day of month clients with the profile bell on get notified; null = off
   autoReviewRequest:      boolean;    // 2hrs after completion
   postApptCheckIn:        boolean;    // check-in message day after
   birthdayGreeting:       boolean;    // greeting on client birthday
@@ -59,34 +65,29 @@ interface ProviderAutomations {
 
   // Provider business rules
   autoConfirmBookings:    boolean;
-  bufferMins:             string;     // '0' | '10' | '15' | '30' | '45' | '60'
   cancellationNoticeHours:string;     // '0' | '12' | '24' | '48' | '72'
-  depositRequiredNew:     boolean;    // require deposit from first-time clients
   waitlistEnabled:        boolean;
   autoAcceptWaitlist:     boolean;
-  maxBookingsPerDay:      string;     // 'unlimited' | '4' | '6' | '8' | '10' | '12'
-  bookingWindowDays:      string;     // '14' | '30' | '60' | '90' | '180' | '0' (unlimited)
-  minBookingNoticeHrs:    string;     // '0' | '1' | '2' | '4' | '12' | '24'
-  slotIntervalMins:       string;     // '15' | '30' | '60'
+  // Owned and edited by PoliciesScreen — carried here only because saving
+  // automation_settings REPLACES the whole blob, so a value this screen didn't
+  // read back would be deleted on the next save. Never render an editor for it
+  // here; that's what created the split this consolidation just undid.
+  depositRequiredNew:     boolean;
 }
 
 const DEFAULTS: ProviderAutomations = {
   clientReminderTiming:    ['24h'],
   rebookingNudgeWeeks:     'never',
+  scheduleReleaseDay:      null,
   autoReviewRequest:       true,
   postApptCheckIn:         false,
   birthdayGreeting:        false,
   newBookingRecap:         true,
   autoConfirmBookings:     true,  // matches providers.auto_accept_bookings DB default
-  bufferMins:              '0',
   cancellationNoticeHours: '0',   // matches providers.cancellation_notice_hours DB default
-  depositRequiredNew:      false,
   waitlistEnabled:         false,
   autoAcceptWaitlist:      false,
-  maxBookingsPerDay:       'unlimited',
-  bookingWindowDays:       '60',
-  minBookingNoticeHrs:     '0',    // matches providers.min_booking_notice_hrs DB default
-  slotIntervalMins:        '60',
+  depositRequiredNew:      false,
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ function SectionHeader({ icon, label, sub, C }: { icon: string; label: string; s
     <View style={{ marginBottom: 12, marginTop: 28 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 4 }}>
         <Ionicons name={icon as any} size={13} color={C.accent} />
-        <Text style={[st.sectionLabel, { color: C.accent }]}>{label}</Text>
+        <Text style={[st.sectionLabel, { color: C.accentText }]}>{label}</Text>
       </View>
       <Text style={[st.sectionSub, { color: C.sub }]}>{sub}</Text>
     </View>
@@ -186,6 +187,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   const [toast, setToast]       = useState<{ msg: string; ok: boolean } | null>(null);
   const [d, setD]               = useState<ProviderAutomations>(DEFAULTS);
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -195,37 +197,45 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const [{ data: { user } }, profile] = await Promise.all([
-          supabase.auth.getUser(),
-          getMyProviderProfile(),
-        ]);
+        const context = await getMyProviderProfileContext();
+        const profile = context?.profile ?? null;
         if (profile) setProviderId(profile.id);
-        const m = user?.user_metadata ?? {};
+        const m = (context?.userMetadata ?? {}) as {
+          pa_client_reminder_timing?: string[];
+          pa_rebooking_nudge_weeks?: string;
+          pa_auto_review_request?: boolean;
+          pa_post_appt_check_in?: boolean;
+          pa_birthday_greeting?: boolean;
+          pa_new_booking_recap?: boolean;
+          pa_auto_confirm_bookings?: boolean;
+          pa_cancellation_notice_hours?: string | number;
+          pa_waitlist_enabled?: boolean;
+          pa_auto_accept_waitlist?: boolean;
+          pa_deposit_required_new?: boolean;
+        };
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
         const a = (profile as any)?.automation_settings ?? {};
         setD({
           clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
+          // Providers-row only (added after automation_settings existed) —
+          // no legacy user_metadata fallback needed.
+          scheduleReleaseDay:      a.scheduleReleaseDay   ?? DEFAULTS.scheduleReleaseDay,
           autoReviewRequest:       a.autoReviewRequest    ?? m['pa_auto_review_request']    ?? DEFAULTS.autoReviewRequest,
           postApptCheckIn:         a.postApptCheckIn      ?? m['pa_post_appt_check_in']     ?? DEFAULTS.postApptCheckIn,
           birthdayGreeting:        a.birthdayGreeting     ?? m['pa_birthday_greeting']      ?? DEFAULTS.birthdayGreeting,
-          newBookingRecap:         m['pa_new_booking_recap']           ?? DEFAULTS.newBookingRecap,
+          newBookingRecap:         a.newBookingRecap      ?? m['pa_new_booking_recap']      ?? DEFAULTS.newBookingRecap,
           // These four are enforced straight off the providers row (cron jobs
           // and the booking flow read them from there, not user_metadata) —
           // the row is the real answer, not just a fallback.
           autoConfirmBookings:     profile?.auto_accept_bookings ?? m['pa_auto_confirm_bookings'] ?? DEFAULTS.autoConfirmBookings,
-          bufferMins:              String(profile?.buffer_mins ?? m['pa_buffer_mins'] ?? DEFAULTS.bufferMins),
           cancellationNoticeHours: String(profile?.cancellation_notice_hours ?? m['pa_cancellation_notice_hours'] ?? DEFAULTS.cancellationNoticeHours),
-          depositRequiredNew:      a.depositRequiredNew   ?? m['pa_deposit_required_new']   ?? DEFAULTS.depositRequiredNew,
           waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
-          maxBookingsPerDay:       profile?.max_bookings_per_day != null
-            ? (profile.max_bookings_per_day === 0 ? 'unlimited' : String(profile.max_bookings_per_day))
-            : (m['pa_max_bookings_per_day'] ?? DEFAULTS.maxBookingsPerDay),
-          bookingWindowDays:       String(profile?.booking_window_days    ?? m['pa_booking_window_days']    ?? DEFAULTS.bookingWindowDays),
-          minBookingNoticeHrs:     String(profile?.min_booking_notice_hrs ?? m['pa_min_booking_notice_hrs'] ?? DEFAULTS.minBookingNoticeHrs),
-          slotIntervalMins:        String(profile?.slot_interval_mins     ?? m['pa_slot_interval_mins']     ?? DEFAULTS.slotIntervalMins),
+          // Read purely so the save below can write it back unchanged — see
+          // the note on the type above.
+          depositRequiredNew:      a.depositRequiredNew   ?? m['pa_deposit_required_new']   ?? DEFAULTS.depositRequiredNew,
         });
       } finally {
         setLoading(false);
@@ -238,8 +248,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       const saves: Promise<unknown>[] = [
-        supabase.auth.updateUser({
-          data: {
+        updateCurrentUserMetadata({
             pa_client_reminder_timing:    d.clientReminderTiming,
             pa_rebooking_nudge_weeks:     d.rebookingNudgeWeeks,
             pa_auto_review_request:       d.autoReviewRequest,
@@ -247,29 +256,21 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             pa_birthday_greeting:         d.birthdayGreeting,
             pa_new_booking_recap:         d.newBookingRecap,
             pa_auto_confirm_bookings:     d.autoConfirmBookings,
-            pa_buffer_mins:               d.bufferMins,
             pa_cancellation_notice_hours: d.cancellationNoticeHours,
-            pa_deposit_required_new:      d.depositRequiredNew,
             pa_waitlist_enabled:          d.waitlistEnabled,
             pa_auto_accept_waitlist:      d.autoAcceptWaitlist,
-            pa_max_bookings_per_day:      d.maxBookingsPerDay,
-            pa_min_booking_notice_hrs:    d.minBookingNoticeHrs,
-          },
-        }).then(({ error }) => { if (error) throw error; }),
+            // pa_buffer_mins / pa_max_bookings_per_day /
+            // pa_min_booking_notice_hrs / pa_booking_window_days /
+            // pa_slot_interval_mins / pa_deposit_required_new are owned by
+            // SchedulingScreen and PaymentsScreen now. Writing them here too
+            // would push this screen's stale in-memory copy over whatever
+            // those screens last saved.
+        }),
       ];
       if (providerId) {
         saves.push(updateProviderAutoAccept(providerId, d.autoConfirmBookings));
-        saves.push(updateProviderScheduleSettings(providerId, {
-          booking_window_days:    parseInt(d.bookingWindowDays, 10)    || 60,
-          slot_interval_mins:     parseInt(d.slotIntervalMins, 10)     || 60,
-          buffer_mins:            parseInt(d.bufferMins, 10)           || 0,
-          min_booking_notice_hrs: parseInt(d.minBookingNoticeHrs, 10)  || 0,
-        }));
-        // Persist daily cap to providers table (0 = unlimited)
-        const capInt = d.maxBookingsPerDay === 'unlimited'
-          ? 0
-          : parseInt(d.maxBookingsPerDay, 10) || 0;
-        saves.push(updateProviderMaxBookingsPerDay(providerId, capInt));
+        // updateProviderScheduleSettings / updateProviderMaxBookingsPerDay are
+        // SchedulingScreen's to call — same clobbering reason as above.
         const cancelHrs = parseInt(d.cancellationNoticeHours, 10) || 0;
         saves.push(updateProviderCancellationPolicy(providerId, cancelHrs));
         // Mirror the client-facing automations onto the providers row —
@@ -278,12 +279,22 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         saves.push(updateProviderAutomationSettings(providerId, {
           clientReminderTiming: d.clientReminderTiming,
           rebookingNudgeWeeks:  d.rebookingNudgeWeeks,
+          ...(d.scheduleReleaseDay != null ? { scheduleReleaseDay: d.scheduleReleaseDay } : {}),
           autoReviewRequest:    d.autoReviewRequest,
           postApptCheckIn:      d.postApptCheckIn,
           birthdayGreeting:     d.birthdayGreeting,
           waitlistEnabled:      d.waitlistEnabled,
           autoAcceptWaitlist:   d.autoAcceptWaitlist,
+          // Owned/edited by PoliciesScreen (in its Deposit card), but this
+          // call REPLACES the whole automation_settings blob — so the loaded
+          // value is passed straight back rather than dropped, which would
+          // delete it. Never add an editor for it here.
           depositRequiredNew:   d.depositRequiredNew,
+          // Must be mirrored here, not just to user_metadata: the
+          // provider-daily-recap cron job reads this key off the providers
+          // row and its COALESCE(..., TRUE) treats a missing key as "send",
+          // so omitting it made turning the toggle OFF a silent no-op.
+          newBookingRecap:      d.newBookingRecap,
         }));
       }
       await Promise.all(saves);
@@ -401,6 +412,31 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         />
         <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you.</Text>
 
+        {/* Schedule release day — the day of the month clients who've
+            turned on the notification bell on your profile get notified,
+            so they know to check back for new availability. Independent of
+            rebooking nudges: this goes to anyone following you, not just
+            clients with a completed booking. */}
+        <AutoCard
+          title="Notify followers on schedule release day"
+          description="Clients who turned on notifications for your profile get a reminder to check your availability on this day each month."
+          value={d.scheduleReleaseDay != null}
+          onToggle={(v) => set('scheduleReleaseDay', v ? new Date().getDate() : null)}
+          C={C}
+        >
+          {d.scheduleReleaseDay != null && (
+            <TouchableOpacity
+              style={[st.dateBtn, { backgroundColor: C.surface, borderColor: C.border }]}
+              onPress={() => setReleaseDayPickerVisible(true)}
+            >
+              <Ionicons name="calendar-outline" size={15} color={C.accent} />
+              <Text style={[st.dateBtnText, { color: C.text }]}>
+                Day {d.scheduleReleaseDay} of every month
+              </Text>
+            </TouchableOpacity>
+          )}
+        </AutoCard>
+
         <AutoCard
           title="Review request"
           description="2 hours after an appointment is marked completed, Cerviced asks the client to leave a star rating and review."
@@ -453,13 +489,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           C={C}
         />
 
-        <AutoCard
-          title="Require deposit from new clients"
-          description="First-time clients must pay a deposit to secure a booking. Returning clients book as normal."
-          value={d.depositRequiredNew}
-          onToggle={v => set('depositRequiredNew', v)}
-          C={C}
-        />
+        {/* "Require deposit from new clients" moved to PaymentsScreen,
+            alongside the payment-type preferences it belongs with. */}
 
         <AutoCard
           title="Enable waitlist"
@@ -479,25 +510,12 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           />
         )}
 
-        {/* Buffer time */}
-        <ChipSelect
-          label="Buffer time between appointments"
-          options={[
-            { v: '0',  l: 'None'   },
-            { v: '10', l: '10 min' },
-            { v: '15', l: '15 min' },
-            { v: '30', l: '30 min' },
-            { v: '45', l: '45 min' },
-            { v: '60', l: '1 hr'   },
-          ]}
-          selected={d.bufferMins}
-          multi={false}
-          onSelect={v => set('bufferMins', v)}
-          C={C}
-        />
-        <Text style={[st.chipHint, { color: C.sub }]}>
-          Automatically blocks time after each appointment so you're never back-to-back without a break.
-        </Text>
+        {/* Buffer time, max bookings per day, booking window, minimum notice
+            and start-time intervals all moved to SchedulingScreen — they're
+            scheduling rules, not automations, and splitting them across two
+            screens made availability impossible to reason about in one place.
+            Cancellation notice stays here: it drives the cancellation policy
+            clients are shown, not when slots are bookable. */}
 
         {/* Cancellation notice */}
         <ChipSelect
@@ -518,91 +536,61 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           Clients who cancel within this window will be shown your cancellation policy.
         </Text>
 
-        {/* Max bookings per day */}
-        <ChipSelect
-          label="Maximum bookings per day"
-          options={[
-            { v: 'unlimited', l: 'Unlimited' },
-            { v: '4',         l: '4'         },
-            { v: '6',         l: '6'         },
-            { v: '8',         l: '8'         },
-            { v: '10',        l: '10'        },
-            { v: '12',        l: '12'        },
-          ]}
-          selected={d.maxBookingsPerDay}
-          multi={false}
-          onSelect={v => set('maxBookingsPerDay', v)}
-          C={C}
-        />
-        <Text style={[st.chipHint, { color: C.sub }]}>
-          Once this limit is hit, your calendar will show as unavailable for that day.
-        </Text>
-
-        {/* Booking window */}
-        <ChipSelect
-          label="How far ahead clients can book"
-          options={[
-            { v: '14',  l: '2 weeks'  },
-            { v: '30',  l: '1 month'  },
-            { v: '60',  l: '2 months' },
-            { v: '90',  l: '3 months' },
-            { v: '180', l: '6 months' },
-            { v: '0',   l: 'Any time' },
-          ]}
-          selected={d.bookingWindowDays}
-          multi={false}
-          onSelect={v => set('bookingWindowDays', v)}
-          C={C}
-        />
-        <Text style={[st.chipHint, { color: C.sub }]}>
-          Dates beyond this window won't appear on your booking calendar.
-        </Text>
-
-        {/* Minimum notice before booking */}
-        <ChipSelect
-          label="Minimum notice before booking"
-          options={[
-            { v: '0',  l: 'None'    },
-            { v: '1',  l: '1 hr'    },
-            { v: '2',  l: '2 hrs'   },
-            { v: '4',  l: '4 hrs'   },
-            { v: '12', l: '12 hrs'  },
-            { v: '24', l: '24 hrs'  },
-          ]}
-          selected={d.minBookingNoticeHrs}
-          multi={false}
-          onSelect={v => set('minBookingNoticeHrs', v)}
-          C={C}
-        />
-        <Text style={[st.chipHint, { color: C.sub }]}>
-          Clients can't book a slot that starts sooner than this from now — stops last-minute bookings you can't prepare for.
-        </Text>
-
-        {/* Slot start-time interval */}
-        <ChipSelect
-          label="Appointment start-time intervals"
-          options={[
-            { v: '15', l: 'Every 15 min' },
-            { v: '30', l: 'Every 30 min' },
-            { v: '60', l: 'Every hour'   },
-          ]}
-          selected={d.slotIntervalMins}
-          multi={false}
-          onSelect={v => set('slotIntervalMins', v)}
-          C={C}
-        />
-        <Text style={[st.chipHint, { color: C.sub }]}>
-          Controls which start times clients can pick. 30-min slots give more flexibility; hourly is simpler.
-        </Text>
-
         {/* Info note */}
         <View style={[st.infoBox, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Ionicons name="information-circle-outline" size={15} color={C.sub} style={{ marginTop: 1 }} />
           <Text style={[st.infoText, { color: C.sub }]}>
-            Automated messages (reminders, nudges, review requests) are sent by Cerviced — not from your personal number or email. Business rules such as buffer time and daily caps require Supabase scheduled functions to be active.
+            Automated messages (reminders, nudges, review requests) are sent by Cerviced — not from your personal number or email. Rules such as buffer time and daily caps are applied automatically to every message we send on your behalf.
           </Text>
         </View>
       </ScrollView>
+
+      {/* Schedule release day picker — date-of-month only, same
+          Modal-on-iOS/inline-on-Android pattern as ProviderScheduleScreen's
+          pickers. onChange writes straight through; there's no separate
+          "confirm" step since the day is the only thing being chosen. */}
+      {releaseDayPickerVisible && (
+        Platform.OS === 'ios' ? (
+          <Modal transparent animationType="fade" visible={releaseDayPickerVisible}>
+            <View style={st.pickerModalWrap}>
+              <TouchableOpacity
+                style={st.pickerDismiss}
+                activeOpacity={1}
+                onPress={() => setReleaseDayPickerVisible(false)}
+              />
+              <View style={[st.pickerSheet, { backgroundColor: C.surface }]}>
+                <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
+                  <Text style={[st.pickerLabel, { color: C.text }]}>Release Day</Text>
+                  <TouchableOpacity onPress={() => setReleaseDayPickerVisible(false)}>
+                    <Text style={[st.pickerDone, { color: C.accentText }]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  mode="date"
+                  value={new Date(2020, 0, d.scheduleReleaseDay ?? 1)}
+                  onChange={(_: DateTimePickerEvent, date?: Date) => {
+                    if (date) set('scheduleReleaseDay', date.getDate());
+                  }}
+                  display="spinner"
+                  themeVariant={isDarkMode ? 'dark' : 'light'}
+                  textColor={C.text}
+                  style={{ width: '100%' }}
+                />
+              </View>
+            </View>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            mode="date"
+            value={new Date(2020, 0, d.scheduleReleaseDay ?? 1)}
+            onChange={(_: DateTimePickerEvent, date?: Date) => {
+              setReleaseDayPickerVisible(false);
+              if (date) set('scheduleReleaseDay', date.getDate());
+            }}
+            display="default"
+          />
+        )
+      )}
     </SafeAreaView>
     </ThemedBackground>
   );
@@ -628,7 +616,7 @@ const st = StyleSheet.create({
 
   scroll: { paddingHorizontal: 20, paddingTop: 4 },
 
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
+  sectionLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
   sectionSub:   { fontSize: 13, lineHeight: 19 },
 
   card: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
@@ -664,4 +652,24 @@ const st = StyleSheet.create({
     marginBottom: 12,
   },
   toastText: { fontSize: 13, fontWeight: '500', flex: 1 },
+
+  dateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  dateBtnText: { fontSize: 13, fontWeight: '600' },
+
+  pickerModalWrap: { flex: 1, flexDirection: 'column' },
+  pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
+  pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  pickerLabel:     { fontSize: 15, fontWeight: '600' },
+  pickerDone:      { fontSize: 15, fontWeight: '700' },
 });

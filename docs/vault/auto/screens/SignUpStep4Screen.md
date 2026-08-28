@@ -4,10 +4,10 @@ tags: [screen, client]
 # SignUpStep4Screen
 #screen · `src/screens/auth/SignUpStep4Screen.tsx`
 
-**Registered route(s):** `SignUpStep4`
+**Registered route(s):** _unregistered_
 
 ## → Navigates to
-- [[SignUpStep5Screen\|SignUpStep5]]
+- `SignUpStep5` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

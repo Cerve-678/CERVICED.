@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -12,13 +13,20 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { ThemedBackground } from '../../components/ThemedBackground';
+import { invokeSendSupportRequest } from '../../services/databaseService';
+import { SUPPORT_EMAIL } from '../../constants/support';
+import { toUserMessage } from '../../utils/userFacingError';
 
 const CATEGORIES = ['Bug / Crash', 'Booking Issue', 'Provider Issue', 'Payment', 'Account', 'Other'];
 
 export default function ReportProblemScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, palette: P } = useTheme();
+  const { activeMode } = useAuth();
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
@@ -29,18 +37,40 @@ export default function ReportProblemScreen({ navigation }: any) {
     if (!description.trim()) { Alert.alert('Please describe the issue'); return; }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    await new Promise(r => setTimeout(r, 800));
-    setLoading(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    Alert.alert('Report Sent', 'Thank you — we\'ll look into this and get back to you if needed.', [
-      { text: 'Done', onPress: () => navigation.goBack() },
-    ]);
+    try {
+      const { ticketNumber } = await invokeSendSupportRequest({
+        category,
+        description: description.trim(),
+        platform: `${Platform.OS} ${String(Platform.Version)}`,
+        appVersion: Constants.expoConfig?.version ?? 'unknown',
+        activeMode,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      // The reference is the point of storing the report: it gives them
+      // something to quote back at us. Deliberately not conditional on the
+      // email having gone out — the report is saved either way.
+      Alert.alert(
+        'Report Sent',
+        `Thank you — we'll look into this and get back to you if needed.\n\nYour reference is #${ticketNumber}.`,
+        [{ text: 'Done', onPress: () => navigation.goBack() }],
+      );
+    } catch (e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      // Never say it sent when it didn't — hand them the address instead, so a
+      // report isn't simply lost because the send failed.
+      Alert.alert(
+        "Couldn't send your report",
+        `${toUserMessage(e, 'Please try again in a moment.', 'ReportProblemScreen.handleSubmit')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const chipActive = (val: string) => val === category;
 
   return (
-    <View style={[styles.bg, { backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }]}>
+    <ThemedBackground style={styles.bg}>
       <StatusBar barStyle={theme.statusBar} translucent />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
@@ -53,15 +83,15 @@ export default function ReportProblemScreen({ navigation }: any) {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+            <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: theme.text }]}>Report a Problem</Text>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+          <Text style={[styles.title, { color: P.text }]}>Report a Problem</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>
             Tell us what went wrong and we'll fix it
           </Text>
 
-          <Text style={[styles.label, { color: theme.secondaryText }]}>CATEGORY</Text>
+          <Text style={[styles.label, { color: P.sub }]}>CATEGORY</Text>
           <View style={styles.chips}>
             {CATEGORIES.map(cat => (
               <TouchableOpacity
@@ -69,28 +99,26 @@ export default function ReportProblemScreen({ navigation }: any) {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: chipActive(cat)
-                      ? (isDarkMode ? '#AF9197' : '#5C4033')
-                      : (isDarkMode ? 'rgba(175,145,151,0.08)' : 'rgba(92,64,51,0.06)'),
-                    borderColor: chipActive(cat) ? (isDarkMode ? '#AF9197' : '#5C4033') : theme.border,
+                    backgroundColor: chipActive(cat) ? P.accent : P.accentDim,
+                    borderColor: chipActive(cat) ? P.accent : P.border,
                   },
                 ]}
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); setCategory(cat); }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.chipText, { color: chipActive(cat) ? '#fff' : theme.secondaryText }]}>
+                <Text style={[styles.chipText, { color: chipActive(cat) ? '#fff' : P.sub }]}>
                   {cat}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={[styles.label, { color: theme.secondaryText, marginTop: 8 }]}>DESCRIPTION</Text>
+          <Text style={[styles.label, { color: P.sub, marginTop: 8 }]}>DESCRIPTION</Text>
           <TextInput
             style={[
               styles.textArea,
               {
-                color: theme.text,
+                color: P.text,
                 backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
                 borderColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)',
               },
@@ -98,7 +126,7 @@ export default function ReportProblemScreen({ navigation }: any) {
             value={description}
             onChangeText={setDescription}
             placeholder="Describe what happened..."
-            placeholderTextColor={theme.secondaryText}
+            placeholderTextColor={P.sub}
             multiline
             numberOfLines={5}
             textAlignVertical="top"
@@ -106,7 +134,7 @@ export default function ReportProblemScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={[styles.submitBtn, {
-              backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
+              backgroundColor: P.accent,
               borderColor: 'transparent',
             }]}
             onPress={handleSubmit}
@@ -120,7 +148,7 @@ export default function ReportProblemScreen({ navigation }: any) {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardDismissView>
-    </View>
+    </ThemedBackground>
   );
 }
 

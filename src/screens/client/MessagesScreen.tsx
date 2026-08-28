@@ -5,28 +5,22 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
-import { getUserConversations, UserConversationWithProvider } from '../../services/databaseService';
-
-const OL = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  accent: '#5C4033',
-};
-const OD = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  accent: '#AF9197',
-};
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  getUserConversations,
+  subscribeToUserConversationChanges,
+  UserConversationWithProvider,
+} from '../../services/databaseService';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '';
@@ -46,8 +40,8 @@ function initials(name: string): string {
 }
 
 export default function MessagesScreen({ navigation }: any) {
-  const { isDarkMode } = useTheme();
-  const OP = isDarkMode ? OD : OL;
+  const { palette: OP } = useTheme();
+  const { user } = useAuth();
 
   const [conversations, setConversations] = useState<UserConversationWithProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,24 +53,27 @@ export default function MessagesScreen({ navigation }: any) {
     } catch { /* offline — keep whatever we have */ }
   }, []);
 
-  useEffect(() => {
-    fetchConversations().finally(() => setLoading(false));
-  }, [fetchConversations]);
-
-  useFocusEffect(useCallback(() => { fetchConversations(); }, [fetchConversations]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    fetchConversations().finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fetchConversations]));
 
   // Live updates: refresh the list when any of my conversations change
   useEffect(() => {
-    const channel = supabase
-      .channel('user-conversations')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'provider_conversations' },
-        () => { fetchConversations(); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchConversations]);
+    if (!user?.id) return;
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToUserConversationChanges(user.id, () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => { void fetchConversations(); }, 150);
+    });
+    return () => {
+      if (debounce) clearTimeout(debounce);
+      unsubscribe();
+    };
+  }, [fetchConversations, user?.id]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -125,7 +122,7 @@ export default function MessagesScreen({ navigation }: any) {
             </Text>
             {unread && (
               <View style={[styles.badge, { backgroundColor: OP.accent }]}>
-                <Text style={styles.badgeText}>
+                <Text style={[styles.badgeText, { color: OP.onAccent }]}>
                   {item.unread_count_user > 9 ? '9+' : item.unread_count_user}
                 </Text>
               </View>
@@ -138,14 +135,14 @@ export default function MessagesScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: OP.bg }]}>
+      <ThemedBackground style={styles.center}>
         <ActivityIndicator color={OP.accent} />
-      </View>
+      </ThemedBackground>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: OP.bg }}>
+    <ThemedBackground style={{ flex: 1 }}>
       <FlatList
         data={conversations}
         keyExtractor={item => item.id}
@@ -156,14 +153,14 @@ export default function MessagesScreen({ navigation }: any) {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: OP.accent }]}>No messages yet</Text>
+            <Text style={[styles.emptyTitle, { color: OP.accentText }]}>No messages yet</Text>
             <Text style={[styles.emptyBody, { color: OP.sub }]}>
               Start a conversation from any provider's profile with "Get In Touch"
             </Text>
           </View>
         }
       />
-    </View>
+    </ThemedBackground>
   );
 }
 

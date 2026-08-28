@@ -12,34 +12,44 @@ import {
 // visit to the same feed re-downloads from network from scratch.
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
 import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
-import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
-
-// Deliberately not theme.accent — that resolves to a dark brown in light
-// mode, which reads as low-contrast/muddy over a photo. This dusty-rose
-// value is the one from the dark-mode accent and was confirmed to work fine
-// in light mode too for these two highlight uses specifically.
-const HIGHLIGHT_COLOR = '#AF9197';
+import { dimensions } from '../constants/PlatformDimensions';
 
 interface PortfolioCardProps {
   item: PortfolioItem;
   columnWidth: number;
+  // The exact pixel height MasonryGrid reserved for this card. Supplied by
+  // the screen rather than recomputed here, because the reserved slot and
+  // the rendered box must be identical (see masonryHeight.ts) and only the
+  // screen has the measured-ratio cache that resolves a real ratio for
+  // service/provider photos.
+  imageHeight: number;
   onPress: (item: PortfolioItem) => void;
   index: number;
+  // Coach-mark targets. Supplied for exactly one card in the Explore feed
+  // (see ExploreScreen's tourCardId) so the first-visit tour can spotlight a
+  // real heart button and a real price badge, rather than a guessed rect.
+  // Every other card gets neither and is unaffected.
+  heartRef?: React.RefObject<View | null>;
+  priceRef?: React.RefObject<View | null>;
 }
 
-const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCardProps) => {
-  const { theme } = useTheme();
+const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef }: PortfolioCardProps) => {
+  const { theme, palette: P } = useTheme();
+  // Blue-grey secondary — the highlight for the saved-heart and category chip
+  // over photos. Hat-aware via palette; on the client hat this is the blue-grey
+  // secondary, on the provider hat it falls back to that hat's own accent.
+  const HIGHLIGHT_COLOR = P.secondary;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const { isPortfolioSaved, savePortfolioItem, unsavePortfolioItem } = useBookmarkStore();
 
   const isSaved = isPortfolioSaved(item.id);
   // aspectRatio is stored as width/height, so height = width / ratio.
-  const imageHeight = columnWidth / item.aspectRatio;
 
   useEffect(() => {
     Animated.parallel([
@@ -56,9 +66,10 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, slideAnim]);
 
   const handleBookmark = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (isSaved) {
       unsavePortfolioItem(item.id);
     } else {
@@ -122,8 +133,18 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
 
         {/* Price badge */}
         {item.price && (
-          <View style={styles.priceBadge}>
+          <View ref={priceRef} collapsable={false} style={styles.priceBadge}>
             <Text style={styles.priceBadgeText}>{item.price}</Text>
+          </View>
+        )}
+
+        {/* Unclaimed badge — top-right so it never collides with the price
+            badge (top-left). Unclaimed providers never carry a price, but
+            keeping the two on opposite corners avoids coupling this to that
+            fact. */}
+        {item.isUnclaimed && (
+          <View style={styles.unclaimedBadge}>
+            <Text style={styles.unclaimedBadgeText}>UNCLAIMED</Text>
           </View>
         )}
 
@@ -131,6 +152,7 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
             action's icon in ImageDetailModal (was a bookmark glyph here,
             a heart there, for the identical underlying action). */}
         <TouchableOpacity
+          ref={heartRef}
           style={styles.bookmarkButton}
           onPress={handleBookmark}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -138,15 +160,20 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
           <TabIcon
             name="heart"
             size={16}
-            color={isSaved ? HIGHLIGHT_COLOR : '#FFFFFF'}
+            // HIGHLIGHT_COLOR (pale blue-grey, same as the category chip's fill)
+            // barely reads against a photo or the unsaved white heart. Saved
+            // state uses a fixed bright pink instead — the conventional
+            // "favourited" colour, independent of theme/mode.
+            color={isSaved ? '#FF2D78' : '#FFFFFF'}
           />
         </TouchableOpacity>
 
         {/* Bottom overlay info */}
         <View style={styles.overlay}>
-          {/* Category chip */}
+          {/* Category chip — the blue-grey secondary fill (always pale, both
+              modes) needs a fixed dark label; plum ties the two colours together */}
           <View style={[styles.categoryChip, { backgroundColor: HIGHLIGHT_COLOR }]}>
-            <Text style={styles.categoryText}>{item.category}</Text>
+            <Text style={[styles.categoryText, { color: '#3F1E36' }]}>{item.category}</Text>
           </View>
 
           {/* Provider name */}
@@ -165,7 +192,17 @@ export const PortfolioCard = React.memo(PortfolioCardInner, (prev, next) => {
   return (
     prev.item.id === next.item.id &&
     prev.columnWidth === next.columnWidth &&
-    prev.index === next.index
+    // Must be compared: imageHeight changes when the photo's true ratio is
+    // measured (see useMeasuredAspectRatios), and without this the card
+    // would keep rendering at its initial placeholder height while the
+    // grid's packer had already re-laid-out around the corrected one.
+    prev.imageHeight === next.imageHeight &&
+    prev.index === next.index &&
+    // Ref objects are stable per screen, so this only differs when the tour
+    // target moves to a different card — which must re-render both the card
+    // losing the refs and the one gaining them.
+    prev.heartRef === next.heartRef &&
+    prev.priceRef === next.priceRef
   );
 });
 
@@ -216,6 +253,22 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'BakbakOne-Regular',
   },
+  unclaimedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  unclaimedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'Jura-VariableFont_wght',
+    letterSpacing: 0.5,
+  },
   overlay: {
     position: 'absolute',
     bottom: 8,
@@ -232,7 +285,6 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#FFFFFF',
     fontFamily: 'Jura-VariableFont_wght',
     letterSpacing: 0.5,
   },

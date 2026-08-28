@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   FlatList,
@@ -12,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -21,17 +22,24 @@ import SlidingTabs from '../../components/SlidingTabs';
 import {
   getProviderBookings,
   getMyProviderProfile,
-  getServicePrice,
+  getServiceBookingDefaults,
   insertDirectBooking,
   getProviderWaitlist,
   inviteFromWaitlist,
   leaveWaitlist,
+  getProviderUnreadConversationCount,
+  updateBookingStatus,
+  updateGroupBookingStatus,
+  getActiveRescheduleRequestsForBookings,
   type WaitlistEntry,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../contexts/BookingContext';
-import type { BookingWithAddOns } from '../../types/database';
+import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
+import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../../types/database';
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
+import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
+import { WAITLIST_HOLD_MS } from '../../constants/waitlist';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -102,17 +110,54 @@ function fmtMoney(n: number): string {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'all',          label: 'All' },
-  { key: 'pending',      label: 'Pending' },
-  { key: 'waitlist',     label: 'Waitlist' },
-  { key: 'upcoming',     label: 'Upcoming' },
-  { key: 'in_progress',  label: 'In Progress' },
-  { key: 'completed',    label: 'Completed' },
-  { key: 'cancelled',    label: 'Cancelled' },
+  { key: 'history', label: 'History' },
+  { key: 'todo',    label: 'To Do' },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
-type BookingTab = Exclude<TabKey, 'waitlist'>;
+
+// Secondary filter shown only under the History tab — status chips over the
+// combined agenda list, replacing the old top-level per-status tabs.
+const HISTORY_FILTERS = [
+  { key: 'all',         label: 'All' },
+  { key: 'upcoming',    label: 'Upcoming' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'completed',   label: 'Completed' },
+  { key: 'cancelled',   label: 'Cancelled' },
+] as const;
+
+type HistoryFilterKey = typeof HISTORY_FILTERS[number]['key'];
+
+// History is everything not still awaiting the provider's action — one
+// combined agenda list (upcoming, in progress, completed, cancelled/no-show)
+// rather than the old per-status tabs. Status still shows as a pill per card.
+function isHistoryStatus(status: string): boolean {
+  const mapped = mapDbBookingStatus(status);
+  return mapped === BookingStatus.UPCOMING
+    || mapped === BookingStatus.IN_PROGRESS
+    || mapped === BookingStatus.COMPLETED
+    || mapped === BookingStatus.CANCELLED
+    || mapped === BookingStatus.NO_SHOW;
+}
+
+function matchesHistoryFilter(status: string, filter: HistoryFilterKey): boolean {
+  if (filter === 'all') return true;
+  const mapped = mapDbBookingStatus(status);
+  switch (filter) {
+    case 'upcoming':    return mapped === BookingStatus.UPCOMING;
+    case 'in_progress': return mapped === BookingStatus.IN_PROGRESS;
+    case 'completed':   return mapped === BookingStatus.COMPLETED;
+    case 'cancelled':   return mapped === BookingStatus.CANCELLED || mapped === BookingStatus.NO_SHOW;
+  }
+}
+
+// A list row: `booking` is the representative (earliest appointment) of a
+// group-booking's siblings, or the booking itself when it's not grouped.
+// `siblings` is always non-empty and always includes `booking`.
+interface GroupedBooking {
+  booking: BookingWithAddOns;
+  siblings: BookingWithAddOns[];
+}
 
 function agendaSort(items: BookingWithAddOns[]): BookingWithAddOns[] {
   const upcoming = items
@@ -124,32 +169,28 @@ function agendaSort(items: BookingWithAddOns[]): BookingWithAddOns[] {
   return [...upcoming, ...past];
 }
 
-function filterBookings(bookings: BookingWithAddOns[], tab: BookingTab): BookingWithAddOns[] {
-  let items = bookings;
-  switch (tab) {
-    case 'pending':     items = items.filter(b => b.status === 'pending'); break;
-    case 'upcoming':    items = items.filter(b => b.status === 'confirmed' && b.booking_date >= TODAY_STR); break;
-    case 'in_progress': items = items.filter(b => b.status === 'in_progress'); break;
-    case 'completed':   items = items.filter(b => b.status === 'completed'); break;
-    case 'cancelled':   items = items.filter(b => b.status === 'cancelled' || b.status === 'no_show'); break;
+function filterBookings(bookings: BookingWithAddOns[], tab: TabKey, historyFilter: HistoryFilterKey): BookingWithAddOns[] {
+  if (tab === 'todo') {
+    return agendaSort(bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING));
   }
-  if (tab === 'completed' || tab === 'cancelled') {
-    return items.sort((a, b) => b.booking_date.localeCompare(a.booking_date) || b.booking_time.localeCompare(a.booking_time));
-  }
-  return agendaSort(items);
+  // History: agenda-sorted (soonest upcoming first) down to most-recent-past —
+  // completed/cancelled bookings dominate this list day to day, so lead with
+  // recency rather than the live-tabs' future-first ordering.
+  const items = bookings.filter(b => isHistoryStatus(b.status) && matchesHistoryFilter(b.status, historyFilter));
+  return items.sort((a, b) => b.booking_date.localeCompare(a.booking_date) || b.booking_time.localeCompare(a.booking_time));
 }
 
 // ─── Booking card ─────────────────────────────────────────────────────────────
 
-function BookingCard({ booking, dark, P, onPress }: {
-  booking: BookingWithAddOns; dark: boolean; P: Palette; onPress: () => void;
+function BookingCard({ booking, siblingCount, total, dark, P, onPress }: {
+  booking: BookingWithAddOns; siblingCount: number; total: number; dark: boolean; P: Palette; onPress: () => void;
 }) {
   const st    = statusFor(booking.status);
-  const total = (booking.base_price ?? 0) + (booking.add_ons_total ?? 0);
-  const done  = booking.status === 'cancelled' || booking.status === 'no_show';
+  const mappedStatus = mapDbBookingStatus(booking.status);
+  const done  = mappedStatus === BookingStatus.CANCELLED || mappedStatus === BookingStatus.NO_SHOW;
   const name  = booking.customer_name ?? 'Client';
   const initials = name.trim().split(/\s+/).map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase();
-  const isGroup = booking.is_group_booking && booking.group_booking_count > 1;
+  const isGroup = siblingCount > 1;
   const timeStr = fmtTime(booking.booking_time) + (booking.end_time ? ` – ${fmtTime(booking.end_time)}` : '');
 
   return (
@@ -168,13 +209,13 @@ function BookingCard({ booking, dark, P, onPress }: {
           </Text>
           {isGroup && (
             <View style={[bc.groupTag, { backgroundColor: P.accentSoft }]}>
-              <Ionicons name="people" size={10} color={P.accent} />
-              <Text style={[bc.groupCount, { color: P.accent }]}>{booking.group_booking_count}</Text>
+              <Ionicons name="link" size={10} color={P.accent} />
+              <Text style={[bc.groupCount, { color: P.accent }]}>{siblingCount}</Text>
             </View>
           )}
         </View>
         <Text style={[bc.service, { color: P.sub, textDecorationLine: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }]} numberOfLines={1}>
-          {booking.service_name_snapshot}
+          {isGroup ? `${booking.service_name_snapshot} + ${siblingCount - 1} more` : booking.service_name_snapshot}
         </Text>
         <Text style={[bc.time, { color: P.faint }]}>{fmtDayLabel(booking.booking_date)} · {timeStr}</Text>
       </View>
@@ -213,6 +254,54 @@ const bc = StyleSheet.create({
   price:     { fontSize: 15, fontWeight: '800', letterSpacing: -0.3 },
 });
 
+// ─── Pending pill row (To Do tab) ───────────────────────────────────────────
+// Compact calendar-agenda-style row for a still-pending booking: time,
+// client + service, and a Confirm button that accepts it (pending →
+// confirmed) right from the list — replaces the larger BookingCard for this
+// tab only, since a pending booking's whole point here is "act on this now,"
+// not browse detail. Labeled "Confirm", not "Complete" — this app has a
+// separate, later `completed` status once the appointment actually happens.
+
+function PendingPill({ group, dark, P, busy, onPress, onComplete }: {
+  group: GroupedBooking; dark: boolean; P: Palette; busy: boolean; onPress: () => void; onComplete: () => void;
+}) {
+  const { booking, siblings } = group;
+  const isGroup = siblings.length > 1;
+  const name = booking.customer_name ?? 'Client';
+
+  return (
+    <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={[pp.pill, { backgroundColor: P.card }, !dark && bc.shadow]}>
+      <Text style={[pp.time, { color: P.accent }]} numberOfLines={1}>{fmtTime(booking.booking_time)}</Text>
+      <View style={pp.divider} />
+      <View style={pp.body}>
+        <Text style={[pp.line, { color: P.text }]} numberOfLines={1}>
+          <Text style={pp.name}>{name}</Text>
+          <Text style={{ color: P.sub }}> · {isGroup ? `${booking.service_name_snapshot} + ${siblings.length - 1} more` : booking.service_name_snapshot}</Text>
+        </Text>
+      </View>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        disabled={busy}
+        onPress={onComplete}
+        style={[pp.completeBtn, { backgroundColor: P.accent, opacity: busy ? 0.6 : 1 }]}
+      >
+        {busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={pp.completeBtnText}>Confirm</Text>}
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
+const pp = StyleSheet.create({
+  pill:           { flexDirection: 'row', alignItems: 'center', borderRadius: 24, paddingVertical: 8, paddingLeft: 14, paddingRight: 8, gap: 10 },
+  time:           { fontSize: 12, fontWeight: '800', letterSpacing: -0.1, width: 52, flexShrink: 0 },
+  divider:        { width: StyleSheet.hairlineWidth, height: 18, backgroundColor: 'rgba(128,128,128,0.3)' },
+  body:           { flex: 1 },
+  line:           { fontSize: 13 },
+  name:           { fontWeight: '700' },
+  completeBtn:    { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, flexShrink: 0, minWidth: 78, alignItems: 'center', justifyContent: 'center' },
+  completeBtnText:{ fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
+});
+
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 
 function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
@@ -243,16 +332,24 @@ function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-export default function ProviderBookingHistoryScreen({ navigation }: any) {
+export default function ProviderBookingHistoryScreen({ navigation, route }: any) {
   const { isDarkMode: dark } = useTheme();
   const P = dark ? DARK : LIGHT;
 
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
-  const [activeTab, setActiveTab]       = useState<TabKey>('all');
+  const [activeTab, setActiveTab]       = useState<TabKey>(route?.params?.initialTab ?? 'todo');
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilterKey>('all');
   const [waitlist, setWaitlist]         = useState<WaitlistEntry[]>([]);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  // Client-requested reschedules still awaiting the provider's response
+  // (status 'pending' — distinct from 'provider_responded', which is
+  // awaiting the CLIENT). Keyed by booking_id so each row can look up its
+  // booking for the client/service name.
+  const [pendingRescheduleRequests, setPendingRescheduleRequests] = useState<Record<string, DbBookingRescheduleRequest>>({});
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
 
   // Waitlist invite modal
   const [inviteModal, setInviteModal]   = useState<{ visible: boolean; entry: WaitlistEntry | null }>({ visible: false, entry: null });
@@ -269,7 +366,25 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
   }, []);
 
   const fetchBookings = useCallback(async () => {
-    try { setBookings(await getProviderBookings()); } catch {}
+    // This screen's "Completed"/"Cancelled"/"All" tabs and header counts are a
+    // full booking ledger, not a recent-activity view — unlike
+    // ProviderHomeScreen/ProviderInboxScreen, older bookings here don't get
+    // cleared out by the auto-complete/expire-stale-pending cron, so a
+    // windowed fetch would silently hide real history. Request everything,
+    // same opt-in getProviderBookings() gives ProviderAnalyticsScreen.
+    try {
+      const rows = await getProviderBookings(Infinity);
+      setBookings(rows);
+      // Batched .in() lookup over every loaded booking id — same pattern
+      // BookingContext's loadBookings uses client-side — rather than a
+      // per-booking await in a loop.
+      const requests = await getActiveRescheduleRequestsForBookings(rows.map(b => b.id));
+      const pending: Record<string, DbBookingRescheduleRequest> = {};
+      for (const [bookingId, req] of Object.entries(requests)) {
+        if (req.status === 'pending') pending[bookingId] = req;
+      }
+      setPendingRescheduleRequests(pending);
+    } catch {}
   }, []);
 
   const fetchWaitlist = useCallback(async () => {
@@ -277,63 +392,158 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
     try { setWaitlist(await getProviderWaitlist(providerDbId)); } catch {}
   }, [providerDbId]);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchBookings(), fetchWaitlist()]).finally(() => setLoading(false));
-  }, [fetchBookings, fetchWaitlist]);
+  const fetchUnreadMessages = useCallback(async () => {
+    try {
+      setUnreadMessages(await getProviderUnreadConversationCount());
+    } catch {}
+  }, []);
 
   useFocusEffect(useCallback(() => {
-    fetchBookings();
-    fetchWaitlist();
-  }, [fetchBookings, fetchWaitlist]));
+    let active = true;
+    void Promise.all([fetchBookings(), fetchUnreadMessages()]).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fetchBookings, fetchUnreadMessages]));
+
+  useFocusEffect(useCallback(() => {
+    if (providerDbId) void fetchWaitlist();
+  }, [fetchWaitlist, providerDbId]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchBookings(), fetchWaitlist()]);
+    await Promise.all([fetchBookings(), fetchWaitlist(), fetchUnreadMessages()]);
     setRefreshing(false);
-  }, [fetchBookings, fetchWaitlist]);
+  }, [fetchBookings, fetchWaitlist, fetchUnreadMessages]);
 
   const handleTabPress = useCallback((key: TabKey) => {
     setActiveTab(key);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, []);
 
+  const handleHistoryFilterPress = useCallback((key: HistoryFilterKey) => {
+    setHistoryFilter(key);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, []);
+
   // ── Derived data ─────────────────────────────────────────────────────────
 
-  const counts = useMemo(() => ({
-    all:         bookings.length,
-    pending:     bookings.filter(b => b.status === 'pending').length,
-    upcoming:    bookings.filter(b => b.status === 'confirmed' && b.booking_date >= TODAY_STR).length,
-    in_progress: bookings.filter(b => b.status === 'in_progress').length,
-    completed:   bookings.filter(b => b.status === 'completed').length,
-    cancelled:   bookings.filter(b => b.status === 'cancelled' || b.status === 'no_show').length,
-    waitlist:    waitlist.filter(e => e.status === 'waiting').length,
-  }), [bookings, waitlist]);
+  const pendingCount  = useMemo(() => bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING).length, [bookings]);
+  const waitlistCount = useMemo(() => waitlist.filter(e => e.status === 'waiting').length, [waitlist]);
+  const rescheduleRequestCount = useMemo(() => Object.keys(pendingRescheduleRequests).length, [pendingRescheduleRequests]);
+  // Booking rows the reschedule-request rows below link to, keyed by id —
+  // a request whose booking fell out of the loaded ledger (shouldn't happen,
+  // but the fetch is a separate round-trip) is skipped rather than crashing.
+  const rescheduleRequestRows = useMemo(() => {
+    return Object.values(pendingRescheduleRequests)
+      .map(req => ({ req, booking: bookings.find(b => b.id === req.booking_id) }))
+      .filter((r): r is { req: DbBookingRescheduleRequest; booking: BookingWithAddOns } => !!r.booking);
+  }, [pendingRescheduleRequests, bookings]);
 
-  const items = useMemo(() => {
-    if (activeTab === 'waitlist') return [];
-    return filterBookings(bookings, activeTab as BookingTab);
-  }, [bookings, activeTab]);
+  const counts = useMemo(() => ({
+    todo:    pendingCount + waitlistCount + unreadMessages + rescheduleRequestCount,
+    history: bookings.filter(b => isHistoryStatus(b.status)).length,
+  }), [pendingCount, waitlistCount, unreadMessages, rescheduleRequestCount, bookings]);
+
+  // Collapse group-booking siblings (same client, same group_booking_id,
+  // same tab) into one card — a provider's own multi-service group booking
+  // (see bookingBatchId in CartScreen) otherwise shows as N separate cards
+  // for what the client experiences as one booking. Siblings are only
+  // collapsed together if they land in the SAME tab: a group with one
+  // confirmed and one still-pending sibling must show separately in each
+  // tab rather than being silently merged into one status. The earliest
+  // appointment in the group is the representative card (same convention
+  // as the notify_address_released/handle_booking_status_change dedup),
+  // carrying the full sibling list so the card can show the group badge
+  // and the detail screen can list every service.
+  const items = useMemo((): GroupedBooking[] => {
+    const filtered = filterBookings(bookings, activeTab, historyFilter);
+    const byGroup = new Map<string, BookingWithAddOns[]>();
+    const singles: GroupedBooking[] = [];
+    for (const b of filtered) {
+      // Multi-service booking is gated off (MULTI_SERVICE_BOOKING_ENABLED):
+      // don't collapse siblings into one group card. Any pre-existing group
+      // booking's rows each show as their own single card and are managed
+      // individually (per-booking RPCs), instead of showing a group badge and
+      // routing through the all-or-nothing group RPCs. See FUTURE_LOGIC.md.
+      if (MULTI_SERVICE_BOOKING_ENABLED && b.group_booking_id) {
+        const key = b.group_booking_id;
+        const list = byGroup.get(key);
+        if (list) list.push(b); else byGroup.set(key, [b]);
+      } else {
+        singles.push({ booking: b, siblings: [b] });
+      }
+    }
+    const grouped: GroupedBooking[] = singles;
+    for (const siblings of byGroup.values()) {
+      siblings.sort((a, b) => a.booking_date.localeCompare(b.booking_date) || a.booking_time.localeCompare(b.booking_time));
+      grouped.push({ booking: siblings[0]!, siblings });
+    }
+    // Re-apply the tab's ordering using each group's representative booking.
+    const order = filterBookings(grouped.map(g => g.booking), activeTab, historyFilter);
+    const byRepresentativeId = new Map(grouped.map(g => [g.booking.id, g]));
+    return order.map(b => byRepresentativeId.get(b.id)!);
+  }, [bookings, activeTab, historyFilter]);
 
   const tabEmptyText: Record<TabKey, string> = {
-    all:         'No bookings yet',
-    pending:     'No pending bookings',
-    upcoming:    'No upcoming bookings',
-    in_progress: 'No bookings in progress',
-    completed:   'No completed bookings',
-    cancelled:   'No cancelled bookings',
-    waitlist:    'No one on the waitlist',
+    todo:    'No pending bookings',
+    history: 'No bookings yet',
   };
+
+  // ── Complete (pending → confirmed) ───────────────────────────────────────
+
+  // Group siblings route through the atomic group RPC so every one of this
+  // provider's own services in the same client group confirms together —
+  // same rule ProviderBookingDetailScreen's updateBookingStatus follows (see
+  // fix_group_booking_atomic_actions.sql: all-or-nothing server-side).
+  const handleComplete = useCallback((group: GroupedBooking) => {
+    const groupSuffix = group.siblings.length > 1
+      ? ` This confirms all ${group.siblings.length} of this client's services with you.`
+      : '';
+    Alert.alert(
+      'Confirm Booking',
+      `The client will be notified that their booking is confirmed.${groupSuffix}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            setCompletingId(group.booking.id);
+            try {
+              if (group.siblings.length > 1 && group.booking.group_booking_id) {
+                await updateGroupBookingStatus(group.booking.group_booking_id, 'confirmed');
+              } else {
+                await updateBookingStatus(group.booking.id, 'confirmed');
+              }
+              await fetchBookings();
+            } catch (err: any) {
+              logger.error('Failed to confirm booking:', err);
+              // provider_update_booking_status has a real state-machine guard
+              // that raises a specific reason (e.g. already cancelled/completed
+              // by the time this fired) — surface it instead of always
+              // defaulting to a connection message that may not be true.
+              const message =
+                typeof err?.message === 'string' && err.message.length > 0 && !err.message.includes('Network')
+                  ? err.message
+                  : 'Please check your connection and try again.';
+              Alert.alert('Could not confirm', message);
+            } finally {
+              setCompletingId(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [fetchBookings]);
 
   // ── Waitlist invite ───────────────────────────────────────────────────────
 
   const openInvitePicker = useCallback((which: 'date' | 'time') => {
     if (Platform.OS === 'android') {
-      const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
       DateTimePickerAndroid.open({
         value: (which === 'date' ? inviteDate : inviteTime) ?? new Date(),
         mode: which,
-        minimumDate: which === 'date' ? new Date() : undefined,
+        ...(which === 'date' ? { minimumDate: new Date() } : {}),
         onChange: (_: unknown, d?: Date) => { if (d) { if (which === 'date') setInviteDate(d); else setInviteTime(d); } },
       });
     } else {
@@ -348,11 +558,22 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
     try {
       const entry = inviteModal.entry;
       let basePrice = 0;
+      // Length matters as much as price here: without it the booking is
+      // written with no end_time, which leaves the DB overlap constraint
+      // nothing to measure and shows up on the provider's day as a block of
+      // unknown length. An hour is the same fallback the database itself
+      // uses (get_provider_busy_spans COALESCEs to booking_time + 1 hour),
+      // so a service with no duration set still produces a real span.
+      let durationMinutes = 60;
       if (entry.service_id) {
-        basePrice = await getServicePrice(entry.service_id);
+        const defaults = await getServiceBookingDefaults(entry.service_id);
+        basePrice = defaults.price;
+        if (defaults.durationMinutes > 0) durationMinutes = defaults.durationMinutes;
       }
       const bookingDate = inviteDate.toISOString().split('T')[0]!;
       const bookingTime = inviteTime.toTimeString().split(' ')[0]!;
+      const endAt = new Date(inviteTime.getTime() + durationMinutes * 60_000);
+      const endTime = endAt.toTimeString().split(' ')[0]!;
       await insertDirectBooking({
         user_id: entry.user_id,
         provider_id: providerDbId,
@@ -360,6 +581,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
         status: 'pending',
         booking_date: bookingDate,
         booking_time: bookingTime,
+        end_time: endTime,
         payment_type: 'full',
         base_price: basePrice,
         add_ons_total: 0,
@@ -378,9 +600,17 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
       setInviteModal({ visible: false, entry: null });
       setInviteDate(null);
       setInviteTime(null);
-    } catch (err) {
+    } catch (err: any) {
       logger.error('Invite failed:', err);
-      Alert.alert('Invite failed', 'The booking could not be created. Please check your connection and try again.');
+      // The invite RPC throws a real, specific reason (blocked date,
+      // overlapping slot, provider closed that day) — surface it instead of
+      // always showing the generic connection copy, which previously hid
+      // exactly that kind of actionable message.
+      const message =
+        typeof err?.message === 'string' && err.message.length > 0 && !err.message.includes('Network')
+          ? err.message
+          : 'The booking could not be created. Please check your connection and try again.';
+      Alert.alert('Invite failed', message);
     }
     setInviting(false);
   }, [inviteModal.entry, providerDbId, inviteDate, inviteTime]);
@@ -404,132 +634,262 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
           <View style={s.headerBody}>
             <Text style={[s.headerTitle, { color: P.text }]}>Bookings</Text>
             <Text style={[s.headerSub, { color: P.sub }]} numberOfLines={1}>
-              {counts.upcoming > 0 ? `${counts.upcoming} upcoming` : 'Nothing upcoming'}
-              {counts.pending > 0 ? ` · ${counts.pending} pending` : ''}
+              {counts.todo > 0 ? `${counts.todo} to do` : 'All caught up'}
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={s.devBtn}
-            onPress={() => navigation.navigate('DevSettings')}
-            activeOpacity={0.8}
-          >
-            <Text style={s.devBtnText}>DEV</Text>
-          </TouchableOpacity>
+          {/* Debug-only entry point. The client-side equivalent (BookingsScreen)
+              has always been __DEV__-gated; this one was not, so release builds
+              showed real providers a DEV button opening destructive reset tools. */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={s.devBtn}
+              onPress={() => navigation.navigate('DevSettings')}
+              activeOpacity={0.8}
+            >
+              <Text style={s.devBtnText}>DEV</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* ── Tabs ─────────────────────────────────────────────────────── */}
-        <View style={{ paddingBottom: 16 }}>
-          <SlidingTabs
-            tabs={TABS.map(tab => ({ ...tab, count: counts[tab.key] }))}
-            activeKey={activeTab}
-            onPress={handleTabPress}
-            accentColor={P.accent}
-            inactiveTextColor={P.sub}
-          />
+        {/* ── Tabs — plain underline indicator (not SlidingTabs' filled
+            capsule): just enough to show selection, not a heavy pill, for
+            this screen's top-level History/To Do switch specifically. ──── */}
+        <View style={[s.primaryTabsRow, { borderBottomColor: P.sep }]}>
+          {TABS.map(tab => {
+            const active = tab.key === activeTab;
+            const count = counts[tab.key];
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[s.primaryTab, active && { borderBottomColor: P.accent }]}
+                onPress={() => handleTabPress(tab.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.primaryTabText, { color: active ? P.text : P.sub, fontWeight: active ? '700' : '600' }]}>
+                  {tab.label}{count && count > 0 ? `  ${count}` : ''}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* ── Content ─────────────────────────────────────────────────── */}
         {loading ? (
           <SkeletonList dark={dark} P={P} />
-        ) : activeTab === 'waitlist' ? (
-          <FlatList
-            data={waitlist}
-            keyExtractor={e => e.id}
+        ) : activeTab === 'todo' ? (
+          <ScrollView
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={[s.listContent, waitlist.length === 0 && s.listCentered]}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            renderItem={({ item: entry }) => (
-              <View style={[wl.card, { backgroundColor: P.card }, !dark && bc.shadow]}>
-                <View style={wl.cardTop}>
-                  <View style={[wl.avatar, { backgroundColor: P.tile }]}>
-                    <Text style={[wl.avatarText, { color: P.text }]}>
-                      {(entry.user_name_snapshot?.[0] ?? '?').toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[wl.clientName, { color: P.text }]} numberOfLines={1}>
-                      {entry.user_name_snapshot ?? 'Client'}
-                    </Text>
-                    <Text style={[wl.serviceName, { color: P.sub }]} numberOfLines={1}>
-                      {entry.service_name_snapshot}
-                    </Text>
-                  </View>
-                  <View style={[wl.posBadge, { backgroundColor: entry.status === 'notified' ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)' }]}>
-                    <Text style={[wl.posBadgeText, { color: entry.status === 'notified' ? '#34C759' : '#FF9500' }]}>
-                      {entry.status === 'notified' ? 'Holding Slot' : `Waiting · #${entry.position}`}
-                    </Text>
-                  </View>
-                </View>
-                {/* A hold (waitlist_holds.sql) reserves the slot for 3 hours from
-                    notified_at — shown as an estimate rather than fetched from
-                    the linked bookings row, since this list is optimised for
-                    provider skimming, not authoritative countdown precision. */}
-                {entry.status === 'notified' && entry.notified_at ? (
-                  <Text style={[wl.preferredDates, { color: '#34C759' }]}>
-                    Expires around {formatTime12(new Date(new Date(entry.notified_at).getTime() + 3 * 60 * 60 * 1000))} if not confirmed
-                  </Text>
-                ) : null}
-                {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
-                {entry.preferred_dates && entry.preferred_dates.length > 0 ? (
-                  <Text style={[wl.preferredDates, { color: P.sub }]}>
-                    Preferred: {entry.preferred_dates.length > 1
-                      ? `${formatShortDate(entry.preferred_dates[0]!)} – ${formatShortDate(entry.preferred_dates[1]!)}`
-                      : `${formatShortDate(entry.preferred_dates[0]!)} onward`}
-                  </Text>
-                ) : null}
-                <View style={wl.actions}>
-                  {entry.status === 'waiting' && (
-                    <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent }]} activeOpacity={0.8}
-                      onPress={() => setInviteModal({ visible: true, entry })}>
-                      <Text style={wl.inviteBtnText}>Schedule & Invite</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8}
-                    onPress={() => {
-                      leaveWaitlist(entry.id)
-                        .then(() => setWaitlist(prev => prev.filter(e => e.id !== entry.id)))
-                        .catch(() => {});
-                    }}>
-                    <Text style={[wl.removeBtnText, { color: P.sub }]}>Remove</Text>
+            contentContainerStyle={[
+              s.listContent,
+              unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && items.length === 0 && s.listCentered,
+            ]}
+          >
+            {unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && items.length === 0 ? (
+              <View style={s.emptyWrap}>
+                <Ionicons name="checkmark-done-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
+                <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
+                <Text style={[s.emptySub, { color: P.sub }]}>{tabEmptyText['todo']}</Text>
+              </View>
+            ) : (
+              <>
+                {unreadMessages > 0 && (
+                  <TouchableOpacity
+                    style={[wl.card, { backgroundColor: P.card, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }, !dark && bc.shadow]}
+                    activeOpacity={0.75}
+                    onPress={() => navigation.navigate('ProviderInbox', { initialFilter: 'messages' })}
+                  >
+                    <View style={[wl.avatar, { backgroundColor: P.accentSoft }]}>
+                      <Ionicons name="chatbubble-ellipses-outline" size={18} color={P.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[wl.clientName, { color: P.text }]}>
+                        {unreadMessages} unread {unreadMessages === 1 ? 'message' : 'messages'}
+                      </Text>
+                      <Text style={[wl.serviceName, { color: P.sub }]}>Tap to open Inbox</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={P.sub} style={{ opacity: 0.5 }} />
                   </TouchableOpacity>
-                </View>
-              </View>
+                )}
+
+                {rescheduleRequestRows.length > 0 && (
+                  <>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: 0 }]}>RESCHEDULE REQUESTS</Text>
+                    {rescheduleRequestRows.map(({ req, booking }) => (
+                      <TouchableOpacity
+                        key={req.id}
+                        style={[wl.card, { backgroundColor: P.card, marginBottom: 10 }, !dark && bc.shadow]}
+                        activeOpacity={0.75}
+                        onPress={() => navigation.navigate('BookingDetail', {
+                          bookingId: booking.id,
+                          booking: mapDbBookingToConfirmed(booking),
+                          openReschedule: true,
+                        })}
+                      >
+                        <View style={wl.cardTop}>
+                          <View style={[wl.avatar, { backgroundColor: P.tile }]}>
+                            <Ionicons name="calendar-outline" size={16} color={P.text} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[wl.clientName, { color: P.text }]} numberOfLines={1}>
+                              {booking.customer_name ?? 'Client'}
+                            </Text>
+                            <Text style={[wl.serviceName, { color: P.sub }]} numberOfLines={1}>
+                              {booking.service_name_snapshot}
+                            </Text>
+                          </View>
+                          <View style={[wl.posBadge, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
+                            <Text style={[wl.posBadgeText, { color: '#FF9500' }]}>Awaiting response</Text>
+                          </View>
+                        </View>
+                        <Text style={[wl.preferredDates, { color: P.sub }]}>
+                          Was {formatShortDate(req.original_date)} at {formatTime12(req.original_time)}
+                          {req.requested_dates && req.requested_dates.length > 0
+                            ? ` — client asked for ${req.requested_dates.length > 1 ? `${req.requested_dates.length} alternatives` : formatShortDate(req.requested_dates[0]!)}`
+                            : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                )}
+
+                {waitlist.length > 0 && (
+                  <>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: (unreadMessages > 0 || rescheduleRequestRows.length > 0) ? 8 : 0 }]}>WAITLIST</Text>
+                    {waitlist.map(entry => (
+                      <View key={entry.id} style={[wl.card, { backgroundColor: P.card, marginBottom: 10 }, !dark && bc.shadow]}>
+                        <View style={wl.cardTop}>
+                          <View style={[wl.avatar, { backgroundColor: P.tile }]}>
+                            <Text style={[wl.avatarText, { color: P.text }]}>
+                              {(entry.user_name_snapshot?.[0] ?? '?').toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[wl.clientName, { color: P.text }]} numberOfLines={1}>
+                              {entry.user_name_snapshot ?? 'Client'}
+                            </Text>
+                            <Text style={[wl.serviceName, { color: P.sub }]} numberOfLines={1}>
+                              {entry.service_name_snapshot}
+                            </Text>
+                          </View>
+                          <View style={[wl.posBadge, { backgroundColor: entry.status === 'notified' ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)' }]}>
+                            <Text style={[wl.posBadgeText, { color: entry.status === 'notified' ? '#34C759' : '#FF9500' }]}>
+                              {entry.status === 'notified' ? 'Holding Slot' : `Waiting · #${entry.position}`}
+                            </Text>
+                          </View>
+                        </View>
+                        {/* A hold reserves the slot for WAITLIST_HOLD_MINUTES from
+                            notified_at — an estimate, not fetched from the linked
+                            bookings row, since this list is optimised for provider
+                            skimming rather than authoritative countdown precision.
+                            The window is the DB's (waitlist_hold_duration()); the
+                            constant only mirrors it for display. */}
+                        {entry.status === 'notified' && entry.notified_at ? (
+                          <Text style={[wl.preferredDates, { color: '#34C759' }]}>
+                            Expires around {formatTime12(new Date(new Date(entry.notified_at).getTime() + WAITLIST_HOLD_MS))} if not confirmed
+                          </Text>
+                        ) : null}
+                        {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
+                        {entry.preferred_dates && entry.preferred_dates.length > 0 ? (
+                          <Text style={[wl.preferredDates, { color: P.sub }]}>
+                            Preferred: {entry.preferred_dates.length > 1
+                              ? `${formatShortDate(entry.preferred_dates[0]!)} – ${formatShortDate(entry.preferred_dates[1]!)}`
+                              : `${formatShortDate(entry.preferred_dates[0]!)} onward`}
+                          </Text>
+                        ) : null}
+                        <View style={wl.actions}>
+                          {entry.status === 'waiting' && (
+                            <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent }]} activeOpacity={0.8}
+                              onPress={() => setInviteModal({ visible: true, entry })}>
+                              <Text style={wl.inviteBtnText}>Schedule & Invite</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8}
+                            onPress={() => {
+                              leaveWaitlist(entry.id)
+                                .then(() => setWaitlist(prev => prev.filter(e => e.id !== entry.id)))
+                                .catch(() => {});
+                            }}>
+                            <Text style={[wl.removeBtnText, { color: P.sub }]}>Remove</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {items.length > 0 && (
+                  <>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: waitlist.length > 0 ? 8 : 0 }]}>PENDING</Text>
+                    {items.map(group => (
+                      <View key={group.booking.id} style={{ marginBottom: 8 }}>
+                        <PendingPill
+                          group={group}
+                          dark={dark}
+                          P={P}
+                          busy={completingId === group.booking.id}
+                          onPress={() => navigation.navigate('BookingDetail', {
+                            bookingId: group.booking.id,
+                            booking: mapDbBookingToConfirmed(group.booking),
+                            groupSiblings: group.siblings.length > 1 ? group.siblings.map(mapDbBookingToConfirmed) : undefined,
+                          })}
+                          onComplete={() => handleComplete(group)}
+                        />
+                      </View>
+                    ))}
+                  </>
+                )}
+              </>
             )}
-            ListEmptyComponent={
-              <View style={s.emptyWrap}>
-                <Ionicons name="people-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
-                <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
-                <Text style={[s.emptySub, { color: P.sub }]}>{tabEmptyText['waitlist']}</Text>
-              </View>
-            }
-          />
+          </ScrollView>
         ) : (
-          <FlatList
-            ref={listRef}
-            data={items}
-            keyExtractor={b => b.id}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[s.listContent, items.length === 0 && s.listCentered]}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            renderItem={({ item }) => (
-              <BookingCard
-                booking={item}
-                dark={dark}
-                P={P}
-                onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id, booking: mapDbBookingToConfirmed(item) })}
+          <>
+            <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
+              <SlidingTabs
+                tabs={HISTORY_FILTERS}
+                activeKey={historyFilter}
+                onPress={handleHistoryFilterPress}
+                accentColor={P.accent}
+                inactiveTextColor={P.sub}
+                inactiveBackgroundColor={P.tile}
+                height={30}
+                gap={8}
               />
-            )}
-            ListEmptyComponent={
-              <View style={s.emptyWrap}>
-                <Ionicons name="calendar-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
-                <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
-                <Text style={[s.emptySub, { color: P.sub }]}>{tabEmptyText[activeTab]}</Text>
-              </View>
-            }
-          />
+            </View>
+            <FlatList
+              ref={listRef}
+              data={items}
+              keyExtractor={g => g.booking.id}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[s.listContent, items.length === 0 && s.listCentered]}
+              ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+              renderItem={({ item: group }) => (
+                <BookingCard
+                  booking={group.booking}
+                  siblingCount={group.siblings.length}
+                  total={group.siblings.reduce((sum: number, b: BookingWithAddOns) => sum + (b.base_price ?? 0) + (b.add_ons_total ?? 0), 0)}
+                  dark={dark}
+                  P={P}
+                  onPress={() => navigation.navigate('BookingDetail', {
+                    bookingId: group.booking.id,
+                    booking: mapDbBookingToConfirmed(group.booking),
+                    groupSiblings: group.siblings.length > 1 ? group.siblings.map(mapDbBookingToConfirmed) : undefined,
+                  })}
+                />
+              )}
+              ListEmptyComponent={
+                <View style={s.emptyWrap}>
+                  <Ionicons name="calendar-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
+                  <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
+                  <Text style={[s.emptySub, { color: P.sub }]}>
+                    {historyFilter === 'all' ? tabEmptyText[activeTab] : `No ${HISTORY_FILTERS.find(f => f.key === historyFilter)?.label.toLowerCase()} bookings`}
+                  </Text>
+                </View>
+              }
+            />
+          </>
         )}
 
         {/* ── Waitlist invite modal ────────────────────────────────────── */}
@@ -631,6 +991,30 @@ const s = StyleSheet.create({
   headerSub:   { fontSize: 12, marginTop: 1 },
   devBtn:      { backgroundColor: '#FF3B30', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8 },
   devBtnText:  { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+
+  // Primary History/To Do tabs — plain underline, not SlidingTabs' filled
+  // capsule. paddingTop sits it further down from the header than the old
+  // SlidingTabs row did.
+  primaryTabsRow: {
+    flexDirection: 'row',
+    paddingTop: 18,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  primaryTab: {
+    paddingTop: 12,
+    // More space below the label than above it, so the underline indicator
+    // doesn't sit tight against the text — was paddingVertical: 12 (equal
+    // top/bottom), which read as cramped against the border.
+    paddingBottom: 14,
+    marginRight: 24,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  primaryTabText: {
+    fontSize: 15,
+    letterSpacing: -0.1,
+  },
 
   // List
   listContent:  { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120 },

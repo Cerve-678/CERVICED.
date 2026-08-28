@@ -24,3 +24,25 @@ export const STORAGE_KEYS = {
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
+
+/**
+ * Per-user "has already seen this coach-mark tour" flags.
+ *
+ * These are PREFIXES, not whole keys — each one is suffixed with the user id
+ * so two accounts on the same device each get their own first run. Build one
+ * with tourSeenKey() rather than re-writing the template literal, and note
+ * that DevSettings' "Replay Walkthroughs" purges by exactly these prefixes:
+ * a tour whose key isn't listed here silently can't be replayed.
+ */
+export const TOUR_SEEN_PREFIXES = {
+  /** HomeScreen — the client's first-run tour */
+  CLIENT_HOME:    '@client_tour_seen_',
+  /** ExploreScreen — armed on the first visit to Explore, once the feed loads */
+  CLIENT_EXPLORE: '@client_explore_tour_seen_',
+  /** ProviderHomeScreen — the provider's first-run tour */
+  PROVIDER_HOME:  '@provider_tour_seen_',
+} as const;
+
+export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];
+
+export const tourSeenKey = (prefix: TourSeenPrefix, userId: string): string => `${prefix}${userId}`;

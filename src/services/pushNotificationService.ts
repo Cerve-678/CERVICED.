@@ -8,14 +8,34 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
-import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
+import {
+  getCurrentAuthUserId,
+  setPushTokenIfChanged,
+  subscribeToNotificationInserts,
+} from './databaseService';
 
 // Expo Go dropped remote push support in SDK 53 — getExpoPushTokenAsync() fails
 // there and no APNs/FCM delivery is possible, by design, no matter how the
 // backend is configured. startExpoGoNotificationBridge() below is the only way
 // to see notification content while testing in Expo Go.
 export const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+// Realtime can briefly redeliver an INSERT after reconnecting. Keep a bounded
+// process-local record of rows already mirrored so Expo Go schedules each row
+// at most once even if the subscription callback is repeated.
+const mirroredNotificationIds = new Set<string>();
+const MAX_MIRRORED_NOTIFICATION_IDS = 500;
+
+function claimExpoGoMirror(notificationId: string): boolean {
+  if (mirroredNotificationIds.has(notificationId)) return false;
+  mirroredNotificationIds.add(notificationId);
+  if (mirroredNotificationIds.size > MAX_MIRRORED_NOTIFICATION_IDS) {
+    const oldestId = mirroredNotificationIds.values().next().value;
+    if (oldestId) mirroredNotificationIds.delete(oldestId);
+  }
+  return true;
+}
 
 // Show banner + play sound even when the app is foregrounded
 Notifications.setNotificationHandler({
@@ -75,16 +95,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
     logger.log('[Push] Token obtained:', token);
 
     // Save token to the current user's row in Supabase
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { error } = await supabase
-        .from('users')
-        .update({ push_token: token })
-        .eq('id', user.id);
-      if (error) {
-        logger.warn('[Push] Failed to save token to DB:', error.message);
-      } else {
-        logger.log('[Push] Token saved to Supabase');
+    const userId = await getCurrentAuthUserId();
+    if (userId) {
+      try {
+        const wrote = await setPushTokenIfChanged(userId, token);
+        logger.log(wrote ? '[Push] Token saved to Supabase' : '[Push] Token unchanged — skipped write');
+      } catch (error) {
+        logger.warn('[Push] Failed to save token to DB:', error);
       }
     }
 
@@ -105,20 +122,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
 export function startExpoGoNotificationBridge(userId: string): () => void {
   if (!isExpoGo) return () => {};
 
-  const channel = supabase
-    .channel(`expo-go-notification-bridge-${userId}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-      (payload) => {
-        const row = payload.new as {
-          id: string;
-          title: string;
-          message: string;
-          type: string;
-          booking_id: string | null;
-          recipient_role: 'provider' | 'client';
-        };
+  return subscribeToNotificationInserts(userId, row => {
+        if (!claimExpoGoMirror(row.id)) {
+          logger.log('[Push] Skipped duplicate Expo Go notification row:', row.id);
+          return;
+        }
         // Title is sent as-is, matching the production push Edge Function —
         // no business-name prefix (it clipped long titles like "You have a
         // new booking", and provider vs client is already clear from content).
@@ -127,15 +135,22 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
             title: row.title,
             body: row.message,
             sound: 'default',
-            data: { booking_id: row.booking_id, notification_id: row.id, type: row.type, recipient_role: row.recipient_role },
+            // Mirrors the production Edge Function's payload field-for-field —
+            // provider_id included, or chat/profile deep-links would work in a
+            // real build and silently not in Expo Go. Note this dev bridge does
+            // NOT apply the notification-preference gate the Edge Function
+            // does; it exists to prove routing, not delivery policy.
+            data: {
+              booking_id: row.booking_id,
+              provider_id: row.provider_id,
+              notification_id: row.id,
+              type: row.type,
+              recipient_role: row.recipient_role,
+            },
           },
           trigger: null,
         }).catch(() => {});
-      }
-    )
-    .subscribe();
-
-  return () => { supabase.removeChannel(channel); };
+      });
 }
 
 /**
@@ -144,12 +159,9 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
  */
 export async function unregisterPushToken(): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase
-        .from('users')
-        .update({ push_token: null })
-        .eq('id', user.id);
+    const userId = await getCurrentAuthUserId();
+    if (userId) {
+      await setPushTokenIfChanged(userId, null);
     }
   } catch {
     // Ignore — logging out should never fail because of this

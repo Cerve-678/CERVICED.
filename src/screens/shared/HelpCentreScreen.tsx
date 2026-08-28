@@ -15,8 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import Icon from '../../components/IconLibrary';
+import { supportMailtoUrl } from '../../constants/support';
 
 const FAQS = [
   {
@@ -41,26 +43,26 @@ const FAQS = [
   },
 ];
 
-function FAQItem({ q, a, theme }: { q: string; a: string; theme: any }) {
+function FAQItem({ q, a, P }: { q: string; a: string; P: AppTheme }) {
   const [open, setOpen] = useState(false);
   return (
     <TouchableOpacity
-      style={[styles.faqItem, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
+      style={[styles.faqItem, { backgroundColor: P.card, borderColor: P.border }]}
       onPress={() => { Haptics.selectionAsync().catch(() => {}); setOpen(o => !o); }}
       activeOpacity={0.8}
     >
       <View style={styles.faqHeader}>
-        <Text style={[styles.faqQ, { color: theme.text }]}>{q}</Text>
-        <Icon name={open ? 'expand-less' : 'expand-more'} size={20} color={theme.secondaryText} />
+        <Text style={[styles.faqQ, { color: P.text }]}>{q}</Text>
+        <Icon name={open ? 'expand-less' : 'expand-more'} size={20} color={P.sub} />
       </View>
-      {open && <Text style={[styles.faqA, { color: theme.secondaryText }]}>{a}</Text>}
+      {open && <Text style={[styles.faqA, { color: P.sub }]}>{a}</Text>}
     </TouchableOpacity>
   );
 }
 
 function handleContactSupport() {
   Haptics.selectionAsync().catch(() => {});
-  Linking.openURL('mailto:support@cerviced.app');
+  Linking.openURL(supportMailtoUrl());
 }
 
 function showMoreOptions() {
@@ -78,7 +80,7 @@ function showMoreOptions() {
 }
 
 export default function HelpCentreScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -94,7 +96,7 @@ export default function HelpCentreScreen({ navigation }: any) {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+            <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.moreBtn}
@@ -102,18 +104,18 @@ export default function HelpCentreScreen({ navigation }: any) {
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             activeOpacity={0.7}
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color={theme.secondaryText} />
+            <Ionicons name="ellipsis-horizontal" size={20} color={P.sub} />
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.title, { color: theme.text }]}>Help Centre</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+        <Text style={[styles.title, { color: P.text }]}>Help Centre</Text>
+        <Text style={[styles.subtitle, { color: P.sub }]}>
           Answers to common questions
         </Text>
 
-        <Text style={[styles.section, { color: theme.accent }]}>FAQS</Text>
+        <Text style={[styles.section, { color: P.accentText }]}>FAQS</Text>
         {FAQS.map(item => (
-          <FAQItem key={item.q} q={item.q} a={item.a} theme={theme} />
+          <FAQItem key={item.q} q={item.q} a={item.a} P={P} />
         ))}
       </ScrollView>
     </ThemedBackground>

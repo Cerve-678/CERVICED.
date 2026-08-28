@@ -6,7 +6,9 @@
 // booking already selected. See BECCA_CAPABILITIES.md §2.1.
 
 import { BookingStatus, type ConfirmedBooking } from "../../../types/booking";
+import type { PublicProviderSummary } from "../../../types/database";
 import {
+  dateToYMD,
   formatShortDate,
   formatTime12,
   relativeDayLabel,
@@ -17,10 +19,10 @@ import {
   getActiveRescheduleRequest,
   getBookmarkedProviders,
   getClientBeautyProfile,
-  getMyBookmarkCount,
+  getDiscoverServices,
   getMyEventPlans,
-  getMyFollowerCount,
   getNotificationPreferences,
+  getOlderBookings,
   getProviderConsultationService,
   getProviderContactByDisplayName,
   getProviderReschedulePolicyByDisplayName,
@@ -30,6 +32,7 @@ import {
   isProviderBookmarked,
   joinWaitlist,
   getMyBookingActionItems,
+  getInfoPacksByBooking,
   getMyNotifications,
   getNewProviders,
   getPendingIntakeFormsForMe,
@@ -40,16 +43,28 @@ import {
   getProviderBySlug,
   getProviderCancellationPolicy,
   getProviderIdByDisplayName,
+  getProviderAudienceMatches,
+  getProviderLocationsByDisplayNames,
+  getMobileProviderDisplayNames,
+  getProviderDepositPoliciesByDisplayNames,
   getProviderPriceRanges,
+  getProviderSchedulingConstraints,
   getProviders,
   getProviderReviews,
   getRebookableService,
   getUserWaitlistEntries,
 } from "../../databaseService";
 import { AvailabilityService } from "../../AvailabilityService";
-import { hasUsefulHistory, type Capability, type CapabilityContext, type CapabilityResult } from "../types";
+import { hasUsefulHistory, type Capability, type CapabilityResult } from "../types";
 import { CATEGORY_LABELS } from "../serviceCatalogue";
-import { chip, navChip, askChip, money, providerFromDb, goodNews, softMiss } from "./shared";
+import {
+  chip,
+  navChip,
+  askChip,
+  money,
+  providerFromDb,
+  resolveProviderDbId,
+} from "./shared";
 
 /** Human labels for NotificationPreferences' keys. */
 const PREF_LABELS: Record<string, string> = {
@@ -62,6 +77,21 @@ const PREF_LABELS: Record<string, string> = {
 };
 
 // ==================== BOOKINGS ====================
+
+/** Simple everyday question; must never inherit a previous booking/search topic. */
+const currentTime: Capability = {
+  id: "meta.current_time",
+  hat: "client",
+  describe: "What time it is right now",
+  phrases: ["what time is it", "whats the time", "what's the time", "current time", "time right now"],
+  async run({ now }): Promise<CapabilityResult> {
+    const hours = now.getHours();
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+    const suffix = hours >= 12 ? "pm" : "am";
+    const hour12 = hours % 12 || 12;
+    return { text: `It’s **${hour12}:${minutes}${suffix}**.` };
+  },
+};
 
 const nextBooking: Capability = {
   id: "booking.next",
@@ -81,7 +111,11 @@ const nextBooking: Capability = {
     if (!next) {
       return {
         text: "You've got nothing booked in at the moment.",
-        suggestions: [askChip("find", "Find someone", "Find me a provider")],
+        suggestions: [
+          askChip("find", "Find someone", "Find me a provider"),
+          askChip("rebook", "Rebook my last one", "Rebook my last appointment"),
+          askChip("saved", "My saved providers", "Show my saved providers"),
+        ],
       };
     }
 
@@ -89,17 +123,28 @@ const nextBooking: Capability = {
     const when = rel ?? formatShortDate(next.bookingDate);
     return {
       text:
-        `Your next appointment is **${next.serviceName}** with ${next.providerName}.\n\n` +
-        `${when} at ${formatTime12(next.bookingTime)} · ${money(next.price)}` +
+        `## Your next appointment\n` +
+        `**${next.serviceName}** with **${next.providerName}**\n` +
+        `- **When:** ${when} at ${formatTime12(next.bookingTime)}\n` +
+        `- **Cost:** ${money(next.price)}` +
         (upcoming.length > 1
-          ? `\n\nYou've got ${upcoming.length - 1} more after that.`
+          ? `\n\n**Also booked:** ${upcoming.length - 1} more appointment${upcoming.length > 2 ? "s" : ""}.`
           : ""),
       suggestions: [
+        askChip(
+          "details",
+          "Booking breakdown",
+          bookingChoiceMessage(next, "details"),
+          { bookingId: next.id },
+        ),
         navChip("view", "View booking", "BookingDetail", { bookingId: next.id }),
         navChip("resched", "Reschedule", "Reschedule", { bookingId: next.id }),
         ...(upcoming.length > 1
           ? [askChip("all", "See all bookings", "Show all my bookings")]
           : []),
+        askChip("location", "Where is it?", "Where is my next appointment?", { bookingId: next.id }),
+        askChip("cost", "What am I paying?", "How much is it?", { bookingId: next.id }),
+        askChip("prep", "How should I prep?", "How do I prepare for my appointment?", { bookingId: next.id }),
       ],
     };
   },
@@ -128,7 +173,11 @@ const listBookings: Capability = {
         text: date
           ? `Nothing booked ${date.label}.`
           : "You've got nothing booked in at the moment.",
-        suggestions: [askChip("find", "Find someone", "Find me a provider")],
+        suggestions: [
+          askChip("find", "Find someone", "Find me a provider"),
+          askChip("rebook", "Rebook my last one", "Rebook my last appointment"),
+          askChip("saved", "My saved providers", "Show my saved providers"),
+        ],
       };
     }
 
@@ -136,7 +185,7 @@ const listBookings: Capability = {
       .slice(0, 6)
       .map((b) => {
         const rel = relativeDayLabel(b.bookingDate) ?? formatShortDate(b.bookingDate);
-        return `**${b.serviceName}** — ${b.providerName}\n${rel} at ${formatTime12(b.bookingTime)} · ${money(b.price)}`;
+        return `- **${b.serviceName}** with **${b.providerName}**\n  ${rel} at ${formatTime12(b.bookingTime)} · **${money(b.price)}**`;
       })
       .join("\n\n");
 
@@ -145,8 +194,169 @@ const listBookings: Capability = {
       : `You've got ${upcoming.length} coming up:`;
 
     return {
-      text: `${header}\n\n${lines}${upcoming.length > 6 ? `\n\n…and ${upcoming.length - 6} more.` : ""}`,
-      suggestions: [navChip("all", "Open Bookings", "Bookings")],
+      text: `## ${header}\n\n${lines}${upcoming.length > 6 ? `\n\n**Plus ${upcoming.length - 6} more.**` : ""}`,
+      suggestions: [
+        // An appointment first gets a concise, chat-native briefing. From
+        // there the client can still open the exact record without having to
+        // hunt through the bookings screen.
+        ...bookingChoices(upcoming),
+        ...(upcoming.length > 6
+          ? [navChip("all", "Open all bookings", "Bookings")]
+          : []),
+        askChip("next", "Just the next one", "When is my next appointment?"),
+        askChip("cost", "What am I paying?", "How much is it?"),
+      ],
+    };
+  },
+};
+
+/**
+ * The chat-native booking briefing. This is deliberately separate from the
+ * booking screen: a client can understand the appointment and its rules
+ * before deciding whether they need the full record or an action.
+ */
+const bookingDetails: Capability = {
+  id: "booking.details",
+  hat: "client",
+  describe: "Break down an appointment and its policies",
+  phrases: [
+    "tell me about my appointment", "tell me about my booking",
+    "tell me more about my appointment", "tell me more about my booking",
+    "more about my appointment", "more about my booking",
+    "booking details", "appointment details", "details of my appointment",
+    "break down my booking", "break down my appointment", "booking breakdown",
+  ],
+  needs: [{ kind: "booking", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const booking = entities.booking!.value;
+    const [cancellationResult, rescheduleResult] = await Promise.allSettled([
+      getProviderCancellationPolicy(booking.providerName),
+      getProviderReschedulePolicyByDisplayName(booking.providerName),
+    ]);
+
+    // A zero cancellation notice can also mean the policy lookup was
+    // unavailable, so never turn it into an unsafe "cancel any time" claim.
+    const cancellationHours =
+      cancellationResult.status === "fulfilled" ? cancellationResult.value : 0;
+    const cancellation = cancellationHours > 0
+      ? `${cancellationHours}h notice to cancel free of charge`
+      : "Open the booking to check the latest cancellation terms";
+
+    const reschedulePolicy =
+      rescheduleResult.status === "fulfilled" ? rescheduleResult.value : undefined;
+    const reschedule = reschedulePolicy
+      ? `${reschedulePolicy.maxReschedules === null
+          ? "Changes allowed as needed"
+          : `Up to ${reschedulePolicy.maxReschedules} change${reschedulePolicy.maxReschedules === 1 ? "" : "s"}`}${
+          reschedulePolicy.rescheduleNoticeHours > 0
+            ? ` with ${reschedulePolicy.rescheduleNoticeHours}h notice`
+            : ", including on the day"
+        }`
+      : "Open the booking to check the latest rescheduling terms";
+
+    return {
+      text:
+        `## Your booking at a glance\n` +
+        `- **Service:** ${booking.serviceName}\n` +
+        `- **Provider:** ${booking.providerName}\n` +
+        `- **When:** ${formatShortDate(booking.bookingDate)} at ${formatTime12(booking.bookingTime)}\n` +
+        `- **Booking total:** ${money(booking.price)}\n` +
+        `- **Cancellation:** ${cancellation}\n` +
+        `- **Rescheduling:** ${reschedule}`,
+      suggestions: [
+        navChip("view", "View booking", "BookingDetail", { bookingId: booking.id }),
+        navChip("reschedule", "Reschedule booking", "Reschedule", { bookingId: booking.id }),
+        askChip("notes", "My prep & aftercare", `What did ${booking.providerName} send me for my appointment?`, { bookingId: booking.id }),
+        askChip("prep", "What do I need to do?", "How do I prepare for my appointment?", { bookingId: booking.id }),
+        askChip("location", "Where is it?", `Where is my appointment with ${booking.providerName}?`, { bookingId: booking.id }),
+      ],
+    };
+  },
+};
+
+/** Provider notes attached to a specific booking: prep, aftercare and instructions. */
+const bookingInfoPacks: Capability = {
+  id: "booking.info_packs",
+  hat: "client",
+  describe: "Prep, aftercare and information packs attached to an appointment",
+  phrases: [
+    "what did they send me", "my prep notes", "my aftercare", "aftercare notes",
+    "my information pack", "my info pack", "booking notes", "appointment notes",
+    "instructions for my appointment", "what do i need to read",
+  ],
+  needs: [{ kind: "booking", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const booking = entities.booking!.value;
+    const packs = await getInfoPacksByBooking(booking.id);
+
+    if (packs.length === 0) {
+      return {
+        text:
+          `## Prep & aftercare\n` +
+          `**${booking.providerName}** hasn’t attached any notes to your **${booking.serviceName}** booking yet. ` +
+          "The booking page will always show the latest details.",
+        suggestions: [
+          navChip("booking", "View booking", "BookingDetail", { bookingId: booking.id }),
+          askChip("prep", "Anything else to do?", "Do I need to fill anything in?", { bookingId: booking.id }),
+        ],
+      };
+    }
+
+    // The chip says “show my notes”, so expose the provider's actual
+    // instruction text instead of returning only titles.
+    const lines = packs
+      .map((pack) => `- **${pack.title}**${pack.viewedAt ? "" : " · New"}\n  ${pack.content.trim() || "No written instructions added."}`)
+      .join("\n");
+    return {
+      text:
+        `## Your prep & aftercare\n` +
+        `For **${booking.serviceName}** with **${booking.providerName}**:\n\n${lines}\n\n` +
+        "Your booking always has the latest appointment details.",
+      suggestions: [
+        navChip("booking", "View booking", "BookingDetail", { bookingId: booking.id }),
+        askChip("prep", "Anything else to do?", "Do I need to fill anything in?", { bookingId: booking.id }),
+      ],
+    };
+  },
+};
+
+/** A cross-booking view for the common "what have I got to pay?" question. */
+const upcomingBookingSummary: Capability = {
+  id: "booking.upcoming_total",
+  hat: "client",
+  describe: "Total cost and payment status across upcoming appointments",
+  phrases: [
+    "what am i spending", "what am i spending on bookings", "my upcoming total",
+    "total upcoming cost", "total cost of my bookings", "how much are my bookings",
+    "what have i got to pay", "what do i have to pay", "upcoming payments",
+  ],
+  async run({ bookings }): Promise<CapabilityResult> {
+    const upcoming = sortUpcoming(bookings);
+    if (upcoming.length === 0) {
+      return {
+        text: "You don't have any upcoming appointments to pay for.",
+        suggestions: [askChip("find", "Find someone", "Find me a provider")],
+      };
+    }
+
+    const total = upcoming.reduce((sum, booking) => sum + booking.price, 0);
+    const paidInApp = upcoming.reduce((sum, booking) => sum + (booking.amountPaid ?? 0), 0);
+    const remaining = upcoming.reduce((sum, booking) => sum + (booking.remainingBalance ?? 0), 0);
+
+    return {
+      text:
+        `## Your upcoming booking costs\n` +
+        `- **Appointments:** ${upcoming.length}\n` +
+        `- **Total booked:** ${money(total)}\n` +
+        `- **Paid in the app:** ${money(paidInApp)}\n` +
+        `- **Remaining:** ${money(remaining)}\n\n` +
+        (remaining > 0
+          ? "Any remaining balance is settled directly with the relevant provider."
+          : "There’s no remaining balance recorded for these appointments."),
+      suggestions: [
+        ...bookingChoices(upcoming, "Break down"),
+        navChip("all", "Open all bookings", "Bookings"),
+      ],
     };
   },
 };
@@ -162,9 +372,26 @@ const bookingCost: Capability = {
     "have i paid", "is it paid", "what's left to pay", "outstanding balance",
   ],
   async run({ bookings, entities }): Promise<CapabilityResult> {
-    const target = entities.booking?.value ?? sortUpcoming(bookings)[0];
+    const upcoming = sortUpcoming(bookings);
+    const target = entities.booking?.value ?? (upcoming.length === 1 ? upcoming[0] : undefined);
     if (!target) {
-      return { text: "You've got nothing booked in, so nothing to pay." };
+      if (upcoming.length > 1) {
+        const lines = upcoming.slice(0, 6).map((booking) =>
+          `- **${booking.serviceName}** with **${booking.providerName}**\n` +
+          `  ${formatShortDate(booking.bookingDate)} · **${money(booking.price)}**`,
+        );
+        return {
+          text: `## Your upcoming booking costs\nChoose a booking for its payment details:\n\n${lines.join("\n\n")}`,
+          suggestions: bookingChoices(upcoming, "Choose", "cost"),
+        };
+      }
+      return {
+        text: "You've got nothing booked in, so nothing to pay.",
+        suggestions: [
+          askChip("find", "Find someone", "Find me a provider"),
+          askChip("rebook", "Rebook my last one", "Rebook my last appointment"),
+        ],
+      };
     }
     const outstanding = target.remainingBalance ?? 0;
     return {
@@ -178,7 +405,11 @@ const bookingCost: Capability = {
         (outstanding > 0
           ? `\n\n${money(outstanding)} is settled directly with ${target.providerName}.`
           : ""),
-      suggestions: [navChip("view", "View booking", "BookingDetail", { bookingId: target.id })],
+      suggestions: [
+        navChip("view", "View booking", "BookingDetail", { bookingId: target.id }),
+        askChip("policy", "What's the reschedule policy?", "What's the reschedule policy?", { bookingId: target.id }),
+        askChip("prep", "How should I prep?", "How do I prepare for my appointment?", { bookingId: target.id }),
+      ],
     };
   },
 };
@@ -197,9 +428,16 @@ const cancelBooking: Capability = {
   async run({ bookings, entities }): Promise<CapabilityResult> {
     const target = entities.booking?.value ?? soleUpcoming(bookings);
     if (!target) {
+      const choices = bookingChoices(sortUpcoming(bookings), "Choose", "cancel");
+      if (choices.length === 0) {
+        return {
+          text: "You don’t have an upcoming booking to cancel.",
+          suggestions: [askChip("find", "Find someone", "Find me a provider")],
+        };
+      }
       return {
-        text: "Which booking did you want to cancel?",
-        suggestions: [navChip("all", "Open Bookings", "Bookings")],
+        text: "## Choose a booking to cancel\nI’ll take you straight to the right booking, where you can review the policy and confirm.",
+        suggestions: [...choices, navChip("all", "Open all bookings", "Bookings")],
       };
     }
 
@@ -247,9 +485,16 @@ const rescheduleBooking: Capability = {
   async run({ bookings, entities }): Promise<CapabilityResult> {
     const target = entities.booking?.value ?? soleUpcoming(bookings);
     if (!target) {
+      const choices = bookingChoices(sortUpcoming(bookings), "Choose", "reschedule");
+      if (choices.length === 0) {
+        return {
+          text: "You don’t have an upcoming booking to reschedule.",
+          suggestions: [askChip("find", "Find someone", "Find me a provider")],
+        };
+      }
       return {
-        text: "Which booking did you want to move?",
-        suggestions: [navChip("all", "Open Bookings", "Bookings")],
+        text: "## Choose a booking to reschedule\nPick the appointment you want to move and I’ll open its available times.",
+        suggestions: [...choices, navChip("all", "Open all bookings", "Bookings")],
       };
     }
     return {
@@ -272,16 +517,71 @@ const bookingPrep: Capability = {
     "do i need to", "anything to fill", "forms", "intake form", "patch test",
     "before my appointment", "anything i need", "prepare", "aftercare",
   ],
-  async run(): Promise<CapabilityResult> {
-    // Both reads are independent — run them together rather than in sequence.
-    const [formsRes, itemsRes] = await Promise.allSettled([
+  async run({ bookings, entities }): Promise<CapabilityResult> {
+    // A prep question immediately after an appointment card should answer for
+    // THAT appointment, not flatten every form and note in the account into
+    // a generic count. A directly selected/resolved booking wins; with one
+    // upcoming appointment it is also safe to use that as the obvious target.
+    const booking = entities.booking?.value ?? soleUpcoming(bookings);
+
+    // These reads are independent. The info-pack query is included only when
+    // there is a concrete booking, which lets Becca show the actual provider
+    // instructions in chat instead of merely saying an info pack exists.
+    const [formsRes, itemsRes, packsRes] = await Promise.allSettled([
       getPendingIntakeFormsForMe(),
       getMyBookingActionItems(),
+      booking ? getInfoPacksByBooking(booking.id) : Promise.resolve([]),
     ]);
 
     const forms = formsRes.status === "fulfilled" ? formsRes.value : [];
     const items = itemsRes.status === "fulfilled" ? itemsRes.value : {};
     const outstanding = Object.values(items).reduce((a, b) => a + b, 0);
+    const packs = packsRes.status === "fulfilled" ? packsRes.value : [];
+
+    if (booking) {
+      const bookingForms = forms.filter((form) => form.bookingId === booking.id);
+      const unreadPacks = packs.filter((pack) => !pack.viewedAt);
+      const instructionLines = packs.map((pack) => {
+        const content = pack.content.trim();
+        return `- **${pack.title}${pack.viewedAt ? "" : " · New"}:** ${content || "No written instructions added."}`;
+      });
+
+      const sections = [
+        `## Getting ready for your appointment`,
+        `**${booking.serviceName}** with **${booking.providerName}**\n` +
+          `- **When:** ${formatShortDate(booking.bookingDate)} at ${formatTime12(booking.bookingTime)}`,
+      ];
+
+      if (bookingForms.length > 0) {
+        sections.push(
+          `**Before you go**\n` +
+            bookingForms.map((form) => `- Complete **${form.title}**`).join("\n"),
+        );
+      }
+      if (instructionLines.length > 0) {
+        sections.push(`**Instructions from ${booking.providerName}**\n${instructionLines.join("\n")}`);
+      }
+      if (bookingForms.length === 0 && instructionLines.length === 0) {
+        sections.push("No form, prep note or aftercare instruction has been added to this booking yet.");
+      }
+
+      return {
+        text: sections.join("\n\n"),
+        suggestions: [
+          ...bookingForms.slice(0, 4).map((form) =>
+            navChip(`form-${form.id}`, `Complete: ${form.title}`, "ClientIntakeForm", {
+              formId: form.id,
+              bookingId: form.bookingId,
+              serviceName: form.title,
+            }),
+          ),
+          ...(unreadPacks.length > 0
+            ? [askChip("packs", "Show my prep notes", `What did ${booking.providerName} send me for my appointment?`, { bookingId: booking.id })]
+            : []),
+          navChip("booking", "View booking", "BookingDetail", { bookingId: booking.id }),
+        ],
+      };
+    }
 
     if (forms.length === 0 && outstanding === 0) {
       return {
@@ -293,24 +593,25 @@ const bookingPrep: Capability = {
     const parts: string[] = [];
     if (forms.length > 0) {
       parts.push(
-        `You've got ${forms.length} form${forms.length > 1 ? "s" : ""} to fill in before your appointment${forms.length > 1 ? "s" : ""}.`,
+        `- **Forms:** ${forms.length} to fill in before your appointment${forms.length > 1 ? "s" : ""}.`,
       );
     }
-    if (outstanding > 0) parts.push(`There ${outstanding === 1 ? "is" : "are"} ${outstanding} thing${outstanding > 1 ? "s" : ""} needing your attention on your bookings.`);
+    if (outstanding > 0) {
+      parts.push(
+        `- **Booking tasks:** ${outstanding} item${outstanding > 1 ? "s" : ""} need${outstanding === 1 ? "s" : ""} your attention.`,
+      );
+    }
 
-    const firstForm = forms[0];
     return {
-      text: parts.join("\n\n"),
+      text: `Here’s what needs your attention:\n\n${parts.join("\n")}`,
       suggestions: [
-        ...(firstForm
-          ? [
-              navChip("form", "Open form", "ClientIntakeForm", {
-                formId: firstForm.id,
-                bookingId: firstForm.bookingId,
-                serviceName: firstForm.title,
-              }),
-            ]
-          : []),
+        ...forms.slice(0, 4).map((form) =>
+          navChip(`form-${form.id}`, `Open: ${form.title}`, "ClientIntakeForm", {
+            formId: form.id,
+            bookingId: form.bookingId,
+            serviceName: form.title,
+          }),
+        ),
         navChip("all", "Open Bookings", "Bookings"),
       ],
     };
@@ -321,7 +622,17 @@ const rebook: Capability = {
   id: "booking.rebook",
   hat: "client",
   describe: "Book the same thing again",
-  phrases: ["book again", "rebook", "same again", "book that again", "usual again", "last time"],
+  phrases: [
+    "book again", "rebook", "re-book", "same again", "book that again",
+    "usual again", "last time", "book the same", "same as last time",
+    // NOT a bare "my usual"/"the usual": entityResolver already reads those
+    // as "my usual PROVIDER" (resolveProvider), and discover.saved and
+    // discover.forme both claim them too. Only the phrasings that
+    // unambiguously mean "book that same thing again" belong here.
+    "book my usual", "repeat my last", "rebook my last",
+    "book what i had last", "same thing again", "book that in again",
+    "get that booked again", "have that again",
+  ],
   async run({ bookings }): Promise<CapabilityResult> {
     const past = bookings
       .filter((b) => b.status === BookingStatus.COMPLETED)
@@ -371,6 +682,140 @@ const rebook: Capability = {
   },
 };
 
+/** A factual look at the client's own completed-booking history, not a guess. */
+const bookingRoutine: Capability = {
+  id: "booking.routine",
+  hat: "client",
+  describe: "What I normally book and how often I book it",
+  phrases: [
+    "what do i normally get", "what do i usually get", "my usual appointment",
+    "my booking routine", "how often do i book", "when did i last get",
+    "when was my last appointment", "what did i get last time", "my usual",
+  ],
+  async run({ bookings }): Promise<CapabilityResult> {
+    const completed = bookings
+      .filter((booking) => booking.status === BookingStatus.COMPLETED)
+      .sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
+    const latest = completed[0];
+    if (!latest) {
+      return {
+        text: "You haven’t completed an appointment through CERVICED yet, so I don’t have a routine to learn from.",
+        suggestions: [askChip("browse", "Browse services", "Show me all services")],
+      };
+    }
+
+    const matching = completed
+      .filter((booking) => booking.serviceName === latest.serviceName)
+      .map((booking) => booking.bookingDate);
+    const intervals = matching.slice(0, -1).map((date, index) => {
+      const newer = new Date(`${date}T12:00:00`);
+      const older = new Date(`${matching[index + 1]}T12:00:00`);
+      return Math.round((newer.getTime() - older.getTime()) / 86_400_000);
+    });
+    const averageDays = intervals.length > 0
+      ? Math.round(intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length)
+      : undefined;
+
+    return {
+      text:
+        `## Your usual booking\n` +
+        `- **Last appointment:** ${latest.serviceName} with **${latest.providerName}**\n` +
+        `- **Last booked:** ${formatShortDate(latest.bookingDate)}\n` +
+        `- **Completed through CERVICED:** ${matching.length} ${latest.serviceName} appointment${matching.length === 1 ? "" : "s"}` +
+        (averageDays ? `\n- **Usual gap:** about every ${averageDays} days` : ""),
+      suggestions: [
+        askChip("rebook", "Book it again", "Rebook my last appointment"),
+        askChip("bookings", "See my bookings", "Show my bookings"),
+      ],
+    };
+  },
+};
+
+/**
+ * Bookings older than the 90-day window BookingContext holds.
+ *
+ * Distinct from `booking.routine`, which reads the already-loaded `bookings`
+ * array and so can only ever see the last 90 days (see getMyBookings' default
+ * `sinceDaysAgo = 90`). "What did I book last year?" was genuinely
+ * unanswerable — not because the data was missing, but because nothing
+ * fetched past the window.
+ */
+const bookingHistory: Capability = {
+  id: "booking.history",
+  hat: "client",
+  describe: "My older appointments, further back than the last few months",
+  phrases: [
+    "my history", "booking history", "my past appointments", "past bookings",
+    "older bookings", "previous appointments", "appointments last year",
+    "what did i book last year", "what have i booked before",
+    "everything i've booked", "everything ive booked", "all time",
+    "how many appointments have i had", "how much have i booked",
+    "my old bookings", "further back", "before that",
+  ],
+  async run({ bookings, now }): Promise<CapabilityResult> {
+    // Anchor at the oldest booking already in context, so this genuinely
+    // continues the window rather than re-reporting what other capabilities
+    // already cover.
+    const loaded = [...bookings].sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
+    const oldestLoaded = loaded[0]?.bookingDate ?? dateToYMD(now);
+
+    const older = await getOlderBookings(oldestLoaded, 50);
+
+    if (older.length === 0) {
+      const completedRecent = bookings.filter(
+        (b) => b.status === BookingStatus.COMPLETED,
+      ).length;
+      return {
+        text: completedRecent > 0
+          ? `Nothing further back than what I've already got — **${completedRecent}** completed appointment${completedRecent !== 1 ? "s" : ""} is your full history with CERVICED.`
+          : "You haven't completed any appointments through CERVICED yet.",
+        suggestions: [
+          askChip("bookings", "Show my bookings", "Show all my bookings"),
+          askChip("find", "Find someone", "Show me all services"),
+        ],
+      };
+    }
+
+    // Group by provider — "who have I actually been going to" is the question
+    // behind almost every version of this ask.
+    const byProvider = new Map<string, { count: number; last: string }>();
+    for (const b of older) {
+      const key = b.provider_name_snapshot;
+      const existing = byProvider.get(key);
+      if (!existing || b.booking_date > existing.last) {
+        byProvider.set(key, { count: (existing?.count ?? 0) + 1, last: b.booking_date });
+      } else {
+        existing.count += 1;
+      }
+    }
+
+    const ranked = [...byProvider.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5)
+      .map(
+        ([name, info]) =>
+          `- **${name}** — ${info.count} visit${info.count !== 1 ? "s" : ""}, last ${formatShortDate(info.last)}`,
+      )
+      .join("\n");
+
+    const completed = older.filter((b) => b.status === "completed").length;
+
+    return {
+      text:
+        `## Further back\n` +
+        `**${older.length}** appointment${older.length !== 1 ? "s" : ""} before ${formatShortDate(oldestLoaded)}` +
+        (completed !== older.length ? `, **${completed}** of them completed` : "") +
+        `:\n\n${ranked}` +
+        (byProvider.size > 5 ? `\n\n…and ${byProvider.size - 5} more provider${byProvider.size - 5 !== 1 ? "s" : ""}.` : ""),
+      suggestions: [
+        askChip("routine", "What do I usually book?", "What do I normally get?"),
+        askChip("rebook", "Book something again", "Rebook my last appointment"),
+        navChip("all", "Open Bookings", "Bookings"),
+      ],
+    };
+  },
+};
+
 // ==================== DISCOVERY ====================
 
 const findProviders: Capability = {
@@ -387,13 +832,50 @@ const findProviders: Capability = {
     "show me someone", "find someone", "i need my", "need my", "get my",
     "want my", "sort my", "book me in", "who can do",
   ],
+  // "looking for" and "find" are neutral about WHAT is being sought — the
+  // noun decides. "Looking for soft glam looks" is a request for images, but
+  // this capability's required-service bonus (+0.3) made it score 0.82
+  // against inspiration's 0.47, so it answered with a provider list instead.
+  // When the message names looks/inspiration/photos outright, that is the
+  // stated object of the search and inspiration owns it.
+  // Style-name phrases ("soft glam", "bridal look") are included for the same
+  // reason: they name a LOOK, not a person, so "looking for soft glam" is a
+  // request for images even without the word "looks" in it.
+  excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b/i,
   needs: [{ kind: "service", required: true }],
-  async run({ entities }): Promise<CapabilityResult> {
+  async run({ entities, rawMessage }): Promise<CapabilityResult> {
     const service = entities.service!.value;
     const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
     const priceFilter = entities.money?.value;
 
-    const dbProviders = await getProviders(service.category);
+    let dbProviders = await getProviders(service.category);
+
+    // "men's haircut" / "for my daughter" — narrow to providers with at
+    // least one active service tagged services.audience for that audience,
+    // same "provider qualifies via any matching service" rule HomeScreen's
+    // Male/Kids sections and the Search filter use. Distinct from the
+    // category override above (MALE/KIDS as a whole-business category,
+    // which almost no provider registers as) — this catches a HAIR
+    // provider's individual "Men's Cut" service instead.
+    if (service.audience && dbProviders.length > 0) {
+      const audienceMatches = await getProviderAudienceMatches(dbProviders.map((p) => p.id), service.audience);
+      dbProviders = dbProviders.filter((p) => audienceMatches.has(p.id));
+    }
+
+    // Simple keyword → provider-column matching, same ad-hoc shape as the
+    // price filter above rather than a new entity-resolver abstraction —
+    // these are plain provider-level booleans, not a general concept that
+    // needs scoring against other capabilities.
+    const practiceFilters: { keywords: RegExp; matches: (p: PublicProviderSummary) => boolean; label: string }[] = [
+      { keywords: /\bwalk[\s-]?in/i, matches: (p) => !!p.walk_ins_welcome, label: "walk-ins welcome" },
+      { keywords: /\bgroup\s?(booking|appointment)/i, matches: (p) => !!p.group_bookings_available, label: "group bookings" },
+      { keywords: /\bvegan\b|\bcruelty[\s-]?free\b/i, matches: (p) => !!p.vegan_cruelty_free, label: "vegan/cruelty-free" },
+    ];
+    const activePracticeFilters = practiceFilters.filter((f) => f.keywords.test(rawMessage));
+    if (activePracticeFilters.length > 0) {
+      dbProviders = dbProviders.filter((p) => activePracticeFilters.every((f) => f.matches(p)));
+    }
+
     let providers = dbProviders.map(providerFromDb);
 
     if (priceFilter && dbProviders.length > 0) {
@@ -418,23 +900,79 @@ const findProviders: Capability = {
     }
 
     const priceSuffix = priceFilter ? ` ${entities.money!.label}` : "";
+    const practiceSuffix = activePracticeFilters.length > 0
+      ? ` that ${activePracticeFilters.length === 1 ? "is" : "are"} ${activePracticeFilters.map((f) => f.label).join(" and ")}`
+      : "";
+    const audienceSuffix = service.audience ? ` for ${service.audience}` : "";
 
     if (providers.length === 0) {
       return {
-        text: `${softMiss()} I couldn't find any ${label} providers${priceSuffix}. Want to try a different angle?`,
+        text: `I couldn't find any ${label} providers${priceSuffix}${practiceSuffix}${audienceSuffix}. Want to try a different angle?`,
         suggestions: [
           ...(priceFilter ? [askChip("nofilter", "Try without the budget", `Find ${label}`)] : []),
+          ...(activePracticeFilters.length > 0 ? [askChip("noPractice", "Try without that filter", `Find ${label}`)] : []),
+          ...(service.audience ? [askChip("noAudience", `Try any ${label}`, `Find ${label}`)] : []),
           askChip("browse", "Browse everything", "Show me all services"),
         ],
       };
     }
 
     return {
-      text: `${goodNews()} I found **${providers.length} ${label} provider${providers.length !== 1 ? "s" : ""}**${priceSuffix}.`,
+      text: `I found **${providers.length} ${label} provider${providers.length !== 1 ? "s" : ""}**${priceSuffix}${practiceSuffix}.`,
       providers: providers.slice(0, 12),
       suggestions: [
         askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),
-        askChip("deals", "Any deals?", `Any ${label} offers on?`),
+        askChip("top", "See top-rated", `Who are the best rated ${label} providers?`),
+      ],
+    };
+  },
+};
+
+const pickFromList: Capability = {
+  id: "discover.pick",
+  hat: "client",
+  describe: "Tell me about the one you just showed me",
+  // A named provider or a result Becca just displayed. This always requires
+  // a provider resolved from the live database (or carried shown-results
+  // context), so a generic "looking for nails" cannot fire it cold.
+  phrases: [
+    "looking for", "searching for",
+    "the first one", "the second one", "the third one", "the last one",
+    "that one", "this one", "first one", "second one", "number one",
+    "tell me about", "more about", "what about them", "who are they",
+    "book the first", "book that one", "go with", "i'll take", "ill take",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+    const dbId = await resolveProviderDbId(provider);
+
+    // The named result itself should be the navigation affordance. Fetch the
+    // same live, gated provider shape used by discovery cards so the user can
+    // tap the profile directly instead of going through a redundant action.
+    const [profileRes, rangeRes, reviewRes] = await Promise.allSettled([
+      getProviderBySlug(provider.slug),
+      dbId ? getProviderPriceRanges([dbId]) : Promise.resolve(new Map()),
+      dbId ? getProviderReviews(dbId) : Promise.resolve([]),
+    ]);
+
+    const profile = profileRes.status === "fulfilled" ? profileRes.value : null;
+    const range =
+      rangeRes.status === "fulfilled" && dbId ? rangeRes.value.get(dbId) : undefined;
+    const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];
+
+    const bits: string[] = [];
+    if (range) bits.push(`${money(range.min)}\u2013${money(range.max)}`);
+    if (reviews.length > 0) {
+      const avg = reviews.reduce((sum, r) => sum + (r.rating ?? 0), 0) / reviews.length;
+      bits.push(`${avg.toFixed(1)}\u2605 from ${reviews.length} review${reviews.length !== 1 ? "s" : ""}`);
+    }
+
+    return {
+      text: `**${provider.displayName}**` + (bits.length > 0 ? `\n\n${bits.join(" \u00b7 ")}` : ""),
+      ...(profile ? { providers: [providerFromDb(profile)] } : {}),
+      suggestions: [
+        askChip("free", "When are they free?", `When is ${provider.displayName} next free?`),
       ],
     };
   },
@@ -466,11 +1004,26 @@ const followUpPrice: Capability = {
   id: "discover.followup_price",
   hat: "client",
   describe: "How much are they / what do they charge",
+  // Every phrase here used to assume a pronoun ("how much are THEY"), so a
+  // direct category question — "how much are nails", the most natural way to
+  // ask this — matched nothing at all and fell to the generic fallback. The
+  // bare "how much"/"cost of" forms are what catch it, since phrase matching
+  // is contiguous and the service word sits mid-sentence.
   phrases: [
     "how much are they", "how much do they charge", "what do they charge",
     "how much is that", "what's the price", "whats the price", "price range",
     "how much roughly", "are they expensive", "how pricey",
+    "how much", "how much is", "how much are", "how much does",
+    "average price", "typical price", "going rate", "cost of",
+    "what does it cost", "what do they usually cost", "rough price",
   ],
+  // A pronoun means a specific provider is being asked about, and their real
+  // price list beats a category average — discover.provider_services owns
+  // that. Both capabilities score identically when a provider AND a service
+  // are resolved ("how much do they charge for nails"), so registration order
+  // alone decided it, and this one is registered first. An explicit veto is
+  // the mechanism built for exactly this, rather than relying on file order.
+  excludeWhen: /\b(they|them|their|theirs|she|her|hers|he|him|his)\b/i,
   needs: [{ kind: "service", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const service = entities.service!.value;
@@ -478,25 +1031,28 @@ const followUpPrice: Capability = {
 
     const dbProviders = await getProviders(service.category);
     if (dbProviders.length === 0) {
-      return { text: `${softMiss()} I couldn't find any ${label} providers to price up.` };
+      return { text: `I couldn't find any ${label} providers to price up.` };
     }
 
     const ranges = await getProviderPriceRanges(dbProviders.map((p) => p.id));
-    const mins = [...ranges.values()].map((r) => r.min).filter((n) => n > 0);
-    const maxes = [...ranges.values()].map((r) => r.max).filter((n) => n > 0);
+    // Count only providers who actually contributed a price. `dbProviders` is
+    // every provider in the category, including ones with nothing published —
+    // quoting that as the range's basis overstates it ("£25 to £80 across 6
+    // providers" when only one of the six has prices).
+    const priced = [...ranges.values()].filter((r) => r.min > 0 && r.max > 0);
 
-    if (mins.length === 0) {
+    if (priced.length === 0) {
       return {
-        text: `${softMiss()} none of the ${label} providers have published prices yet — you'd need to ask them directly.`,
+        text: `None of the ${label} providers have published prices yet — you'd need to ask them directly.`,
       };
     }
 
-    const low = Math.min(...mins);
-    const high = Math.max(...maxes);
+    const low = Math.min(...priced.map((r) => r.min));
+    const high = Math.max(...priced.map((r) => r.max));
     return {
       text:
         `${label.charAt(0).toUpperCase()}${label.slice(1)} runs from about ` +
-        `**${money(low)}** to **${money(high)}** across the ${dbProviders.length} provider${dbProviders.length !== 1 ? "s" : ""} I can see.`,
+        `**${money(low)}** to **${money(high)}** across ${priced.length} provider${priced.length !== 1 ? "s" : ""}.`,
       suggestions: [
         askChip("cheap", "Show me the cheaper end", `Find ${label} under ${Math.round(low + (high - low) * 0.4)}`),
         askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),
@@ -508,18 +1064,25 @@ const followUpPrice: Capability = {
 const findAvailable: Capability = {
   id: "discover.available",
   hat: "client",
-  describe: "Find providers who are actually free on a given day",
+  describe: "Find providers who are actually free this week or on a given day",
   phrases: [
     "free on", "available on", "who's free", "whos free", "who is free",
     "availability", "any openings", "got space", "fit me in", "free this",
   ],
-  needs: [{ kind: "service", required: true }],
+  // Service is helpful but not required: “Who's free this week?” is a valid
+  // availability search in its own right. Treating it as missing data sent
+  // users into a generic fallback that offered their bookings instead.
+  needs: [{ kind: "service", required: false }],
   async run({ entities }): Promise<CapabilityResult> {
-    const service = entities.service!.value;
-    const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
+    const service = entities.service?.value;
+    const label = service
+      ? service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase()
+      : "providers";
     const date = entities.date?.value;
 
-    const dbProviders = await getProviders(service.category);
+    // No category means an all-service availability search. getProviders()
+    // remains live-provider gated, so this never exposes unpublished profiles.
+    const dbProviders = await getProviders(service?.category);
     if (dbProviders.length === 0) {
       return { text: `I couldn't find any ${label} providers at all.` };
     }
@@ -527,79 +1090,116 @@ const findAvailable: Capability = {
     // Availability is per-provider and genuinely expensive, so cap the fan-out
     // and run the checks concurrently rather than sequentially.
     const candidates = dbProviders.slice(0, 8);
-    // Pass the real UUID, not the display name: findNextAvailableDate would
-    // otherwise run an extra ilike() lookup per provider to resolve the name
-    // back to the id we already have here.
+    // Resolve an actual bookable slot rather than treating a calendar day as
+    // availability. This honours the provider's booking window, notice,
+    // buffers and already-taken appointments.
     const checks = await Promise.allSettled(
-      candidates.map((p) => AvailabilityService.findNextAvailableDate(p.id)),
+      candidates.map((p) => AvailabilityService.resolveNextAvailableSlot(p.id)),
     );
 
     const free = candidates
       .map((p, i) => {
         const res = checks[i];
-        const nextDate = res?.status === "fulfilled" ? res.value : null;
-        if (!nextDate) return null;
-        // findNextAvailableDate searches forward from today, so when the user
-        // named a day we filter to it here rather than passing it in — its
-        // second parameter is a service duration, not a start date.
-        if (date && (nextDate < date.ymd || nextDate > date.endYmd)) return null;
-        return { provider: p, nextDate };
+        const slot = res?.status === "fulfilled" ? res.value : null;
+        if (!slot) return null;
+        if (date && (slot.date < date.ymd || slot.date > date.endYmd)) return null;
+        return { provider: p, ...slot };
       })
-      .filter((x): x is { provider: (typeof candidates)[number]; nextDate: string } => x !== null);
+      .filter((x): x is { provider: (typeof candidates)[number]; date: string; time: string } => x !== null);
 
     if (free.length === 0) {
       return {
         text: date
-          ? `${softMiss()} none of the ${label} providers I checked have space ${date.label} — but there may be more further out.`
-          : `${softMiss()} I couldn't find open slots with the ${label} providers I checked.`,
-        suggestions: [askChip("all", `Show all ${label}`, `Find ${label}`)],
+          ? `None of the ${label} I checked have a bookable slot ${date.label}.`
+          : `I couldn't find a bookable slot with the providers I checked this week.`,
+        suggestions: [
+          askChip("all", service ? `Show all ${label}` : "Browse services", service ? `Find ${label}` : "Show me all services"),
+          askChip("top", "See top-rated", service ? `Who are the best rated ${label} providers?` : "Who are the best rated providers?"),
+        ],
       };
     }
 
     const lines = free
       .slice(0, 5)
-      .map((f) => `**${f.provider.display_name}** — next free ${formatShortDate(f.nextDate)}`)
+      .map((f) => `- **${f.provider.display_name}** — **${formatShortDate(f.date)} at ${formatTime12(f.time)}**`)
       .join("\n");
+    const resultLabel = service
+      ? `${free.length} ${label} provider${free.length !== 1 ? "s" : ""}`
+      : `${free.length} provider${free.length !== 1 ? "s" : ""}`;
+
+    // Availability is checked against a capped sample (see `candidates`), not
+    // the whole category. The empty-result branch above already says "of the
+    // ones I checked"; saying a flat count here implied a complete scan and
+    // undersold how many providers might actually be free.
+    const moreUnchecked = dbProviders.length - candidates.length;
+    const scopeNote =
+      moreUnchecked > 0
+        ? `\n\nThat's from the first ${candidates.length} I checked — there ${moreUnchecked !== 1 ? "are" : "is"} ${moreUnchecked} more to look through.`
+        : "";
 
     return {
-      text: `${goodNews()} **${free.length} ${label} provider${free.length !== 1 ? "s" : ""}** ${free.length !== 1 ? "have" : "has"} space${date ? ` around **${date.label}**` : ""}:\n\n${lines}`,
+      text: `## Availability found\n**${resultLabel}** ${free.length !== 1 ? "have" : "has"} a bookable time${date ? ` **${date.label}**` : " this week"}.\n\n${lines}${scopeNote}`,
       providers: free.map((f) => providerFromDb(f.provider)),
       // Recommendations used to be a dead end — the cards appeared and the
       // conversation stopped. These keep it moving: the obvious next things
       // someone asks after seeing who's available.
       suggestions: [
-        askChip("deals", "Any deals?", `Any ${label} offers on?`),
-        askChip("all", `All ${label}`, `Find ${label}`),
-        askChip("bookings", "My bookings", "Show my bookings"),
+        ...(service ? [askChip("prices", "Compare prices", `How much do ${label} providers charge?`)] : []),
+        askChip("all", service ? `All ${label}` : "Browse services", service ? `Find ${label}` : "Show me all services"),
       ],
     };
   },
 };
 
-const deals: Capability = {
-  id: "discover.deals",
+/**
+ * Turns an open-ended "help me plan" request into visible booking criteria.
+ * It intentionally does not claim a provider is available or affordable until
+ * the dedicated availability and price-backed searches run.
+ */
+const appointmentPlan: Capability = {
+  id: "discover.booking_plan",
   hat: "client",
-  describe: "Any offers or deals on",
+  describe: "Plan a booking around a service, date and budget",
   phrases: [
-    "deals", "offers", "discount", "discounts", "promotion", "promotions",
-    "promo", "sale", "anything cheap", "any offers", "special offers",
-    "anything on offer", "bargains", "cheap", "money off", "savings",
+    "plan my appointment", "plan a booking", "help me plan", "help me book",
+    "plan my beauty appointment", "book me something", "help me find someone",
+    "i need someone for", "i need a provider for", "make me a booking plan",
   ],
+  needs: [{ kind: "service", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
-    const category = entities.service?.value.category;
-    const promos = await getActivePromotions(category);
-    if (promos.length === 0) {
-      return {
-        text: category
-          ? `No ${CATEGORY_LABELS[category] ?? category.toLowerCase()} offers running right now.`
-          : "No offers running at the moment.",
-      };
-    }
-    const lines = promos
-      .slice(0, 5)
-      .map((p) => `**${p.title ?? "Offer"}** — ${p.providers?.display_name ?? "a provider"}`)
-      .join("\n");
-    return { text: `${goodNews()} ${promos.length} offer${promos.length !== 1 ? "s" : ""} running right now:\n\n${lines}` };
+    const service = entities.service!.value;
+    const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
+    const date = entities.date?.value;
+    const budget = entities.money?.value;
+    const budgetLabel = budget
+      ? budget.max != null
+        ? `up to **${money(budget.max)}**`
+        : budget.min != null
+          ? `from **${money(budget.min)}**`
+          : "not set"
+      : "not set yet";
+    const availabilityQuestion = date
+      ? `Which ${label} providers are free ${date.label}?`
+      : `Which ${label} providers are free this week?`;
+    const budgetQuestion = budget?.max != null
+      ? `Find ${label} under ${budget.max}`
+      : budget?.min != null
+        ? `Find ${label} over ${budget.min}`
+        : `Find ${label}`;
+
+    return {
+      text:
+        `## Your ${label} booking plan\n` +
+        `- **Service:** ${label}\n` +
+        `- **Timing:** ${date ? date.label : "Flexible"}\n` +
+        `- **Budget:** ${budgetLabel}\n\n` +
+        "Choose what matters most and I’ll narrow the real options down for you.",
+      suggestions: [
+        askChip("available", "Check availability", availabilityQuestion),
+        askChip("budget", "Match my budget", budgetQuestion),
+        askChip("top", "See top-rated options", `Who are the best rated ${label} providers?`),
+      ],
+    };
   },
 };
 
@@ -616,10 +1216,12 @@ const reviews: Capability = {
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
-    if (!provider.dbId) {
-      return { text: `I couldn't look up reviews for ${provider.displayName}.` };
+    // May have come from a pronoun/ordinal reference, which carries no UUID.
+    const providerDbId = await resolveProviderDbId(provider);
+    if (!providerDbId) {
+      return { text: `I couldn't look ${provider.displayName} up properly.` };
     }
-    const rows = await getProviderReviews(provider.dbId);
+    const rows = await getProviderReviews(providerDbId);
     if (rows.length === 0) {
       return {
         text: `${provider.displayName} hasn't got any reviews yet.`,
@@ -638,10 +1240,20 @@ const providerServices: Capability = {
   id: "discover.provider_services",
   hat: "client",
   describe: "What a specific provider offers, and what it costs",
+  // Carries the provider-scoped PRICE phrasings as well as the service-list
+  // ones. discover.followup_price owns the same vocabulary but requires a
+  // service entity, so with a provider resolved and no service named it takes
+  // a -0.35 penalty and lands at 0.25 — under the matcher's 0.3 medium
+  // threshold, i.e. straight into the "didn't catch that" fallback. "What do
+  // they charge?" about a named provider therefore answered nothing at all
+  // until these were listed here.
   phrases: [
     "what do they offer", "what does she do", "what does he do",
     "their services", "what services", "what can i book with",
     "what do they do", "their prices", "how much do they charge",
+    "what do they charge", "how much are they", "how much is it with",
+    "what are their prices", "how much would it be", "are they expensive",
+    "their rates", "what do they cost", "how much do they cost",
     "price list", "menu",
   ],
   needs: [{ kind: "provider", required: true }],
@@ -652,7 +1264,7 @@ const providerServices: Capability = {
     const full = provider.slug ? await getProviderBySlug(provider.slug) : null;
     if (!full) {
       return {
-        text: `${softMiss()} I couldn't pull up what ${provider.displayName} offers just now.`,
+        text: `I couldn't pull up what ${provider.displayName} offers just now.`,
       };
     }
 
@@ -675,17 +1287,463 @@ const providerServices: Capability = {
       .slice(0, 6)
       .map((s) => {
         const mins = s.duration_minutes ? ` · ${s.duration_minutes} min` : "";
-        return `**${s.name}** — ${money(s.price ?? 0)}${mins}`;
+        return `- **${s.name}** — **${money(s.price ?? 0)}**${mins}`;
       })
       .join("\n");
     const more = sorted.length > 6 ? `\n\n…and ${sorted.length - 6} more on their profile.` : "";
 
+    // STAGING, not booking. `openServiceId` opens that exact service's
+    // BookingSheet on the provider's profile — the user still picks their own
+    // slot and confirms. Becca prepares the step; she never completes it.
+    // Same route Explore's "Book Now" uses, so there's one booking entry
+    // point rather than a second Becca-specific path.
+    //
+    // Only offered when the user named a specific service, or the provider
+    // has few enough that a chip per service is a menu rather than a wall.
+    const wantedService = entities.service?.value.specific?.toLowerCase();
+    const named = wantedService
+      ? sorted.filter((s) => s.name?.toLowerCase().includes(wantedService))
+      : [];
+    const stageable = named.length > 0 ? named : sorted.length <= 3 ? sorted : [];
+
     return {
       text: `${provider.displayName} offers **${services.length} service${services.length !== 1 ? "s" : ""}**:\n\n${lines}${more}`,
       suggestions: [
-        navChip("book", `Book with ${provider.displayName}`, "ProviderProfile", { providerId: provider.slug, source: "becca" }),
+        ...stageable.slice(0, 3).map((s) =>
+          navChip(`stage-${s.id}`, `Book ${s.name} — ${money(s.price ?? 0)}`, "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+            openServiceId: s.id,
+          }),
+        ),
+        ...(stageable.length === 0
+          ? [navChip("book", `Book with ${provider.displayName}`, "ProviderProfile", { providerId: provider.slug, source: "becca" })]
+          : []),
         askChip("free", "When are they free?", `When is ${provider.displayName} free?`),
         askChip("reviews", "What do people say?", `Reviews for ${provider.displayName}`),
+      ],
+    };
+  },
+};
+
+/**
+ * Treatment-safety requirements a provider has stated on their own services.
+ *
+ * HEALTH-ADJACENT — read the framing before changing anything here.
+ *
+ * This capability REPORTS what a provider has recorded against a service
+ * (patch test required, not recommended during pregnancy, minimum age,
+ * contraindications). It does not assess, advise, reassure, or infer. Three
+ * rules follow from that and must hold:
+ *
+ *  1. Wording mirrors ProviderProfileScreen's existing "Treatment Safety"
+ *     block verbatim ("Patch test required before this treatment", "Not
+ *     recommended during pregnancy") so Becca and the profile can never
+ *     state the same fact differently.
+ *  2. Silence is never reported as safety. A service with no flags set means
+ *     the provider hasn't recorded anything — NOT that the treatment is safe
+ *     for this person — so the empty case says exactly that and points at the
+ *     provider, mirroring how `provider.consultation` handles the same gap.
+ *  3. It never reads the user's own health profile (allergies, medical
+ *     notes) to cross-reference against a treatment. Matching a stated
+ *     allergy to a contraindication would be Becca forming a medical
+ *     opinion, which engine.ts's MEDICAL_OR_DERMATOLOGY_RE guard exists to
+ *     prevent her doing anywhere else.
+ */
+const treatmentSafety: Capability = {
+  id: "provider.safety",
+  hat: "client",
+  describe: "Safety requirements for a provider's treatments",
+  // Deliberately avoids words caught by MEDICAL_OR_DERMATOLOGY_RE (allergy,
+  // skin condition, reaction, treatment-as-verb...) — those are intercepted
+  // before routing and can never reach any capability.
+  // NOTE: "treatment safety" is deliberately absent despite being the app's
+  // own heading for this content — MEDICAL_OR_DERMATOLOGY_RE matches `treat`,
+  // so the phrase is intercepted before routing and could never reach here.
+  // Listing it would advertise coverage that doesn't exist.
+  phrases: [
+    "safety info", "safety requirements", "safety notes",
+    "is it safe", "safe for pregnancy", "pregnancy safe", "pregnant",
+    "expecting", "age limit", "minimum age", "how old do you have to be",
+    "any restrictions", "restrictions", "contraindications",
+    "anything i should know before", "who can't have",
+    "who cant have", "am i able to have",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities, rawMessage }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+    // getProviderBySlug is has_gone_live + is_active gated.
+    const full = provider.slug ? await getProviderBySlug(provider.slug) : null;
+    if (!full) {
+      return {
+        text: `I couldn't pull up ${provider.displayName}'s services just now — their profile has the current details.`,
+        suggestions: [
+          navChip("profile", "View profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    const services = full.services ?? [];
+    // Narrow to one service when the user named it, so "is the peel safe in
+    // pregnancy" answers about the peel rather than listing everything.
+    const wanted = entities.service?.value.specific?.toLowerCase();
+    const scoped = wanted
+      ? services.filter((s) => s.name?.toLowerCase().includes(wanted))
+      : services;
+    const pool = scoped.length > 0 ? scoped : services;
+
+    // Did the user actually ask about pregnancy? Checked here as well as in
+    // the notes builder, because it widens what counts as "has something to
+    // say": a service the provider explicitly marked pregnancy-SAFE carries
+    // no restriction, so it isn't "flagged" in the normal sense — but when
+    // someone asks directly, that recorded answer is exactly what they want,
+    // and dropping it to the generic empty state would bury it.
+    const askedPregnancy = /\b(?:pregnan|expecting|breastfeed|nursing)/i.test(rawMessage);
+
+    const flagged = pool.filter(
+      (s) =>
+        s.patch_test_required ||
+        s.is_pregnancy_safe === false ||
+        s.min_age != null ||
+        (s.contraindications?.length ?? 0) > 0 ||
+        (askedPregnancy && s.is_pregnancy_safe === true),
+    );
+
+    if (flagged.length === 0) {
+      // NOT "it's safe" — an empty set means nothing was recorded. Saying
+      // otherwise would turn missing data into a reassurance Becca has no
+      // basis for.
+      return {
+        text:
+          `${provider.displayName} hasn't recorded any safety requirements against ` +
+          `${wanted ? `**${wanted}**` : "their services"}. ` +
+          `That isn't the same as there being none — if you've got something specific in mind, ask them directly before booking.`,
+        suggestions: [
+          navChip("chat", `Ask ${provider.displayName}`, "ProviderChat", {
+            providerId: provider.slug,
+            ...(full.id ? { providerDbId: full.id } : {}),
+            providerName: provider.displayName,
+          }),
+          navChip("profile", "View profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    // Wording below is copied from ProviderProfileScreen's Treatment Safety
+    // block on purpose — see rule 1 above.
+    const blocks = flagged
+      .slice(0, 5)
+      .map((s) => {
+        const notes: string[] = [];
+        if (s.patch_test_required) notes.push("Patch test required before this treatment");
+        if (s.is_pregnancy_safe === false) notes.push("Not recommended during pregnancy");
+        // PER-FIELD SILENCE (rule 2, one level down). `is_pregnancy_safe` is
+        // an opt-in flag, so `undefined` means "never filled in" — NOT "safe".
+        // Omitting it from an otherwise-populated, confident-looking block let
+        // a user asking "is it safe when pregnant?" read the absence as a no.
+        // That's reassurance-by-silence buried inside a positive answer, which
+        // is worse than the all-empty case because no caveat attaches to it.
+        // Only surfaced when they actually asked, so unrelated queries don't
+        // get noise about a field nobody mentioned.
+        else if (askedPregnancy && s.is_pregnancy_safe == null) {
+          notes.push("Pregnancy suitability not recorded — check with them");
+        }
+        // Provider explicitly marked it suitable. Attributed to THEM, never
+        // asserted by Becca — she has no basis to judge an individual case,
+        // and a direct question deserves the recorded answer rather than a
+        // silence the user would read as an implied "no".
+        else if (askedPregnancy && s.is_pregnancy_safe === true) {
+          notes.push(`${provider.displayName} has marked this suitable during pregnancy`);
+        }
+        if (s.min_age != null) notes.push(`Minimum age ${s.min_age}`);
+        for (const c of (s.contraindications ?? []).slice(0, 3)) notes.push(c);
+        return `- **${s.name}**\n${notes.map((n) => `  - ${n}`).join("\n")}`;
+      })
+      .join("\n");
+
+    return {
+      text:
+        `## Treatment safety\n` +
+        `${provider.displayName} has recorded requirements on ` +
+        `**${flagged.length}** service${flagged.length !== 1 ? "s" : ""}:\n\n${blocks}` +
+        (flagged.length > 5 ? `\n\n…and ${flagged.length - 5} more on their profile.` : "") +
+        `\n\nThis is only what ${provider.displayName} has filled in — a blank isn't a "no". Anything health-related beyond it is a question for them or a professional.`,
+      suggestions: [
+        navChip("chat", `Ask ${provider.displayName}`, "ProviderChat", {
+          providerId: provider.slug,
+          ...(full.id ? { providerDbId: full.id } : {}),
+          providerName: provider.displayName,
+        }),
+        askChip("consult", "Do I need a consultation?", `Do I need a consultation with ${provider.displayName}?`),
+        navChip("profile", "View profile", "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        }),
+      ],
+    };
+  },
+};
+
+const providerLocation: Capability = {
+  id: "provider.location",
+  hat: "client",
+  describe: "Where a provider is based or whether they travel",
+  phrases: [
+    "where are they", "where is the provider", "where is their salon", "their location",
+    "their address", "where are you based", "where are they based", "do they travel",
+    "mobile provider", "home visit", "home visits", "come to me",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+    const [mobileProviders, locations] = await Promise.all([
+      getMobileProviderDisplayNames([provider.displayName]),
+      getProviderLocationsByDisplayNames([provider.displayName]),
+    ]);
+
+    if (mobileProviders.has(provider.displayName)) {
+      return {
+        text:
+          `**${provider.displayName}** offers mobile appointments. ` +
+          "Open their profile to check the services and booking details for your area.",
+        suggestions: [
+          navChip("profile", "View provider profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    const location = locations[provider.displayName];
+    if (!location) {
+      return {
+        text:
+          `I couldn’t confirm **${provider.displayName}**’s listed area just now. ` +
+          "Their profile has the most up-to-date location and contact details.",
+        suggestions: [
+          navChip("profile", "View provider profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    return {
+      text:
+        `**${provider.displayName}** is listed in **${location.address}**. ` +
+        "Your confirmed booking will show the location details available for that appointment.",
+      suggestions: [
+        navChip("profile", "View provider profile", "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        }),
+      ],
+    };
+  },
+};
+
+/**
+ * Booking-specific location answer. This only reports the provider's public
+ * listed area; the booking detail screen remains the authority for any exact
+ * address that has been released under that appointment's privacy policy.
+ */
+const bookingLocation: Capability = {
+  id: "booking.location",
+  hat: "client",
+  describe: "Where an upcoming appointment is",
+  phrases: [
+    "where is my appointment", "where's my appointment", "where is my booking",
+    "where's my booking", "where am i going", "how do i get there", "directions",
+    "where is it", "where's it",
+  ],
+  needs: [{ kind: "booking", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const booking = entities.booking!.value;
+    const location = (await getProviderLocationsByDisplayNames([booking.providerName]))[
+      booking.providerName
+    ];
+
+    if (!location) {
+      return {
+        text:
+          `I couldn’t confirm the listed area for **${booking.serviceName}** with **${booking.providerName}**. ` +
+          "Open the booking for the latest appointment details.",
+        suggestions: [navChip("booking", "View booking", "BookingDetail", { bookingId: booking.id })],
+      };
+    }
+
+    return {
+      text:
+        `## Your appointment location\n` +
+        `- **Service:** ${booking.serviceName}\n` +
+        `- **Provider:** ${booking.providerName}\n` +
+        `- **Listed area:** ${location.address}\n\n` +
+        "Open your booking to see the location details available for this appointment.",
+      suggestions: [navChip("booking", "View booking details", "BookingDetail", { bookingId: booking.id })],
+    };
+  },
+};
+
+const providerDeposit: Capability = {
+  id: "provider.deposit",
+  hat: "client",
+  describe: "Whether a provider takes a deposit",
+  phrases: [
+    "deposit", "do they take a deposit", "deposit required", "pay a deposit",
+    "how much is the deposit", "booking deposit", "pay upfront", "pay up front",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+    const policy = (await getProviderDepositPoliciesByDisplayNames([provider.displayName]))[
+      provider.displayName
+    ];
+
+    if (!policy || !policy.depositAvailable) {
+      return {
+        text: `**${provider.displayName}** doesn’t offer a deposit option in checkout.`,
+        suggestions: [
+          navChip("profile", "View provider profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    const amount = policy.depositType === "fixed"
+      ? money(policy.depositAmount)
+      : `${policy.depositAmount}%`;
+    return {
+      text:
+        `**${provider.displayName}** offers a **${amount} deposit** at checkout.` +
+        (policy.depositOnly
+          ? " This deposit is required to secure the booking."
+          : " You’ll see the available payment options before you confirm."),
+      suggestions: [
+        navChip("profile", "View provider profile", "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        }),
+        askChip("services", "What services do they offer?", `What services does ${provider.displayName} offer?`),
+      ],
+    };
+  },
+};
+
+const providerBookingTiming: Capability = {
+  id: "provider.booking_timing",
+  hat: "client",
+  describe: "How far ahead or how late a provider accepts bookings",
+  phrases: [
+    "how late can i book", "how far ahead can i book", "booking window",
+    "minimum notice", "last minute booking", "same day booking", "book ahead",
+    "when can i book", "how soon can i book",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+
+    // Resolve to the real UUID first. getProviderSchedulingConstraints falls
+    // back to 60 days / 0 hours when its lookup finds nothing, and a
+    // display-name match is fragile (case, punctuation, a renamed business) —
+    // so passing a name that misses returned those defaults, which Becca then
+    // stated as this provider's actual policy. Same reasoning as
+    // getProviderReschedulePolicyById being preferred over its name sibling.
+    const providerDbId = await resolveProviderDbId(provider);
+    if (!providerDbId) {
+      return {
+        text:
+          `I couldn't pull up ${provider.displayName}'s booking window — their profile has the current rules.`,
+        suggestions: [
+          navChip("profile", "View provider profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    const rules = await getProviderSchedulingConstraints(providerDbId);
+    const notice = rules.minBookingNoticeHrs > 0
+      ? `${rules.minBookingNoticeHrs} hours’ notice`
+      : "no minimum notice";
+
+    return {
+      text:
+        `## Booking timing with ${provider.displayName}\n` +
+        `- **Book ahead:** up to **${rules.bookingWindowDays} days**\n` +
+        `- **Minimum notice:** **${notice}**\n\n` +
+        "Availability still depends on open slots at the time you book.",
+      suggestions: [
+        askChip("free", "When are they free?", `When is ${provider.displayName} free?`),
+        askChip("deposit", "Do they take a deposit?", `Does ${provider.displayName} take a deposit?`),
+        navChip("profile", "View provider profile", "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        }),
+      ],
+    };
+  },
+};
+
+const providerAvailability: Capability = {
+  id: "provider.next_available",
+  hat: "client",
+  describe: "When a specific provider is next available",
+  phrases: [
+    "when are they free", "when is she free", "when is he free", "when are you free",
+    "when is the next slot", "their next slot", "next available", "when can i see them",
+    "when can i book them", "when is this provider free",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+    const providerDbId = await resolveProviderDbId(provider);
+    if (!providerDbId) {
+      return {
+        text: `I couldn’t look **${provider.displayName}** up properly.`,
+        suggestions: [
+          navChip("profile", "View provider profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    const slot = await AvailabilityService.resolveNextAvailableSlot(providerDbId);
+    if (!slot) {
+      return {
+        text: `I couldn’t find a bookable slot with **${provider.displayName}** in the next 60 days.`,
+        suggestions: [
+          navChip("profile", "View provider profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+          askChip("similar", "Find someone similar", "Show me all services"),
+        ],
+      };
+    }
+
+    return {
+      text:
+        `## Next availability\n` +
+        `**${provider.displayName}** is next available on **${formatShortDate(slot.date)}** at **${formatTime12(slot.time)}**.`,
+      suggestions: [
+        navChip("profile", `Book with ${provider.displayName}`, "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        }),
+        askChip("services", "View their services", `What services does ${provider.displayName} offer?`),
       ],
     };
   },
@@ -701,12 +1759,20 @@ const myProviders: Capability = {
     if (rows.length === 0) {
       return {
         text: "You haven't saved any providers yet. Tap the bookmark on a profile to keep them here.",
-        suggestions: [askChip("find", "Find someone", "Find me a provider")],
+        suggestions: [
+          askChip("find", "Find someone", "Find me a provider"),
+          askChip("browse", "What can I book?", "Browse all services"),
+          askChip("top", "Who's top rated?", "Show me top rated providers"),
+        ],
       };
     }
     return {
       text: `You've saved **${rows.length} provider${rows.length !== 1 ? "s" : ""}**.`,
       providers: rows.map(providerFromDb),
+      suggestions: [
+        askChip("free", "Who's free soon?", "Who's free this week?"),
+        askChip("rebook", "Rebook my last one", "Rebook my last appointment"),
+      ],
     };
   },
 };
@@ -727,10 +1793,20 @@ const waitlist: Capability = {
     if (!userId) return { text: "I couldn't check your waitlists — try signing in again." };
     const entries = await getUserWaitlistEntries(userId);
     if (entries.length === 0) {
-      return { text: "You're not on any waitlists right now." };
+      return {
+        text: "You're not on any waitlists right now.",
+        suggestions: [
+          askChip("free", "Who's free soon?", "Who's free this week?"),
+          askChip("find", "Find someone", "Find me a provider"),
+        ],
+      };
     }
     return {
       text: `You're on **${entries.length} waitlist${entries.length !== 1 ? "s" : ""}**. I'll let you know if a slot frees up.`,
+      suggestions: [
+        navChip("bookings", "Open Bookings", "Bookings"),
+        askChip("free", "Anyone free sooner?", "Who's free this week?"),
+      ],
     };
   },
 };
@@ -776,17 +1852,30 @@ const notifications: Capability = {
     const unread = rows.filter((n) => !n.is_read);
     if (unread.length === 0) {
       return {
-        text: `${softMiss()} nothing new — you're all caught up.`,
+        text: `Nothing new — you're all caught up.`,
         suggestions: [askChip("next", "What's my next appointment?", "When's my next appointment?")],
       };
     }
     const lines = unread
       .slice(0, 5)
-      .map((n) => `**${n.title}**\n${n.message}`)
+      .map((n) => `- **${n.title}**\n  ${n.message}`)
       .join("\n\n");
     return {
       text: `You've got ${unread.length} unread update${unread.length !== 1 ? "s" : ""}:\n\n${lines}`,
-      suggestions: [navChip("notifs", "Open Notifications", "Notifications")],
+      suggestions: [
+        ...unread
+          .filter((notification) => !!notification.booking_id)
+          .slice(0, 4)
+          .map((notification) =>
+            navChip(
+              `booking-${notification.id}`,
+              `View booking: ${notification.title}`,
+              "BookingDetail",
+              { bookingId: notification.booking_id! },
+            ),
+          ),
+        navChip("notifs", "Open all notifications", "Notifications"),
+      ],
     };
   },
 };
@@ -804,30 +1893,33 @@ const messages: Capability = {
     const convos = await getUserConversations();
     const unread = convos.filter((c) => (c.unread_count_user ?? 0) > 0);
     if (convos.length === 0) {
-      return { text: `${softMiss()} you haven't messaged any providers yet.` };
+      return { text: `You haven't messaged any providers yet.` };
     }
     if (unread.length === 0) {
       return {
         text: `No unread messages — you've got ${convos.length} conversation${convos.length !== 1 ? "s" : ""} on the go.`,
       };
     }
-    const first = unread[0]?.provider;
     const names = unread
       .map((c) => c.provider?.display_name)
       .filter((n): n is string => !!n);
     return {
       text:
-        `${goodNews()} you've got ${unread.length} unread message${unread.length !== 1 ? "s" : ""}` +
+        `You've got ${unread.length} unread message${unread.length !== 1 ? "s" : ""}` +
         (names.length > 0 ? ` — from ${names.slice(0, 3).join(", ")}.` : "."),
-      suggestions: first
-        ? [
-            navChip("chat", `Reply to ${first.display_name}`, "ProviderChat", {
-              providerId: first.slug,
-              providerDbId: first.id,
-              providerName: first.display_name,
+      suggestions: unread
+        .slice(0, 5)
+        .flatMap((conversation) => {
+          const provider = conversation.provider;
+          if (!provider) return [];
+          return [
+            navChip(`chat-${conversation.id}`, `Reply to ${provider.display_name}`, "ProviderChat", {
+              providerId: provider.slug,
+              providerDbId: provider.id,
+              providerName: provider.display_name,
             }),
-          ]
-        : [],
+          ];
+        }),
     };
   },
 };
@@ -845,6 +1937,7 @@ const inspiration: Capability = {
     "inspiration", "inspo", "show me looks", "show me some looks",
     "examples", "ideas", "show me ideas", "some ideas", "design ideas",
     "portfolio", "their work", "photos", "pictures", "gallery",
+    "soft glam", "glam look", "makeup look", "bridal look",
     "what does it look like", "see their work",
   ],
   // Optional, not required: "show me some inspiration" is a valid ask with no
@@ -853,24 +1946,113 @@ const inspiration: Capability = {
   // bonus (+0.3) beats it outright whenever a service IS named, which is
   // exactly the case where inspiration is most likely what was meant.
   needs: [{ kind: "service", required: false }],
-  async run({ entities }): Promise<CapabilityResult> {
-    const category = entities.service?.value.category;
-    const specific = entities.service?.value.specific;
+  async run({ entities, rawMessage }): Promise<CapabilityResult> {
+    // A generic ask ("show me some inspiration") must NOT inherit the service
+    // from an earlier turn. carryForward fills gaps from the previous
+    // message, so tapping the generic "Show me some looks" chip after talking
+    // about makeup silently searched for natural makeup and then reported
+    // "I couldn't find any natural makeup work" — an answer to a question the
+    // user never asked. When the message itself names nothing, search
+    // everything.
+    const namesService = !!rawMessage.match(
+      /\b(?:nail|nails|hair|lash|lashes|brow|brows|makeup|mua|glam|facial|skin|wax|tan|massage|barber|beard|braid|balayage|manicure|pedicure|gel|acrylic|bridal|lamination|microblading)\w*\b/i,
+    );
+    const category = namesService ? entities.service?.value.category : undefined;
+    const specific = namesService ? entities.service?.value.specific : undefined;
+    const audience = namesService ? entities.service?.value.audience : undefined;
+    // Style phrases are search terms, not service categories. Keep them intact
+    // so "show me soft glam" searches for soft-glam work rather than falling
+    // back to an unrelated all-category gallery.
+    const styleQuery = rawMessage.match(/\b(?:soft glam|glam look|makeup look|bridal look)\b/i)?.[0];
+    const term = styleQuery ?? specific;
 
-    // A specific service ("balayage") is a better search term than its
-    // category; fall back to the category feed when there isn't one.
-    const items = specific
-      ? await searchPortfolio(specific)
-      : await getPortfolioItems(category);
+    // TWO sources, because portfolio alone silently misses most of the app's
+    // images. `portfolio_items` is provider-uploaded gallery work;
+    // `service_images` are the photos attached to a bookable service, and
+    // Explore's feed mixes both. Becca previously read portfolio only, so a
+    // category whose photos live on services (makeup, for one) returned
+    // "I couldn't find any work to show you" while Explore displayed plenty.
+    //
+    // searchPortfolio is also a literal caption/tag match, and captions are
+    // frequently empty — so a text search alone can return nothing even when
+    // matching images exist. Service NAMES are reliably populated, which is
+    // what makes the service-image side able to match a style term at all.
+    const [portfolioResult, serviceResult] = await Promise.allSettled([
+      term ? searchPortfolio(term) : getPortfolioItems(category),
+      getDiscoverServices(category, 40, audience),
+    ]);
 
-    const label = specific ?? (category ? CATEGORY_LABELS[category] : undefined);
+    const portfolioItems = portfolioResult.status === "fulfilled" ? portfolioResult.value : [];
+    const discoverServices = serviceResult.status === "fulfilled" ? serviceResult.value : [];
 
-    if (items.length === 0) {
+    // When the user named a style, keep only services whose name/description
+    // actually mentions it. Without this "soft glam" would return the whole
+    // category feed and quietly pretend it had matched.
+    const needle = term?.toLowerCase();
+    const matchedServices = needle
+      ? discoverServices.filter(
+          (svc) =>
+            svc.name?.toLowerCase().includes(needle) ||
+            svc.description?.toLowerCase().includes(needle),
+        )
+      : discoverServices;
+
+    // Flatten service images into the same shape as portfolio items so both
+    // sources render through one path.
+    type Shot = {
+      id: string;
+      imageUrl: string;
+      caption?: string;
+      /** Present for service images: the bookable service this photo is of. */
+      serviceName?: string;
+      servicePrice?: number;
+      provider: { id: string; slug: string; display_name: string; service_category: string; logo_url: string | null };
+    };
+    const shots: Shot[] = [
+      ...portfolioItems
+        .filter((item) => !!item.image_url && !!item.provider)
+        .map((item) => ({
+          id: item.id,
+          imageUrl: item.image_url,
+          ...(item.caption ? { caption: item.caption } : {}),
+          provider: item.provider!,
+        })),
+      ...matchedServices.flatMap((svc) => {
+        const first = [...(svc.service_images ?? [])].sort(
+          (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+        )[0];
+        if (!first?.url || !svc.provider) return [];
+        return [{
+          id: `svc-${svc.id}`,
+          imageUrl: first.url,
+          caption: svc.name,
+          serviceName: svc.name,
+          ...(typeof svc.price === "number" ? { servicePrice: svc.price } : {}),
+          provider: svc.provider,
+        }];
+      }),
+    ];
+
+    const label = styleQuery ?? specific ?? (category ? CATEGORY_LABELS[category] : undefined);
+
+    if (shots.length === 0) {
+      // Only claim "nothing to show" when BOTH sources came back empty, and
+      // say what was actually searched so it doesn't read as a flat no.
       return {
-        text: `${softMiss()} I couldn't find any ${label ?? ""} work to show you yet.`.replace(/\s+/g, " "),
-        suggestions: [navChip("explore", "Browse Explore", "Explore")],
+        text:
+          `I couldn't find any ${label ?? ""} work to show you yet.`.replace(/\s+/g, " ") +
+          (label ? ` Explore has the full gallery — it's worth a look for ${label}.` : ""),
+        suggestions: [
+          navChip("explore", "Browse Explore", "Explore"),
+          ...(label ? [askChip("providers", `Find ${label} providers`, `Find ${label}`)] : []),
+        ],
       };
     }
+
+    // Keep `items` as the downstream name so the rest of this capability is
+    // unchanged, and dedupe by image so a photo present in both sources
+    // doesn't render twice.
+    const items = [...new Map(shots.map((shot) => [shot.imageUrl, shot])).values()];
 
     // De-duplicate: one provider often has several portfolio items, and the
     // cards should show distinct people rather than the same name repeated.
@@ -883,17 +2065,179 @@ const inspiration: Capability = {
       ).values(),
     ];
 
+    const shown = Math.min(items.length, 8);
+    const shownItems = items.slice(0, shown);
+
+    // Name what's actually on screen rather than counting it. "1 look from 1
+    // provider" is technically true and tells the user nothing — who made it,
+    // what it is, and what it costs are the things they'd act on.
+    const named = shownItems.filter((item) => !!item.serviceName);
+    const detailLines = [
+      ...new Map(
+        named.map((item) => [
+          `${item.provider.display_name}|${item.serviceName}`,
+          `- **${item.serviceName}** — ${item.provider.display_name}` +
+            (item.servicePrice != null ? ` · **${money(item.servicePrice)}**` : ""),
+        ]),
+      ).values(),
+    ].slice(0, 5);
+
+    const heading = label
+      ? `${label[0]!.toUpperCase()}${label.slice(1)}`
+      : "Inspiration";
+
+    // One result deserves a sentence, not a tally.
+    const lead =
+      shown === 1 && shownItems[0]
+        ? `**${shownItems[0].provider.display_name}** has ` +
+          (shownItems[0].serviceName ? `**${shownItems[0].serviceName}**` : "work") +
+          (shownItems[0].servicePrice != null ? ` at **${money(shownItems[0].servicePrice)}**` : "") +
+          "."
+        : `**${shown}** look${shown !== 1 ? "s" : ""} from **${unique.length}** provider${unique.length !== 1 ? "s" : ""}` +
+          (items.length > shown ? `, out of ${items.length} I found` : "") +
+          ".";
+
     return {
       text:
-        `${goodNews()} found ${items.length} ${label ?? "portfolio"} photo${items.length !== 1 ? "s" : ""} ` +
-        `from ${unique.length} provider${unique.length !== 1 ? "s" : ""}. The full gallery is in Explore.`,
+        `## ${heading}\n${lead}` +
+        (detailLines.length > 0 && shown > 1 ? `\n\n${detailLines.join("\n")}` : "") +
+        "\n\nTap a photo to see it full size.",
       providers: unique.slice(0, 12).map((p) => ({
         id: p.slug,
         name: p.display_name,
         service: p.service_category,
         logo: p.logo_url ? { uri: p.logo_url } : null,
       })),
-      suggestions: [navChip("explore", "Open Explore", "Explore")],
+      inspiration: shownItems.map((item) => ({
+        id: item.id,
+        imageUrl: item.imageUrl,
+        ...(item.caption ? { caption: item.caption } : {}),
+        providerName: item.provider.display_name,
+        providerSlug: item.provider.slug,
+        // Say what the photo IS when it's a real bookable service, rather
+        // than the same generic moodboard line on every card.
+        whyItFits: item.serviceName
+          ? `${item.serviceName}${item.servicePrice != null ? ` · ${money(item.servicePrice)}` : ""}`
+          : label
+            ? `A ${label.toLowerCase()} reference`
+            : "A fresh reference for your moodboard",
+      })),
+      suggestions: [
+        // Book what they're looking at, when there's exactly one provider.
+        ...(unique.length === 1 && unique[0]
+          ? [navChip("book", `See ${unique[0].display_name}`, "ProviderProfile", {
+              providerId: unique[0].slug,
+              source: "becca",
+            })]
+          : []),
+        ...(label
+          ? [askChip("who", `Who does ${label}?`, `Find ${label}`)]
+          : []),
+        navChip("explore", "Open Explore", "Explore"),
+      ],
+    };
+  },
+};
+
+/**
+ * Live offers across the marketplace.
+ *
+ * Distinct from `discover.promocode`, which validates ONE code against ONE
+ * provider and requires a resolved provider. This is the open-ended "is
+ * anything on offer?" question, which had no capability at all — promotions
+ * were completely invisible to Becca despite being a real, live feature.
+ */
+const offers: Capability = {
+  id: "discover.offers",
+  hat: "client",
+  describe: "What offers or deals are on right now",
+  // Note the bare "deals"/"offers"/"discounts" entries alongside the "any X"
+  // forms: phrase matching is contiguous, so "any nail deals" does NOT match
+  // "any deals" — the service word sits between them. The single-word entries
+  // are what make a message with a category in the middle still resolve.
+  phrases: [
+    "any offers", "any deals", "any discounts", "any promotions",
+    "offers", "deals", "discounts", "promotions", "promos",
+    "what offers", "what deals", "offers on", "deals on",
+    "whats on offer", "what's on offer", "anything on sale", "sales on",
+    "special offers", "any bargains", "cheap deals", "money off",
+    "anything discounted", "current offers", "discounted",
+  ],
+  // Optional: "any nail deals?" narrows by category, a bare "any offers?"
+  // shows everything.
+  needs: [{ kind: "service", required: false }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const category = entities.service?.value.category;
+    const label = category ? CATEGORY_LABELS[category] ?? category.toLowerCase() : undefined;
+
+    // getActivePromotions gates on providers.has_gone_live AND is_active, and
+    // filters to promotions that haven't expired — so this never surfaces an
+    // unpublished provider or a dead offer.
+    const rows = await getActivePromotions(category);
+
+    if (rows.length === 0) {
+      return {
+        text: label
+          ? `No ${label} offers running right now. They come and go, so it's worth checking back.`
+          : "No offers running right now. They come and go, so it's worth checking back.",
+        suggestions: [
+          ...(label ? [askChip("all-offers", "Any other offers?", "Any offers on?")] : []),
+          askChip("top", "Who's best rated?", "Who are the best rated providers?"),
+          navChip("explore", "Browse Explore", "Explore"),
+        ],
+      };
+    }
+
+    const lines = rows
+      .slice(0, 6)
+      .map((promo) => {
+        // discount_text is the provider's own wording and is the most
+        // accurate thing to show. Fall back to the structured fields only
+        // when they haven't written one.
+        const value =
+          promo.discount_text ??
+          (promo.discount_percent != null
+            ? `${promo.discount_percent}% off`
+            : promo.discount_amount != null
+              ? `${money(promo.discount_amount)} off`
+              : undefined);
+        const who = promo.providers?.display_name ?? "A provider";
+        return (
+          `- **${who}** — ${value ? `**${value}** · ` : ""}${promo.title}` +
+          (promo.promo_code ? `\n  Code: **${promo.promo_code}**` : "")
+        );
+      })
+      .join("\n");
+
+    return {
+      text:
+        `## ${label ? `${label[0]!.toUpperCase()}${label.slice(1)} offers` : "Offers on now"}\n` +
+        `**${rows.length}** offer${rows.length !== 1 ? "s" : ""} running` +
+        (rows.length > 6 ? `, showing the first 6` : "") +
+        `:\n\n${lines}`,
+      // Provider cards so the offers are tappable through to a real profile,
+      // deduped since one provider can run several promotions at once. Built
+      // via providerFromDb so the card shape stays consistent with every
+      // other capability rather than hand-rolling a fourth mapper.
+      providers: [
+        ...new Map(
+          rows
+            .filter((promo) => !!promo.providers?.slug)
+            .map((promo) => [
+              promo.providers!.slug!,
+              providerFromDb({
+                slug: promo.providers!.slug!,
+                display_name: promo.providers!.display_name ?? "Provider",
+                service_category: promo.service_category ?? "OTHER",
+                logo_url: promo.providers!.logo_url,
+              } as Parameters<typeof providerFromDb>[0]),
+            ]),
+        ).values(),
+      ].slice(0, 12),
+      suggestions: [
+        navChip("explore", "Browse Explore", "Explore"),
+        askChip("top", "Who's best rated?", "Who are the best rated providers?"),
+      ],
     };
   },
 };
@@ -909,14 +2253,66 @@ const topRated: Capability = {
   async run({ rawMessage }): Promise<CapabilityResult> {
     const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
     const rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
-    if (rows.length === 0) {
-      return { text: `${softMiss()} I couldn't find any to show right now.` };
+
+    if (rows.length > 0) {
+      return {
+        text: wantsNew
+          ? `**${rows.length}** provider${rows.length !== 1 ? "s" : ""} recently joined:`
+          : `Here are the top-rated providers right now:`,
+        providers: rows.map(providerFromDb),
+        suggestions: [
+          askChip("free", "Who's free this week?", "Who's free this week?"),
+          askChip("offers", "Any offers on?", "Any offers on?"),
+        ],
+      };
     }
+
+    // getTopRatedProviders requires 3+ reviews AND a 4.0+ rating — a sensible
+    // bar for a mature marketplace, but on a young one it excludes everyone,
+    // including a genuinely 5-star provider with a single review. Returning
+    // "I couldn't find any to show right now" then reads as "there are no good
+    // providers", which is both discouraging and false.
+    //
+    // Fall back to showing who IS here, and say plainly why ratings aren't
+    // the sort — rather than dead-ending on an empty, chipless reply.
+    if (!wantsNew) {
+      const anyone = await getProviders();
+      if (anyone.length > 0) {
+        // Offer a way to narrow rather than dumping everyone. "Best rated" with
+        // no category is a vague ask, and the useful reply is "in what?" —
+        // built from the categories that actually have providers, so every
+        // option leads somewhere real rather than to an empty result.
+        const categories = [
+          ...new Set(anyone.map((p) => p.service_category).filter(Boolean)),
+        ].slice(0, 4);
+
+        return {
+          text:
+            "No one's built up enough reviews yet for a top-rated list — it takes a few before that means anything.\n\n" +
+            `There ${anyone.length !== 1 ? "are" : "is"} **${anyone.length}** provider${anyone.length !== 1 ? "s" : ""} on CERVICED. ` +
+            (categories.length > 1
+              ? "Narrow it down and I can be more useful:"
+              : "Here's who's here:"),
+          providers: anyone.slice(0, 12).map(providerFromDb),
+          suggestions: [
+            ...categories.map((cat) => {
+              const catLabel = CATEGORY_LABELS[cat] ?? cat.toLowerCase();
+              return askChip(`cat-${cat}`, catLabel[0]!.toUpperCase() + catLabel.slice(1), `Find ${catLabel}`);
+            }),
+            askChip("free", "Who's free this week?", "Who's free this week?"),
+          ],
+        };
+      }
+    }
+
     return {
       text: wantsNew
-        ? `${goodNews()} ${rows.length} provider${rows.length !== 1 ? "s" : ""} recently joined:`
-        : `${goodNews()} here are the top-rated providers right now:`,
-      providers: rows.map(providerFromDb),
+        ? "No one's joined recently — but there are still providers to browse."
+        : "I couldn't find anyone to show right now.",
+      suggestions: [
+        askChip("browse", "Show me everything", "Show me all services"),
+        navChip("explore", "Browse Explore", "Explore"),
+      ],
     };
   },
 };
@@ -940,7 +2336,7 @@ const rescheduleStatus: Capability = {
 
     if (!target) {
       return {
-        text: `${softMiss()} you haven't got any reschedule requests waiting on a reply.`,
+        text: `You haven't got any reschedule requests waiting on a reply.`,
         suggestions: [askChip("next", "What's my next appointment?", "When's my next appointment?")],
       };
     }
@@ -962,7 +2358,7 @@ const rescheduleStatus: Capability = {
         };
       case "provider_responded":
         return {
-          text: `${goodNews()} ${target.providerName} has come back with times for ${header}. Pick one to lock it in.`,
+          text: `${target.providerName} has come back with times for ${header}. Pick one to lock it in.`,
           suggestions: [
             navChip("pick", "Choose a time", "Reschedule", { bookingId: target.id }),
           ],
@@ -970,13 +2366,20 @@ const rescheduleStatus: Capability = {
       case "confirmed":
         return {
           text:
-            `${goodNews()} your reschedule is confirmed — ${header} is now ` +
+            `Your reschedule is confirmed — ${header} is now ` +
             `${formatShortDate(target.bookingDate)} at ${formatTime12(target.bookingTime)}.`,
           suggestions: [navChip("view", "View booking", "BookingDetail", { bookingId: target.id })],
         };
       case "rejected":
         return {
-          text: `${softMiss()} ${target.providerName} couldn't do a different time for ${header}. Your original slot still stands.`,
+          text: `${target.providerName} couldn't do a different time for ${header}. Your original slot still stands.`,
+          suggestions: [navChip("view", "View booking", "BookingDetail", { bookingId: target.id })],
+        };
+      default:
+        // New backend statuses should not make the assistant silently fail.
+        // Keep the booking accessible while the client catches up with the API.
+        return {
+          text: `Your reschedule request for ${header} is currently ${request.status}.`,
           suggestions: [navChip("view", "View booking", "BookingDetail", { bookingId: target.id })],
         };
     }
@@ -996,17 +2399,31 @@ const providerContact: Capability = {
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
-    const contact = await getProviderContactByDisplayName(provider.displayName);
+    const [contact, providerDbId] = await Promise.all([
+      getProviderContactByDisplayName(provider.displayName),
+      // An ordinal/pronoun reference contains slug + name but not always the
+      // UUID required by ProviderChat. Resolve it before offering a message
+      // action rather than navigating with an empty id that cannot load.
+      resolveProviderDbId(provider),
+    ]);
 
     // Messaging in-app is always available and keeps the thread attached to
-    // the booking, so it's offered regardless of what else they've published.
-    const chips = [
-      navChip("chat", `Message ${provider.displayName}`, "ProviderChat", {
-        providerId: provider.slug,
-        providerDbId: provider.dbId ?? "",
-        providerName: provider.displayName,
-      }),
-    ];
+    // the booking, so it's offered whenever we can resolve its real id. If
+    // resolution fails, the public profile is a safe, useful fallback.
+    const chips = providerDbId
+      ? [
+          navChip("chat", `Message ${provider.displayName}`, "ProviderChat", {
+            providerId: provider.slug,
+            providerDbId,
+            providerName: provider.displayName,
+          }),
+        ]
+      : [
+          navChip("profile", "View provider profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ];
 
     if (!contact) {
       return {
@@ -1015,10 +2432,16 @@ const providerContact: Capability = {
       };
     }
 
+    // Only surface a channel the provider has actually opted into via
+    // Communications — a stored phone/whatsapp_number/email can outlive the
+    // provider disabling that channel, and every other contact-sheet reader
+    // (BookingDetailScreen, BookingsScreen, ProviderProfileScreen) already
+    // gates on preferred_contact_methods the same way.
+    const enabled = contact.preferred_contact_methods ?? [];
     const lines: string[] = [];
-    if (contact.phone) lines.push(`Phone: ${contact.phone}`);
-    if (contact.whatsapp_number) lines.push(`WhatsApp: ${contact.whatsapp_number}`);
-    if (contact.email) lines.push(`Email: ${contact.email}`);
+    if (contact.phone && enabled.includes("phone")) lines.push(`- **Phone:** ${contact.phone}`);
+    if (contact.whatsapp_number && enabled.includes("whatsapp")) lines.push(`- **WhatsApp:** ${contact.whatsapp_number}`);
+    if (contact.email && enabled.includes("email")) lines.push(`- **Email:** ${contact.email}`);
 
     return {
       text:
@@ -1034,18 +2457,38 @@ const consultationCheck: Capability = {
   id: "provider.consultation",
   hat: "client",
   describe: "Do I need a consultation first",
+  // Widened deliberately: this is the health-adjacent path (patch tests,
+  // allergy testing, skin tests), so a near-miss that drops into the generic
+  // "didn't catch that" fallback is the worst place to leave a user guessing.
+  // Widened deliberately: this is the health-adjacent path (patch tests,
+  // consultations), so a near-miss dropping into the generic "didn't catch
+  // that" fallback is the worst place to leave a user guessing.
+  //
+  // Deliberately EXCLUDES "allergy test" and "skin test": engine.ts's
+  // MEDICAL_OR_DERMATOLOGY_RE intercepts `allerg` and `skin (condition|
+  // reaction|...)` before routing, so those phrases can never reach this
+  // capability — listing them would look like coverage that doesn't exist.
+  // "Patch test" is safe (no medical keyword) and is the term the app's own
+  // provider settings use.
   phrases: [
-    "consultation", "do i need a consult", "patch test", "do i need a patch test",
-    "before i book", "first appointment", "do they need to see me first",
+    "consultation", "consult", "do i need a consult", "do i need a consultation",
+    "patch test", "do i need a patch test", "patch tested", "patch testing",
+    "sensitivity test", "do i need testing", "test first", "tested first",
+    "before i book", "first appointment", "first time", "new client",
+    "do they need to see me first", "do i need to see them first",
+    "is a consultation required", "48 hours before", "anything before",
+    "what do i need to do first", "any requirements",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
-    if (!provider.dbId) {
-      return { text: `${softMiss()} I couldn't look ${provider.displayName} up properly.` };
+    // May have come from a pronoun/ordinal reference, which carries no UUID.
+    const providerDbId = await resolveProviderDbId(provider);
+    if (!providerDbId) {
+      return { text: `I couldn't look ${provider.displayName} up properly.` };
     }
 
-    const consult = await getProviderConsultationService(provider.dbId);
+    const consult = await getProviderConsultationService(providerDbId);
     if (!consult) {
       return {
         text:
@@ -1056,9 +2499,15 @@ const consultationCheck: Capability = {
           // absence. Point at the provider, don't infer safety.
           `If you're unsure whether they need to see you first, ask them directly.`,
         suggestions: [
+          // `providerDbId` (resolved above), NOT `provider.dbId` — a provider
+          // reached by pronoun or ordinal ("are they any good?", "the first
+          // one") carries slug + name but no UUID, and ProviderChatScreen
+          // bails early on a missing providerDbId. The chip rendered fine and
+          // silently did nothing when tapped — on the one path that tells the
+          // user to go ask about a health-adjacent requirement.
           navChip("chat", `Ask ${provider.displayName}`, "ProviderChat", {
             providerId: provider.slug,
-            providerDbId: provider.dbId,
+            providerDbId,
             providerName: provider.displayName,
           }),
         ],
@@ -1085,9 +2534,17 @@ const reschedulePolicy: Capability = {
   id: "provider.reschedule_policy",
   hat: "client",
   describe: "How many times can I move a booking, and how much notice",
+  // POLICY questions only. Deliberately excludes phrasings that mean "do it"
+  // ("change the time", "push it back", "rearrange") — those belong to
+  // booking.reschedule, which starts the actual reschedule, and someone
+  // asking them wants the action, not a policy explainer. Every phrase here
+  // reads as a question ABOUT the rules.
   phrases: [
     "how many times can i reschedule", "reschedule policy", "how much notice",
     "can i move it again", "notice to reschedule", "how late can i change",
+    "how late can i reschedule", "how many reschedules", "reschedule rules",
+    "rules for moving", "moving policy", "what's the reschedule policy",
+    "whats the reschedule policy", "notice do i need to move",
   ],
   needs: [{ kind: "provider", required: false }],
   async run({ entities, bookings }): Promise<CapabilityResult> {
@@ -1125,8 +2582,10 @@ const promoCode: Capability = {
   hat: "client",
   describe: "Is this promo code valid",
   phrases: [
-    "promo code", "discount code", "voucher code", "is this code valid",
-    "does this code work", "coupon",
+    "promo code", "promotion code", "discount code", "voucher code",
+    "is this code valid", "does this code work", "coupon", "coupon code",
+    "any discount", "any offers", "any deals", "do they have offers",
+    "is there a discount", "redeem a code", "apply a code", "referral code",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities, rawMessage }): Promise<CapabilityResult> {
@@ -1143,12 +2602,15 @@ const promoCode: Capability = {
     const promo = await validatePromoCode(provider.displayName, code);
     if (!promo) {
       return {
-        text: `${softMiss()} **${code}** isn't valid for ${provider.displayName} right now.`,
-        suggestions: [askChip("deals", "What offers are on?", "Any deals on?")],
+        text: `**${code}** isn't valid for ${provider.displayName} right now.`,
+        suggestions: [navChip("profile", `View ${provider.displayName}`, "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        })],
       };
     }
     return {
-      text: `${goodNews()} **${code}** is valid for ${provider.displayName} — ${promo.title ?? "discount applied at checkout"}.`,
+      text: `**${code}** is valid for ${provider.displayName} — ${promo.title ?? "discount applied at checkout"}.`,
       suggestions: [
         navChip("profile", `Book with ${provider.displayName}`, "ProviderProfile", {
           providerId: provider.slug,
@@ -1173,13 +2635,13 @@ const eventPlans: Capability = {
     const plans = await getMyEventPlans();
     if (plans.length === 0) {
       return {
-        text: `${softMiss()} you haven't set up any event plans yet.`,
+        text: `You haven't set up any event plans yet.`,
         suggestions: [askChip("browse", "Browse services", "Show me all services")],
       };
     }
     const lines = plans
       .slice(0, 5)
-      .map((p) => `**${p.name}**${p.event_date ? ` — ${formatShortDate(p.event_date)}` : ""}`)
+      .map((p) => `- **${p.name}**${p.event_date ? ` — ${formatShortDate(p.event_date)}` : ""}`)
       .join("\n");
     return {
       text: `You've got ${plans.length} event plan${plans.length !== 1 ? "s" : ""}:\n\n${lines}`,
@@ -1199,13 +2661,16 @@ const savedLooks: Capability = {
     const ids = await getSavedPortfolioIds();
     if (ids.length === 0) {
       return {
-        text: `${softMiss()} you haven't saved any looks yet. Tap the bookmark on any photo in Explore to keep it.`,
+        text: `You haven't saved any looks yet. Tap the bookmark on any photo in Explore to keep it.`,
         suggestions: [navChip("explore", "Open Explore", "Explore")],
       };
     }
     return {
       text: `You've saved ${ids.length} look${ids.length !== 1 ? "s" : ""}. They're all in your profile.`,
-      suggestions: [navChip("explore", "Find more", "Explore")],
+      suggestions: [
+        navChip("profile", "Open my saved looks", "Profile", { profileScreen: "ProfileMain" }),
+        navChip("explore", "Find more", "Explore"),
+      ],
     };
   },
 };
@@ -1232,6 +2697,11 @@ const notificationSettings: Capability = {
         (on.length > 0 ? `**On:** ${on.join(", ")}` : "Everything's switched off.") +
         (off.length > 0 ? `\n\n**Off:** ${off.join(", ")}` : "") +
         `\n\nYou can change these in your profile settings.`,
+      suggestions: [
+        navChip("settings", "Open notification settings", "Profile", {
+          profileScreen: "NotificationsSettings",
+        }),
+      ],
     };
   },
 };
@@ -1252,18 +2722,23 @@ const beautyProfile: Capability = {
     // this same object — they are for the provider treating you, and Becca
     // neither recites nor interprets them (see BECCA_CAPABILITIES.md §2.1).
     const bits: string[] = [];
-    if (profile.hairType) bits.push(`Hair type: ${profile.hairType}`);
-    if (profile.skinType) bits.push(`Skin type: ${profile.skinType}`);
-    if (profile.nailShape) bits.push(`Nail shape: ${profile.nailShape}`);
-    if (profile.lashStyle) bits.push(`Lash style: ${profile.lashStyle}`);
-    if (profile.browStyle) bits.push(`Brow style: ${profile.browStyle}`);
-    if (profile.styleVibe) bits.push(`Style: ${profile.styleVibe}`);
+    if (profile.hairType) bits.push(`- **Hair type:** ${profile.hairType}`);
+    if (profile.skinType) bits.push(`- **Skin type:** ${profile.skinType}`);
+    if (profile.nailShape) bits.push(`- **Nail shape:** ${profile.nailShape}`);
+    if (profile.lashStyle) bits.push(`- **Lash style:** ${profile.lashStyle}`);
+    if (profile.browStyle) bits.push(`- **Brow style:** ${profile.browStyle}`);
+    if (profile.styleVibe) bits.push(`- **Style:** ${profile.styleVibe}`);
 
     if (bits.length === 0) {
       return {
         text:
-          `${softMiss()} your beauty profile is empty. Filling it in helps providers ` +
+          `Your beauty profile is empty. Filling it in helps providers ` +
           `prepare properly for your appointments.`,
+        suggestions: [
+          navChip("profile", "Set up my beauty profile", "Profile", {
+            profileScreen: "BeautyProfile",
+          }),
+        ],
       };
     }
     // Deliberately surfaces only preference/style fields. Allergies, medical
@@ -1272,6 +2747,13 @@ const beautyProfile: Capability = {
     // interpret them.
     return {
       text: `Here's what's on your beauty profile:\n\n${bits.join("\n")}`,
+      suggestions: [
+        navChip("profile", "Edit beauty profile", "Profile", {
+          profileScreen: "BeautyProfile",
+        }),
+        askChip("forme", "What suits me?", "What do you suggest?"),
+        askChip("saved", "My saved providers", "Show my saved providers"),
+      ],
     };
   },
 };
@@ -1284,16 +2766,44 @@ const myStats: Capability = {
     "how many providers have i saved", "how many do i follow",
     "how many bookmarks", "my stats", "how many providers",
   ],
-  async run(): Promise<CapabilityResult> {
-    const [bookmarks, following] = await Promise.all([
-      getMyBookmarkCount(),
-      getMyFollowerCount(),
+  async run({ bookings }): Promise<CapabilityResult> {
+    // MUST be getBookmarkedProviders(), not getMyBookmarkCount(). The latter
+    // counts how many people have bookmarked YOU **as a provider** — it
+    // resolves a providers row for the signed-in user and returns 0 when
+    // there isn't one, so in the client hat it reported "you've saved 0
+    // providers" for every client, always, however many they'd actually
+    // saved. `discover.saved` was listing those same providers correctly at
+    // the same time, so the two capabilities contradicted each other.
+    // getMyFollowerCount() has the identical provider-row gate and is
+    // likewise meaningless here.
+    const [saved, savedLooks] = await Promise.all([
+      getBookmarkedProviders(),
+      getSavedPortfolioIds(),
     ]);
+
+    const completed = bookings.filter((b) => b.status === BookingStatus.COMPLETED).length;
+    const upcoming = bookings.filter((b) => b.status === BookingStatus.UPCOMING).length;
+
+    const lines = [
+      `- **${saved.length}** saved provider${saved.length !== 1 ? "s" : ""}`,
+      `- **${savedLooks.length}** saved look${savedLooks.length !== 1 ? "s" : ""}`,
+      `- **${completed}** appointment${completed !== 1 ? "s" : ""} completed`,
+      ...(upcoming > 0
+        ? [`- **${upcoming}** coming up`]
+        : []),
+    ].join("\n");
+
     return {
-      text:
-        `You've saved **${bookmarks}** provider${bookmarks !== 1 ? "s" : ""}` +
-        (following > 0 ? ` and you're following **${following}**.` : "."),
-      suggestions: [askChip("saved", "Show them", "Show my saved providers")],
+      text: `## Your activity\n${lines}`,
+      suggestions: [
+        ...(saved.length > 0
+          ? [askChip("saved", "Show my saved providers", "Show my saved providers")]
+          : [askChip("find", "Find someone to save", "Show me all services")]),
+        ...(savedLooks.length > 0
+          ? [askChip("looks", "My saved looks", "Show my saved looks")]
+          : []),
+        askChip("bookings", "What have I got booked?", "Show all my bookings"),
+      ],
     };
   },
 };
@@ -1319,15 +2829,15 @@ const saveProvider: Capability = {
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
-    if (!provider.dbId) {
-      return {
-        text: `${softMiss()} I couldn't look ${provider.displayName} up properly.`,
-      };
+    // May have come from a pronoun/ordinal reference, which carries no UUID.
+    const providerDbId = await resolveProviderDbId(provider);
+    if (!providerDbId) {
+      return { text: `I couldn't look ${provider.displayName} up properly.` };
     }
 
     // Check first: "save them" when they're already saved should say so
     // rather than offer a confirm that does nothing visible.
-    const already = await isProviderBookmarked(provider.dbId);
+    const already = await isProviderBookmarked(providerDbId);
     if (already) {
       return {
         text: `${provider.displayName} is already in your saved providers.`,
@@ -1335,7 +2845,7 @@ const saveProvider: Capability = {
       };
     }
 
-    const dbId = provider.dbId;
+    const dbId = providerDbId;
     return {
       text: `Save **${provider.displayName}** to your providers?`,
       pendingAction: {
@@ -1344,7 +2854,7 @@ const saveProvider: Capability = {
         confirmLabel: "Save them",
         run: async () => {
           await addBookmark(dbId);
-          return `${goodNews()} ${provider.displayName} is in your saved providers now.`;
+          return `${provider.displayName} is in your saved providers now.`;
         },
       },
     };
@@ -1368,8 +2878,10 @@ const joinWaitlistAction: Capability = {
   needs: [{ kind: "provider", required: true }],
   async run({ entities, userId }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
-    if (!userId || !provider.dbId) {
-      return { text: `${softMiss()} I couldn't set that up just now.` };
+    // May have come from a pronoun/ordinal reference, which carries no UUID.
+    const providerDbId = await resolveProviderDbId(provider);
+    if (!userId || !providerDbId) {
+      return { text: `I couldn't set that up just now.` };
     }
 
     const service = entities.service?.value;
@@ -1378,7 +2890,7 @@ const joinWaitlistAction: Capability = {
       (service ? CATEGORY_LABELS[service.category] : undefined) ??
       "any service";
 
-    const dbId = provider.dbId;
+    const dbId = providerDbId;
     const uid = userId;
     return {
       text:
@@ -1399,7 +2911,7 @@ const joinWaitlistAction: Capability = {
             serviceNameSnapshot: serviceLabel,
             providerNameSnapshot: provider.displayName,
           });
-          return `${goodNews()} you're on ${provider.displayName}'s waitlist. I'll tell you the second a slot opens.`;
+          return `You're on ${provider.displayName}'s waitlist. I'll tell you the second a slot opens.`;
         },
       },
     };
@@ -1422,7 +2934,7 @@ const leaveReview: Capability = {
 
     if (!last) {
       return {
-        text: `${softMiss()} you haven't had a completed appointment to review yet.`,
+        text: `You haven't had a completed appointment to review yet.`,
       };
     }
 
@@ -1465,7 +2977,7 @@ const forMe: Capability = {
     if (!hasUsefulHistory(personal)) {
       return {
         text:
-          `${softMiss()} I don't know your taste well enough yet. ` +
+          `I don't know your taste well enough yet. ` +
           `Book a few things or browse around and I'll start spotting what you go for.`,
         suggestions: [
           askChip("browse", "Browse everything", "Show me all services"),
@@ -1485,7 +2997,7 @@ const forMe: Capability = {
     const rows = await getProviders(category);
     const label = CATEGORY_LABELS[category] ?? category.toLowerCase();
     if (rows.length === 0) {
-      return { text: `${softMiss()} no ${label} providers available right now.` };
+      return { text: `No ${label} providers available right now.` };
     }
 
     const styleNote =
@@ -1494,7 +3006,7 @@ const forMe: Capability = {
         : "";
 
     return {
-      text: `${goodNews()} you book ${label} most, so here's who's available.${styleNote}`,
+      text: `You book ${label} most, so here's who's available.${styleNote}`,
       providers: rows.slice(0, 12).map(providerFromDb),
       suggestions: [
         askChip("free", `Who's free soon?`, `Which ${label} providers are free this week?`),
@@ -1515,15 +3027,80 @@ const help: Capability = {
   async run(): Promise<CapabilityResult> {
     return {
       text:
-        "I can help you with:\n\n" +
-        "**Your bookings** — what's next, costs, moving or cancelling\n" +
-        "**Finding someone** — by service, budget, or who's actually free\n" +
-        "**Getting ready** — forms and anything outstanding\n" +
-        "**Your saved providers** and any offers on\n\n" +
-        "Just ask me normally.",
+        "## What I can do for you\n" +
+        "- **Bookings** — see what’s next, costs, forms, payment details, or open the exact booking to reschedule or cancel\n" +
+        "- **Find a provider** — search by service, budget, availability, reviews, prices, or portfolio work\n" +
+        "- **Plan a booking** — set the service, timing and budget, then narrow real options down\n" +
+        "- **Provider details** — check services, prices, contact details, consultations, promo codes and reschedule policies\n" +
+        "- **Your activity** — saved providers and looks, waitlists, messages, notifications, event plans and beauty profile\n" +
+        "- **Personal picks** — recommendations based on what you usually book\n\n" +
+        "Ask naturally, or choose an action below.",
       suggestions: [
         askChip("next", "When's my next appointment?", "When's my next appointment?"),
+        askChip("bookings", "Break down my bookings", "Show my bookings"),
         askChip("find", "Find me someone", "Show me all services"),
+        askChip("plan", "Plan a booking", "Help me plan a nail appointment"),
+        askChip("free", "Who's free soon?", "Who is free this week?"),
+        askChip("forms", "Anything I need to do?", "Do I need to fill anything in?"),
+        askChip("messages", "Any messages?", "Do I have any messages?"),
+      ],
+    };
+  },
+};
+
+/**
+ * Becca is also the plain-English index for account areas. These answers do
+ * not need a database read; the useful outcome is taking the client to the
+ * exact settings screen they asked for, rather than telling them to hunt
+ * through Profile themselves.
+ */
+const appNavigation: Capability = {
+  id: "meta.app_navigation",
+  hat: "client",
+  describe: "Open an account, support, or settings area",
+  phrases: [
+    "change password", "change my password", "reset password", "my password",
+    "notification settings", "turn off notifications", "manage notifications",
+    "payment methods", "payment method", "my card", "my cards", "add a card",
+    "my cart", "my basket", "open cart", "open basket", "checkout", "check out",
+    "edit my profile", "edit profile", "my account", "account details", "profile details",
+    "my subscription", "manage subscription", "my points", "loyalty points",
+    "help centre", "help center", "report a problem", "report problem",
+    "terms and conditions", "terms", "about the app", "about cerviced",
+  ],
+  async run({ rawMessage }): Promise<CapabilityResult> {
+    const message = rawMessage.toLowerCase();
+    if (/\b(?:cart|basket|checkout|check out)\b/.test(message)) {
+      return {
+        text: "## Your cart\nI’ll open your cart so you can review your services and checkout.",
+        suggestions: [navChip("cart", "Open cart", "CartMain")],
+      };
+    }
+    const target = message.includes("password")
+      ? { screen: "ChangePassword", title: "Change password", text: "I’ll open password settings for you." }
+      : message.includes("profile") || message.includes("account")
+        ? { screen: "ProfileInfo", title: "Account details", text: "I’ll open your account details." }
+      : message.includes("notification")
+        ? { screen: "NotificationsSettings", title: "Notification settings", text: "I’ll open your notification settings." }
+        : message.includes("payment") || message.includes("card")
+          ? { screen: "PaymentMethods", title: "Payment methods", text: "I’ll open your saved payment methods." }
+          : message.includes("subscription")
+            ? { screen: "Subscription", title: "Subscription", text: "I’ll open your subscription settings." }
+            : message.includes("point")
+              ? { screen: "Points", title: "My points", text: "I’ll open your points." }
+              : message.includes("report")
+                ? { screen: "ReportProblem", title: "Report a problem", text: "I’ll open the problem report form." }
+                : message.includes("term")
+                  ? { screen: "Terms", title: "Terms & conditions", text: "I’ll open the terms and conditions." }
+                  : message.includes("about")
+                    ? { screen: "About", title: "About CERVICED", text: "I’ll open information about CERVICED." }
+                    : { screen: "HelpCentre", title: "Help centre", text: "I’ll open the help centre." };
+
+    return {
+      text: `## ${target.title}\n${target.text}`,
+      suggestions: [
+        navChip("open", `Open ${target.title}`, "Profile", { profileScreen: target.screen }),
+        askChip("help", "What else can you do?", "What can you help with?"),
       ],
     };
   },
@@ -1547,9 +3124,72 @@ function soleUpcoming(bookings: ConfirmedBooking[]): ConfirmedBooking | undefine
   return up.length === 1 ? up[0] : undefined;
 }
 
+/**
+ * Appointment-specific chat actions. Keeping the date in the label matters
+ * when the same service appears more than once: clients can choose the exact
+ * appointment to discuss before deciding whether to open its full record.
+ */
+type BookingChoiceIntent = "details" | "cost" | "cancel" | "reschedule";
+
+function bookingChoiceMessage(
+  booking: ConfirmedBooking,
+  intent: BookingChoiceIntent,
+): string {
+  const appointment = `my ${booking.serviceName} appointment with ${booking.providerName}`;
+  switch (intent) {
+    case "cost":
+      return `How much is ${appointment}?`;
+    case "cancel":
+      return `Cancel ${appointment}`;
+    case "reschedule":
+      return `Reschedule ${appointment}`;
+    default:
+      return `Tell me about ${appointment}`;
+  }
+}
+
+function bookingChoices(
+  bookings: ConfirmedBooking[],
+  verb = "Check",
+  intent: BookingChoiceIntent = "details",
+) {
+  return bookings.slice(0, 6).map((booking) => {
+    const date = relativeDayLabel(booking.bookingDate) ?? formatShortDate(booking.bookingDate);
+    // Once the client has selected the exact appointment, cancellation and
+    // rescheduling are screen-owned confirmation flows. Going through chat a
+    // second time is both unnecessary and vulnerable to losing that choice.
+    if (intent === "reschedule") {
+      return navChip(
+        `booking-${booking.id}`,
+        `${verb}: ${booking.serviceName} · ${date}`,
+        "Reschedule",
+        { bookingId: booking.id },
+      );
+    }
+    if (intent === "cancel") {
+      return navChip(
+        `booking-${booking.id}`,
+        `${verb}: ${booking.serviceName} · ${date}`,
+        "BookingDetail",
+        { bookingId: booking.id },
+      );
+    }
+    return askChip(
+      `booking-${booking.id}`,
+      `${verb}: ${booking.serviceName} · ${date}`,
+      bookingChoiceMessage(booking, intent),
+      { bookingId: booking.id },
+    );
+  });
+}
+
 export const CLIENT_CAPABILITIES: Capability[] = [
+  currentTime,
   nextBooking,
   listBookings,
+  bookingDetails,
+  bookingInfoPacks,
+  upcomingBookingSummary,
   bookingCost,
   cancelBooking,
   // Before `rescheduleBooking`: "has my reschedule been accepted?" is a
@@ -1558,21 +3198,40 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   rescheduleStatus,
   rescheduleBooking,
   bookingPrep,
+  bookingLocation,
+  bookingRoutine,
+  // After `bookingRoutine`: "what do I usually book" is answerable from the
+  // already-loaded window, so it shouldn't pay for an extra query. This one
+  // only earns its place when the user explicitly asks to go further back.
+  bookingHistory,
   rebook,
   // Follow-ups first: both REQUIRE entities that usually arrive via carried
   // context, so they only score mid-conversation and can't win cold.
+  // Pointing at a shown result beats a generic follow-up question.
+  pickFromList,
   followUpDay,
   followUpPrice,
+  appointmentPlan,
   findAvailable,
   // Before `findProviders`: "show me nail ideas" is a request for WORK, not
   // for a provider list — findProviders' generic "show me" would otherwise
   // win on an equal score by registration order alone.
   inspiration,
+  // Before `findProviders` and `promoCode`: "any nail deals?" is a request to
+  // BROWSE offers, not to find a provider or validate one specific code —
+  // both of which would otherwise take it on a generic phrase match.
+  offers,
   findProviders,
-  deals,
   // Before `reviews`: both need a provider, and "what do they do" should
   // resolve to their service list rather than falling through to feedback.
+  // Before `providerServices`: "is the peel safe in pregnancy" is a safety
+  // question, not a request for their price list, and both need a provider.
+  treatmentSafety,
   providerServices,
+  providerLocation,
+  providerDeposit,
+  providerBookingTiming,
+  providerAvailability,
   reviews,
   // Provider-detail questions: all require a resolved provider, so they only
   // ever win when one is actually named.
@@ -1605,5 +3264,6 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   forMe,
   topRated,
   browse,
+  appNavigation,
   help,
 ];

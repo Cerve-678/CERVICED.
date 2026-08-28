@@ -41,7 +41,7 @@ export function getCapability(id: string, hat: BeccaHat): Capability | undefined
  * integration has a single, always-current source for what Becca can do,
  * rather than a hand-maintained prompt that drifts from the code.
  */
-export function toToolSchema(hat: BeccaHat): Array<{
+export function toToolSchema(hat: BeccaHat): {
   name: string;
   description: string;
   input_schema: {
@@ -49,7 +49,7 @@ export function toToolSchema(hat: BeccaHat): Array<{
     properties: Record<string, { type: string; description: string }>;
     required: string[];
   };
-}> {
+}[] {
   return capabilitiesFor(hat).map((c) => {
     const properties: Record<string, { type: string; description: string }> = {};
     const required: string[] = [];

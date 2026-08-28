@@ -3,14 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
+  type ListRenderItem,
   TouchableOpacity,
-  Image,
   StatusBar,
   Platform,
   Animated,
   Easing,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,8 +20,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { HomeStackParamList } from '../../navigation/types';
 import { useBooking, BookingStatus } from '../../contexts/BookingContext';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
-import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark, getActivePromotions } from '../../services/databaseService';
-import type { DbProvider } from '../../types/database';
+import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark, getProviderIdsWithActivePromotions } from '../../services/databaseService';
+import type { PublicProviderSummary } from '../../types/database';
 import Icon from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
@@ -49,7 +50,7 @@ interface Provider {
   rating: number;
 }
 
-function mapDbProvider(p: DbProvider): Provider {
+function mapDbProvider(p: PublicProviderSummary): Provider {
   return {
     id: p.id,
     slug: p.slug,
@@ -62,7 +63,7 @@ function mapDbProvider(p: DbProvider): Provider {
 }
 
 // ── Skeleton (mirrors the 2-col gallery grid) ─────────────────────────────────
-function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
+function SkeletonProviderCard() {
   const { palette: P } = useTheme();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -76,7 +77,7 @@ function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
     return () => loop.stop();
   }, [shimmer]);
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
+  const base = P.surface;
   return (
     <View style={skeletonStyles.card}>
       <Animated.View style={[skeletonStyles.image, { backgroundColor: base, opacity }]} />
@@ -94,7 +95,7 @@ const skeletonStyles = StyleSheet.create({
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
-  const { isDarkMode, theme, palette: P } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
 
@@ -116,9 +117,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     return counts;
   }, [bookings]);
 
-  const filteredProviders = selectedService === 'ALL'
-    ? liveProviders
-    : liveProviders.filter(p => p.service === selectedService);
+  const filteredProviders = useMemo(
+    () => selectedService === 'ALL'
+      ? liveProviders
+      : liveProviders.filter(p => p.service === selectedService),
+    [liveProviders, selectedService],
+  );
 
   const handleServicePress = useCallback((service: ServiceType) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -131,7 +135,14 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       headerTransparent: true,
       headerTitleAlign: 'center',
       headerTitle: () => (
-        <View style={styles.headerTitleRow}>
+        // pointerEvents="none" is load-bearing, not decoration. A function
+        // headerTitle is mounted into the iOS navigation bar's titleView,
+        // whose container is laid out across the bar rather than shrink-
+        // wrapped to this row — so an interactive title sits on top of the
+        // back chevron and silently eats its taps, which is exactly how this
+        // screen ended up with a back button that drew fine and did nothing.
+        // A title is never interactive, so it should never take touches.
+        <View style={styles.headerTitleRow} pointerEvents="none">
           <Text style={[styles.screenTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
           {liveProviders.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
@@ -140,17 +151,19 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           )}
         </View>
       ),
-      headerLeft: () => (
-        <TouchableOpacity
-          style={styles.navBackButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.navBackText}>←</Text>
-        </TouchableOpacity>
-      ),
+      // The system back control, deliberately — it carries the platform
+      // chevron, the back-swipe affordance and the long-press history menu,
+      // none of which a hand-drawn TouchableOpacity reproduces. The reason it
+      // used to do nothing was the titleView above swallowing its taps, which
+      // pointerEvents="none" fixes at the source; replacing the button was
+      // treating the symptom.
+      headerBackButtonDisplayMode: 'minimal',
+      headerTintColor: P.text,
       headerStyle: { backgroundColor: 'transparent' },
-      headerBackground: () => null,
+      // No headerBackground: `() => null` still counts as "a custom header
+      // background" to native-stack, which then renders an empty absolutely
+      // positioned View over the top of the screen for no reason. Leaving it
+      // unset with headerTransparent already gives a transparent bar.
     });
   }, [navigation, P, liveProviders.length]);
 
@@ -159,13 +172,15 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       const load = async () => {
         try {
           setLoading(true);
-          await loadBookmarks();
-          const supabaseData = await getBookmarkedProviders();
+          const [, supabaseData] = await Promise.all([
+            loadBookmarks(),
+            getBookmarkedProviders(),
+          ]);
           setLiveProviders(supabaseData.map(mapDbProvider));
-          try {
-            const promos = await getActivePromotions();
-            setProviderIdsWithOffers(new Set(promos.map(p => p.provider_id)));
-          } catch { /* silent */ }
+          setLoading(false);
+          void getProviderIdsWithActivePromotions()
+            .then(ids => setProviderIdsWithOffers(new Set(ids)))
+            .catch(() => {});
         } catch (error) {
           logger.error('Failed to load bookmarks:', error);
         } finally {
@@ -176,19 +191,58 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     }, [loadBookmarks])
   );
 
-  const handleRemoveBookmark = async (providerId: string) => {
+  const handleRemoveBookmark = useCallback(async (provider: Provider) => {
     try {
-      await dbRemoveBookmark(providerId).catch(() => {});
-      setLiveProviders(prev => prev.filter(p => p.id !== providerId));
-      await removeBookmark(providerId);
+      await dbRemoveBookmark(provider.id).catch(() => {});
+      setLiveProviders(prev => prev.filter(p => p.id !== provider.id));
+      await removeBookmark(provider.id);
     } catch (error) {
       logger.error('Failed to remove bookmark:', error);
     }
-  };
+  }, [removeBookmark]);
 
-  const handleViewProfile = (providerId: string) => {
-    navigation.navigate('ProviderProfile', { providerId });
-  };
+  const handleViewProfile = useCallback((provider: Provider) => {
+    navigation.navigate('ProviderProfile', { providerId: provider.slug });
+  }, [navigation]);
+
+  const renderProviderCard: ListRenderItem<Provider> = useCallback(({ item, index }) => (
+    <BookmarkGridCard
+      provider={item}
+      index={index}
+      hasOffer={providerIdsWithOffers.has(item.id)}
+      appointmentCount={appointmentCounts[item.id] ?? 0}
+      P={P}
+      onPress={handleViewProfile}
+      onRemove={handleRemoveBookmark}
+    />
+  ), [P, appointmentCounts, handleRemoveBookmark, handleViewProfile, providerIdsWithOffers]);
+
+  const renderEmptyState = useCallback(() => (
+    <View style={styles.emptyState}>
+      <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+        <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
+          <Icon name="bookmark" size={26} color={P.accentText} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: P.text }]}>
+          {liveProviders.length === 0 ? 'No Saved Providers' : `No ${selectedService} providers saved`}
+        </Text>
+        <Text style={[styles.emptySubtitle, { color: P.sub }]}>
+          {liveProviders.length === 0
+            ? 'Save providers you love to find them quickly here'
+            : `You haven't bookmarked any ${selectedService.toLowerCase()} providers yet`}
+        </Text>
+        {liveProviders.length === 0 ? (
+          <TouchableOpacity
+            style={[styles.exploreButton, { backgroundColor: P.accent }]}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>Explore Providers</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  ), [P, liveProviders.length, navigation, selectedService]);
 
   if (loading) {
     return (
@@ -197,7 +251,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         <SafeAreaView style={styles.container}>
           <View style={[styles.gridRow, { paddingTop: insets.top + 48, paddingHorizontal: 16 }]}>
             {[1, 2, 3, 4, 5, 6].map(k => (
-              <SkeletonProviderCard key={k} isDarkMode={isDarkMode} />
+              <SkeletonProviderCard key={k} />
             ))}
           </View>
         </SafeAreaView>
@@ -218,6 +272,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
               activeKey={selectedService}
               onPress={handleServicePress}
               accentColor={P.accent}
+              activeTextColor={P.onAccent}
               inactiveTextColor={P.sub}
               containerStyle={styles.tabsContent}
             />
@@ -225,68 +280,22 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         </View>
 
         {/* ── Gallery grid ── */}
-        <ScrollView
+        <FlatList
           style={styles.scrollContainer}
+          data={filteredProviders}
+          renderItem={renderProviderCard}
+          keyExtractor={provider => provider.id}
+          numColumns={2}
+          columnWrapperStyle={styles.gridColumnWrapper}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           removeClippedSubviews={Platform.OS === 'android'}
-        >
-          {filteredProviders.length > 0 ? (
-            <View style={styles.gridRow}>
-              {filteredProviders.map((provider, index) => (
-                <BookmarkGridCard
-                  key={provider.id}
-                  provider={provider}
-                  index={index}
-                  hasOffer={providerIdsWithOffers.has(provider.id)}
-                  appointmentCount={appointmentCounts[provider.id] ?? 0}
-                  P={P}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    handleViewProfile(provider.slug);
-                  }}
-                  onRemove={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    handleRemoveBookmark(provider.id);
-                  }}
-                />
-              ))}
-            </View>
-
-          ) : liveProviders.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
-                  <Icon name="bookmark" size={26} color={P.accent} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: P.text }]}>No Saved Providers</Text>
-                <Text style={[styles.emptySubtitle, { color: P.sub }]}>
-                  Save providers you love to find them quickly here
-                </Text>
-                <TouchableOpacity
-                  style={[styles.exploreButton, { backgroundColor: P.accent }]}
-                  onPress={() => navigation.goBack()}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.exploreButtonText}>Explore Providers</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-          ) : (
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
-                  <Icon name="bookmark" size={26} color={P.accent} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: P.text }]}>No {selectedService} providers saved</Text>
-                <Text style={[styles.emptySubtitle, { color: P.sub }]}>
-                  You haven't bookmarked any {selectedService.toLowerCase()} providers yet
-                </Text>
-              </View>
-            </View>
-          )}
-        </ScrollView>
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={7}
+          updateCellsBatchingPeriod={50}
+          ListEmptyComponent={renderEmptyState}
+        />
       </SafeAreaView>
     </ThemedBackground>
   );
@@ -299,11 +308,11 @@ interface BookmarkGridCardProps {
   hasOffer: boolean;
   appointmentCount: number;
   P: AppTheme;
-  onPress: () => void;
-  onRemove: () => void;
+  onPress: (provider: Provider) => void;
+  onRemove: (provider: Provider) => void;
 }
 
-function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove }: BookmarkGridCardProps) {
+const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove }: BookmarkGridCardProps) {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -313,14 +322,20 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
       Animated.timing(fadeAnim, { toValue: 1, duration: 560, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 560, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, slideAnim]);
 
   return (
     <Animated.View style={[styles.gridCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.88}>
+      <TouchableOpacity
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress(provider);
+        }}
+        activeOpacity={0.88}
+      >
         <View style={styles.imageWrap}>
           {provider.logo ? (
-            <Image source={provider.logo} style={styles.image} resizeMode="cover" />
+            <Image source={provider.logo} style={styles.image} contentFit="cover" />
           ) : (
             <View style={[styles.imagePlaceholder, { backgroundColor: P.surface }]}>
               <Text style={[styles.imagePlaceholderInitial, { color: P.sub }]}>
@@ -344,14 +359,18 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
               </View>
               {hasOffer && (
                 <View style={[styles.offerChip, { backgroundColor: P.accent }]}>
-                  <Text style={styles.offerChipText}>OFFER</Text>
+                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>OFFER</Text>
                 </View>
               )}
             </View>
 
             <TouchableOpacity
               style={styles.bookmarkFloating}
-              onPress={(e) => { e.stopPropagation(); onRemove(); }}
+              onPress={(e) => {
+                e.stopPropagation();
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onRemove(provider);
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
             >
@@ -388,32 +407,10 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
       </TouchableOpacity>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-
-  // Matches ProviderProfileScreen's nav back button exactly — circular glass
-  // button, fixed dark arrow, so it reads as one nav-bar language app-wide.
-  navBackButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 20,
-    marginLeft: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  navBackText: {
-    fontSize: 24,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#000',
-  },
 
   headerTitleRow: {
     flexDirection: 'row',
@@ -458,6 +455,9 @@ const styles = StyleSheet.create({
   gridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridColumnWrapper: {
     justifyContent: 'space-between',
   },
   gridCard: {

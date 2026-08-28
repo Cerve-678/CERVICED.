@@ -16,23 +16,42 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
+  Platform,
+  UIManager,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardDismissView } from './KeyboardDismissView';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
+import { EmergencyBookingPrompt } from './EmergencyBookingPrompt';
 import { AvailabilityService } from '../services/AvailabilityService';
+import type { EmergencyReason } from '../services/AvailabilityService';
+import type { EmergencyRequest } from '../contexts/CartContext';
 import { BookingService, DepositPolicy } from '../services/bookingService';
 import {
+  getProviderBookingPoliciesById,
   getProviderDepositPoliciesByDisplayNames,
+  getProviderIdByDisplayName,
+  getProviderTerms,
   ProviderDepositPolicy,
   validatePromoCode,
 } from '../services/databaseService';
 import { PromoCodeRow } from './PromoCodeRow';
-import { buildThemeTokens, withAlpha } from '../constants/providerThemes';
+import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
+import { EMERGENCY_BOOKINGS_ENABLED } from '../constants/featureFlags';
 import type { DbPromotion } from '../types/database';
+import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// LayoutAnimation is opt-in on old-architecture Android; without this the
+// optional sections snap open instead of animating there. Same guard as
+// ModernBeautyCalendar/HomeScreen — set here too so this sheet doesn't
+// depend on another module's import side effect.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Matches MultiBookingSheet's own formatShortDate — same "Wed, 12 Aug" style
 // used everywhere else a booked date is summarised.
@@ -40,6 +59,64 @@ const formatShortDate = (dateStr: string): string =>
   new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', {
     weekday: 'short', day: 'numeric', month: 'short',
   });
+
+export type BookingStep = 'addons' | 'when' | 'pay' | 'confirm';
+
+/** The three steps the progress dots count. "addons" is deliberately absent:
+ *  it's conditional on the service having any, so including it would make the
+ *  same booking show a different number of steps depending on the service. */
+const PROGRESS_STEPS: { key: BookingStep; label: string }[] = [
+  { key: 'when', label: 'When' },
+  { key: 'pay', label: 'Pay' },
+  { key: 'confirm', label: 'Confirm' },
+];
+
+/** Slim progress indicator — shows where you are and how much is left, which
+ *  is the thing a multi-step flow has to answer to not feel longer than a
+ *  single scroll. Shared with MultiBookingSheet so the group flow reads as
+ *  the same task, not a different corner of the app. */
+export const StepProgress: React.FC<{
+  current: BookingStep;
+  accentColor: string;
+  subColor: string;
+  borderColor: string;
+}> = ({ current, accentColor, subColor, borderColor }) => {
+  const activeIndex = PROGRESS_STEPS.findIndex(s => s.key === current);
+  if (activeIndex < 0) return null; // "addons" — no progress shown yet
+  return (
+    <View style={styles.progressRow}>
+      {PROGRESS_STEPS.map((s, i) => {
+        const done = i < activeIndex;
+        const active = i === activeIndex;
+        return (
+          <React.Fragment key={s.key}>
+            {i > 0 && (
+              <View style={[styles.progressBar, { backgroundColor: done || active ? accentColor : borderColor }]} />
+            )}
+            <View style={styles.progressStep}>
+              <View
+                style={[
+                  styles.progressDot,
+                  { borderColor: done || active ? accentColor : borderColor },
+                  (done || active) && { backgroundColor: accentColor },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.progressLabel,
+                  { color: active ? accentColor : subColor },
+                  active && { fontWeight: '700' },
+                ]}
+              >
+                {s.label}
+              </Text>
+            </View>
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+};
 
 export interface BookingSheetAddOn {
   id: string | number;
@@ -59,7 +136,7 @@ export interface BookingSheetService {
 }
 
 export interface BookingSheetResult {
-  selectedAddOns: Array<{ id: string | number; name: string; price: number }>;
+  selectedAddOns: { id: string | number; name: string; price: number }[];
   date: string;
   time: string;
   notes: string;
@@ -70,6 +147,16 @@ export interface BookingSheetResult {
   /** Present when consultationRequired was passed in and the client picked
    *  a date/time for it in this same sheet. */
   consultationBooking?: { date: string; time: string };
+  /** Frozen copy of what applied to this booking: the provider's structured
+   *  policy (see BookingSheetProps.bookingPolicies) and, under `providerTerms`,
+   *  their own written T&Cs when the client ticked the agree box. Absent only
+   *  when the provider has neither. Built by buildPolicySnapshot(). */
+  policySnapshot?: Record<string, unknown>;
+  /** Present only when the chosen time is one this provider's own scheduling
+   *  rules exclude and they've opted into being asked — the client accepted
+   *  the "scheduling conflict" confirmation for THIS date/time. Carried onto
+   *  the cart item and, from there, into prepare_checkout. */
+  emergencyRequest?: EmergencyRequest;
 }
 
 interface BookingSheetProps {
@@ -88,19 +175,32 @@ interface BookingSheetProps {
   /** Provider's service category — narrows promo eligibility the same way
    *  CartScreen's itemPromoDiscounts does, so the add-mode preview matches. */
   providerServiceCategory?: string;
+  /** The provider's live cancellation/booking policy (providers.booking_policies)
+   *  — snapshotted into the result when the client agrees, so the eventual
+   *  booking row remembers what was actually agreed to even if the provider
+   *  edits their policy later. Caller already has this loaded (e.g.
+   *  ProviderProfileScreen's own Policy tab reads the same data). */
+  bookingPolicies?: Record<string, unknown> | null;
   adaptiveAccentColor: string;
   /** Sheet's background colour — always the caller's own content-backdrop
    *  colour (e.g. the provider's card colour, or the cart's card colour),
    *  never derived from system/app dark mode. The sheet has no light/dark
    *  fallback of its own; every caller must supply this. */
   backgroundColor: string;
-  initial?: {
-    selectedAddOns?: Array<{ id: string | number; name: string; price: number }> | undefined;
-    selectedDate?: string | undefined;
-    selectedTime?: string | undefined;
-    notes?: string | undefined;
-    isDepositOnly?: boolean | undefined;
-  };
+  initial?:
+    | {
+        selectedAddOns?: { id: string | number; name: string; price: number }[] | undefined;
+        selectedDate?: string | undefined;
+        selectedTime?: string | undefined;
+        notes?: string | undefined;
+        isDepositOnly?: boolean | undefined;
+        /** An acceptance already given for this item's existing time (edit
+         *  mode). Without it, reopening a request booking just to change its
+         *  notes would drop the flag and the unchanged time would then be
+         *  rejected by the very rule it was accepted under. */
+        emergencyRequest?: EmergencyRequest | undefined;
+      }
+    | undefined;
   /** When set, this provider requires a consultation before this client's
    *  first real booking — the sheet shows a second Date & Time picker for
    *  it, above the main service's, and both are scheduled together on
@@ -118,12 +218,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   providerDisplayName,
   providerKey,
   providerServiceCategory,
+  bookingPolicies,
   adaptiveAccentColor,
   backgroundColor,
   initial,
   consultationRequired,
   onSubmit,
 }) => {
+  const insets = useSafeAreaInsets();
   const sheetBackground = backgroundColor;
   // Every other colour in this sheet (text/sub/border/surface) is derived
   // from its own backdrop too — nothing here reads the app's light/dark
@@ -132,16 +234,22 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     () => buildThemeTokens(sheetBackground, sheetBackground, adaptiveAccentColor, sheetBackground),
     [sheetBackground, adaptiveAccentColor]
   );
-  const isDark = tokens.isDark;
+  // Text/icons drawn ON a solid adaptiveAccentColor fill (close button,
+  // submit button) can't assume white — a pale accent (e.g. the client
+  // dark-mode blue-grey #E5ECF4) makes white text unreadable. Pick black or
+  // white by the accent's own luminance instead of hardcoding either.
+  const onAccentColor = useMemo(
+    () => (isDarkColor(adaptiveAccentColor) ? '#fff' : '#1B2740'),
+    [adaptiveAccentColor]
+  );
 
   const [selectedAddOns, setSelectedAddOns] = useState<
-    Array<{ id: string | number; name: string; price: number }>
+    { id: string | number; name: string; price: number }[]
   >([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
   const [isDepositOnly, setIsDepositOnly] = useState(false);
-  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [isResolvingSlot, setIsResolvingSlot] = useState(false);
   const [depositPolicy, setDepositPolicy] = useState<ProviderDepositPolicy | undefined>(undefined);
 
@@ -155,15 +263,56 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   // mode="add" local promo preview (mode="edit" uses the real cart state via props)
   const [localPromo, setLocalPromo] = useState<DbPromotion | undefined>(undefined);
 
-  // Two-step flow: pick add-ons first (its own screen, like the old
-  // AddOnsModal), then "Next" into the booking screen — add-ons, notes,
-  // payment and promo, and where the picked add-ons show up as a read-only
-  // summary instead of the interactive list. Services with no add-ons skip
-  // straight to "book" — there's nothing to pick.
-  const [step, setStep] = useState<'addons' | 'book'>('book');
+  // Guided flow. Each step asks for one kind of thing, so the client is never
+  // reading a scroll of seven competing sections:
+  //   addons  — optional extras (skipped entirely when the service has none)
+  //   when    — date & time, plus the consultation's own date & time
+  //   pay     — deposit vs full, promo code, notes
+  //   confirm — the full booking read back, and the terms gate
+  // "addons" stays first and stays conditional, exactly as before.
+  const [step, setStep] = useState<BookingStep>('when');
 
   const resolvedOnce = useRef(false);
   const depositFetched = useRef(false);
+  const termsFetched = useRef(false);
+  const fetchedPoliciesRef = useRef(false);
+  const [providerTerms, setProviderTerms] = useState<{ title: string; body: string } | null>(null);
+  const [showProviderTerms, setShowProviderTerms] = useState(false);
+  // Agreement to the provider's OWN terms, gating add-to-cart. Separate from
+  // the cart's checkout checkbox (CERVICED's Terms + cancellation policy):
+  // that one is app-wide and is what records policy_accepted_at server-side,
+  // this one is about this
+  // provider's own document, which the client should not be able to add a
+  // booking to the cart without having accepted.
+  const [agreedToProviderTerms, setAgreedToProviderTerms] = useState(false);
+  // A time the provider only accepts as a request. `pendingEmergency` is the
+  // slot awaiting the client's answer; `emergencyRequest` is their accepted
+  // answer, and is what travels to the cart. Both are cleared whenever the
+  // date changes or another time is picked — a reason belongs to the time it
+  // was accepted for, never to the booking in general.
+  const [pendingEmergency, setPendingEmergency] = useState<{ time: string; reasons: EmergencyReason[] } | null>(null);
+  const [emergencyAck, setEmergencyAck] = useState(false);
+  const [emergencyRequest, setEmergencyRequest] = useState<EmergencyRequest | null>(null);
+  const [showEmergencyPolicy, setShowEmergencyPolicy] = useState(false);
+  // The provider's Emergency Booking Policy — a free-text field on
+  // booking_policies, authored on PoliciesScreen. Its own document, distinct
+  // from `providerTerms` (the add-to-cart T&Cs form); the client reads it in
+  // the "scheduling conflict" prompt before asking for a time outside the
+  // provider's normal availability. Only surfaced while EMERGENCY_BOOKINGS_
+  // ENABLED is on — the prompt can't open otherwise.
+  //
+  // Prefer the caller's `bookingPolicies` prop; fall back to a self-fetch
+  // (below) so the cart's edit-mode invocation — which passes no
+  // bookingPolicies — still resolves it, the same way this sheet already
+  // self-fetches `providerTerms` regardless of caller.
+  const [fetchedBookingPolicies, setFetchedBookingPolicies] =
+    useState<Record<string, unknown> | null>(null);
+  const effectiveBookingPolicies = bookingPolicies ?? fetchedBookingPolicies;
+  const emergencyPolicyText =
+    typeof effectiveBookingPolicies?.['emergencyBookingPolicy'] === 'string'
+      ? (effectiveBookingPolicies['emergencyBookingPolicy'] as string).trim()
+      : '';
+  const scrollRef = useRef<ScrollView>(null);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
   useEffect(() => {
@@ -173,13 +322,27 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setSelectedTime(initial?.selectedTime ?? '');
     setNotes(initial?.notes ?? '');
     setIsDepositOnly(initial?.isDepositOnly ?? false);
-    setAgreedToPolicy(false);
     setLocalPromo(undefined);
     setConsultationDate('');
     setConsultationTime('');
-    setStep((service?.addOns?.length ?? 0) > 0 ? 'addons' : 'book');
+    setStep((service?.addOns?.length ?? 0) > 0 ? 'addons' : 'when');
     resolvedOnce.current = false;
     depositFetched.current = false;
+    termsFetched.current = false;
+    // Clear the resolved values too, not just the "fetched" refs — the sheet
+    // is reused across providers (editingItem stays mounted), so without this
+    // the previous provider's deposit label and T&Cs render until the refetch
+    // for the new one lands, and depositPolicy?.depositOnly can force
+    // isDepositOnly off a stale policy.
+    setDepositPolicy(undefined);
+    setProviderTerms(null);
+    setAgreedToProviderTerms(false);
+    setPendingEmergency(null);
+    setEmergencyAck(false);
+    setShowEmergencyPolicy(false);
+    fetchedPoliciesRef.current = false;
+    setFetchedBookingPolicies(null);
+    setEmergencyRequest(initial?.emergencyRequest ?? null);
     consultationResolvedOnce.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, service?.id]);
@@ -233,6 +396,42 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       .then(policies => setDepositPolicy(policies[providerDisplayName]))
       .catch(() => {});
   }, [isVisible, providerDisplayName]);
+
+  // The provider's own Terms & Conditions, if they've written any. Read-only
+  // here: this is a "read before you book" surface, not an agreement step —
+  // sending it as a real form the client signs is a separate feature (see
+  // FUTURE_LOGIC.md). null means they haven't written any, which is normal
+  // and shows nothing; a failed read is treated the same way rather than
+  // blocking the booking on a document that may not exist.
+  useEffect(() => {
+    if (!isVisible || termsFetched.current) return;
+    termsFetched.current = true;
+    const resolveProviderId = UUID_RE.test(providerIdentifier)
+      ? Promise.resolve(providerIdentifier)
+      : getProviderIdByDisplayName(providerDisplayName);
+    resolveProviderId
+      .then(id => (id ? getProviderTerms(id) : null))
+      .then(setProviderTerms)
+      .catch(() => setProviderTerms(null));
+  }, [isVisible, providerIdentifier, providerDisplayName]);
+
+  // Self-fetch booking_policies only when the caller didn't supply them (the
+  // cart's edit-mode sheet) AND the emergency flow is live — the only reader
+  // of the fetched blob is the Emergency Booking Policy modal. Keeps
+  // `emergencyPolicyText` correct on every path without threading a third prop
+  // through two call sites.
+  useEffect(() => {
+    if (!EMERGENCY_BOOKINGS_ENABLED) return;
+    if (!isVisible || bookingPolicies || fetchedPoliciesRef.current) return;
+    fetchedPoliciesRef.current = true;
+    const resolveProviderId = UUID_RE.test(providerIdentifier)
+      ? Promise.resolve(providerIdentifier)
+      : getProviderIdByDisplayName(providerDisplayName);
+    resolveProviderId
+      .then(id => (id ? getProviderBookingPoliciesById(id) : null))
+      .then(setFetchedBookingPolicies)
+      .catch(() => setFetchedBookingPolicies(null));
+  }, [isVisible, bookingPolicies, providerIdentifier, providerDisplayName]);
 
   // Provider requires deposit-only (set in their business details) — the
   // client has no "pay in full" choice, so force it regardless of whatever
@@ -308,10 +507,126 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   const consultationScheduleMissing = !!consultationRequired && (!consultationDate || !consultationTime);
 
+  // Only gates mode="add": an item already in the cart cleared this gate when
+  // it was added, so re-editing its date shouldn't demand the tick again.
+  // Nothing to agree to when the provider hasn't written any terms.
+  const providerTermsGateUnmet = mode === 'add' && !!providerTerms && !agreedToProviderTerms;
+
+  // ── Step navigation ────────────────────────────────────────────────────
+  // The order is computed, not hardcoded, so "addons" can drop out entirely
+  // for a service that has none without every back/next call having to know
+  // about that special case.
+  // Reads service?.addOns rather than the `hasAddOns` const below, which is
+  // declared after this component's early `return null` and so can't be a
+  // hook dependency.
+  const stepOrder = useMemo<BookingStep[]>(
+    () =>
+      (service?.addOns?.length ?? 0) > 0
+        ? ['addons', 'when', 'pay', 'confirm']
+        : ['when', 'pay', 'confirm'],
+    [service?.addOns?.length]
+  );
+
+  // What's missing before this step can be left. null = good to continue.
+  // Each step gates only its OWN requirements, so the client is told what's
+  // wrong while they're still looking at it, instead of at the very end.
+  const stepBlocker = useMemo((): string | null => {
+    // Scheduling is checked on "when" (where it's fixable) AND on "confirm"
+    // (where it's committed). Re-checking at the end isn't redundant: the
+    // date/time can be cleared after the client has already moved past that
+    // step, which would otherwise leave an enabled "Add to Cart" that
+    // silently does nothing because handleSubmit's own guard rejects it.
+    if (step === 'when' || step === 'confirm') {
+      if (!selectedDate || !selectedTime) return 'Choose a date and time';
+      if (consultationScheduleMissing) return 'Choose a consultation time';
+    }
+    // Fixable right here on "confirm", so unlike scheduling this one disables
+    // the button rather than routing back to an earlier step.
+    if (step === 'confirm' && providerTermsGateUnmet) return 'Agree to the Terms & Conditions';
+    return null;
+  }, [step, selectedDate, selectedTime, consultationScheduleMissing, providerTermsGateUnmet]);
+
+  // Whether handleSubmit's own requirements are met right now, regardless of
+  // which step is showing — used by the edit-mode "Done" shortcut so a
+  // client fixing one field (e.g. just the date) isn't forced to click
+  // through every remaining step to save it, as long as scheduling is
+  // already valid from an earlier pass.
+  const canFinishNow =
+    !!selectedDate && !!selectedTime && !consultationScheduleMissing;
+
+  const goToStep = useCallback((next: BookingStep) => {
+    Haptics.selectionAsync().catch(() => {});
+    setStep(next);
+    // A step change is a new screen — start it at the top, or the client
+    // lands mid-content carried over from the previous step's scroll.
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, []);
+
+  const handleBack = useCallback(() => {
+    const i = stepOrder.indexOf(step);
+    if (i > 0) goToStep(stepOrder[i - 1]!);
+  }, [step, stepOrder, goToStep]);
+
+  const handleNext = useCallback(() => {
+    if (stepBlocker) return; // guarded by disabling the button too
+    const i = stepOrder.indexOf(step);
+    if (i >= 0 && i < stepOrder.length - 1) goToStep(stepOrder[i + 1]!);
+  }, [step, stepOrder, stepBlocker, goToStep]);
+
+  const isFirstStep = stepOrder.indexOf(step) === 0;
+
+  // Picking a time the provider only accepts as a request doesn't schedule
+  // anything yet — it opens the confirmation. The time IS set straight away
+  // so the picker collapses to it as usual, but it's backed out again if the
+  // client declines, since it isn't bookable on any other terms.
+  const handleSelectTime = useCallback((time: string, requestReasons?: EmergencyReason[]) => {
+    setSelectedTime(time);
+    if (requestReasons && requestReasons.length > 0) {
+      setEmergencyAck(false);
+      setPendingEmergency({ time, reasons: requestReasons });
+    } else {
+      setPendingEmergency(null);
+      setEmergencyRequest(null);
+    }
+  }, []);
+
+  // A different day is a different set of rules — whatever was accepted for
+  // the old date can't carry over to the new one.
+  const handleSelectDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    setPendingEmergency(null);
+    setEmergencyAck(false);
+    setEmergencyRequest(null);
+  }, []);
+
+  const confirmEmergency = useCallback(() => {
+    if (!pendingEmergency) return;
+    setEmergencyRequest({
+      reasons: pendingEmergency.reasons,
+      acknowledgedAt: new Date().toISOString(),
+    });
+    setPendingEmergency(null);
+  }, [pendingEmergency]);
+
+  const cancelEmergency = useCallback(() => {
+    setSelectedTime('');
+    setEmergencyRequest(null);
+    setEmergencyAck(false);
+    setPendingEmergency(null);
+  }, []);
+
+  // A scheduling blocker reached on the confirm step is the one case where the
+  // button must stay tappable rather than disabled: what needs fixing lives on
+  // an earlier step, so greying it out here would strand the client with no
+  // way forward. It sends them back to "when" instead. (Terms, by contrast,
+  // IS fixable right here, so that one stays disabled as normal.)
+  const schedulingFixableElsewhere =
+    step === 'confirm' && (!selectedDate || !selectedTime || consultationScheduleMissing);
+
   const handleSubmit = useCallback(() => {
     if (!service) return;
     if (consultationScheduleMissing) return; // guarded by disabling the button too
-    if (!agreedToPolicy) return; // guarded by disabling the button too
+    if (providerTermsGateUnmet) return; // ditto — the provider's own T&Cs gate
     onSubmit({
       selectedAddOns,
       date: selectedDate,
@@ -322,9 +637,31 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       ...(consultationRequired && consultationDate && consultationTime
         ? { consultationBooking: { date: consultationDate, time: consultationTime } }
         : {}),
+      // The policy in force at booking time, recorded as fact — not as
+      // consent. Agreement itself is captured once, by the cart's own
+      // bundled Terms + cancellation-policy checkbox at checkout, which is
+      // what hold_cart_booking_slots() records policy_accepted_at from.
+      //
+      // Now carries the provider's own written T&Cs too, when the client
+      // ticked the box above. Previously that tick gated Add to Cart and was
+      // then discarded, so a provider editing their terms afterwards left the
+      // agreed version unrecoverable.
+      ...(() => {
+        // effectiveBookingPolicies, not the raw prop — so the self-fetched
+        // blob (cart edit mode passes no bookingPolicies prop) reaches the
+        // snapshot rather than being silently dropped.
+        const snapshot = buildPolicySnapshot(
+          effectiveBookingPolicies,
+          agreedToProviderTerms ? providerTerms : null,
+        );
+        return snapshot ? { policySnapshot: snapshot } : {};
+      })(),
+      // Only when it still matches the time being submitted — a stale
+      // acceptance from a time since changed must never travel.
+      ...(emergencyRequest ? { emergencyRequest } : {}),
     });
     onClose();
-  }, [service, consultationScheduleMissing, agreedToPolicy, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, onSubmit, onClose]);
+  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, effectiveBookingPolicies, agreedToProviderTerms, providerTerms, emergencyRequest, onSubmit, onClose]);
 
   if (!service) return null;
 
@@ -340,12 +677,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           off the bottom of the visible sheet. */}
       <KeyboardDismissView style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
-          <SafeAreaView style={styles.container}>
+          <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
-          {step === 'book' && hasAddOns && (
+          {!isFirstStep && (
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => setStep('addons')}
+              onPress={handleBack}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={[styles.backButtonText, { color: adaptiveAccentColor }]}>‹</Text>
@@ -353,7 +690,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           )}
           <View style={{ flex: 1 }}>
             <Text style={[styles.headerTitle, { color: tokens.text }]}>
-              {step === 'addons' ? 'Choose Add-ons' : mode === 'add' ? 'Book Service' : 'Edit Booking'}
+              {step === 'addons'
+                ? 'Choose Add-ons'
+                : mode === 'add' ? 'Book Service' : 'Edit Booking'}
             </Text>
             <Text style={[styles.headerSubtitle, { color: tokens.sub }]}>
               {service.name} • £{service.price}
@@ -364,11 +703,25 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             onPress={onClose}
             activeOpacity={0.8}
           >
-            <Text style={styles.closeButtonText}>✕</Text>
+            <Text style={[styles.closeButtonText, { color: onAccentColor }]}>✕</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+        <StepProgress
+          current={step}
+          accentColor={adaptiveAccentColor}
+          subColor={tokens.sub}
+          borderColor={tokens.border}
+        />
+
+        <ScrollView
+          ref={scrollRef}
+          style={styles.body}
+          // The footer is pinned, so leave enough room to scroll the last
+          // field fully above it instead of letting it sit behind the CTA.
+          contentContainerStyle={[styles.bodyContent, { paddingBottom: 180 + insets.bottom }]}
+          showsVerticalScrollIndicator={false}
+        >
           {step === 'addons' ? (
             <View style={styles.section}>
               {availableAddOns.map(addOn => {
@@ -398,19 +751,21 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         isSelected && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
                       ]}
                     >
-                      {isSelected && <Text style={styles.addOnCheckmark}>✓</Text>}
+                      {isSelected && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
-          ) : (
+          ) : step === 'when' ? (
             <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>When works for you?</Text>
+
               {hasAddOns && (
                 <View style={styles.section}>
                   <View style={styles.summaryHeaderRow}>
                     <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add-ons</Text>
-                    <TouchableOpacity onPress={() => setStep('addons')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity onPress={() => goToStep('addons')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change</Text>
                     </TouchableOpacity>
                   </View>
@@ -467,9 +822,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 )}
                 <ModernBeautyCalendar
                   selectedDate={selectedDate}
-                  onDateSelect={setSelectedDate}
-                  onTimeSelect={setSelectedTime}
+                  onDateSelect={handleSelectDate}
+                  onTimeSelect={handleSelectTime}
                   selectedTime={selectedTime}
+                  allowRequests={EMERGENCY_BOOKINGS_ENABLED}
+                  providerLabel={providerDisplayName}
                   providerName={providerIdentifier}
                   serviceDuration={service.duration}
                   accentColor={adaptiveAccentColor}
@@ -479,26 +836,15 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   {...(uuidServiceId ? { serviceId: uuidServiceId } : {})}
                 />
               </View>
-
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Notes</Text>
-                <TextInput
-                  style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder="Add special requests, allergies, or preferences..."
-                  placeholderTextColor={tokens.sub}
-                  multiline
-                  numberOfLines={4}
-                  maxLength={500}
-                />
-                <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
-              </View>
+            </>
+          ) : step === 'pay' ? (
+            <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>How would you like to pay?</Text>
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Payment</Text>
-                {showFullPaymentOption ? (
-                  <View style={styles.paymentButtons}>
+                <View style={styles.paymentButtons}>
+                  {showFullPaymentOption && (
                     <TouchableOpacity
                       style={[
                         styles.paymentOptionButton,
@@ -511,39 +857,45 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         Pay Full Amount
                       </Text>
                     </TouchableOpacity>
-                    {depositPolicy?.depositAvailable !== false && (
-                      <TouchableOpacity
-                        style={[
-                          styles.paymentOptionButton,
-                          { backgroundColor: tokens.surface },
-                          isDepositOnly && { backgroundColor: withAlpha(adaptiveAccentColor, 0.14), borderColor: adaptiveAccentColor },
-                        ]}
-                        onPress={() => setIsDepositOnly(true)}
-                      >
-                        <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
-                          {depositPolicy
-                            ? depositPolicy.depositType === 'fixed'
-                              ? `Pay Deposit (£${depositPolicy.depositAmount} flat)`
-                              : `Pay Deposit (${depositPolicy.depositAmount}%)`
-                            : 'Pay Deposit (20%)'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ) : (
+                  )}
+                  {(showFullPaymentOption ? depositPolicy?.depositAvailable !== false : true) && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentOptionButton,
+                        { backgroundColor: tokens.surface },
+                        isDepositOnly && { backgroundColor: withAlpha(adaptiveAccentColor, 0.14), borderColor: adaptiveAccentColor },
+                      ]}
+                      onPress={() => setIsDepositOnly(true)}
+                      activeOpacity={showFullPaymentOption ? 0.7 : 1}
+                      disabled={!showFullPaymentOption}
+                    >
+                      <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
+                        {depositPolicy
+                          ? depositPolicy.depositType === 'fixed'
+                            ? `Pay Deposit (£${depositPolicy.depositAmount})`
+                            : `Pay Deposit (${depositPolicy.depositAmount}%)`
+                          : 'Pay Deposit (20%)'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {/* Whichever single option a provider offers, say why it's
+                    the only one — a lone unexplained button reads as a bug or
+                    a missing choice, not as the provider's policy. */}
+                {!showFullPaymentOption && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
                     This provider requires a deposit to book — paying in full isn't available for this service.
                   </Text>
                 )}
+                {showFullPaymentOption && depositPolicy?.depositAvailable === false && (
+                  <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
+                    This provider doesn't take deposits — the full amount is paid when you book.
+                  </Text>
+                )}
                 {isDepositOnly && (
-                  <View style={[styles.depositInfo, { backgroundColor: isDark ? 'rgba(76,175,80,0.16)' : 'rgba(76,175,80,0.1)' }]}>
-                    <Text style={[styles.depositInfoText, { color: isDark ? '#7BD989' : '#2E7D32' }]}>
-                      Deposit: £{BookingService.calculateDeposit(subtotal, depositPolicyArg).toFixed(2)}
-                    </Text>
-                    <Text style={[styles.depositRemainingText, { color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.7)' }]}>
-                      Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
-                    </Text>
-                  </View>
+                  <Text style={[styles.depositRemainingText, { color: tokens.sub }]}>
+                    Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
+                  </Text>
                 )}
               </View>
 
@@ -552,7 +904,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   via CartItem.initialPromoCode still auto-applies there. */}
               {mode === 'add' && (
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Promo Code</Text>
+                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Have a promo code?</Text>
                   <PromoCodeRow
                     providerKey={providerKey}
                     {...(localPromo !== undefined ? { appliedPromo: localPromo } : {})}
@@ -568,10 +920,37 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </View>
               )}
 
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add notes</Text>
+                <TextInput
+                  style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Add special requests, allergies, or preferences..."
+                  placeholderTextColor={tokens.sub}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={500}
+                />
+                <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>Does this look right?</Text>
+
               {service && (
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Booking Summary</Text>
-                  <View style={styles.summaryItemRow}>
+                  <View style={styles.summaryHeaderRow}>
+                    <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>Booking Summary</Text>
+                    {/* The confirm step is where a mistake gets noticed, so
+                        it has to offer a way back to the step that owns it
+                        rather than making the client hunt for the ‹ button. */}
+                    <TouchableOpacity onPress={() => goToStep('when')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change time</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={[styles.summaryItemRow, { marginTop: 12 }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.summaryItemName, { color: tokens.text }]}>{service.name}</Text>
                       <Text style={[styles.summaryItemDateTime, { color: tokens.sub }]}>
@@ -602,13 +981,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       <Text style={[styles.summaryItemPrice, { color: adaptiveAccentColor }]}>£{consultationRequired.price.toFixed(2)}</Text>
                     </View>
                   )}
-                  <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
-                  {/* On a deposit booking the service total and the amount
-                      actually charged now are different numbers — show both,
-                      plus what's left to settle with the provider, rather
-                      than a single "Total" that means neither. */}
-                  {isDepositOnly ? (
+                  {/* On a deposit booking the service total and what's left to
+                      settle with the provider are context the footer can't
+                      show. The amount being charged now is NOT repeated here —
+                      the footer owns that number, so there's exactly one
+                      "what am I paying" figure in the sheet. */}
+                  {isDepositOnly && (
                     <>
+                      <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
                       <View style={styles.summaryAddOnRow}>
                         <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Service total</Text>
                         <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryServiceTotal.toFixed(2)}</Text>
@@ -617,82 +997,286 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Remaining at appointment</Text>
                         <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryRemaining.toFixed(2)}</Text>
                       </View>
-                      <View style={styles.summaryItemRow}>
-                        <Text style={[styles.summaryTotalLabel, { color: tokens.text }]}>Deposit Due Now</Text>
-                        <Text style={[styles.summaryTotalValue, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
-                      </View>
                     </>
-                  ) : (
-                    <View style={styles.summaryItemRow}>
-                      <Text style={[styles.summaryTotalLabel, { color: tokens.text }]}>Total</Text>
-                      <Text style={[styles.summaryTotalValue, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
-                    </View>
                   )}
                 </View>
               )}
 
-              <TouchableOpacity
-                style={styles.policyCheckboxRow}
-                onPress={() => setAgreedToPolicy(!agreedToPolicy)}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.addOnCheckbox,
-                  { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
-                ]}>
-                  {agreedToPolicy && <Text style={styles.addOnCheckmark}>✓</Text>}
+              {/* Carried onto the confirm step so the client isn't reminded
+                  only in a modal they dismissed several taps ago — what
+                  they're adding to the cart is a request, and that has to be
+                  visible at the moment they add it. */}
+              {emergencyRequest && (
+                <View style={[styles.emergencyNotice, { borderColor: withAlpha(adaptiveAccentColor, 0.5) }]}>
+                  <Text style={[styles.emergencyNoticeTitle, { color: tokens.text }]}>
+                    Requested outside {providerDisplayName}'s availability
+                  </Text>
+                  <Text style={[styles.emergencyNoticeText, { color: tokens.sub }]}>
+                    {providerDisplayName} has to accept this before it's confirmed. You'll be
+                    told either way.
+                  </Text>
                 </View>
-                {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
-                <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
-                  I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
-                </Text>
-              </TouchableOpacity>
+              )}
+
+              {/* Shown whether or not there's a structured booking policy — a
+                  provider can have written terms without having filled one in.
+                  The tick is what gates Add to Cart; it records agreement for
+                  this sheet only (the cart's checkout checkbox is still what
+                  records policy_accepted_at on the booking). Sending these as a
+                  signable form is the follow-on feature (FUTURE_LOGIC.md). */}
+              {providerTerms && (
+                <View style={styles.providerTermsBlock}>
+                  <TouchableOpacity
+                    style={styles.providerTermsLinkRow}
+                    onPress={() => setShowProviderTerms(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
+                      Read {providerDisplayName}'s Terms &amp; Conditions
+                    </Text>
+                  </TouchableOpacity>
+
+                  {mode === 'add' && (
+                    <TouchableOpacity
+                      style={styles.providerTermsAgreeRow}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setAgreedToProviderTerms(prev => !prev);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: agreedToProviderTerms }}
+                      accessibilityLabel={`I agree to ${providerDisplayName}'s Terms and Conditions`}
+                    >
+                      <View
+                        style={[
+                          styles.addOnCheckbox,
+                          { borderColor: tokens.border },
+                          agreedToProviderTerms && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                        ]}
+                      >
+                        {agreedToProviderTerms && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
+                      </View>
+                      <Text style={[styles.providerTermsAgreeText, { color: tokens.text }]}>
+                        I agree to {providerDisplayName}'s Terms &amp; Conditions
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </>
           )}
         </ScrollView>
 
-        <View style={[styles.footer, { borderTopColor: tokens.border, backgroundColor: sheetBackground }]}>
+        <View
+          style={[
+            styles.footer,
+            {
+              borderTopColor: tokens.border,
+              backgroundColor: sheetBackground,
+              // Keep the action above the home indicator / Android gesture
+              // bar, including on shorter devices where the modal reaches
+              // the very bottom of the display.
+              bottom: Math.max(16, insets.bottom + 16),
+            },
+          ]}
+        >
           {step === 'addons' ? (
             <TouchableOpacity
               style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }]}
-              onPress={() => setStep('book')}
+              onPress={() => goToStep('when')}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Next: choose appointment time"
             >
-              <Text style={styles.submitButtonText}>
-                {`Next${totalAddOnsPrice > 0 ? ` • +£${totalAddOnsPrice.toFixed(2)}` : ''}`}
-              </Text>
+              <Text style={[styles.submitButtonText, { color: onAccentColor }]}>Next</Text>
             </TouchableOpacity>
           ) : (
             <>
-              <View style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: tokens.text }]}>Total</Text>
-                <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
+              {/* Deliberately NOT on the "when" step. Picking a time is a
+                  question about the diary, and a price — "Deposit due now"
+                  most of all — sitting under it answers a question nobody
+                  asked yet, and reads as though choosing a time is what
+                  charges them. It appears from "pay" onward, which is the
+                  step that actually asks how they want to pay, so the number
+                  still never arrives as a surprise at the end.
+
+                  On a deposit booking this is the deposit, not the service
+                  total, so it must not be labelled "Total" — the rest is
+                  still owed to the provider at the appointment. */}
+              {step !== 'when' && (
+                <View style={styles.totalRow}>
+                  <Text style={[styles.totalLabel, { color: tokens.text }]}>
+                    {isDepositOnly ? 'Deposit due now' : 'Total'}
+                  </Text>
+                  <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
+                </View>
+              )}
+
+              {/* On the last step this commits the booking; before that it
+                  just advances. Either way the label says what will happen,
+                  and a blocker replaces it with what's missing. */}
+              <View style={styles.footerButtonRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.submitButton,
+                    { backgroundColor: adaptiveAccentColor },
+                    !!stepBlocker && styles.submitButtonDisabled,
+                  ]}
+                  onPress={
+                    schedulingFixableElsewhere
+                      ? () => goToStep('when')
+                      : step === 'confirm'
+                      ? handleSubmit
+                      : handleNext
+                  }
+                  activeOpacity={0.8}
+                  disabled={!!stepBlocker && !schedulingFixableElsewhere}
+                >
+                  <Text style={[styles.submitButtonText, { color: onAccentColor }]}>
+                    {schedulingFixableElsewhere
+                      ? 'Choose a date and time'
+                      : stepBlocker
+                      ? stepBlocker
+                      : step === 'confirm'
+                      ? (mode === 'add'
+                          ? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart')
+                          : 'Save Changes')
+                      : 'Continue'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Editing an existing cart item is a correction to one
+                    field, not a fresh multi-step booking — once whatever's
+                    already set is valid (date/time picked, terms already
+                    agreed from the original add-to-cart), the client should
+                    be able to bail out and save right here instead of being
+                    walked through "pay"/"confirm" again just to re-confirm
+                    choices they aren't changing. Not shown in "add" mode,
+                    where there's nothing yet to save until confirm. */}
+                {mode === 'edit' && step !== 'confirm' && canFinishNow && (
+                  <TouchableOpacity
+                    style={[styles.submitButton, styles.doneButton, { borderColor: adaptiveAccentColor }]}
+                    onPress={handleSubmit}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.submitButtonText, { color: adaptiveAccentColor }]}>Done</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }, (consultationScheduleMissing || !agreedToPolicy) && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
-                activeOpacity={0.8}
-                disabled={consultationScheduleMissing || !agreedToPolicy}
-              >
-                <Text style={styles.submitButtonText}>
-                  {consultationScheduleMissing
-                    ? 'Choose a consultation time'
-                    : !agreedToPolicy
-                    ? 'Agree to terms to continue'
-                    : mode === 'add' ? 'Add to Cart' : 'Save Changes'}
-                </Text>
-              </TouchableOpacity>
             </>
           )}
         </View>
           </SafeAreaView>
         </View>
       </KeyboardDismissView>
+
+      {/* Same nesting rule as the terms sheet below: rendered inside the
+          sheet's own Modal so the confirmation lands ON the booking sheet,
+          and opening the provider's policy from it lands on top of BOTH. */}
+      {pendingEmergency && (
+        <EmergencyBookingPrompt
+          visible
+          providerName={providerDisplayName}
+          date={selectedDate}
+          time={pendingEmergency.time}
+          reasons={pendingEmergency.reasons}
+          hasPolicy={!!emergencyPolicyText}
+          onReadPolicy={() => setShowEmergencyPolicy(true)}
+          acknowledged={emergencyAck}
+          onToggleAcknowledged={() => setEmergencyAck(prev => !prev)}
+          onConfirm={confirmEmergency}
+          onCancel={cancelEmergency}
+          accentColor={adaptiveAccentColor}
+          backgroundColor={sheetBackground}
+          textColor={tokens.text}
+          subColor={tokens.sub}
+        />
+      )}
+
+      {/* Nested inside the sheet's own Modal so it lands on top of it rather
+          than replacing it — the client is mid-booking and goes straight back
+          to where they were. */}
+      <Modal
+        visible={showProviderTerms}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowProviderTerms(false)}
+      >
+        <View style={styles.termsOverlay}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+              <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
+                  {providerTerms?.title ?? 'Terms & Conditions'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowProviderTerms(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close terms"
+                >
+                  <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.termsBody}>
+                <Text style={[styles.termsBodyText, { color: tokens.text }]}>
+                  {providerTerms?.body ?? ''}
+                </Text>
+                <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
+                  Written by {providerDisplayName}. These are their own terms, not CERVICED's.
+                </Text>
+              </ScrollView>
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* The provider's Emergency Booking Policy — a separate document from
+          their Terms & Conditions above. Opened from the "scheduling conflict"
+          prompt, so it lands on top of both the sheet and that prompt. */}
+      <Modal
+        visible={showEmergencyPolicy}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowEmergencyPolicy(false)}
+      >
+        <View style={styles.termsOverlay}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+              <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
+                  Emergency Booking Policy
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowEmergencyPolicy(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close emergency booking policy"
+                >
+                  <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.termsBody}>
+                <Text style={[styles.termsBodyText, { color: tokens.text }]}>
+                  {emergencyPolicyText}
+                </Text>
+                <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
+                  Written by {providerDisplayName}, for times outside their normal availability.
+                </Text>
+              </ScrollView>
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  emergencyNotice: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 20 },
+  emergencyNoticeTitle: { fontSize: 14, fontWeight: '700', marginBottom: 5 },
+  emergencyNoticeText: { fontSize: 12, lineHeight: 17 },
   // Dimmed backdrop + rounded sheet sliding up from the bottom — same
   // transparent-overlay idiom as CartScreen's PaymentModal, instead of an
   // opaque full-screen pageSheet.
@@ -708,7 +1292,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   headerSubtitle: { fontSize: 13, marginTop: 4 },
   closeButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  closeButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  closeButtonText: { fontSize: 15, fontWeight: '700' },
   body: { flex: 1 },
   bodyContent: { padding: 20, paddingBottom: 40 },
   section: { marginBottom: 26 },
@@ -727,23 +1311,58 @@ const styles = StyleSheet.create({
   addOnDescription: { fontSize: 12, marginTop: 2 },
   addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  addOnCheckmark: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8 },
-  policyCheckboxLabel: { flex: 1, fontSize: 13 },
-  requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
+  addOnCheckmark: { fontSize: 12, fontWeight: '700' },
+  providerTermsBlock: { marginTop: 4 },
+  providerTermsLinkRow: { paddingVertical: 10 },
+  providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+  providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  termsHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  termsTitle: { flex: 1, fontSize: 17, fontWeight: '700', marginRight: 12 },
+  termsClose: { fontSize: 18, fontWeight: '600' },
+  termsBody: { paddingHorizontal: 20, paddingVertical: 18, paddingBottom: 40 },
+  termsBodyText: { fontSize: 14, lineHeight: 21 },
+  termsFootnote: { fontSize: 12, lineHeight: 18, marginTop: 22, fontStyle: 'italic' },
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   resolvingText: { fontSize: 13 },
   consultationNotice: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
+  // The one question each step is asking. Sets the step's purpose before any
+  // controls appear, so the client reads an intent rather than a form.
+  stepQuestion: {
+    fontFamily: 'BakbakOne-Regular', fontSize: 20,
+    letterSpacing: -0.3, marginBottom: 22,
+  },
+
+  // ── Step progress ───────────────────────────────────────────────────
+  progressRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2,
+  },
+  progressStep:  { alignItems: 'center', gap: 5 },
+  progressDot:   { width: 11, height: 11, borderRadius: 6, borderWidth: 1.5 },
+  progressLabel: { fontSize: 10, fontWeight: '500' },
+  // Sits level with the dots, not the labels below them.
+  progressBar:   { height: 1.5, width: 34, marginHorizontal: 7, marginBottom: 15 },
+
   notesInput: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, fontSize: 14, minHeight: 90, textAlignVertical: 'top' },
   characterCount: { fontSize: 11, textAlign: 'right', marginTop: 6 },
   paymentButtons: { flexDirection: 'row', gap: 10 },
   paymentOptionButton: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: 'transparent', paddingVertical: 12, alignItems: 'center' },
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
-  depositInfo: { borderRadius: 12, padding: 12, marginTop: 10 },
-  depositInfoText: { fontSize: 13, fontWeight: '700' },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
-  footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 20 },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    padding: 20,
+  },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   totalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
   totalPrice: { fontFamily: 'BakbakOne-Regular', fontSize: 20, fontWeight: 'bold' },
@@ -755,9 +1374,23 @@ const styles = StyleSheet.create({
   summaryItemDateTime: { fontSize: 12, marginTop: 2 },
   summaryItemPrice: { fontSize: 14, fontWeight: '700' },
   summaryDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
-  summaryTotalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 15, fontWeight: '700' },
-  summaryTotalValue: { fontFamily: 'BakbakOne-Regular', fontSize: 16, fontWeight: '700' },
-  submitButton: { borderRadius: 20, paddingVertical: 15, alignItems: 'center' },
+  footerButtonRow: { flexDirection: 'row', gap: 10 },
+  submitButton: {
+    minHeight: 52,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  doneButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
   submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: '#fff', fontWeight: 'bold' },
+  submitButtonText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    fontWeight: 'bold',
+    lineHeight: 20,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
 });

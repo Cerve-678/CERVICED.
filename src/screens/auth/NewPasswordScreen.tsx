@@ -15,11 +15,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
+import { updatePasswordAndSignOut } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { PasswordRequirements } from '../../components/PasswordRequirements';
+import { validatePassword } from '../../utils/validation';
 
 type Props = StackScreenProps<RootStackParamList, 'NewPassword'>;
 
@@ -34,9 +36,10 @@ export default function NewPasswordScreen({ navigation }: Props) {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleSave = async () => {
-    if (password.length < 8) {
+    const passwordError = validatePassword(password);
+    if (passwordError) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Too short', 'Password must be at least 8 characters.');
+      Alert.alert('Weak password', passwordError);
       return;
     }
     if (password !== confirm) {
@@ -46,13 +49,14 @@ export default function NewPasswordScreen({ navigation }: Props) {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) {
+    try {
+      await updatePasswordAndSignOut(password);
+    } catch {
       Alert.alert('Error', "Couldn't update your password. Please try again.");
       return;
+    } finally {
+      setLoading(false);
     }
-    await supabase.auth.signOut();
     Alert.alert('Password updated!', 'Please log in with your new password.', [
       { text: 'OK', onPress: () => navigation.navigate('Login') },
     ]);
@@ -93,6 +97,9 @@ export default function NewPasswordScreen({ navigation }: Props) {
                 <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
               </TouchableOpacity>
             </View>
+            {password.length > 0 && (
+              <PasswordRequirements password={password} goodColor={t.accent} pendingColor={t.sub} />
+            )}
 
             {/* Confirm */}
             <View style={[styles.inputWrapper, { backgroundColor: t.surface, borderColor: t.border }]}>

@@ -35,6 +35,18 @@ export const validateRequired = (v: string, fieldName: string): string | null =>
   return null;
 };
 
+export interface PasswordRule {
+  key: string;
+  label: string;
+  test: (v: string) => boolean;
+}
+
+export const PASSWORD_RULES: PasswordRule[] = [
+  { key: 'length', label: 'At least 8 characters', test: v => v.length >= 8 },
+  { key: 'uppercase', label: 'One uppercase letter', test: v => /[A-Z]/.test(v) },
+  { key: 'number', label: 'One number', test: v => /[0-9]/.test(v) },
+];
+
 export const getPasswordStrength = (password: string) => {
   const strong = password.length >= 8 && /[A-Z]/.test(password) && /[0-9]/.test(password);
   const medium = password.length >= 8;

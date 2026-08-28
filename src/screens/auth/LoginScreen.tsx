@@ -1,5 +1,5 @@
 // src/screens/auth/LoginScreen.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
@@ -17,7 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { validateEmail } from '../../utils/validation';
-import { supabase } from '../../lib/supabase';
+import {
+  refreshAuthSession,
+  signInWithAppleIdToken,
+  signInWithEmailPassword,
+} from '../../services/databaseService';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import {
   isBiometricAvailable,
@@ -33,22 +37,27 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
+import { useAuth } from '../../contexts/AuthContext';
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
 
 export default function LoginScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
+  const { isLoggedIn } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
+  // Guards re-entrant taps synchronously — see handleAppleLogin below.
+  const isAppleInFlightRef = useRef(false);
 
   // useFocusEffect (not a mount-only useEffect) — a failed login attempt
   // doesn't unmount this screen, and a stale one-time check could otherwise
@@ -121,13 +130,14 @@ export default function LoginScreen({ navigation }: Props) {
     }
 
     setIsLoading(true);
-    const { error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-    setIsLoading(false);
-
-    if (error) {
+    try {
+      await refreshAuthSession(refreshToken);
+    } catch {
       Alert.alert('Session expired', 'Please sign in with your password to reconnect Face ID.');
       await disableBiometric();
       setBiometricEnabled(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -143,17 +153,25 @@ export default function LoginScreen({ navigation }: Props) {
 
     logger.log('[Login] Attempting signInWithPassword for:', email.trim());
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    logger.log('[Login] signInWithPassword result — error:', error?.message ?? 'none', '| session:', data?.session?.user?.id ?? 'no session');
-    setIsLoading(false);
-
-    if (error) {
-      Alert.alert('Login failed', 'Incorrect email or password. Please try again.');
-      return;
+    try {
+      const session = await signInWithEmailPassword(email.trim(), password);
+      logger.log('[Login] signInWithPassword result — session:', session.userId);
+      maybePromptEnableBiometric(session.refreshToken ?? undefined);
+      logger.log('[Login] Success — waiting for onAuthStateChange...');
+    } catch (error) {
+      // A 4xx (bad credentials / unconfirmed) is the user's details; a 5xx,
+      // rate-limit, or no-status (network) is our problem, not their password —
+      // log those so we can see them, and give an accurate, non-blaming message.
+      const status = (error as { status?: number }).status;
+      if (!status || status >= 500 || status === 429) {
+        logger.error('[Login] sign-in failed (server/network):', error);
+        Alert.alert('Login failed', "We couldn't sign you in just now. Please try again.");
+      } else {
+        Alert.alert('Login failed', 'Incorrect email or password. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
     }
-
-    maybePromptEnableBiometric(data.session?.refresh_token);
-    logger.log('[Login] Success — waiting for onAuthStateChange...');
   };
 
   const handleSocialLogin = (provider: string) => {
@@ -162,6 +180,15 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   const handleAppleLogin = async () => {
+    // Synchronous re-entry guard — `disabled={isLoading}` on the button only
+    // takes effect after a re-render, leaving a brief window where a fast
+    // double-tap fires this handler twice concurrently. A second concurrent
+    // AppleAuthentication.signInAsync() call while the first is still in
+    // flight rejects (the native sheet is already showing/dismissed), which
+    // used to surface a "Sign in failed" alert even though the FIRST call's
+    // signInWithIdToken had already succeeded and logged the user in.
+    if (isAppleInFlightRef.current) return;
+    isAppleInFlightRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -175,21 +202,20 @@ export default function LoginScreen({ navigation }: Props) {
         return;
       }
       setIsLoading(true);
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'apple',
-        token: credential.identityToken,
-      });
+      const session = await signInWithAppleIdToken(credential.identityToken);
       setIsLoading(false);
-      if (error) {
-        Alert.alert('Sign in failed', error.message);
-        return;
-      }
-      maybePromptEnableBiometric(data.session?.refresh_token);
+      maybePromptEnableBiometric(session.refreshToken ?? undefined);
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
-      if (e.code !== 'ERR_REQUEST_CANCELED') {
+      // A concurrent/duplicate attempt (or one that lands after the user is
+      // already signed in via an earlier in-flight call) must not show a
+      // false failure alert — check the real auth state before alerting.
+      if (e.code !== 'ERR_REQUEST_CANCELED' && !isLoggedIn) {
         Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
       }
+    } finally {
+      setIsLoading(false);
+      isAppleInFlightRef.current = false;
     }
   };
 
@@ -240,16 +266,24 @@ export default function LoginScreen({ navigation }: Props) {
             {/* Password */}
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: t.sub }]}>PASSWORD</Text>
-              <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: touched['password'] && errors.password ? '#DC2626' : t.border }]}>
+              <View style={[styles.inputWrap, styles.passwordInputWrap, { backgroundColor: t.surface, borderColor: touched['password'] && errors.password ? '#DC2626' : t.border }]}>
                 <TextInput
-                  style={[styles.input, { color: t.text }]}
+                  style={[styles.input, styles.passwordInput, { color: t.text }]}
                   value={password}
                   onChangeText={setPassword}
                   onBlur={() => markTouched('password')}
                   placeholder="••••••••"
                   placeholderTextColor={t.sub}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
                 />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
+                </TouchableOpacity>
               </View>
               {renderError('password')}
             </View>
@@ -382,6 +416,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0.3,
     padding: 0,
+  },
+  passwordInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+  },
+  eyeBtn: { paddingLeft: 8 },
+  eyeText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
   },
   errorText: {
     fontFamily: 'Jura-VariableFont_wght',

@@ -56,7 +56,7 @@ const SECTIONS = [
 ];
 
 export default function TermsScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -71,20 +71,20 @@ export default function TermsScreen({ navigation }: any) {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+          <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: theme.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: theme.secondaryText }]}>Last updated: July 2026</Text>
+        <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: July 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>
-            <Text style={[styles.heading, { color: theme.text }]}>{s.heading}</Text>
-            <Text style={[styles.body, { color: theme.secondaryText }]}>{s.body}</Text>
+            <Text style={[styles.heading, { color: P.text }]}>{s.heading}</Text>
+            <Text style={[styles.body, { color: P.sub }]}>{s.body}</Text>
           </View>
         ))}
 
-        <Text style={[styles.footer, { color: theme.secondaryText }]}>© 2026 Cerviced Ltd. All rights reserved.</Text>
+        <Text style={[styles.footer, { color: P.sub }]}>© 2026 Cerviced Ltd. All rights reserved.</Text>
       </ScrollView>
     </ThemedBackground>
   );

@@ -1,11 +1,33 @@
 // src/services/providerRegistrationService.ts
 // Phase 2: Provider registration — save to and load from Supabase
-import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
+// Only for getSize (reading an image's true pixel dimensions) — this service
+// renders nothing.
+import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
-import { setMyProviderFullAddress } from './databaseService';
+import {
+  getProviderBookingPolicies,
+  getProviderLogoUrlByUserId,
+  getProviderRegistrationCore,
+  getProviderRegistrationDetails,
+  getProviderRegistrationRecord,
+  insertProviderRegistrationRow,
+  promoteUserToProvider,
+  providerSlugExists,
+  removeStorageObjects,
+  replaceProviderServiceCatalog,
+  saveProviderBookingPolicies,
+  setMyProviderFullAddress,
+  updateProviderRegistrationRow,
+  uploadPublicStorageObject,
+} from './databaseService';
+import type { DbProvider, BusinessType } from '../types/database';
+import {
+  reconcileAddressReleasePolicy,
+  type AddressReleasePolicy,
+} from '../features/business-details/options';
 
 // ── Shared types (mirror InfoRegScreen / ProviderMyProfileScreen) ───────────
 
@@ -37,6 +59,11 @@ export interface ServiceData {
   contraindications: string[];
   aftercareNotes: string;
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
+  hairTypesSuitable: string[];
+  // Who this specific service is for. '' = not stated, read as "everyone" —
+  // mirrors the live services_audience_check constraint.
+  audience: 'women' | 'men' | 'kids' | 'everyone' | '';
 }
 
 export interface ProviderRegistrationData {
@@ -45,7 +72,14 @@ export interface ProviderRegistrationData {
   customServiceType: string;
   location: string;
   aboutText: string;
-  slotsText: string;
+  /** Day of month (1-31) new slots go out AND clients who've turned on the
+   *  profile bell get notified. Drives the client-facing profile's "Slots
+   *  out every Nth of the month" pill directly (computed live, no separate
+   *  text field to keep in sync). Stored in
+   *  providers.automation_settings.scheduleReleaseDay (merged in, not
+   *  overwritten — that JSONB blob also holds unrelated settings owned by
+   *  ProviderAutomationsScreen). null = no release day set / notifications off. */
+  scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
   // computed BEFORE the `gradient` field above gets its hardcoded fallback
@@ -78,9 +112,37 @@ export interface ProviderRegistrationData {
   externalBookingUrl: string;
   yearsExperience: string;
   // Address privacy
-  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | '';
+  // '' is this form's "not answered yet"; the four real values are the
+  // canonical BusinessType union.
+  businessType: BusinessType | '';
+  // Collected at signup (Step 4's "Who you work with" / "Tell me more" —
+  // see supabase/provider_signup_business_fields.sql), editable here too.
+  teamSize: 'solo' | 'small_team' | 'large_team' | '';
+  accessibilityNotes: string;
+  /** providers.terms_accepted_at — stamped once, on first publish. Read-only
+   *  from the app's side: nothing ever clears or re-stamps it, so its presence
+   *  is the answer to "has this provider accepted CERVICED's terms". */
+  termsAcceptedAt: string | null;
+  languagesSpoken: string[];
+  preferredPaymentMethods: string[];
+  // Drives providers.price_tier — the client-facing price filter/badge
+  // (SearchScreen/HomeScreen) already reads this column, this form is its
+  // first writer.
+  priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
+  // Service-coverage cities — drives providers.service_locations, read by
+  // the client Search "City" filter. See src/constants/ukCities.ts.
+  serviceLocations: string[];
   fullAddress: string;
-  addressReleasePolicy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
+  /** Coordinates returned by the address picker for this exact address.
+   *  Kept in form state only and written atomically with fullAddress. */
+  fullAddressCoordinates: { latitude: number; longitude: number } | null;
+  /** null is a real value, not a missing one: it means this provider shares
+   *  no address at all. That's the default (and the only default) for mobile,
+   *  so this must stay nullable — coercing it to 'on_confirmation' on write
+   *  is how a mobile provider's home address would start auto-releasing to
+   *  every confirmed client. Always run it through
+   *  reconcileAddressReleasePolicy() with the business type. */
+  addressReleasePolicy: AddressReleasePolicy | null;
   // Cover photo set via Branding & Style (providers.background_image_url) —
   // not editable from this form, but the client-facing hero uses it as the
   // backdrop instead of the gradient when set, so any faithful preview of
@@ -141,14 +203,12 @@ export async function uploadToStorage(
     bytes[i] = binaryStr.charCodeAt(i);
   }
 
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(storagePath, bytes, { contentType, upsert: true });
-
-  if (error) throw new Error(`Upload failed (${bucket}/${storagePath}): ${error.message}`);
-
-  const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-  return data.publicUrl;
+  try {
+    return await uploadPublicStorageObject(bucket, storagePath, bytes, contentType);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown storage error';
+    throw new Error(`Upload failed (${bucket}/${storagePath}): ${message}`);
+  }
 }
 
 function parseDurationToMinutes(duration: string): number {
@@ -209,7 +269,8 @@ const UK_POSTCODE_PATTERN = /[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}/;
  * it propagate rather than catch-and-swallow.
  */
 export async function geocodeAndValidateUkAddress(
-  address: string
+  address: string,
+  selectedCoordinates?: { latitude: number; longitude: number } | null,
 ): Promise<{ latitude: number; longitude: number }> {
   const trimmed = address.trim();
   if (!trimmed) {
@@ -219,17 +280,24 @@ export async function geocodeAndValidateUkAddress(
     throw new Error('Please include a valid UK postcode in your address.');
   }
 
-  let match: Location.LocationGeocodedLocation | undefined;
-  try {
-    [match] = await Location.geocodeAsync(trimmed);
-  } catch {
-    match = undefined;
+  // A picker selection gives us the exact coordinates that produced the
+  // formatted address. Re-use them instead of geocoding the text again — a
+  // second lookup can yield a vague area or fail despite a valid selection.
+  let latitude = selectedCoordinates?.latitude;
+  let longitude = selectedCoordinates?.longitude;
+  if (latitude == null || longitude == null) {
+    let match: Location.LocationGeocodedLocation | undefined;
+    try {
+      [match] = await Location.geocodeAsync(trimmed);
+    } catch {
+      match = undefined;
+    }
+    if (!match) {
+      throw new Error("We couldn't find that address — please check it and try again.");
+    }
+    latitude = match.latitude;
+    longitude = match.longitude;
   }
-  if (!match) {
-    throw new Error("We couldn't find that address — please check it and try again.");
-  }
-
-  const { latitude, longitude } = match;
   if (
     latitude < UK_BOUNDS.minLat || latitude > UK_BOUNDS.maxLat ||
     longitude < UK_BOUNDS.minLng || longitude > UK_BOUNDS.maxLng
@@ -244,22 +312,71 @@ export async function geocodeAndValidateUkAddress(
 // Upserts the provider row, uploads images, replaces services/images/add-ons.
 // Also updates the user's role to 'provider' and refreshes the AsyncStorage cache.
 
+/**
+ * A local or remote image's width/height ratio, or null if it can't be read.
+ *
+ * Never throws: a failed measurement must not be able to fail a provider's
+ * whole service save. Null means "not measured" and is stored as SQL NULL,
+ * which the client treats as "fall back to measuring this myself" rather
+ * than as a real ratio.
+ */
+function measureAspectRatio(uri: string): Promise<number | null> {
+  return new Promise(resolve => {
+    try {
+      RNImage.getSize(
+        uri,
+        (w, h) => resolve(w > 0 && h > 0 ? w / h : null),
+        () => resolve(null),
+      );
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 export async function saveProviderToSupabase(
   userId: string,
-  data: ProviderRegistrationData
+  data: ProviderRegistrationData,
+  // True only on first publish (InfoRegScreen's !isEditMode submit, gated on
+  // its own terms checkbox) — stamps terms_accepted_at once on insert. Later
+  // edit-saves never pass this, so an existing acceptance timestamp is never
+  // overwritten or cleared.
+  acceptedTerms?: boolean
 ): Promise<void> {
   // 0. Validate the real business address before anything else happens —
   // required for every business_type now, including 'mobile' (a private base
   // address, never shown to clients). Fails fast, before any upload or DB
   // write, so a bad address never leaves partial state behind.
-  const addressCoords = await geocodeAndValidateUkAddress(data.fullAddress || '');
+  const addressCoords = await geocodeAndValidateUkAddress(
+    data.fullAddress || '',
+    data.fullAddressCoordinates,
+  );
 
-  // 1. Upload logo if it's a local file
+  // 1. Upload logo if it's a local file. Path is versioned with Date.now()
+  // (matching the pattern already used for portfolio/promotions uploads)
+  // rather than a fixed `${userId}/logo.jpg` — a fixed path with upsert:true
+  // overwrites the same object, so the public URL is byte-identical across
+  // re-uploads and RN Image/expo-image/Supabase's CDN all keep serving the
+  // old cached bytes for that URL indefinitely.
   let logoUrl: string | null = data.logo;
+  let previousLogoStoragePath: string | null = null;
   if (data.logo && isLocalUri(data.logo)) {
+    // Grab the current logo path before it's replaced, so the now-orphaned
+    // object (versioned paths are no longer overwritten in place) can be
+    // cleaned up below once the new one is safely saved.
+    const previousLogoUrl = await getProviderLogoUrlByUserId(userId);
+    if (previousLogoUrl) {
+      try {
+        previousLogoStoragePath = new URL(previousLogoUrl).pathname
+          .split('/provider-logos/')[1] ?? null;
+      } catch {
+        previousLogoStoragePath = null;
+      }
+    }
+
     logoUrl = await uploadToStorage(
       'provider-logos',
-      `${userId}/logo.jpg`,
+      `${userId}/logo-${Date.now()}.jpg`,
       data.logo
     );
   }
@@ -290,33 +407,49 @@ export async function saveProviderToSupabase(
   }
 
   // 2. Upsert provider row
-  const { data: existingProvider, error: existingProviderError } = await supabase
-    .from('providers')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
+  let existingProvider: Awaited<ReturnType<typeof getProviderRegistrationCore>>;
+  try {
+    existingProvider = await getProviderRegistrationCore(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error';
+    throw new Error(`Provider lookup failed: ${message}`);
+  }
   // maybeSingle() errors (rather than returning null) if more than one row
   // matches — if we ignore that, the code below falls through to inserting a
   // duplicate provider row instead of updating the existing one, and future
   // edits silently split across rows. Fail loudly instead.
-  if (existingProviderError) {
-    throw new Error(`Provider lookup failed: ${existingProviderError.message}`);
-  }
-
   let providerId: string;
 
+  // Merged in, never overwritten whole — automation_settings also holds
+  // unrelated keys (rebookingNudgeWeeks, clientReminderTiming, etc.) owned
+  // by ProviderAutomationsScreen, which reads/writes the exact same
+  // scheduleReleaseDay key so the two screens stay in sync automatically
+  // (both fetch fresh from this one column on their own mount — no separate
+  // sync step needed, just don't let either screen clobber the other's keys).
+  const mergedAutomationSettings: NonNullable<DbProvider['automation_settings']> = {
+    ...(existingProvider?.automation_settings ?? {}),
+  };
+  if (data.scheduleReleaseDay != null) {
+    mergedAutomationSettings.scheduleReleaseDay = data.scheduleReleaseDay;
+  } else {
+    delete mergedAutomationSettings.scheduleReleaseDay;
+  }
+
   if (existingProvider) {
-    const { error } = await supabase
-      .from('providers')
-      .update({
-        display_name: data.providerName,
+    try {
+      await updateProviderRegistrationRow(existingProvider.id, {
+        // display_name is deliberately absent from the UPDATE path. The name
+        // is set once here on insert (below), then locked in InfoRegScreen —
+        // Business Profile → Business Details → Business Info is its only
+        // ongoing editor, and it's under a 14-day cooldown enforced by the
+        // providers_display_name_cooldown trigger. Re-sending the name this
+        // screen loaded would make any unrelated save race that cooldown.
         service_category: data.providerService,
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
         latitude,
         longitude,
         about_text: data.aboutText,
-        slots_text: data.slotsText,
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
@@ -325,28 +458,42 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        // Shared with ProviderCommunicationsScreen, which writes the same
+        // column. loadProviderFromSupabase has always read it back into
+        // `whatsapp`, but this payload never wrote it — so a number typed in
+        // InfoReg was silently dropped on save.
+        whatsapp_number: data.whatsapp?.trim() || null,
         external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
-        address_release_policy: data.addressReleasePolicy || 'on_confirmation',
+        team_size: data.teamSize || null,
+        accessibility_notes: data.accessibilityNotes?.trim() || null,
+        languages_spoken: data.languagesSpoken,
+        price_tier: data.priceRange || null,
+        preferred_contact_methods: data.preferredContactMethods,
+        service_locations: data.serviceLocations,
+        preferred_payment_methods: data.preferredPaymentMethods,
+        // reconcile, not `|| 'on_confirmation'`: the old fallback silently
+        // turned "never share" into "share on confirmation" for any provider
+        // whose policy was null — i.e. every mobile provider — on every save.
+        address_release_policy: data.businessType
+          ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
+          : (data.addressReleasePolicy ?? null),
+        automation_settings: mergedAutomationSettings,
         is_active: true,
-      })
-      .eq('id', existingProvider.id);
-    if (error) throw new Error(`Provider update failed: ${error.message}`);
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database error';
+      throw new Error(`Provider update failed: ${message}`);
+    }
     providerId = existingProvider.id;
   } else {
     // Generate unique slug
     let slug = generateSlug(data.providerName);
-    const { data: slugExists } = await supabase
-      .from('providers')
-      .select('id')
-      .eq('slug', slug)
-      .maybeSingle();
-    if (slugExists) slug = `${slug}-${userId.substring(0, 8)}`;
+    if (await providerSlugExists(slug)) slug = `${slug}-${userId.substring(0, 8)}`;
 
-    const { data: newProvider, error } = await supabase
-      .from('providers')
-      .insert({
+    try {
+      providerId = await insertProviderRegistrationRow({
         user_id: userId,
         slug,
         display_name: data.providerName,
@@ -356,7 +503,6 @@ export async function saveProviderToSupabase(
         latitude,
         longitude,
         about_text: data.aboutText,
-        slots_text: data.slotsText,
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
@@ -365,16 +511,48 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        // Shared with ProviderCommunicationsScreen, which writes the same
+        // column. loadProviderFromSupabase has always read it back into
+        // `whatsapp`, but this payload never wrote it — so a number typed in
+        // InfoReg was silently dropped on save.
+        whatsapp_number: data.whatsapp?.trim() || null,
         external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
-        address_release_policy: data.addressReleasePolicy || 'on_confirmation',
+        team_size: data.teamSize || null,
+        accessibility_notes: data.accessibilityNotes?.trim() || null,
+        languages_spoken: data.languagesSpoken,
+        price_tier: data.priceRange || null,
+        preferred_contact_methods: data.preferredContactMethods,
+        service_locations: data.serviceLocations,
+        preferred_payment_methods: data.preferredPaymentMethods,
+        // reconcile, not `|| 'on_confirmation'`: the old fallback silently
+        // turned "never share" into "share on confirmation" for any provider
+        // whose policy was null — i.e. every mobile provider — on every save.
+        address_release_policy: data.businessType
+          ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
+          : (data.addressReleasePolicy ?? null),
+        automation_settings: mergedAutomationSettings,
         is_active: true,
-      })
-      .select('id')
-      .single();
-    if (error) throw new Error(`Provider insert failed: ${error.message}`);
-    providerId = newProvider.id;
+        terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database error';
+      throw new Error(`Provider insert failed: ${message}`);
+    }
+  }
+
+  // Now that the new logo_url is durably saved, remove the old versioned
+  // object it replaced — best-effort, never blocks the save. Without this,
+  // every logo re-upload leaves the previous object orphaned in Storage
+  // forever, since versioned paths (unlike the old fixed path) are never
+  // overwritten in place.
+  if (previousLogoStoragePath) {
+    try {
+      await removeStorageObjects('provider-logos', [previousLogoStoragePath]);
+    } catch {
+      // Orphaned object, not a failed save — safe to ignore.
+    }
   }
 
   // The street address lives in the owner-only provider_private_details table,
@@ -391,7 +569,7 @@ export async function saveProviderToSupabase(
   );
 
   // 3. Update user role to 'provider'
-  await supabase.from('users').update({ role: 'provider' }).eq('id', userId);
+  await promoteUserToProvider(userId);
 
   // 4-5. Replace services ATOMICALLY. Storage isn't transactional, so upload
   // every image first (collecting resolved URLs), then hand the whole service
@@ -406,15 +584,36 @@ export async function saveProviderToSupabase(
       const svc = services[sortOrder];
       if (!svc) continue;
 
-      const images: { url: string; sort_order: number }[] = [];
+      const images: {
+        url: string;
+        sort_order: number;
+        aspect_ratio: number | null;
+      }[] = [];
       for (let i = 0; i < svc.images.length; i++) {
         const imgUri = svc.images[i];
         if (!imgUri) continue;
         let imgUrl = imgUri;
         if (isLocalUri(imgUri)) {
-          imgUrl = await uploadToStorage('service-images', `${userId}/${safeCat}-${sortOrder}-${i}.jpg`, imgUri);
+          // Versioned with Date.now() for the same reason as the logo path
+          // above — a fixed per-slot path would make a replaced photo's URL
+          // identical to the old one and never bust the image cache.
+          imgUrl = await uploadToStorage('service-images', `${userId}/${safeCat}-${sortOrder}-${i}-${Date.now()}.jpg`, imgUri);
         }
-        images.push({ url: imgUrl, sort_order: i });
+        // Measured off the LOCAL uri where there is one — it's already on
+        // disk, so this needs no network round-trip and can't be affected by
+        // the upload. Falls back to the resolved remote URL for an image
+        // that was already uploaded on a previous save.
+        //
+        // Stored so Explore's masonry grid and ImageDetailModal can size
+        // this photo's box to its real shape. Without it the client has to
+        // measure every service photo itself on each feed load (see
+        // useMeasuredAspectRatios), and until that resolves the card renders
+        // at a hardcoded 0.8 placeholder — which is what put landscape
+        // photos in portrait boxes. Null on failure rather than a guessed
+        // default, so "unknown" stays distinguishable from a real square.
+        const aspect_ratio =
+          (await measureAspectRatio(imgUri)) ?? (await measureAspectRatio(imgUrl));
+        images.push({ url: imgUrl, sort_order: i, aspect_ratio });
       }
 
       servicesPayload.push({
@@ -438,17 +637,20 @@ export async function saveProviderToSupabase(
         contraindications: svc.contraindications?.length ? svc.contraindications : null,
         aftercare_notes: svc.aftercareNotes || null,
         service_type: svc.serviceType || null,
+        hair_types_suitable: svc.hairTypesSuitable?.length ? svc.hairTypesSuitable : null,
+        audience: svc.audience || null,
         images,
         add_ons: svc.addOns.map((a) => ({ name: a.name, price: a.price })),
       });
     }
   }
 
-  const { error: svcError } = await supabase.rpc('replace_provider_services', {
-    p_provider_id: providerId,
-    p_services: servicesPayload,
-  });
-  if (svcError) throw new Error(`Saving services failed: ${svcError.message}`);
+  try {
+    await replaceProviderServiceCatalog(providerId, servicesPayload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error';
+    throw new Error(`Saving services failed: ${message}`);
+  }
 
   // 6. Refresh AsyncStorage cache with resolved URLs
   const cached: ProviderRegistrationData = { ...data, logo: logoUrl };
@@ -462,14 +664,11 @@ export async function saveProviderToSupabase(
 export async function loadProviderFromSupabase(
   userId: string
 ): Promise<ProviderRegistrationData | null> {
-  const { data: provider, error } = await supabase
-    .from('providers')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (error) {
-    logger.warn('loadProviderFromSupabase error:', error.message);
+  let provider: Awaited<ReturnType<typeof getProviderRegistrationRecord>>;
+  try {
+    provider = await getProviderRegistrationRecord(userId);
+  } catch (error) {
+    logger.warn('loadProviderFromSupabase error:', error);
     return getCachedProviderData(userId);
   }
   if (!provider) return getCachedProviderData(userId);
@@ -477,53 +676,18 @@ export async function loadProviderFromSupabase(
   // Street address, the services list, and the AsyncStorage fallback each
   // only depend on `provider.id` / `userId` — none on each other's result —
   // so fetch them together instead of one after another.
-  const [{ data: privateDetails }, servicesResult, cached] = await Promise.all([
-    // Street address comes from the owner-only side table, not `providers`.
-    supabase
-      .from('provider_private_details')
-      .select('full_address')
-      .eq('provider_id', provider.id)
-      .maybeSingle(),
-    supabase
-      .from('services')
-      .select(`
-        id,
-        category_name,
-        category_description,
-        name,
-        description,
-        price,
-        duration_minutes,
-        buffer_before_mins,
-        buffer_after_mins,
-        sort_order,
-        tags,
-        technique_tags,
-        outcome_tags,
-        occasion_tags,
-        trend_names,
-        is_pregnancy_safe,
-        patch_test_required,
-        min_age,
-        contraindications,
-        aftercare_notes,
-        service_type,
-        service_images ( url, sort_order ),
-        service_add_ons ( name, price )
-      `)
-      .eq('provider_id', provider.id)
-      .eq('is_active', true)
-      .order('sort_order'),
+  const [detailsResult, cached] = await Promise.all([
+    getProviderRegistrationDetails(provider.id)
+      .then(value => ({ value, error: null as unknown }))
+      .catch(error => ({ value: null, error })),
     getCachedProviderData(userId).catch(() => null),
   ]);
-  const fullAddress =
-    (privateDetails as { full_address?: string | null } | null)?.full_address ?? '';
-  const { data: services, error: svcError } = servicesResult;
-
-  if (svcError) {
-    logger.warn('loadProviderFromSupabase services error:', svcError.message);
+  if (detailsResult.error || !detailsResult.value) {
+    logger.warn('loadProviderFromSupabase details error:', detailsResult.error);
     return cached;
   }
+  const { fullAddress } = detailsResult.value;
+  const services = detailsResult.value.services as any[];
 
   // Reconstruct categories
   const categories: Record<string, ServiceData[]> = {};
@@ -569,6 +733,8 @@ export async function loadProviderFromSupabase(
       contraindications: svc.contraindications || [],
       aftercareNotes: svc.aftercare_notes || '',
       serviceType: svc.service_type || '',
+      hairTypesSuitable: svc.hair_types_suitable || [],
+      audience: svc.audience || '',
     });
   }
 
@@ -578,7 +744,7 @@ export async function loadProviderFromSupabase(
     customServiceType: provider.custom_service_type || '',
     location: provider.location_text || '',
     aboutText: provider.about_text || '',
-    slotsText: provider.slots_text || '',
+    scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
     hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
     accentColor: provider.accent_color || '#7B1FA2',
@@ -593,8 +759,19 @@ export async function loadProviderFromSupabase(
     externalBookingUrl: provider.external_booking_url || '',
     yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
     businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
+    teamSize: (provider.team_size as ProviderRegistrationData['teamSize']) || '',
+    accessibilityNotes: provider.accessibility_notes || '',
+    termsAcceptedAt: provider.terms_accepted_at ?? null,
+    languagesSpoken: provider.languages_spoken || [],
+    priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
+    serviceLocations: provider.service_locations || [],
+    preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress,
-    addressReleasePolicy: (provider.address_release_policy as ProviderRegistrationData['addressReleasePolicy']) || 'on_confirmation',
+    // Existing profiles may predate the picker. A later save falls back to a
+    // one-time geocode, while every new picker selection supplies these.
+    fullAddressCoordinates: null,
+    // NULL round-trips as null — see the field's note on ProviderRegistrationData.
+    addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
     backgroundImage: provider.background_image_url ?? null,
     isVerified: provider.is_verified ?? false,
     rating: Number(provider.rating) || 0,
@@ -608,35 +785,34 @@ export async function loadProviderFromSupabase(
 // ── Booking policies — saved to Supabase booking_policies column ─────────────
 
 export async function saveProviderPolicies(userId: string, policies: Record<string, unknown>): Promise<void> {
-  const { data: existing } = await supabase
-    .from('providers')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (!existing) return;
-  await supabase
-    .from('providers')
-    .update({ booking_policies: policies })
-    .eq('id', existing.id);
+  const saved = await saveProviderBookingPolicies(userId, policies);
+  // `false` means no providers row was visible for this user, so the update
+  // matched nothing and the policies were NOT stored. Returning quietly here
+  // let PoliciesScreen/PaymentsScreen fire their success haptic and navigate
+  // back having saved nothing. Callers decide how to degrade — so throw.
+  if (!saved) {
+    throw new Error('Could not find your provider profile to save these policies to.');
+  }
   // Keep local copy in sync
   await AsyncStorage.setItem(`provider_policies_${userId}`, JSON.stringify(policies));
 }
 
+/**
+ * The DB is the only source of truth for policies.
+ *
+ * This used to fall back to a device-local AsyncStorage copy whenever the read
+ * threw, which is worse than failing: both editors of this blob (PoliciesScreen
+ * and PaymentsScreen) carry the keys they don't own straight back through their
+ * next save, so one transient read failure meant a stale cached blob got
+ * written over live data — silently reverting deposit settings saved from
+ * another device. A read failure now propagates and the screen shows its
+ * "could not load" state instead.
+ *
+ * The cache write in saveProviderPolicies is kept: it costs nothing and other
+ * call sites still read it, but it is no longer a fallback for this path.
+ */
 export async function loadProviderPolicies(userId: string): Promise<Record<string, unknown> | null> {
-  try {
-    const { data } = await supabase
-      .from('providers')
-      .select('booking_policies')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if ((data as any)?.booking_policies) return (data as any).booking_policies;
-  } catch {}
-  // Fallback to local cache
-  try {
-    const raw = await AsyncStorage.getItem(`provider_policies_${userId}`);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return null;
+  return await getProviderBookingPolicies(userId);
 }
 
 // ── AsyncStorage cache helpers ───────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,17 +19,20 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
+import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
-import { useBooking, BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
+import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
+import { canDisputeNoShow } from '../../types/booking';
+import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
-import { supabase } from '../../lib/supabase';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
+import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
+import { AvailabilityService, BackToBackSlot } from '../../services/AvailabilityService';
 import {
   getActiveRescheduleRequest,
   respondToRescheduleRequest,
-  insertBookingUserNotification,
-  getAvailableSlots,
+  rejectRescheduleRequest,
   upsertProviderRescheduleRequest,
   getClientBeautyProfile,
   getClientBookingHistory,
@@ -37,23 +40,40 @@ import {
   getInfoPacksByBooking,
   getProviderAddressPolicy,
   releaseBookingAddress,
+  getMyProviderFullAddress,
   getBookingAddressReleasedAt,
   getBookingWithAddOnsById,
+  getGroupBookingSiblings,
   getBookingUserId,
+  updateBookingStatus as dbUpdateBookingStatus,
+  providerCancelOwnBooking,
+  updateGroupBookingStatus,
+  providerCancelGroupBooking,
+  providerInitiateGroupReschedule,
   getProviderServiceCategoryByUserId,
   getOrCreateConversation,
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
+  getServiceDurationsByIds,
+  subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
   BookingInfoPack,
   ProviderInfoPackRow,
   ProviderAddressPolicy,
 } from '../../services/databaseService';
-import type { DbBooking, ServiceCategory } from '../../types/database';
-import type { DbBookingRescheduleRequest } from '../../types/database';
+import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
-import { formatLongDate, formatTime12, dateToYMD } from '../../utils/dateUtils';
+import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
+import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
+import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
+import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
+import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
+import { formatBookingRef } from '../../features/bookings/presentation';
+import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
+import { supportMailtoUrl } from '../../constants/support';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -83,70 +103,32 @@ const DARK = {
   iconBg:  'rgba(175,145,151,0.10)',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  [BookingStatus.PENDING]: '#FF9500',
-  [BookingStatus.UPCOMING]: '#007AFF',
-  [BookingStatus.IN_PROGRESS]: '#FF9500',
-  [BookingStatus.COMPLETED]: '#34C759',
-  [BookingStatus.CANCELLED]: '#FF3B30',
-  [BookingStatus.NO_SHOW]: '#8E8E93',
+type ProviderInvoiceBooking = Pick<
+  ConfirmedBooking,
+  'id' | 'status' | 'addOns' | 'paymentType' | 'amountPaid' | 'price' | 'bookingDate' | 'bookingTime' | 'endTime' | 'serviceName'
+> & {
+  customerName?: string;
+  paymentMethod?: string;
+  remainingBalance?: number;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  [BookingStatus.PENDING]: 'Pending Confirmation',
-  [BookingStatus.UPCOMING]: 'Upcoming',
-  [BookingStatus.IN_PROGRESS]: 'In Progress',
-  [BookingStatus.COMPLETED]: 'Completed',
-  [BookingStatus.CANCELLED]: 'Cancelled',
-  [BookingStatus.NO_SHOW]: 'No Show',
-};
-
-// Which beauty profile fields are relevant per provider service category.
-// 'allergies', 'medicalNotes', 'photographyConsent' are always critical — included for all.
-const SERVICE_PROFILE_FIELDS: Partial<Record<ServiceCategory, (keyof ClientBeautyProfile)[]>> = {
-  HAIR:       ['hairType', 'scalpCondition', 'hairGoals', 'treatmentHistory', 'allergies', 'styleVibe', 'medicalNotes', 'photographyConsent'],
-  NAILS:      ['nailLength', 'nailShape', 'allergies', 'skinConcerns', 'sensitiveAreas', 'medicalNotes', 'photographyConsent'],
-  LASHES:     ['lashStyle', 'lashStatus', 'skinType', 'skinConcerns', 'allergies', 'sensitiveAreas', 'medicalNotes', 'photographyConsent'],
-  BROWS:      ['browStyle', 'browCondition', 'skinType', 'skinConcerns', 'allergies', 'sensitiveAreas', 'medicalNotes', 'photographyConsent'],
-  MUA:        ['skinType', 'skinTone', 'skinConcerns', 'makeupCoverage', 'makeupFinish', 'makeupEyes', 'makeupLips', 'allergies', 'styleVibe', 'medicalNotes', 'photographyConsent'],
-  AESTHETICS: ['skinType', 'skinTone', 'skinConcerns', 'sensitiveAreas', 'allergies', 'treatmentHistory', 'medicalNotes', 'photographyConsent'],
-  MALE:       ['hairType', 'scalpCondition', 'skinType', 'skinTone', 'skinConcerns', 'allergies', 'medicalNotes', 'photographyConsent'],
-  KIDS:       ['allergies', 'sensitiveAreas', 'medicalNotes', 'photographyConsent'],
-  OTHER:      ['hairType', 'scalpCondition', 'hairGoals', 'treatmentHistory', 'skinType', 'skinTone', 'skinConcerns', 'sensitiveAreas', 'nailLength', 'nailShape', 'lashStyle', 'lashStatus', 'browStyle', 'browCondition', 'makeupCoverage', 'makeupFinish', 'makeupEyes', 'makeupLips', 'allergies', 'styleVibe', 'medicalNotes', 'photographyConsent'],
-};
-function formatDisplayDate(dateStr: string): string {
-  return formatLongDate(dateStr);
-}
-
-function dateToIso(d: Date): string {
-  return dateToYMD(d);
-}
-
-function isoToDate(iso: string): Date {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return new Date();
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-}
-
-function buildInvoiceHTML(booking: any, totalPrice: number): string {
+function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): string {
   const statusColors: Record<string, string> = {
     UPCOMING: '#007AFF', COMPLETED: '#34C759',
     CANCELLED: '#FF3B30', NO_SHOW: '#FF3B30',
     PENDING: '#FF9500', IN_PROGRESS: '#AF9197',
   };
   const statusColor = statusColors[booking.status] ?? '#AF9197';
-  const addOnsRows = (booking.addOns ?? []).map((a: any) =>
-    `<tr><td style="padding:8px 0;color:#555;padding-left:20px;font-size:16px">+ ${a.name}</td><td style="padding:8px 0;color:#555;font-size:16px;text-align:right">£${Number(a.price).toFixed(2)}</td></tr>`
+  const addOnsRows = (booking.addOns ?? []).map(addOn =>
+    `<tr><td style="padding:8px 0;color:#555;padding-left:20px;font-size:16px">+ ${addOn.name}</td><td style="padding:8px 0;color:#555;font-size:16px;text-align:right">£${Number(addOn.price).toFixed(2)}</td></tr>`
   ).join('');
   const depositLabel = booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment';
-  const balanceRow = booking.remainingBalance > 0
-    ? `<tr><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px">Balance due</td><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px;text-align:right">£${Number(booking.remainingBalance).toFixed(2)}</td></tr>`
+  const remainingBalance = booking.remainingBalance ?? 0;
+  const balanceRow = remainingBalance > 0
+    ? `<tr><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px">Balance due</td><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px;text-align:right">£${remainingBalance.toFixed(2)}</td></tr>`
     : '';
   const rawMethod = booking.paymentMethod as string | undefined;
-  const METHOD_LABELS: Record<string, string> = {
-    card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay',
-  };
-  const paymentMethodLabel = (rawMethod && METHOD_LABELS[rawMethod]) ? METHOD_LABELS[rawMethod]! : 'Card';
+  const paymentMethodLabel = (rawMethod && PAYMENT_METHOD_LABELS[rawMethod]) ? PAYMENT_METHOD_LABELS[rawMethod]! : 'Card';
 
   return `<!DOCTYPE html>
 <html>
@@ -185,7 +167,7 @@ function buildInvoiceHTML(booking: any, totalPrice: number): string {
   <section>
     <div class="label">SERVICE</div>
     <table>
-      <tr class="bold"><td style="padding:6px 0">${booking.serviceName ?? '—'}</td><td style="padding:6px 0;text-align:right">£${Number(booking.price).toFixed(2)}</td></tr>
+      <tr class="bold"><td style="padding:6px 0">${booking.serviceName ?? '—'}</td><td style="padding:6px 0;text-align:right">£${Number(booking.price ?? 0).toFixed(2)}</td></tr>
       ${addOnsRows}
     </table>
   </section>
@@ -226,7 +208,7 @@ function buildInvoiceHTML(booking: any, totalPrice: number): string {
 
   <div class="ref-block">
     <div class="ref-label">REFERENCE</div>
-    <div class="ref-value">${(booking.id ?? '').slice(0, 8).toUpperCase()}</div>
+    <div class="ref-value">${formatBookingRef(booking)}</div>
   </div>
 
   <div class="footer">cerviced.app</div>
@@ -234,43 +216,51 @@ function buildInvoiceHTML(booking: any, totalPrice: number): string {
 </html>`;
 }
 
+/** What a client is still waiting on, for the timed release policies. Says
+ *  when it WILL happen rather than offering a tap, because the server does it
+ *  on schedule with no involvement from this screen. 'manual' and 'always'
+ *  aren't here on purpose — neither is a pending timer. */
+const PENDING_RELEASE_COPY: Record<string, string> = {
+  on_confirmation:   'Sends when you confirm',
+  day_before:        'Sends 24 hours before',
+  two_days_before:   'Sends 48 hours before',
+  three_days_before: 'Sends 72 hours before',
+  five_days_before:  'Sends 5 days before',
+  week_before:       'Sends 1 week before',
+};
+
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
-  const { bookingId, booking: passedBooking } = route.params;
+  const { user, activeMode } = useAuth();
+  const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule } = route.params;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
-  const { getBookingById, updateBookingStatus, cancelBooking } = useBooking();
-
-  const contextBooking = useMemo(
-    () => passedBooking ?? getBookingById(bookingId),
-    [passedBooking, bookingId, getBookingById]
-  );
+  // Deliberately NOT wired to BookingContext: that cache is the client hat's
+  // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
+  // come from the client_bookings view where the address is masked until
+  // release. Reading it here would render a provider their client-side
+  // projection of the same booking, and writing to it would rewrite client-hat
+  // storage. Provider data comes from the passed booking (sourced from
+  // getProviderBookings, scoped .eq('provider_id', mine)) or a direct fetch.
+  const passedProviderBooking = passedBooking ?? null;
 
   const [fetchedBooking, setFetchedBooking] = useState<ConfirmedBooking | null>(null);
   const [fetching, setFetching] = useState(false);
   // Seed from the booking object directly — clientUserId on ConfirmedBooking is the source of truth.
   // The DB fallback below only fires when the field is absent (legacy local-only bookings).
   const [clientUserId, setClientUserId] = useState<string | null>(
-    contextBooking?.clientUserId ?? null
+    passedProviderBooking?.clientUserId ?? null
   );
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
   const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
-  const [showSupportDropdown, setShowSupportDropdown] = useState(false);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const [dbReschedule, setDbReschedule] = useState<DbBookingRescheduleRequest | null>(null);
-  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: string } | null>(null);
-  const [showRespondModal, setShowRespondModal] = useState(false);
-  const [outboundSlots, setOutboundSlots] = useState<{ date: string; times: string[] }[]>([]);
-  const [slotDate, setSlotDate] = useState(''); // ISO YYYY-MM-DD, set only via the date picker
-  const [slotDatePickerVisible, setSlotDatePickerVisible] = useState(false);
-  const [slotTimes, setSlotTimes] = useState('');
-  const [suggestedTimes, setSuggestedTimes] = useState<string[]>([]);
-  const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
-  const [loadingTimes, setLoadingTimes] = useState(false);
+  // `status` is a MAPPED BookingStatus, never a raw DB string — it is merged
+  // straight into booking.status, which the screen compares against
+  // BookingStatus members. Typed as such so a raw 'confirmed' can't slip in.
+  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: BookingStatus } | null>(null);
   const [respondLoading, setRespondLoading] = useState(false);
-  const [respondSent, setRespondSent] = useState(false);
-  const [inputError, setInputError] = useState('');
   const [sendApology, setSendApology] = useState(false);
   const [apologyText, setApologyText] = useState(
     "Sorry, I'm not available on the dates you requested. Here are some alternative dates I can offer:"
@@ -283,7 +273,21 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     onConfirm: () => void;
   } | null>(null);
 
+  // A confirm dialog's action fires exactly once. Without this a double-tap
+  // on the dialog button ran the RPC twice: the second call arrives after the
+  // first has already moved the booking, so the server's state-machine guard
+  // rejects it ("Invalid status transition: in_progress -> in_progress") and
+  // the provider sees a failure for an action that actually succeeded.
+  const confirmInFlight = useRef(false);
+
   const [showMoreSheet, setShowMoreSheet] = useState(false);
+  // Single merged reschedule-proposal modal — the `init*` naming is a holdover
+  // from when this only covered the provider-initiated flow; it now also
+  // backs "respond to a client's reschedule request" (formerly a separate
+  // showRespondModal/outboundSlots implementation, removed). Which mode is
+  // active is NOT stored here — it's read live off dbReschedule.status
+  // (canRespondToReschedule) at render/submit time, so the same state powers
+  // both without a mode flag to keep in sync.
   const [showInitRescheduleModal, setShowInitRescheduleModal] = useState(false);
   const [initRescheduleSlots, setInitRescheduleSlots] = useState<{ date: string; times: string[] }[]>([]);
   const [initSlotDate, setInitSlotDate] = useState(''); // ISO YYYY-MM-DD, set only via the date picker
@@ -296,7 +300,33 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [initSent, setInitSent] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
 
+  // Group reschedule-initiate: provider picks ONE new day for the whole
+  // group; ModernBeautyCalendar (fed groupSlotResolver below) only offers
+  // times where every sibling's chain still fits back-to-back that day —
+  // same interaction CartScreen.tsx already uses client-side for the
+  // pre-booking group reschedule. groupDateOptions accumulates day+chain
+  // proposals the provider has explicitly added (mirrors initRescheduleSlots'
+  // "add multiple options" pattern for the single-booking flow) before
+  // sending them all via providerInitiateGroupReschedule.
+  const [showGroupRescheduleModal, setShowGroupRescheduleModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeBusy, setDisputeBusy] = useState(false);
+  const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
+  const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
+  const [groupDateOptions, setGroupDateOptions] = useState<
+    { date: string; chain: BackToBackSlot[] }[]
+  >([]);
+  const [groupRescheduleSending, setGroupRescheduleSending] = useState(false);
+  const [groupRescheduleError, setGroupRescheduleError] = useState('');
+  const groupChainsByStart = useRef<Map<string, BackToBackSlot[]>>(new Map());
+
   const [addressSettings, setAddressSettings] = useState<ProviderAddressPolicy | null>(null);
+  // Distinct from `addressSettings === null`, which cannot tell "not back yet"
+  // from "no policy set". Every branch of the Location row below depends on
+  // knowing this provider's business_type, so it has to wait for the answer —
+  // see addressKnown.
+  const [addressSettingsLoaded, setAddressSettingsLoaded] = useState(false);
   const [addressReleasedAt, setAddressReleasedAt] = useState<string | null>(null);
   const [releasingAddress, setReleasingAddress] = useState(false);
 
@@ -310,25 +340,77 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showInfoPackPicker, setShowInfoPackPicker] = useState(false);
   const [isAttachingInfoPack, setIsAttachingInfoPack] = useState(false);
 
+  // ProviderBookingHistoryScreen already collapses group siblings into one
+  // card and passes them here directly (groupSiblings param) — no refetch
+  // needed on that path. Anywhere else this screen is opened (a
+  // notification tap, a deep link) only has a bookingId, so once the real
+  // booking loads and turns out to be part of a group, fetch its siblings
+  // (scoped to this provider's own rows — see getGroupBookingSiblings).
+  const [fetchedGroupSiblings, setFetchedGroupSiblings] = useState<ConfirmedBooking[] | null>(null);
+
+  // Re-read the live status/date/time and apply it over whatever the screen is
+  // showing. Unlike the mount seed below this always wins, because it's called
+  // when the screen has just been *proved* stale — the server rejected an
+  // action based on the status being rendered.
+  const refreshBookingStatus = useCallback(() => {
+    if (!bookingId) return;
+    getBookingWithAddOnsById(bookingId)
+      .then(raw => {
+        if (!raw) return;
+        const mapped = mapDbBookingToConfirmed(raw);
+        setLiveBookingOverrides(prev => ({
+          ...prev,
+          status: mapped.status,
+          bookingDate: mapped.bookingDate,
+          bookingTime: mapped.bookingTime,
+          endTime: mapped.endTime,
+        }));
+      })
+      .catch(err => logger.error('[ProviderBookingDetail] status refresh failed:', err));
+  }, [bookingId]);
+
+  // Always read the live row, even when the caller passed a booking object in.
+  // That object is a snapshot of whatever the list had cached when it was
+  // rendered, and its status goes stale the moment the booking moves on
+  // anywhere else (the other hat, another device, a cron job, this same
+  // provider on the bookings list). Acting on a stale status is how "Start
+  // Appointment" reached the server as in_progress -> in_progress: the button
+  // renders off booking.status, which said 'confirmed' long after the DB said
+  // otherwise. The realtime subscription above only catches changes that
+  // happen while this screen is open — it can't seed what was already true.
+  //
+  // The passed object still renders instantly (no spinner when we have
+  // something to show); the fetch only corrects it, and only seeds when no
+  // newer local truth exists — an override set by an action or a realtime
+  // event always wins over a fetch that started before it.
   useEffect(() => {
-    if (contextBooking || !bookingId) return;
-    setFetching(true);
+    if (!bookingId) return;
+    if (!passedProviderBooking) setFetching(true);
     getBookingWithAddOnsById(bookingId)
       .then(raw => {
         if (!raw) { setFetching(false); return; }
         const mapped = { ...mapDbBookingToConfirmed(raw), isPendingReschedule: false };
-        setFetchedBooking(mapped);
-        if ((raw as any).user_id) setClientUserId((raw as any).user_id);
+        if (passedProviderBooking) {
+          setLiveBookingOverrides(prev => prev ?? {
+            status: mapped.status,
+            bookingDate: mapped.bookingDate,
+            bookingTime: mapped.bookingTime,
+            endTime: mapped.endTime,
+          });
+        } else {
+          setFetchedBooking(mapped);
+          if ((raw as any).user_id) setClientUserId((raw as any).user_id);
+        }
         setFetching(false);
       })
-      .catch(() => { setFetching(false); });
-  }, [bookingId, contextBooking]);
+      .catch((err) => { logger.error('[ProviderBookingDetail] booking load failed:', err); setFetching(false); });
+  }, [bookingId, passedProviderBooking]);
 
   useEffect(() => {
     if (!bookingId) return;
     getActiveRescheduleRequest(bookingId)
       .then(r => setDbReschedule(r))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] reschedule request load failed:', err));
   }, [bookingId]);
 
   // Realtime: keep reschedule state + booking date/time in sync while screen is open.
@@ -339,26 +421,21 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
     const to12 = (t: string) => formatTime12(t);
 
-    const channel = supabase
-      .channel(`provider-booking-live-${bookingId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'booking_reschedule_requests', filter: `booking_id=eq.${bookingId}` },
-        (payload) => {
-          const row = payload.new as DbBookingRescheduleRequest | null;
-          // If row was deleted or status is confirmed/rejected, clear the reschedule UI
-          if (!row || (payload.eventType === 'DELETE')) {
+    return subscribeToProviderBookingDetailChanges(bookingId, {
+        onReschedule: (row) => {
+          // A deleted row clears the UI outright. Any other row (including
+          // one that just turned confirmed/rejected/cancelled) is still set
+          // as-is — hasRescheduleRequest/canRespondToReschedule below only
+          // match 'pending'/'provider_responded', so a closed request's
+          // banner/actions disappear on the next render without needing a
+          // separate branch here.
+          if (!row) {
             setDbReschedule(null);
           } else {
             setDbReschedule(row);
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${bookingId}` },
-        (payload) => {
-          const d = payload.new as any;
+        },
+        onBookingUpdate: (d) => {
           if (!d) return;
           const rawStart = d.booking_time ? (d.booking_time as string).slice(0, 5) : '';
           const rawEnd = d.end_time ? (d.end_time as string).slice(0, 5) : '';
@@ -369,26 +446,30 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             ...(rawEnd && { endTime: to12(rawEnd) }),
             ...(d.status && { status: mapDbBookingStatus(d.status) }),
           }));
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+        },
+    });
   }, [bookingId]);
 
   useEffect(() => {
-    const providerId = contextBooking?.providerId ?? fetchedBooking?.providerId;
+    const providerId = passedProviderBooking?.providerId ?? fetchedBooking?.providerId;
     if (!providerId) return;
     getProviderAddressPolicy(providerId)
-      .then(s => setAddressSettings(s))
-      .catch(() => {});
-  }, [contextBooking?.providerId, fetchedBooking?.providerId]);
+      .then(s => { setAddressSettings(s); setAddressSettingsLoaded(true); })
+      .catch((err) => {
+        logger.error('[ProviderBookingDetail] address policy load failed:', err);
+        // Mark it answered anyway. Holding the row forever on a failed fetch
+        // is worse than falling back to what the booking itself says, and the
+        // fallback is only reached for a provider whose business_type we could
+        // not read at all.
+        setAddressSettingsLoaded(true);
+      });
+  }, [passedProviderBooking?.providerId, fetchedBooking?.providerId]);
 
   useEffect(() => {
     if (!bookingId) return;
     getBookingAddressReleasedAt(bookingId)
       .then(t => setAddressReleasedAt(t))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] address release time load failed:', err));
   }, [bookingId]);
 
   // For context-passed bookings we also look up user_id from Supabase
@@ -396,7 +477,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!bookingId || clientUserId) return;
     getBookingUserId(bookingId)
       .then(uid => { if (uid) setClientUserId(uid); })
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] booking user id load failed:', err));
   }, [bookingId, clientUserId]);
 
   useEffect(() => {
@@ -409,24 +490,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           setProfileExpanded(true);
         }
       })
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
   }, [clientUserId]);
 
   useEffect(() => {
     if (!bookingId) return;
     getIntakeFormByBooking(bookingId)
       .then(f => setIntakeForm(f))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] intake form load failed:', err));
     getInfoPacksByBooking(bookingId)
       .then(p => setBookingInfoPacks(p))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] info packs load failed:', err));
   }, [bookingId]);
 
   // Fetch current provider's service category + available info packs once on mount
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         const [category, packs] = await Promise.all([
           getProviderServiceCategoryByUserId(user.id),
@@ -434,122 +514,134 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         ]);
         if (category) setProviderServiceCategory(category as ServiceCategory);
         setProviderInfoPacks(packs);
-      } catch {}
-    })();
-  }, []);
-
-  const baseBooking = contextBooking ?? fetchedBooking;
-  const booking = baseBooking ? {
-    ...baseBooking,
-    ...(liveBookingOverrides?.bookingDate !== undefined && { bookingDate: liveBookingOverrides.bookingDate }),
-    ...(liveBookingOverrides?.bookingTime !== undefined && { bookingTime: liveBookingOverrides.bookingTime }),
-    ...(liveBookingOverrides?.endTime !== undefined && { endTime: liveBookingOverrides.endTime }),
-    ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status as BookingStatus }),
-  } as ConfirmedBooking : baseBooking;
-
-  // Fetch real available slots once the provider picks a date
-  useEffect(() => {
-    if (!slotDate || !booking?.providerId) {
-      setSuggestedTimes([]);
-      setSelectedTimes([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingTimes(true);
-    setInputError('');
-    getAvailableSlots(booking.providerId, slotDate)
-      .then(slots => {
-        if (!cancelled) { setSuggestedTimes(slots); setSelectedTimes([]); }
-      })
-      .catch(() => { if (!cancelled) setSuggestedTimes([]); })
-      .finally(() => { if (!cancelled) setLoadingTimes(false); });
-    return () => { cancelled = true; };
-  }, [slotDate, booking?.providerId]);
-
-  const toggleTime = useCallback((time: string) => {
-    setSelectedTimes(prev =>
-      prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]
-    );
-  }, []);
-
-  const handleAddSlot = useCallback(() => {
-    const manualTimes = slotTimes.trim().split(',').map(t => t.trim()).filter(Boolean);
-    const allTimes = [...new Set([...selectedTimes, ...manualTimes])];
-    if (!slotDate) {
-      setInputError('Pick a date first.');
-      return;
-    }
-    if (allTimes.length === 0) {
-      setInputError('Select a time slot or type at least one time.');
-      return;
-    }
-    setInputError('');
-    setOutboundSlots(prev => {
-      const existing = prev.find(s => s.date === slotDate);
-      if (existing) {
-        return prev.map(s => s.date === slotDate
-          ? { ...s, times: [...new Set([...s.times, ...allTimes])] }
-          : s
-        );
+      } catch (err) {
+        logger.error('[ProviderBookingDetail] provider category / info pack load failed:', err);
       }
-      return [...prev, { date: slotDate, times: allTimes }];
-    });
-    setSlotDate('');
-    setSlotTimes('');
-    setSuggestedTimes([]);
-    setSelectedTimes([]);
-  }, [slotDate, slotTimes, selectedTimes]);
+    })();
+  }, [user]);
 
-  const handleRespondSubmit = useCallback(async () => {
-    if (outboundSlots.length === 0) {
-      setInputError('Add at least one date slot before sending.');
+  const baseBooking = passedProviderBooking ?? fetchedBooking;
+  // Keep the derived booking reference stable. The action handlers below are
+  // intentionally memoized; recreating this object every render invalidated
+  // all of them and caused needless re-renders of the detail screen.
+  const booking = useMemo(() => {
+    if (!baseBooking) return baseBooking;
+    return {
+      ...baseBooking,
+      ...(liveBookingOverrides?.bookingDate !== undefined && { bookingDate: liveBookingOverrides.bookingDate }),
+      ...(liveBookingOverrides?.bookingTime !== undefined && { bookingTime: liveBookingOverrides.bookingTime }),
+      ...(liveBookingOverrides?.endTime !== undefined && { endTime: liveBookingOverrides.endTime }),
+      ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status }),
+    } as ConfirmedBooking;
+  }, [baseBooking, liveBookingOverrides]);
+
+  // Packs scoped to specific services (service_names non-empty) only make
+  // sense for a booking that's actually one of those services — an
+  // "ALL SERVICES" pack (empty service_names) still applies to every
+  // booking. Without this filter the picker offered every pack the provider
+  // has ever created, including ones for services unrelated to this booking.
+  const relevantInfoPacks = useMemo(() => {
+    const name = booking?.serviceName;
+    return providerInfoPacks.filter(
+      pack => pack.service_names.length === 0 || (!!name && pack.service_names.includes(name)),
+    );
+  }, [providerInfoPacks, booking?.serviceName]);
+
+  useEffect(() => {
+    // Multi-service booking is gated off (MULTI_SERVICE_BOOKING_ENABLED): don't
+    // resolve a booking's group siblings, so even a pre-existing group booking
+    // opened directly (e.g. from a notification) is treated as a single booking
+    // — the group badge, sibling list, and all-or-nothing group RPCs below all
+    // key off groupSiblings.length > 1, which stays 1 here. See FUTURE_LOGIC.md.
+    if (!MULTI_SERVICE_BOOKING_ENABLED) return;
+    if (passedGroupSiblings || !booking?.groupBookingId) return;
+    getGroupBookingSiblings(booking.groupBookingId)
+      .then(rows => setFetchedGroupSiblings(rows.map(mapDbBookingToConfirmed)))
+      .catch((err) => { logger.error('[ProviderBookingDetail] group siblings load failed:', err); setFetchedGroupSiblings([]); });
+  }, [passedGroupSiblings, booking?.groupBookingId]);
+
+  // Every other service in this client's group booking that this provider
+  // also owns, INCLUDING the currently open one (so "3 services" reads as
+  // the whole group, not "2 others"). Empty/single-item when not grouped.
+  const groupSiblings = useMemo<ConfirmedBooking[]>(
+    () => passedGroupSiblings ?? fetchedGroupSiblings ?? [],
+    [passedGroupSiblings, fetchedGroupSiblings],
+  );
+
+  // Provider-hat mutations. These call the provider RPCs directly rather than
+  // BookingContext's versions, which also rewrite the client's local booking
+  // cache — wrong storage for this hat. The DB status-change trigger still owns
+  // notifying the client, so there are no app-side inserts here either way.
+  // Local status is reflected via liveBookingOverrides so the screen updates
+  // without touching client-hat state.
+  // The override is merged into `booking.status`, which the whole screen
+  // compares against BookingStatus members — so store the MAPPED status, never
+  // the raw DB string. They aren't interchangeable: DB 'confirmed' maps to
+  // BookingStatus.UPCOMING ('upcoming'), so writing the raw value here would
+  // silently match none of the status checks until the screen refetched.
+  // Group bookings (groupSiblings.length > 1) route through the atomic group
+  // RPCs so ALL of this provider's own sibling services move together — no
+  // mixed status where one service confirms and another stays pending. Both
+  // RPCs are all-or-nothing server-side (see fix_group_booking_atomic_
+  // actions.sql): if any sibling can't legally make the transition, the RPC
+  // throws and nothing changes, so the caller's catch block already gets a
+  // specific, actionable message — no separate partial-failure UI needed
+  // here. A single (non-grouped) booking is unaffected — same RPC as before.
+  // Opened with openReschedule (e.g. from Add Booking's conflict warning):
+  // open the reschedule modal once the booking has loaded and is actually
+  // reschedulable. Guarded to fire once, then clears the param so it doesn't
+  // reopen on a re-render or navigation back.
+  const openRescheduleHandled = useRef(false);
+  useEffect(() => {
+    if (!openReschedule || openRescheduleHandled.current || !booking) return;
+    openRescheduleHandled.current = true;
+    navigation.setParams({ openReschedule: undefined } as never);
+    // Mirrors the manual Reschedule button's own gate (UPCOMING only,
+    // IN_PROGRESS also allowed here since that's a valid reschedule target
+    // too) — a pending/completed/cancelled booking isn't "rescheduled", so
+    // silently doing nothing for those would look like a dead button rather
+    // than a deliberate rule.
+    if (booking.status !== BookingStatus.UPCOMING && booking.status !== BookingStatus.IN_PROGRESS) {
+      Alert.alert(
+        'Can’t reschedule yet',
+        booking.status === BookingStatus.PENDING
+          ? 'This booking is still pending confirmation — confirm or decline it first.'
+          : 'This booking can no longer be rescheduled.'
+      );
       return;
     }
-    if (!booking) return;
-    setRespondLoading(true);
-    setInputError('');
-    try {
-      await respondToRescheduleRequest(booking.id, outboundSlots);
-      await insertBookingUserNotification({
-        booking_id: booking.id,
-        type: 'reschedule_provider_response',
-        title: sendApology ? `${booking.providerName} can't make those dates` : 'Provider Responded',
-        message: sendApology
-          ? apologyText
-          : `${booking.providerName} has shared available dates for your reschedule request.`,
-        priority: 'high',
-        is_actionable: true,
-        provider_id: booking.providerId,
-      });
-      setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: outboundSlots } : prev);
-      setRespondSent(true);
-    } catch {
-      setInputError('Could not send response. Please try again.');
-    } finally {
-      setRespondLoading(false);
+    const openGroup = groupSiblings.length > 1;
+    setTimeout(() => (openGroup ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true)), 260);
+  }, [openReschedule, booking, groupSiblings.length, navigation]);
+
+  const updateBookingStatus = useCallback(async (id: string, status: BookingStatus) => {
+    const dbStatus = PROVIDER_BOOKING_DB_STATUS[status];
+    if (!dbStatus) throw new Error(`Unsupported provider status transition: ${status}`);
+    if (groupSiblings.length > 1 && booking?.groupBookingId) {
+      await updateGroupBookingStatus(booking.groupBookingId, dbStatus as DbBooking['status']);
+    } else {
+      await dbUpdateBookingStatus(id, dbStatus as DbBooking['status']);
     }
-  }, [outboundSlots, booking, sendApology, apologyText]);
+    setLiveBookingOverrides(prev => ({ ...(prev ?? {}), status }));
+  }, [groupSiblings.length, booking?.groupBookingId]);
 
-  const closeRespondModal = useCallback(() => {
-    setShowRespondModal(false);
-    setOutboundSlots([]);
-    setSlotDate('');
-    setSlotTimes('');
-    setSuggestedTimes([]);
-    setSelectedTimes([]);
-    setRespondSent(false);
-    setInputError('');
-    setSendApology(false);
-  }, []);
+  const cancelBooking = useCallback(async (id: string) => {
+    if (groupSiblings.length > 1 && booking?.groupBookingId) {
+      await providerCancelGroupBooking(booking.groupBookingId);
+    } else {
+      await providerCancelOwnBooking(id);
+    }
+    setLiveBookingOverrides(prev => ({ ...(prev ?? {}), status: BookingStatus.CANCELLED }));
+  }, [groupSiblings.length, booking?.groupBookingId]);
 
-  // Fetch available slots once the provider picks a date in the initiate reschedule modal
+  // Fetch available slots once the provider picks a date in the reschedule modal
   useEffect(() => {
     if (!initSlotDate || !booking?.providerId) { setInitSuggestedTimes([]); setInitSelectedTimes([]); return; }
     let cancelled = false;
     setInitLoadingTimes(true);
-    getAvailableSlots(booking.providerId, initSlotDate)
+    AvailabilityService.getAvailableSlotTimes(booking.providerId, initSlotDate)
       .then(slots => { if (!cancelled) { setInitSuggestedTimes(slots); setInitSelectedTimes([]); } })
-      .catch(() => { if (!cancelled) setInitSuggestedTimes([]); })
+      .catch((err) => { logger.error('[ProviderBookingDetail] available slots load failed:', err); if (!cancelled) setInitSuggestedTimes([]); })
       .finally(() => { if (!cancelled) setInitLoadingTimes(false); });
     return () => { cancelled = true; };
   }, [initSlotDate, booking?.providerId]);
@@ -577,46 +669,194 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setInitSlotDate(''); setInitSuggestedTimes([]); setInitSelectedTimes([]);
   }, [initSlotDate, initSelectedTimes]);
 
+  // Single submit handler for the merged reschedule-proposal modal. The two
+  // paths call genuinely different RPCs with different meaning — this is NOT
+  // just cosmetic branching:
+  //  - Responding to an existing client request (canRespondToReschedule, i.e.
+  //    dbReschedule.status === 'pending') calls respondToRescheduleRequest,
+  //    which resolves that specific request row and (optionally) carries the
+  //    apology text onto response_note.
+  //  - Provider-initiating with no pending client request calls
+  //    upsertProviderRescheduleRequest, which creates/updates a
+  //    provider-initiated request row from scratch.
+  // Both are trigger-notified server-side (handle_reschedule_request_change()
+  // in supabase/fix_reschedule_flow_completion.sql) — no app-side insert here.
   const handleInitRescheduleSubmit = useCallback(async () => {
     if (initRescheduleSlots.length === 0) { setInitInputError('Add at least one date and time slot.'); return; }
     if (!booking) return;
     setInitLoading(true);
     setInitInputError('');
+    // Computed here (not from the `canRespondToReschedule` const, which is
+    // derived after this component's early-return guards and so isn't in
+    // scope for hooks declared above it) directly off dbReschedule state —
+    // same condition, same meaning: a still-pending client request.
+    const respondingToClientRequest = dbReschedule?.status === 'pending';
     try {
-      await upsertProviderRescheduleRequest({
-        booking_id: booking.id,
-        proposed_slots: initRescheduleSlots,
-      });
-      await insertBookingUserNotification({
-        booking_id: booking.id,
-        type: 'reschedule_request',
-        title: `${booking.providerName} needs to reschedule`,
-        message: `${booking.providerName} has proposed new times for your ${booking.serviceName} appointment. Tap to choose a slot.`,
-        priority: 'high',
-        is_actionable: true,
-        provider_id: booking.providerId,
-      });
-      setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, requested_by: 'provider' } : {
-        id: '', booking_id: booking.id, requested_by: 'provider', original_date: booking.bookingDate,
-        original_time: booking.bookingTime, requested_dates: [], provider_available_slots: initRescheduleSlots,
-        status: 'provider_responded', reschedule_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      });
+      if (respondingToClientRequest) {
+        await respondToRescheduleRequest(booking.id, initRescheduleSlots, sendApology ? apologyText : undefined);
+        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots } : prev);
+      } else {
+        await upsertProviderRescheduleRequest({
+          booking_id: booking.id,
+          proposed_slots: initRescheduleSlots,
+        });
+        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, requested_by: 'provider' } : {
+          id: '', booking_id: booking.id, requested_by: 'provider', original_date: booking.bookingDate,
+          original_time: booking.bookingTime, requested_dates: [], provider_available_slots: initRescheduleSlots,
+          status: 'provider_responded', reschedule_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        });
+      }
       setInitSent(true);
-    } catch {
-      setInitInputError('Could not send reschedule request. Please try again.');
+    } catch (err) {
+      logger.error('[ProviderBookingDetail] send reschedule response failed:', err);
+      setInitInputError(respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.');
     } finally {
       setInitLoading(false);
     }
-  }, [initRescheduleSlots, booking]);
+  }, [initRescheduleSlots, booking, dbReschedule?.status, sendApology, apologyText]);
 
   const closeInitRescheduleModal = useCallback(() => {
     setShowInitRescheduleModal(false);
     setInitRescheduleSlots([]); setInitSlotDate('');
     setInitSuggestedTimes([]); setInitSelectedTimes([]); setInitCustomTimePickerVisible(false);
     setInitInputError(''); setInitSent(false);
+    setSendApology(false);
   }, []);
 
-  const handleReleaseAddress = useCallback(async () => {
+  // Decline a client's reschedule request outright — no alternative times
+  // required. Only meaningful when responding to a real client request
+  // (dbReschedule.status === 'pending'); there is nothing to decline when the
+  // provider is initiating from scratch, so the caller only wires this up in
+  // that mode. Closes the modal itself rather than routing through the
+  // "sent" success screen — confirmDeclineRequest (below) already got an
+  // explicit confirmation, and the reschedule section on the receipt updates
+  // from the dbReschedule state change here regardless of modal visibility.
+  const handleDeclineRequest = useCallback(async () => {
+    if (!booking) return;
+    setRespondLoading(true);
+    try {
+      await rejectRescheduleRequest(booking.id, sendApology ? apologyText : undefined);
+      setDbReschedule(prev => prev ? { ...prev, status: 'rejected' } : prev);
+      closeInitRescheduleModal();
+    } catch (err) {
+      Alert.alert('Could not decline', toUserMessage(err, 'That reschedule request is still open. Please try again.', 'ProviderBookingDetail.declineReschedule'));
+    } finally {
+      setRespondLoading(false);
+    }
+  }, [booking, sendApology, apologyText, closeInitRescheduleModal]);
+
+  const confirmDeclineRequest = useCallback(() => {
+    setPendingConfirm({
+      title: 'Decline Reschedule Request',
+      message: 'Are you sure you want to decline this reschedule? The client will be notified and their original appointment time stands.',
+      confirmLabel: 'Decline',
+      destructive: true,
+      onConfirm: handleDeclineRequest,
+    });
+  }, [handleDeclineRequest]);
+
+  // What counts as a bookable time for the group on a given day: a start
+  // where the WHOLE chain (every sibling this provider owns, in original
+  // date/time order) fits back-to-back — same rule and same
+  // AvailabilityService call CartScreen.tsx's client-side group reschedule
+  // already uses. Chains are cached by start time so tapping a calendar
+  // time resolves straight back to its full per-sibling schedule without a
+  // second round trip.
+  const groupSlotResolver = useCallback(
+    async (date: string): Promise<string[]> => {
+      if (groupSiblings.length < 2 || !booking?.providerId) return [];
+      try {
+        const orderedSiblings = [...groupSiblings].sort(
+          (a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime)
+        );
+        const chains = await AvailabilityService.findAllBackToBackSlots(
+          booking.providerId,
+          orderedSiblings.map(s => ({ serviceId: s.serviceId ?? '', duration: s.duration })),
+          date,
+        );
+        if (!chains) return [];
+        chains.forEach(chain => {
+          groupChainsByStart.current.set(`${date}|${chain[0]!.time}`, chain);
+        });
+        return chains.map(chain => chain[0]!.time);
+      } catch (err) {
+        logger.error('[ProviderBookingDetail] back-to-back slot search failed:', err);
+        return [];
+      }
+    },
+    [groupSiblings, booking?.providerId]
+  );
+
+  const groupRescheduleChain = useMemo(
+    () => (groupRescheduleDate && groupRescheduleTime
+      ? groupChainsByStart.current.get(`${groupRescheduleDate}|${groupRescheduleTime}`) ?? null
+      : null),
+    [groupRescheduleDate, groupRescheduleTime]
+  );
+
+  // Add the currently-picked day+chain as one proposed option (the provider
+  // can add several candidate days before sending, same "build a list of
+  // options" pattern as the single-booking initiate flow above).
+  const handleAddGroupDateOption = useCallback(() => {
+    if (!groupRescheduleDate || !groupRescheduleChain) {
+      setGroupRescheduleError('Pick a date and time first.');
+      return;
+    }
+    setGroupRescheduleError('');
+    setGroupDateOptions(prev => {
+      if (prev.some(o => o.date === groupRescheduleDate)) return prev;
+      return [...prev, { date: groupRescheduleDate, chain: groupRescheduleChain }];
+    });
+    setGroupRescheduleDate('');
+    setGroupRescheduleTime('');
+  }, [groupRescheduleDate, groupRescheduleChain]);
+
+  const handleSendGroupReschedule = useCallback(async () => {
+    if (groupDateOptions.length === 0) {
+      setGroupRescheduleError('Add at least one date option.');
+      return;
+    }
+    if (!booking?.groupBookingId) return;
+
+    const orderedSiblings = [...groupSiblings].sort(
+      (a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime)
+    );
+
+    setGroupRescheduleSending(true);
+    setGroupRescheduleError('');
+    try {
+      // One proposal entry per sibling, each carrying its OWN shifted time
+      // across every candidate day — index-aligned with orderedSiblings
+      // since every chain in groupDateOptions was resolved against that
+      // same ordering (see groupSlotResolver).
+      const proposals = orderedSiblings.map((sibling, i) => ({
+        booking_id: sibling.id,
+        available_slots: groupDateOptions.map(opt => ({
+          date: opt.date,
+          times: [opt.chain[i]!.time],
+        })),
+      }));
+      await providerInitiateGroupReschedule(booking.groupBookingId, proposals);
+      setInitSent(true);
+    } catch (err: unknown) {
+      // A P0001 guard names the sibling that blocked this all-or-nothing move,
+      // so it's shown as-is; any other coded error is backend detail.
+      setGroupRescheduleError(
+        toUserMessageAllowingDbGuard(err, 'Could not send reschedule request. Please try again.', 'ProviderBookingDetail.groupReschedule')
+      );
+    } finally {
+      setGroupRescheduleSending(false);
+    }
+  }, [groupDateOptions, booking?.groupBookingId, groupSiblings]);
+
+  const closeGroupRescheduleModal = useCallback(() => {
+    setShowGroupRescheduleModal(false);
+    setGroupRescheduleDate(''); setGroupRescheduleTime('');
+    setGroupDateOptions([]); setGroupRescheduleError(''); setInitSent(false);
+    groupChainsByStart.current = new Map();
+  }, []);
+
+  const releaseAddressNow = useCallback(async () => {
     if (!booking || releasingAddress) return;
     setReleasingAddress(true);
     try {
@@ -627,15 +867,41 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       await releaseBookingAddress(booking.id);
       const now = new Date().toISOString();
       setAddressReleasedAt(now);
-    } catch {
-      Alert.alert('Error', 'Could not release address. Please try again.');
+    } catch (err) {
+      Alert.alert('Address not sent', toUserMessage(err, 'Could not send your address. Please try again.', 'ProviderBookingDetail.releaseAddress'));
     } finally {
       setReleasingAddress(false);
     }
   }, [booking, releasingAddress]);
 
+  // Sending an address is irreversible — there is no "unsend", and for a
+  // mobile or home-studio provider the address in question is their home. So
+  // a manual release asks first, every time, rather than firing on one tap.
+  const handleReleaseAddress = useCallback(async () => {
+    if (!booking || releasingAddress) return;
+    // Fetched here rather than held in state: it's a private address, only
+    // needed on the rare taps that actually send one, and RLS scopes
+    // getMyProviderFullAddress to the caller's own row. A failed read just
+    // drops the preview line — it must not block the send.
+    const address = await getMyProviderFullAddress().catch((err) => { logger.error('[ProviderBookingDetail] address preview load failed:', err); return null; });
+    Alert.alert(
+      'Send your address?',
+      'Check it\u2019s correct before sending \u2014 this can\u2019t be undone.'
+        + (address ? `\n\n${address}` : ''),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send address', onPress: () => { void releaseAddressNow(); } },
+      ],
+    );
+  }, [booking, releasingAddress, releaseAddressNow]);
+
+  // NULL is a real state, not a missing one: it means this provider shares no
+  // address at all (the default, and the only default, for mobile). Coercing
+  // it to 'manual' put a send button in front of someone who chose not to
+  // share. isAddressReleasedByPolicy treats an unknown policy as "not
+  // released", so passing null through is safe.
   const addressPolicy = useMemo(
-    () => addressSettings?.address_release_policy ?? 'manual',
+    () => addressSettings?.address_release_policy ?? null,
     [addressSettings]
   );
 
@@ -655,13 +921,48 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     });
   }, [booking, addressReleasedAt, addressPolicy]);
 
+  // Read off the provider's OWN business_type (getProviderAddressPolicy), not
+  // off the booking — a booking read through the provider path doesn't carry
+  // provider_business_type, and isMobileBooking's clientAddress fallback would
+  // then answer "mobile?" with "did an address happen to arrive?", which is
+  // the very question the Location row is trying to report on.
+  const isMobileProvider = addressSettings?.business_type === 'mobile';
+  // Until getProviderAddressPolicy answers, this screen does not know whose
+  // address the venue is. Rendering anything in the meantime picks the
+  // non-mobile branch by default and falls through to `booking.address` —
+  // which on a mobile booking is provider_address_snapshot, i.e. the
+  // provider's OWN private street address, stamped on every row by
+  // claim_cart_booking_slots(). It flashed up as the appointment's Location
+  // and then vanished when the policy arrived and the row switched to
+  // "Waiting for client's address". Hold the row rather than guess.
+  const addressKnown = addressSettingsLoaded;
+  const hasClientAddress = !!booking?.clientAddress?.trim();
+
+  // Group-scoped copy for the confirm modal — shown whenever this booking is
+  // one of multiple services this provider has in the same client group, so
+  // the provider isn't surprised that tapping one button moves every sibling
+  // service at once (that's the point — see updateBookingStatus/cancelBooking
+  // above, which already route to the atomic group RPC in this case).
+  const groupSuffix = groupSiblings.length > 1
+    ? ` This applies to all ${groupSiblings.length} of this client's services with you.`
+    : '';
+
   const handleStatusChange = useCallback(
     (newStatus: BookingStatus) => {
       if (!booking) return;
-      const label = STATUS_LABELS[newStatus] || newStatus;
+      const label = BOOKING_STATUS_LABELS[newStatus] || newStatus;
+      // A no-show is an accusation about someone who isn't in the room to
+      // answer it, and it's terminal (TERMINAL_BOOKING_STATUSES — no RPC can
+      // move a booking back out of it). So it gets its own copy rather than
+      // the neutral "the status will be updated" line every other transition
+      // uses: the accused gets a say, and there is no undo.
+      const isNoShow = newStatus === BookingStatus.NO_SHOW;
+      const clientName = booking.customerName?.trim() || 'The client';
       setPendingConfirm({
-        title: `Mark as ${label}`,
-        message: `The booking status will be updated to ${label}.`,
+        title: isNoShow ? 'Mark as No Show?' : `Mark as ${label}`,
+        message: isNoShow
+          ? `${clientName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone.${groupSuffix} Are you sure?`
+          : `The booking status will be updated to ${label}.${groupSuffix}`,
         confirmLabel: `Mark ${label}`,
         destructive: newStatus === BookingStatus.NO_SHOW,
         onConfirm: async () => {
@@ -673,14 +974,54 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         },
       });
     },
-    [booking, updateBookingStatus, navigation]
+    [booking, updateBookingStatus, navigation, groupSuffix]
   );
+
+  // The mirror image of handleStatusChange's no-show branch: here the
+  // provider is the one who was accused (status 'provider_no_show', set by the
+  // client via client_mark_provider_no_show). Same rules, same window, same
+  // absence of any adjudication — dispute_no_show() decides who may call it.
+  const canDispute = useMemo(
+    () => !!booking && canDisputeNoShow(booking, BookingStatus.PROVIDER_NO_SHOW),
+    [booking],
+  );
+
+  const handleSubmitDispute = useCallback(async () => {
+    if (!booking || !disputeReason.trim()) return;
+    setDisputeBusy(true);
+    try {
+      const { ticketNumber } = await fileNoShowDispute(booking, disputeReason, 'provider', activeMode);
+      setShowDisputeModal(false);
+      setDisputeReason('');
+      // A null ticket means the dispute is recorded but the support ticket
+      // didn't file — don't quote a reference that doesn't exist, and don't
+      // call it a failure either (see fileNoShowDispute).
+      Alert.alert(
+        'Dispute Sent',
+        ticketNumber
+          ? `Your client has been told you dispute this, and support has a copy. Your reference is #${ticketNumber}.`
+          : `Your client has been told you dispute this. We couldn't reach support just now — email ${SUPPORT_EMAIL} if you don't hear back.`,
+      );
+      refreshBookingStatus();
+    } catch (err) {
+      Alert.alert(
+        "Couldn't Send Your Dispute",
+        toUserMessageAllowingDbGuard(
+          err,
+          'Please try again in a moment.',
+          'ProviderBookingDetail.handleSubmitDispute',
+        ),
+      );
+    } finally {
+      setDisputeBusy(false);
+    }
+  }, [booking, disputeReason, activeMode, refreshBookingStatus]);
 
   const handleConfirm = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
       title: 'Confirm Booking',
-      message: 'The client will be notified that their booking is confirmed.',
+      message: `The client will be notified that their booking is confirmed.${groupSuffix}`,
       confirmLabel: 'Confirm Booking',
       onConfirm: async () => {
         // pending → confirmed fires the DB trigger, which notifies the client
@@ -688,13 +1029,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         navigation.goBack();
       },
     });
-  }, [booking, updateBookingStatus, navigation]);
+  }, [booking, updateBookingStatus, navigation, groupSuffix]);
 
   const handleDecline = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
       title: 'Decline Booking',
-      message: 'The client will be notified. This cannot be undone.',
+      message: `The client will be notified. This cannot be undone.${groupSuffix}`,
       confirmLabel: 'Decline',
       destructive: true,
       onConfirm: async () => {
@@ -705,13 +1046,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         navigation.goBack();
       },
     });
-  }, [booking, cancelBooking, navigation]);
+  }, [booking, cancelBooking, navigation, groupSuffix]);
 
   const handleCancel = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
       title: 'Cancel Booking',
-      message: 'This cannot be undone. The client will be notified.',
+      message: `This cannot be undone. The client will be notified.${groupSuffix}`,
       confirmLabel: 'Cancel Booking',
       destructive: true,
       onConfirm: async () => {
@@ -721,7 +1062,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         navigation.goBack();
       },
     });
-  }, [booking, cancelBooking, navigation]);
+  }, [booking, cancelBooking, navigation, groupSuffix]);
 
   const handleCallClient = useCallback(() => {
     if (!booking?.customerPhone) return;
@@ -734,26 +1075,38 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       const clientName = booking.customerName ?? 'Client';
       const conversationId = await getOrCreateConversation(booking.providerId, clientUserId);
       navigation.navigate('ProviderConversation', { conversationId, clientUserId, clientName });
-    } catch {
-      Alert.alert('Error', 'Could not open chat. Try again.');
+    } catch (err) {
+      Alert.alert('Chat unavailable', toUserMessage(err, 'Could not open this chat. Please try again.', 'ProviderBookingDetail.openChat'));
     }
   }, [booking, clientUserId, navigation]);
 
   const handleShare = useCallback(async () => {
     if (!booking) return;
-    const t = booking.price + (booking.addOns?.reduce((s: number, a: { price: number }) => s + a.price, 0) ?? 0);
+    const t = (booking.price ?? 0) + (booking.addOns?.reduce((s: number, a: { price: number }) => s + (a.price ?? 0), 0) ?? 0);
     try {
       const html = buildInvoiceHTML(booking, t);
       const { uri } = await Print.printToFileAsync({ html });
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Invoice', UTI: 'com.adobe.pdf' });
-    } catch {
-      Alert.alert('Invoice error', 'Could not generate the invoice. Rebuild the app if this persists.');
+    } catch (err) {
+      Alert.alert('Invoice not created', toUserMessage(err, 'Could not generate the invoice. Please try again.', 'ProviderBookingDetail.shareInvoice'));
     }
   }, [booking]);
 
-  const hasBeautyData = (p: ClientBeautyProfile) =>
-    p.hairType || p.skinType || p.styleVibe || p.medicalNotes ||
-    p.allergies.length > 0 || p.skinConcerns.length > 0 || p.treatmentHistory.length > 0;
+  // Recover the real length of a booking whose row never got an end_time
+  // written (see insertDirectBooking / the ProviderHomeScreen counterpart of
+  // this fetch) — only fires when this specific booking actually needs it,
+  // never a per-list-row fetch.
+  const [recoveredServiceDurationMinutes, setRecoveredServiceDurationMinutes] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    setRecoveredServiceDurationMinutes(undefined);
+    if (booking?.duration || !booking?.serviceId) return;
+    if (booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime) return;
+    let cancelled = false;
+    getServiceDurationsByIds([booking.serviceId])
+      .then(map => { if (!cancelled) setRecoveredServiceDurationMinutes(map.get(booking.serviceId!)); })
+      .catch(err => logger.error('[ProviderBookingDetail] service duration lookup failed:', err));
+    return () => { cancelled = true; };
+  }, [booking?.serviceId, booking?.duration, booking?.bookingTime, booking?.endTime]);
 
   // Must be above early returns — hooks cannot be called after conditional returns
   const displayDuration = useMemo(() => {
@@ -781,8 +1134,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         return `${m}m`;
       }
     }
+    if (recoveredServiceDurationMinutes) return formatDurationMinutes(recoveredServiceDurationMinutes);
     return '';
-  }, [booking?.duration, booking?.bookingTime, booking?.endTime]);
+  }, [booking, recoveredServiceDurationMinutes]);
 
   if (fetching) {
     return (
@@ -808,7 +1162,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     );
   }
 
-  const statusColor = STATUS_COLORS[booking.status] || '#007AFF';
+  const statusColor = BOOKING_STATUS_COLORS[booking.status] || '#007AFF';
 
   const isActive = booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS;
   const isPendingConfirmation = booking.status === BookingStatus.PENDING;
@@ -824,11 +1178,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const apptStart = booking.bookingDate && booking.bookingTime
     ? createBookingDateTime(booking.bookingDate, booking.bookingTime)
     : null;
-  const isApptToday = booking.bookingDate === new Date().toISOString().split('T')[0];
+  const isApptToday = booking.bookingDate === dateToYMD(new Date());
   const apptStartPassed = !!apptStart && apptStart.getTime() < Date.now();
   const pendingExpired = isPendingConfirmation && apptStartPassed;
 
-  const totalPrice = booking.price + (booking.addOns?.reduce((s: number, a: { price: number }) => s + a.price, 0) ?? 0);
+  const totalPrice = (booking.price ?? 0) + (booking.addOns?.reduce((s: number, a: { price: number }) => s + (a.price ?? 0), 0) ?? 0);
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
   const perf = isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
   const rowDiv = isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
@@ -845,7 +1199,20 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: P.text }]}>Booking Details</Text>
+          {/* Hat label: this screen is reachable directly from a provider
+              notification on cold launch, where the tab bar is the only other
+              hat signal and is easy to miss. A dual-hat user must be able to
+              tell their own appointment from their client's job at a glance —
+              the two afford opposite actions. This screen is always the
+              provider hat's view of a job they are performing. */}
+          <View style={styles.headerTitleWrap}>
+            <Text style={[styles.headerHat, { color: P.accent }]} numberOfLines={1}>
+              BUSINESS
+            </Text>
+            <Text style={[styles.headerTitle, { color: P.text }]} numberOfLines={1}>
+              Your Client's Booking
+            </Text>
+          </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
               onPress={() => setShowHelpDropdown(v => !v)}
@@ -908,7 +1275,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                    {STATUS_LABELS[booking.status]}{isPending ? '  ·  Reschedule Requested' : ''}
+                    {BOOKING_STATUS_LABELS[booking.status]}{isPending ? '  ·  Reschedule Requested' : ''}
                   </Text>
                 </View>
               </View>
@@ -930,9 +1297,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── SERVICE section ── */}
               <View style={styles.section}>
                 {!showHelpDropdown && <Text style={[styles.sectionLabel, { color: P.sub }]}>SERVICE</Text>}
-                <Row label={booking.serviceName} value={`£${booking.price.toFixed(2)}`} textColor={P.text} divColor={rowDiv} bold />
+                <Row label={booking.serviceName} value={`£${(booking.price ?? 0).toFixed(2)}`} textColor={P.text} divColor={rowDiv} bold />
                 {(booking.addOns ?? []).map((a: { name: string; price: number }, i: number) => (
-                  <Row key={i} label={a.name} value={`£${a.price.toFixed(2)}`} textColor={P.text} divColor={rowDiv} indent />
+                  <Row key={i} label={a.name} value={`£${(a.price ?? 0).toFixed(2)}`} textColor={P.text} divColor={rowDiv} indent />
                 ))}
                 {(booking.addOns ?? []).length > 0 && (
                   <View style={[styles.subtotalRow, { borderTopColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.10)' }]}>
@@ -942,18 +1309,104 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 )}
               </View>
 
+              {/* ── GROUP BOOKING section — only when this client booked more than
+                  one of this provider's services together (see bookingBatchId in
+                  CartScreen). Every sibling this provider owns is listed,
+                  including the one currently open, so the count reads as the
+                  whole group rather than "N others". Tapping a sibling pushes
+                  its own detail screen rather than replacing this one, so back
+                  returns here. ── */}
+              {groupSiblings.length > 1 && (
+                <>
+                  <Perf color={perf} />
+                  <View style={styles.section}>
+                    <View style={styles.groupSectionHeader}>
+                      <Ionicons name="link" size={12} color={P.sub} />
+                      <Text style={[styles.sectionLabel, { color: P.sub, marginBottom: 0 }]}>
+                        GROUP BOOKING · {groupSiblings.length} SERVICES
+                      </Text>
+                    </View>
+                    {groupSiblings
+                      .slice()
+                      .sort((a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime))
+                      .map((sib, i, arr) => {
+                        const isCurrent = sib.id === booking.id;
+                        const rowContent = (
+                          <Row
+                            label={`${sib.serviceName}${isCurrent ? ' (this one)' : ''}`}
+                            value={`${formatBookingDisplayDate(sib.bookingDate)} · ${sib.bookingTime}`}
+                            textColor={isCurrent ? P.accent : P.text}
+                            divColor={rowDiv}
+                            bold={isCurrent}
+                            last={i === arr.length - 1}
+                          />
+                        );
+                        return isCurrent ? (
+                          <View key={sib.id}>{rowContent}</View>
+                        ) : (
+                          <TouchableOpacity
+                            key={sib.id}
+                            activeOpacity={0.6}
+                            onPress={() => navigation.push('BookingDetail', {
+                              bookingId: sib.id,
+                              booking: sib,
+                              groupSiblings,
+                            })}
+                          >
+                            {rowContent}
+                          </TouchableOpacity>
+                        );
+                      })}
+                  </View>
+                </>
+              )}
+
               {/* ── Perforated divider ── */}
               <Perf color={perf} />
 
               {/* ── APPOINTMENT section ── */}
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: P.sub }]}>APPOINTMENT</Text>
-                <Row label="Date" value={formatDisplayDate(booking.bookingDate) || '—'} textColor={P.text} divColor={rowDiv} />
+                <Row label="Date" value={formatBookingDisplayDate(booking.bookingDate) || '—'} textColor={P.text} divColor={rowDiv} />
                 <Row label="Time" value={booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime ? `${booking.bookingTime} – ${booking.endTime}` : booking.bookingTime || '—'} textColor={P.text} divColor={rowDiv} />
                 {displayDuration ? (
                   <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
-                {addressSettings?.business_type !== 'mobile' && addressPolicy !== 'always' ? (
+                {/* A MOBILE provider travels to the client, so the venue is the
+                    client's address and the only thing this row can honestly
+                    report is whether that address has arrived yet. The
+                    provider's own release policy is irrelevant here — their
+                    address is their private base, never where this
+                    appointment happens (see isMobileBooking in
+                    types/booking.ts) — so the release states below are not
+                    rendered for mobile at all. The address itself lives in
+                    the ADDRESS section further down; this is the status line
+                    for it. */}
+                {!addressKnown ? (
+                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                ) : isMobileProvider ? (
+                  <Row
+                    label="Location"
+                    value={hasClientAddress ? 'Client address received' : 'Waiting for client’s address'}
+                    textColor={P.text}
+                    {...(hasClientAddress ? { valueColor: '#34C759' } : {})}
+                    divColor={rowDiv}
+                    last
+                  />
+                ) : (
+                <>
+                {/* Three distinct states, where there used to be two.
+                    'always' isn't handled here at all — the address is simply
+                    part of the booking.
+
+                    Only a MANUAL policy gets a button. Every timed policy is
+                    a statement of fact, not an action: the server releases it
+                    on schedule whether or not this screen is open, so
+                    rendering it as a tappable "Address will be confirmed…"
+                    invited a provider to press something that did nothing.
+                    A null policy means this provider shares no address —
+                    mobile's default — so there's nothing to say or do. */}
+                {addressPolicy && addressPolicy !== 'always' ? (
                   isAddressReleased ? (
                     <Row
                       label="Location"
@@ -963,10 +1416,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       divColor={rowDiv}
                       last
                     />
-                  ) : (
+                  ) : addressPolicy === 'manual' ? (
                     <TouchableOpacity
                       style={styles.row}
-                      onPress={handleReleaseAddress}
+                      onPress={() => { void handleReleaseAddress(); }}
                       activeOpacity={0.7}
                       disabled={releasingAddress}
                     >
@@ -974,25 +1427,39 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       {releasingAddress ? (
                         <ActivityIndicator size="small" color={P.accent} />
                       ) : (
-                        <Text style={[styles.rowValue, { color: P.accent }]}>Address will be confirmed…</Text>
+                        <Text style={[styles.rowValue, { color: P.accent }]}>Send address to client</Text>
                       )}
                     </TouchableOpacity>
+                  ) : (
+                    <Row
+                      label="Location"
+                      value={PENDING_RELEASE_COPY[addressPolicy] ?? 'Address not sent yet'}
+                      textColor={P.text}
+                      divColor={rowDiv}
+                      last
+                    />
                   )
                 ) : booking.address ? (
                   <Row label="Location" value={booking.address} textColor={P.text} divColor={rowDiv} last />
                 ) : null}
+                </>
+                )}
               </View>
 
               {/* ── Perforated divider ── */}
               <Perf color={perf} />
 
-              {/* ── ADDRESS section — mobile providers only; client sends this via messaging ── */}
-              {addressSettings?.business_type === 'mobile' && (
+              {/* ── ADDRESS section — mobile providers only.
+                  This section exists to SHOW the client's address; the
+                  Location row above is what reports its status, so the copy
+                  here says where the address comes from rather than restating
+                  "waiting" a second time. ── */}
+              {isMobileProvider && (
                 <>
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: P.sub }]}>ADDRESS</Text>
 
-                    {booking.clientAddress ? (
+                    {hasClientAddress ? (
                       <>
                         <View style={[addrStyles.addressBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: rowDiv }]}>
                           <Text style={[addrStyles.addressLabel, { color: P.sub }]}>CLIENT ADDRESS</Text>
@@ -1006,7 +1473,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     ) : (
                       <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv }]}>
                         <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
-                        <Text style={[addrStyles.statusText, { color: P.sub }]}>Mobile — waiting for client to send their address in Messages</Text>
+                        <Text style={[addrStyles.statusText, { color: P.sub }]}>The client sends this in Messages — it appears here as soon as they do</Text>
                       </View>
                     )}
                   </View>
@@ -1016,27 +1483,26 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 </>
               )}
 
-              {/* ── NOTES section ── */}
-              {(booking.notes || booking.bookingInstructions) && (
+              {/* ── NOTES section ──
+                  The client's note only. `bookingInstructions` is the
+                  PROVIDER's own booking instructions (PoliciesScreen /
+                  InfoRegScreen) — copy they wrote for clients to read, so
+                  quoting it back at them here told them nothing they didn't
+                  already know while burying the one note on this screen that
+                  came from someone else. It still shows on the client's
+                  BookingDetailScreen, which is its audience. */}
+              {booking.notes ? (
                 <>
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: P.sub }]}>NOTES</Text>
-                    {booking.notes ? (
-                      <View style={[styles.notesBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
-                        <Text style={[styles.notesLabel, { color: P.sub }]}>Client note</Text>
-                        <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
-                      </View>
-                    ) : null}
-                    {booking.bookingInstructions ? (
-                      <View style={[styles.notesBlock, { backgroundColor: isDarkMode ? 'rgba(255,149,0,0.08)' : 'rgba(255,149,0,0.05)', borderColor: isDarkMode ? 'rgba(255,149,0,0.25)' : 'rgba(255,149,0,0.20)', marginTop: booking.notes ? 10 : 0 }]}>
-                        <Text style={[styles.notesLabel, { color: '#FF9500' }]}>Booking instructions</Text>
-                        <Text style={[styles.notesText, { color: P.text }]}>{booking.bookingInstructions}</Text>
-                      </View>
-                    ) : null}
+                    <View style={[styles.notesBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
+                      <Text style={[styles.notesLabel, { color: P.sub }]}>Client note</Text>
+                      <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
+                    </View>
                   </View>
                   <Perf color={perf} />
                 </>
-              )}
+              ) : null}
 
               {/* ── CLIENT section ── */}
               <View style={styles.section}>
@@ -1054,7 +1520,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         try {
                           const h = await getClientBookingHistory(clientUserId);
                           setClientHistoryBookings(h);
-                        } catch {}
+                        } catch (err) {
+                          logger.error('[ProviderBookingDetail] client booking history load failed:', err);
+                        }
                         setClientHistoryLoading(false);
                       }}
                       style={{ marginLeft: 'auto', padding: 8 }}
@@ -1402,21 +1870,32 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── PAYMENT section ── */}
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: P.sub }]}>PAYMENT</Text>
-                <Row
-                  label={booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
-                  value={`£${booking.amountPaid.toFixed(2)}`}
-                  textColor={P.text}
-                  divColor={rowDiv}
-                  valueColor="#34C759"
-                  bold
-                />
+                {/* Only show a "paid" row when something was actually paid
+                    through the app — a manual booking (provider_create_
+                    manual_booking) always inserts amount_paid=0, so showing
+                    "Full payment  £0.00" in green here would read as if £0
+                    was collected via the app, when really nothing has been
+                    collected through the app at all yet. */}
+                {(booking.amountPaid ?? 0) > 0 && (
+                  <Row
+                    label={booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
+                    value={`£${(booking.amountPaid ?? 0).toFixed(2)}`}
+                    textColor={P.text}
+                    divColor={rowDiv}
+                    valueColor="#34C759"
+                    bold
+                  />
+                )}
                 {/* Informational only — collecting and confirming any
                     remaining balance is between the provider and client
-                    directly; the app doesn't track or verify it. */}
-                {booking.remainingBalance > 0 && (
+                    directly; the app doesn't track or verify it. Label
+                    distinguishes "nothing paid through the app yet" (a
+                    manual booking) from "a genuine remaining balance after a
+                    real deposit" so the two don't read the same. */}
+                {(booking.remainingBalance ?? 0) > 0 && (
                   <Row
-                    label="Balance due at appointment"
-                    value={`£${booking.remainingBalance.toFixed(2)}`}
+                    label={(booking.amountPaid ?? 0) > 0 ? 'Balance due at appointment' : 'To collect in person'}
+                    value={`£${(booking.remainingBalance ?? 0).toFixed(2)}`}
                     textColor={P.text}
                     divColor={rowDiv}
                     valueColor="#FF9500"
@@ -1440,14 +1919,19 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : 'RESCHEDULE · RESPONDED'}
                     </Text>
                     <Text style={[styles.rescheduleNote, { color: P.sub }]}>
-                      Requested {formatDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at)}
+                      Requested {formatBookingDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at)}
                     </Text>
-                    {(dbReschedule.requested_dates ?? []).map((date: string, i: number) => (
-                      <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#FF9500' + '18', borderColor: '#FF9500' + '44' }]}>
-                        <Ionicons name="calendar-outline" size={14} color="#FF9500" />
-                        <Text style={[styles.slotChipText, { color: P.text }]}>{formatDisplayDate(date)}</Text>
-                      </View>
-                    ))}
+                    {(dbReschedule.requested_dates ?? []).map((date: string, i: number) => {
+                      const requestedTime = dbReschedule.requested_times?.[i];
+                      return (
+                        <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#FF9500' + '18', borderColor: '#FF9500' + '44' }]}>
+                          <Ionicons name="calendar-outline" size={14} color="#FF9500" />
+                          <Text style={[styles.slotChipText, { color: P.text }]}>
+                            {formatBookingDisplayDate(date)}{requestedTime ? `  ·  ${formatTime12(requestedTime)}` : ''}
+                          </Text>
+                        </View>
+                      );
+                    })}
                     {dbReschedule.status === 'provider_responded' && (dbReschedule.provider_available_slots ?? []).length > 0 && (
                       <View style={{ marginTop: 8 }}>
                         <Text style={[styles.rescheduleNote, { color: P.text + '77', marginBottom: 6 }]}>Your offered slots:</Text>
@@ -1455,7 +1939,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#34C75915', borderColor: '#34C75944' }]}>
                             <Ionicons name="checkmark-circle" size={14} color="#34C759" />
                             <Text style={[styles.slotChipText, { color: P.text }]}>
-                              {formatDisplayDate(slot.date)}  ·  {(slot.times ?? []).join(', ')}
+                              {formatBookingDisplayDate(slot.date)}  ·  {(slot.times ?? []).map(t => formatTime12Safe(t) ?? t).join(', ')}
                             </Text>
                           </View>
                         ))}
@@ -1464,7 +1948,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {canRespondToReschedule && (
                       <TouchableOpacity
                         style={[styles.respondBtn, { backgroundColor: '#FF9500' }]}
-                        onPress={() => setShowRespondModal(true)}
+                        onPress={() => setShowInitRescheduleModal(true)}
                         activeOpacity={0.8}
                       >
                         <Text style={styles.respondBtnText}>Respond to Reschedule</Text>
@@ -1477,7 +1961,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Receipt Footer ── */}
               <View style={[styles.receiptFooter, { borderTopColor: perf }]}>
                 <Text style={[styles.footerText, { color: P.sub }]}>
-                  #{booking.id?.slice(0, 8).toUpperCase() ?? ''}
+                  {formatBookingRef(booking)}
                 </Text>
                 <Text style={[styles.footerText, { color: P.sub }]}>cerviced.app</Text>
               </View>
@@ -1488,6 +1972,26 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </View>{/* receiptScene */}
 
         {/* ── Action buttons below the receipt ── */}
+        {/* Sits directly above Confirm/Decline on purpose. This booking only
+            reached the provider because they opted into being asked, and the
+            client was shown a confirmation saying exactly that — the provider
+            has to see the same fact before they accept, not discover it when
+            the appointment doesn't fit their day. */}
+        {isPendingConfirmation && booking.isEmergencyRequest && (
+          <View style={[styles.emergencyBanner, { borderColor: '#C2811A' }]}>
+            <Text style={[styles.emergencyBannerTitle, { color: '#C2811A' }]}>
+              Outside your availability
+            </Text>
+            <Text style={[styles.emergencyBannerText, { color: P.sub }]}>
+              {booking.customerName || 'This client'} requested a time outside your working
+              hours. Confirming books them in as normal.
+              {/* The opt-in this points at is hidden while EMERGENCY_BOOKINGS_ENABLED
+                  is off (SchedulingScreen), so don't send the provider to a screen
+                  where the setting no longer appears. */}
+              {EMERGENCY_BOOKINGS_ENABLED ? ' To change this setting, go to Scheduling & Availability.' : ''}
+            </Text>
+          </View>
+        )}
         {isPendingConfirmation && (
           <View style={styles.actions}>
             {pendingExpired ? (
@@ -1509,7 +2013,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={{ textAlign: 'center', fontSize: 13, color: P.sub, marginBottom: 10 }}>
                   {apptStartPassed
                     ? 'The appointment day has passed — mark it No Show or Cancel.'
-                    : `You can start this appointment on ${formatDisplayDate(booking.bookingDate)}.`}
+                    : `You can start this appointment on ${formatBookingDisplayDate(booking.bookingDate)}.`}
                 </Text>
               )
             )}
@@ -1517,252 +2021,50 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <ActionButton color={P.accent} label="Mark Complete" onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
             )}
             <View style={styles.secondaryActions}>
-              {apptStartPassed && booking.status !== BookingStatus.IN_PROGRESS && (
+              {/* Mirrors provider_update_booking_status()'s server-side no_show
+                  guard exactly: same calendar day as the appointment (not just
+                  "start time has passed" — that alone let a booking from weeks
+                  ago still show this button), and never while a reschedule
+                  offer the client could still act on is outstanding — resolve
+                  that first rather than short-circuiting it with a no_show. */}
+              {isApptToday && apptStartPassed && !hasRescheduleRequest && booking.status !== BookingStatus.IN_PROGRESS && (
                 <ActionButton color="#FF9500" label="No Show" onPress={() => handleStatusChange(BookingStatus.NO_SHOW)} ghost />
               )}
               {booking.status === BookingStatus.UPCOMING && !isApptToday && !apptStartPassed && !hasRescheduleRequest && (
-                <ActionButton color="#FF9500" label="Reschedule" onPress={() => setShowInitRescheduleModal(true)} ghost />
+                <ActionButton
+                  color="#FF9500"
+                  label="Reschedule"
+                  onPress={() => (groupSiblings.length > 1 ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true))}
+                  ghost
+                />
               )}
               <ActionButton color="#FF3B30" label="Cancel" onPress={handleCancel} ghost />
             </View>
           </View>
         )}
 
+        {/* A no-show the CLIENT recorded against this provider. Terminal, so
+            it sits outside the isActive action block above — disputing does
+            not undo it, it records the disagreement, tells the client, and
+            puts it in front of a human at support. */}
+        {canDispute && (
+          <View style={styles.actions}>
+            <ActionButton
+              color="#FF9500"
+              label="This wasn't right — dispute it"
+              onPress={() => setShowDisputeModal(true)}
+              ghost
+            />
+          </View>
+        )}
+        {!!booking.noShowDisputedAt && (
+          <Text style={{ textAlign: 'center', fontSize: 13, color: P.sub, paddingHorizontal: 24, marginTop: 8 }}>
+            You disputed this. {booking.customerName || 'Your client'} has been told and support has a copy.
+          </Text>
+        )}
+
         <View style={{ height: 56 }} />
       </ScrollView>
-
-      {/* Reschedule Respond Modal */}
-      <Modal
-        visible={showRespondModal}
-        transparent
-        animationType="fade"
-        onRequestClose={closeRespondModal}
-      >
-        <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
-
-            {respondSent ? (
-              /* ── Success state ── */
-              <View style={styles.sentState}>
-                <Text style={styles.sentIcon}>✓</Text>
-                <Text style={[styles.sentTitle, { color: P.text }]}>Response Sent</Text>
-                <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  The client has been notified of your available dates.
-                </Text>
-                {/* respondModalBtn is `flex:1`, meant to share a row with a
-                    sibling button — used alone it had no row to fill and
-                    Yoga collapsed it, so "Done" barely rendered / wasn't
-                    reliably tappable. The row wrapper gives it one. */}
-                <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
-                  <TouchableOpacity
-                    style={[styles.respondModalBtn, { backgroundColor: '#FF9500' }]}
-                    onPress={closeRespondModal}
-                  >
-                    <Text style={styles.respondModalBtnText}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <Text style={[styles.respondModalTitle, { color: P.text }]}>Send Available Dates</Text>
-
-                {/* Client's requested dates */}
-                {(dbReschedule?.requested_dates ?? []).length > 0 && (
-                  <View style={{ marginBottom: 4 }}>
-                    <Text style={[styles.inputLabel, { color: P.text + '66', marginBottom: 4 }]}>CLIENT REQUESTED</Text>
-                    {(dbReschedule?.requested_dates ?? []).map((d, i) => (
-                      <Text key={i} style={[styles.respondModalSub, { color: P.text + '99' }]}>{formatDisplayDate(d)}</Text>
-                    ))}
-                  </View>
-                )}
-
-                {/* Apology toggle */}
-                <TouchableOpacity
-                  style={[styles.apologyToggle, {
-                    backgroundColor: sendApology
-                      ? (isDarkMode ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.08)')
-                      : (isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
-                    borderColor: sendApology ? '#FF3B30' + '66' : (isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'),
-                  }]}
-                  onPress={() => setSendApology(v => !v)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.apologyCheck, {
-                    backgroundColor: sendApology ? '#FF3B30' : 'transparent',
-                    borderColor: sendApology ? '#FF3B30' : (isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)'),
-                  }]}>
-                    {sendApology && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>x</Text>}
-                  </View>
-                  <Text style={[styles.apologyToggleText, { color: sendApology ? '#FF3B30' : P.text + 'AA' }]}>
-                    Apologise — none of the requested dates work
-                  </Text>
-                </TouchableOpacity>
-
-                {sendApology && (
-                  <TextInput
-                    style={[styles.respondInput, styles.apologyInput, { color: P.text, borderColor: '#FF3B30' + '44', backgroundColor: isDarkMode ? 'rgba(255,59,48,0.08)' : 'rgba(255,59,48,0.04)' }]}
-                    value={apologyText}
-                    onChangeText={setApologyText}
-                    multiline
-                    numberOfLines={3}
-                    placeholderTextColor={P.text + '44'}
-                  />
-                )}
-
-                <View style={[styles.divider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', marginVertical: 16 }]} />
-
-                {/* Date picker — triggers slot fetch once a date is chosen */}
-                <Text style={[styles.inputLabel, { color: P.text + '88' }]}>DATE</Text>
-                <TouchableOpacity
-                  style={[styles.datePickBtn, { borderColor: inputError ? '#FF3B30' : (isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'), backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
-                  onPress={() => { setInputError(''); setSlotDatePickerVisible(true); }}
-                  activeOpacity={0.75}
-                >
-                  <Ionicons name="calendar-outline" size={16} color="#FF9500" />
-                  <Text style={[styles.datePickBtnText, { color: slotDate ? P.text : P.text + '66' }]}>
-                    {slotDate ? formatDisplayDate(slotDate) : 'Choose a date'}
-                  </Text>
-                </TouchableOpacity>
-                {slotDatePickerVisible && (
-                  Platform.OS === 'ios' ? (
-                    <Modal transparent animationType="fade" visible={slotDatePickerVisible} onRequestClose={() => setSlotDatePickerVisible(false)}>
-                      <View style={styles.pickerModalWrap}>
-                        <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setSlotDatePickerVisible(false)} />
-                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
-                          <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
-                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Date</Text>
-                            <TouchableOpacity onPress={() => setSlotDatePickerVisible(false)}>
-                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>Done</Text>
-                            </TouchableOpacity>
-                          </View>
-                          <DateTimePicker
-                            mode="date"
-                            value={slotDate ? isoToDate(slotDate) : new Date()}
-                            onChange={(_, d) => { if (d) setSlotDate(dateToIso(d)); }}
-                            display="spinner"
-                            themeVariant={isDarkMode ? 'dark' : 'light'}
-                            textColor={P.text}
-                            minimumDate={new Date()}
-                            style={{ width: '100%' }}
-                          />
-                        </View>
-                      </View>
-                    </Modal>
-                  ) : (
-                    <DateTimePicker
-                      mode="date"
-                      value={slotDate ? isoToDate(slotDate) : new Date()}
-                      onChange={(_, d) => { setSlotDatePickerVisible(false); if (d) setSlotDate(dateToIso(d)); }}
-                      display="default"
-                      minimumDate={new Date()}
-                    />
-                  )
-                )}
-
-                {/* Auto-loaded time chips */}
-                {loadingTimes && (
-                  <View style={styles.chipsLoadingRow}>
-                    <ActivityIndicator size="small" color="#FF9500" />
-                    <Text style={[styles.chipsLoadingText, { color: P.sub }]}>Loading your availability</Text>
-                  </View>
-                )}
-                {!loadingTimes && suggestedTimes.length > 0 && (
-                  <View style={styles.chipsSection}>
-                    <Text style={[styles.inputLabel, { color: P.text + '88' }]}>YOUR AVAILABLE SLOTS</Text>
-                    <View style={styles.chipsRow}>
-                      {suggestedTimes.map(time => {
-                        const on = selectedTimes.includes(time);
-                        return (
-                          <TouchableOpacity
-                            key={time}
-                            style={[
-                              styles.timeChip,
-                              on
-                                ? { backgroundColor: '#FF9500', borderColor: '#FF9500' }
-                                : { backgroundColor: 'transparent', borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' },
-                            ]}
-                            onPress={() => toggleTime(time)}
-                            activeOpacity={0.75}
-                          >
-                            <Text style={[styles.timeChipText, { color: on ? '#fff' : P.text + 'CC' }]}>{time}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-                )}
-                {!loadingTimes && !!slotDate && suggestedTimes.length === 0 && (
-                  <Text style={[styles.noSlotsText, { color: P.sub }]}>No availability set for this date.</Text>
-                )}
-
-                {/* Manual / extra times */}
-                <Text style={[styles.inputLabel, { color: P.text + '88', marginTop: 10 }]}>
-                  {suggestedTimes.length > 0 ? 'ADD EXTRA TIMES (OPTIONAL)' : 'TIMES'}
-                </Text>
-                <TextInput
-                  style={[styles.respondInput, { color: P.text, borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
-                  placeholder="e.g. 10:00, 14:30"
-                  placeholderTextColor={P.text + '44'}
-                  value={slotTimes}
-                  onChangeText={setSlotTimes}
-                  keyboardType="numbers-and-punctuation"
-                />
-
-                {!!inputError && (
-                  <Text style={styles.inputErrorText}>{inputError}</Text>
-                )}
-
-                <TouchableOpacity
-                  style={[styles.addSlotBtn, { borderColor: '#FF9500' }]}
-                  onPress={handleAddSlot}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.addSlotBtnText, { color: '#FF9500' }]}>+ Add Date</Text>
-                </TouchableOpacity>
-
-                {/* Accumulated outbound slots */}
-                {outboundSlots.length > 0 && (
-                  <View style={styles.slotsList}>
-                    <Text style={[styles.inputLabel, { color: '#FF9500' }]}>
-                      {sendApology ? 'ALTERNATIVE DATES' : 'DATES BEING SENT'}
-                    </Text>
-                    {outboundSlots.map((slot, i) => (
-                      <View key={i} style={[styles.slotRow, { backgroundColor: isDarkMode ? 'rgba(255,149,0,0.12)' : 'rgba(255,149,0,0.08)' }]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.slotRowDate, { color: P.text }]}>{formatDisplayDate(slot.date)}</Text>
-                          <Text style={[styles.slotRowTimes, { color: P.text + '99' }]}>{slot.times.join('  ·  ')}</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => setOutboundSlots(prev => prev.filter((_, idx) => idx !== i))}>
-                          <Text style={{ color: '#FF3B30', fontSize: 18, paddingLeft: 10 }}>×</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                <View style={[styles.respondModalActions, { marginTop: 16 }]}>
-                  <TouchableOpacity
-                    style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]}
-                    onPress={closeRespondModal}
-                  >
-                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.respondModalBtn, { backgroundColor: outboundSlots.length > 0 ? '#FF9500' : '#FF950055', opacity: respondLoading ? 0.6 : 1 }]}
-                    onPress={handleRespondSubmit}
-                    disabled={respondLoading || outboundSlots.length === 0}
-                  >
-                    {respondLoading
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={styles.respondModalBtnText}>Send Response</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        </KeyboardDismissView>
-      </Modal>
 
       {/* ── Client history modal ── */}
       <Modal
@@ -1844,7 +2146,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </View>
       </Modal>
 
-      {/* ── Provider-initiated reschedule modal ── */}
+      {/* ── Reschedule proposal modal — single merged UI for both flows:
+          responding to a client's pending reschedule request, and a
+          provider-initiated reschedule with no existing request. Which mode
+          is active is read live off dbReschedule.status (not captured at
+          modal-open time), so it always matches ● the RESCHEDULE REQUEST /
+          RESCHEDULE · RESPONDED banner above and ● the group modal's
+          equivalent copy. See handleInitRescheduleSubmit for the RPC
+          branch. ── */}
       <Modal
         visible={showInitRescheduleModal}
         transparent
@@ -1855,10 +2164,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           <View style={[styles.respondModal, { backgroundColor: P.card }]}>
             {initSent ? (
               <View style={styles.sentState}>
-                <Text style={styles.sentIcon}>✓</Text>
-                <Text style={[styles.sentTitle, { color: P.text }]}>Request Sent</Text>
+                <Text style={styles.sentIcon}>{dbReschedule?.status === 'rejected' ? '✕' : '✓'}</Text>
+                <Text style={[styles.sentTitle, { color: P.text }]}>
+                  {dbReschedule?.status === 'rejected' ? 'Request Declined' : 'Request Sent'}
+                </Text>
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  {booking?.customerName ?? 'The client'} has been notified and can choose from your proposed times.
+                  {dbReschedule?.status === 'rejected'
+                    ? 'The client has been notified. Their original appointment time stands.'
+                    : `${booking?.customerName ?? 'The client'} has been notified and can choose from your proposed times.`}
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
@@ -1871,10 +2184,77 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <Text style={[styles.respondModalTitle, { color: P.text }]}>Propose New Times</Text>
-                <Text style={[styles.respondModalSub, { color: P.text + '77', marginBottom: 14 }]}>
-                  Add the dates and times you're available. The client will pick one to confirm.
+                <Text style={[styles.respondModalTitle, { color: P.text }]}>
+                  {canRespondToReschedule ? 'Respond to Reschedule' : 'Propose New Times'}
                 </Text>
+                <Text style={[styles.respondModalSub, { color: P.text + '77', marginBottom: 14 }]}>
+                  {canRespondToReschedule
+                    ? "Offer dates and times you're available. The client will pick one to confirm."
+                    : "Add the dates and times you're available. The client will pick one to confirm."}
+                </Text>
+
+                {/* Client's requested dates — only present when responding to
+                    an actual pending request. Same row treatment (slotChip)
+                    as "your proposed times" below, just a different label and
+                    accent, so the two don't read as two different UI
+                    languages (one styled, one plain text). */}
+                {canRespondToReschedule && (dbReschedule?.requested_dates ?? []).length > 0 && (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={[styles.inputLabel, { color: '#FF9500' }]}>CLIENT REQUESTED</Text>
+                    {(dbReschedule?.requested_dates ?? []).map((d, i) => {
+                      const requestedTime = dbReschedule?.requested_times?.[i];
+                      return (
+                        <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#FF9500' + '18', borderColor: '#FF9500' + '44' }]}>
+                          <Ionicons name="calendar-outline" size={14} color="#FF9500" />
+                          <Text style={[styles.slotChipText, { color: P.text }]}>
+                            {formatBookingDisplayDate(d)}{requestedTime ? `  ·  ${formatTime12(requestedTime)}` : ''}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Apology toggle — only meaningful when responding to a real
+                    client request; nothing to apologise for when the
+                    provider is initiating from scratch. */}
+                {canRespondToReschedule && (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.apologyToggle, {
+                        backgroundColor: sendApology
+                          ? (isDarkMode ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.08)')
+                          : (isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
+                        borderColor: sendApology ? '#FF3B30' + '66' : (isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'),
+                      }]}
+                      onPress={() => setSendApology(v => !v)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.apologyCheck, {
+                        backgroundColor: sendApology ? '#FF3B30' : 'transparent',
+                        borderColor: sendApology ? '#FF3B30' : (isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)'),
+                      }]}>
+                        {sendApology && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>x</Text>}
+                      </View>
+                      <Text style={[styles.apologyToggleText, { color: sendApology ? '#FF3B30' : P.text + 'AA' }]}>
+                        Apologise — none of the requested dates work
+                      </Text>
+                    </TouchableOpacity>
+
+                    {sendApology && (
+                      <TextInput
+                        style={[styles.respondInput, styles.apologyInput, { color: P.text, borderColor: '#FF3B30' + '44', backgroundColor: isDarkMode ? 'rgba(255,59,48,0.08)' : 'rgba(255,59,48,0.04)' }]}
+                        value={apologyText}
+                        onChangeText={setApologyText}
+                        multiline
+                        numberOfLines={3}
+                        placeholderTextColor={P.text + '44'}
+                      />
+                    )}
+
+                    <View style={[styles.divider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+                  </>
+                )}
 
                 {/* Date picker */}
                 <Text style={[styles.inputLabel, { color: P.text + '77' }]}>DATE</Text>
@@ -1885,7 +2265,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 >
                   <Ionicons name="calendar-outline" size={16} color="#FF9500" />
                   <Text style={[styles.datePickBtnText, { color: initSlotDate ? P.text : P.text + '66' }]}>
-                    {initSlotDate ? formatDisplayDate(initSlotDate) : 'Choose a date'}
+                    {initSlotDate ? formatBookingDisplayDate(initSlotDate) : 'Choose a date'}
                   </Text>
                 </TouchableOpacity>
                 {initSlotDatePickerVisible && (
@@ -1902,8 +2282,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           </View>
                           <DateTimePicker
                             mode="date"
-                            value={initSlotDate ? isoToDate(initSlotDate) : new Date()}
-                            onChange={(_, d) => { if (d) setInitSlotDate(dateToIso(d)); }}
+                            value={initSlotDate ? bookingIsoToDate(initSlotDate) : new Date()}
+                            onChange={(_, d) => { if (d) setInitSlotDate(dateToBookingIso(d)); }}
                             display="spinner"
                             themeVariant={isDarkMode ? 'dark' : 'light'}
                             textColor={P.text}
@@ -1916,8 +2296,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   ) : (
                     <DateTimePicker
                       mode="date"
-                      value={initSlotDate ? isoToDate(initSlotDate) : new Date()}
-                      onChange={(_, d) => { setInitSlotDatePickerVisible(false); if (d) setInitSlotDate(dateToIso(d)); }}
+                      value={initSlotDate ? bookingIsoToDate(initSlotDate) : new Date()}
+                      onChange={(_, d) => { setInitSlotDatePickerVisible(false); if (d) setInitSlotDate(dateToBookingIso(d)); }}
                       display="default"
                       minimumDate={new Date()}
                     />
@@ -1941,13 +2321,29 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
                 )}
 
-                {/* Escape hatch: propose a time outside the normal availability grid */}
-                <TouchableOpacity
-                  style={[styles.addSlotBtn, { borderColor: P.accent + '66', marginTop: 4 }]}
-                  onPress={() => { if (!initSlotDate) { setInitInputError('Pick a date first.'); return; } setInitInputError(''); setInitCustomTimePickerVisible(true); }}
-                >
-                  <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add custom time</Text>
-                </TouchableOpacity>
+                {/* Time-row actions. "+ Add custom time" (the escape hatch for a
+                    time outside the availability grid) and the commit action sit
+                    on ONE row: the commit used to be a full-width solid bar of its
+                    own, which read as the modal's primary submit when it only adds
+                    a row to the list below. Sized down and moved up beside the time
+                    control, it reads as what it is — finishing this one entry. */}
+                <View style={styles.addSlotRow}>
+                  <TouchableOpacity
+                    style={[styles.addSlotBtn, { borderColor: P.accent + '66' }]}
+                    onPress={() => { if (!initSlotDate) { setInitInputError('Pick a date first.'); return; } setInitInputError(''); setInitCustomTimePickerVisible(true); }}
+                  >
+                    <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add custom time</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.addSlotBtnPrimary, { backgroundColor: '#FF9500' }]}
+                    onPress={handleAddInitSlot}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add this date and time to your proposed times"
+                  >
+                    <Text style={styles.addSlotBtnPrimaryText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
                 {initCustomTimePickerVisible && (
                   Platform.OS === 'ios' ? (
                     <Modal transparent animationType="fade" visible={initCustomTimePickerVisible} onRequestClose={() => setInitCustomTimePickerVisible(false)}>
@@ -1984,24 +2380,64 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   )
                 )}
 
-                <TouchableOpacity style={[styles.addSlotBtn, { borderColor: P.accent + '66', marginTop: 10 }]} onPress={handleAddInitSlot}>
-                  <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add date</Text>
-                </TouchableOpacity>
-
                 {initInputError ? <Text style={styles.inputErrorText}>{initInputError}</Text> : null}
 
-                {/* Added slots */}
-                {initRescheduleSlots.map((slot, i) => (
-                  <View key={i} style={[styles.slotRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.slotRowDate, { color: P.text }]}>{formatDisplayDate(slot.date)}</Text>
-                      <Text style={[styles.slotRowTimes, { color: P.text + '88' }]}>{slot.times.map(t => formatTime12(t)).join(', ')}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => setInitRescheduleSlots(prev => prev.filter((_, idx) => idx !== i))}>
-                      <Ionicons name="close-circle" size={18} color={P.text + '55'} />
-                    </TouchableOpacity>
+                {/* Accumulated slots — same slotChip row treatment as "CLIENT
+                    REQUESTED" above, just a different label/accent, so
+                    requested vs. proposed dates read as one visual language. */}
+                {initRescheduleSlots.length > 0 && (
+                  <View style={styles.slotsList}>
+                    <Text style={[styles.inputLabel, { color: '#FF9500' }]}>
+                      {canRespondToReschedule ? (sendApology ? 'ALTERNATIVE DATES' : 'YOUR PROPOSED TIMES') : 'DATES BEING SENT'}
+                    </Text>
+                    {initRescheduleSlots.map((slot, i) => (
+                      <View key={i} style={[styles.slotChip, styles.slotChipRow, { justifyContent: 'space-between', backgroundColor: isDarkMode ? 'rgba(255,149,0,0.12)' : 'rgba(255,149,0,0.08)', borderColor: '#FF9500' + '44' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Ionicons name="checkmark-circle" size={14} color="#FF9500" />
+                          <Text style={[styles.slotChipText, { color: P.text }]}>
+                            {formatBookingDisplayDate(slot.date)}  ·  {slot.times.map(t => formatTime12(t)).join(', ')}
+                          </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setInitRescheduleSlots(prev => prev.filter((_, idx) => idx !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="close-circle" size={18} color={P.text + '55'} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    {/* Offering a time reserves it. place_reschedule_holds_from_slots
+                        (supabase/migrations/20260827120337_reschedule_slot_holds.sql)
+                        writes an on_hold row per time, so the slot is still there
+                        when the client picks it — an offer that can't be honoured
+                        is worse than no offer. The cost lands on this provider's
+                        own diary, so it's stated rather than capped: nothing else
+                        on this screen would explain why those slots went quiet. */}
+                    <Text style={{ color: P.sub, fontSize: 11, lineHeight: 15, marginTop: 8 }}>
+                      {(() => {
+                        const n = initRescheduleSlots.reduce((sum, s) => sum + s.times.length, 0);
+                        return `${n} time${n === 1 ? '' : 's'} held for this client until they answer or the request expires. Nobody else can book ${n === 1 ? 'it' : 'them'} in the meantime.`;
+                      })()}
+                    </Text>
                   </View>
-                ))}
+                )}
+
+                {/* Decline outright — no alternative slots required, unlike
+                    the "Apologise" flow above which still needs >=1 slot
+                    added before Send Response unlocks. Separate action, not
+                    a replacement for it — see reject_reschedule_request in
+                    supabase/fix_reschedule_flow_completion.sql. Only shown
+                    when responding to a real client request — nothing to
+                    decline when the provider is initiating from scratch. */}
+                {canRespondToReschedule && (
+                  <TouchableOpacity
+                    onPress={confirmDeclineRequest}
+                    disabled={respondLoading}
+                    activeOpacity={0.7}
+                    style={{ alignSelf: 'center', marginTop: 14, opacity: respondLoading ? 0.5 : 1 }}
+                  >
+                    <Text style={{ color: '#FF3B30', fontSize: 13, fontWeight: '600' }}>
+                      Decline Request (no alternative times)
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 <View style={[styles.respondModalActions, { marginTop: 16 }]}>
                   <TouchableOpacity style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} onPress={closeInitRescheduleModal}>
@@ -2012,7 +2448,122 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     onPress={handleInitRescheduleSubmit}
                     disabled={initLoading || initRescheduleSlots.length === 0}
                   >
-                    {initLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.respondModalBtnText}>Send Request</Text>}
+                    {initLoading
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={styles.respondModalBtnText}>{canRespondToReschedule ? 'Send Response' : 'Send Request'}</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </KeyboardDismissView>
+      </Modal>
+
+      {/* ── Group reschedule-initiate modal — every one of this provider's
+          own sibling services in the group moves together to a shared new
+          day. Reuses ModernBeautyCalendar with a chain-aware slotResolver,
+          same pattern CartScreen.tsx uses client-side pre-booking. ── */}
+      <Modal
+        visible={showGroupRescheduleModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeGroupRescheduleModal}
+      >
+        <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
+          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
+            {initSent ? (
+              <View style={styles.sentState}>
+                <Text style={styles.sentIcon}>✓</Text>
+                <Text style={[styles.sentTitle, { color: P.text }]}>Request Sent</Text>
+                <Text style={[styles.sentSub, { color: P.text + '88' }]}>
+                  {booking?.customerName ?? 'The client'} has been notified and can choose from your proposed dates for all {groupSiblings.length} services.
+                </Text>
+                <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: '#FF9500' }]}
+                    onPress={closeGroupRescheduleModal}
+                  >
+                    <Text style={styles.respondModalBtnText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={[styles.respondModalTitle, { color: P.text }]}>
+                  Propose New Day — {groupSiblings.length} Services
+                </Text>
+                <Text style={[styles.respondModalSub, { color: P.text + '77', marginBottom: 14 }]}>
+                  Times shown fit all {groupSiblings.length} services back-to-back. Add one or more days — the client will pick one to confirm the whole group.
+                </Text>
+
+                <ModernBeautyCalendar
+                  selectedDate={groupRescheduleDate}
+                  onDateSelect={setGroupRescheduleDate}
+                  selectedTime={groupRescheduleTime}
+                  onTimeSelect={setGroupRescheduleTime}
+                  providerName={booking?.providerId ?? ''}
+                  slotResolver={groupSlotResolver}
+                  accentColor="#FF9500"
+                  textColor={P.text}
+                  subColor={P.text + '77'}
+                  surfaceColor={P.card}
+                />
+
+                {groupRescheduleChain && (
+                  <View style={{ marginTop: 12, gap: 6 }}>
+                    {[...groupSiblings]
+                      .sort((a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime))
+                      .map((sib, i) => (
+                        <View key={sib.id} style={[styles.row, { borderBottomColor: 'transparent' }]}>
+                          <Text style={[styles.rowLabel, { color: P.text }]} numberOfLines={1}>{sib.serviceName}</Text>
+                          <Text style={[styles.rowValue, { color: '#FF9500' }]}>
+                            {groupRescheduleChain[i]!.time} – {groupRescheduleChain[i]!.endTime}
+                          </Text>
+                        </View>
+                      ))}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.respondModalBtn, { backgroundColor: groupRescheduleChain ? '#FF9500' : '#FF950055', marginTop: 14 }]}
+                  onPress={handleAddGroupDateOption}
+                  disabled={!groupRescheduleChain}
+                >
+                  <Text style={styles.respondModalBtnText}>Add This Day</Text>
+                </TouchableOpacity>
+
+                {groupDateOptions.length > 0 && (
+                  <View style={{ marginTop: 14, gap: 6 }}>
+                    <Text style={[styles.inputLabel, { color: P.text + '77' }]}>PROPOSED DAYS</Text>
+                    {groupDateOptions.map(opt => (
+                      <View key={opt.date} style={[styles.row, { borderBottomColor: 'transparent' }]}>
+                        <Text style={[styles.rowLabel, { color: P.text }]}>{formatBookingDisplayDate(opt.date)}</Text>
+                        <TouchableOpacity onPress={() => setGroupDateOptions(prev => prev.filter(o => o.date !== opt.date))}>
+                          <Ionicons name="close-circle" size={18} color={P.text + '55'} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {groupRescheduleError ? (
+                  <Text style={{ color: '#FF3B30', fontSize: 13, marginTop: 10 }}>{groupRescheduleError}</Text>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', width: '100%', marginTop: 20, gap: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: P.text + '22' }]}
+                    onPress={closeGroupRescheduleModal}
+                  >
+                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: groupDateOptions.length > 0 ? '#FF9500' : '#FF950055', opacity: groupRescheduleSending ? 0.6 : 1 }]}
+                    onPress={handleSendGroupReschedule}
+                    disabled={groupRescheduleSending || groupDateOptions.length === 0}
+                  >
+                    {groupRescheduleSending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.respondModalBtnText}>Send Request</Text>}
                   </TouchableOpacity>
                 </View>
               </ScrollView>
@@ -2074,7 +2625,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           {booking && (booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS) && (
             <TouchableOpacity
               style={[styles.moreSheetRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
-              onPress={() => { setShowMoreSheet(false); setTimeout(() => setShowInitRescheduleModal(true), 260); }}
+              onPress={() => {
+                setShowMoreSheet(false);
+                const openGroup = groupSiblings.length > 1;
+                setTimeout(() => (openGroup ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true)), 260);
+              }}
               activeOpacity={0.7}
             >
               <View style={[styles.moreSheetIcon, { backgroundColor: '#FF950018' }]}>
@@ -2089,7 +2644,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           )}
           <TouchableOpacity
             style={styles.moreSheetRow}
-            onPress={() => { setShowMoreSheet(false); Linking.openURL('mailto:support@cerviced.app?subject=Booking%20Support'); }}
+            onPress={() => { setShowMoreSheet(false); Linking.openURL(supportMailtoUrl('Booking Support')); }}
             activeOpacity={0.7}
           >
             <View style={[styles.moreSheetIcon, { backgroundColor: '#007AFF18' }]}>
@@ -2101,6 +2656,72 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             </View>
             <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ── Dispute dialog ──────────────────────────────────────────────
+          Same dialog shell as the confirm/decline one below, with a required
+          reason: that text is the entire content of the support ticket, and a
+          dispute that says nothing gives whoever reads it nothing to act on. */}
+      <Modal
+        visible={showDisputeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDisputeModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.dialogOverlay}
+          activeOpacity={1}
+          onPress={() => { if (!disputeBusy) { setShowDisputeModal(false); setDisputeReason(''); } }}
+        />
+        <View style={styles.dialogPositioner} pointerEvents="box-none">
+          <View style={[styles.dialog, { backgroundColor: P.card }]}>
+            <Text style={[styles.dialogTitle, { color: P.text }]}>Dispute this no-show</Text>
+            <Text style={[styles.dialogMessage, { color: P.text + '88' }]}>
+              {booking.customerName || 'Your client'} reported that you didn't show up. Tell us what actually happened — they'll see it, and so will Cerviced support.
+            </Text>
+            <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
+              <TextInput
+                style={[styles.respondInput, {
+                  color: P.text,
+                  borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+                  minHeight: 92,
+                  textAlignVertical: 'top',
+                }]}
+                placeholder="What happened?"
+                placeholderTextColor={P.text + '44'}
+                value={disputeReason}
+                onChangeText={setDisputeReason}
+                multiline
+                maxLength={1000}
+                editable={!disputeBusy}
+              />
+            </View>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={disputeBusy || !disputeReason.trim()}
+              onPress={handleSubmitDispute}
+            >
+              {disputeBusy ? (
+                <ActivityIndicator size="small" color="#007AFF" />
+              ) : (
+                <Text style={[styles.dialogBtnText, { color: '#007AFF', fontWeight: '600', opacity: disputeReason.trim() ? 1 : 0.4 }]}>
+                  Send Dispute
+                </Text>
+              )}
+            </TouchableOpacity>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={disputeBusy}
+              onPress={() => { setShowDisputeModal(false); setDisputeReason(''); }}
+            >
+              <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -2126,11 +2747,36 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 style={styles.dialogBtn}
                 activeOpacity={0.65}
                 onPress={() => {
+                  if (confirmInFlight.current) return;
+                  confirmInFlight.current = true;
                   const fn = pendingConfirm.onConfirm;
                   setPendingConfirm(null);
-                  Promise.resolve(fn()).catch(() =>
-                    Alert.alert('Action failed', 'Could not complete this action. Check your connection and try again.')
-                  );
+                  Promise.resolve(fn()).catch((err: any) => {
+                    // The group RPCs (provider_update_group_booking_status /
+                    // provider_cancel_group_booking) are all-or-nothing and
+                    // RAISE EXCEPTION with a specific, actionable reason
+                    // (e.g. "Booking X is already completed") when even one
+                    // sibling can't legally make the transition — surface
+                    // that verbatim instead of a generic message so the
+                    // provider knows what actually blocked it. A PostgREST/RPC
+                    // error is a plain {message, code, details} object, NOT an
+                    // `Error` instance, so it's matched on SQLSTATE instead:
+                    // only P0001 (our own RAISE EXCEPTION) is copy meant for a
+                    // provider to read. Anything else coded — RLS 42501, unique
+                    // violation 23505 — is backend detail and gets the generic
+                    // message plus a log.
+                    const message = toUserMessageAllowingDbGuard(
+                      err,
+                      'Could not complete this action. Check your connection and try again.',
+                      'ProviderBookingDetail.confirmAction',
+                    );
+                    Alert.alert('Action failed', message);
+                    // The most common cause of a rejected transition is this
+                    // screen acting on a status that has since moved on, so
+                    // re-read the row rather than leaving the provider looking
+                    // at the same wrong buttons that just failed.
+                    if ((err as { code?: string } | null)?.code === 'P0001') refreshBookingStatus();
+                  }).finally(() => { confirmInFlight.current = false; });
                 }}
               >
                 <Text style={[styles.dialogBtnText, { color: pendingConfirm.destructive ? '#FF3B30' : '#007AFF', fontWeight: '600' }]}>
@@ -2164,13 +2810,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               Choose a pack to send to the client for this booking.
             </Text>
 
-            {providerInfoPacks.length === 0 ? (
+            {relevantInfoPacks.length === 0 ? (
               <Text style={[styles.respondModalSub, { color: P.sub, textAlign: 'center', marginVertical: 24 }]}>
-                No info packs yet — create them in your Info Packs settings.
+                {providerInfoPacks.length === 0
+                  ? 'No info packs yet — create them in your Info Packs settings.'
+                  : 'No info packs match this booking’s service.'}
               </Text>
             ) : (
               <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-                {providerInfoPacks.map(pack => {
+                {relevantInfoPacks.map(pack => {
                   const alreadySent = bookingInfoPacks.some(bp => bp.infoPackId === pack.id);
                   return (
                     <TouchableOpacity
@@ -2184,8 +2832,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           const updated = await getInfoPacksByBooking(bookingId);
                           setBookingInfoPacks(updated);
                           setShowInfoPackPicker(false);
-                        } catch (e: any) {
-                          Alert.alert('Error', e?.message ?? 'Failed to send info pack.');
+                        } catch (e) {
+                          Alert.alert('Info pack not sent', toUserMessage(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
                         } finally {
                           setIsAttachingInfoPack(false);
                         }
@@ -2209,9 +2857,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           </View>
                         )}
                       </View>
-                      {pack.service ? (
-                        <Text style={[styles.intakeFormSub, { color: P.sub }]}>{pack.service}</Text>
-                      ) : null}
+                      <Text style={[styles.intakeFormSub, { color: P.sub }]}>
+                        {pack.service_names.length === 0 ? 'All services' : pack.service_names.join(', ')}
+                      </Text>
+                      <Text style={[styles.intakeFormSub, { color: P.sub }]} numberOfLines={2}>
+                        {pack.content}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -2320,6 +2971,12 @@ function ActionButton({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  emergencyBanner: {
+    borderWidth: 1, borderRadius: 14, padding: 14,
+    marginHorizontal: 20, marginBottom: 12,
+  },
+  emergencyBannerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 5 },
+  emergencyBannerText: { fontSize: 12, lineHeight: 17 },
   root:      { flex: 1 },
   container: { flex: 1 },
   content:   { paddingHorizontal: 16, paddingBottom: 40 },
@@ -2341,6 +2998,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    alignItems: 'center',
+  },
+  headerHat: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: 1,
   },
   headerTitle: {
     fontSize: 17,
@@ -2554,6 +3220,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 2,
+    marginBottom: 12,
+  },
+  groupSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginBottom: 12,
   },
 
@@ -2883,15 +3555,45 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontStyle: 'italic',
   },
+  // The two time-row actions share this row so they read as one control pair.
+  addSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 16,
+  },
   addSlotBtn: {
+    // Takes the remaining width so the compact commit button keeps a fixed,
+    // deliberately smaller footprint beside it.
+    flex: 1,
     borderWidth: 1.5,
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
   },
   addSlotBtnText: {
     fontSize: 15,
+    fontWeight: '700',
+  },
+  // Solid-fill variant of addSlotBtn — the "commit this slot" primary action,
+  // deliberately distinct from the outline treatment used everywhere else in
+  // the reschedule modal (e.g. "+ Add custom time") so it reads as the one
+  // action that actually adds the date, not just another secondary control.
+  addSlotBtnPrimary: {
+    // Compact: hugs its label instead of spanning the sheet, and the orange
+    // glow is gone — at full width with a shadow it out-shouted the modal's
+    // real submit button.
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addSlotBtnPrimaryText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '700',
   },
   slotsList: {

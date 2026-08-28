@@ -1,8 +1,12 @@
 // App.tsx - WITH BookingProvider
+// These two runtime requires are intentional: Reactotron is dev-only and the
+// Stripe native module must not be evaluated in Expo Go. Both must remain
+// conditional, ahead of normal app initialisation.
+/* eslint-disable import/first, @typescript-eslint/no-require-imports */
 if (__DEV__) {
   try {
     require('./src/utils/reactotron');
-  } catch (e) {
+  } catch {
     console.log('Reactotron not configured');
   }
 }
@@ -26,8 +30,11 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { storage, STORAGE_KEYS } from './src/utils/storage';
 import { useBookmarkStore } from './src/stores/useBookmarkStore';
 import { initSentry } from './src/lib/sentry';
+import { installAuthErrorFilter } from './src/utils/logger';
 import * as Sentry from '@sentry/react-native';
 import { env } from './src/utils/env';
+import { configureBeccaAI } from './src/services/becca/aiRuntime';
+import { nvidiaBeccaInterpreter } from './src/services/becca/nvidiaInterpreter';
 
 // @stripe/stripe-react-native's native module binding throws at import time
 // (TurboModuleRegistry.getEnforcing) when the native module isn't present —
@@ -72,6 +79,12 @@ Sentry.init({
 
 // Initialise crash reporting as early as possible (no-ops without a DSN).
 initSentry();
+installAuthErrorFilter();
+
+// BeccaScreen picks this up for every new message. Without a registration she
+// stays fully deterministic, so this single call is the whole on/off switch —
+// gated per build by EXPO_PUBLIC_BECCA_AI_ENABLED.
+configureBeccaAI(env.beccaAiEnabled ? nvidiaBeccaInterpreter : undefined);
 
 SplashScreen.preventAutoHideAsync();
 
@@ -155,8 +168,8 @@ export default Sentry.wrap(function App() {
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaProvider>
-          <ThemeProvider>
-            <AuthProvider>
+          <AuthProvider>
+            <ThemeProvider>
               <RegistrationProvider>
                 <FontProvider customFontsLoaded={fontsLoaded && !fontError}>
                   <StripeProvider
@@ -179,8 +192,8 @@ export default Sentry.wrap(function App() {
                   </StripeProvider>
                 </FontProvider>
               </RegistrationProvider>
-            </AuthProvider>
-          </ThemeProvider>
+            </ThemeProvider>
+          </AuthProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

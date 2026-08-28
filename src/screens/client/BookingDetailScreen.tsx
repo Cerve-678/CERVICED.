@@ -1,48 +1,61 @@
 // BookingDetailScreen.tsx
 // Full-screen booking detail view extracted from BookingsScreen modal.
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
   Keyboard, TouchableWithoutFeedback,
   LayoutAnimation, UIManager,
 } from 'react-native';
-
-if (Platform.OS === 'android') {
-  UIManager.setLayoutAnimationEnabledExperimental?.(true);
-}
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as Haptics from 'expo-haptics';
 import { useFont } from '../../contexts/FontContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { hasMapDestination, isAddressPending } from '../../types/booking';
+import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking } from '../../types/booking';
+import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { SUPPORT_EMAIL } from '../../constants/support';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   submitReview, getProviderIdByDisplayName, hasReviewedBooking,
   getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName,
   getProviderContactById,
-  ProviderContactInfo, getProviderAddressPolicyByDisplayName,
-  getProviderAddressPolicy,
-  getProviderCancellationPolicyById,
-  getProviderReschedulePolicyById,
+  ProviderContactInfo,
+  getProviderBookingDetailMetadata,
   ProviderAddressPolicy,
-  getProviderCancellationPolicy,
   getInfoPacksByBooking, markInfoPackViewed, BookingInfoPack,
-  getProviderReschedulePolicyByDisplayName,
   ProviderReschedulePolicy,
   getRebookableService,
   setBookingTip,
   getBookingTip,
 } from '../../services/databaseService';
-import { formatLongDate, formatShortDate, formatTime12 } from '../../utils/dateUtils';
+import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
+import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
+import {
+  calculateBookingPaymentBreakdown,
+  PAYMENT_METHOD_LABELS,
+} from '../../features/bookings/paymentPresentation';
+import {
+  formatNoticeWindow,
+  isLongBookingInfoPack,
+} from '../../features/bookings/clientBookingPresentation';
+import { buildClientReceiptHTML } from '../../features/bookings/receipt';
+import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
+import { formatBookingRef } from '../../features/bookings/presentation';
+import { logger } from '../../utils/logger';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -50,78 +63,29 @@ type Props = {
   route: { params: { bookingId: string } };
 };
 
-const METHOD_LABELS: Record<string, string> = {
-  card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay',
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function formatDisplayDate(dateStr: string): string {
-  return formatLongDate(dateStr);
-}
-
-function calculatePaymentBreakdown(booking: ConfirmedBooking) {
-  const servicePrice = booking.price || 0;
-  const addOnsTotal = booking.addOns?.reduce((s, a) => s + (a.price || 0), 0) || 0;
-  const subtotal = servicePrice + addOnsTotal;
-  const serviceCharge = booking.serviceCharge || 2.99;
-  const total = subtotal + serviceCharge;
-  const paymentType = booking.paymentType || 'full';
-  const amountPaidAtCheckout = booking.amountPaid;
-  const depositAmount = booking.depositAmount || 0;
-  const remainingBalance = total - amountPaidAtCheckout;
-  const totalPaidAtCheckout = paymentType === 'deposit'
-    ? depositAmount + serviceCharge
-    : amountPaidAtCheckout;
-  return { servicePrice, addOnsTotal, subtotal, serviceCharge, total, paymentType, depositAmount, amountPaidAtCheckout, remainingBalance, totalPaidAtCheckout };
-}
-
-async function shareReceipt(booking: ConfirmedBooking) {
-  const servicePrice = booking.price || 0;
-  const addOnsTotal = booking.addOns?.reduce((s, a) => s + (a.price || 0), 0) || 0;
-  const subtotal = servicePrice + addOnsTotal;
-  const serviceCharge = booking.serviceCharge || 2.99;
-  const total = subtotal + serviceCharge;
-  const paymentType = booking.paymentType || 'full';
-  const depositAmount = booking.depositAmount || 0;
-  const amountPaid = booking.amountPaid || 0;
-  const remainingBalance = total - amountPaid;
-  const addOnRows = (booking.addOns ?? []).map(a =>
-    `<tr><td style="padding:6px 0;color:#555;padding-left:16px">+ ${a.name}</td><td style="padding:6px 0;color:#555;text-align:right">£${Number(a.price).toFixed(2)}</td></tr>`
-  ).join('');
-  const dateStr = formatShortDate(new Date(booking.createdAt));
-  const ref = (booking.id ?? '').slice(0, 8).toUpperCase();
-  const m = (booking as any).paymentMethod as string | undefined;
-  const paymentMethodLabel = (m && METHOD_LABELS[m]) ? METHOD_LABELS[m]! : 'Card';
-  const paymentRows = paymentType === 'deposit'
-    ? `<tr><td style="padding:6px 0;color:#34C759;font-weight:600">Deposit Paid</td><td style="text-align:right">£${depositAmount.toFixed(2)}</td></tr>
-       <tr><td style="padding:6px 0;color:#34C759;font-weight:600">Total Paid</td><td style="text-align:right">£${(depositAmount + serviceCharge).toFixed(2)}</td></tr>
-       ${remainingBalance > 0 ? `<tr><td style="color:#FF9500;font-weight:600">Balance Due at Appointment</td><td style="text-align:right">£${remainingBalance.toFixed(2)}</td></tr>` : ''}
-       <tr><td style="color:#555">Payment Method</td><td style="text-align:right">${paymentMethodLabel}</td></tr>`
-    : `<tr><td style="color:#34C759;font-weight:600">Total Paid</td><td style="text-align:right">£${amountPaid.toFixed(2)}</td></tr>
-       <tr><td style="color:#555">Payment Method</td><td style="text-align:right">${paymentMethodLabel}</td></tr>`;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Helvetica,Arial,sans-serif;background:#fff;color:#111;padding:48px 40px;max-width:520px;margin:0 auto}.brand{font-size:38px;font-weight:900;letter-spacing:8px;text-align:center;margin-bottom:4px}.sub{font-size:13px;letter-spacing:3px;color:#888;text-align:center;margin-bottom:24px}.perf{border:none;border-top:2px dashed #ddd;margin:18px 0}table{width:100%;border-collapse:collapse}td{font-size:15px;vertical-align:middle;padding:6px 0}.bold td{font-weight:600}.total-block{margin-top:18px;padding-top:14px;border-top:2.5px solid #111;display:flex;justify-content:space-between}.total-value{font-size:28px;font-weight:900}.ref-block{margin-top:24px;text-align:center}.ref-value{font-size:18px;font-weight:700;letter-spacing:3px;color:#555}.date{font-size:12px;color:#aaa;margin-top:4px}</style></head><body><div class="brand">CERVICED</div><div class="sub">PAYMENT RECEIPT</div><hr class="perf"/><section><div>SERVICE</div><table><tr class="bold"><td>${booking.serviceName ?? '—'}</td><td style="text-align:right">£${servicePrice.toFixed(2)}</td></tr>${addOnRows}${addOnRows ? `<tr><td style="color:#888;font-size:13px">Subtotal</td><td style="color:#888;font-size:13px;text-align:right">£${subtotal.toFixed(2)}</td></tr>` : ''}</table></section><hr class="perf"/><section><div>BOOKING</div><table><tr><td style="color:#555">Provider</td><td style="text-align:right">${booking.providerName ?? '—'}</td></tr><tr><td style="color:#555">Date</td><td style="text-align:right">${booking.bookingDate ? formatDisplayDate(booking.bookingDate) : '—'}</td></tr><tr><td style="color:#555">Time</td><td style="text-align:right">${booking.bookingTime ?? '—'}</td></tr></table></section><hr class="perf"/><section><div>PAYMENT</div><table>${paymentRows}</table><div class="total-block"><span>TOTAL</span><span class="total-value">£${total.toFixed(2)}</span></div></section><hr class="perf"/><div class="ref-block"><div>REFERENCE</div><div class="ref-value">${ref}</div><div class="date">${dateStr}</div></div></body></html>`;
-  const { uri } = await Print.printToFileAsync({ html });
+/**
+ * Generate the receipt PDF (always possible — built from the booking's own
+ * data) and open the share sheet. Returns false only when the device has no
+ * share sheet available; a user cancelling the sheet resolves normally (not an
+ * error). Throwing here now means a genuine, loggable failure.
+ */
+async function shareReceipt(booking: ConfirmedBooking): Promise<boolean> {
+  const { uri } = await Print.printToFileAsync({ html: buildClientReceiptHTML(booking) });
+  if (!(await Sharing.isAvailableAsync())) return false;
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Receipt', UTI: 'com.adobe.pdf' });
-}
-
-// Short info packs (a quick heads-up) read better as a small popup than a
-// full-screen takeover; longer ones (policies, prep instructions) still need
-// the dedicated reading screen.
-const INFO_PACK_POPUP_MAX_CHARS = 240;
-function isLongInfoPack(pack: BookingInfoPack): boolean {
-  return (pack.title?.length ?? 0) + (pack.content?.length ?? 0) > INFO_PACK_POPUP_MAX_CHARS;
+  return true;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function BookingDetailScreen({ navigation, route }: Props) {
   useFont();
   const { bookingId } = route.params;
-  const { theme, isDarkMode } = useTheme();
-  const { user } = useAuth();
+  const { isDarkMode, palette: C } = useTheme();
+  const { user, activeMode } = useAuth();
   const { addToCart } = useCart();
   const {
     todayBookings, upcomingBookings, pastBookings,
-    cancelBooking, canReschedule,
+    cancelBooking, canReschedule, markProviderNoShow,
   } = useBooking();
 
   // Look up the booking from context
@@ -129,14 +93,39 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     [...(todayBookings ?? []), ...(upcomingBookings ?? []), ...(pastBookings ?? [])].find(b => b.id === bookingId)
   , [bookingId, todayBookings, upcomingBookings, pastBookings]);
 
+  // Native stack header (not a custom in-body top bar) — gives the real
+  // OS-provided back button and swipe-back gesture, same convention as
+  // SearchScreen/RescheduleScreen. No title text: the provider name already
+  // renders prominently as the screen's own in-content header just below,
+  // so a duplicate native title would be redundant.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,
+      headerTitle: '',
+      headerStyle: { backgroundColor: C.bg },
+      headerShadowVisible: false,
+      headerTintColor: C.accentText,
+      headerBackButtonDisplayMode: 'minimal',
+    });
+  }, [navigation, C]);
+
   // Async data loaded on mount
   const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [todoLoaded, setTodoLoaded] = useState(false);
+  const [todoLoadError, setTodoLoadError] = useState(false);
+  const [todoRetryNonce, setTodoRetryNonce] = useState(0);
+  const todoBookingIdRef = useRef<string | null>(null);
   const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
   const [addrSettings, setAddrSettings] = useState<ProviderAddressPolicy | null>(null);
   const [addrCountdown, setAddrCountdown] = useState('');
   const [cancellationNoticeHrs, setCancellationNoticeHrs] = useState(0);
+  // Fallback only — used when this booking predates policy_snapshot (or the
+  // client booked via a path that never captured one). booking.policySnapshot
+  // is preferred whenever present, since it's frozen to what the client
+  // actually agreed to, not whatever the provider's policy says today.
+  const [livePolicyFallback, setLivePolicyFallback] = useState<Record<string, unknown> | null>(null);
 
   // UI state
   const [showReceipt, setShowReceipt] = useState(false);
@@ -149,53 +138,72 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [showTipModal, setShowTipModal] = useState(false);
   const [tipAmount, setTipAmount] = useState(0);
-  const [hasTipped, setHasTipped] = useState(false);
   const [tippedBookings, setTippedBookings] = useState<Set<string>>(new Set());
   const [rebookBusy, setRebookBusy] = useState(false);
   const [showRebookAddOnsModal, setShowRebookAddOnsModal] = useState(false);
-  const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [successIcon, setSuccessIcon] = useState('✓');
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
   const [showCooldownModal, setShowCooldownModal] = useState(false);
+  const [showProviderNoShowModal, setShowProviderNoShowModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeBusy, setDisputeBusy] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState('');
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
   const [contactSheetInfo, setContactSheetInfo] = useState<ProviderContactInfo | null>(null);
   const [contactSheetLoading, setContactSheetLoading] = useState(false);
 
-  // Load booking data on mount / bookingId change
-  useEffect(() => {
-    if (!bookingId) return;
-    setTodoLoaded(false);
-    // Load both to-do sources together and reveal the section only once BOTH
-    // have settled — loading them independently makes the section pop in (and
-    // shove the layout down) twice as each request resolves separately.
+  // One focus-aware loader owns both to-do requests. This runs once on first
+  // focus and once when returning from the intake form, without a separate
+  // mount effect racing a navigation focus listener. The active flag prevents
+  // a slow response for booking A from appearing after this route changes to B.
+  useFocusEffect(useCallback(() => {
+    // Reading the nonce makes the Retry action intentionally restart this
+    // focus effect without giving it any other semantic meaning.
+    void todoRetryNonce;
+    if (!bookingId) return undefined;
+    const bookingChanged = todoBookingIdRef.current !== bookingId;
+    todoBookingIdRef.current = bookingId;
+    if (bookingChanged) {
+      setBookingIntakeForm(null);
+      setBookingInfoPacks([]);
+      setTodoLoaded(false);
+    }
+    setTodoLoadError(false);
+
+    let active = true;
     Promise.allSettled([
-      getIntakeFormByBooking(bookingId).then(setBookingIntakeForm),
-      getInfoPacksByBooking(bookingId).then(setBookingInfoPacks),
-    ]).finally(() => {
-      // The section still has to wait on this network round-trip, but at
-      // least it eases into place instead of snapping in and shoving the
-      // rest of the screen down a beat after everything else has settled.
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      getIntakeFormByBooking(bookingId),
+      getInfoPacksByBooking(bookingId),
+    ]).then(([intakeResult, packsResult]) => {
+      if (!active) return;
+      const form = intakeResult.status === 'fulfilled' ? intakeResult.value : null;
+      const packs = packsResult.status === 'fulfilled' ? packsResult.value : [];
+      if (intakeResult.status === 'fulfilled') setBookingIntakeForm(form);
+      if (packsResult.status === 'fulfilled') setBookingInfoPacks(packs);
+      const hadError = intakeResult.status === 'rejected' || packsResult.status === 'rejected';
+      setTodoLoadError(hadError);
+      // Only animate when the section is actually about to appear (there's a
+      // form, a pack, or an error card). Most bookings have none of these, and
+      // firing configureNext then left a stray easeInEaseOut to land on the
+      // next unrelated commit (the policy/countdown metadata resolving a beat
+      // later) — which is the "glitch" where the whole screen twitched. A
+      // fade, not the position-animating preset, so siblings don't slide.
+      if (form || packs.length > 0 || hadError) {
+        LayoutAnimation.configureNext({
+          duration: 220,
+          create: { type: 'easeInEaseOut', property: 'opacity' },
+          update: { type: 'easeInEaseOut' },
+        });
+      }
       setTodoLoaded(true);
     });
-  }, [bookingId]);
 
-  // Re-fetch on refocus — without this, returning from ClientIntakeFormScreen
-  // after submitting kept showing the form as pending: this screen's state was
-  // only ever set on mount, never after the DB row flipped to 'completed'.
-  useEffect(() => {
-    if (!bookingId) return;
-    const unsubscribe = navigation.addListener('focus', () => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      getIntakeFormByBooking(bookingId).then(setBookingIntakeForm).catch(() => {});
-      getInfoPacksByBooking(bookingId).then(setBookingInfoPacks).catch(() => {});
-    });
-    return unsubscribe;
-  }, [navigation, bookingId]);
+    return () => { active = false; };
+  }, [bookingId, todoRetryNonce]));
 
   // Hydrate rated/tipped state from the DB. These were local-only, so after any
   // remount an already-rated booking showed an active "Rate" button again (the
@@ -213,7 +221,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     getBookingTip(bookingId)
       .then(tip => {
         if (cancelled || tip == null || tip <= 0) return;
-        setHasTipped(true);
         setTippedBookings(prev => new Set(prev).add(bookingId));
       })
       .catch(() => {});
@@ -230,30 +237,47 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     // every booking already on the books. The id never changes.
     const pid = booking.providerId;
 
-    (pid
-      ? getProviderReschedulePolicyById(pid)
-      : getProviderReschedulePolicyByDisplayName(booking.providerName)
-    ).then(setReschedulePolicy).catch(() => {});
+    let cancelled = false;
+    getProviderBookingDetailMetadata({
+      ...(pid ? { providerId: pid } : {}),
+      displayName: booking.providerName,
+    })
+      .then(metadata => {
+        if (cancelled) return;
+        setReschedulePolicy(metadata.reschedulePolicy);
+        setCancellationNoticeHrs(metadata.cancellationNoticeHours);
+        setLivePolicyFallback(
+          booking.policySnapshot ? null : metadata.bookingPolicies,
+        );
+        // Kept even for a booking that already has a client address: its
+        // business_type is what says whose address is the venue. Dropping it
+        // whenever a client address existed is what let a salon booking be
+        // mistaken for a mobile one.
+        setAddrSettings(metadata.addressPolicy);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [booking]);
 
-    (pid
-      ? getProviderCancellationPolicyById(pid)
-      : getProviderCancellationPolicy(booking.providerName)
-    ).then(setCancellationNoticeHrs).catch(() => {});
+  // Who travels to whom. The booking carries the provider's business_type
+  // (client_bookings view); addrSettings is the same answer fetched by id, and
+  // covers a booking read before the view exposed it.
+  const isMobile = useMemo(
+    () =>
+      !!booking &&
+      isMobileBooking({
+        providerBusinessType:
+          booking.providerBusinessType ?? addrSettings?.business_type ?? null,
+        clientAddress: booking.clientAddress ?? null,
+      }),
+    [booking, addrSettings],
+  );
 
-    if (!booking.clientAddress) {
-      // Policy only. This screen needs the release policy to render the
-      // countdown; a client must never be sent an address the policy hasn't
-      // unlocked. The address itself arrives gated via the client_bookings view.
-      (pid
-        ? getProviderAddressPolicy(pid)
-        : getProviderAddressPolicyByDisplayName(booking.providerName)
-      ).then(setAddrSettings).catch(() => {});
-    }
-  }, [booking?.id]);
-
-  // Address countdown timer
+  // Address countdown timer — release timings belong to a provider the client
+  // travels to. A mobile provider's own address is never the venue, so there
+  // is nothing here to count down to.
   useEffect(() => {
-    if (!booking || booking.clientAddress) return;
+    if (!booking || isMobile) return;
     const policy = addrSettings?.address_release_policy ?? null; // ProviderAddressPolicy field
     if (!policy || policy === 'always' || policy === 'manual') return;
     const offsetDays: Record<string, number> = {
@@ -277,17 +301,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [booking?.id, booking?.bookingDate, addrSettings]);
+  }, [booking, addrSettings, isMobile]);
 
   const getStatusColor = useCallback((status: string, isPending?: boolean) => {
-    if (isPending) return (isDarkMode ? '#AF9197' : '#5C4033');
+    if (isPending) return C.accent;
     const map: Record<string, string> = {
       [BookingStatus.UPCOMING]: '#4CAF50', [BookingStatus.IN_PROGRESS]: '#2196F3',
       [BookingStatus.COMPLETED]: '#2196F3', [BookingStatus.CANCELLED]: '#F44336',
-      [BookingStatus.NO_SHOW]: '#FF9800',
+      [BookingStatus.NO_SHOW]: '#FF9800', [BookingStatus.PROVIDER_NO_SHOW]: '#FF9800',
     };
     return map[status] || '#9E9E9E';
-  }, []);
+  }, [C.accent]);
 
   const openInMaps = useCallback(async (b: ConfirmedBooking) => {
     // coordinates is typed non-null but is null whenever the release view masks
@@ -306,7 +330,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       });
       if (url && await Linking.canOpenURL(url)) await Linking.openURL(url);
       else await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
-    } catch { Alert.alert('Error', 'Unable to open maps'); }
+    } catch (err) { logger.error('[BookingDetail] open maps failed:', err); Alert.alert("Couldn't Open Maps", 'Please try again in a moment.'); }
   }, []);
 
   const openContactSheet = useCallback(async (b: ConfirmedBooking) => {
@@ -326,16 +350,42 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     } finally { setContactSheetLoading(false); }
   }, []);
 
+  // Prefer the frozen snapshot (what the client actually agreed to at
+  // booking time) over the live fallback (today's policy, for older bookings
+  // that predate policy_snapshot). No enforced-hours override here — that
+  // Automations-screen number is a live-only concept with no snapshot
+  // equivalent, so both branches read purely from the descriptive text.
+  const policyRows = useMemo(
+    () => buildPolicyDisplayRows(booking?.policySnapshot ?? livePolicyFallback),
+    [booking?.policySnapshot, livePolicyFallback],
+  );
+
+  // Only ever from the frozen snapshot — never the live fallback. The point of
+  // showing these is that they are what THIS client agreed to; reading the
+  // provider's current terms instead would assert agreement to text the client
+  // may never have seen, which is the exact failure this records against.
+  const agreedTerms = useMemo(
+    () => readProviderTermsSnapshot(booking?.policySnapshot),
+    [booking?.policySnapshot],
+  );
+
+  const noticeWindowText = useMemo(() => formatNoticeWindow(cancellationNoticeHrs), [cancellationNoticeHrs]);
+
+  // Whether cancelling right now would fall inside the provider's notice
+  // window — purely informational (drives the modal's warning copy below).
+  // It does NOT block the attempt: cancel_own_booking() enforces the notice
+  // window server-side, so the Cancel button always calls handleCancelBooking
+  // and lets the RPC's own guard message surface if it's actually rejected.
+  const isPastCancellationWindow = useMemo(() => {
+    if (!booking || booking.status === BookingStatus.PENDING || cancellationNoticeHrs <= 0) return false;
+    if (!booking.bookingDate || !booking.bookingTime) return false;
+    const apptMs = createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime();
+    const hoursUntil = (apptMs - Date.now()) / 3_600_000;
+    return hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs;
+  }, [booking, cancellationNoticeHrs]);
+
   const handleCancelBooking = useCallback(async () => {
     if (!booking) return;
-    if (booking.status !== BookingStatus.PENDING && cancellationNoticeHrs > 0 && booking.bookingDate && booking.bookingTime) {
-      const apptMs = createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime();
-      const hoursUntil = (apptMs - Date.now()) / 3_600_000;
-      if (hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs) {
-        Alert.alert('Cancellation Not Allowed', `This provider requires ${cancellationNoticeHrs} hours' notice to cancel.`);
-        return;
-      }
-    }
     setIsLoading(true);
     try {
       await cancelBooking(booking.id);
@@ -343,9 +393,94 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setSuccessMessage('Your appointment has been cancelled successfully.');
       setSuccessIcon('✓');
       setShowSuccessModal(true);
-    } catch { Alert.alert('Error', 'Failed to cancel booking. Please try again.'); }
+    } catch (err) {
+      logger.error('[BookingDetail] cancel failed:', err);
+      Alert.alert(
+        'Cancellation Failed',
+        // cancel_own_booking() enforces the provider's notice window
+        // server-side and throws a guard message written for the client
+        // reading it ("requires 24 hours notice to cancel") — let it
+        // through rather than masking it with a generic line.
+        toUserMessageAllowingDbGuard(err, "We couldn't cancel this booking just now. Please try again.", 'BookingDetailScreen.handleCancelBooking'),
+      );
+    }
     finally { setIsLoading(false); }
-  }, [booking, cancelBooking, cancellationNoticeHrs]);
+  }, [booking, cancelBooking]);
+
+  // "Provider didn't show up" — client-side mirror of the RPC's guardrails
+  // (client_mark_provider_no_show / fix_provider_no_show_status.sql), used
+  // only to decide the button's visible/disabled state. The RPC itself is
+  // the real enforcement, same relationship as isPastCancellationWindow
+  // above — same calendar day as the appointment, and the appointment start
+  // time must have already passed.
+  const canMarkProviderNoShow = useMemo(() => {
+    if (!booking || !booking.bookingDate || !booking.bookingTime) return false;
+    if (booking.status !== BookingStatus.UPCOMING && booking.status !== BookingStatus.IN_PROGRESS) return false;
+    if (booking.isPendingReschedule) return false;
+    const apptStart = createBookingDateTime(booking.bookingDate, booking.bookingTime);
+    const now = new Date();
+    const isSameDay = apptStart.getFullYear() === now.getFullYear()
+      && apptStart.getMonth() === now.getMonth()
+      && apptStart.getDate() === now.getDate();
+    return isSameDay && now.getTime() >= apptStart.getTime();
+  }, [booking]);
+
+  const handleMarkProviderNoShow = useCallback(async () => {
+    if (!booking || !canMarkProviderNoShow) return;
+    setIsLoading(true);
+    try {
+      await markProviderNoShow(booking.id);
+      setSuccessMessage("We've let the provider know they were marked as a no-show.");
+      setSuccessIcon('✓');
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      logger.error('[BookingDetail] mark provider no-show failed:', error);
+      // The RPC raises a human reason (P0001, e.g. timing/status rules). Show
+      // that; genericise anything coded/technical.
+      const isTechnical = error?.code && error.code !== 'P0001';
+      const friendly = typeof error?.message === 'string' && error.message.length > 0 && !isTechnical && !error.message.includes('Network')
+        ? error.message : null;
+      Alert.alert("Couldn't Report", friendly ?? "We couldn't report this just now. Please try again.");
+    } finally { setIsLoading(false); }
+  }, [booking, canMarkProviderNoShow, markProviderNoShow]);
+
+  // Disputing a no-show the PROVIDER recorded against this client. The button
+  // that opens this is gated on canDisputeNoShow; dispute_no_show() re-checks
+  // identity and window server-side, so this is presentation, not enforcement.
+  const canDispute = useMemo(
+    () => !!booking && canDisputeNoShow(booking, BookingStatus.NO_SHOW),
+    [booking],
+  );
+
+  const handleSubmitDispute = useCallback(async () => {
+    if (!booking || !disputeReason.trim()) return;
+    setDisputeBusy(true);
+    try {
+      const { ticketNumber } = await fileNoShowDispute(booking, disputeReason, 'client', activeMode);
+      setShowDisputeModal(false);
+      setDisputeReason('');
+      // ticketNumber null means the dispute is recorded but the support
+      // ticket didn't file — don't hand them a reference that doesn't exist,
+      // and don't call it a failure either (see fileNoShowDispute).
+      setSuccessMessage(
+        ticketNumber
+          ? `${booking.providerName} has been told you dispute this, and support has a copy. Your reference is #${ticketNumber}.`
+          : `${booking.providerName} has been told you dispute this. We couldn't reach support just now — email ${SUPPORT_EMAIL} if you don't hear back.`,
+      );
+      setSuccessIcon('✓');
+      setShowSuccessModal(true);
+    } catch (error: unknown) {
+      logger.error('[BookingDetail] dispute no-show failed:', error);
+      Alert.alert(
+        "Couldn't Send Your Dispute",
+        // dispute_no_show()'s guards are written for the person reading
+        // them ("You have already disputed this no-show"), so let them through.
+        toUserMessageAllowingDbGuard(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitDispute'),
+      );
+    } finally {
+      setDisputeBusy(false);
+    }
+  }, [booking, disputeReason, activeMode]);
 
   const handleReschedulePress = useCallback(() => {
     if (!booking) return;
@@ -366,7 +501,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         const start = createBookingDateTime(booking.bookingDate, booking.bookingTime);
         const hoursUntil = (start.getTime() - Date.now()) / 3_600_000;
         if (hoursUntil >= 0 && hoursUntil < reschedulePolicy.rescheduleNoticeHours) {
-          setCooldownMessage(`${booking.providerName} requires ${reschedulePolicy.rescheduleNoticeHours} hours' notice to reschedule.`);
+          setCooldownMessage(`${booking.providerName} requires ${formatNoticeWindow(reschedulePolicy.rescheduleNoticeHours)} notice to reschedule.`);
           setShowCooldownModal(true);
           return;
         }
@@ -501,7 +636,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);
       setTimeout(() => { setShowRatingModal(false); setRating(0); setReviewText(''); }, 2000);
-    } catch { Alert.alert('Error', 'Failed to submit rating.'); }
+    } catch (err) { logger.error('[BookingDetail] submit rating failed:', err); Alert.alert('Rating Not Saved', 'Please try again in a moment.'); }
     finally { setIsLoading(false); }
   }, [booking, rating, reviewText, user]);
 
@@ -527,7 +662,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         return;
       }
       setTippedBookings(prev => new Set(prev).add(booking.id));
-      setHasTipped(true);
       setShowTipModal(false);
       // Deliberately does NOT say the tip was paid — no payment provider is
       // wired up for tips, so this records the amount for the provider only.
@@ -535,8 +669,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
-    } catch {
-      Alert.alert('Error', 'Failed to save your tip. Please try again.');
+    } catch (err) {
+      logger.error('[BookingDetail] save tip failed:', err);
+      Alert.alert('Tip Not Saved', 'Please try again in a moment.');
     } finally {
       setIsLoading(false);
     }
@@ -570,20 +705,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     });
   }, [navigation]);
 
-  const C = isDarkMode ? {
-    bg: '#1A1815', card: '#252220', text: '#F0ECE7', sub: '#7E6667',
-    border: 'rgba(126,102,103,0.18)', accent: (isDarkMode ? '#AF9197' : '#5C4033'),
-  } : {
-    bg: '#F5F1EC', card: '#FFFFFF', text: '#000000', sub: '#7E6667',
-    border: 'rgba(126,102,103,0.14)', accent: (isDarkMode ? '#AF9197' : '#5C4033'),
-  };
-
   if (!booking) {
     return (
       <ThemedBackground>
-        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} edges={['bottom', 'left', 'right']}>
           <Text style={{ color: C.sub, fontSize: 16 }}>Booking not found.</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+          <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }} style={{ marginTop: 16 }}>
             <Text style={{ color: C.accent, fontSize: 16 }}>Go Back</Text>
           </TouchableOpacity>
         </SafeAreaView>
@@ -591,7 +718,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     );
   }
 
-  const payment = calculatePaymentBreakdown(booking);
+  const payment = calculateBookingPaymentBreakdown(booking);
   const hasBeenRated = ratedBookings.has(booking.id);
   const hasBeenTipped = tippedBookings.has(booking.id);
   const isUpcoming = booking.status === BookingStatus.UPCOMING && !booking.isPendingReschedule;
@@ -600,15 +727,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom', 'left', 'right']}>
-        {/* Back button row */}
-        <View style={[st.topBar, { borderBottomColor: C.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn} activeOpacity={0.7}>
-            <Text style={[st.backArrow, { color: C.accent }]}>‹</Text>
-            <Text style={[st.backLabel, { color: C.sub }]}>Back</Text>
-          </TouchableOpacity>
-        </View>
-
+      <SafeAreaView style={{ flex: 1 }} edges={['bottom', 'left', 'right']}>
         <ScrollView
           contentContainerStyle={st.scroll}
           showsVerticalScrollIndicator={false}
@@ -617,10 +736,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Header */}
           <View style={st.header}>
             {booking.providerImage ? (
-              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={st.providerImg} resizeMode="cover" />
+              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={st.providerImg} contentFit="cover" />
             ) : (
-              <View style={[st.providerImg, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'), alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>
+              <View style={[st.providerImg, { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: C.onAccent, fontSize: 22, fontWeight: '800' }}>
                   {booking.providerName?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'P'}
                 </Text>
               </View>
@@ -637,9 +756,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
               {[
                 ['Service', booking.serviceName],
-                ['Date', formatDisplayDate(booking.bookingDate)],
+                ['Date', formatBookingDisplayDate(booking.bookingDate)],
                 ['Time', booking.bookingTime],
-                ['Duration', booking.duration],
+                // mapDbBookingToConfirmed derives `duration` from
+                // end_time − booking_time, and leaves it '' for the legacy
+                // rows written before end_time was required — which rendered
+                // as a labelled row with nothing beside it.
+                ['Duration', booking.duration || '—'],
               ].map(([label, value]) => (
                 <View key={label} style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>{label}</Text>
@@ -684,12 +807,29 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               badge) instead of disappearing — it used to only render while
               status === 'pending', so once submitted there was no way back
               into ClientIntakeFormScreen to see the answers you'd just filled in. */}
+          {todoLoaded && todoLoadError && (
+            <View style={st.section}>
+              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, padding: 14, flexDirection: 'row', alignItems: 'center' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>Some appointment tasks couldn’t load</Text>
+                  <Text style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>Retry to make sure you don’t miss a required form or provider information.</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setTodoRetryNonce(value => value + 1); }}
+                  style={{ marginLeft: 12, paddingHorizontal: 12, paddingVertical: 8 }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: C.accentText, fontSize: 13, fontWeight: '700' }}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
           {todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
               {bookingIntakeForm && (
                 <TouchableOpacity style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: bookingIntakeForm.status === 'completed' ? 0.72 : 1 }]} activeOpacity={0.8}
-                  onPress={() => navigation.navigate('ClientIntakeForm', { formId: bookingIntakeForm.id, bookingId: bookingIntakeForm.bookingId, serviceName: booking.serviceName })}>
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClientIntakeForm', { formId: bookingIntakeForm.id, bookingId: bookingIntakeForm.bookingId, serviceName: booking.serviceName }); }}>
                   <Text style={{ fontSize: 20 }}>📋</Text>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{bookingIntakeForm.title}</Text>
@@ -698,13 +838,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                   <View style={[st.todoBadge, { backgroundColor: bookingIntakeForm.status === 'completed' ? '#34C759' : C.accent }]}>
-                    <Text style={st.todoBadgeText}>{bookingIntakeForm.status === 'completed' ? 'Completed' : 'Required'}</Text>
+                    <Text style={[st.todoBadgeText, { color: bookingIntakeForm.status === 'completed' ? '#FFF' : C.onAccent }]}>{bookingIntakeForm.status === 'completed' ? 'Completed' : 'Required'}</Text>
                   </View>
                 </TouchableOpacity>
               )}
               {bookingInfoPacks.map(pack => (
                 <TouchableOpacity key={pack.id} style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: pack.viewedAt ? 0.72 : 1 }]} activeOpacity={0.8}
                   onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     setViewingPack(pack);
                     if (!pack.viewedAt) {
                       markInfoPackViewed(pack.id).catch(() => {});
@@ -741,25 +882,42 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT STATUS</Text>
-              <TouchableOpacity onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowReceipt(v => !v); }} activeOpacity={0.7}>
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowReceipt(v => !v); }} activeOpacity={0.7}>
                 <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
             {!showReceipt ? (
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
-                <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total Paid</Text><Text style={[st.rowValue, { color: '#34C759' }]}>£{(payment.paymentType === 'deposit' ? payment.totalPaidAtCheckout : payment.amountPaidAtCheckout).toFixed(2)}</Text></View>
-                <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
+                <View style={[st.row, payment.remainingBalance <= 0 && { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
+                {/* Three rows, deliberately: Total, what's paid, what's left.
+                    The platform fee gets no row of its own — it's inside
+                    Total and itemised in the receipt below, and repeating it
+                    here read as a second charge. A settled booking ends at
+                    the paid row, since "Due at Appointment £0.00" only
+                    invites the question. */}
+                {payment.remainingBalance > 0 && (
+                  <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: '#FF9500' }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
+                )}
               </View>
             ) : (
-              <View style={[st.receiptContainer, { backgroundColor: isDarkMode ? '#3A3A3C' : '#F5F5F5' }]}>
-                <View style={[st.receiptPaper, { backgroundColor: C.card, borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]}>
+              <View style={[st.receiptContainer, { backgroundColor: C.surface }]}>
+                <View style={[st.receiptPaper, { backgroundColor: C.card, borderColor: C.border }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, position: 'relative' }}>
                     <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 1, color: C.text, textAlign: 'center' }}>PAYMENT RECEIPT</Text>
                     <TouchableOpacity
-                      onPress={async () => { try { await shareReceipt(booking); } catch { Alert.alert('Error', 'Could not generate receipt.'); } }}
+                      onPress={async () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        try {
+                          const shared = await shareReceipt(booking);
+                          if (!shared) Alert.alert('Sharing Unavailable', "Your receipt is ready, but this device can't open a share sheet.");
+                        } catch (err) {
+                          logger.error('[BookingDetail] share receipt failed:', err);
+                          Alert.alert('Receipt Unavailable', "We couldn't open your receipt just now. Please try again.");
+                        }
+                      }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={{ position: 'absolute', right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ position: 'absolute', right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: C.iconBg, alignItems: 'center', justifyContent: 'center' }}
                     >
                       <Ionicons name="share-outline" size={16} color={C.text} />
                     </TouchableOpacity>
@@ -768,7 +926,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
                   {/* Booking */}
-                  {[['Service', booking.serviceName], ['Date', booking.bookingDate ? formatDisplayDate(booking.bookingDate) : booking.bookingDate], ['Time', booking.bookingTime]].map(([l, v]) => (
+                  {[['Service', booking.serviceName], ['Date', booking.bookingDate ? formatBookingDisplayDate(booking.bookingDate) : booking.bookingDate], ['Time', booking.bookingTime]].map(([l, v]) => (
                     <View key={l} style={st.rcptRow}>
                       <Text style={{ color: C.sub, fontSize: 13 }}>{l}</Text>
                       <Text style={{ color: C.text, fontSize: 13, flexShrink: 1, textAlign: 'right', marginLeft: 12 }} numberOfLines={2}>{v}</Text>
@@ -795,7 +953,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </View>
                   )}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Service Charge</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Platform Fee</Text>
                     <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
                   </View>
 
@@ -807,30 +965,42 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>£{payment.total.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paymentType === 'deposit' ? 'Deposit Paid' : 'Total Paid'}</Text>
-                    <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600' }}>£{(payment.paymentType === 'deposit' ? payment.totalPaidAtCheckout : payment.amountPaidAtCheckout).toFixed(2)}</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
+                    <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
-                  <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
-                    <Text style={{ color: payment.remainingBalance > 0 ? '#FF9500' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
-                  </View>
+                  {payment.remainingBalance > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
+                      <Text style={{ color: '#FF9500', fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
+                    </View>
+                  )}
                   <View style={st.rcptRow}>
                     <Text style={{ color: C.sub, fontSize: 13 }}>Payment Method</Text>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
-                      {(booking.paymentMethod && METHOD_LABELS[booking.paymentMethod]) || 'Card'}
+                      {(booking.paymentMethod && PAYMENT_METHOD_LABELS[booking.paymentMethod]) || 'Card'}
                     </Text>
                   </View>
 
-                  {payment.paymentType === 'full' && (
+                  {payment.isPaidInFull && (
                     <View style={st.receiptFullyPaidBadge}>
                       <Text style={st.receiptFullyPaidText}>Paid in Full</Text>
                     </View>
+                  )}
+                  {/* A booking the provider added for you never went through
+                      checkout, so there is nothing paid to receipt yet —
+                      say so plainly rather than leaving a £0.00 "paid" line
+                      to be read as an error. */}
+                  {payment.isUnpaid && payment.remainingBalance > 0 && (
+                    <Text style={{ color: C.sub, fontSize: 11, textAlign: 'center', marginTop: 10, lineHeight: 16 }}>
+                      No payment has been taken through CERVICED for this booking.
+                      Payment is arranged directly with {booking.providerName}.
+                    </Text>
                   )}
 
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ color: C.sub, fontSize: 10, marginBottom: 2 }}>REF: {booking.id?.slice(0, 8).toUpperCase()}</Text>
+                    <Text style={{ color: C.sub, fontSize: 10, marginBottom: 2 }}>REF: {formatBookingRef(booking)}</Text>
                     <Text style={{ color: C.sub, fontSize: 10 }}>
                       {formatShortDate(new Date(booking.createdAt))}, {formatTime12(new Date(booking.createdAt))}
                     </Text>
@@ -840,7 +1010,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             )}
           </View>
 
-          {/* Notes / Instructions */}
+          {/* The client's own notes — nothing else is folded in here (the
+              provider's booking_instructions moved down to their policy
+              card, and health data is never copied in; see CartScreen). */}
           {booking.notes && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>YOUR NOTES</Text>
@@ -849,9 +1021,61 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           )}
-          {booking.bookingInstructions && (
+
+          {/* Provider's cancellation/booking policy — the exact terms this
+              client agreed to at checkout (policySnapshot), or the
+              provider's current policy as a fallback for bookings made
+              before that was captured. */}
+          {policyRows.length > 0 && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>INSTRUCTIONS</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>
+                {booking.providerName}'S POLICY
+              </Text>
+              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+                {policyRows.map((row, i) => (
+                  <View
+                    key={row.label}
+                    style={[st.row, i === policyRows.length - 1 && { borderBottomWidth: 0 }]}
+                  >
+                    <Text style={[st.rowLabel, { color: C.sub, flex: 0.35 }]}>{row.label}</Text>
+                    <Text style={[st.rowValue, { color: C.text, flex: 0.65 }]}>
+                      {row.value}{row.tag ? `  ·  ${row.tag}` : ''}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* The provider's own written T&Cs, exactly as shown when this
+              client ticked "I agree" — frozen at booking time, so a provider
+              editing their terms afterwards cannot change what this booking
+              says was agreed. Absent on bookings made before 2026-08-26 and
+              on any where the provider had written no terms. */}
+          {agreedTerms && (
+            <View style={st.section}>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>TERMS YOU AGREED TO</Text>
+              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Text style={{ color: C.text, fontSize: 14, fontWeight: '700', paddingHorizontal: 16, paddingTop: 16 }}>
+                  {agreedTerms.title}
+                </Text>
+                <Text style={{ color: C.text, fontSize: 14, lineHeight: 20, padding: 16 }}>
+                  {agreedTerms.body}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* The provider's own instructions — its own section, not folded
+              into the policy card above and not into the client's notes
+              above that. It sits next to the policy because both come from
+              the provider, but it isn't a term the client agreed to at
+              checkout, which is all the policy card is. */}
+          {!!booking.bookingInstructions && (
+            <View style={st.section}>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>
+                {booking.providerName}'S INSTRUCTIONS
+              </Text>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Text style={{ color: C.text, fontSize: 14, lineHeight: 20, padding: 16 }}>{booking.bookingInstructions}</Text>
               </View>
@@ -865,17 +1089,26 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>Contact Provider</Text>
-                  <TouchableOpacity onPress={() => openContactSheet(booking)} style={[st.actionChip, { backgroundColor: C.accent }]} activeOpacity={0.7}>
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Contact</Text>
+                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openContactSheet(booking); }} style={[st.actionChip, { backgroundColor: C.accent }]} activeOpacity={0.7}>
+                    <Text style={{ color: C.onAccent, fontSize: 12, fontWeight: '600' }}>Contact</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={[st.row, { borderBottomWidth: 0 }]}>
-                  <Text style={[st.rowLabel, { color: C.sub }]}>{booking.clientAddress ? 'Your Address' : 'Location'}</Text>
-                  {booking.clientAddress ? (
-                    <Text style={[st.rowValue, { color: C.text }]}>{booking.clientAddress}</Text>
+                  <Text style={[st.rowLabel, { color: C.sub }]}>{isMobile ? 'Your Address' : 'Location'}</Text>
+                  {isMobile ? (
+                    booking.clientAddress ? (
+                      <Text style={[st.rowValue, { color: C.text }]}>{booking.clientAddress}</Text>
+                    ) : (
+                      // Mobile, but the client never gave an address — they
+                      // send it through Messages. Never the release countdown:
+                      // the provider's address isn't what's missing here.
+                      <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>
+                        Send {booking.providerName} your address in Messages
+                      </Text>
+                    )
                   ) : hasMapDestination(booking) ? (
-                    <TouchableOpacity onPress={() => openInMaps(booking)} activeOpacity={0.7}>
-                      <Text style={[st.rowValue, { color: C.accent }]}>{booking.address}</Text>
+                    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openInMaps(booking); }} activeOpacity={0.7} style={{ flex: 0.6 }}>
+                      <Text style={[st.rowValue, { color: C.accent, flex: undefined }]}>{booking.address}</Text>
                     </TouchableOpacity>
                   ) : !isAddressPending(booking.address) ? (
                     // A real address the provider never geocoded — show it as
@@ -914,7 +1147,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       const t = (booking as any).rescheduleRequest.requestedTimes?.[i];
                       return (
                         <Text key={`${d}-${i}`} style={{ fontSize: 12, color: C.text, fontWeight: '600', marginTop: 2 }}>
-                          You requested: {formatDisplayDate(d)}{t ? ` at ${t}` : ''}
+                          You requested: {formatBookingDisplayDate(d)}{formatTime12Safe(t) ? ` at ${formatTime12Safe(t)}` : ''}
                         </Text>
                       );
                     })}
@@ -927,65 +1160,151 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Action Buttons */}
           <View style={st.actions}>
             {isPending && (
-              <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border }]} onPress={() => setShowCancelModal(true)} activeOpacity={0.7}>
+              <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
                 <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Decline Request</Text>
               </TouchableOpacity>
             )}
             {isUpcoming && (
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => setShowCancelModal(true)} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
                   <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={handleReschedulePress} activeOpacity={0.7}>
-                  <Text style={st.primaryBtnText}>Reschedule</Text>
+                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleReschedulePress(); }} activeOpacity={0.7}>
+                  <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule</Text>
                 </TouchableOpacity>
               </View>
             )}
+            {/* "Provider didn't show up" — only once the appointment start
+                time has actually passed, same day, mirroring the provider's
+                own no_show button gating. Kept as its own row (not crowded
+                into the Cancel/Reschedule pair above) since it only appears
+                same-day and shouldn't be mistaken for a routine action. */}
+            {isUpcoming && canMarkProviderNoShow && (
+              <TouchableOpacity
+                style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(true); }}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>Provider didn't show up</Text>
+              </TouchableOpacity>
+            )}
             {booking.isPendingReschedule && (
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => setShowCancelModal(true)} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
                   <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Cancel Booking</Text>
                 </TouchableOpacity>
                 {(booking as any).rescheduleRequest?.providerAvailableDates && (
-                  <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => navigation.navigate('Reschedule', { bookingId: booking.id })} activeOpacity={0.7}>
-                    <Text style={st.primaryBtnText}>Reschedule Now</Text>
+                  <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); navigation.navigate('Reschedule', { bookingId: booking.id }); }} activeOpacity={0.7}>
+                    <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule Now</Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
+            {/* Rate / Tip / Book Again — same treatment as the identical trio
+                on the map screen's appointment cards (BookingsScreen): a
+                tinted fill with a matching solid border per action, rather
+                than three solid accent-filled blocks that read as one
+                undifferentiated bar. Colours are BookingsScreen's exact
+                values; only the type scales up, since this row is
+                full-width here and 9pt would be unreadable at this size. */}
             {isCompleted && (
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: hasBeenRated ? C.border : C.accent }]} disabled={hasBeenRated} onPress={() => setShowRatingModal(true)} activeOpacity={0.7}>
-                  <Text style={st.primaryBtnText}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[st.mapActionBtn, { backgroundColor: C.accentDim, borderColor: C.accent }, hasBeenRated && st.mapActionBtnDisabled, hasBeenRated && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
+                  disabled={hasBeenRated}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: hasBeenTipped ? C.border : '#34C759' }]} disabled={hasBeenTipped} onPress={() => setShowTipModal(true)} activeOpacity={0.7}>
-                  <Text style={st.primaryBtnText}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
+                <TouchableOpacity
+                  style={[st.mapActionBtn, { backgroundColor: '#4CAF5050', borderColor: '#2b6a2eff' }, hasBeenTipped && st.mapActionBtnDisabled, hasBeenTipped && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
+                  disabled={hasBeenTipped}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowTipModal(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} disabled={rebookBusy} onPress={() => handleRebook(booking)} activeOpacity={0.7}>
-                  {rebookBusy ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={st.primaryBtnText}>Book Again</Text>}
+                <TouchableOpacity
+                  style={[st.mapActionBtn, { backgroundColor: '#f28f0c58', borderColor: '#b9550dff' }, rebookBusy && st.mapActionBtnDisabled]}
+                  disabled={rebookBusy}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleRebook(booking); }}
+                  activeOpacity={0.7}
+                >
+                  {rebookBusy ? <ActivityIndicator size="small" color={C.text} /> : <Text style={[st.mapActionBtnText, { color: C.text }]}>Book Again</Text>}
                 </TouchableOpacity>
               </View>
+            )}
+            {/* A no-show recorded against this client. The status itself is
+                terminal and stays exactly as it is — disputing does not undo
+                it. What it does is stop the no-show hardening into a
+                permanent reliability count against them, tell the provider,
+                and put it in front of a human at support. */}
+            {canDispute && (
+              <TouchableOpacity
+                style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowDisputeModal(true); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>This wasn't right — dispute it</Text>
+              </TouchableOpacity>
+            )}
+            {!!booking.noShowDisputedAt && (
+              <Text style={{ marginTop: 12, fontSize: 13, color: C.sub, textAlign: 'center' }}>
+                You disputed this no-show. {booking.providerName} has been told and support has a copy.
+              </Text>
             )}
           </View>
 
           <View style={{ height: 40 }} />
         </ScrollView>
 
-        {/* ─── Cancel Modal ─── */}
+        {/* ─── Cancel Modal ───────────────────────────────────────────────
+            Same modal handles both states: the normal "are you sure" ask,
+            and — when isPastCancellationWindow is true — a heads-up that the
+            provider's notice window hasn't passed yet. Either way the Cancel
+            button always calls handleCancelBooking: cancel_own_booking()
+            enforces the notice window server-side (see BookingContext.
+            cancelBooking), so a rejection surfaces as the RPC's own guard
+            message via handleCancelBooking's catch, rather than this modal
+            silently blocking the attempt itself. */}
         <Modal visible={showCancelModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCancelModal(false)}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.overlay}>
-              <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
-                <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cancel Booking</Text>
-                <Text style={[st.sheetSub, { color: C.sub }]}>Are you sure you want to cancel "{booking.serviceName}"? This cannot be undone.</Text>
-                <View style={st.sheetBtns}>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowCancelModal(false)} disabled={isLoading} activeOpacity={0.7}>
-                    <Text style={{ color: C.text, fontWeight: '600' }}>Keep Booking</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={handleCancelBooking} disabled={isLoading} activeOpacity={0.7}>
-                    {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Yes, Cancel</Text>}
-                  </TouchableOpacity>
-                </View>
+              <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+                {isPastCancellationWindow ? (
+                  <>
+                    <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
+                    <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cancelling Now</Text>
+                    <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
+                      {booking.providerName} requires {noticeWindowText} notice to cancel — cancelling now may be subject to their policy.
+                    </Text>
+                    <View style={[st.sheetBtns, { marginTop: 16 }]}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
+                        <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleCancelBooking(); }} disabled={isLoading} activeOpacity={0.7}>
+                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Cancel</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[st.sheetTitle, { color: C.text }]}>Cancel Booking</Text>
+                    <Text style={[st.sheetSub, { color: C.sub }]}>
+                      Cancel "{booking.serviceName}"? This can't be undone.
+                    </Text>
+                    <View style={st.sheetBtns}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
+                        <Text style={{ color: C.text, fontWeight: '600' }}>Keep Booking</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleCancelBooking(); }} disabled={isLoading} activeOpacity={0.7}>
+                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Yes, Cancel</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           </TouchableWithoutFeedback>
@@ -995,9 +1314,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent
           onRequestClose={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }}>
           <View style={st.overlay}>
-            <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>{successIcon}</Text>
-              <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{successMessage}</Text>
               {/* sheetBtn is `flex:1`, meant to share a sheetBtns row with a
                   sibling — used alone (even with alignSelf:'stretch') it has
@@ -1006,8 +1325,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   gives flex:1 something to fill again. */}
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]}
-                  onPress={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }} activeOpacity={0.7}>
-                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }} activeOpacity={0.7}>
+                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1017,52 +1336,130 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Cooldown Modal ─── */}
         <Modal visible={showCooldownModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCooldownModal(false)}>
           <View style={st.overlay}>
-            <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
-              <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cannot Reschedule</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Cannot Reschedule</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{cooldownMessage}</Text>
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
-                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => setShowCooldownModal(false)} activeOpacity={0.7}>
-                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCooldownModal(false); }} activeOpacity={0.7}>
+                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
 
+        {/* ─── Provider No-Show Modal ─────────────────────────────────────
+            Same in-app sheet as Cancel/Cooldown above, deliberately NOT a
+            system Alert: this is a consequential, irreversible accusation and
+            it should look like the app making it, not the OS. Copy mirrors
+            the provider's own no-show confirmation (see
+            ProviderBookingDetailScreen.handleStatusChange) — the accused
+            party isn't here to answer, and the status is terminal
+            (TERMINAL_BOOKING_STATUSES; the RPC refuses to write over it). */}
+        <Modal visible={showProviderNoShowModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowProviderNoShowModal(false)}>
+          <View style={st.overlay}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Provider didn't show up?</Text>
+              <Text style={[st.sheetSub, { color: C.sub }]}>
+                {booking.providerName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone. Are you sure?
+              </Text>
+              <View style={st.sheetBtns}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(false); }} disabled={isLoading} activeOpacity={0.7}>
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Go Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: '#FF9800' }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); setShowProviderNoShowModal(false); handleMarkProviderNoShow(); }}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                >
+                  {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Confirm</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Dispute Modal ──────────────────────────────────────────────
+            A reason is required and is not optional politeness: it is the
+            entire content of the support ticket, and a dispute that says
+            nothing gives whoever reads it nothing to act on. */}
+        <Modal visible={showDisputeModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowDisputeModal(false)}>
+          <KeyboardDismissView style={st.overlay} dismissOnTap>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Dispute this no-show</Text>
+              <Text style={[st.sheetSub, { color: C.sub }]}>
+                {booking.providerName} marked this appointment as missed. Tell us what actually happened — they'll see it, and so will Cerviced support.
+              </Text>
+              <TextInput
+                style={[st.disputeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
+                placeholder="What happened?"
+                placeholderTextColor={C.sub}
+                value={disputeReason}
+                onChangeText={setDisputeReason}
+                multiline
+                maxLength={1000}
+                editable={!disputeBusy}
+              />
+              <View style={st.sheetBtns}>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowDisputeModal(false); setDisputeReason(''); }}
+                  disabled={disputeBusy}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.accent }, !disputeReason.trim() && { opacity: 0.5 }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleSubmitDispute(); }}
+                  disabled={disputeBusy || !disputeReason.trim()}
+                  activeOpacity={0.7}
+                >
+                  {disputeBusy
+                    ? <ActivityIndicator size="small" color={C.onAccent} />
+                    : <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Send Dispute</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardDismissView>
+        </Modal>
+
         {/* ─── Rating Modal ─── */}
         <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
-              <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+              <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 {!hasRated ? (
                   <>
-                    <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Rate Your Experience</Text>
+                    <Text style={[st.sheetTitle, { color: C.text }]}>Rate Your Experience</Text>
                     <Text style={[st.sheetSub, { color: C.sub }]}>How was your appointment with {booking.providerName}?</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 16 }}>
                       {[1,2,3,4,5].map(s => (
-                        <TouchableOpacity key={s} onPress={() => setRating(s)}>
+                        <TouchableOpacity key={s} onPress={() => { Haptics.selectionAsync().catch(() => {}); setRating(s); }}>
                           <Text style={{ fontSize: 32, color: s <= rating ? '#FFD700' : (isDarkMode ? '#555' : '#CCC') }}>★</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                     <TextInput
-                      style={[st.reviewInput, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F8F8F8', color: C.text, borderColor: C.border }]}
+                      style={[st.reviewInput, { backgroundColor: C.surface, color: C.text, borderColor: C.border }]}
                       multiline numberOfLines={3} placeholder="Share your experience (optional)"
                       placeholderTextColor={C.sub} value={reviewText} onChangeText={setReviewText} maxLength={500}
                     />
                     <View style={st.sheetBtns}>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
                         <Text style={{ color: C.text }}>Skip</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: rating === 0 ? C.border : C.accent }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
-                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Submit</Text>}
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: rating === 0 ? C.border : C.accent }]} disabled={rating === 0 || isLoading} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleRatingSubmit(); }} activeOpacity={0.7}>
+                        {isLoading ? <ActivityIndicator size="small" color={rating === 0 ? C.text : C.onAccent} /> : <Text style={{ color: rating === 0 ? C.text : C.onAccent, fontWeight: '600' }}>Submit</Text>}
                       </TouchableOpacity>
                     </View>
                   </>
                 ) : (
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>✓</Text>
-                    <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Thanks!</Text>
+                    <Text style={[st.sheetTitle, { color: C.text }]}>Thanks!</Text>
                     <Text style={[st.sheetSub, { color: C.sub }]}>Your feedback helps improve our services.</Text>
                   </>
                 )}
@@ -1073,27 +1470,27 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Tip Modal ─── */}
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
-              <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
-                <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Leave a Tip</Text>
+              <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+                <Text style={[st.sheetTitle, { color: C.text }]}>Leave a Tip</Text>
                 <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
                   {[5, 10, 15, 20].map(amt => (
-                    <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => setTipAmount(amt)} activeOpacity={0.7}>
-                      <Text style={{ color: tipAmount === amt ? '#FFF' : C.text, fontWeight: '600' }}>£{amt}</Text>
+                    <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); setTipAmount(amt); }} activeOpacity={0.7}>
+                      <Text style={{ color: tipAmount === amt ? C.onAccent : C.text, fontWeight: '600' }}>£{amt}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? '#2C2C2E' : '#F8F8F8', borderRadius: 10, paddingHorizontal: 12, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, paddingHorizontal: 12, marginBottom: 16 }}>
                   <Text style={{ color: C.text, fontSize: 16 }}>£</Text>
                   <TextInput style={{ flex: 1, color: C.text, fontSize: 16, paddingVertical: 10 }} keyboardType="decimal-pad" placeholder="Custom amount" placeholderTextColor={C.sub}
                     value={tipAmount > 0 ? tipAmount.toString() : ''} onChangeText={t => setTipAmount(isNaN(parseFloat(t)) ? 0 : parseFloat(t))} />
                 </View>
                 <View style={st.sheetBtns}>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
+                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
                     <Text style={{ color: C.text }}>Skip</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: tipAmount <= 0 ? C.border : C.accent }]} disabled={tipAmount <= 0} onPress={handleTipSubmit} activeOpacity={0.7}>
-                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Send Tip</Text>
+                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: tipAmount <= 0 ? C.border : C.accent }]} disabled={tipAmount <= 0} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleTipSubmit(); }} activeOpacity={0.7}>
+                    <Text style={{ color: tipAmount <= 0 ? C.text : C.onAccent, fontWeight: '600' }}>Send Tip</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1101,10 +1498,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Rebook Add-ons Modal ─── */}
-        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRebookAddOnsModal(false); setRebookSelection(null); }}>
+        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
           <View style={st.overlay}>
-            <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
-              <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Include Add-Ons?</Text>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Include Add-Ons?</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>Would you like to include the same add-ons from your previous booking?</Text>
               {booking.addOns?.map((a, i) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
@@ -1113,11 +1510,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 </View>
               ))}
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
-                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => confirmRebook('without')} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); confirmRebook('without'); }} activeOpacity={0.7}>
                   <Text style={{ color: C.text }}>Without Add-Ons</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => confirmRebook('with')} activeOpacity={0.7}>
-                  <Text style={{ color: '#FFF', fontWeight: '600' }}>With Add-Ons</Text>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); confirmRebook('with'); }} activeOpacity={0.7}>
+                  <Text style={{ color: C.onAccent, fontWeight: '600' }}>With Add-Ons</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1127,33 +1524,33 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} onPress={() => setContactSheetVisible(false)}>
-            <Pressable style={[st.contactSheet, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]} onPress={e => e.stopPropagation()}>
+            <Pressable style={[st.contactSheet, { backgroundColor: C.surfaceRaised }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
               <Text style={[st.sheetTitle, { color: C.text }]}>Contact {booking.providerName}</Text>
               {contactSheetLoading ? <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} /> : (
                 <View style={{ gap: 8, marginTop: 8 }}>
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
-                    onPress={() => { setContactSheetVisible(false); openProviderChat(booking); }}>
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); openProviderChat(booking); }}>
                     <View style={[st.contactIcon, { backgroundColor: '#5B1E32' }]}><Text>💬</Text></View>
                     <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>In-app message</Text><Text style={{ color: C.sub, fontSize: 12 }}>Chat directly inside Cerviced</Text></View>
                     <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                   </TouchableOpacity>
                   {contactSheetInfo?.preferred_contact_methods?.includes('email') && contactSheetInfo.email && (
-                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}>
+                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}>
                       <View style={[st.contactIcon, { backgroundColor: '#1C3A5B' }]}><Text>✉️</Text></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>Email</Text><Text style={{ color: C.sub, fontSize: 12 }} numberOfLines={1}>{contactSheetInfo.email}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('whatsapp') && contactSheetInfo.whatsapp_number && (
-                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}>
+                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}>
                       <View style={[st.contactIcon, { backgroundColor: '#1A3D2B' }]}><Text>💚</Text></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>WhatsApp</Text><Text style={{ color: C.sub, fontSize: 12 }}>{contactSheetInfo.whatsapp_number}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('phone') && contactSheetInfo.phone && (
-                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}>
+                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}>
                       <View style={[st.contactIcon, { backgroundColor: '#2B2B1A' }]}><Text>📞</Text></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>Phone call</Text><Text style={{ color: C.sub, fontSize: 12 }}>{contactSheetInfo.phone}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
@@ -1174,8 +1571,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Info Pack Full-Screen Reader — long packs only. Short ones get
             the compact popup below instead of taking over the whole screen. */}
-        <Modal visible={!!viewingPack && isLongInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
-          <View style={{ flex: 1, backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }}>
+        <Modal visible={!!viewingPack && isLongBookingInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
+          <View style={{ flex: 1, backgroundColor: C.bg }}>
             <SafeAreaView style={{ flex: 1 }}>
               {/* Header */}
               <View style={{
@@ -1183,7 +1580,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 paddingHorizontal: 16, paddingVertical: 12,
                 borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
               }}>
-                <TouchableOpacity onPress={() => setViewingPack(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setViewingPack(null); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
                   <Ionicons name="chevron-back" size={26} color={C.accent} />
                 </TouchableOpacity>
                 <View style={{ flex: 1, alignItems: 'center' }}>
@@ -1212,7 +1609,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   {/* Title */}
                   <Text style={{
                     fontSize: 26, fontWeight: '800', letterSpacing: -0.5,
-                    color: isDarkMode ? '#F0ECE7' : '#1C1A18',
+                    color: C.text,
                     marginBottom: 24, lineHeight: 32,
                   }}>
                     {viewingPack.title}
@@ -1221,7 +1618,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginBottom: 24 }} />
 
                   {/* Body */}
-                  <Text style={{ fontSize: 16, lineHeight: 26, color: isDarkMode ? '#D8D2CB' : '#3A3733' }}>
+                  <Text style={{ fontSize: 16, lineHeight: 26, color: C.sub }}>
                     {viewingPack.content}
                   </Text>
                 </ScrollView>
@@ -1232,9 +1629,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Info Pack Popup — short packs, as a small sheet instead of a
             takeover screen ─── */}
-        <Modal visible={!!viewingPack && !isLongInfoPack(viewingPack)} animationType="fade" transparent onRequestClose={() => setViewingPack(null)}>
+        <Modal visible={!!viewingPack && !isLongBookingInfoPack(viewingPack)} animationType="fade" transparent onRequestClose={() => setViewingPack(null)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 28 }} onPress={() => setViewingPack(null)}>
-            <Pressable style={{ width: '100%', maxWidth: 420, borderRadius: 20, padding: 22, backgroundColor: isDarkMode ? '#252220' : '#FFF' }} onPress={e => e.stopPropagation()}>
+            <Pressable style={{ width: '100%', maxWidth: 420, borderRadius: 20, padding: 22, backgroundColor: C.surfaceRaised }} onPress={e => e.stopPropagation()}>
               {viewingPack && (
                 <>
                   <View style={{
@@ -1252,11 +1649,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     {viewingPack.content}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => setViewingPack(null)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setViewingPack(null); }}
                     activeOpacity={0.8}
                     style={{ marginTop: 18, alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: C.accent }}
                   >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Got it</Text>
+                    <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 13 }}>Got it</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -1270,10 +1667,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 const st = StyleSheet.create({
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  backBtn: { flexDirection: 'row', alignItems: 'center' },
-  backArrow: { fontSize: 28, fontWeight: '300', marginRight: 4 },
-  backLabel: { fontSize: 16 },
   scroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   header: { alignItems: 'center', paddingVertical: 20 },
   providerImg: { width: 80, height: 80, borderRadius: 40, marginBottom: 12 },
@@ -1303,6 +1696,22 @@ const st = StyleSheet.create({
   primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   rescheduleBanner: { borderRadius: 14, borderWidth: 1, padding: 16 },
   actionChip: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
+  // Mirrors BookingsScreen's rateButton/tipButton/bookAgainButton shape —
+  // the per-action fill and border colours are applied inline, since they
+  // differ per button and two of the three are palette-derived.
+  mapActionBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapActionBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, fontWeight: 'bold' },
+  mapActionBtnDisabled: { opacity: 0.5 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
   sheetTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
@@ -1312,6 +1721,11 @@ const st = StyleSheet.create({
   // unconstrained row, and Yoga can collapse it to zero width so it never
   // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
   sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
+  disputeInput: {
+    width: '100%', minHeight: 96, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14,
+    textAlignVertical: 'top', marginBottom: 12,
+  },
   sheetBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },
   reviewInput: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 12, minHeight: 80, fontSize: 14, marginBottom: 16 },
   tipChip: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },

@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 
 interface SettingsOptionProps {
@@ -18,33 +19,34 @@ interface SettingsOptionProps {
   title: string;
   subtitle: string;
   onPress: () => void;
-  theme: any;
+  palette: AppTheme;
 }
 
-const SettingsOption = React.memo(({ icon, title, subtitle, onPress, theme }: SettingsOptionProps) => (
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P }: SettingsOptionProps) => (
   <TouchableOpacity
-    style={[styles.option, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
+    style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
   >
     <View style={styles.optionLeft}>
-      <Icon name={icon} size={20} color={theme.secondaryText} style={{ marginRight: 12 }} />
+      <Icon name={icon} size={20} color={P.sub} style={{ marginRight: 12 }} />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.optionText, { color: theme.text }]}>{title}</Text>
-        <Text style={[styles.optionSubText, { color: theme.secondaryText }]}>{subtitle}</Text>
+        <Text style={[styles.optionText, { color: P.text }]}>{title}</Text>
+        <Text style={[styles.optionSubText, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
-    <Icon name="chevron-right" size={18} color={theme.secondaryText} style={{ opacity: 0.4 }} />
+    <Icon name="chevron-right" size={18} color={P.sub} style={{ opacity: 0.4 }} />
   </TouchableOpacity>
 ));
+SettingsOption.displayName = 'SettingsOption';
 
 export default function BeautyBillingScreen({ navigation }: any) {
-  const { theme: t } = useTheme();
+  const { theme, palette: P } = useTheme();
 
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={t.statusBar} translucent />
+        <StatusBar barStyle={theme.statusBar} translucent />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
@@ -54,40 +56,40 @@ export default function BeautyBillingScreen({ navigation }: any) {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.backArrow, { color: t.text }]}>{'←'}</Text>
+            <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: t.text }]}>My Profile</Text>
-          <Text style={[styles.subtitle, { color: t.secondaryText }]}>Beauty preferences and payment details</Text>
+          <Text style={[styles.title, { color: P.text }]}>My Profile</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>Beauty preferences and payment details</Text>
 
           {/* Beauty */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: t.text }]}>Beauty</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Beauty</Text>
             <SettingsOption
               icon="heart"
               title="Beauty Profile"
               subtitle="Hair, skin, interests"
               onPress={() => navigation.navigate('BeautyProfile')}
-              theme={t}
+              palette={P}
             />
           </View>
 
           {/* Billing */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: t.text }]}>Billing</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Billing</Text>
             <SettingsOption
               icon="payment"
               title="Payment Methods"
               subtitle="Cards, Apple Pay"
               onPress={() => navigation.navigate('PaymentMethods')}
-              theme={t}
+              palette={P}
             />
             <SettingsOption
               icon="receipt"
               title="Subscription & Billing"
               subtitle="Plans, invoices"
               onPress={() => navigation.navigate('Subscription')}
-              theme={t}
+              palette={P}
             />
           </View>
 

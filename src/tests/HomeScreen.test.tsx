@@ -6,6 +6,7 @@ jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useFocusEffect: jest.fn(),
   useNavigation: () => ({ navigate: jest.fn() }),
+  useIsFocused: () => true,
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -42,7 +43,11 @@ jest.mock('../services/databaseService', () => ({
   getNewProviders: jest.fn(() => new Promise(() => {})),
   getProviders: jest.fn(() => new Promise(() => {})),
   getTopRatedProviders: jest.fn(() => new Promise(() => {})),
+  getTrendingProviders: jest.fn(() => new Promise(() => {})),
+  getDiscoverServices: jest.fn(() => new Promise(() => {})),
+  getProviderIdsByServiceAudience: jest.fn(() => new Promise(() => {})),
   getUnreadNotificationCount: jest.fn(() => new Promise(() => {})),
+  prefetchProviderBySlug: jest.fn(),
 }));
 
 describe('HomeScreen', () => {

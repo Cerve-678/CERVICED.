@@ -2,13 +2,26 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
-import { AvailabilityService } from '../services/AvailabilityService';
-import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, CartClaimResult } from '../services/databaseService';
-import type { DbBookingRescheduleRequest } from '../types/database';
+import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
+import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, getServiceIdsByNames, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow, getCurrentAuthUserId, subscribeToUserBookingChanges, subscribeToRescheduleRequestChanges } from '../services/databaseService';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { parseRescheduleRequestToken } from '../utils/rescheduleWindow';
+
+import {
+  BookingStatus,
+  PaymentStatus,
+  pendingRescheduleStatusOverride,
+  type BookingCoordinates,
+  type ConfirmedBooking,
+  type BookingConflictResult,
+  type AppointmentData,
+  type AvailableDate,
+  type PaymentBreakdown,
+} from '../types/booking';
+import { logger } from '../utils/logger';
+import { formatTime12, formatLongDate } from '../utils/dateUtils';
 
 export class BookingError extends Error {
   succeededCartItemIds: string[];
@@ -43,19 +56,37 @@ export { BookingStatus, PaymentStatus } from '../types/booking';
 // can import it from here without changing their import paths.
 export { mapDbBookingToConfirmed };
 
-// Import types locally (for use within this file)
-import type {
-  BookingCoordinates,
-  ConfirmedBooking,
-  BookingsByDate,
-  BookingConflictResult,
-  AppointmentData,
-  AvailableDate,
-} from '../types/booking';
-import { BookingStatus, PaymentStatus, type PaymentBreakdown } from '../types/booking';
-import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
-import { logger } from '../utils/logger';
-import { formatTime12, formatLongDate } from '../utils/dateUtils';
+/**
+ * The client's own address, and which providers in the cart it actually
+ * applies to.
+ *
+ * Only a MOBILE provider travels to the client, so only a mobile provider's
+ * booking gets a client address. This used to be a bare `clientAddress?:
+ * string` applied to every row in the cart — and because CartScreen seeds the
+ * field from the account's saved default regardless of what's in the cart,
+ * every booking a client with a saved address ever made was stamped with it.
+ * That address then read as the appointment's location on the client's own
+ * booking screens, hiding the salon's real (already released) address.
+ *
+ * `providerNames` holds `providerDisplayName ?? providerName` per cart item —
+ * the same key CartScreen resolves mobile providers by.
+ */
+export interface MobileClientAddress {
+  address: string;
+  /**
+   * The coarse area the client chose in Account > Your Address ("Camden,
+   * London"). Travels with the address because it answers the same question
+   * at a different resolution — but it is NOT gated: the provider reads it
+   * the moment the request arrives, which is the whole point (they need to
+   * judge travel before accepting, and the address is hidden until they do).
+   *
+   * Optional because a client who has never picked one is the normal case;
+   * the DB then falls back to deriving a postcode district from the address,
+   * and to NULL when there is no postcode to read.
+   */
+  area?: string | null;
+  providerNames: readonly string[];
+}
 
 export interface BookingContextType {
   bookings: ConfirmedBooking[];
@@ -68,12 +99,12 @@ export interface BookingContextType {
   allTodayBookingsCompleted: boolean;
 
   // Actions
-  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], clientAddress?: string, holdBatchId?: string) => Promise<void>;
+  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], mobileClientAddress?: MobileClientAddress, holdBatchId?: string) => Promise<void>;
   validateBookingsBeforeCheckout: (cartItems: CartItem[], appointmentData: AppointmentData[]) => Promise<BookingConflictResult>;
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
   // for the 10-minute window while the user is on the payment screen —
   // closes the gap between "committed to paying" and "booking actually
-  // inserted" that createBooking()'s insert-time-only conflict check can't
+  // inserted" that the claim RPC's insert-time-only conflict check can't
   // cover on its own. Only needs date/time per item (not full
   // AppointmentData — customer/payment details aren't known yet at this
   // point in checkout). Returns the batch id to pass into
@@ -82,7 +113,12 @@ export interface BookingContextType {
   // if any item can't be held.
   holdCartCheckoutSlots: (
     cartItems: CartItem[],
-    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>
+    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>,
+    /** The Confirm & Pay checkbox, passed through rather than assumed. It
+     *  gates the button that calls this, so it is always true in practice —
+     *  but hold_cart_booking_slots() rejects a batch without it, and reading
+     *  the real state keeps the assertion honest if that gating ever changes. */
+    consent: { policyAccepted: boolean; safetyAcknowledged: boolean }
   ) => Promise<string>;
   // Best-effort release of a hold batch when the user backs out of payment
   // before claiming it (close button, payment failure/cancel). Never throws
@@ -91,6 +127,13 @@ export interface BookingContextType {
   releaseCartCheckoutSlots: (holdBatchId: string) => Promise<void>;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => Promise<void>;
   cancelBooking: (bookingId: string) => Promise<void>;
+  // Reverse of the provider's no_show action — client marks the PROVIDER as
+  // not having shown up. Routed through client_mark_provider_no_show() (see
+  // supabase/fix_provider_no_show_status.sql), same guardrails philosophy
+  // as the provider's own no_show button (same-day, appointment start
+  // passed, terminal-state check, no active reschedule request) enforced
+  // server-side.
+  markProviderNoShow: (bookingId: string) => Promise<void>;
   getBookingsByProvider: (providerName: string) => ConfirmedBooking[];
   getBookingsByDate: (date: string) => ConfirmedBooking[];
   getBookingById: (bookingId: string) => ConfirmedBooking | undefined;
@@ -109,6 +152,19 @@ export interface BookingContextType {
   requestReschedule: (bookingId: string, preferredDates: string[]) => Promise<void>;
   providerRespondToReschedule: (bookingId: string, availableDates: AvailableDate[]) => Promise<void>;
   confirmReschedule: (bookingId: string, newDate: string, newTime: string) => Promise<void>;
+  declineReschedule: (bookingId: string) => Promise<void>;
+  // Group reschedule — confirm/decline every sibling booking sharing a
+  // group_booking_id at once, matching a provider's group-scoped proposal
+  // (see supabase/fix_group_booking_reschedule.sql). `siblings` and, for
+  // confirm, `chain` come from getBookingsByGroupId() + the picked chain
+  // out of the group's shared providerAvailableDates.
+  confirmGroupReschedule: (
+    groupBookingId: string,
+    siblings: ConfirmedBooking[],
+    newDate: string,
+    newTime: string
+  ) => Promise<void>;
+  declineGroupReschedule: (groupBookingId: string, siblings: ConfirmedBooking[]) => Promise<void>;
 }
 
 const STORAGE_KEY = STORAGE_KEYS.BOOKINGS;
@@ -169,6 +225,60 @@ const resolveCartProviderIds = async (
   return { providerIdCache, unresolvedNames };
 };
 
+/** cartItemId → real `services.id` UUID, for every item we can resolve one for.
+ *
+ *  A cart item's `serviceId` is whatever id the screen that added it had.
+ *  Usually that's the live UUID, but some paths (rebook from a booking whose
+ *  own service link was already missing, anything falling back to a local or
+ *  synthetic id) carry something that is not a UUID — and `bookings.service_id`
+ *  is a uuid FK, so those were written as NULL and the booking ended up with no
+ *  link to the service it is for. Resolving by (provider, service name) puts
+ *  the link back; an item that still can't be matched is written NULL exactly
+ *  as before, so this can only ever improve a row.
+ *
+ *  One query per distinct provider, not one per item.
+ */
+const resolveCartServiceIds = async (
+  cartItems: CartItem[],
+  providerIdCache: Record<string, string | null>,
+): Promise<Record<string, string>> => {
+  const resolved: Record<string, string> = {};
+  const needsLookup = new Map<string, CartItem[]>();
+
+  for (const item of cartItems) {
+    if (item.serviceId && UUID_RE.test(item.serviceId)) {
+      resolved[item.id] = item.serviceId;
+      continue;
+    }
+    const providerId = providerIdCache[item.providerName];
+    if (!providerId || !item.serviceName) continue;
+    const forProvider = needsLookup.get(providerId) ?? [];
+    forProvider.push(item);
+    needsLookup.set(providerId, forProvider);
+  }
+
+  await Promise.all(
+    [...needsLookup.entries()].map(async ([providerId, items]) => {
+      try {
+        const byName = await getServiceIdsByNames(
+          providerId,
+          [...new Set(items.map(i => i.serviceName))],
+        );
+        for (const item of items) {
+          const id = byName[item.serviceName];
+          if (id) resolved[item.id] = id;
+        }
+      } catch (err) {
+        // A failed lookup means the row keeps the NULL it would have had
+        // anyway — never a reason to fail the checkout.
+        logger.error('[Booking] service id resolution failed:', err);
+      }
+    }),
+  );
+
+  return resolved;
+};
+
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
 // ==================== HELPER FUNCTIONS ====================
@@ -207,25 +317,12 @@ const parseTimeToMinutes = (timeStr: string): number => {
 const calculateEndTime = (startTime: string, duration: string): string => {
   try {
     const startMinutes = parseTimeToMinutes(startTime);
-    const durationMatch = duration.match(/(\d+(?:\.\d+)?)\s*(hour|hr|h|minute|min|m)/i);
-    
-    if (!durationMatch) return startTime;
-    
-    const amountStr = durationMatch[1];
-    const unitStr = durationMatch[2];
-    
-    if (!amountStr || !unitStr) return startTime;
-    
-    const amount = parseFloat(amountStr);
-    const unit = unitStr.toLowerCase();
-    
-    let durationMinutes = 0;
-    if (unit.startsWith('h')) {
-      durationMinutes = Math.round(amount * 60);
-    } else {
-      durationMinutes = Math.round(amount);
-    }
-    
+    // Shared parser: the local first-match-only regex here read "1h 30min" as
+    // 60 minutes, so a booking's stored end time was an hour after its start
+    // no matter how long the service actually ran.
+    if (!/\d/.test(duration)) return startTime;
+    const durationMinutes = parseDurationToMinutes(duration);
+
     const totalMinutes = startMinutes + durationMinutes;
     const endHours = Math.floor(totalMinutes / 60) % 24;
     const endMinutes = totalMinutes % 60;
@@ -298,8 +395,21 @@ const determineBookingStatus = (
   try {
     const now = new Date();
     const appointmentStart = createBookingDateTime(bookingDate, bookingTime);
-    const appointmentEnd = createBookingDateTime(bookingDate, endTime);
-    
+    let appointmentEnd = createBookingDateTime(bookingDate, endTime);
+
+    // A booking row written before insertDirectBooking started requiring
+    // end_time has bookings.end_time NULL, and mapDbBookingToConfirmed then
+    // sets endTime to the START time. That made the appointment zero-length
+    // here: `now <= appointmentEnd` was true for one millisecond, so the
+    // booking skipped IN_PROGRESS entirely and flipped from UPCOMING to
+    // COMPLETED the instant its start time passed — a client sitting in the
+    // chair saw their live appointment filed under Past. Treat a
+    // non-positive span as one hour, the same assumed length the provider
+    // side's scheduleIssues.resolveSpan falls back to.
+    if (appointmentEnd.getTime() <= appointmentStart.getTime()) {
+      appointmentEnd = new Date(appointmentStart.getTime() + 60 * 60 * 1000);
+    }
+
     if (now < appointmentStart) {
       return BookingStatus.UPCOMING;
     } else if (now >= appointmentStart && now <= appointmentEnd) {
@@ -334,20 +444,11 @@ const sortBookingsByDateTime = (bookings: ConfirmedBooking[]): ConfirmedBooking[
 };
 
 
-// Map a raw DB bookings.status string → app BookingStatus enum. Single source
-// of truth — screens must never cast a raw DB status string directly, since
-// 'confirmed' (DB) has no identically-named BookingStatus member (it maps to
-// UPCOMING) and a raw cast silently produces an unmatched status.
-export const mapDbBookingStatus = (s: string): BookingStatus => {
-  switch (s) {
-    case 'pending': return BookingStatus.PENDING;
-    case 'completed': return BookingStatus.COMPLETED;
-    case 'cancelled': return BookingStatus.CANCELLED;
-    case 'in_progress': return BookingStatus.IN_PROGRESS;
-    case 'no_show': return BookingStatus.NO_SHOW;
-    default: return BookingStatus.UPCOMING;
-  }
-};
+// mapDbBookingStatus now lives in ../types/booking.ts (single source of
+// truth, shared by BookingContext and bookingService without a circular
+// import) and is re-exported here so existing importers of it from this
+// module keep working.
+export { mapDbBookingStatus } from '../types/booking';
 
 
 // ==================== PROVIDER COMPONENT ====================
@@ -442,8 +543,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         // (not yet synced) are kept as-is. Local reschedule/UI state is kept.
         let mergedBookings: ConfirmedBooking[] = migratedBookings;
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
+          const userId = await getCurrentAuthUserId();
+          if (userId) {
             const dbBookings = await getMyBookings();
             if (dbBookings.length > 0) {
               const dbById = new Map(dbBookings.map(d => [d.id, d]));
@@ -478,6 +579,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   // The client's own address for mobile bookings is never masked
                   // by the view, so keep a local value that hasn't synced yet.
                   clientAddress: fromDb.clientAddress ?? b.clientAddress,
+                  // Read live off the joined provider by the view, so it can
+                  // only be absent on a client running against a DB that
+                  // predates the column — keep the local value in that case.
+                  providerBusinessType: fromDb.providerBusinessType ?? b.providerBusinessType,
                   remainingBalance: fromDb.remainingBalance,
                   paymentStatus: fromDb.paymentStatus,
                 };
@@ -500,7 +605,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               mergedBookings = [...mergedBookings, ...missingLocally];
             }
           }
-        } catch (_) {
+        } catch {
           // Offline or fetch failed — local copy stands
         }
 
@@ -520,7 +625,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           mergedBookings = mergedBookings.map((b: ConfirmedBooking) =>
             applyRescheduleRequestRow(b, rescheduleRows[b.id])
           );
-        } catch (_) {
+        } catch {
           // Offline — the catch-up sweep and realtime subscription still cover it
         }
 
@@ -528,10 +633,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           // A booking mid-reschedule should not be auto-expired based on the
           // original appointment date — the date is being replaced, so treat
           // it as still upcoming until the reschedule is resolved.
-          if (booking.isPendingReschedule &&
-              booking.status !== BookingStatus.CANCELLED &&
-              booking.status !== BookingStatus.NO_SHOW) {
-            return { ...booking, status: BookingStatus.UPCOMING };
+          //
+          // Never out of a TERMINAL status, though: that state was reached
+          // server-side and the app doesn't get to overrule it. This guard
+          // used to name CANCELLED and NO_SHOW inline and omitted COMPLETED,
+          // so a completed booking still carrying an open reschedule request
+          // was forced back to UPCOMING — and since BookingsScreen also filters
+          // pending-reschedule bookings out of Past, it could never leave the
+          // Upcoming tab. Requests are now closed server-side when their
+          // booking goes terminal (on_booking_terminal_close_reschedule), so
+          // this is the second of two layers rather than the only one.
+          const rescheduleHold = pendingRescheduleStatusOverride(booking);
+          if (rescheduleHold) {
+            return { ...booking, status: rescheduleHold };
           }
           return {
             ...booking,
@@ -550,8 +664,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       } else {
         logger.log('No bookings in storage — trying Supabase fallback...');
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
+          const userId = await getCurrentAuthUserId();
+          if (userId) {
             const dbBookings = await getMyBookings();
             if (dbBookings.length > 0) {
               const mapped = dbBookings.map(mapDbBookingToConfirmed);
@@ -564,7 +678,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           } else {
             setBookings([]);
           }
-        } catch (_) {
+        } catch {
           setBookings([]);
         }
       }
@@ -585,33 +699,22 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   // Realtime: re-fetch bookings whenever a booking row changes for the current user
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let unsubscribe: (() => void) | null = null;
+    let active = true;
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-
-      channel = supabase
-        .channel('booking-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'bookings',
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
+    getCurrentAuthUserId().then(userId => {
+      if (!active || !userId) return;
+      unsubscribe = subscribeToUserBookingChanges(userId, () => {
             // A booking was inserted/updated — reload to reflect latest status.
             // Also update the Zustand store so non-context consumers stay fresh.
             loadBookings().catch(() => {});
-            useBookingStore.getState().refreshBookings(user.id).catch(() => {});
-          }
-        )
-        .subscribe();
-    });
+            useBookingStore.getState().refreshBookings(userId).catch(() => {});
+      });
+    }).catch(() => {});
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      active = false;
+      unsubscribe?.();
     };
   }, [loadBookings]);
 
@@ -741,8 +844,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // RescheduleScreen.tsx handleSubmit) — split so the UI can show the
       // requested date and time separately, mirroring how the RPC now splits
       // them into requested_dates/requested_times server-side.
-      const requestedDatesOnly = preferredDates.map(d => d.split(' ')[0] ?? d);
-      const requestedTimesOnly = preferredDates.map(d => d.split(' ')[1] ?? '');
+      // Split on the FIRST space only (see parseRescheduleRequestToken).
+      // `d.split(' ')[1]` kept just the first token of the time, so a
+      // 12-hour "2026-09-01 2:30 PM" was stored locally as "2:30" — which
+      // formatTime12Safe then rendered back to the client as 2:30 AM.
+      const requestedDatesOnly = preferredDates.map(d => parseRescheduleRequestToken(d)[0]);
+      const requestedTimesOnly = preferredDates.map(d => parseRescheduleRequestToken(d)[1]);
 
       // ✅ Update only the specific booking
       const updatedBooking = {
@@ -765,21 +872,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
-      // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
-      const rescheduleProviderId = booking.providerId
-        ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
-      if (rescheduleProviderId) {
-        const dateList = preferredDates.slice(0, 3).join(', ');
-        insertProviderNotification({
-          provider_id: rescheduleProviderId,
-          type: 'reschedule_request',
-          title: 'Reschedule Request',
-          message: `${booking.customerName || 'A client'} wants to reschedule their ${booking.serviceName} appointment. Preferred dates: ${dateList}.`,
-          priority: 'high',
-          is_actionable: true,
-          booking_id: bookingId,
-        }).catch(() => {});
-      }
+      // Provider notification is now trigger-owned (handle_reschedule_request_change()
+      // in supabase/fix_reschedule_flow_completion.sql fires on the INSERT
+      // that request_reschedule_own_booking() just performed) — no app-side
+      // insert needed here anymore.
 
       logger.log('Step 1 Complete: Status=PENDING, waiting for provider response');
     } catch (error) {
@@ -879,8 +975,40 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       if (!slots || slots.length === 0) return;
       try {
         await providerRespondToReschedule(bookingId, slots);
-      } catch (_) {
+      } catch {
         // Booking not on this device or already applied — safe to ignore
+      }
+    };
+
+    // Provider declined the client's request outright (reject_reschedule_request,
+    // see supabase/fix_reschedule_flow_completion.sql) — clear local pending
+    // state so RescheduleScreen/BookingDetailScreen stop showing "waiting on
+    // provider" for a request that's actually closed. The notification
+    // explaining WHY is trigger-owned and arrives separately; this just
+    // keeps the booking's local state from going stale.
+    const applyRejection = async (bookingId: string) => {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!stored) return;
+        const current: ConfirmedBooking[] = JSON.parse(stored);
+        const booking = current.find(b => b.id === bookingId);
+        if (!booking || !booking.isPendingReschedule) return;
+        const updated: ConfirmedBooking = {
+          ...booking,
+          isPendingReschedule: false,
+          rescheduleRequest: {
+            ...(booking.rescheduleRequest?.rescheduleCount != null
+              ? { rescheduleCount: booking.rescheduleRequest.rescheduleCount }
+              : {}),
+            ...(booking.rescheduleRequest?.lastRescheduledAt
+              ? { lastRescheduledAt: booking.rescheduleRequest.lastRescheduledAt }
+              : {}),
+          },
+          updatedAt: new Date().toISOString(),
+        };
+        await saveBookings(current.map(b => b.id === bookingId ? updated : b));
+      } catch {
+        // Safe to ignore — worst case the banner clears next time bookings reload.
       }
     };
 
@@ -898,9 +1026,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             // while this app was closed (provider-initiated reschedule)
             (!b.isPendingReschedule && b.status === BookingStatus.UPCOMING)
         );
+        // No .catch() swallow here: an empty map means "no active request"
+        // to the applyRejection branch below, so a failed fetch used to clear
+        // isPendingReschedule on bookings whose request was still live
+        // server-side. Let it throw into the outer catch and leave local
+        // state alone — the realtime subscription below still covers us.
         const rescheduleRows = await getActiveRescheduleRequestsForBookings(
           waiting.map(b => b.id)
-        ).catch(() => ({} as Record<string, DbBookingRescheduleRequest>));
+        );
         for (const b of waiting) {
           if (cancelled) break;
           const req = rescheduleRows[b.id];
@@ -909,9 +1042,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               b.id,
               req.provider_available_slots as AvailableDate[] | null
             );
+          } else if (!req && b.isPendingReschedule) {
+            // No active (pending/provider_responded) row remains for a
+            // booking this device still thinks is mid-reschedule — it was
+            // resolved elsewhere (rejected, cancelled, or confirmed on
+            // another device) while this app was closed. Clear local state.
+            await applyRejection(b.id);
           }
         }
-      } catch (_) {
+      } catch {
         // Offline — realtime subscription below still covers the live case
       }
     })();
@@ -922,29 +1061,22 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     // The membership check below is a local optimisation, not a security
     // boundary: it stops a row for someone else's booking from triggering an
     // AsyncStorage read/write cycle that would find nothing to update.
-    const channel = supabase
-      .channel('reschedule-responses')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'booking_reschedule_requests' },
-        (payload) => {
-          const row = payload.new as {
-            booking_id?: string;
-            status?: string;
-            provider_available_slots?: AvailableDate[] | null;
-          } | null;
-          if (row?.status !== 'provider_responded' || !row.booking_id) return;
-          if (!bookingIdsRef.current.has(row.booking_id)) return;
-          applyProviderResponse(row.booking_id, row.provider_available_slots);
-        }
-      )
-      .subscribe();
+    const unsubscribe = subscribeToRescheduleRequestChanges(
+        (row) => {
+          if (!row?.booking_id || !bookingIdsRef.current.has(row.booking_id)) return;
+          if (row.status === 'provider_responded') {
+            applyProviderResponse(row.booking_id, row.provider_available_slots);
+          } else if (row.status === 'rejected') {
+            applyRejection(row.booking_id);
+          }
+        },
+    );
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
-  }, [providerRespondToReschedule]);
+  }, [providerRespondToReschedule, saveBookings]);
 
   const confirmReschedule = useCallback(async (bookingId: string, newDate: string, newTime: string) => {
     try {
@@ -1028,24 +1160,175 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
-      // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
-      const confirmedProviderId = booking.providerId
-        ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
-      if (confirmedProviderId) {
-        insertProviderNotification({
-          provider_id: confirmedProviderId,
-          type: 'reschedule_confirmed',
-          title: 'Reschedule Confirmed',
-          message: `${booking.customerName || 'A client'} confirmed their ${booking.serviceName} for ${newDate.split('-').reverse().join('/')} at ${newTime}.`,
-          priority: 'medium',
-          is_actionable: true,
-          booking_id: bookingId,
-        }).catch(() => {});
-      }
+      // Provider notification is now trigger-owned (handle_reschedule_request_change()
+      // in supabase/fix_reschedule_flow_completion.sql fires on the
+      // confirm_reschedule_own_booking() UPDATE above) — no app-side insert
+      // needed here anymore.
 
       logger.log('Step 3 Complete: Status=UPCOMING, 24hr cooldown active, total reschedules:', rescheduleCount);
     } catch (error) {
       logger.error('❌ Failed to confirm reschedule:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
+  // Client declines a provider's offered reschedule times. The booking
+  // itself is untouched server-side (decline_reschedule_offer only closes
+  // the request row) — clear the local pending flags to match, so the
+  // booking falls back to displaying its original, still-confirmed date/time.
+  const declineReschedule = useCallback(async (bookingId: string) => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!stored) throw new Error('No bookings found in storage');
+
+      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+      const booking = currentBookings.find(b => b.id === bookingId);
+      if (!booking) throw new Error('Booking not found');
+
+      await declineRescheduleOffer(bookingId);
+
+      const updatedBooking: ConfirmedBooking = {
+        ...booking,
+        isPendingReschedule: false,
+        rescheduleRequest: {
+          ...(booking.rescheduleRequest?.rescheduleCount != null
+            ? { rescheduleCount: booking.rescheduleRequest.rescheduleCount }
+            : {}),
+          ...(booking.rescheduleRequest?.lastRescheduledAt
+            ? { lastRescheduledAt: booking.rescheduleRequest.lastRescheduledAt }
+            : {}),
+        },
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedBookings = currentBookings.map(b => b.id === bookingId ? updatedBooking : b);
+      await saveBookings(updatedBookings);
+    } catch (error) {
+      logger.error('❌ Failed to decline reschedule offer:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
+  // Confirm ONE proposed day for a whole group reschedule at once — every
+  // sibling this client has with the provider (identified by a shared
+  // rescheduleRequest.groupRescheduleBatchId, see
+  // supabase/fix_group_booking_reschedule.sql) moves to its own shifted
+  // time from that chosen day, together. `chain` is the exact per-sibling
+  // date/time/endTime the client picked (index-aligned to `siblings`,
+  // sorted the same way the provider's proposal was built — earliest
+  // original appointment first) — this mirrors how confirmReschedule above
+  // trusts a single already-chosen newDate/newTime rather than
+  // re-deriving it. The double-booking guard (isSlotTaken) still runs per
+  // sibling, same as the single-booking path, since a slot can be taken by
+  // someone else between the provider proposing and the client confirming.
+  // newDate/newTime is the representative sibling's picked slot — same
+  // "already chosen, don't re-derive" trust model as the singular
+  // confirmReschedule above. Each OTHER sibling's own time for that same
+  // date is read straight off its own rescheduleRequest.providerAvailableDates
+  // (every sibling's request row was proposed for the same set of candidate
+  // days, just with each sibling's own shifted time per day — see
+  // provider_initiate_group_reschedule). endTime is recomputed from each
+  // sibling's own duration, same as the singular path — provider_available_
+  // slots only ever stores a start time, never an end time.
+  const confirmGroupReschedule = useCallback(async (
+    groupBookingId: string,
+    siblings: ConfirmedBooking[],
+    newDate: string,
+    newTime: string
+  ) => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!stored) throw new Error('No bookings found in storage');
+      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+
+      const perSiblingTime = new Map<string, string>();
+      for (const sib of siblings) {
+        const time = sib.rescheduleRequest?.providerAvailableDates?.find(d => d.date === newDate)?.times?.[0];
+        if (!time) throw new Error(`Could not determine ${sib.serviceName}'s time for this date.`);
+        perSiblingTime.set(sib.id, time);
+      }
+
+      for (const sib of siblings) {
+        const time = perSiblingTime.get(sib.id)!;
+        const slotProviderId =
+          sib.providerId ?? (await getProviderIdByDisplayName(sib.providerName).catch(() => null));
+        const time24 = timeTo24(time);
+        if (slotProviderId && time24 && (await isSlotTaken(slotProviderId, newDate, time24))) {
+          throw new Error(`That time for ${sib.serviceName} has just been taken. Please pick another day.`);
+        }
+      }
+
+      const selections = siblings.map(sib => {
+        const time = perSiblingTime.get(sib.id)!;
+        return {
+          booking_id: sib.id,
+          new_date: newDate,
+          new_time: time,
+          new_end_time: calculateEndTime(time, sib.duration),
+        };
+      });
+
+      await dbConfirmGroupReschedule(groupBookingId, selections);
+
+      const selectionById = new Map(selections.map(s => [s.booking_id, s]));
+      const updatedBookings = currentBookings.map(b => {
+        const sel = selectionById.get(b.id);
+        if (!sel) return b;
+        const originalDate = b.rescheduleRequest?.originalDate || b.bookingDate;
+        const originalTime = b.rescheduleRequest?.originalTime || b.bookingTime;
+        const rescheduleCount = (b.rescheduleRequest?.rescheduleCount || 0) + 1;
+        return {
+          ...b,
+          bookingDate: sel.new_date,
+          bookingTime: sel.new_time,
+          endTime: sel.new_end_time,
+          isPendingReschedule: false,
+          rescheduleRequest: {
+            originalDate,
+            originalTime,
+            rescheduleCount,
+            lastRescheduledAt: new Date().toISOString(),
+          },
+          updatedAt: new Date().toISOString(),
+        } as ConfirmedBooking;
+      });
+
+      await saveBookings(updatedBookings);
+    } catch (error) {
+      logger.error('❌ Failed to confirm group reschedule:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
+  const declineGroupReschedule = useCallback(async (groupBookingId: string, siblings: ConfirmedBooking[]) => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!stored) throw new Error('No bookings found in storage');
+      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+
+      await declineGroupRescheduleOffer(groupBookingId);
+
+      const siblingIds = new Set(siblings.map(s => s.id));
+      const updatedBookings = currentBookings.map(b => {
+        if (!siblingIds.has(b.id)) return b;
+        return {
+          ...b,
+          isPendingReschedule: false,
+          rescheduleRequest: {
+            ...(b.rescheduleRequest?.rescheduleCount != null
+              ? { rescheduleCount: b.rescheduleRequest.rescheduleCount }
+              : {}),
+            ...(b.rescheduleRequest?.lastRescheduledAt
+              ? { lastRescheduledAt: b.rescheduleRequest.lastRescheduledAt }
+              : {}),
+          },
+          updatedAt: new Date().toISOString(),
+        } as ConfirmedBooking;
+      });
+
+      await saveBookings(updatedBookings);
+    } catch (error) {
+      logger.error('❌ Failed to decline group reschedule offer:', error);
       throw error;
     }
   }, [saveBookings]);
@@ -1107,6 +1390,39 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [saveBookings]);
 
+  // Reverse of the provider's no_show action — client marks the PROVIDER as
+  // not having shown up. Routed through client_mark_provider_no_show()
+  // (SECURITY DEFINER RPC, see supabase/fix_provider_no_show_status.sql),
+  // which enforces the same guardrails as the provider's own no_show button
+  // server-side (same calendar day, appointment start time passed, terminal-
+  // state check, no active reschedule request) — this app never trusts a
+  // client-side check alone for that kind of rule. The provider is notified
+  // by handle_booking_status_change() (DB trigger owns this).
+  const markProviderNoShow = useCallback(async (bookingId: string) => {
+    try {
+      logger.log('Marking provider no-show:', bookingId);
+      if (!isDbBookingId(bookingId)) return;
+      await dbMarkProviderNoShow(bookingId);
+
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const currentBookings: ConfirmedBooking[] = stored ? JSON.parse(stored) : [];
+      const booking = currentBookings.find(b => b.id === bookingId);
+      if (booking) {
+        const updatedBookings = currentBookings.map(b =>
+          b.id === bookingId
+            ? { ...b, status: BookingStatus.PROVIDER_NO_SHOW, updatedAt: new Date().toISOString() }
+            : b
+        );
+        await saveBookings(updatedBookings);
+      }
+
+      logger.log('Provider marked no-show successfully');
+    } catch (error) {
+      logger.error('❌ Failed to mark provider no-show:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
   const updateBookingStatus = useCallback(async (bookingId: string, status: BookingStatus) => {
     try {
       const updatedBookings = bookings.map(b =>
@@ -1153,6 +1469,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           duration: item.duration,
           cartItemId: item.id,
           serviceId: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : undefined,
+          // Without this the item is re-checked against the very rules the
+          // client already accepted a request under, and reported back to
+          // them as a conflict.
+          isEmergencyRequest: !!item.emergencyRequest,
         };
       }).filter(b => b.date && b.time);
 
@@ -1184,11 +1504,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const createBookingsFromCart = useCallback(async (
     cartItems: CartItem[],
     appointmentData: AppointmentData[],
-    clientAddress?: string,
+    mobileClientAddress?: MobileClientAddress,
     holdBatchId?: string
   ) => {
     try {
       logger.log('Creating bookings from cart...');
+
+      // Which providers in this cart travel to the client. Keyed by
+      // `providerDisplayName ?? providerName`, matching how CartScreen resolves
+      // them. Empty when nobody in the cart is mobile — which is exactly when
+      // no booking here should carry a client address.
+      const clientAddressText = mobileClientAddress?.address.trim() || null;
+      const clientAreaText = mobileClientAddress?.area?.trim() || null;
+      const mobileProviderNames = new Set(mobileClientAddress?.providerNames ?? []);
 
       // Validate bookings before creating to prevent double-booking. Skipped
       // when a hold batch is present: hold_cart_booking_slots() already did
@@ -1333,8 +1661,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const itemProviderId = providerIdCache[item.providerName];
         const groupInfo = groupInfoForItem(item);
         const endTime = calculateEndTime(appointment.time, item.duration);
-        const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
-        const now = new Date();
         const initialStatus = providerCapCache[item.providerName]?.auto_accept
           ? BookingStatus.UPCOMING
           : BookingStatus.PENDING;
@@ -1390,9 +1716,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           bookingTime: appointment.time,
           endTime,
           status: initialStatus,
-          address: providerLocations[itemProviderId ?? '']?.address ?? appointment.address,
-          coordinates: (providerLocations[itemProviderId ?? '']?.coordinates ?? appointment.coordinates) as unknown as BookingCoordinates,
+          // Mirrors the DB row built below: a mobile provider's own location
+          // is not this appointment's venue, so the optimistic local copy
+          // doesn't claim it is either — otherwise the booking flips address
+          // the moment the real row loads back.
+          address: mobileProviderNames.has(fullProviderName)
+            ? ''
+            : providerLocations[itemProviderId ?? '']?.address ?? appointment.address,
+          coordinates: (mobileProviderNames.has(fullProviderName)
+            ? null
+            : providerLocations[itemProviderId ?? '']?.coordinates ?? appointment.coordinates) as unknown as BookingCoordinates,
           phone: providerLocations[itemProviderId ?? '']?.phone ?? appointment.phone,
+          ...(mobileProviderNames.has(fullProviderName) && clientAddressText
+            ? { clientAddress: clientAddressText, providerBusinessType: 'mobile' as const }
+            : {}),
           // Customer information
           customerName: appointment.customerName,
           customerEmail: appointment.customerEmail,
@@ -1435,17 +1772,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // id after a successful save (reschedules/cancellations reference it)
       const dbIdByCartItemId: Record<string, string> = {};
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        const userId = await getCurrentAuthUserId();
+        if (userId) {
           // If this checkout reserved a hold batch (CartScreen calls
           // holdCartCheckoutSlots when the user commits to payment), claim
           // it now: every item with a still-live held row gets converted in
           // place (UPDATE, not a fresh INSERT) and is looked up below by
-          // (provider, date, time) to skip dbCreateBooking entirely. Items
+          // (provider, date, time) to skip the per-item insert entirely. Items
           // with no live hold (expired, or the hold call never happened —
           // e.g. an old client build) simply fall through to the normal
           // insert path unchanged, same as if no hold existed at all.
           const claimedByKey = new Map<string, string>();
+          const claimServiceIdByCartItem = holdBatchId
+            ? await resolveCartServiceIds(cartItems, providerIdCache)
+            : {};
           if (holdBatchId) {
             try {
               const claimItems = cartItems
@@ -1465,9 +1805,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                         ? (item.providerImage as { uri?: string }).uri ?? null
                         : null);
                   const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
+                  // Only a mobile provider travels to the client, so only a
+                  // mobile provider's booking carries the client's address —
+                  // and conversely, a mobile provider's own location is their
+                  // private base, not this appointment's venue, so it isn't
+                  // snapshotted as one. Getting this wrong in either direction
+                  // is what made a salon booking render the client's own home
+                  // address as its location.
+                  const isMobile = mobileProviderNames.has(
+                    item.providerDisplayName ?? item.providerName,
+                  );
                   return {
                     provider_id: providerId,
-                    service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
+                    service_id: claimServiceIdByCartItem[item.id] ?? null,
                     booking_date: apt.date,
                     booking_time: pgTime,
                     end_time: pgEndTime,
@@ -1489,16 +1839,32 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                     service_name_snapshot: item.serviceName,
                     service_category_snapshot: item.providerService || null,
                     provider_logo_snapshot: logoUrl,
-                    provider_address_snapshot: providerLocations[providerId]?.address ?? apt.address ?? null,
+                    provider_address_snapshot: isMobile
+                      ? null
+                      : providerLocations[providerId]?.address ?? apt.address ?? null,
                     provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
-                    provider_coordinates: (() => {
-                      const c = providerLocations[providerId]?.coordinates;
-                      return c ? { lat: c.latitude, lng: c.longitude } : null;
-                    })(),
+                    provider_coordinates: isMobile
+                      ? null
+                      : (() => {
+                          const c = providerLocations[providerId]?.coordinates;
+                          return c ? { lat: c.latitude, lng: c.longitude } : null;
+                        })(),
                     customer_name: apt.customerName,
                     customer_email: apt.customerEmail,
                     customer_phone: apt.customerPhone,
-                    client_address: clientAddress ?? null,
+                    client_address: isMobile ? clientAddressText : null,
+                    // Same gate as the address — only a mobile provider
+                    // travels, so only their booking carries either half.
+                    // relocate_booking_client_address() COALESCEs this over
+                    // its postcode derivation, so a chosen area wins and a
+                    // missing one still falls back.
+                    client_area: isMobile ? clientAreaText : null,
+                    // policy_accepted_at is deliberately absent:
+                    // hold_cart_booking_slots() stamps it from the DB clock
+                    // before payment, and the claim no longer overwrites it.
+                    // policy_snapshot is the policy's CONTENT rather than
+                    // evidence of consent, and is only assembled by here.
+                    policy_snapshot: item.policySnapshot ?? null,
                   };
                 })
                 .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -1522,8 +1888,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
             const providerId = providerIdCache[item.providerName];
             if (!providerId) continue; // unreachable — resolution guaranteed above
-            const groupInfo = groupInfoForItem(item);
-
             try {
 
             const pgTime = timeTo24(apt.time);
@@ -1534,117 +1898,30 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             const claimedId = claimedByKey.get(`${providerId}|${apt.date}|${pgTime}`);
             if (claimedId) {
               dbIdByCartItemId[item.id] = claimedId;
-              if (apt.customerEmail) {
-                const { subject, html } = bookingConfirmationEmail({
-                  clientName: apt.customerName || 'there',
-                  providerName: item.providerName,
-                  service: item.serviceName,
-                  date: formatLongDate(apt.date),
-                  time: formatTime12(apt.time),
-                  location: apt.address || 'Address shared on confirmation',
-                });
-                sendEmail(apt.customerEmail, subject, html).catch(() => {});
-              }
+              // The confirmation email is no longer sent from here. The
+              // queue_booking_confirmation_email trigger on `bookings` owns
+              // it, so it no longer depends on this app staying open long
+              // enough to finish the request — and the wording follows the
+              // booking row rather than whatever this screen had in memory.
               continue;
             }
 
-            const endTimeStr = calculateEndTime(apt.time, item.duration);
-            const pgEndTime = timeTo24(endTimeStr);
-
-            const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
-            const logoUrl = typeof item.providerImage === 'string'
-              ? item.providerImage
-              : (item.providerImage && typeof item.providerImage === 'object' && 'uri' in item.providerImage
-                  ? (item.providerImage as { uri?: string }).uri ?? null
-                  : null);
-            const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
-
-            const newDbBooking = await dbCreateBooking(
-              {
-                user_id: user.id,
-                provider_id: providerId,
-                // Link the real service row when the cart item carries the DB
-                // UUID (static/demo services have numeric ids — store null).
-                // This powers waitlist service-matching, duration lookups and
-                // review linkage downstream.
-                service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
-                status: 'pending',
-                booking_date: apt.date,
-                booking_time: pgTime,
-                end_time: pgEndTime,
-                notes: apt.notes ?? null,
-                booking_instructions: null,
-                payment_type: apt.paymentType,
-                base_price: item.price,
-                add_ons_total: addOnsTotal,
-                service_charge: apt.serviceCharge,
-                deposit_amount: apt.depositAmount,
-                amount_paid: apt.amountPaid,
-                remaining_balance: apt.remainingBalance,
-                payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
-                payment_method: apt.paymentMethod ?? null,
-                payment_intent_id: apt.paymentIntentId ?? null,
-                is_group_booking: groupInfo.isGroupBooking,
-                group_booking_id: groupInfo.groupBookingId ?? null,
-                group_booking_count: groupInfo.isGroupBooking ? groupInfo.groupBookingCount : 1,
-                provider_name_snapshot: item.providerName,
-                service_name_snapshot: item.serviceName,
-                service_category_snapshot: item.providerService || null,
-                provider_logo_snapshot: logoUrl,
-                // Keyed by provider id — a display-name key could pull a
-                // different provider's address when two share a name.
-                // This is only ever the public, approximate location (the client
-                // can't read a different provider's real address — RLS on
-                // provider_private_details blocks it) or the pending placeholder.
-                // trg_stamp_booking_address_snapshot overwrites it server-side with
-                // the real full_address when the provider has one on file — see
-                // fix_booking_address_snapshot_uses_real_address.sql.
-                provider_address_snapshot: providerLocations[providerId]?.address ?? apt.address ?? null,
-                provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
-                provider_coordinates: (() => {
-                  const c = providerLocations[providerId]?.coordinates;
-                  return c ? { lat: c.latitude, lng: c.longitude } : null;
-                })(),
-                customer_name: apt.customerName,
-                customer_email: apt.customerEmail,
-                customer_phone: apt.customerPhone,
-                address_released_at: null,
-                client_address: clientAddress ?? null,
-                occasion_type: null,
-                style_request: null,
-                reference_image_url: null,
-              },
-              (item.addOns ?? []).map(a => ({
-                add_on_id: String(a.id),
-                name_snapshot: a.name,
-                price_snapshot: a.price,
-              }))
+            // The hold batch is the ONLY way a client can create a booking.
+            // public.bookings has no client INSERT policy — only
+            // bookings_provider_insert — so the direct createBooking() insert
+            // that used to live here could do nothing but fail RLS and surface
+            // Postgres' policy text to the client. If the slot wasn't claimed
+            // from the hold, the booking genuinely did not happen; say so
+            // plainly instead of attempting a doomed write.
+            //
+            // The policy is deliberately NOT being restored — a blanket
+            // authenticated INSERT would let a client forge rows with arbitrary
+            // price/status/snapshot fields, bypassing every validation the claim
+            // RPC performs. See supabase/migrations/20260810180952_restore_
+            // legacy_booking_writes_pending_stripe.sql.
+            throw new Error(
+              `That time slot with ${item.providerDisplayName ?? item.providerName} is no longer available. Please choose a different time.`
             );
-
-            if (newDbBooking?.id) {
-              dbIdByCartItemId[item.id] = newDbBooking.id;
-            }
-
-            // Auto-confirm is owned by the DB trigger handle_new_booking, which
-            // flips the row to 'confirmed' on insert when the provider has
-            // auto-accept enabled. Confirming here too produced a SECOND
-            // "Booking Confirmed" notification — the app's status update fired the
-            // status-change trigger on top of the trigger's own confirm — so the
-            // app no longer confirms; the DB trigger is the single source.
-            // Requires the auto-accepting handle_new_booking to be deployed
-            // (fix_auto_accept_provider_notification.sql), else these stay 'pending'.
-            // Confirmation email — fire and forget, never blocks booking
-            if (apt.customerEmail) {
-              const { subject, html } = bookingConfirmationEmail({
-                clientName: apt.customerName || 'there',
-                providerName: item.providerName,
-                service: item.serviceName,
-                date: formatLongDate(apt.date),
-                time: formatTime12(apt.time),
-                location: apt.address || 'Address shared on confirmation',
-              });
-              sendEmail(apt.customerEmail, subject, html).catch(() => {});
-            }
 
             } catch (itemError: any) {
               const name = item.providerDisplayName ?? item.providerName;
@@ -1655,9 +1932,23 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 // caught a different-start-time overlap the app-side
                 // pre-check missed under concurrent requests. Same
                 // user-facing story either way: someone else got there first.
-                message = `That time slot with ${name} was just taken by another client. Please choose a different time.`;
-              } else if (itemError instanceof Error && !itemError.message.includes('Network') && !('code' in itemError)) {
-                // createBooking validation: closed day, blocked date, overlap…
+                message = `That time slot with ${name} is no longer available. Please choose a different time.`;
+              } else if (
+                typeof itemError?.message === 'string'
+                && itemError.message.length > 0
+                && !itemError.message.includes('Network')
+                // itemError.message is safe to show verbatim for the claim
+                // RPC's own `new Error(...)` validations (closed day,
+                // blocked date, overlap — no .code at all) and for a
+                // deliberate DB guard (RAISE EXCEPTION, which Postgres
+                // defaults to SQLSTATE P0001) — both are written for people.
+                // Supabase's PostgrestError DOES extend Error and carries a
+                // real .code for a genuine technical failure (RLS,
+                // constraint violation, anything else Postgres raised)
+                // that's unsafe to surface raw — those fall through to the
+                // generic message below instead.
+                && !(itemError?.code && itemError.code !== 'P0001')
+              ) {
                 message = itemError.message;
               } else {
                 message = `Your booking with ${name} couldn't be placed. Please check your connection and try again.`;
@@ -1674,7 +1965,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const newIds = new Set(newBookings.map(nb => nb.id));
         await saveBookings(updatedBookings.filter(b => !newIds.has(b.id)));
         throw new BookingError(
-          "We couldn't reach the server, so your booking wasn't placed. Please check your connection and try again."
+          "We couldn't place your booking just now. Please check your connection and try again."
         );
       }
 
@@ -1783,12 +2074,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       logger.error('❌ Failed to create bookings:', error);
       throw error;
     }
-  }, [bookings, saveBookings]);
+  }, [bookings, saveBookings, validateBookingsBeforeCheckout]);
 
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
   // right when the user commits to payment — closes the gap between
   // "committed to paying" and "booking actually inserted" that
-  // createBooking()'s insert-time-only conflict check leaves open for the
+  // the claim RPC's insert-time-only conflict check leaves open for the
   // whole review + payment-sheet interaction. Takes only date/time per item
   // (not full AppointmentData) since customer/payment details aren't known
   // yet at "Confirm & Pay" time — CartScreen's checkoutSnapshot.bookings
@@ -1799,7 +2090,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   // — CartScreen's existing "Scheduling Conflict" alert handles both.
   const holdCartCheckoutSlots = useCallback(async (
     cartItems: CartItem[],
-    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>
+    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>,
+    consent: { policyAccepted: boolean; safetyAcknowledged: boolean }
   ): Promise<string> => {
     const { providerIdCache, unresolvedNames } = await resolveCartProviderIds(cartItems);
     if (unresolvedNames.length > 0) {
@@ -1808,6 +2100,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         `Please re-add the service from the provider's profile and try again.`
       );
     }
+
+    // Recover a real services.id for any item whose cart copy doesn't carry
+    // one, so the held (and then claimed) row is linked to the service it is
+    // actually for. See resolveCartServiceIds.
+    const serviceIdByCartItem = await resolveCartServiceIds(cartItems, providerIdCache);
 
     const holdItems: CartHoldItem[] = cartItems.map(item => {
       const schedule = scheduleByItemId[item.id];
@@ -1823,10 +2120,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       }
       return {
         provider_id: providerId,
-        service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
+        service_id: serviceIdByCartItem[item.id] ?? null,
         booking_date: schedule.selectedDate,
         booking_time: pgTime,
         end_time: pgEndTime,
+        // Carried from the cart item, not re-derived: the reasons were fixed
+        // when the client accepted the confirmation for THIS time.
+        ...(item.emergencyRequest ? { is_emergency_request: true } : {}),
+        // One checkbox covers the whole checkout, so every item carries the
+        // same answer. The server decides per item whether the safety half
+        // was needed at all — it reads that off the service, not off this.
+        policy_accepted: consent.policyAccepted,
+        safety_ack: consent.safetyAcknowledged,
       };
     });
 
@@ -1835,7 +2140,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       await holdCartBookingSlots(batchId, holdItems);
     } catch (error: any) {
       if (error?.code === '23505' || error?.code === '23P01') {
-        throw new BookingError("That time slot was just taken by another client. Please choose a different time.");
+        throw new BookingError("That time slot is no longer available. Please choose a different time.");
+      }
+      // bookings_service_id_fkey: a cart item outlived the service it was
+      // added from. validateCartBookings normally catches this first and
+      // flags the offending item by name; this is the backstop for the gap
+      // between that check and the hold (or for a lookup that failed open).
+      // It must NOT fall through to the generic "please try again" — the
+      // batch will fail identically every time until the item is removed.
+      if (error?.code === '23503' && /service_id/.test(error?.details ?? error?.message ?? '')) {
+        throw new BookingError(
+          "One of your services isn't offered any more. Pull down to refresh your cart, then remove the one that's flagged."
+        );
       }
       throw error;
     }
@@ -1954,7 +2270,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       try {
         const bookingDateTime = createBookingDateTime(b.bookingDate, b.bookingTime);
         return bookingDateTime > now;
-      } catch (error) {
+      } catch {
         return b.status === BookingStatus.UPCOMING;
       }
     });
@@ -1979,7 +2295,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         try {
           const bookingDateTime = createBookingDateTime(b.bookingDate, b.bookingTime);
           return bookingDateTime <= now;
-        } catch (error) {
+        } catch {
           return false;
         }
       })
@@ -2045,6 +2361,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     validateBookingsBeforeCheckout,
     updateBookingStatus,
     cancelBooking,
+    markProviderNoShow,
     getBookingsByProvider,
     getBookingsByDate,
     getBookingById,
@@ -2055,6 +2372,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,
+    declineReschedule,
+    confirmGroupReschedule,
+    declineGroupReschedule,
     hasMoreHistory,
     loadingMoreHistory,
     loadOlderBookings,
@@ -2072,6 +2392,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     validateBookingsBeforeCheckout,
     updateBookingStatus,
     cancelBooking,
+    markProviderNoShow,
     getBookingsByProvider,
     getBookingsByDate,
     getBookingById,
@@ -2082,6 +2403,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,
+    declineReschedule,
+    confirmGroupReschedule,
+    declineGroupReschedule,
     hasMoreHistory,
     loadingMoreHistory,
     loadOlderBookings,

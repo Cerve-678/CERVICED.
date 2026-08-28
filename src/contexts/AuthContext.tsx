@@ -3,15 +3,21 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { Alert, AppState } from 'react-native';
 import { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../lib/supabase';
 import { registerForPushNotifications, unregisterPushToken, startExpoGoNotificationBridge } from '../services/pushNotificationService';
 import { updateBiometricToken } from '../services/biometricService';
-import { registerModeSetter } from '../navigation/modeController';
+import { registerModeSetter, resolveModeChange } from '../navigation/modeController';
 import {
   getUserProfileById,
   upgradeUserToProvider,
-  updateClientProfileData,
-  updateUserNamePhone,
+  updateUserContactDetails,
+  updateClientProfileFields,
+  cancelAccountDeletionRequest,
+  deleteClientAccountProfile,
+  deleteProviderAccountProfile,
+  clearUserStorageFolder,
+  setAuthAutoRefresh,
+  signOutCurrentSession,
+  subscribeToAuthStateChanges,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
@@ -28,6 +34,14 @@ export interface UserData {
   loginMethod: string;
   businessName?: string;
   businessEmail?: string;
+  // Saved default address for mobile bookings, prefilled at checkout. Client
+  // side only — a provider's own address lives on their provider record.
+  clientAddress?: string | null;
+  // The coarse half of the same answer: the area the client says they're in
+  // ("Camden, London"), shown to a mobile provider before they accept while
+  // clientAddress stays gated. Chosen, not derived — see migration
+  // 20260827162000.
+  clientArea?: string | null;
   needsEmailVerification?: boolean;
   hasClientProfile?: boolean;
   gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
@@ -65,7 +79,15 @@ interface AuthContextType {
   session: Session | null;
   activeMode: 'provider' | 'client';
   switchMode: () => Promise<void>;
-  upgradeToProvider: (businessName: string, businessEmail: string, extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }) => Promise<void>;
+  upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
+    businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
+    dobDay?: string; dobMonth?: string; dobYear?: string;
+    serviceInterests?: string[]; serviceLocations?: string[];
+    priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+    accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
+    preferredPaymentMethods?: string[];
+    referralSource?: string;
+  }) => Promise<void>;
   addClientProfile: (profileData: ClientProfileData) => Promise<void>;
   login: (userData?: UserData) => void;
   logout: () => Promise<void>;
@@ -100,17 +122,7 @@ function accountDeletionError(data: any): Error {
  *  vanish silently — log them so an orphaned file is at least debuggable. */
 async function clearStorageFolder(bucket: string, uid: string): Promise<void> {
   try {
-    const { data, error: listError } = await supabase.storage.from(bucket).list(uid);
-    if (listError) {
-      logger.warn(`[AuthContext] storage list failed (${bucket}/${uid}):`, listError.message);
-      return;
-    }
-    if (data && data.length > 0) {
-      const { error: removeError } = await supabase.storage.from(bucket).remove(data.map(f => `${uid}/${f.name}`));
-      if (removeError) {
-        logger.warn(`[AuthContext] storage cleanup failed (${bucket}/${uid}):`, removeError.message);
-      }
-    }
+    await clearUserStorageFolder(bucket, uid);
   } catch (err: any) {
     logger.warn(`[AuthContext] storage cleanup threw (${bucket}/${uid}):`, err?.message ?? err);
   }
@@ -124,12 +136,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [activeMode, setActiveMode] = useState<'provider' | 'client'>('client');
+  // Mirrors activeMode for applyMode's noop check without pulling activeMode
+  // into that callback's deps (which would otherwise force it to be
+  // re-created — and re-registered via registerModeSetter — on every switch).
+  const activeModeRef = useRef(activeMode);
+  useEffect(() => { activeModeRef.current = activeMode; }, [activeMode]);
+
+  // Restore the persisted hat, but never into a hat this account doesn't hold.
+  // The saved mode is a device-local preference; `role` is the server's
+  // statement of which hats exist. If they disagree the server wins — otherwise
+  // deleting the provider hat on one device leaves another device booted into
+  // an empty provider tree with no obvious way back (the switch control only
+  // renders for accounts that actually have the other hat).
+  const resolveRestoredMode = useCallback(
+    (savedMode: string | null, role: AccountType): 'provider' | 'client' => {
+      const canBeProvider = role === 'provider';
+      const saved = savedMode === 'provider' || savedMode === 'client' ? savedMode : null;
+      if (saved === 'provider' && !canBeProvider) return 'client';
+      return saved ?? (canBeProvider ? 'provider' : 'client');
+    },
+    []
+  );
   const [isSwitching, setIsSwitching] = useState(false);
   const [switchingTo, setSwitchingTo] = useState<'provider' | 'client'>('client');
   const [pendingReactivation, setPendingReactivation] = useState<string | null>(null);
   const [isReactivating, setIsReactivating] = useState(false);
   // Tracks user-initiated logouts so SIGNED_OUT doesn't show a spurious alert
   const intentionalLogoutRef = useRef(false);
+  // The auth subscription is intentionally installed once. Keep the latest
+  // profile loader in a ref so it does not close over stale role-resolution
+  // logic without repeatedly tearing down the Supabase subscription.
+  const loadUserProfileRef = useRef<(activeSession: Session) => Promise<void>>(async () => {});
 
   // Expo Go can't receive remote push (dropped in SDK 53) — mirror notification
   // rows as local notifications instead so content is still visible while
@@ -147,19 +184,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // and the first API call on foreground will get a 401 before the refresh completes.
     const appStateSub = AppState.addEventListener('change', state => {
       if (state === 'active') {
-        supabase.auth.startAutoRefresh();
+        setAuthAutoRefresh(true);
         // Keep the push token fresh on every resume, not just on cold launch / login.
         // This self-heals tokens after an APNs-key rotation or EAS project migration
         // without requiring the user to sign out and back in. Safe no-op when logged out.
         registerForPushNotifications().catch((err) => console.warn('[Push] foreground refresh failed:', err));
       } else {
-        supabase.auth.stopAutoRefresh();
+        setAuthAutoRefresh(false);
       }
     });
 
     // onAuthStateChange fires INITIAL_SESSION immediately on subscribe,
     // so we only use it as the single source of truth — no separate getSession() call.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const unsubscribeAuth = subscribeToAuthStateChanges(async (event, session) => {
       logger.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
@@ -173,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'TOKEN_REFRESHED') {
         if (!session) {
           intentionalLogoutRef.current = true;
-          await supabase.auth.signOut().catch(() => {});
+          await signOutCurrentSession().catch(() => {});
           setUser(null);
           setIsLoggedIn(false);
           setSession(null);
@@ -206,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setSession(session);
       if (session?.user) {
-        await loadUserProfile(session);
+        await loadUserProfileRef.current(session);
       } else {
         setUser(null);
         setIsLoggedIn(false);
@@ -215,7 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribeAuth();
       appStateSub.remove();
     };
   }, []);
@@ -250,11 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
-        setActiveMode(
-          savedMode === 'provider' || savedMode === 'client'
-            ? savedMode
-            : role === 'provider' ? 'provider' : 'client'
-        );
+        setActiveMode(resolveRestoredMode(savedMode, role));
         setUser({
           id: session.user.id,
           name: meta?.['name'] ?? session.user.email?.split('@')[0] ?? '',
@@ -265,9 +298,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loginMethod: 'email',
           businessName: meta?.['business_name'],
           businessEmail: meta?.['business_email'],
+          // hasClientProfile is deliberately absent: session metadata doesn't
+          // carry it, and this branch only runs when the profile row couldn't be
+          // read. Leaving it falsy means a provider briefly sees no client hat
+          // rather than one the database hasn't confirmed — don't "fix" this by
+          // guessing from role or dob, which is the inference the column replaced.
         });
         setIsLoggedIn(true);
-        registerForPushNotifications().catch((err) => console.warn('[Push] registration failed:', err));
+        registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
         return;
       }
 
@@ -306,18 +344,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...(profile.business_name != null ? { businessName: profile.business_name } : {}),
           ...(profile.business_email != null ? { businessEmail: profile.business_email } : {}),
           needsEmailVerification: !session.user.email_confirmed_at,
-          hasClientProfile: !!profile.dob,
+          // Read straight from the column that owns this (migration
+          // 20260823105742). It used to be inferred as `role !== 'provider' ||
+          // dob != null`, which made a provider's date of birth double as their
+          // client-hat marker — so the client->provider upgrade, which never
+          // asked for a DOB, dropped the hat on the next launch. Never infer it
+          // again; a non-provider row is still true by backfill, not by rule.
+          hasClientProfile: profile.has_client_profile === true,
           gender: (profile as any).gender ?? null,
           has_kids: (profile as any).has_kids ?? null,
           birth_year: (profile as any).birth_year ?? null,
           service_interests: profile.service_interests ?? null,
+          clientAddress: profile.client_address ?? null,
+          clientArea: profile.client_area ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
-        setActiveMode(
-          savedMode === 'provider' || savedMode === 'client'
-            ? savedMode
-            : role === 'provider' ? 'provider' : 'client'
-        );
+        const restoredMode = resolveRestoredMode(savedMode, role);
+        setActiveMode(restoredMode);
+        // Persist the corrected hat so the stale value can't win a later restore
+        // (e.g. if the next launch hits the metadata-fallback path instead).
+        if (restoredMode !== savedMode) {
+          await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, restoredMode).catch(() => {});
+        }
         setUser(userData);
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
@@ -383,15 +431,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [resolveRestoredMode]);
+
+  loadUserProfileRef.current = loadUserProfile;
 
   // Directly set the mode (used by notification taps / deep-links that must land
   // in a specific hat). Exposed to non-React code via the mode controller so the
   // push tap handler can switch hats before deep-linking.
+  //
+  // This is the one chokepoint every mode-change path (switchMode, and
+  // requestMode from outside React) funnels through, so it's the only place
+  // that needs to enforce hat ownership. Without this check, a client-only
+  // account could be driven into the provider navigator (or vice versa) by
+  // anything that can call requestMode/switchMode — e.g. a forged/stray
+  // notification payload — even though nothing ever granted that hat.
+  // Falls back to whichever hat the account actually holds rather than a
+  // silent no-op, so a rejected switch still lands somewhere real.
   const applyMode = useCallback(async (mode: 'provider' | 'client') => {
-    setActiveMode(mode);
-    await AsyncStorage.setItem('@active_mode', mode).catch(() => {});
-  }, []);
+    const ownsProvider = user?.accountType === 'provider';
+    const ownsClient = user?.accountType !== 'provider' || !!user?.hasClientProfile;
+    const allowed = mode === 'provider' ? ownsProvider : ownsClient;
+    const resolved = allowed ? mode : (ownsProvider ? 'provider' : 'client');
+    if (!allowed) {
+      logger.warn(`[AuthContext] applyMode('${mode}') rejected — account does not hold that hat; staying on '${resolved}'`);
+    }
+    // If this doesn't actually change activeMode (already in `resolved`, or
+    // rejected back to the hat we're already in), React bails out of
+    // re-rendering — RootNavigation's activeMode effect never re-fires, so
+    // resolveModeChange() must be called directly here or requestMode()
+    // callers would hang waiting for a re-render that never happens.
+    const isNoop = resolved === activeModeRef.current;
+    setActiveMode(resolved);
+    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, resolved).catch(() => {});
+    if (isNoop) resolveModeChange(resolved);
+  }, [user?.accountType, user?.hasClientProfile]);
 
   useEffect(() => {
     registerModeSetter((mode) => { applyMode(mode).catch(() => {}); });
@@ -399,6 +472,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchMode = useCallback(async () => {
     const next = activeMode === 'provider' ? 'client' : 'provider';
+    const ownsProvider = user?.accountType === 'provider';
+    const ownsClient = user?.accountType !== 'provider' || !!user?.hasClientProfile;
+    const allowed = next === 'provider' ? ownsProvider : ownsClient;
+    if (!allowed) {
+      logger.warn(`[AuthContext] switchMode() to '${next}' rejected — account does not hold that hat`);
+      return;
+    }
     setSwitchingTo(next);
     setIsSwitching(true);
     // Brief pause so the overlay renders before the navigator swaps
@@ -407,14 +487,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, next).catch(() => {});
     await new Promise(resolve => setTimeout(resolve, 600));
     setIsSwitching(false);
-  }, [activeMode]);
+  }, [activeMode, user?.accountType, user?.hasClientProfile]);
 
   // Upgrades an existing client account to provider in-place — no new auth user created.
   // Updates the DB role, local state, and activeMode all in one call.
   const upgradeToProvider = useCallback(async (
     businessName: string,
     businessEmail: string,
-    extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }
+    extras?: {
+      businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
+      dobDay?: string; dobMonth?: string; dobYear?: string;
+      serviceInterests?: string[]; serviceLocations?: string[];
+      priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+      accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
+      preferredPaymentMethods?: string[];
+      referralSource?: string;
+    }
   ) => {
     if (!user) throw new Error('No logged-in user');
     await upgradeUserToProvider(user.id, businessName, businessEmail, extras);
@@ -440,7 +528,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const dob = profileData.dobYear && profileData.dobMonth && profileData.dobDay
       ? `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`
       : null;
-    const { error } = await supabase.from('users').update({
+    try {
+      await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
       hair_type: profileData.hairType || null,
       skin_type: profileData.skinType || null,
@@ -456,10 +545,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       referral_source: profileData.referralSource || null,
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
       ...(profileData.has_kids != null ? { has_kids: profileData.has_kids } : {}),
-    }).eq('id', user.id);
+      // The hat itself, not a side effect of some other field being filled in.
+      has_client_profile: true,
+      });
     // Keep the user-facing copy friendly, but record the real Postgres reason
     // (Metro/console only) so any future failure here is diagnosable at a glance.
-    if (error) { logger.error('addClientProfile failed:', error); throw error; }
+    } catch (error) { logger.error('addClientProfile failed:', error); throw error; }
     setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
@@ -472,12 +563,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
+    await updateUserContactDetails(updated.id, {
+      name: updated.name,
+      phone: updated.phone ?? '',
+      // Only written when this call is actually changing it, so an unrelated
+      // updateUser({ name }) can't wipe a saved address.
+      ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
+      ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
+    });
     setUser(updated);
-    try {
-      await updateUserNamePhone(updated.id, updated.name, updated.phone ?? '');
-    } catch (err: any) {
-      logger.warn('updateUser DB error:', err.message);
-    }
   }, [user, session]);
 
   const logout = useCallback(async () => {
@@ -514,7 +608,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Await signOut so the session is fully cleared in AsyncStorage before the
     // function returns. If the app is killed immediately after logout, the session
     // won't linger and re-log the user in on next launch.
-    await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
+    await signOutCurrentSession().catch(err => logger.warn('signOut error:', err));
   }, [user]);
 
   // Called from ReactivateAccountScreen when someone mid-grace-period logs
@@ -525,10 +619,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session) throw new Error('No session');
     setIsReactivating(true);
     try {
-      const { data, error } = await supabase.rpc('cancel_account_deletion');
-      if (error) throw error;
-      if (data && (data as any).ok === false) {
-        throw new Error((data as any).error || 'Could not reactivate your account.');
+      const data = await cancelAccountDeletionRequest();
+      if (data.ok === false) {
+        throw new Error(data.error || 'Could not reactivate your account.');
       }
       setPendingReactivation(null);
       await loadUserProfile(session);
@@ -546,7 +639,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setIsLoggedIn(false);
-    await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
+    await signOutCurrentSession().catch(err => logger.warn('signOut error:', err));
   }, []);
 
   // Deletes only the CLIENT side of the account via a SECURITY DEFINER RPC
@@ -556,9 +649,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // there'd be nothing left to keep it around for. See supabase/delete_account.sql.
   const deleteClientProfile = useCallback(async () => {
     if (!user) throw new Error('No logged-in user');
-    const { data, error } = await supabase.rpc('delete_client_profile');
-    if (error) throw error;
-    if (data && (data as any).ok === false) throw accountDeletionError(data);
+    const data = await deleteClientAccountProfile();
+    if (data.ok === false) throw accountDeletionError(data);
 
     await clearStorageFolder('avatars', user.id);
 
@@ -577,9 +669,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the whole account. See supabase/delete_account.sql.
   const deleteProviderProfile = useCallback(async () => {
     if (!user) throw new Error('No logged-in user');
-    const { data, error } = await supabase.rpc('delete_provider_profile');
-    if (error) throw error;
-    if (data && (data as any).ok === false) throw accountDeletionError(data);
+    const data = await deleteProviderAccountProfile();
+    if (data.ok === false) throw accountDeletionError(data);
 
     await Promise.all([
       clearStorageFolder('provider-logos', user.id),

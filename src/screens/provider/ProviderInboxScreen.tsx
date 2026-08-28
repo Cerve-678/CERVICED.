@@ -1,22 +1,40 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   FlatList,
+  Keyboard,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getProviderBookings, getProviderConversations, ProviderConversationWithClient } from '../../services/databaseService';
-import type { BookingWithAddOns } from '../../types/database';
-import { ThemedBackground } from '../../components/ThemedBackground';
+import { useAuth } from '../../contexts/AuthContext';
+import { useProviderDialog } from '../../components/ProviderDialog';
+import {
+  getProviderBookings,
+  getProviderConversations,
+  ProviderConversationWithClient,
+  updateBookingStatus,
+  updateGroupBookingStatus,
+  providerCancelOwnBooking,
+  providerCancelGroupBooking,
+  markConversationReadByProvider,
+  sendConversationQuickReply,
+} from '../../services/databaseService';
+import type { BookingWithAddOns, DbBooking } from '../../types/database';
 import { mapDbBookingToConfirmed } from '../../contexts/BookingContext';
+import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
 import { formatTime12 } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +44,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all',       label: 'All'       },
   { key: 'pending',   label: 'Pending'   },
   { key: 'confirmed', label: 'Confirmed' },
-  { key: 'done',      label: 'Done'      },
+  { key: 'done',      label: 'Completed' },
   { key: 'messages',  label: 'Messages'  },
 ];
 
@@ -130,24 +148,31 @@ const sk = StyleSheet.create({
 function InboxRow({
   booking,
   isUnread,
+  isPending,
   index,
   dark,
   text,
   sub,
   border,
   onPress,
+  onConfirm,
+  onDecline,
 }: {
   booking: BookingWithAddOns;
   isUnread: boolean;
+  isPending: boolean;
   index: number;
   dark: boolean;
   text: string;
   sub: string;
   border: string;
   onPress: () => void;
+  onConfirm: () => void;
+  onDecline: () => void;
 }) {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const swipeRef  = useRef<Swipeable>(null);
 
   useEffect(() => {
     const delay = Math.min(index * 45, 300);
@@ -155,56 +180,120 @@ function InboxRow({
       Animated.timing(fadeAnim,  { toValue: 1, duration: 280, delay, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, slideAnim]);
 
   const cfg  = STATUS_CONFIG[booking.status] ?? STATUS_CONFIG['confirmed']!;
   const init = initials(booking.customer_name ?? '?');
   const ago  = timeAgo(booking.booking_date, booking.booking_time);
   const avatarBg = dark ? cfg.dbg : cfg.bg;
 
-  return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <TouchableOpacity
-        activeOpacity={0.72}
-        onPress={onPress}
-        style={[row.wrap, { borderBottomColor: border }]}
-      >
-        {/* Unread indicator */}
-        {isUnread && (
-          <View style={[row.unreadBar, { backgroundColor: cfg.color }]} />
+  const renderRightActions = isPending
+    ? () => (
+        <View style={row.swipeActions}>
+          <TouchableOpacity
+            style={[row.swipeBtn, { backgroundColor: '#FF453A' }]}
+            onPress={() => { swipeRef.current?.close(); onDecline(); }}
+          >
+            <Ionicons name="close" size={18} color="#fff" />
+            <Text style={row.swipeBtnText}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[row.swipeBtn, { backgroundColor: '#34C759' }]}
+            onPress={() => { swipeRef.current?.close(); onConfirm(); }}
+          >
+            <Ionicons name="checkmark" size={18} color="#fff" />
+            <Text style={row.swipeBtnText}>Confirm</Text>
+          </TouchableOpacity>
+        </View>
+      )
+    : undefined;
+
+  const content = (
+    <TouchableOpacity
+      activeOpacity={0.72}
+      onPress={onPress}
+      style={[row.wrap, { borderBottomColor: border }]}
+    >
+      {/* Unread indicator */}
+      {isUnread && (
+        <View style={[row.unreadBar, { backgroundColor: cfg.color }]} />
+      )}
+
+      {/* Avatar */}
+      <View style={[row.avatar, { backgroundColor: avatarBg }]}>
+        <Text style={[row.avatarText, { color: cfg.color }]}>{init}</Text>
+      </View>
+
+      {/* Body */}
+      <View style={row.body}>
+        <View style={row.topLine}>
+          <Text style={[row.name, { color: text, fontWeight: isUnread ? '700' : '500' }]} numberOfLines={1}>
+            {booking.customer_name ?? 'Client'}
+          </Text>
+          <Text style={[row.timestamp, { color: sub }]}>{ago}</Text>
+        </View>
+
+        <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
+          {booking.service_name_snapshot}
+        </Text>
+
+        <View style={row.footer}>
+          <View style={[row.statusPill, { backgroundColor: dark ? cfg.dbg : cfg.bg }]}>
+            <Ionicons name={cfg.icon as any} size={11} color={cfg.color} />
+            <Text style={[row.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+          </View>
+          <Text style={[row.dateChip, { color: sub }]}>
+            {fmtDate(booking.booking_date)} · {fmtTime(booking.booking_time)}
+          </Text>
+        </View>
+
+        {/* This one broke the provider's own scheduling rules and only exists
+            because they opted into being asked. Confirm/Decline sit right
+            here, so the reason has to be visible BEFORE the tap — a request
+            that looks identical to an ordinary booking is one they'd accept
+            without registering that it's 8pm on a day they'd blocked out. */}
+        {booking.is_emergency_request && (
+          <View style={[row.requestPill, { backgroundColor: dark ? '#3A2E1A' : '#FFF4E0' }]}>
+            <Ionicons name="alert-circle-outline" size={11} color="#C2811A" />
+            <Text style={[row.requestText, { color: '#C2811A' }]}>
+              Outside your availability
+            </Text>
+          </View>
         )}
 
-        {/* Avatar */}
-        <View style={[row.avatar, { backgroundColor: avatarBg }]}>
-          <Text style={[row.avatarText, { color: cfg.color }]}>{init}</Text>
-        </View>
-
-        {/* Body */}
-        <View style={row.body}>
-          <View style={row.topLine}>
-            <Text style={[row.name, { color: text, fontWeight: isUnread ? '700' : '500' }]} numberOfLines={1}>
-              {booking.customer_name ?? 'Client'}
-            </Text>
-            <Text style={[row.timestamp, { color: sub }]}>{ago}</Text>
+        {isPending && (
+          <View style={row.inlineActions}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={onDecline}
+              style={[row.inlineBtn, { borderColor: '#FF453A' }]}
+            >
+              <Text style={[row.inlineBtnText, { color: '#FF453A' }]}>Decline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={onConfirm}
+              style={[row.inlineBtn, { backgroundColor: '#34C759', borderColor: '#34C759' }]}
+            >
+              <Text style={[row.inlineBtnText, { color: '#fff' }]}>Confirm</Text>
+            </TouchableOpacity>
           </View>
+        )}
+      </View>
 
-          <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
-            {booking.service_name_snapshot}
-          </Text>
+      <Ionicons name="chevron-forward" size={14} color={sub} style={{ opacity: 0.35, marginTop: 2, marginLeft: 4 }} />
+    </TouchableOpacity>
+  );
 
-          <View style={row.footer}>
-            <View style={[row.statusPill, { backgroundColor: dark ? cfg.dbg : cfg.bg }]}>
-              <Ionicons name={cfg.icon as any} size={11} color={cfg.color} />
-              <Text style={[row.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-            </View>
-            <Text style={[row.dateChip, { color: sub }]}>
-              {fmtDate(booking.booking_date)} · {fmtTime(booking.booking_time)}
-            </Text>
-          </View>
-        </View>
-
-        <Ionicons name="chevron-forward" size={14} color={sub} style={{ opacity: 0.35, marginTop: 2, marginLeft: 4 }} />
-      </TouchableOpacity>
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      {renderRightActions ? (
+        <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+          {content}
+        </Swipeable>
+      ) : (
+        content
+      )}
     </Animated.View>
   );
 }
@@ -223,6 +312,19 @@ const row = StyleSheet.create({
   statusPill:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 },
   statusText:  { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
   dateChip:    { fontSize: 11 },
+  requestPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 6,
+  },
+  requestText: { fontSize: 10.5, fontWeight: '700' },
+
+  inlineActions: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  inlineBtn:     { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8, borderWidth: 1.5 },
+  inlineBtnText: { fontSize: 12, fontWeight: '700' },
+
+  swipeActions: { flexDirection: 'row', height: '100%' },
+  swipeBtn:     { width: 76, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  swipeBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 });
 
 // ─── Conversation row ─────────────────────────────────────────────────────────
@@ -235,6 +337,8 @@ function ConversationRow({
   accent,
   border,
   onPress,
+  onReply,
+  onMarkRead,
 }: {
   conversation: ProviderConversationWithClient;
   index: number;
@@ -243,9 +347,12 @@ function ConversationRow({
   accent: string;
   border: string;
   onPress: () => void;
+  onReply: () => void;
+  onMarkRead: () => void;
 }) {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const swipeRef  = useRef<Swipeable>(null);
 
   useEffect(() => {
     const delay = Math.min(index * 45, 300);
@@ -253,42 +360,63 @@ function ConversationRow({
       Animated.timing(fadeAnim,  { toValue: 1, duration: 280, delay, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, slideAnim]);
 
   const isUnread = conversation.unread_count_provider > 0;
   const clientName = conversation.client?.name ?? 'Client';
   const init = initials(clientName);
 
+  const renderRightActions = () => (
+    <View style={row.swipeActions}>
+      <TouchableOpacity
+        style={[row.swipeBtn, { backgroundColor: '#8E8E93' }]}
+        onPress={() => { swipeRef.current?.close(); onMarkRead(); }}
+      >
+        <Ionicons name="checkmark-done" size={18} color="#fff" />
+        <Text style={row.swipeBtnText}>Mark read</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[row.swipeBtn, { backgroundColor: accent }]}
+        onPress={() => { swipeRef.current?.close(); onReply(); }}
+      >
+        <Ionicons name="arrow-undo" size={18} color="#fff" />
+        <Text style={row.swipeBtnText}>Reply</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <TouchableOpacity
-        activeOpacity={0.72}
-        onPress={onPress}
-        style={[row.wrap, { borderBottomColor: border }]}
-      >
-        {isUnread && (
-          <View style={[row.unreadBar, { backgroundColor: accent }]} />
-        )}
+      <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={onPress}
+          style={[row.wrap, { borderBottomColor: border }]}
+        >
+          {isUnread && (
+            <View style={[row.unreadBar, { backgroundColor: accent }]} />
+          )}
 
-        <View style={[row.avatar, { backgroundColor: `${accent}22` }]}>
-          <Text style={[row.avatarText, { color: accent }]}>{init}</Text>
-        </View>
-
-        <View style={row.body}>
-          <View style={row.topLine}>
-            <Text style={[row.name, { color: text, fontWeight: isUnread ? '700' : '500' }]} numberOfLines={1}>
-              {clientName}
-            </Text>
-            <Text style={[row.timestamp, { color: sub }]}>{timeAgoISO(conversation.last_message_at)}</Text>
+          <View style={[row.avatar, { backgroundColor: `${accent}22` }]}>
+            <Text style={[row.avatarText, { color: accent }]}>{init}</Text>
           </View>
 
-          <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
-            {conversation.last_message ?? 'No messages yet'}
-          </Text>
-        </View>
+          <View style={row.body}>
+            <View style={row.topLine}>
+              <Text style={[row.name, { color: text, fontWeight: isUnread ? '700' : '500' }]} numberOfLines={1}>
+                {clientName}
+              </Text>
+              <Text style={[row.timestamp, { color: sub }]}>{timeAgoISO(conversation.last_message_at)}</Text>
+            </View>
 
-        <Ionicons name="chevron-forward" size={14} color={sub} style={{ opacity: 0.35, marginTop: 2, marginLeft: 4 }} />
-      </TouchableOpacity>
+            <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
+              {conversation.last_message ?? 'No messages yet'}
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={14} color={sub} style={{ opacity: 0.35, marginTop: 2, marginLeft: 4 }} />
+        </TouchableOpacity>
+      </Swipeable>
     </Animated.View>
   );
 }
@@ -338,7 +466,9 @@ const DARK_P = {
 };
 
 export default function ProviderInboxScreen({ navigation, route }: any) {
+  const { showToast, DialogHost } = useProviderDialog();
   const { isDarkMode: dark } = useTheme();
+  const { user } = useAuth();
   const P = dark ? DARK_P : LIGHT_P;
 
   const [bookings,      setBookings]      = useState<BookingWithAddOns[]>([]);
@@ -346,6 +476,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter ?? 'all');
+
+  const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
+  const [replyText,    setReplyText]    = useState('');
+  const [replySending, setReplySending] = useState(false);
 
   // Apply initialFilter on re-navigation too — navigate() to an already-mounted
   // inbox only updates params, so the useState initializer never re-runs
@@ -355,19 +489,24 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   }, [route?.params?.initialFilter]);
 
   const fetchBookings = useCallback(async () => {
-    try { setBookings(await getProviderBookings()); } catch {}
+    try { setBookings(await getProviderBookings()); } catch (err) {
+      logger.error('[ProviderInbox] load bookings failed:', err);
+    }
   }, []);
 
   const fetchConversations = useCallback(async () => {
-    try { setConversations(await getProviderConversations()); } catch {}
+    try { setConversations(await getProviderConversations()); } catch (err) {
+      logger.error('[ProviderInbox] load conversations failed:', err);
+    }
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchBookings(), fetchConversations()]).finally(() => setLoading(false));
-  }, [fetchBookings, fetchConversations]);
-
-  useFocusEffect(useCallback(() => { fetchBookings(); fetchConversations(); }, [fetchBookings, fetchConversations]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void Promise.all([fetchBookings(), fetchConversations()]).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fetchBookings, fetchConversations]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -375,13 +514,105 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     setRefreshing(false);
   }, [fetchBookings, fetchConversations]);
 
-  const unreadConversationCount = useMemo(
-    () => conversations.filter(c => c.unread_count_provider > 0).length,
+  const runConfirmAction = useCallback((fn: () => Promise<void>) => {
+    Promise.resolve(fn())
+      .then(() => fetchBookings())
+      .catch((err: any) => {
+        logger.error('[ProviderInbox] booking action failed:', err);
+        // Group RPCs (provider_update_group_booking_status /
+        // provider_cancel_group_booking) throw a specific, actionable reason
+        // as a DB guard message (P0001) when a sibling can't legally
+        // transition — that's written for people and safe to surface
+        // verbatim. Any other coded (RLS, etc.) or network error is not.
+        const isTechnical = err?.code && err.code !== 'P0001';
+        const message =
+          typeof err?.message === 'string' && err.message.length > 0 && !isTechnical && !err.message.includes('Network')
+            ? err.message
+            : 'Could not complete this action. Check your connection and try again.';
+        Alert.alert('Action failed', message);
+      });
+  }, [fetchBookings]);
+
+  const handleConfirmBooking = useCallback((booking: BookingWithAddOns) => {
+    const isGroup = !!booking.group_booking_id;
+    Alert.alert(
+      'Confirm Booking',
+      `The client will be notified that their booking is confirmed.${isGroup ? ' This applies to all of this client’s services with you.' : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm Booking', onPress: () => {
+        runConfirmAction(async () => {
+          if (isGroup) {
+            await updateGroupBookingStatus(booking.group_booking_id!, 'confirmed' as DbBooking['status']);
+          } else {
+            await updateBookingStatus(booking.id, 'confirmed' as DbBooking['status']);
+          }
+        });
+        } },
+      ],
+    );
+  }, [runConfirmAction]);
+
+  const handleDeclineBooking = useCallback((booking: BookingWithAddOns) => {
+    const isGroup = !!booking.group_booking_id;
+    Alert.alert(
+      'Decline Booking',
+      `The client will be notified. This cannot be undone.${isGroup ? ' This applies to all of this client’s services with you.' : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Decline', style: 'destructive', onPress: () => {
+        runConfirmAction(async () => {
+          if (isGroup) {
+            await providerCancelGroupBooking(booking.group_booking_id!);
+          } else {
+            await providerCancelOwnBooking(booking.id);
+          }
+        });
+        } },
+      ],
+    );
+  }, [runConfirmAction]);
+
+  const handleMarkConversationRead = useCallback((conversation: ProviderConversationWithClient) => {
+    markConversationReadByProvider(conversation.id)
+      .then(() => fetchConversations())
+      .catch((err) => {
+        logger.error('[ProviderInbox] mark-read failed:', err);
+        Alert.alert('Could not mark as read', 'Check your connection and try again.');
+      });
+  }, [fetchConversations]);
+
+  const handleSendReply = useCallback(async () => {
+    const text = replyText.trim();
+    if (!text || !replyTarget || !user?.id || replySending) return;
+    setReplySending(true);
+    try {
+      await sendConversationQuickReply({
+        conversationId: replyTarget.id,
+        senderId: user.id,
+        content: text,
+      });
+      setReplyText('');
+      setReplyTarget(null);
+      Keyboard.dismiss();
+      fetchConversations();
+    } catch (err) {
+      logger.error('[ProviderInbox] quick reply failed:', err);
+      showToast('Message not sent. Check your connection and try again.', 'error');
+    }
+    setReplySending(false);
+  }, [replyText, replyTarget, user?.id, replySending, fetchConversations, showToast]);
+
+  const unreadConversations = useMemo(
+    () => [...conversations]
+      .filter(c => c.unread_count_provider > 0)
+      .sort((a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()),
     [conversations]
   );
+  const unreadConversationCount = unreadConversations.length;
 
   const pendingIds = useMemo(
-    () => new Set(bookings.filter(b => b.status === 'pending').map(b => b.id)),
+    () => new Set(bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING).map(b => b.id)),
     [bookings]
   );
 
@@ -390,38 +621,21 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
     );
     switch (filter) {
-      case 'pending':   return sorted.filter(b => b.status === 'pending');
-      case 'confirmed': return sorted.filter(b => b.status === 'confirmed' || b.status === 'in_progress');
-      case 'done':      return sorted.filter(b => b.status === 'completed' || b.status === 'cancelled' || b.status === 'no_show');
+      case 'pending':   return sorted.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING);
+      case 'confirmed': return sorted.filter(b => mapDbBookingStatus(b.status) === BookingStatus.UPCOMING || mapDbBookingStatus(b.status) === BookingStatus.IN_PROGRESS);
+      case 'done':      return sorted.filter(b => {
+        const s = mapDbBookingStatus(b.status);
+        return s === BookingStatus.COMPLETED || s === BookingStatus.CANCELLED || s === BookingStatus.NO_SHOW;
+      });
       default:          return sorted;
     }
   }, [bookings, filter]);
 
-  // Group into sections: pending first, then upcoming, then past
-  const listData = useMemo(() => {
-    if (filter !== 'all') {
-      return [{ type: 'rows' as const, data: filtered }];
-    }
-    const pending   = filtered.filter(b => b.status === 'pending');
-    const active    = filtered.filter(b => b.status === 'confirmed' || b.status === 'in_progress');
-    const done      = filtered.filter(b => b.status === 'completed' || b.status === 'cancelled' || b.status === 'no_show');
-    const sections: Array<{ type: 'section'; label: string; count: number } | { type: 'rows'; data: BookingWithAddOns[] }> = [];
-    if (pending.length > 0) {
-      sections.push({ type: 'section', label: 'Needs attention', count: pending.length });
-      sections.push({ type: 'rows', data: pending });
-    }
-    if (active.length > 0) {
-      sections.push({ type: 'section', label: 'Upcoming', count: active.length });
-      sections.push({ type: 'rows', data: active });
-    }
-    if (done.length > 0) {
-      sections.push({ type: 'section', label: 'Past', count: done.length });
-      sections.push({ type: 'rows', data: done });
-    }
-    return sections;
-  }, [filtered, filter]);
-
   const pendingCount = pendingIds.size;
+  // Everything outstanding — pending bookings AND unread messages both need a
+  // reply from the provider, so they share one "Needs attention" section
+  // instead of living in separate tabs the provider has to check separately.
+  const outstandingCount = pendingCount + unreadConversationCount;
 
   // Flat items for FlatList
   type ListItem =
@@ -433,19 +647,35 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     if (filter === 'messages') {
       return conversations.map((c, idx) => ({ key: c.id, t: 'conversation' as const, conversation: c, idx }));
     }
+
+    if (filter !== 'all') {
+      return filtered.map((b, idx) => ({ key: b.id, t: 'booking' as const, booking: b, idx }));
+    }
+
+    const pending = filtered.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING);
+    const active  = filtered.filter(b => mapDbBookingStatus(b.status) === BookingStatus.UPCOMING || mapDbBookingStatus(b.status) === BookingStatus.IN_PROGRESS);
+    const done    = filtered.filter(b => {
+      const s = mapDbBookingStatus(b.status);
+      return s === BookingStatus.COMPLETED || s === BookingStatus.CANCELLED || s === BookingStatus.NO_SHOW;
+    });
+
     const out: ListItem[] = [];
-    let bookingIdx = 0;
-    for (const s of listData) {
-      if (s.type === 'section') {
-        out.push({ key: `sec-${s.label}`, t: 'section', label: s.label, count: s.count });
-      } else {
-        for (const b of s.data) {
-          out.push({ key: b.id, t: 'booking', booking: b, idx: bookingIdx++ });
-        }
-      }
+    let idx = 0;
+    if (pending.length > 0 || unreadConversations.length > 0) {
+      out.push({ key: 'sec-needs-attention', t: 'section', label: 'Needs attention', count: pending.length + unreadConversations.length });
+      for (const b of pending) out.push({ key: b.id, t: 'booking', booking: b, idx: idx++ });
+      for (const c of unreadConversations) out.push({ key: c.id, t: 'conversation', conversation: c, idx: idx++ });
+    }
+    if (active.length > 0) {
+      out.push({ key: 'sec-upcoming', t: 'section', label: 'Upcoming', count: active.length });
+      for (const b of active) out.push({ key: b.id, t: 'booking', booking: b, idx: idx++ });
+    }
+    if (done.length > 0) {
+      out.push({ key: 'sec-past', t: 'section', label: 'Past', count: done.length });
+      for (const b of done) out.push({ key: b.id, t: 'booking', booking: b, idx: idx++ });
     }
     return out;
-  }, [listData, filter, conversations]);
+  }, [filtered, filter, conversations, unreadConversations]);
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -454,7 +684,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       Animated.timing(headerFade, { toValue: 1, duration: 300, useNativeDriver: true }),
       Animated.spring(headerY,    { toValue: 0, tension: 90, friction: 14, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [headerFade, headerY]);
 
   return (
     <View style={[s.root, { backgroundColor: P.bg }]}>
@@ -472,9 +702,9 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
 
           <View style={s.headerCenter}>
             <Text style={[s.title, { color: P.text }]}>Inbox</Text>
-            {pendingCount > 0 && (
+            {outstandingCount > 0 && (
               <View style={[s.badge, { backgroundColor: '#FF3B30' }]}>
-                <Text style={s.badgeText}>{pendingCount}</Text>
+                <Text style={s.badgeText}>{outstandingCount}</Text>
               </View>
             )}
           </View>
@@ -486,7 +716,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
         <View style={[s.filterRow, { backgroundColor: P.card, borderBottomColor: P.border }]}>
           {FILTERS.map(f => {
             const active = filter === f.key;
-            const badgeCount = f.key === 'pending' ? pendingCount : f.key === 'messages' ? unreadConversationCount : 0;
+            const badgeCount =
+              f.key === 'all'      ? outstandingCount :
+              f.key === 'pending'  ? pendingCount :
+              f.key === 'messages' ? unreadConversationCount : 0;
             const isNew  = badgeCount > 0;
             return (
               <TouchableOpacity
@@ -546,6 +779,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                       clientUserId: item.conversation.user_id,
                       clientName: item.conversation.client?.name ?? 'Client',
                     })}
+                    onReply={() => setReplyTarget(item.conversation)}
+                    onMarkRead={() => handleMarkConversationRead(item.conversation)}
                   />
                 );
               }
@@ -553,12 +788,15 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 <InboxRow
                   booking={item.booking}
                   isUnread={pendingIds.has(item.booking.id)}
+                  isPending={mapDbBookingStatus(item.booking.status) === BookingStatus.PENDING}
                   index={item.idx}
                   dark={dark}
                   text={P.text}
                   sub={P.sub}
                   border={P.border}
                   onPress={() => navigation.navigate('BookingDetail', { bookingId: item.booking.id, booking: mapDbBookingToConfirmed(item.booking) })}
+                  onConfirm={() => handleConfirmBooking(item.booking)}
+                  onDecline={() => handleDeclineBooking(item.booking)}
                 />
               );
             }}
@@ -575,6 +813,57 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             }
           />
         )}
+
+        {/* ── Quick-reply dialog ─────────────────────────────────────── */}
+        <Modal
+          visible={!!replyTarget}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setReplyTarget(null)}
+        >
+          <TouchableOpacity
+            style={m.overlay}
+            activeOpacity={1}
+            onPress={() => { setReplyTarget(null); setReplyText(''); Keyboard.dismiss(); }}
+          />
+          {replyTarget && (
+            <View style={m.positioner} pointerEvents="box-none">
+              <View style={[m.replyDialog, { backgroundColor: P.card }]}>
+                <Text style={[m.dialogTitle, { color: P.text }]}>
+                  Reply to {replyTarget.client?.name ?? 'client'}
+                </Text>
+                <TextInput
+                  style={[m.replyInput, { color: P.text, borderColor: P.border }]}
+                  value={replyText}
+                  onChangeText={setReplyText}
+                  placeholder="Type a reply…"
+                  placeholderTextColor={P.sub}
+                  multiline
+                  autoFocus
+                  editable={!replySending}
+                />
+                <View style={m.replyActions}>
+                  <TouchableOpacity
+                    style={m.replyCancelBtn}
+                    activeOpacity={0.7}
+                    onPress={() => { setReplyTarget(null); setReplyText(''); Keyboard.dismiss(); }}
+                  >
+                    <Text style={[m.dialogBtnText, { color: P.sub }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[m.replySendBtn, { backgroundColor: P.accent, opacity: replyText.trim() && !replySending ? 1 : 0.5 }]}
+                    activeOpacity={0.8}
+                    onPress={handleSendReply}
+                    disabled={!replyText.trim() || replySending}
+                  >
+                    <Text style={m.replySendText}>{replySending ? 'Sending…' : 'Send'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+        </Modal>
+        <DialogHost />
       </SafeAreaView>
     </View>
   );
@@ -603,4 +892,24 @@ const s = StyleSheet.create({
   emptyIcon:  { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
   emptySub:   { fontSize: 14 },
+});
+
+// ─── Modal styles ───────────────────────────────────────────────────────────────
+
+const m = StyleSheet.create({
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  positioner:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  dialog:      { width: '100%', borderRadius: 14, overflow: 'hidden' },
+  dialogTitle:   { fontSize: 16, fontWeight: '700', textAlign: 'center', paddingTop: 18, paddingHorizontal: 16 },
+  dialogMessage: { fontSize: 13, textAlign: 'center', paddingTop: 8, paddingHorizontal: 16, paddingBottom: 16, lineHeight: 18 },
+  divider:     { height: StyleSheet.hairlineWidth, width: '100%' },
+  dialogBtn:      { paddingVertical: 13, alignItems: 'center' },
+  dialogBtnText:  { fontSize: 15, fontWeight: '600' },
+
+  replyDialog: { width: '100%', borderRadius: 14, padding: 16, gap: 12 },
+  replyInput:  { borderWidth: 1.5, borderRadius: 10, padding: 12, minHeight: 80, maxHeight: 160, fontSize: 14, textAlignVertical: 'top' },
+  replyActions:   { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  replyCancelBtn: { paddingVertical: 10, paddingHorizontal: 14 },
+  replySendBtn:   { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10 },
+  replySendText:  { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

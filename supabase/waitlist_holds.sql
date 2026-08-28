@@ -4,6 +4,13 @@
 -- Run this in the Supabase SQL editor, whole file, top to bottom.
 -- Safe to re-run.
 --
+-- NOTE (2026-08-17): invite_next_waitlist_entry(), expire_waitlist_holds(),
+-- and decline_waitlist_hold() below reflect a follow-up fix already applied
+-- live — see supabase/migrations/20260817110500_waitlist_lapse_and_
+-- exhaustion_notifications.sql for the full rationale (lapsed-hold client
+-- notification + provider "waitlist exhausted" notification, gated on the
+-- function's new BOOLEAN return value).
+--
 -- PROBLEMS THIS FIXES (see waitlist_automation_settings.sql for prior state):
 --   1. With autoAcceptWaitlist off (the default), invite_next_waitlist_entry()
 --      only ever sent a generic notification with no date/time and no
@@ -240,7 +247,12 @@ GRANT SELECT ON public.client_bookings TO authenticated;
 -- ── 5. invite_next_waitlist_entry() — now filters candidates by preferred
 --    date range and loops through them (best match first) until one
 --    successfully gets a hold placed, instead of trying only the single
---    top-of-queue entry and giving up if bookability fails for them. ──────
+--    top-of-queue entry and giving up if bookability fails for them.
+--    Returns BOOLEAN (TRUE = someone was offered the slot, FALSE = queue
+--    exhausted) as of waitlist_lapse_and_exhaustion_notifications.sql
+--    (2026-08-17) — expire_waitlist_holds() and decline_waitlist_hold()
+--    below use this to know when to notify the provider the whole
+--    waitlist came up empty. ────────────────────────────────────────────
 DROP FUNCTION IF EXISTS public.invite_next_waitlist_entry(UUID, UUID, DATE, TIME, TIME, NUMERIC, NUMERIC, NUMERIC, TEXT);
 
 CREATE OR REPLACE FUNCTION public.invite_next_waitlist_entry(
@@ -253,7 +265,7 @@ CREATE OR REPLACE FUNCTION public.invite_next_waitlist_entry(
   p_add_ons_total NUMERIC DEFAULT NULL,
   p_service_charge NUMERIC DEFAULT NULL,
   p_service_category_snapshot TEXT DEFAULT NULL
-) RETURNS VOID AS $$
+) RETURNS BOOLEAN AS $$
 DECLARE
   w                   RECORD;
   v_waitlist_enabled  BOOLEAN;
@@ -266,10 +278,10 @@ BEGIN
     FROM public.providers WHERE id = p_provider_id;
 
   IF NOT COALESCE(v_waitlist_enabled, TRUE) THEN
-    RETURN;
+    RETURN FALSE;
   END IF;
   IF p_booking_date IS NULL OR p_booking_time IS NULL THEN
-    RETURN;
+    RETURN FALSE;
   END IF;
 
   FOR w IN
@@ -310,7 +322,7 @@ BEGIN
         RETURNING id INTO v_new_booking_id;
 
         UPDATE public.provider_waitlist SET status = 'booked', notified_at = NOW() WHERE id = w.id;
-        RETURN;
+        RETURN TRUE;
       ELSE
         -- Real, exclusive hold — not just a notification. Blocks the slot
         -- from everyone else via bookings_no_overlap (prevent_overlapping_
@@ -352,7 +364,7 @@ BEGIN
           'client',
           v_new_booking_id
         );
-        RETURN;
+        RETURN TRUE;
       END IF;
     EXCEPTION WHEN OTHERS THEN
       -- Bookability rules changed since the original booking was made (or a
@@ -361,22 +373,30 @@ BEGIN
       CONTINUE;
     END;
   END LOOP;
-  -- Loop exhausted with no eligible candidate — nothing to do, slot is
-  -- simply open to the public same as any other cancellation.
+  -- Loop exhausted with no eligible candidate — slot is open to the public
+  -- same as any other cancellation. Caller uses this FALSE to notify the
+  -- provider the waitlist is exhausted (see the 2026-08-17 fix below).
+  RETURN FALSE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ── 6. Cron sweep: release unclaimed holds and cascade to the next
---    candidate for that same freed slot. ──────────────────────────────────
+--    candidate for that same freed slot. As of
+--    waitlist_lapse_and_exhaustion_notifications.sql (2026-08-17), also
+--    tells the lapsed client their hold expired, and — only if the
+--    cascade finds nobody left to offer it to — tells the provider the
+--    waitlist is exhausted and the slot is back on the open market. ─────
 CREATE OR REPLACE FUNCTION public.expire_waitlist_holds()
 RETURNS VOID AS $$
 DECLARE
   h RECORD;
+  v_provider_user_id UUID;
+  v_offered_someone BOOLEAN;
 BEGIN
   FOR h IN
-    SELECT id, provider_id, service_id, booking_date, booking_time, end_time,
+    SELECT id, user_id, provider_id, service_id, booking_date, booking_time, end_time,
            base_price, add_ons_total, service_charge, service_category_snapshot,
-           waitlist_entry_id
+           provider_name_snapshot, service_name_snapshot, waitlist_entry_id
       FROM public.bookings
      WHERE status = 'on_hold' AND hold_expires_at < NOW()
   LOOP
@@ -385,10 +405,35 @@ BEGIN
       UPDATE public.provider_waitlist SET status = 'expired' WHERE id = h.waitlist_entry_id;
     END IF;
 
-    PERFORM public.invite_next_waitlist_entry(
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+    VALUES (
+      h.user_id, 'waitlist_slot_available', 'Your held slot expired',
+      'Your held slot for ' || h.service_name_snapshot || ' with ' || h.provider_name_snapshot ||
+        ' on ' || TO_CHAR(h.booking_date, 'DD Mon YYYY') || ' at ' || TO_CHAR(h.booking_time, 'HH12:MI AM') ||
+        ' has expired.',
+      'medium', FALSE, h.id, h.provider_id, 'client'
+    );
+
+    v_offered_someone := public.invite_next_waitlist_entry(
       h.provider_id, h.service_id, h.booking_date, h.booking_time, h.end_time,
       h.base_price, h.add_ons_total, h.service_charge, h.service_category_snapshot
     );
+
+    IF NOT v_offered_someone THEN
+      SELECT p.user_id INTO v_provider_user_id FROM public.providers p WHERE p.id = h.provider_id;
+      IF v_provider_user_id IS NOT NULL THEN
+        INSERT INTO public.notifications
+          (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+        VALUES (
+          v_provider_user_id, 'waitlist_slot_available', 'Waitlist exhausted',
+          'Nobody on the waitlist claimed ' || h.service_name_snapshot ||
+            ' on ' || TO_CHAR(h.booking_date, 'DD Mon YYYY') || ' at ' || TO_CHAR(h.booking_time, 'HH12:MI AM') ||
+            ' — the slot is open to the public again.',
+          'medium', FALSE, h.id, h.provider_id, 'provider'
+        );
+      END IF;
+    END IF;
   END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -484,10 +529,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- As of waitlist_lapse_and_exhaustion_notifications.sql (2026-08-17): if
+-- the cascade below finds nobody left to offer the slot to, tells the
+-- provider the waitlist is exhausted. The declining client isn't notified
+-- back — they took the action themselves and already know.
 CREATE OR REPLACE FUNCTION public.decline_waitlist_hold(p_booking_id UUID)
 RETURNS VOID AS $$
 DECLARE
   v_booking RECORD;
+  v_provider_user_id UUID;
+  v_offered_someone BOOLEAN;
 BEGIN
   SELECT * INTO v_booking FROM public.bookings
    WHERE id = p_booking_id AND status = 'on_hold';
@@ -505,11 +556,26 @@ BEGIN
 
   -- Don't make the next candidate wait out the full window just because
   -- this one actively said no.
-  PERFORM public.invite_next_waitlist_entry(
+  v_offered_someone := public.invite_next_waitlist_entry(
     v_booking.provider_id, v_booking.service_id, v_booking.booking_date,
     v_booking.booking_time, v_booking.end_time, v_booking.base_price,
     v_booking.add_ons_total, v_booking.service_charge, v_booking.service_category_snapshot
   );
+
+  IF NOT v_offered_someone THEN
+    SELECT p.user_id INTO v_provider_user_id FROM public.providers p WHERE p.id = v_booking.provider_id;
+    IF v_provider_user_id IS NOT NULL THEN
+      INSERT INTO public.notifications
+        (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+      VALUES (
+        v_provider_user_id, 'waitlist_slot_available', 'Waitlist exhausted',
+        'Nobody on the waitlist claimed ' || v_booking.service_name_snapshot ||
+          ' on ' || TO_CHAR(v_booking.booking_date, 'DD Mon YYYY') || ' at ' || TO_CHAR(v_booking.booking_time, 'HH12:MI AM') ||
+          ' — the slot is open to the public again.',
+        'medium', FALSE, p_booking_id, v_booking.provider_id, 'provider'
+      );
+    END IF;
+  END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

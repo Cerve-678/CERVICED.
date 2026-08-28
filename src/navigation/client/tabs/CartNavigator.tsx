@@ -30,11 +30,11 @@ export default function CartNavigator() {
         headerBackTitle: 'Back',
       }}
     >
-      <CartStack.Screen 
-        name="CartMain" 
+      <CartStack.Screen
+        name="CartMain"
         component={CartScreen}  // ✅ This is correct - just pass the component
-        options={{ 
-          headerShown: false 
+        options={{
+          headerShown: false
         }}
       />
       
@@ -82,13 +82,13 @@ export default function CartNavigator() {
       <CartStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
 
       <CartStack.Screen
         name="Reschedule"
         component={RescheduleScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
 
       <CartStack.Screen

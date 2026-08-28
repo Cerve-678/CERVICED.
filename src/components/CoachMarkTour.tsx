@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Easing,
+  Pressable,
   Modal,
   StyleSheet,
   Text,
@@ -9,16 +11,28 @@ import {
   View,
 } from 'react-native';
 import Svg, { Defs, Mask, Rect as SvgRect } from 'react-native-svg';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
+import { isTargetOnScreen } from '../utils/coachMarkTargets';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const ACCENT = '#AF9197';
 const PAD = 8; // breathing room between the real element and the spotlight edge
-const CARD_GAP = 14;
-const CARD_W = Math.min(SCREEN_W - 40, 340);
+const CARD_GAP = 16;
+const CARD_W = Math.min(SCREEN_W - 36, 344);
+const BEAK = 12; // width/height of the square that's rotated 45° into a pointer
+const HALO = 12; // how far the pulsing ring travels beyond the spotlight edge
+
+// The scrim is dark in BOTH light and dark mode — a spotlight that dims the
+// screen has to actually dim it. So anything drawn ON the scrim (the ring
+// around the cutout, the halo) uses white rather than the palette accent:
+// the light-mode accent on either hat is a dark colour (#3F1E36 plum /
+// #5C4033 chocolate) and would disappear against it. Same rule the app
+// already applies to icons drawn over photos (see PortfolioCard's unsaved
+// heart). Inside the caption card — which is a normal P.card surface — the
+// full palette is used normally.
+const SCRIM = 'rgba(10,9,8,0.82)';
+const ON_SCRIM = '#FFFFFF';
 
 type Rect = { x: number; y: number; width: number; height: number };
 
@@ -36,6 +50,8 @@ export interface CoachMarkStep {
   target: { ref: React.RefObject<View | null> } | { rect: Rect };
   /** Corner radius of the spotlight cutout. Defaults to a rounded-card look. */
   radius?: number;
+  /** Ionicons glyph shown in the caption card's header tile. */
+  icon?: keyof typeof Ionicons.glyphMap;
 }
 
 interface CoachMarkTourProps {
@@ -59,44 +75,94 @@ const measureStep = (step: CoachMarkStep): Promise<Rect | null> => {
 
 /**
  * Full-screen spotlight tour: dims everything except a rounded cutout around
- * the current step's real, on-screen element, with a caption card pointing
- * at it. Steps whose target fails to measure (not rendered, e.g. a checklist
- * that's already complete) are skipped rather than blocking the tour.
+ * the current step's real, on-screen element, with a caption card that points
+ * at it via a beak. Steps whose target fails to measure — not rendered, or
+ * scrolled out of view — are skipped rather than blocking the tour.
  */
 export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, onFinish }) => {
-  const { isDarkMode } = useTheme();
-  const accent = isDarkMode ? '#AF9197' : '#5C4033';
+  const { palette: P } = useTheme();
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const hasPositioned = useRef(false);
+  // Indices actually landed on, in order — Back walks this rather than
+  // decrementing stepIndex, so it can't stop on a step forward navigation
+  // already skipped as unmeasurable.
+  const historyRef = useRef<number[]>([]);
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
 
   const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardLift = useRef(new Animated.Value(10)).current;
   const cutX = useRef(new Animated.Value(0)).current;
   const cutY = useRef(new Animated.Value(0)).current;
   const cutW = useRef(new Animated.Value(0)).current;
   const cutH = useRef(new Animated.Value(0)).current;
+  // 0 → 1 on repeat, driving the halo's outward travel and fade. Gated by
+  // haloGate so the ring stays hidden while the cutout springs between
+  // steps and only breathes once it has settled on the new target.
+  const haloPulse = useRef(new Animated.Value(0)).current;
+  const haloGate = useRef(new Animated.Value(0)).current;
 
-  const goToStep = useCallback(async (index: number) => {
+  const halo = useMemo(() => {
+    const grow = haloPulse.interpolate({ inputRange: [0, 1], outputRange: [0, HALO] });
+    return {
+      left: Animated.subtract(cutX, grow),
+      top: Animated.subtract(cutY, grow),
+      width: Animated.add(cutW, Animated.multiply(grow, 2)),
+      height: Animated.add(cutH, Animated.multiply(grow, 2)),
+      opacity: Animated.multiply(
+        haloGate,
+        haloPulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] })
+      ),
+    };
+  }, [cutX, cutY, cutW, cutH, haloPulse, haloGate]);
+
+  useEffect(() => {
+    if (!visible) return;
+    haloPulse.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(haloPulse, {
+        toValue: 1,
+        duration: 1700,
+        easing: Easing.out(Easing.quad),
+        // Layout props (left/top/width/height) can't run on the native
+        // driver, and the opacity is multiplied off the same node.
+        useNativeDriver: false,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [visible, haloPulse]);
+
+  const goToStep = useCallback(async (index: number, dir: 1 | -1 = 1) => {
     if (index >= steps.length) { onFinish(); return; }
+    if (index < 0) return;
     const step = steps[index]!;
     const r = await measureStep(step);
     if (!mountedRef.current) return;
-    if (!r) { goToStep(index + 1); return; }
+    if (!r || !isTargetOnScreen(r, { width: SCREEN_W, height: SCREEN_H })) { goToStep(index + dir, dir); return; }
 
     setStepIndex(index);
     setRect(r);
+    historyRef.current.push(index);
     const padded = { x: r.x - PAD, y: r.y - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 };
 
     cardOpacity.setValue(0);
+    cardLift.setValue(10);
+    haloGate.setValue(0);
+    const reveal = Animated.parallel([
+      Animated.timing(cardOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
+      Animated.spring(cardLift, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 240 }),
+    ]);
+
     if (!hasPositioned.current) {
       hasPositioned.current = true;
       cutX.setValue(padded.x);
       cutY.setValue(padded.y);
       cutW.setValue(padded.width);
       cutH.setValue(padded.height);
-      Animated.timing(cardOpacity, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+      reveal.start();
+      Animated.timing(haloGate, { toValue: 1, duration: 300, delay: 240, useNativeDriver: false }).start();
     } else {
       Animated.parallel([
         Animated.spring(cutX, { toValue: padded.x, useNativeDriver: false, damping: 20, stiffness: 220 }),
@@ -104,12 +170,18 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
         Animated.spring(cutW, { toValue: padded.width, useNativeDriver: false, damping: 20, stiffness: 220 }),
         Animated.spring(cutH, { toValue: padded.height, useNativeDriver: false, damping: 20, stiffness: 220 }),
       ]).start();
-      Animated.timing(cardOpacity, { toValue: 1, duration: 260, delay: 150, useNativeDriver: true }).start();
+      Animated.sequence([Animated.delay(150), reveal]).start();
+      Animated.timing(haloGate, { toValue: 1, duration: 300, delay: 400, useNativeDriver: false }).start();
     }
-  }, [steps, onFinish, cardOpacity, cutX, cutY, cutW, cutH]);
+  }, [steps, onFinish, cardOpacity, cardLift, cutX, cutY, cutW, cutH, haloGate]);
 
   useEffect(() => {
-    if (!visible) { hasPositioned.current = false; setRect(null); return; }
+    if (!visible) {
+      hasPositioned.current = false;
+      historyRef.current = [];
+      setRect(null);
+      return;
+    }
     goToStep(0);
     // Only (re)start when the tour opens — steps is stable in identity terms
     // per caller (useMemo'd), and re-running this on every parent render
@@ -122,80 +194,154 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
   if (!step) return null;
   const radius = step.radius ?? 16;
   const isLast = stepIndex === steps.length - 1;
+  const canGoBack = historyRef.current.length > 1;
 
-  const advance = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    goToStep(stepIndex + 1);
+  const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  const advance = () => { tap(); goToStep(stepIndex + 1, 1); };
+  const goBack = () => {
+    tap();
+    const hist = historyRef.current;
+    hist.pop();                                   // the step being left
+    const prev = hist.pop();                      // re-pushed by goToStep
+    if (prev === undefined) return;
+    goToStep(prev, -1);
   };
-  const skip = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    onFinish();
-  };
+  const skip = () => { tap(); onFinish(); };
 
   const spaceBelow = SCREEN_H - (rect.y + rect.height);
   const spaceAbove = rect.y;
-  const placeBelow = spaceBelow >= 170 || spaceBelow >= spaceAbove;
-  const cardTop = placeBelow ? Math.min(rect.y + rect.height + PAD + CARD_GAP, SCREEN_H - 210) : undefined;
+  const placeBelow = spaceBelow >= 200 || spaceBelow >= spaceAbove;
+  const cardTop = placeBelow ? Math.min(rect.y + rect.height + PAD + CARD_GAP, SCREEN_H - 240) : undefined;
   const cardBottom = !placeBelow ? SCREEN_H - rect.y + PAD + CARD_GAP : undefined;
-  const cardLeft = Math.max(20, Math.min(SCREEN_W - CARD_W - 20, rect.x + rect.width / 2 - CARD_W / 2));
-
-  const textColor = isDarkMode ? '#F0ECE7' : '#1C1C1E';
-  const subColor = isDarkMode ? 'rgba(240,236,231,0.75)' : 'rgba(28,28,30,0.7)';
-  const dotOff = isDarkMode ? 'rgba(240,236,231,0.25)' : 'rgba(28,28,30,0.18)';
-  const skipColor = isDarkMode ? 'rgba(240,236,231,0.55)' : 'rgba(28,28,30,0.5)';
+  const cardLeft = Math.max(18, Math.min(SCREEN_W - CARD_W - 18, rect.x + rect.width / 2 - CARD_W / 2));
+  // The beak tracks the spotlight's centre, but stays clear of the card's
+  // rounded corners so it never pokes out of a curve.
+  const beakLeft = Math.max(
+    20,
+    Math.min(CARD_W - 20 - BEAK, rect.x + rect.width / 2 - cardLeft - BEAK / 2)
+  );
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={skip}>
       <View style={StyleSheet.absoluteFill}>
-        <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
-          <Defs>
-            <Mask id="coachmark-mask" maskUnits="userSpaceOnUse" x={0} y={0} width={SCREEN_W} height={SCREEN_H}>
-              <SvgRect x={0} y={0} width={SCREEN_W} height={SCREEN_H} fill="#fff" />
-              <AnimatedSvgRect x={cutX} y={cutY} width={cutW} height={cutH} rx={radius} fill="#000" />
-            </Mask>
-          </Defs>
-          <SvgRect x={0} y={0} width={SCREEN_W} height={SCREEN_H} fill="rgba(10,9,8,0.80)" mask="url(#coachmark-mask)" />
-          <AnimatedSvgRect
-            x={cutX} y={cutY} width={cutW} height={cutH} rx={radius}
-            stroke={accent} strokeWidth={2.5} fill="none"
+        {/* Tapping the dimmed area advances, so the whole screen is the
+            "next" button — the footer controls stay for Back/Skip. */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={advance}>
+          <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
+            <Defs>
+              <Mask id="coachmark-mask" maskUnits="userSpaceOnUse" x={0} y={0} width={SCREEN_W} height={SCREEN_H}>
+                <SvgRect x={0} y={0} width={SCREEN_W} height={SCREEN_H} fill="#fff" />
+                <AnimatedSvgRect x={cutX} y={cutY} width={cutW} height={cutH} rx={radius} fill="#000" />
+              </Mask>
+            </Defs>
+            <SvgRect x={0} y={0} width={SCREEN_W} height={SCREEN_H} fill={SCRIM} mask="url(#coachmark-mask)" />
+            <AnimatedSvgRect
+              x={cutX} y={cutY} width={cutW} height={cutH} rx={radius}
+              stroke={ON_SCRIM} strokeWidth={2} fill="none"
+            />
+          </Svg>
+
+          {/* Pulsing halo — the thing that actually draws the eye to the
+              cutout. pointerEvents none so it never eats the scrim tap. */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.halo,
+              {
+                left: halo.left,
+                top: halo.top,
+                width: halo.width,
+                height: halo.height,
+                opacity: halo.opacity,
+                borderRadius: radius + HALO,
+                borderColor: ON_SCRIM,
+              },
+            ]}
           />
-        </Svg>
+        </Pressable>
 
         <Animated.View
           style={[
-            styles.card,
+            styles.cardWrap,
             {
               left: cardLeft,
               width: CARD_W,
               top: cardTop,
               bottom: cardBottom,
               opacity: cardOpacity,
+              transform: [{ translateY: cardLift }],
             },
           ]}
         >
-          <BlurView
-            intensity={isDarkMode ? 50 : 70}
-            tint={isDarkMode ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
+          {/* Beak — a square rotated 45°, half-buried under the card so only
+              the two outward-facing edges (and their border) show. */}
+          <View
+            style={[
+              styles.beak,
+              {
+                left: beakLeft,
+                backgroundColor: P.card,
+                borderColor: P.border,
+                ...(placeBelow
+                  ? { top: -BEAK / 2, borderTopWidth: 1, borderLeftWidth: 1 }
+                  : { bottom: -BEAK / 2, borderBottomWidth: 1, borderRightWidth: 1 }),
+              },
+            ]}
           />
-          <View style={styles.cardInner}>
-            <Text style={[styles.title, { color: textColor }]}>{step.title}</Text>
-            <Text style={[styles.body, { color: subColor }]}>{step.body}</Text>
-            <View style={styles.footer}>
-              <View style={styles.dots}>
+          <View style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}>
+            <View style={styles.header}>
+              {step.icon && (
+                <View style={[styles.iconTile, { backgroundColor: P.accentDim }]}>
+                  <Ionicons name={step.icon} size={15} color={P.accentText} />
+                </View>
+              )}
+              <Text style={[styles.stepLabel, { color: P.accentText }]}>
+                STEP {stepIndex + 1} OF {steps.length}
+              </Text>
+              <View style={{ flex: 1 }} />
+              {!isLast && (
+                <TouchableOpacity onPress={skip} activeOpacity={0.5} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={[styles.skipText, { color: P.sub }]}>Skip</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Text style={[styles.title, { color: P.text }]}>{step.title}</Text>
+            <Text style={[styles.body, { color: P.sub }]}>{step.body}</Text>
+
+            <View style={[styles.footer, { borderTopColor: P.sep }]}>
+              <View style={styles.segments}>
                 {steps.map((s, i) => (
-                  <View key={s.key} style={[styles.dot, { backgroundColor: i === stepIndex ? accent : dotOff }]} />
+                  <View
+                    key={s.key}
+                    style={[
+                      styles.segment,
+                      i === stepIndex
+                        ? { width: 18, backgroundColor: P.accent }
+                        : { width: 6, backgroundColor: i < stepIndex ? P.accent : P.border, opacity: i < stepIndex ? 0.4 : 1 },
+                    ]}
+                  />
                 ))}
               </View>
               <View style={styles.actions}>
-                {!isLast && (
-                  <TouchableOpacity onPress={skip} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={[styles.skipText, { color: skipColor }]}>Skip</Text>
+                {canGoBack && (
+                  <TouchableOpacity
+                    onPress={goBack}
+                    activeOpacity={0.5}
+                    style={styles.backBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="chevron-back" size={13} color={P.sub} />
+                    <Text style={[styles.backText, { color: P.sub }]}>BACK</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={[styles.nextBtn, { backgroundColor: accent }]} onPress={advance} activeOpacity={0.85}>
-                  <Text style={styles.nextText}>{isLast ? 'Got it' : 'Next'}</Text>
-                  {!isLast && <Ionicons name="arrow-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />}
+                <TouchableOpacity
+                  style={[styles.nextBtn, { backgroundColor: P.accent }]}
+                  onPress={advance}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.nextText, { color: P.onAccent }]}>{isLast ? 'GOT IT' : 'NEXT'}</Text>
+                  {!isLast && <Ionicons name="arrow-forward" size={13} color={P.onAccent} style={{ marginLeft: 5 }} />}
                 </TouchableOpacity>
               </View>
             </View>
@@ -207,25 +353,71 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
 };
 
 const styles = StyleSheet.create({
-  card: {
+  halo: {
     position: 'absolute',
+    borderWidth: 2,
+  },
+  cardWrap: {
+    position: 'absolute',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.32,
+    shadowRadius: 24,
+    elevation: 14,
+  },
+  beak: {
+    position: 'absolute',
+    width: BEAK,
+    height: BEAK,
+    transform: [{ rotate: '45deg' }],
+  },
+  card: {
     borderRadius: 20,
-    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(175,145,151,0.3)',
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
-  cardInner: { padding: 18, gap: 6 },
-  title: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
-  body: { fontSize: 13, lineHeight: 18 },
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  dots: { flexDirection: 'row', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  iconTile: {
+    width: 26,
+    height: 26,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
+    letterSpacing: 1.6,
+  },
+  skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600' },
+  title: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 17,
+    letterSpacing: 0.3,
+    marginBottom: 5,
+  },
+  body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13.5, lineHeight: 19 },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  segments: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  segment: { height: 4, borderRadius: 2 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  skipText: { fontSize: 13, fontWeight: '600' },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 1 },
+  backText: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1 },
   nextBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 8, paddingHorizontal: 16, borderRadius: 18,
-    backgroundColor: ACCENT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 20,
   },
-  nextText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  nextText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1.2 },
 });

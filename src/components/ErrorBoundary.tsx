@@ -1,7 +1,7 @@
 // src/components/ErrorBoundary.tsx
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { reportError } from '../utils/logger';
+import { logger, reportError } from '../utils/logger';
 
 interface Props {
   children: ReactNode;
@@ -38,6 +38,15 @@ export default class ErrorBoundary extends Component<Props, State> {
   override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
     reportError(error, 'ErrorBoundary');
+    // The component stack was only ever rendered into the on-screen debug box,
+    // so the terminal got a bare message with nothing naming WHERE it came
+    // from — useless for the errors that don't point at their own source
+    // ("Maximum update depth exceeded" names no component at all). Dev only:
+    // the stack is developer detail, and reportError already forwards the
+    // error itself to the external reporter in production.
+    if (__DEV__ && errorInfo.componentStack) {
+      logger.error('[ErrorBoundary] component stack:', errorInfo.componentStack);
+    }
   }
 
   handleReset = () => {

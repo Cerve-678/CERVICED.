@@ -388,6 +388,101 @@ reinstall or shows up on a second device.
 
 ---
 
+## RESCHEDULE EXPIRY EATS THE CLIENT'S CANCELLATION RIGHT (deferred 2026-08-26)
+
+Not building this yet — decision deferred deliberately. Recording it so the
+trap is not rediscovered the hard way.
+
+**The trap.** Reschedule expiry shipped 2026-08-26 (see `BOOKINGS.md` §7a): if
+a provider never answers, the request expires at the start of the appointment
+day and the booking stays exactly as originally scheduled. But cancelling is
+governed by a *separate*, unrelated window — `cancel_own_booking()` reads
+`providers.cancellation_notice_hours`, falling back to
+`booking_policies->>'cancelNotice'` (24h/48h/72h), and hard-blocks with
+`This provider requires N hours notice to cancel`.
+
+Nothing connects the two. So a client who acts entirely in good time can be
+left unable to do either thing:
+
+| | 24h cancel notice | 72h cancel notice |
+|---|---|---|
+| Appointment | 2pm Wed | 2pm Wed |
+| Client asks to reschedule | 2pm Tue (allowed) | 2pm Sun (allowed) |
+| Provider ignores it | | |
+| Request expires | midnight Tue→Wed | midnight Tue→Wed |
+| Time left at expiry | ~14h | ~14h |
+| Can they still cancel? | **No — needs 24h** | **No — needs 72h** |
+
+**The sharp part:** at the moment the client asked, they still had their full
+cancellation right. By the time the provider's silence resolved into an answer,
+they had lost it. The provider's non-response consumed a right belonging to the
+client. Their remaining options are attend an appointment they tried to move,
+or no-show — and a no-show inside 24h also increments `late_cancel_count` on
+`client_provider_reliability`, so the silence ends up recorded against the
+*client's* reliability.
+
+The longer the provider's notice period, the worse it gets — a 72h provider
+opens a ~58h gap between "you could still have cancelled" and "you now can't."
+
+**Two ways out, and they trade off against each other:**
+
+1. **Grant a no-penalty cancellation** when a `pending` request expires. Most
+   direct, and the fairest reading — the client shouldn't lose a right to
+   somebody else's inaction. This is the option with real liability attached
+   (`LEGAL-COMPLIANCE-NOTES.md` §12) and it is a product/legal call, not an
+   engineering one. It also needs a refund answer, and there is currently no
+   refund logic anywhere in the app (`PRE-LAUNCH-TODO.md` §1b).
+
+2. **Expire the request early enough that the cancellation window is still
+   intact** — cap the deadline at `appointment - cancelNotice` as well. Cleaner
+   in that no new right is invented, but it cannot fully work on timing alone:
+   when the cancel notice is long (72h) and the client asks near that boundary,
+   the cap lands at or before the moment they asked, leaving the provider no
+   answer window at all. It would need the same 4-hour floor the appointment-day
+   backstop already uses, and at that point it is still eating into the
+   cancellation window, just less of it.
+
+A real fix probably combines them: cap where there is room, and fall back to
+(1) where there is not. Do not pick unilaterally — (1) is the half with money
+and terms attached.
+
+
+### PARKED 2026-08-27: telling the client the cancel window has already closed
+
+Built, reviewed, then parked before shipping — not abandoned. The code was on
+`RescheduleScreen` and is in git history (`a16c492`), removed the same day.
+
+**What it did.** When a client opened the reschedule screen for a booking
+already inside their provider's *cancellation* notice — legitimate, because a
+provider whose reschedule notice is shorter than their cancellation notice
+accepts requests from clients who can no longer cancel — it showed a plain note
+above the policy card. No warning icon, no red, not a modal, not a block: the
+client has done nothing wrong and the request may well succeed.
+
+The copy, with the final sentence cut on review (it pushed the client at the
+provider when the screen's own job is to handle it):
+
+> Worth knowing: [Provider] asks for [N] hours' notice to cancel, and this
+> appointment is inside that now. You can still ask to move it — just bear in
+> mind that if none of the times work out, the original booking stays as it is.
+
+**What it needed.** `getProviderReschedulePolicy*` had to carry
+`cancelNoticeHours` alongside the reschedule fields, resolved exactly the way
+`cancel_own_booking()` resolves it — `providers.cancellation_notice_hours`
+first, `booking_policies->>'cancelNotice'` as fallback — and read *before* the
+mapper's early return, since a provider can have the column set while
+`booking_policies` is still null. That field was removed again with the UI
+rather than left with no reader.
+
+**Why it is parked rather than dead.** It is the client-facing half of the
+cancellation-right trap above. The server-side half — the
+`cancel_window_closing` warning notification — shipped and is live
+(`20260827160000`). This half covers the case that warning cannot reach: the
+client who was already past the cancel boundary when they asked, where there is
+no gap to warn into. Restoring it is a small diff and one policy field.
+
+---
+
 ## WHAT IS DONE (as of June 2026)
 
 | Item | Status |

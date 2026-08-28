@@ -4,10 +4,10 @@ tags: [screen, client]
 # NewPasswordScreen
 #screen · `src/screens/auth/NewPasswordScreen.tsx`
 
-**Registered route(s):** `NewPassword`
+**Registered route(s):** _unregistered_
 
 ## → Navigates to
-- [[LoginScreen\|Login]]
+- `Login` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

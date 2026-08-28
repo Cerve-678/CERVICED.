@@ -1,8 +1,7 @@
 // src/navigation/types.ts
-import { NavigatorScreenParams } from "@react-navigation/native";
+import { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/native";
 import { StackScreenProps } from "@react-navigation/stack";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { CompositeScreenProps } from "@react-navigation/native";
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 
 // ============================================================================
@@ -14,7 +13,10 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<TabParamList>;
   Welcome: undefined;
   Login: undefined;
-  ClaimProvider: undefined;
+  // providerId — when present, jumps straight to the preview step for that
+  // specific unclaimed listing (from a profile's "Claim this business"
+  // button) instead of starting at the search step. See ClaimProviderScreen.
+  ClaimProvider: { providerId?: string } | undefined;
   SignUpStep1: undefined;
   SignUpStep2: undefined;
   SignUpStep3: undefined;
@@ -28,7 +30,7 @@ export type RootStackParamList = {
 // Home Stack
 export type HomeStackParamList = {
   HomeMain: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -39,6 +41,7 @@ export type HomeStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -56,7 +59,7 @@ export type HomeStackParamList = {
 // Explore Stack
 export type ExploreStackParamList = {
   ExploreMain: { category?: string };
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -71,7 +74,7 @@ export type ExploreStackParamList = {
 // Becca Stack
 export type BeccaStackParamList = {
   BeccaMain: { conversationId?: string };
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -82,6 +85,7 @@ export type BeccaStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -100,14 +104,39 @@ export type BeccaStackParamList = {
 export type ProviderBeccaStackParamList = {
   BeccaMain: { conversationId?: string };
   Notifications: undefined;
-  BookingDetail: { bookingId: string; booking?: any };
+  BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
   DevSettings: undefined;
+  // Becca's OWN copies of the provider screens her chips route to.
+  //
+  // Deliberately duplicated from ProviderHome/Profile/MyServices rather than
+  // reached by a cross-tab navigate: a cross-tab jump lands the screen at its
+  // tab root with an empty stack beneath it, so its close/back button fires an
+  // unhandled GO_BACK. Pushing within THIS stack always leaves BeccaMain
+  // underneath, so back returns to the conversation that sent you there.
+  // Mirrors how the client BeccaNavigator already owns its own destinations.
+  ProviderSchedule: undefined;
+  Scheduling: undefined;
+  AddBooking: undefined;
+  Clientele: undefined;
+  ProviderInbox:
+    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | undefined;
+  ProviderConversation: {
+    conversationId: string;
+    clientUserId: string;
+    clientName: string;
+  };
+  Promotions: undefined;
+  InfoPacks: undefined;
+  Analytics: undefined;
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
+  Automations: undefined;
 };
 
 // Cart Stack
 export type CartStackParamList = {
   CartMain: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -117,6 +146,7 @@ export type CartStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -131,7 +161,11 @@ export type CartStackParamList = {
 // Profile Stack
 export type ProfileStackParamList = {
   ProfileMain: undefined;
-  ProfileInfo: undefined;
+  /** `returnToTab` is set when checkout sends the client here to set their
+   *  address — saving returns to that tab (where the cart, and its in-flight
+   *  Confirm Your Details state, is still mounted) instead of falling back to
+   *  ProfileMain. */
+  ProfileInfo: { returnToTab?: string } | undefined;
   BeautyProfile: undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;
@@ -142,7 +176,7 @@ export type ProfileStackParamList = {
   Terms: undefined;
   ReportProblem: undefined;
   Points: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -153,6 +187,7 @@ export type ProfileStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -169,9 +204,19 @@ export type ProfileStackParamList = {
 
 // Provider Home Stack (Calendar/Scheduling)
 export type ProviderHomeStackParamList = {
-  ProviderHomeMain: undefined;
+  // jumpToDate: set after AddBookingScreen creates a booking outside "today",
+  // so the calendar opens straight to the day it was added on instead of
+  // silently leaving the provider on whatever day they already had selected.
+  ProviderHomeMain: { jumpToDate?: string } | undefined;
   ProviderSchedule: undefined;
-  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean };
+  AddBooking: undefined;
+  // Reachable from the Calendar tab's profile quick-actions. Registered here
+  // (as well as on the Profile stack) so those actions PUSH instead of jumping
+  // to the Profile tab root — a cross-tab jump left these at the root of a
+  // fresh stack, so their back/save button fired an unhandled GO_BACK.
+  EditProfile: { transferProviderId?: string } | undefined;
+  Branding: undefined;
+  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; groupSiblings?: any[] };
   ProviderIntakeForm:
     | {
         bookingId: string;
@@ -179,6 +224,11 @@ export type ProviderHomeStackParamList = {
         serviceName: string;
         formId?: string;
       }
+    // Straight into the Terms & Conditions builder, skipping the library —
+    // the entry points for terms (Business Info, the profile-health
+    // checklist) name the document, so landing on a list of every form and
+    // asking the provider to find it again is a step backwards.
+    | { openTerms: true }
     | undefined;
   Notifications: undefined;
   ProviderInbox:
@@ -199,9 +249,34 @@ export type ProviderHomeStackParamList = {
 export type ProviderServicesStackParamList = {
   ProviderServicesMain: undefined;
   EditProfile: { transferProviderId?: string } | undefined;
+  // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
+  // builder opens with the profile editor beneath it instead of at a bare tab
+  // root — same reasoning as Policies below. Only the openTerms shape is
+  // reachable from this stack.
+  ProviderIntakeForm: { openTerms: true } | undefined;
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
+  // Pushed from the Clientele screen's Message button, for the same reason
+  // ProviderSchedule is registered here — a cross-tab navigate would land the
+  // conversation at a bare tab root and its back button would fire an
+  // unhandled GO_BACK.
+  ProviderConversation: {
+    conversationId: string;
+    clientUserId: string;
+    clientName: string;
+  };
+  // Pushed from the availability card on the provider's own profile, so the
+  // schedule opens with that profile beneath it instead of at a bare tab root.
+  ProviderSchedule: undefined;
+  // Pushed from the dashboard's Booking policies / Branding cards, for the
+  // same reason ProviderSchedule is registered here rather than jumped to on
+  // the Account tab.
+  Policies: undefined;
+  Branding: undefined;
+  // Pushed from the dashboard's saved-by-clients tile, same reasoning.
+  Analytics: undefined;
+  AddBooking: undefined;
   DevSettings: undefined;
 };
 
@@ -210,18 +285,24 @@ export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
   EditProfile: { transferProviderId?: string } | undefined;
   Notifications: undefined;
-  BookingHistory: undefined;
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Analytics: undefined;
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
-  BookingDetail: { bookingId: string; booking?: any };
-  ProviderIntakeForm: {
-    bookingId: string;
-    clientUserId: string;
-    serviceName: string;
-    formId?: string;
-  };
+  ProviderSchedule: undefined;
+  AddBooking: undefined;
+  BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
+  ProviderIntakeForm:
+    | {
+        bookingId: string;
+        clientUserId: string;
+        serviceName: string;
+        formId?: string;
+      }
+    // See the ProviderAccount stack's copy of this route.
+    | { openTerms: true }
+    | undefined;
   ProviderInbox:
     | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
     | undefined;
@@ -232,7 +313,14 @@ export type ProviderAccountStackParamList = {
   };
   ChangePassword: undefined;
   AccountInfo: undefined;
+  // Business Details is a hub over these sub-screens.
   BusinessDetails: undefined;
+  BusinessInfo: undefined;
+  ServicesPricing: undefined;
+  AboutYou: undefined;
+  Scheduling: undefined;
+  Payments: undefined;
+  Policies: undefined;
   Communications: undefined;
   Automations: undefined;
   BusinessProfile: undefined;

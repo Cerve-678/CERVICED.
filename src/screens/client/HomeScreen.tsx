@@ -1,47 +1,52 @@
-import React, { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
+import type { BusinessType } from '../../types/database';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   FlatList,
-  Image,
-  StatusBar,
-  Animated,
+  TouchableOpacity,
   Dimensions,
   LayoutAnimation,
   Platform,
   UIManager,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { useFocusEffect } from '@react-navigation/native';
+import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 
 // NAVIGATION IMPORTS - CORRECTED PATH
-import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { HomeStackParamList } from '../../navigation/types';
 
 // Import your icons from IconLibrary
-import Icon, { BellIcon, SearchIcon } from '../../components/IconLibrary';
+import { BellIcon, SearchIcon } from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import { useBooking } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import userLearningService from '../../services/userLearningService';
 import { HairTypeSelector } from '../../components/HairTypeSelector';
+import { ProviderCard } from '../../features/home/ProviderCard';
+import { ServiceButton } from '../../features/home/ServiceButton';
+import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
-import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders } from '../../services/databaseService';
-import type { DbProvider, DbPromotionWithProvider } from '../../types/database';
+import { resolveClientLocation } from '../../services/clientLocationService';
+import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
+import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
+import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
-import { getDistanceKm, formatDistance } from '../../utils/distance';
+import { getDistanceKm } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
+import { PortfolioCard } from '../../components/PortfolioCard';
+import type { PortfolioItem, ServiceCategory } from '../../types/providers';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -51,50 +56,26 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
 
-// ── Skeleton Loader ─────────────────────────────────────────────────────────
-function SkeletonSection({ isDarkMode, cardWidth, cardHeight, borderRadius = 16, count = 4 }: {
-  isDarkMode: boolean; cardWidth: number; cardHeight: number; borderRadius?: number; count?: number;
-}) {
-  const shimmer = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [shimmer]);
-  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
-  return (
-    <View style={{ flexDirection: 'row', paddingLeft: 2 }}>
-      {Array.from({ length: count }).map((_, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            width: cardWidth,
-            height: cardHeight,
-            borderRadius,
-            backgroundColor: base,
-            opacity,
-            marginRight: 16,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
 // FILTER TYPES
+// serviceType values are the real business_type column values (see
+// DbProvider) — this used to collapse 'salon' and 'studio' into a single
+// vague "Store" option that didn't match what a provider actually picked at
+// registration (InfoRegScreen's own picker: Salon / Studio / Home Studio /
+// Mobile). Mirrors SearchScreen.tsx's FilterOptions.
+// Filter chips for business type: 'all' plus every real business_type value,
+// labelled exactly as the provider's own picker labels them.
+const SERVICE_TYPE_FILTERS: { label: string; value: 'all' | BusinessType }[] = [
+  { label: 'All', value: 'all' },
+  ...BUSINESS_TYPE_OPTS.map(o => ({ label: o.label, value: o.value })),
+];
+
 interface FilterOptions {
   sortBy: 'recommended' | 'nearest' | 'highest-rated' | 'available-now';
   availability: 'any' | 'today' | 'tomorrow' | 'this-week';
   priceRange?: { min: number; max: number };
   rating?: number;
   distance?: number;
-  serviceType?: 'all' | 'home-service' | 'store' | 'mobile';
+  serviceType?: 'all' | BusinessType;
 }
 
 // Offer type definition
@@ -118,75 +99,89 @@ interface Provider {
   logo: any;
   rating: number;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
-  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
+  businessType: BusinessType | null;
   latitude: number | null;
   longitude: number | null;
   distanceKm?: number; // populated by nearbyProviders when the user's location is known
 }
 
-// Component prop types
-interface ProviderCardProps {
-  provider: Provider;
-  onPress: () => void;
-  style: any;
+const ProviderRail = React.memo(function ProviderRail({
+  providers,
+  keyPrefix,
+  onProviderPress,
+  cardStyle,
+  blurStyle,
+}: {
+  providers: Provider[];
+  keyPrefix: string;
+  onProviderPress: (provider: Provider) => void;
+  cardStyle: any;
   blurStyle: any;
-}
-
-interface ServiceButtonProps {
-  service: string;
-  isSelected: boolean;
-  onPress: () => void;
-  onBack?: () => void;
-  showBackArrow?: boolean;
-}
-
-const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurStyle }) => {
-  const { isDarkMode, palette: P } = useTheme();
-
+}) {
   return (
-    <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.75}>
-      <View style={[blurStyle, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-        {provider.logo ? (
-          <Image
-            source={provider.logo}
-            style={styles.providerImage}
-            resizeMode="cover"
-            fadeDuration={0}
-          />
-        ) : (
-          <View style={[styles.placeholderCard, { backgroundColor: P.surface }]}>
-            <Text style={[styles.placeholderText, { color: P.sub }]}>{provider.service}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.providerCardName, { color: P.text }]} numberOfLines={1}>{provider.name}</Text>
-      <Text style={[styles.providerCardSub, { color: P.sub }]} numberOfLines={1}>{provider.service}</Text>
-    </TouchableOpacity>
+    <FlatList
+      horizontal
+      data={providers}
+      keyExtractor={provider => `${keyPrefix}-${provider.id}`}
+      renderItem={({ item }) => (
+        <ProviderCard
+          provider={item}
+          onPress={() => onProviderPress(item)}
+          style={cardStyle}
+          blurStyle={blurStyle}
+        />
+      )}
+      showsHorizontalScrollIndicator={false}
+      style={styles.categoryScroll}
+      initialNumToRender={4}
+      maxToRenderPerBatch={4}
+      windowSize={5}
+      removeClippedSubviews={Platform.OS === 'android'}
+    />
   );
 });
 
-const ServiceButton = memo<ServiceButtonProps>(({ service, isSelected, onPress }) => {
-  const { isDarkMode, palette: P } = useTheme();
-
+const RoundProviderRail = React.memo(function RoundProviderRail({
+  providers,
+  keyPrefix,
+  onProviderPress,
+  surface,
+  border,
+  text,
+}: {
+  providers: Provider[];
+  keyPrefix: string;
+  onProviderPress: (provider: Provider) => void;
+  surface: string;
+  border: string;
+  text: string;
+}) {
   return (
-    <TouchableOpacity style={styles.serviceButton} onPress={onPress} activeOpacity={0.7}>
-      <View style={[
-        styles.glassCard,
-        {
-          backgroundColor: isSelected ? P.accent : P.surface,
-          borderColor: P.border,
-          borderWidth: StyleSheet.hairlineWidth,
-        }
-      ]}>
-        <Text style={[styles.serviceText, { color: isSelected ? P.ice : P.text }]}>{service}</Text>
-      </View>
-    </TouchableOpacity>
+    <FlatList
+      horizontal
+      data={providers}
+      keyExtractor={provider => `${keyPrefix}-${provider.id}`}
+      showsHorizontalScrollIndicator={false}
+      style={styles.categoryScroll}
+      initialNumToRender={5}
+      maxToRenderPerBatch={5}
+      windowSize={5}
+      removeClippedSubviews={Platform.OS === 'android'}
+      renderItem={({ item }) => (
+        <TouchableOpacity style={styles.roundCard} onPress={() => onProviderPress(item)} activeOpacity={0.7}>
+          <View style={[styles.roundCardBlur, { backgroundColor: surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }]}>
+            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} contentFit="cover" transition={0} /> : null}
+          </View>
+          <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
+        </TouchableOpacity>
+      )}
+    />
   );
 });
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { theme, isDarkMode, palette: P } = useTheme();
+  const { palette: P } = useTheme();
   const { bookings } = useBooking();
   const { user } = useAuth();
   const { bookmarkedIds, loadBookmarks } = useBookmarkStore();
@@ -197,6 +192,10 @@ export default function HomeScreen() {
 
   // First-run coach-mark tour for brand-new clients.
   const [showTour, setShowTour] = useState(false);
+  // Home stays mounted as a tab; CoachMarkTour is a full-screen Modal. Gate it
+  // on focus so an armed tour never spotlights over a screen pushed on top
+  // while its start timer was pending — it just waits for the return to Home.
+  const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
   const searchIconRef = useRef<View>(null);
   const bellIconRef = useRef<View>(null);
@@ -205,7 +204,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (tourCheckedRef.current || !user?.id) return;
     tourCheckedRef.current = true;
-    const seenKey = `@client_tour_seen_${user.id}`;
+    const seenKey = tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_HOME, user.id);
     storage.getItem<boolean>(seenKey).then(seen => {
       if (seen) return;
       // Give the header/category section time to finish their entrance
@@ -216,7 +215,7 @@ export default function HomeScreen() {
 
   const finishTour = useCallback(() => {
     setShowTour(false);
-    if (user?.id) storage.setItem(`@client_tour_seen_${user.id}`, true).catch(() => {});
+    if (user?.id) storage.setItem(tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_HOME, user.id), true).catch(() => {});
   }, [user?.id]);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
@@ -242,6 +241,7 @@ export default function HomeScreen() {
           },
         },
         radius: TAB_H / 2,
+        icon: 'apps',
       },
       {
         key: 'search',
@@ -249,6 +249,7 @@ export default function HomeScreen() {
         body: 'Search by name, treatment, or category to find who you want to book.',
         target: { ref: searchIconRef },
         radius: 18,
+        icon: 'search',
       },
       {
         key: 'bell',
@@ -256,6 +257,7 @@ export default function HomeScreen() {
         body: 'Booking confirmations, reminders, and messages show up in your notifications.',
         target: { ref: bellIconRef },
         radius: 18,
+        icon: 'notifications',
       },
       {
         key: 'bookings',
@@ -263,6 +265,7 @@ export default function HomeScreen() {
         body: 'Everything you\'ve booked — upcoming and past — lives here.',
         target: { ref: bookingsChipRef },
         radius: 18,
+        icon: 'calendar',
       },
     ];
   }, []);
@@ -284,11 +287,15 @@ export default function HomeScreen() {
   // Set once the user has manually chosen a city (as opposed to GPS) — drives
   // the "· LONDON" label suffix and lets LocationModal show the current pick.
   const [manualLocationLabel, setManualLocationLabel] = useState<string | null>(null);
+  // The device gave a position, but too vague a one to call it "where you are"
+  // — on iOS this is Precise Location switched off, which still reports as
+  // granted. Labelled rather than hidden: the distances are still the best
+  // available, they just shouldn't be presented as exact.
+  const [locationIsCoarse, setLocationIsCoarse] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationRadius, setLocationRadius] = useState(10);
 
   const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [showHairTypeSelector, setShowHairTypeSelector] = useState(false);
   const [selectedHairType, setSelectedHairType] = useState<any>(null);
   const [viewAllRecommended, setViewAllRecommended] = useState(false);
   const [viewAllProviders, setViewAllProviders] = useState(false);
@@ -304,7 +311,7 @@ export default function HomeScreen() {
   });
 
   // Offers from Supabase — live promotions data
-  const [rawPromotions, setRawPromotions] = useState<DbPromotionWithProvider[]>([]);
+  const [rawPromotions, setRawPromotions] = useState<PublicPromotionWithProvider[]>([]);
 
   const allOffers: Offer[] = useMemo(() =>
     rawPromotions.map(p => ({
@@ -375,6 +382,19 @@ export default function HomeScreen() {
   const [newProviders,    setNewProviders]    = useState<Provider[]>([]);
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
+  const [trending,        setTrending]        = useState<Provider[]>([]);
+
+  // Per-service audience refinement (services.audience) for the Male/Kids
+  // sections — a provider whose whole business isn't registered as MALE/KIDS
+  // can still have one service tagged for that audience (e.g. a hair salon
+  // with a "Men's Cut"). providerIds widens which providers qualify for the
+  // section below; the card list shows the actual matching service photos,
+  // not just the provider tile. Empty until a provider tags a service this
+  // way — see MEMORY service-audience-field.md.
+  const [maleServiceProviderIds, setMaleServiceProviderIds] = useState<Set<string>>(new Set());
+  const [kidsServiceProviderIds, setKidsServiceProviderIds] = useState<Set<string>>(new Set());
+  const [maleServiceCards, setMaleServiceCards] = useState<PortfolioItem[]>([]);
+  const [kidsServiceCards, setKidsServiceCards] = useState<PortfolioItem[]>([]);
 
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
@@ -403,7 +423,7 @@ export default function HomeScreen() {
         // Silent failure — keeps default service order
       });
 
-    const mapDbProvider = (p: DbProvider): Provider => ({
+    const mapDbProvider = (p: PublicProviderSummary): Provider => ({
       id: p.id,
       slug: p.slug,
       name: p.display_name,
@@ -415,6 +435,33 @@ export default function HomeScreen() {
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
     });
+
+    // One card per service (cover photo only, not one per carousel photo —
+    // unlike Explore's mapDbServiceToCards, this is a compact rail, not a
+    // save-everything grid). Null when a matching service somehow has no
+    // photo (shouldn't happen — getDiscoverServices !inner-joins service_images).
+    const mapAudienceServiceToCard = (s: DiscoverServiceWithProvider): PortfolioItem | null => {
+      const cover = [...s.service_images].sort((a, b) => a.sort_order - b.sort_order)[0];
+      if (!cover) return null;
+      const p = s.provider;
+      return {
+        id: `service-${s.id}`,
+        image: { uri: cover.url },
+        caption: s.description ?? '',
+        serviceName: s.name,
+        category: p.service_category as unknown as ServiceCategory,
+        aspectRatio: cover.aspect_ratio ?? 0.8,
+        providerId: p.slug,
+        price: `£${s.price}`,
+        providerName: p.display_name,
+        providerSlug: p.slug,
+        providerRating: p.rating,
+        providerReviewCount: p.review_count,
+        kind: 'service' as const,
+        serviceId: s.id,
+        ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+      };
+    };
 
     // Fetch live providers — shows empty state if DB has no data
     getProviders().then(data => {
@@ -429,45 +476,71 @@ export default function HomeScreen() {
     // If GPS is denied/unavailable, fall back to a previously-picked city
     // (never to the unsorted full provider list) — and if the user has never
     // picked one either, Near You prompts them to instead of guessing.
+    // Guarded because this effect can run more than once: `user` is an object,
+    // and any of AuthContext's setUser calls hands back a fresh identity even
+    // when nothing about the person changed. Two overlapping runs each resolve
+    // location independently, and whichever finishes LAST wins — so a slow GPS
+    // fix from run one could land after run two's saved-city fallback and
+    // replace a precise position with a city centroid, or the reverse. Either
+    // way Near You visibly re-sorts under the client for no reason they can
+    // see. Same sequence-guard shape as the calendar's week paging.
+    let locationRunCancelled = false;
     (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const position = await Location.getCurrentPositionAsync({});
-          setUserCoords({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-          return;
-        }
-      } catch {
-        // Falls through to the manual-city fallback below
-      }
-
-      try {
-        const savedCity = await storage.getItem<string>(STORAGE_KEYS.MANUAL_LOCATION);
-        if (savedCity) {
-          const [match] = await Location.geocodeAsync(savedCity);
-          if (match) {
-            setUserCoords({ latitude: match.latitude, longitude: match.longitude });
-            setManualLocationLabel(savedCity);
-          }
-        }
-      } catch {
-        // Silent failure — Near You prompts the user to pick a city instead
-      }
+      const location = await resolveClientLocation();
+      if (locationRunCancelled || !location.coords) return;
+      setUserCoords(location.coords);
+      // Only a city centroid gets labelled — that label is the whole reason
+      // the client can tell "distances from the middle of Manchester" from
+      // "distances from where you are".
+      setManualLocationLabel(location.source === 'saved-city' ? location.cityLabel : null);
+      setLocationIsCoarse(location.isCoarse);
     })();
 
-    // Fetch active promotions
-    getActivePromotions().then(data => {
-      setRawPromotions(data);
-    }).catch(() => {
-      // Silent failure — keeps empty offers list
-    });
+    // Fetch active promotions (skipped while OFFERS_ENABLED is off, see FUTURE_LOGIC.md)
+    if (OFFERS_ENABLED) {
+      getActivePromotions().then(data => {
+        setRawPromotions(data);
+      }).catch(() => {
+        // Silent failure — keeps empty offers list
+      });
+    }
 
     getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
     getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
-  }, []); // Only run once on mount
+    getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))).catch(() => {});
+
+    // Per-service audience refinement for the Male/Kids sections — see the
+    // state declarations above. Widens qualification beyond providers whose
+    // whole business is registered as service_category MALE/KIDS.
+    //
+    // Two separate fetches on purpose: getProviderIdsByServiceAudience
+    // doesn't require a photo, so a provider whose new "Men's Cut" has no
+    // photo YET still makes their provider tile qualify. getDiscoverServices
+    // does require one (it's the same photo feed Explore uses) — that one
+    // only decides whether an actual service CARD can render, which
+    // legitimately needs a photo to show.
+    getProviderIdsByServiceAudience('men').then(ids => {
+      setMaleServiceProviderIds(new Set(ids));
+    }).catch(() => {});
+    getProviderIdsByServiceAudience('kids').then(ids => {
+      setKidsServiceProviderIds(new Set(ids));
+    }).catch(() => {});
+    // Photo rail fetch skipped while AUDIENCE_SERVICE_PHOTOS_ENABLED is off,
+    // see FUTURE_LOGIC.md — the provider-tile widening above is unaffected.
+    if (AUDIENCE_SERVICE_PHOTOS_ENABLED) {
+      getDiscoverServices(undefined, 15, 'men').then(data => {
+        setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
+      }).catch(() => {});
+      getDiscoverServices(undefined, 15, 'kids').then(data => {
+        setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
+      }).catch(() => {});
+    }
+    return () => { locationRunCancelled = true; };
+    // Keyed on the id, not the object — the rest of this screen's effects
+    // already do (see the `user?.id` deps above). Depending on `user` itself
+    // re-ran this whole block, GPS prompt and every provider list included,
+    // every time anything handed back a new user object.
+  }, [loadBookmarks, user?.id]);
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
@@ -497,10 +570,12 @@ export default function HomeScreen() {
           muaProviders: liveProviders.filter(p => p.service === 'MUA'),
           browProviders: liveProviders.filter(p => p.service === 'BROWS'),
           aestheticsProviders: liveProviders.filter(p => p.service === 'AESTHETICS'),
-          // Male providers
-          maleProviders: liveProviders.filter(p => p.service === 'MALE'),
-          // Kids providers
-          kidsProviders: liveProviders.filter(p => p.service === 'KIDS'),
+          // Male providers — whole-business MALE category, widened by any
+          // provider that has at least one service tagged audience='men'
+          // (see maleServiceProviderIds above).
+          maleProviders: liveProviders.filter(p => p.service === 'MALE' || maleServiceProviderIds.has(p.id)),
+          // Kids providers — same widening via audience='kids'.
+          kidsProviders: liveProviders.filter(p => p.service === 'KIDS' || kidsServiceProviderIds.has(p.id)),
         });
 
         // Phase 5.4 — recently viewed from userLearningService interaction log.
@@ -522,7 +597,7 @@ export default function HomeScreen() {
     };
 
     updateProviderData();
-  }, [bookmarkedIds, liveProviders]); // React to both bookmark changes and live data updates
+  }, [bookmarkedIds, liveProviders, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
 
   // "Near You" — nearest-first, not "every active provider" in arbitrary DB
   // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
@@ -558,6 +633,8 @@ export default function HomeScreen() {
       if (match) {
         setUserCoords({ latitude: match.latitude, longitude: match.longitude });
         setManualLocationLabel(city);
+        // A hand-picked city supersedes whatever the device said, coarse or not.
+        setLocationIsCoarse(false);
         await storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, city);
       }
     } catch {
@@ -626,17 +703,22 @@ export default function HomeScreen() {
     return providersData.kidsProviders.slice(0, 15);
   }, [providersData.kidsProviders]);
 
-  // Phase 5.2 — profile-aware gating for MALE and KIDS sections
+  // Phase 5.2 — profile-aware POSITIONING for MALE and KIDS sections (not
+  // visibility — a service tagged for an audience should stay discoverable
+  // by everyone, just deprioritized for viewers it isn't aimed at). See the
+  // updated comment on homeSections.ts's showWhen for the full rationale.
+  const hasMaleSectionData = providersData.maleProviders.length > 0;
   // § config-driven — see src/config/homeSections.ts (id: 'male-services')
-  const showMaleSection = useMemo(() => {
+  const maleSectionRelevant = useMemo(() => {
     const config = HOME_SECTIONS.find(s => s.id === 'male-services');
-    return config?.showWhen?.(user, providersData) ?? (providersData.maleProviders.length > 0);
+    return config?.showWhen?.(user, providersData) ?? true;
   }, [user, providersData]);
 
+  const hasKidsSectionData = providersData.kidsProviders.length > 0;
   // § config-driven — see src/config/homeSections.ts (id: 'kids-services')
-  const showKidsSection = useMemo(() => {
+  const kidsSectionRelevant = useMemo(() => {
     const config = HOME_SECTIONS.find(s => s.id === 'kids-services');
-    return config?.showWhen?.(user, providersData) ?? (providersData.kidsProviders.length > 0);
+    return config?.showWhen?.(user, providersData) ?? true;
   }, [user, providersData]);
 
   const serviceProviders = useMemo(() => {
@@ -689,21 +771,17 @@ export default function HomeScreen() {
         return approx >= min && approx <= max;
       });
     }
+    // serviceType values are business_type's own values now — direct
+    // comparison, no collapsing map needed (see FilterOptions' comment).
     if (activeFilters.serviceType && activeFilters.serviceType !== 'all') {
-      const typeMap: Record<string, string[]> = {
-        'home-service': ['home_based'],
-        'store': ['salon', 'studio'],
-        'mobile': ['mobile'],
-      };
-      const allowed = typeMap[activeFilters.serviceType] ?? [];
-      providers = providers.filter(p => p.businessType && allowed.includes(p.businessType));
+      providers = providers.filter(p => p.businessType === activeFilters.serviceType);
     }
 
     return {
       left: providers.slice(0, 8),
       right: providers.slice(8, 15),
     };
-  }, [selectedService, providersData, activeFilters]);
+  }, [selectedService, providersData, activeFilters, liveProviders]);
 
   const handleServicePress = useCallback(async (service: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -727,7 +805,6 @@ export default function HomeScreen() {
   const handleBackPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedService(null);
-    setShowHairTypeSelector(false);
     setSelectedHairType(null);
   }, []);
 
@@ -738,9 +815,29 @@ export default function HomeScreen() {
 
       // The 'view' interaction is tracked once, by ProviderProfileScreen itself
       // on load — tracking it again here double-counted every visit.
+      prefetchProviderBySlug(provider.slug);
       navigation.navigate('ProviderProfile', {
         providerId: provider.slug,
         source: 'home',
+      });
+    },
+    [navigation]
+  );
+
+  // Tapping an audience-tagged service card (Male/Kids sections) — jumps
+  // straight to that exact service's booking modal via openServiceId, same
+  // as Explore's "Book Now" on a service card, rather than a bare profile
+  // visit that leaves the client to find the service themselves.
+  const navigateToAudienceService = useCallback(
+    (item: PortfolioItem) => {
+      if (!item.providerSlug) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      prefetchProviderBySlug(item.providerSlug);
+      navigation.navigate('ProviderProfile', {
+        providerId: item.providerSlug,
+        source: 'home',
+        bookIntent: true,
+        ...(item.serviceId ? { openServiceId: item.serviceId } : {}),
       });
     },
     [navigation]
@@ -818,6 +915,154 @@ export default function HomeScreen() {
     });
   }, []);
 
+  // Rendered at one of two JSX positions depending on maleSectionRelevant /
+  // kidsSectionRelevant (see above) — the normal early slot, or pushed down
+  // to just above Book Again. Plain closures (not components) so calling
+  // one twice in the same render never double-mounts it — only one of the
+  // two call sites is ever reached, since the surrounding && conditions are
+  // mutually exclusive.
+  const renderMaleSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
+        <TouchableOpacity
+          onPress={toggleViewAllMaleServices}
+          style={styles.viewAllButton}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.viewAll, { color: P.sub }]}>
+            {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {viewAllMaleServices ? (
+        <View style={styles.expandedGrid}>
+          {maleProvidersDisplay.map((provider) => (
+            <View key={`male-expanded-${provider.id}`} style={styles.gridItem}>
+              <ProviderCard
+                provider={provider}
+                onPress={() => navigateToProvider(provider)}
+                style={styles.gridCard}
+                blurStyle={styles.gridCardBlur}
+              />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryScroll}
+          nestedScrollEnabled={true}
+        >
+          {maleProvidersDisplay.map(provider => (
+            <ProviderCard
+              key={`male-${provider.id}`}
+              provider={provider}
+              onPress={() => navigateToProvider(provider)}
+              style={styles.brandCard}
+              blurStyle={styles.brandCardBlur}
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Actual matching service listings (services.audience =
+          'men'), not just provider tiles — a HAIR provider with one
+          "Men's Cut" service shows that specific service here even
+          though their whole business isn't registered as MALE. Pulled
+          while AUDIENCE_SERVICE_PHOTOS_ENABLED is off, see FUTURE_LOGIC.md. */}
+      {AUDIENCE_SERVICE_PHOTOS_ENABLED && maleServiceCards.length > 0 && (
+        <>
+          <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
+            POPULAR MEN'S SERVICES
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryScroll}
+            nestedScrollEnabled={true}
+          >
+            {maleServiceCards.map((item, index) => (
+              <View key={item.id} style={{ width: 130, marginRight: 12 }}>
+                <PortfolioCard
+                  item={item}
+                  columnWidth={130}
+                  imageHeight={170}
+                  onPress={navigateToAudienceService}
+                  index={index}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </>
+      )}
+    </View>
+  );
+
+  const renderKidsSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>KIDS SERVICES</Text>
+        <TouchableOpacity
+          onPress={toggleViewAllKidsServices}
+          style={styles.viewAllButton}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.viewAll, { color: P.sub }]}>
+            {viewAllKidsServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {viewAllKidsServices ? (
+        <View style={styles.expandedGrid}>
+          {kidsProvidersDisplay.map((provider) => (
+            <View key={`kids-expanded-${provider.id}`} style={styles.gridItem}>
+              <ProviderCard
+                provider={provider}
+                onPress={() => navigateToProvider(provider)}
+                style={styles.gridCard}
+                blurStyle={styles.gridCardBlur}
+              />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+      )}
+
+      {/* Actual matching service listings (services.audience =
+          'kids'), same reasoning as the Male section above. Pulled while
+          AUDIENCE_SERVICE_PHOTOS_ENABLED is off, see FUTURE_LOGIC.md. */}
+      {AUDIENCE_SERVICE_PHOTOS_ENABLED && kidsServiceCards.length > 0 && (
+        <>
+          <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
+            POPULAR KIDS' SERVICES
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryScroll}
+            nestedScrollEnabled={true}
+          >
+            {kidsServiceCards.map((item, index) => (
+              <View key={item.id} style={{ width: 130, marginRight: 12 }}>
+                <PortfolioCard
+                  item={item}
+                  columnWidth={130}
+                  imageHeight={170}
+                  onPress={navigateToAudienceService}
+                  index={index}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </>
+      )}
+    </View>
+  );
 
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
@@ -871,7 +1116,7 @@ export default function HomeScreen() {
               onPress={navigateToBookings}
               activeOpacity={0.7}
             >
-              <Text style={[styles.bookingsChipText, { color: P.ice }]}>Bookings</Text>
+              <Text style={[styles.bookingsChipText, { color: P.onAccent }]}>Bookings</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -887,22 +1132,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoryScroll}
-              nestedScrollEnabled={true}
-            >
-              {providersData.yourProviders.slice(0, 15).map(provider => (
-                <ProviderCard
-                  key={`your-${provider.id}`}
-                  provider={provider}
-                  onPress={() => navigateToProvider(provider)}
-                  style={styles.brandCard}
-                  blurStyle={styles.brandCardBlur}
-                />
-              ))}
-            </ScrollView>
+            <ProviderRail providers={providersData.yourProviders.slice(0, 15)} keyPrefix="your" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
           </View>
         )}
 
@@ -963,7 +1193,7 @@ export default function HomeScreen() {
                     accessibilityState={{ expanded: filtersExpanded }}
                   >
                     <View style={styles.filterButtonBlur}>
-                      <Text style={styles.filterButtonText}>
+                      <Text style={[styles.filterButtonText, { color: P.sub }]}>
                         FILTERS {filtersExpanded ? '▲' : '▼'}
                       </Text>
                     </View>
@@ -982,7 +1212,7 @@ export default function HomeScreen() {
                         <View style={styles.filterDropdownHeader}>
                           <Text style={[styles.filterDropdownTitle, { color: P.text }]}>FILTER OPTIONS</Text>
                           <TouchableOpacity onPress={resetFilters}>
-                            <Text style={[styles.resetText, { color: P.accent }]}>RESET</Text>
+                            <Text style={[styles.resetText, { color: P.accentText }]}>RESET</Text>
                           </TouchableOpacity>
                         </View>
 
@@ -993,11 +1223,9 @@ export default function HomeScreen() {
                             <HairTypeSelector
                               onSelect={(hairType) => {
                                 setSelectedHairType(hairType);
-                                setShowHairTypeSelector(true);
                               }}
                               onBack={() => {
                                 setSelectedService(null);
-                                setShowHairTypeSelector(false);
                               }}
                             />
                           </View>
@@ -1035,7 +1263,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1080,7 +1308,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1123,7 +1351,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1166,7 +1394,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1208,7 +1436,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1225,12 +1453,11 @@ export default function HomeScreen() {
                         <View style={styles.filterSection}>
                           <Text style={[styles.filterSectionTitle, { color: P.text }]}>SERVICE TYPE</Text>
                           <View style={styles.filterChipsRow}>
-                            {[
-                              { label: 'All', value: 'all' as const },
-                              { label: 'Home Service', value: 'home-service' as const },
-                              { label: 'Store', value: 'store' as const },
-                              { label: 'Mobile', value: 'mobile' as const },
-                            ].map((type) => {
+                            {/* Built from BUSINESS_TYPE_OPTS, not a hand-written
+                                copy of it — the filter chips a client picks
+                                from must be exactly the types a provider can
+                                register as. */}
+                            {SERVICE_TYPE_FILTERS.map((type) => {
                               const isActive = activeFilters.serviceType === type.value;
                               return (
                                 <TouchableOpacity
@@ -1251,7 +1478,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1360,7 +1587,7 @@ export default function HomeScreen() {
               </View>
 
               {providersLoading ? (
-                <SkeletonSection isDarkMode={isDarkMode} cardWidth={176} cardHeight={64} borderRadius={16} />
+                <SkeletonSection cardWidth={176} cardHeight={64} borderRadius={16} />
               ) : viewAllRecommended ? (
                 <View style={styles.expandedGrid}>
                   {recommendedProvidersList.map((provider) => (
@@ -1375,27 +1602,56 @@ export default function HomeScreen() {
                   ))}
                 </View>
               ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {recommendedProvidersList.map((provider) => (
-                    <ProviderCard
-                      key={`recommended-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.brandCard}
-                      blurStyle={styles.brandCardBlur}
-                    />
-                  ))}
-                </ScrollView>
+                <ProviderRail providers={recommendedProvidersList} keyPrefix="recommended" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               )}
             </View>
             )}
 
-            {/* Provider of the Week */}
+            {/* § config-driven — see src/config/homeSections.ts (id: 'trending') */}
+            {/* TRENDING THIS WEEK */}
+            {trending.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
+                </View>
+                <ProviderRail providers={trending} keyPrefix="trending" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
+              </View>
+            )}
+
+            {/* § config-driven — see src/config/homeSections.ts (id: 'new-providers') */}
+            {/* NEW ON CERVICED */}
+            {newProviders.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
+                </View>
+                <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+              </View>
+            )}
+
+            {/* § config-driven — see src/config/homeSections.ts (id: 'top-rated') */}
+            {/* TOP RATED */}
+            {topRated.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
+                </View>
+                <ProviderRail providers={topRated} keyPrefix="toprated" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
+              </View>
+            )}
+
+            {/* § config-driven — see src/config/homeSections.ts (id: 'recently-viewed') */}
+            {/* RECENTLY VIEWED */}
+            {recentlyViewed.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
+                </View>
+                <RoundProviderRail providers={recentlyViewed} keyPrefix="recent" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
+              </View>
+            )}
+
+            {/* BROWSE BY PROVIDER */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>BROWSE BY PROVIDER</Text>
@@ -1411,7 +1667,7 @@ export default function HomeScreen() {
               </View>
 
               {providersLoading ? (
-                <SkeletonSection isDarkMode={isDarkMode} cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
+                <SkeletonSection cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
               ) : viewAllProviders ? (
                 <View>
                   {Object.entries(allCategorizedProviders).map(([category, providers]) => {
@@ -1489,148 +1745,6 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* § config-driven — see src/config/homeSections.ts (id: 'new-providers') */}
-            {/* NEW ON CERVICED */}
-            {newProviders.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {newProviders.map(provider => (
-                    <ProviderCard
-                      key={`new-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.brandCard}
-                      blurStyle={styles.brandCardBlur}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* § config-driven — see src/config/homeSections.ts (id: 'top-rated') */}
-            {/* TOP RATED */}
-            {topRated.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {topRated.map(provider => (
-                    <ProviderCard
-                      key={`toprated-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.providerCard}
-                      blurStyle={styles.providerBlur}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* § config-driven — see src/config/homeSections.ts (id: 'recently-viewed') */}
-            {/* RECENTLY VIEWED */}
-            {recentlyViewed.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {recentlyViewed.map(provider => (
-                    <TouchableOpacity
-                      key={`recent-${provider.id}`}
-                      style={styles.roundCard}
-                      onPress={() => navigateToProvider(provider)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                        {provider.logo && (
-                          <Image
-                            source={provider.logo}
-                            style={styles.roundCardImage}
-                            resizeMode="cover"
-                            fadeDuration={0}
-                          />
-                        )}
-                      </View>
-                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
-                        {provider.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* § config-driven — see src/config/homeSections.ts (id: 'male-services') */}
-            {/* Male Services Section */}
-            {showMaleSection && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
-                  <TouchableOpacity
-                    onPress={toggleViewAllMaleServices}
-                    style={styles.viewAllButton}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.viewAll, { color: P.sub }]}>
-                      {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {viewAllMaleServices ? (
-                  <View style={styles.expandedGrid}>
-                    {maleProvidersDisplay.map((provider) => (
-                      <View key={`male-expanded-${provider.id}`} style={styles.gridItem}>
-                        <ProviderCard
-                          provider={provider}
-                          onPress={() => navigateToProvider(provider)}
-                          style={styles.gridCard}
-                          blurStyle={styles.gridCardBlur}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoryScroll}
-                    nestedScrollEnabled={true}
-                  >
-                    {maleProvidersDisplay.map(provider => (
-                      <ProviderCard
-                        key={`male-${provider.id}`}
-                        provider={provider}
-                        onPress={() => navigateToProvider(provider)}
-                        style={styles.brandCard}
-                        blurStyle={styles.brandCardBlur}
-                      />
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-            )}
-
             {/* Near You Section — sorted by real distance once we have a
                 location fix, from GPS or a manually-chosen city. Never
                 falls back to the plain unsorted "every provider" list —
@@ -1646,7 +1760,9 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.sectionTitle, { color: P.text }]}>
-                  NEAR YOU{manualLocationLabel ? ` · ${manualLocationLabel.split(',')[0]!.toUpperCase()}` : ''}
+                  NEAR YOU{manualLocationLabel
+                    ? ` · ${manualLocationLabel.split(',')[0]!.toUpperCase()}`
+                    : locationIsCoarse ? ' · APPROXIMATE' : ''}
                 </Text>
                 <Text style={[styles.viewAll, { color: P.sub }]}>
                   {userCoords ? 'CHANGE' : 'SET AREA'}
@@ -1654,7 +1770,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
 
               {providersLoading ? (
-                <SkeletonSection isDarkMode={isDarkMode} cardWidth={100} cardHeight={100} borderRadius={50} count={5} />
+                <SkeletonSection cardWidth={100} cardHeight={100} borderRadius={50} count={5} />
               ) : !userCoords ? (
                 <TouchableOpacity
                   style={[styles.nearYouPrompt, { backgroundColor: P.surface, borderColor: P.border }]}
@@ -1669,40 +1785,7 @@ export default function HomeScreen() {
                   </Text>
                 </TouchableOpacity>
               ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {nearbyProviders.slice(0, 15).map(provider => (
-                    <TouchableOpacity
-                      key={`near-${provider.id}`}
-                      style={styles.roundCard}
-                      onPress={() => navigateToProvider(provider)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                        {provider.logo && (
-                          <Image
-                            source={provider.logo}
-                            style={styles.roundCardImage}
-                            resizeMode="cover"
-                            fadeDuration={0}
-                          />
-                        )}
-                      </View>
-                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
-                        {provider.name}
-                      </Text>
-                      {provider.distanceKm != null && (
-                        <Text style={[styles.distanceBadge, { color: P.sub }]} numberOfLines={1}>
-                          {formatDistance(provider.distanceKm)}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <RoundProviderRail providers={nearbyProviders.slice(0, 15)} keyPrefix="near" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               )}
             </View>
 
@@ -1715,59 +1798,18 @@ export default function HomeScreen() {
               onRadiusChange={setLocationRadius}
             />
 
-            {/* § config-driven — see src/config/homeSections.ts (id: 'kids-services') */}
-            {/* Kids Services Section */}
-            {showKidsSection && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>KIDS SERVICES</Text>
-                  <TouchableOpacity
-                    onPress={toggleViewAllKidsServices}
-                    style={styles.viewAllButton}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.viewAll, { color: P.sub }]}>
-                      {viewAllKidsServices ? 'VIEW LESS <' : 'VIEW ALL >'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+            {/* § config-driven — see src/config/homeSections.ts (id: 'male-services').
+                Normal early slot only when relevant to this viewer — when
+                it isn't, the same section still renders, just pushed down
+                to just above Book Again (see below), never hidden outright. */}
+            {hasMaleSectionData && maleSectionRelevant && renderMaleSection()}
 
-                {viewAllKidsServices ? (
-                  <View style={styles.expandedGrid}>
-                    {kidsProvidersDisplay.map((provider) => (
-                      <View key={`kids-expanded-${provider.id}`} style={styles.gridItem}>
-                        <ProviderCard
-                          provider={provider}
-                          onPress={() => navigateToProvider(provider)}
-                          style={styles.gridCard}
-                          blurStyle={styles.gridCardBlur}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoryScroll}
-                    nestedScrollEnabled={true}
-                  >
-                    {kidsProvidersDisplay.map(provider => (
-                      <ProviderCard
-                        key={`kids-${provider.id}`}
-                        provider={provider}
-                        onPress={() => navigateToProvider(provider)}
-                        style={styles.brandCard}
-                        blurStyle={styles.brandCardBlur}
-                      />
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-            )}
+            {/* § config-driven — see src/config/homeSections.ts (id: 'kids-services') — same rule as above. */}
+            {hasKidsSectionData && kidsSectionRelevant && renderKidsSection()}
 
-            {/* Current Offers Section — only rendered when there are live promotions */}
-            {currentOffers.length > 0 && <View style={styles.section}>
+            {/* Current Offers Section — only rendered when there are live promotions.
+                Temporarily pulled entirely via OFFERS_ENABLED, see FUTURE_LOGIC.md. */}
+            {OFFERS_ENABLED && currentOffers.length > 0 && <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>CURRENT OFFERS</Text>
                 <TouchableOpacity onPress={handleViewAllOffers}>
@@ -1789,14 +1831,14 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} resizeMode="cover" fadeDuration={0} /> : <View style={styles.offerLogo} />}
+                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} contentFit="cover" transition={0} /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
                         {/* In normal flow (not floating over the title) so a
                             long custom label — a provider can type anything
                             into discount_text, not just "20% OFF" — pushes
                             the title down instead of covering it. */}
                         <View style={[styles.offerDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>
-                          <Text style={[styles.offerDiscountText, { color: P.ice }]} numberOfLines={1}>{offer.discount}</Text>
+                          <Text style={[styles.offerDiscountText, { color: P.onAccent }]} numberOfLines={1}>{offer.discount}</Text>
                         </View>
                         <Text style={[styles.offerTitle, { color: P.text }]} numberOfLines={2}>
                           {offer.title}
@@ -1814,6 +1856,15 @@ export default function HomeScreen() {
               </ScrollView>
             </View>}
 
+            {/* Deprioritized position for Male/Kids Services — same
+                sections as above, rendered here instead when they aren't
+                relevant to this viewer's gender/interests. Still visible
+                (so a tagged service stays discoverable to everyone), just
+                pushed to the bottom of the feed rather than sitting in the
+                early slot. */}
+            {hasMaleSectionData && !maleSectionRelevant && renderMaleSection()}
+            {hasKidsSectionData && !kidsSectionRelevant && renderKidsSection()}
+
             {/* Book Again Section - Only show if user has previous bookings */}
             {previouslyBookedProviders.length > 0 && (
               <View style={styles.section}>
@@ -1821,35 +1872,7 @@ export default function HomeScreen() {
                   <Text style={[styles.sectionTitle, { color: P.text }]}>BOOK AGAIN</Text>
                 </View>
 
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {previouslyBookedProviders.slice(0, 15).map(provider => (
-                    <TouchableOpacity
-                      key={`booked-${provider.id}`}
-                      style={styles.roundCard}
-                      onPress={() => navigateToProvider(provider)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                        {provider.logo && (
-                          <Image
-                            source={provider.logo}
-                            style={styles.roundCardImage}
-                            resizeMode="cover"
-                            fadeDuration={0}
-                          />
-                        )}
-                      </View>
-                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
-                        {provider.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <RoundProviderRail providers={previouslyBookedProviders.slice(0, 15)} keyPrefix="booked" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               </View>
             )}
           </>
@@ -1858,7 +1881,7 @@ export default function HomeScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <CoachMarkTour visible={showTour} steps={tourSteps} onFinish={finishTour} />
+      <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
     </View>
   );
 }
@@ -2019,21 +2042,6 @@ const styles = StyleSheet.create({
     height: 120,
     overflow: 'hidden',
   },
-  serviceButton: {
-    marginRight: 10,
-  },
-  glassCard: {
-    borderRadius: 14,
-    paddingHorizontal: Platform.OS === 'android' ? 18 : 22,
-    height: Platform.OS === 'android' ? 30 : 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  serviceText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
-  },
   serviceContainer: {
     minHeight: 50,
   },
@@ -2058,7 +2066,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#7E6667',
   },
   filteredProvidersSection: {
     flex: 1,
@@ -2074,36 +2081,6 @@ const styles = StyleSheet.create({
     width: 160,
     height: 70,
     overflow: 'hidden',
-  },
-  providerImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    borderRadius: 16,
-  },
-  placeholderCard: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  providerCardName: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 5,
-    letterSpacing: 0.1,
-  },
-  providerCardSub: {
-    fontSize: 11,
-    fontWeight: '400',
-    marginTop: 1,
-    opacity: 0.8,
   },
   categoryLabel: {
     fontFamily: 'BakbakOne-Regular',
@@ -2183,7 +2160,6 @@ const styles = StyleSheet.create({
   },
   resetText: {
     fontSize: 13,
-    color: '#AF9197',
     fontWeight: '600',
   },
   filterSection: {
@@ -2209,18 +2185,6 @@ const styles = StyleSheet.create({
   filterChipText: {
     fontSize: 13,
     fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: '#AF9197',
-    fontWeight: '700',
-  },
-  ViewAllButton: {
-    backgroundColor: '#AF9197',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   viewAllButtonText: {
     color: '#fff',
@@ -2249,14 +2213,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     fontWeight: '600',
-  },
-  distanceBadge: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 10,
-    marginTop: 4,
-    textAlign: 'center',
-    fontWeight: '500',
-    opacity: 0.7,
   },
   nearYouPrompt: {
     borderRadius: 16,
@@ -2390,10 +2346,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  serviceTypeChipTextActive: {
-    fontWeight: '700',
-    color: '#AF9197',
-  },
   // Offer tabs styles
   offerTabsScroll: {
     marginBottom: 15,
@@ -2421,10 +2373,6 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: '500',
-  },
-  offerTabTextActive: {
-    fontWeight: '700',
-    color: '#AF9197',
   },
   // Vertical offer grid styles - matching horizontal layout
   offerVerticalGrid: {

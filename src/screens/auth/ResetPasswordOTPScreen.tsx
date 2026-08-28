@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
+import { sendPasswordReset, verifyRecoveryOtp } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -63,8 +63,9 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsVerifying(true);
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
-    if (error) {
+    try {
+      await verifyRecoveryOtp(email, token);
+    } catch {
       setIsVerifying(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
@@ -78,15 +79,16 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   const handleResend = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setResending(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    setResending(false);
-    if (error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Error', "Couldn't resend the code. Please try again.");
-    } else {
+    try {
+      await sendPasswordReset(email);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
       Alert.alert('Sent!', 'A new code has been sent to your email.');
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Error', "Couldn't resend the code. Please try again.");
+    } finally {
+      setResending(false);
     }
   };
 

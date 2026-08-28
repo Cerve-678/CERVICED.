@@ -135,13 +135,13 @@ export default function HomeNavigator() {
       <HomeStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
 
       <HomeStack.Screen
         name="Reschedule"
         component={RescheduleScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
 
       {/* SWIPE-DOWN MODAL - Notifications (formSheet style on iOS) */}

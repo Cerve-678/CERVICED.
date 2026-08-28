@@ -1,7 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderAccountScreen from '../../../screens/provider/ProviderAccountScreen';
-import InfoRegScreen from '../../../screens/shared/InfoRegScreen';
+import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
@@ -16,7 +16,15 @@ import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
-import ProviderBusinessEmailScreen from '../../../screens/provider/ProviderBusinessEmailScreen';
+import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
+import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
+import BusinessDetailsScreen from '../../../screens/provider/BusinessDetailsScreen';
+import BusinessInfoScreen from '../../../screens/provider/BusinessInfoScreen';
+import ServicesPricingScreen from '../../../screens/provider/ServicesPricingScreen';
+import AboutYouScreen from '../../../screens/provider/AboutYouScreen';
+import SchedulingScreen from '../../../screens/provider/SchedulingScreen';
+import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
+import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
 import ProviderCommunicationsScreen from '../../../screens/provider/ProviderCommunicationsScreen';
 import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import BusinessProfileScreen from '../../../screens/provider/BusinessProfileScreen';
@@ -25,14 +33,12 @@ import ProviderAccountInfoScreen from '../../../screens/provider/ProviderAccount
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { ProviderAccountStackParamList } from '../../types';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
 
 const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
 
 export default function ProviderAccountNavigator() {
-  const { theme } = useTheme();
 
   return (
     <ProviderAccountStack.Navigator>
@@ -109,6 +115,18 @@ export default function ProviderAccountNavigator() {
       />
 
       <ProviderAccountStack.Screen
+        name="ProviderSchedule"
+        component={ProviderScheduleScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AddBooking"
+        component={AddBookingScreen}
+        options={{ headerShown: false, presentation: 'modal' }}
+      />
+
+      <ProviderAccountStack.Screen
         name="InfoPacks"
         component={ProviderInfoPackScreen}
         options={{ headerShown: false }}
@@ -126,9 +144,49 @@ export default function ProviderAccountNavigator() {
         options={{ headerShown: false }}
       />
 
+      {/* Business Details is a hub; the sub-screens below each own a slice of
+          what used to be one 671-line screen. Scheduling and Payments were
+          added later, consolidating settings that had spread across
+          ServicesPricing and Automations. */}
       <ProviderAccountStack.Screen
         name="BusinessDetails"
-        component={ProviderBusinessEmailScreen}
+        component={BusinessDetailsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="BusinessInfo"
+        component={BusinessInfoScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="ServicesPricing"
+        component={ServicesPricingScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AboutYou"
+        component={AboutYouScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Scheduling"
+        component={SchedulingScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Payments"
+        component={PaymentsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Policies"
+        component={PoliciesScreen}
         options={{ headerShown: false }}
       />
 

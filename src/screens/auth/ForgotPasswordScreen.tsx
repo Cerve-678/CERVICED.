@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
+import { sendPasswordReset } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -39,13 +39,14 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(trimmed);
-    setLoading(false);
-    if (error) {
+    try {
+      await sendPasswordReset(trimmed);
+      navigation.navigate('ResetPasswordOTP', { email: trimmed });
+    } catch {
       Alert.alert('Error', "We couldn't send a reset email. Please check your email address and try again.");
-      return;
+    } finally {
+      setLoading(false);
     }
-    navigation.navigate('ResetPasswordOTP', { email: trimmed });
   };
 
   return (

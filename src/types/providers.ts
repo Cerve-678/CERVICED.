@@ -38,6 +38,11 @@ export interface PortfolioItem {
   // detail modal needs the whole set to render its own swipeable carousel
   // instead of showing only the single photo that was tapped.
   images?: ImageSourcePropType[];
+  // True only for kind === 'provider' cards backed by an unclaimed/scraped
+  // provider row (is_claimed = false) — see getDiscoverUnclaimedProviders.
+  // Card UI must show an "Unclaimed" badge and route to the claim flow
+  // instead of a normal profile/booking view.
+  isUnclaimed?: boolean;
 }
 
 export interface Service {

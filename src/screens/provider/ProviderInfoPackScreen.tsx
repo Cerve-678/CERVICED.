@@ -12,6 +12,7 @@ import {
   Animated,
   ActivityIndicator,
   Modal,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,6 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProviderAccountStackParamList } from '../../navigation/types';
 import { useProviderDialog } from '../../components/ProviderDialog';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import {
   getMyProviderServices,
@@ -30,7 +30,6 @@ import {
   deleteInfoPack,
   ProviderInfoPackRow,
 } from '../../services/databaseService';
-import { logger } from '../../utils/logger';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
@@ -91,7 +90,7 @@ function PackCard({
       Animated.timing(fadeAnim,  { toValue: 1, duration: 280, delay, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, slideAnim]);
 
   const sc = serviceColor(pack.service);
   const pillBg = dark ? sc.dbg : sc.bg;
@@ -158,6 +157,7 @@ function SendSheet({
 }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const phoneInputRef = useRef<TextInput>(null);
   const slideAnim = useRef(new Animated.Value(500)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -173,7 +173,7 @@ function SendSheet({
         Animated.timing(slideAnim, { toValue: 500, duration: 200, useNativeDriver: true }),
       ]).start(() => { setEmail(''); setPhone(''); });
     }
-  }, [visible]);
+  }, [fadeAnim, slideAnim, visible]);
 
   if (!visible && !pack) return null;
 
@@ -199,18 +199,39 @@ function SendSheet({
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <Animated.View style={[ss.overlay, { opacity: fadeAnim }]} pointerEvents={visible ? 'auto' : 'none'}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-        <KeyboardDismissView dismissOnTap>
+        <KeyboardDismissView style={ss.keyboardAvoiding} dismissOnTap>
           <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
             <View style={[ss.handle, { backgroundColor: P.border }]} />
             <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
             {pack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{pack.title}</Text>}
             <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
               <Ionicons name="mail-outline" size={16} color={P.sub} />
-              <TextInput style={[ss.input, { color: P.text }]} placeholder="Client email" placeholderTextColor={P.sub} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <TextInput
+                style={[ss.input, { color: P.text }]}
+                placeholder="Client email"
+                placeholderTextColor={P.sub}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => phoneInputRef.current?.focus()}
+              />
             </View>
             <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
               <Ionicons name="call-outline" size={16} color={P.sub} />
-              <TextInput style={[ss.input, { color: P.text }]} placeholder="Client phone" placeholderTextColor={P.sub} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              <TextInput
+                ref={phoneInputRef}
+                style={[ss.input, { color: P.text }]}
+                placeholder="Client phone"
+                placeholderTextColor={P.sub}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
             </View>
             <View style={ss.btnRow}>
               <TouchableOpacity style={[ss.btn, { backgroundColor: P.iconBg }]} activeOpacity={0.78} onPress={handleEmail}>
@@ -231,6 +252,7 @@ function SendSheet({
 
 const ss = StyleSheet.create({
   overlay:  { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)', zIndex: 10 },
+  keyboardAvoiding: { flex: 1, justifyContent: 'flex-end' },
   sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingBottom: 36, paddingTop: 12 },
   handle:   { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   title:    { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4 },
@@ -273,7 +295,12 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   useEffect(() => {
     if (!user?.id) { setIsLoading(false); return; }
     getMyProviderServices()
-      .then(services => setMyServices(services.map((s: any) => s.name)))
+      // A provider can have legacy duplicate service records with the same
+      // display name. The attachment UI is name-based, so show each name once
+      // rather than rendering duplicate chips with duplicate React keys.
+      .then(services => setMyServices(Array.from(new Set(
+        services.map((s: any) => s.name).filter(Boolean),
+      ))))
       .catch(() => {});
     getProviderInfoPacksByUserId(user.id)
       .then((rows: ProviderInfoPackRow[]) => {
@@ -319,6 +346,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     };
     setPacks(prev => [newPack, ...prev]);
     resetForm();
+    Keyboard.dismiss();
     setView('list');
     if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [title, selectedServices, content, user?.id, resetForm, showToast]);
@@ -336,7 +364,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       Animated.timing(headerFade, { toValue: 1, duration: 280, useNativeDriver: true }),
       Animated.spring(headerY,    { toValue: 0, tension: 90, friction: 14, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [headerFade, headerY]);
 
   return (
     <View style={[s.root, { backgroundColor: P.bg }]}>
@@ -345,7 +373,13 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
         {/* ── Header ───────────────────────────────────────── */}
         <Animated.View style={[s.header, { opacity: headerFade, transform: [{ translateY: headerY }] }]}>
           <TouchableOpacity
-            onPress={() => { if (view === 'create') { resetForm(); setView('list'); } else navigation.goBack(); }}
+            onPress={() => {
+              if (view === 'create') {
+                Keyboard.dismiss();
+                resetForm();
+                setView('list');
+              } else navigation.goBack();
+            }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[s.iconBtn, { backgroundColor: P.iconBg }]}
           >
@@ -362,8 +396,20 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               <Text style={s.newBtnText}>New</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={handleSave} style={[s.newBtn, { backgroundColor: '#30D158' }]} activeOpacity={0.82}>
-              <Text style={s.newBtnText}>Save</Text>
+            <TouchableOpacity
+              onPress={() => setPreviewing({
+                id: 'draft',
+                title: title.trim() || 'Untitled pack',
+                service: selectedServices.length > 0 ? selectedServices[0]!.toUpperCase() : 'GENERAL',
+                serviceNames: selectedServices,
+                content: content.trim() || 'Nothing written yet.',
+                createdAt: '',
+              })}
+              style={[s.newBtn, { backgroundColor: '#30D158' }]}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="eye-outline" size={15} color="#fff" />
+              <Text style={s.newBtnText}>Preview</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -403,24 +449,53 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
         ) : (
           /* ── Create form ──────────────────────────────── */
           <KeyboardDismissView style={{ flex: 1 }}>
-            <ScrollView contentContainerStyle={s.formContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView
+              contentContainerStyle={s.formContent}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              automaticallyAdjustKeyboardInsets
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={[s.fieldLabel, { color: P.sub }]}>TITLE</Text>
               <View style={[s.inputWrap, { backgroundColor: P.card, borderColor: P.border }]}>
-                <TextInput style={[s.input, { color: P.text }]} placeholder="e.g. Lash Aftercare Guide" placeholderTextColor={P.sub} value={title} onChangeText={setTitle} maxLength={80} />
+                <TextInput
+                  style={[s.input, { color: P.text }]}
+                  placeholder="e.g. Lash Aftercare Guide"
+                  placeholderTextColor={P.sub}
+                  value={title}
+                  onChangeText={setTitle}
+                  maxLength={80}
+                  returnKeyType="next"
+                />
               </View>
 
-              <Text style={[s.fieldLabel, { color: P.sub }]}>ATTACHES TO SERVICES</Text>
+              <View style={s.fieldLabelRow}>
+                <Text style={[s.fieldLabel, { color: P.sub, marginBottom: 0 }]}>ATTACHES TO SERVICES</Text>
+                {myServices.length > 1 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setSelectedServices(selectedServices.length === myServices.length ? [] : myServices);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.selectAllText, { color: P.accent }]}>
+                      {selectedServices.length === myServices.length ? 'Clear all' : 'Select all'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <Text style={[s.fieldHint, { color: P.sub }]}>
                 Pick the services this pack goes with — it's sent automatically when a client books them. Leave empty to attach to every booking.
               </Text>
               <View style={s.serviceChipsWrap}>
                 {myServices.length === 0 ? (
                   <Text style={[s.fieldHint, { color: P.sub }]}>No services on your profile yet — the pack will attach to all bookings.</Text>
-                ) : myServices.map(name => {
+                ) : myServices.map((name, index) => {
                   const selected = selectedServices.includes(name);
                   return (
                     <TouchableOpacity
-                      key={name}
+                      key={`${name}-${index}`}
                       style={[s.serviceChip, {
                         borderColor: selected ? P.accent : P.border,
                         backgroundColor: selected ? P.accent + '18' : P.card,
@@ -437,7 +512,15 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
               <Text style={[s.fieldLabel, { color: P.sub }]}>CONTENT</Text>
               <View style={[s.inputWrap, s.textAreaWrap, { backgroundColor: P.card, borderColor: P.border }]}>
-                <TextInput style={[s.input, s.textArea, { color: P.text }]} placeholder={'Aftercare instructions, prep tips, what to expect…'} placeholderTextColor={P.sub} value={content} onChangeText={setContent} multiline textAlignVertical="top" />
+                <TextInput
+                  style={[s.input, s.textArea, { color: P.text }]}
+                  placeholder={'Aftercare instructions, prep tips, what to expect…'}
+                  placeholderTextColor={P.sub}
+                  value={content}
+                  onChangeText={setContent}
+                  multiline
+                  textAlignVertical="top"
+                />
               </View>
 
               <TouchableOpacity style={[s.saveBtn, { backgroundColor: P.accent }]} onPress={handleSave} activeOpacity={0.85}>
@@ -511,6 +594,8 @@ const s = StyleSheet.create({
   listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 80 },
 
   fieldLabel:  { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  selectAllText: { fontSize: 12, fontWeight: '700' },
   fieldHint:   { fontSize: 12, lineHeight: 18, marginBottom: 10 },
   serviceChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   serviceChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },

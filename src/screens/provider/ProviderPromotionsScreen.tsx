@@ -34,14 +34,15 @@ import {
   togglePromotion,
   deletePromotion,
   getProviderClientele,
-  getMyProviderServices,
+  getMyPromotionManagerCore,
   sendPromotionNotificationsToClients,
   markScheduledNotifSent,
   type UpsertPromotionInput,
 } from '../../services/databaseService';
 import type { DbPromotion, ClienteleMember, DbService } from '../../types/database';
-import { supabase } from '../../lib/supabase';
 import { formatTime12 } from '../../utils/dateUtils';
+import { toUserMessage } from '../../utils/userFacingError';
+import { uploadToStorage } from '../../services/providerRegistrationService';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -154,16 +155,9 @@ function discountLabel(p: DbPromotion) {
 
 async function uploadPromoImage(uri: string): Promise<string | null> {
   try {
-    const res = await fetch(uri);
-    const blob = await res.blob();
     const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
     const path = `${Date.now()}.${ext}`;
-    const { data, error } = await supabase.storage
-      .from('promotion-images')
-      .upload(path, blob, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: true });
-    if (error) return null;
-    const { data: { publicUrl } } = supabase.storage.from('promotion-images').getPublicUrl(data.path);
-    return publicUrl;
+    return await uploadToStorage('promotion-images', path, uri);
   } catch { return null; }
 }
 
@@ -875,14 +869,6 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
 
   const coverUri = form.imageUri ?? form.existingImageUrl;
 
-  // Group services by category
-  const serviceGroups = services.reduce<Record<string, DbService[]>>((acc, s) => {
-    const key = s.category_name || 'Other';
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(s);
-    return acc;
-  }, {});
-
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -1314,7 +1300,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
     } else {
       Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     }
-  }, [visible]);
+  }, [anim, visible]);
 
   return (
     <Animated.View
@@ -1380,6 +1366,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
   const [clients, setClients] = useState<ClienteleMember[]>([]);
   const [services, setServices] = useState<DbService[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clientsLoading, setClientsLoading] = useState(true);
   const [tab, setTab] = useState<PromoTab>('live');
   const [templateVisible, setTemplateVisible] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
@@ -1390,6 +1377,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const loadGenerationRef = useRef(0);
 
   const showToast = useCallback((msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -1399,16 +1387,28 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
   }, []);
 
   const load = useCallback(async () => {
+    const generation = ++loadGenerationRef.current;
     setLoading(true);
+    setClientsLoading(true);
     try {
-      const [data, clientData, svcData] = await Promise.all([
-        getMyPromotions(),
-        getProviderClientele(),
-        getMyProviderServices(),
-      ]);
+      const { promotions: data, services: svcData } =
+        await getMyPromotionManagerCore();
+      if (generation !== loadGenerationRef.current) return;
       setPromos(data);
-      setClients(clientData);
       setServices(svcData);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+
+      // Client aggregation can scan a large bounded booking history. It is
+      // needed for audience counts and notification targeting, not for
+      // viewing or editing promotions, so keep it off the critical path.
+      void getProviderClientele()
+        .then(clientData => {
+          if (generation === loadGenerationRef.current) setClients(clientData);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (generation === loadGenerationRef.current) setClientsLoading(false);
+        });
 
       // Fallback sender for scheduled notifications that are now due — the
       // scheduled-promotion cron job (client_automation_jobs.sql) normally
@@ -1417,29 +1417,31 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
       const duePromos = data.filter(
         p => p.scheduled_notify_at && !p.notify_sent_at && new Date(p.scheduled_notify_at) <= now
       );
-      for (const p of duePromos) {
-        try {
-          const claimed = await markScheduledNotifSent(p.id);
-          if (claimed) await sendPromotionNotificationsToClients(p, 'interested');
-        } catch {}
-      }
-      if (duePromos.length > 0) {
-        const refreshed = await getMyPromotions();
-        setPromos(refreshed);
-      }
-
-      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+      void (async () => {
+        for (const p of duePromos) {
+          try {
+            const claimed = await markScheduledNotifSent(p.id);
+            if (claimed) await sendPromotionNotificationsToClients(p, 'interested');
+          } catch {}
+        }
+        if (duePromos.length > 0) {
+          const refreshed = await getMyPromotions();
+          if (generation === loadGenerationRef.current) setPromos(refreshed);
+        }
+      })();
     } catch (e: any) {
-      showToast(e.message ?? 'Could not load promotions');
+      if (generation === loadGenerationRef.current) setClientsLoading(false);
+      showToast(toUserMessage(e, 'Could not load promotions.', 'ProviderPromotionsScreen.load'));
     } finally {
-      setLoading(false);
+      if (generation === loadGenerationRef.current) setLoading(false);
     }
-  }, []);
+  }, [fadeAnim, showToast]);
 
   useFocusEffect(useCallback(() => {
     fadeAnim.setValue(0);
-    load();
-  }, [load]));
+    void load();
+    return () => { loadGenerationRef.current += 1; };
+  }, [fadeAnim, load]));
 
   const livePromos = promos.filter(p => p.is_active && !isExpired(p.valid_until) && !isUpcoming(p.valid_from));
   const upcomingPromos = promos.filter(p => p.is_active && isUpcoming(p.valid_from));
@@ -1451,10 +1453,10 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
     try {
       await togglePromotion(id, active);
     } catch (e: any) {
-      showToast(e.message ?? 'Could not update promotion');
+      showToast(toUserMessage(e, 'Could not update that promotion.', 'ProviderPromotionsScreen.update'));
       setPromos(prev => prev.map(p => p.id === id ? { ...p, is_active: !active } : p));
     }
-  }, []);
+  }, [showToast]);
 
   const handleDelete = useCallback((id: string) => {
     showConfirm('Delete Promotion', 'This cannot be undone.', [
@@ -1463,11 +1465,11 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
         text: 'Delete', style: 'destructive', onPress: async () => {
           setPromos(prev => prev.filter(p => p.id !== id));
           try { await deletePromotion(id); }
-          catch (e: any) { showToast(e.message ?? 'Could not delete promotion'); load(); }
+          catch (e: any) { showToast(toUserMessage(e, 'Could not delete that promotion.', 'ProviderPromotionsScreen.delete')); load(); }
         },
       },
     ]);
-  }, [load]);
+  }, [load, showConfirm, showToast]);
 
   const handleSave = useCallback(async (input: UpsertPromotionInput) => {
     await upsertPromotion(input);
@@ -1552,9 +1554,9 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
         showToast(`Sent to ${sent} client${sent !== 1 ? 's' : ''}`);
       }
     } catch (e: any) {
-      showToast(e.message ?? 'Could not send notification');
+      showToast(toUserMessage(e, 'Could not send that notification.', 'ProviderPromotionsScreen.notify'));
     }
-  }, [notifyPromo, showToast, load]);
+  }, [notifyPromo, showToast]);
 
   const counts = { live: livePromos.length, upcoming: upcomingPromos.length, past: pastPromos.length };
 
@@ -1585,7 +1587,9 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
         </View>
 
         {/* Subtitle */}
-        <Text style={[scSt.headerSub, { color: P.sub }]}>{livePromos.length} live · {clients.length} clients</Text>
+        <Text style={[scSt.headerSub, { color: P.sub }]}>
+          {livePromos.length} live · {clientsLoading ? '…' : clients.length} clients
+        </Text>
 
         <PromoTabBar active={tab} onChange={setTab} counts={counts} P={P} />
 

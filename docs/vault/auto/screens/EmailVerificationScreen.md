@@ -4,7 +4,7 @@ tags: [screen, client]
 # EmailVerificationScreen
 #screen · `src/screens/auth/EmailVerificationScreen.tsx`
 
-**Registered route(s):** `EmailVerification`
+**Registered route(s):** _unregistered_
 
 ## → Navigates to
 - _— none —_

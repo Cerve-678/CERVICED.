@@ -1,11 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   type AppTheme,
   lightTheme as appLightTheme,
   darkTheme as appDarkTheme,
+  clientLightTheme,
+  clientDarkTheme,
 } from '../constants/theme';
+import { useAuth } from './AuthContext';
 import {
   colors,
   typography,
@@ -208,6 +211,7 @@ const THEME_STORAGE_KEY = '@cerviced_theme_mode';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemColorScheme = useColorScheme();
+  const { activeMode } = useAuth();
   const [themePreference, setThemePref] = useState<ThemePreference>('auto');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -256,44 +260,46 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveThemePreference = async (preference: ThemePreference) => {
+  const saveThemePreference = useCallback(async (preference: ThemePreference) => {
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, preference);
     } catch (error) {
       logger.error('Failed to save theme preference:', error);
     }
-  };
+  }, []);
 
-  const setThemePreference = (preference: ThemePreference) => {
+  const setThemePreference = useCallback((preference: ThemePreference) => {
     setThemePref(preference);
     saveThemePreference(preference);
-  };
+  }, [saveThemePreference]);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     // Toggle between light and dark (not auto)
     const newMode = isDarkMode ? 'light' : 'dark';
     setThemePref(newMode);
     saveThemePreference(newMode);
-  };
+  }, [isDarkMode, saveThemePreference]);
 
-  const setDarkMode = (enabled: boolean) => {
+  const setDarkMode = useCallback((enabled: boolean) => {
     const newMode = enabled ? 'dark' : 'light';
     setThemePref(newMode);
     saveThemePreference(newMode);
-  };
+  }, [saveThemePreference]);
 
   const contextValue = useMemo(
     () => ({
       isDarkMode,
       theme: legacyTheme,
       enterpriseTheme,
-      palette: (isDarkMode ? appDarkTheme : appLightTheme) as AppTheme,
+      palette: (activeMode === 'client'
+        ? (isDarkMode ? clientDarkTheme : clientLightTheme)
+        : (isDarkMode ? appDarkTheme : appLightTheme)) as AppTheme,
       themePreference,
       toggleTheme,
       setDarkMode,
       setThemePreference,
     }),
-    [isDarkMode, legacyTheme, enterpriseTheme, themePreference]
+    [isDarkMode, legacyTheme, enterpriseTheme, themePreference, activeMode, toggleTheme, setDarkMode, setThemePreference]
   );
 
   if (isLoading) {

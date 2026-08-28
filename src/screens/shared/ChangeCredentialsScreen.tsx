@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // ── Input component ──────────────────────────────────────────────────────────
@@ -86,7 +85,7 @@ function Field({
 
 export default function ChangeCredentialsScreen({ navigation }: any) {
   const { theme, isDarkMode } = useTheme();
-  const { user, session } = useAuth();
+  const { session } = useAuth();
 
   // Password
   const [newPassword, setNewPassword] = useState('');
@@ -127,7 +126,7 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
       setNewPassword('');
       setConfirmPassword('');
       Alert.alert('Success', 'Your password has been updated.');
-    } catch (e: any) {
+    } catch {
       Alert.alert('Error', 'Couldn\'t update your password. Please try again.');
     } finally {
       setPasswordLoading(false);

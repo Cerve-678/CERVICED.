@@ -25,10 +25,32 @@ import { SERVICE_CATALOGUE } from "./serviceCatalogue";
 // ==================== SERVICE ====================
 
 /**
+ * Words naming WHO a service is for, rather than what it is.
+ *
+ * These override longest-keyword matching because they reframe the entire
+ * request: "my son needs a haircut" is a KIDS booking, but "haircut" (7 chars)
+ * is longer than "my son" (6), so pure longest-match resolved it to HAIR and
+ * sent a parent to adult salon stylists. Audience is a different axis from
+ * service type, so it can't be settled by comparing keyword lengths on one
+ * scale — it has to win outright.
+ *
+ * Deliberately narrow: only unambiguous audience phrases. A bare "kid" or
+ * "men" is already in the catalogue as an ordinary keyword and still resolves
+ * normally when nothing else matches.
+ */
+const AUDIENCE_OVERRIDES: { pattern: RegExp; category: string; audience: "men" | "kids" }[] = [
+  { pattern: /\b(?:my (?:son|daughter|kid|child|little one)|for (?:my )?(?:kids?|children|a child)|toddler|childrens?|children's)\b/i, category: "KIDS", audience: "kids" },
+  { pattern: /\b(?:my (?:husband|boyfriend|partner|son)'?s? (?:hair|cut|beard)|for (?:my )?(?:husband|boyfriend)|mens?|men's|for men)\b/i, category: "MALE", audience: "men" },
+];
+
+/**
  * Longest keyword wins, so "gel manicure" beats a bare "manicure" and
  * resolves to the specific service rather than only the category. The old
  * implementation returned on first match in object order, which made results
  * depend on declaration order rather than specificity.
+ *
+ * An audience phrase (see above) overrides the category that longest-match
+ * picked, while keeping the specific service when it belongs to that audience.
  */
 export function resolveService(
   message: string,
@@ -47,11 +69,31 @@ export function resolveService(
     }
   }
 
+  // "my son needs a haircut" — the audience decides the category, not the
+  // longest service word. Applied after matching so a message with no service
+  // word at all ("something for my son") still resolves to the category.
+  const audienceMatch = AUDIENCE_OVERRIDES.find((a) => a.pattern.test(lower));
+  if (audienceMatch && best?.cat !== audienceMatch.category) {
+    // The specific service was matched under a DIFFERENT category ("haircut"
+    // under HAIR), so it doesn't describe anything in the audience's own list.
+    // Keep the category only — "kids haircut" is the honest resolution, and
+    // claiming a specific that isn't in that category would search for a
+    // service row that can't exist.
+    best = { kw: audienceMatch.category.toLowerCase(), cat: audienceMatch.category };
+  }
+
   if (!best) return undefined;
 
-  const value: ServiceRef = best.specific
-    ? { category: best.cat, specific: best.specific }
-    : { category: best.cat };
+  // audience is attached whenever the phrase was detected, independent of
+  // whether it also drove the category override above — a HAIR provider's
+  // individual audience='men' service ("men's haircut" staying under HAIR
+  // because "haircut" resolved there first) still needs this signal to
+  // narrow by services.audience downstream.
+  const value: ServiceRef = {
+    category: best.cat,
+    ...(best.specific ? { specific: best.specific } : {}),
+    ...(audienceMatch ? { audience: audienceMatch.audience } : {}),
+  };
 
   return {
     kind: "service",
@@ -254,7 +296,13 @@ export function resolveBooking(
   ambiguous?: AmbiguousEntity<"booking">;
 } {
   const lower = message.toLowerCase();
-  const upcoming = bookings.filter((b) => b.status === BookingStatus.UPCOMING);
+  const upcoming = bookings
+    .filter((b) => b.status === BookingStatus.UPCOMING)
+    .sort((a, b) =>
+      a.bookingDate === b.bookingDate
+        ? a.bookingTime.localeCompare(b.bookingTime)
+        : a.bookingDate.localeCompare(b.bookingDate),
+    );
   if (upcoming.length === 0) return {};
 
   const scored = upcoming
@@ -280,11 +328,24 @@ export function resolveBooking(
   const label = (b: ConfirmedBooking) =>
     `${b.serviceName} with ${b.providerName}, ${formatShortDate(b.bookingDate)}`;
 
-  // A generic reference ("my booking", "my appointment") with no
-  // distinguishing detail: unambiguous with exactly one upcoming, but a real
-  // ambiguity with several — ask which, rather than silently falling through
-  // to a capability that would then pick the soonest by default.
+  // "Next" is a real distinguishing instruction: the upcoming list is
+  // chronological, so "my next appointment" always means its first record.
+  // Only genuinely generic booking references need a chooser with several.
   if (scored.length === 0) {
+    const next = /\bnext\b.*\b(booking|appointment|appt)\b|\b(booking|appointment|appt)\b.*\bnext\b/.test(lower);
+    if (next) {
+      const first = upcoming[0]!;
+      return {
+        resolved: {
+          kind: "booking",
+          value: first,
+          confidence: 0.95,
+          sourceText: "your next appointment",
+          label: label(first),
+        },
+      };
+    }
+
     const generic = /\b(my|next|upcoming|the)\b.*\b(booking|appointment|appt)\b/.test(lower);
     if (!generic) return {};
 
@@ -358,6 +419,7 @@ export function resolveBooking(
 export async function resolveProvider(
   message: string,
   bookings: ConfirmedBooking[],
+  service?: ResolvedEntity<"service", ServiceRef>,
 ): Promise<{
   resolved?: ResolvedEntity<"provider", ProviderRef>;
   ambiguous?: AmbiguousEntity<"provider">;
@@ -412,12 +474,38 @@ export async function resolveProvider(
     }
   }
 
-  // Otherwise try a name search on capitalised words, skipping the sentence
-  // opener so "Find Lola" doesn't search for "Find".
+  // Otherwise try likely names. Capitalised words remain useful, but people
+  // do not reliably capitalise names in chat ("i'm looking for lola studio").
+  // Pull the object of an explicit provider-search phrase as a second,
+  // multi-word candidate so natural lowercase requests reach the same live,
+  // has_gone_live-gated database lookup.
   const candidates = (message.match(/\b[A-Z][a-zA-Z'’&]{2,}\b/g) ?? []).filter(
     (w) => !SENTENCE_OPENERS.has(w.toLowerCase()),
   );
-  for (const cand of candidates) {
+  const namedSearch = message.match(
+    /\b(?:looking for|search(?:ing)? for|find(?: me)?|show me)\s+([^?!.,]{2,80})/i,
+  )?.[1]
+    ?.trim()
+    .replace(/^(?:a|an|the)\s+/i, "")
+    .replace(/^(?:provider\s+)?(?:called|named)\s+/i, "")
+    .replace(/^(?:provider|beautician|stylist|salon)\s+/i, "")
+    .replace(/\s+(?:provider|beautician|stylist|salon)$/i, "")
+    .trim();
+  const genericSearchTerms = new Set([
+    "someone", "anyone", "provider", "beautician", "stylist", "salon",
+    "nail", "nails", "hair", "makeup", "lashes", "brows", "aesthetics",
+  ]);
+  if (
+    namedSearch &&
+    namedSearch.split(/\s+/).length <= 6 &&
+    !genericSearchTerms.has(namedSearch.toLowerCase()) &&
+    namedSearch.toLowerCase() !== service?.sourceText.toLowerCase()
+  ) {
+    candidates.push(namedSearch);
+  }
+
+  const uniqueCandidates = [...new Set(candidates.map((value) => value.trim()).filter(Boolean))];
+  for (const cand of uniqueCandidates) {
     try {
       const rows = await searchProviders(cand);
       if (rows.length === 1 && rows[0]) {
@@ -496,7 +584,7 @@ export async function resolveEntities(
 
   // Provider hits the network; everything above is pure. Run it once and
   // reuse the result for booking disambiguation.
-  const providerResult = await resolveProvider(message, bookings);
+  const providerResult = await resolveProvider(message, bookings, service);
 
   const bookingResult = resolveBooking(message, bookings, now, {
     ...(service ? { service: service.value } : {}),

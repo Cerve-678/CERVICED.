@@ -1,0 +1,732 @@
+{
+  "source": "linked Supabase migration history",
+  "exportedAt": "2026-08-20T11:18:30.052Z",
+  "migrations": [
+    {
+      "version": "20260715100159",
+      "name": "bump_push_notification_webhook_timeout",
+      "file": "supabase/remote-migrations/20260715100159_bump_push_notification_webhook_timeout.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260715100510",
+      "name": "require_services_for_go_live",
+      "file": "supabase/remote-migrations/20260715100510_require_services_for_go_live.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260715160621",
+      "name": "notification_recipient_role",
+      "file": "supabase/remote-migrations/20260715160621_notification_recipient_role.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260715172912",
+      "name": "prevent_self_conversation_guard",
+      "file": "supabase/remote-migrations/20260715172912_prevent_self_conversation_guard.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260717154712",
+      "name": "chat_notification_recipient_role",
+      "file": "supabase/remote-migrations/20260717154712_chat_notification_recipient_role.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260717170321",
+      "name": "throttle_reminder_notifications",
+      "file": "supabase/remote-migrations/20260717170321_throttle_reminder_notifications.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260717170407",
+      "name": "quiet_hours_reminder_push",
+      "file": "supabase/remote-migrations/20260717170407_quiet_hours_reminder_push.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260717174758",
+      "name": "throttle_add_booking_reminder",
+      "file": "supabase/remote-migrations/20260717174758_throttle_add_booking_reminder.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260717174804",
+      "name": "quiet_hours_add_booking_reminder",
+      "file": "supabase/remote-migrations/20260717174804_quiet_hours_add_booking_reminder.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260718165852",
+      "name": "fix_auto_accept_provider_notification",
+      "file": "supabase/remote-migrations/20260718165852_fix_auto_accept_provider_notification.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260718170808",
+      "name": "address_release_notification",
+      "file": "supabase/remote-migrations/20260718170808_address_release_notification.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260727104235",
+      "name": "notification_fixes_bundle",
+      "file": "supabase/remote-migrations/20260727104235_notification_fixes_bundle.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260731142651",
+      "name": "fix_notifications_type_check_missing_types",
+      "file": "supabase/remote-migrations/20260731142651_fix_notifications_type_check_missing_types.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260731232258",
+      "name": "waitlist_automation_settings",
+      "file": "supabase/remote-migrations/20260731232258_waitlist_automation_settings.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260801124140",
+      "name": "consolidate_address_release_notification",
+      "file": "supabase/remote-migrations/20260801124140_consolidate_address_release_notification.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260801124331",
+      "name": "lock_down_notify_address_released",
+      "file": "supabase/remote-migrations/20260801124331_lock_down_notify_address_released.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260801124403",
+      "name": "consolidate_address_release_notification_manual",
+      "file": "supabase/remote-migrations/20260801124403_consolidate_address_release_notification_manual.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260801124420",
+      "name": "stamp_booking_address_snapshot_fallback_location_text",
+      "file": "supabase/remote-migrations/20260801124420_stamp_booking_address_snapshot_fallback_location_text.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260801124546",
+      "name": "lock_down_notify_address_released_v2",
+      "file": "supabase/remote-migrations/20260801124546_lock_down_notify_address_released_v2.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802000506",
+      "name": "require_provider_address",
+      "file": "supabase/remote-migrations/20260802000506_require_provider_address.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802151536",
+      "name": "account_deletion_grace_period",
+      "file": "supabase/remote-migrations/20260802151536_account_deletion_grace_period.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802151625",
+      "name": "fix_anon_executable_security_definer_functions",
+      "file": "supabase/remote-migrations/20260802151625_fix_anon_executable_security_definer_functions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802151709",
+      "name": "fix_reschedule_requested_dates_type_mismatch",
+      "file": "supabase/remote-migrations/20260802151709_fix_reschedule_requested_dates_type_mismatch.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802151833",
+      "name": "trending_providers_view",
+      "file": "supabase/remote-migrations/20260802151833_trending_providers_view.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802151913",
+      "name": "provider_fully_booked_alert",
+      "file": "supabase/remote-migrations/20260802151913_provider_fully_booked_alert.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802152337",
+      "name": "prevent_overlapping_bookings_steps_0_2",
+      "file": "supabase/remote-migrations/20260802152337_prevent_overlapping_bookings_steps_0_2.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802152641",
+      "name": "waitlist_holds",
+      "file": "supabase/remote-migrations/20260802152641_waitlist_holds.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802160523",
+      "name": "gate_provider_visibility_on_has_gone_live",
+      "file": "supabase/remote-migrations/20260802160523_gate_provider_visibility_on_has_gone_live.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802160550",
+      "name": "gate_trending_providers_view_on_has_gone_live",
+      "file": "supabase/remote-migrations/20260802160550_gate_trending_providers_view_on_has_gone_live.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802160620",
+      "name": "restrict_storage_bucket_listing_to_owner",
+      "file": "supabase/remote-migrations/20260802160620_restrict_storage_bucket_listing_to_owner.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802160657",
+      "name": "pin_search_path_on_security_definer_functions",
+      "file": "supabase/remote-migrations/20260802160657_pin_search_path_on_security_definer_functions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802160906",
+      "name": "convert_trending_providers_view_to_definer_function",
+      "file": "supabase/remote-migrations/20260802160906_convert_trending_providers_view_to_definer_function.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802161027",
+      "name": "pin_search_path_remaining_invoker_functions",
+      "file": "supabase/remote-migrations/20260802161027_pin_search_path_remaining_invoker_functions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260802161423",
+      "name": "gate_service_add_ons_on_has_gone_live",
+      "file": "supabase/remote-migrations/20260802161423_gate_service_add_ons_on_has_gone_live.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260803220042",
+      "name": "add_bookings_no_overlap_future_only",
+      "file": "supabase/remote-migrations/20260803220042_add_bookings_no_overlap_future_only.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260803221837",
+      "name": "fix_reschedule_request_rls_forgery_gap",
+      "file": "supabase/remote-migrations/20260803221837_fix_reschedule_request_rls_forgery_gap.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260803223159",
+      "name": "dev_reset_provider_bookings_only",
+      "file": "supabase/remote-migrations/20260803223159_dev_reset_provider_bookings_only.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260804075043",
+      "name": "cancel_own_booking_policy_fallback",
+      "file": "supabase/remote-migrations/20260804075043_cancel_own_booking_policy_fallback.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260804133604",
+      "name": "becca_chat_sessions_add_hat",
+      "file": "supabase/remote-migrations/20260804133604_becca_chat_sessions_add_hat.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260806171711",
+      "name": "provider_busy_spans_rpc",
+      "file": "supabase/remote-migrations/20260806171711_provider_busy_spans_rpc.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808101812",
+      "name": "provider_follow_notify_cron",
+      "file": "supabase/remote-migrations/20260808101812_provider_follow_notify_cron.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808103754",
+      "name": "fix_group_booking_notification_dedup",
+      "file": "supabase/remote-migrations/20260808103754_fix_group_booking_notification_dedup.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808173121",
+      "name": "fix_provider_status_transition_guard",
+      "file": "supabase/remote-migrations/20260808173121_fix_provider_status_transition_guard.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808173143",
+      "name": "fix_reschedule_requested_dates_type_mismatch",
+      "file": "supabase/remote-migrations/20260808173143_fix_reschedule_requested_dates_type_mismatch.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808175129",
+      "name": "provider_follow_schedule_release_day_cron",
+      "file": "supabase/remote-migrations/20260808175129_provider_follow_schedule_release_day_cron.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808181219",
+      "name": "reschedule_flow_completion",
+      "file": "supabase/remote-migrations/20260808181219_reschedule_flow_completion.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808181344",
+      "name": "restore_group_aware_booking_confirmed_branch",
+      "file": "supabase/remote-migrations/20260808181344_restore_group_aware_booking_confirmed_branch.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808181956",
+      "name": "add_providers_unclaimed_read_policy",
+      "file": "supabase/remote-migrations/20260808181956_add_providers_unclaimed_read_policy.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808182012",
+      "name": "fix_dev_reset_and_reschedule_reminder_anon_grants",
+      "file": "supabase/remote-migrations/20260808182012_fix_dev_reset_and_reschedule_reminder_anon_grants.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808225133",
+      "name": "group_booking_atomic_actions",
+      "file": "supabase/remote-migrations/20260808225133_group_booking_atomic_actions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808225200",
+      "name": "fix_anon_executable_security_definer_functions",
+      "file": "supabase/remote-migrations/20260808225200_fix_anon_executable_security_definer_functions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808225655",
+      "name": "provider_scrape_pipeline_cron",
+      "file": "supabase/remote-migrations/20260808225655_provider_scrape_pipeline_cron.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260808225822",
+      "name": "deploy_correct_delete_account_functions",
+      "file": "supabase/remote-migrations/20260808225822_deploy_correct_delete_account_functions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260809202007",
+      "name": "group_booking_reschedule",
+      "file": "supabase/remote-migrations/20260809202007_group_booking_reschedule.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260809205845",
+      "name": "group_reschedule_notification_dedup",
+      "file": "supabase/remote-migrations/20260809205845_group_reschedule_notification_dedup.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260809223801",
+      "name": "get_providers_availability_batch",
+      "file": "supabase/remote-migrations/20260809223801_get_providers_availability_batch.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260809225036",
+      "name": "add_provider_terms_accepted_at",
+      "file": "supabase/remote-migrations/20260809225036_add_provider_terms_accepted_at.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260809231144",
+      "name": "fix_provider_notification_recipient_roles",
+      "file": "supabase/remote-migrations/20260809231144_fix_provider_notification_recipient_roles.sql",
+      "statementCount": 4
+    },
+    {
+      "version": "20260810093439",
+      "name": "fix_client_policy_acceptance",
+      "file": "supabase/remote-migrations/20260810093439_fix_client_policy_acceptance.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810093517",
+      "name": "fix_claim_cart_booking_slots_policy_snapshot",
+      "file": "supabase/remote-migrations/20260810093517_fix_claim_cart_booking_slots_policy_snapshot.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810100139",
+      "name": "fix_reschedule_notification_wrong_booking_id",
+      "file": "supabase/remote-migrations/20260810100139_fix_reschedule_notification_wrong_booking_id.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810100901",
+      "name": "fix_no_show_guardrails",
+      "file": "supabase/remote-migrations/20260810100901_fix_no_show_guardrails.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810152214",
+      "name": "fix_claim_cart_booking_slots_private_details_ambiguous",
+      "file": "supabase/remote-migrations/20260810152214_fix_claim_cart_booking_slots_private_details_ambiguous.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810152458",
+      "name": "fix_handle_booking_status_change_on_hold_notification",
+      "file": "supabase/remote-migrations/20260810152458_fix_handle_booking_status_change_on_hold_notification.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810152938",
+      "name": "account_deletion_grace_period_30_days",
+      "file": "supabase/remote-migrations/20260810152938_account_deletion_grace_period_30_days.sql",
+      "statementCount": 2
+    },
+    {
+      "version": "20260810153721",
+      "name": "revoke_anon_dev_reset_client",
+      "file": "supabase/remote-migrations/20260810153721_revoke_anon_dev_reset_client.sql",
+      "statementCount": 3
+    },
+    {
+      "version": "20260810154030",
+      "name": "harden_saved_portfolio_rpcs",
+      "file": "supabase/remote-migrations/20260810154030_harden_saved_portfolio_rpcs.sql",
+      "statementCount": 6
+    },
+    {
+      "version": "20260810155113",
+      "name": "revoke_public_trigger_function_execution",
+      "file": "supabase/remote-migrations/20260810155113_revoke_public_trigger_function_execution.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810155238",
+      "name": "fix_claim_cart_booking_slots_missing_notifications",
+      "file": "supabase/remote-migrations/20260810155238_fix_claim_cart_booking_slots_missing_notifications.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810155902",
+      "name": "revoke_public_auto_release_address",
+      "file": "supabase/remote-migrations/20260810155902_revoke_public_auto_release_address.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810160045",
+      "name": "revoke_public_check_provider_live",
+      "file": "supabase/remote-migrations/20260810160045_revoke_public_check_provider_live.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810160206",
+      "name": "revoke_anon_provider_claim_rpc",
+      "file": "supabase/remote-migrations/20260810160206_revoke_anon_provider_claim_rpc.sql",
+      "statementCount": 2
+    },
+    {
+      "version": "20260810161558",
+      "name": "revoke_public_booking_effective_range_trigger",
+      "file": "supabase/remote-migrations/20260810161558_revoke_public_booking_effective_range_trigger.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810162303",
+      "name": "revoke_anon_delete_own_notification",
+      "file": "supabase/remote-migrations/20260810162303_revoke_anon_delete_own_notification.sql",
+      "statementCount": 2
+    },
+    {
+      "version": "20260810162430",
+      "name": "revoke_anon_notification_read_rpcs",
+      "file": "supabase/remote-migrations/20260810162430_revoke_anon_notification_read_rpcs.sql",
+      "statementCount": 4
+    },
+    {
+      "version": "20260810162659",
+      "name": "revoke_anon_set_booking_client_address",
+      "file": "supabase/remote-migrations/20260810162659_revoke_anon_set_booking_client_address.sql",
+      "statementCount": 2
+    },
+    {
+      "version": "20260810171124",
+      "name": "booking_authority_and_provider_manual_bookings",
+      "file": "supabase/remote-migrations/20260810171124_booking_authority_and_provider_manual_bookings.sql",
+      "statementCount": 29
+    },
+    {
+      "version": "20260810173349",
+      "name": "tiered_platform_fee_excluding_deposits",
+      "file": "supabase/remote-migrations/20260810173349_tiered_platform_fee_excluding_deposits.sql",
+      "statementCount": 8
+    },
+    {
+      "version": "20260810173911",
+      "name": "deposit_checkout_fee",
+      "file": "supabase/remote-migrations/20260810173911_deposit_checkout_fee.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260810174528",
+      "name": "simplify_platform_fee_top_tier",
+      "file": "supabase/remote-migrations/20260810174528_simplify_platform_fee_top_tier.sql",
+      "statementCount": 3
+    },
+    {
+      "version": "20260810180302",
+      "name": "revoke_legacy_client_booking_writes",
+      "file": "supabase/remote-migrations/20260810180302_revoke_legacy_client_booking_writes.sql",
+      "statementCount": 3
+    },
+    {
+      "version": "20260815101138",
+      "name": "scheduled_announcements",
+      "file": "supabase/remote-migrations/20260815101138_scheduled_announcements.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260815101624",
+      "name": "harden_notification_delivery_authority",
+      "file": "supabase/remote-migrations/20260815101624_harden_notification_delivery_authority.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260816174349",
+      "name": "manual_booking_working_hours_bypass",
+      "file": "supabase/remote-migrations/20260816174349_manual_booking_working_hours_bypass.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260816174755",
+      "name": "reapply_booking_bookability_trigger_lockdown",
+      "file": "supabase/remote-migrations/20260816174755_reapply_booking_bookability_trigger_lockdown.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260816183008",
+      "name": "manual_booking_add_ons",
+      "file": "supabase/remote-migrations/20260816183008_manual_booking_add_ons.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817075902",
+      "name": "safety_acknowledgement_checkout",
+      "file": "supabase/remote-migrations/20260817075902_safety_acknowledgement_checkout.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817075942",
+      "name": "drop_stale_manual_booking_overload",
+      "file": "supabase/remote-migrations/20260817075942_drop_stale_manual_booking_overload.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817084930",
+      "name": "fix_pregnancy_safe_default",
+      "file": "supabase/remote-migrations/20260817084930_fix_pregnancy_safe_default.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817085035",
+      "name": "provider_signup_business_fields",
+      "file": "supabase/remote-migrations/20260817085035_provider_signup_business_fields.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817103049",
+      "name": "waitlist_lapse_and_exhaustion_notifications",
+      "file": "supabase/remote-migrations/20260817103049_waitlist_lapse_and_exhaustion_notifications.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817103816",
+      "name": "fix_group_booking_per_service_actions",
+      "file": "supabase/remote-migrations/20260817103816_fix_group_booking_per_service_actions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817103929",
+      "name": "fix_no_show_grace_period",
+      "file": "supabase/remote-migrations/20260817103929_fix_no_show_grace_period.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817103952",
+      "name": "fix_pending_booking_provider_reminder",
+      "file": "supabase/remote-migrations/20260817103952_fix_pending_booking_provider_reminder.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817104009",
+      "name": "fix_waitlist_selection_method_hook",
+      "file": "supabase/remote-migrations/20260817104009_fix_waitlist_selection_method_hook.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817104827",
+      "name": "fix_provider_no_show_status",
+      "file": "supabase/remote-migrations/20260817104827_fix_provider_no_show_status.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817105507",
+      "name": "fix_client_reliability_tracking",
+      "file": "supabase/remote-migrations/20260817105507_fix_client_reliability_tracking.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817105544",
+      "name": "fix_client_reliability_tracking_grant_hardening",
+      "file": "supabase/remote-migrations/20260817105544_fix_client_reliability_tracking_grant_hardening.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817115657",
+      "name": "fix_vague_notification_copy",
+      "file": "supabase/remote-migrations/20260817115657_fix_vague_notification_copy.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817125241",
+      "name": "replace_my_provider_specialties",
+      "file": "supabase/remote-migrations/20260817125241_replace_my_provider_specialties.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817130613",
+      "name": "add_hair_types_suitable",
+      "file": "supabase/remote-migrations/20260817130613_add_hair_types_suitable.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817144603",
+      "name": "manual_booking_category_snapshot_parity",
+      "file": "supabase/remote-migrations/20260817144603_manual_booking_category_snapshot_parity.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817152452",
+      "name": "provider_practice_details_columns",
+      "file": "supabase/remote-migrations/20260817152452_provider_practice_details_columns.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817152938",
+      "name": "manual_booking_scheduling_policy_override",
+      "file": "supabase/remote-migrations/20260817152938_manual_booking_scheduling_policy_override.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260817164336",
+      "name": "reduce_recurring_job_scan_io",
+      "file": "supabase/remote-migrations/20260817164336_reduce_recurring_job_scan_io.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260818105903",
+      "name": "prevent_self_booking",
+      "file": "supabase/remote-migrations/20260818105903_prevent_self_booking.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260818130232",
+      "name": "add_service_images_aspect_ratio",
+      "file": "supabase/remote-migrations/20260818130232_add_service_images_aspect_ratio.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260818130315",
+      "name": "replace_provider_services_carry_aspect_ratio",
+      "file": "supabase/remote-migrations/20260818130315_replace_provider_services_carry_aspect_ratio.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820095542",
+      "name": "revoke_public_booking_bookability_trigger",
+      "file": "supabase/remote-migrations/20260820095542_revoke_public_booking_bookability_trigger.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820095626",
+      "name": "harden_attach_info_pack_to_booking",
+      "file": "supabase/remote-migrations/20260820095626_harden_attach_info_pack_to_booking.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820095825",
+      "name": "harden_promotion_and_conversation_rpcs",
+      "file": "supabase/remote-migrations/20260820095825_harden_promotion_and_conversation_rpcs.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820095910",
+      "name": "revoke_public_waitlist_invite_function",
+      "file": "supabase/remote-migrations/20260820095910_revoke_public_waitlist_invite_function.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820095951",
+      "name": "revoke_public_scheduled_process_functions",
+      "file": "supabase/remote-migrations/20260820095951_revoke_public_scheduled_process_functions.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820100037",
+      "name": "revoke_public_trigger_function_execution_batch_two",
+      "file": "supabase/remote-migrations/20260820100037_revoke_public_trigger_function_execution_batch_two.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820100126",
+      "name": "harden_notification_delivery_authority",
+      "file": "supabase/remote-migrations/20260820100126_harden_notification_delivery_authority.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820100152",
+      "name": "restrict_future_public_function_execution",
+      "file": "supabase/remote-migrations/20260820100152_restrict_future_public_function_execution.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820101044",
+      "name": "revoke_public_scheduled_announcements",
+      "file": "supabase/remote-migrations/20260820101044_revoke_public_scheduled_announcements.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820101214",
+      "name": "harden_get_user_public_profiles",
+      "file": "supabase/remote-migrations/20260820101214_harden_get_user_public_profiles.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820102006",
+      "name": "revoke_anon_trending_providers",
+      "file": "supabase/remote-migrations/20260820102006_revoke_anon_trending_providers.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820104517",
+      "name": "client_default_address_on_users",
+      "file": "supabase/remote-migrations/20260820104517_client_default_address_on_users.sql",
+      "statementCount": 1
+    },
+    {
+      "version": "20260820111627",
+      "name": "revoke_anon_provider_release_address",
+      "file": "supabase/remote-migrations/20260820111627_revoke_anon_provider_release_address.sql",
+      "statementCount": 1
+    }
+  ]
+}

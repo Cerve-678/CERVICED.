@@ -1,6 +1,6 @@
 // src/services/checkoutService.ts
 import { CartItem } from '../contexts/CartContext';
-import { BookingService, ServiceBookingData } from './bookingService';
+import { BookingService } from './bookingService';
 
 export interface CheckoutPaymentOption {
   isDeposit: boolean;

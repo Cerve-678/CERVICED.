@@ -109,6 +109,85 @@ async function handlePushError(
   }
 }
 
+/**
+ * Which client-facing notification-settings toggle governs which notification
+ * type. Mirrors NotificationPreferences in databaseService.ts and the rows in
+ * NotificationsSettingsScreen.
+ *
+ * Scope is deliberately narrow, and the narrowness is the safety property:
+ *  - Only the PUSH is gated. The notifications row is always written, so the
+ *    in-app list stays a complete record and a toggle can never destroy
+ *    information the user may need later.
+ *  - Only recipient_role 'client' is gated. These toggles live on a client
+ *    screen; a provider's operational alerts are not theirs to switch off.
+ *  - Any type absent from this map always sends. Fail-open is the correct
+ *    default for a delivery gate: a missing mapping should mean "not covered
+ *    by a toggle", never "silently suppressed".
+ */
+const PREF_KEY_BY_TYPE: Record<string, string> = {
+  // "Booking Confirmed — Instant confirmation alerts"
+  booking_pending: 'bookingConfirm',
+  booking_confirmed: 'bookingConfirm',
+  payment_success: 'bookingConfirm',
+  // "Appointment Reminders — 24h and 1h before"
+  booking_reminder: 'bookingReminder',
+  pending_booking_reminder: 'bookingReminder',
+  rebooking_nudge: 'bookingReminder',
+  // "Booking Updates — Changes, cancellations"
+  booking_declined: 'bookingUpdates',
+  booking_cancelled: 'bookingUpdates',
+  booking_in_progress: 'bookingUpdates',
+  no_show: 'bookingUpdates',
+  provider_no_show: 'bookingUpdates',
+  no_show_disputed: 'bookingUpdates',
+  address_released: 'bookingUpdates',
+  reschedule_request: 'bookingUpdates',
+  reschedule_provider_response: 'bookingUpdates',
+  reschedule_confirmed: 'bookingUpdates',
+  reschedule_declined: 'bookingUpdates',
+  // "Offers & Promotions — Deals from your saved providers"
+  promotion: 'promotions',
+  announcement: 'promotions',
+  birthday_greeting: 'promotions',
+  post_appt_check_in: 'promotions',
+  // "New Providers — Professionals near you"
+  new_provider: 'newProviders',
+};
+
+// Must match DEFAULT_NOTIF_PREFS in databaseService.ts.
+const DEFAULT_PREFS: Record<string, boolean> = {
+  bookingConfirm: true,
+  bookingReminder: true,
+  bookingUpdates: true,
+  promotions: false,
+  newProviders: true,
+  weeklySummary: false,
+};
+
+/**
+ * A few notification titles are written for the in-app list row, where there's
+ * room, but read better as a short headline on a lock screen. Only the PUSH
+ * copy is swapped — the notifications row keeps its original title as the
+ * canonical record, so the in-app list is unchanged. Keyed on the exact title
+ * the DB trigger writes; anything not listed is pushed as-is.
+ */
+const PUSH_TITLE_OVERRIDES: Record<string, string> = {
+  'Booking Request — Outside Your Hours': 'Outside Hours Request',
+};
+
+/** True when this notification may be pushed to this user. */
+function pushAllowedByPrefs(
+  type: string | undefined,
+  recipientRole: string | undefined,
+  prefs: Record<string, boolean> | null,
+): boolean {
+  if (recipientRole !== 'client') return true;
+  const key = type ? PREF_KEY_BY_TYPE[type] : undefined;
+  if (!key) return true;
+  const effective = { ...DEFAULT_PREFS, ...(prefs ?? {}) };
+  return effective[key] !== false;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -126,15 +205,51 @@ serve(async (req) => {
 
     const { user_id, title, message } = payload.record;
 
+    if (!payload.record.id) {
+      return new Response(JSON.stringify({ error: 'missing_notification_id' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Use service role to read the user's push_token (bypasses RLS)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    // Database webhooks are at-least-once delivery. Atomically claim this row
+    // before calling Expo so a retry/concurrent webhook cannot show the same
+    // notification twice. Keep the claim even if the downstream outcome is
+    // uncertain: retrying an accepted-but-unacknowledged Expo request is the
+    // exact failure mode that produces duplicate visible alerts.
+    const { data: claimed, error: claimError } = await supabase.rpc(
+      'claim_notification_push',
+      { p_notification_id: payload.record.id },
+    );
+
+    if (claimError) {
+      console.error(
+        `[push] claim failed notification=${payload.record.id}: ${claimError.message}`,
+      );
+      return new Response(JSON.stringify({ error: 'claim_failed' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!claimed) {
+      console.log(`[push] duplicate skipped notification=${payload.record.id}`);
+      return new Response(JSON.stringify({ sent: false, reason: 'duplicate' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Preferences come back in the SAME row read as the token — they gate the
+    // send, so fetching them separately would be a second round trip per push.
     const { data: userRow, error } = await supabase
       .from('users')
-      .select('push_token')
+      .select('push_token, notification_preferences')
       .eq('id', user_id)
       .single();
 
@@ -145,23 +260,48 @@ serve(async (req) => {
       });
     }
 
+    // The user switched this category off in Notification Settings. Until now
+    // nothing on the send path read these toggles at all, so every switch on
+    // that screen was decorative. The notifications row itself is already
+    // written and untouched — only the push is suppressed.
+    if (
+      !pushAllowedByPrefs(
+        payload.record.type,
+        payload.record.recipient_role,
+        userRow.notification_preferences as Record<string, boolean> | null,
+      )
+    ) {
+      console.log(
+        `[push] suppressed by user preference notification=${payload.record.id} type=${payload.record.type}`,
+      );
+      return new Response(JSON.stringify({ sent: false, reason: 'preference_off' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const pushToken = userRow.push_token;
 
-    // Send to Expo Push Service. The notification title is sent as-is — provider
-    // vs client is already clear from the title/message, and prefixing the
-    // business name clipped long titles like "You have a new booking".
+    // Send to Expo Push Service. The notification title is sent as-is (bar the
+    // per-title push headline swaps above) — provider vs client is already
+    // clear from the title/message, and prefixing the business name clipped
+    // long titles like "You have a new booking".
+    const pushTitle = PUSH_TITLE_OVERRIDES[title] ?? title;
     const expoPushRes = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: expoHeaders(),
       body: JSON.stringify({
         to: pushToken,
-        title,
+        title: pushTitle,
         body: message,
         sound: 'default',
         channelId: 'default', // matches the Android channel created in the app
         priority: payload.record.priority === 'high' ? 'high' : 'normal',
         data: {
           booking_id: payload.record.booking_id,
+          // Without this, every notification whose destination is a provider
+          // rather than a booking (chat, provider profiles, broadcasts) could
+          // only dump the user on the notifications list to tap a second time.
+          provider_id: payload.record.provider_id,
           notification_id: payload.record.id,
           type: payload.record.type,
           recipient_role: payload.record.recipient_role,

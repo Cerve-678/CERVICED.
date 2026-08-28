@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import {
   PROVIDER_THEMES,
@@ -42,14 +43,20 @@ interface ProviderThemePickerProps {
   sepColor: string;
 }
 
-/** One theme option rendered as three colour dots — accent, card, backdrop. */
-const TripleDots: React.FC<{ accent: string; card: string; backdrop: string; borderColor: string }> = (
-  { accent, card, backdrop, borderColor }
+/** One theme option's swatch: a small gradient chip (the real backdrop blend)
+ *  plus the accent as a dot overlaid on it, so the picker shows what the
+ *  profile will actually look like instead of three disconnected dots. */
+const ThemeSwatch: React.FC<{ accent: string; gradient: [string, string]; borderColor: string }> = (
+  { accent, gradient, borderColor }
 ) => (
-  <View style={styles.dotsRow}>
-    <View style={[styles.dot, { backgroundColor: accent, borderColor }]} />
-    <View style={[styles.dot, { backgroundColor: card, borderColor }]} />
-    <View style={[styles.dot, { backgroundColor: backdrop, borderColor }]} />
+  <View style={[styles.swatchChip, { borderColor }]}>
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={StyleSheet.absoluteFill}
+    />
+    <View style={[styles.accentDot, { backgroundColor: accent, borderColor }]} />
   </View>
 );
 
@@ -90,7 +97,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
                 isSelected && { borderColor: t.tokens.accent },
               ]}
             >
-              <TripleDots accent={t.tokens.accent} card={t.tokens.card} backdrop={t.tokens.hero} borderColor={borderColor} />
+              <ThemeSwatch accent={t.tokens.accent} gradient={t.tokens.gradient} borderColor={borderColor} />
               <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={1}>
                 {t.name}
               </Text>
@@ -110,7 +117,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
             themeChoice === 'custom' && { borderColor: customAccent },
           ]}
         >
-          <TripleDots accent={customAccent} card={customCard} backdrop={customBackdrop} borderColor={borderColor} />
+          <ThemeSwatch accent={customAccent} gradient={[customBackdrop, customCard]} borderColor={borderColor} />
           <Text style={[styles.optionName, { color: themeChoice === 'custom' ? textColor : subColor }]} numberOfLines={1}>
             Custom
           </Text>
@@ -212,14 +219,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
   },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  dot: {
-    width: 20,
-    height: 20,
+  swatchChip: {
+    width: 48,
+    height: 32,
     borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    padding: 3,
+  },
+  accentDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
   },
   optionName: {

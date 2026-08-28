@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,27 +9,33 @@ import {
   Animated,
   Modal,
   ScrollView,
-  TextInput,
+  Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import {
   getProviderClientele,
-  getMyPromotions,
-  sendPromoToClient,
   sendRebookPrompt,
   sendAnnouncement,
+  queueScheduledAnnouncement,
   getClientBookingHistory,
   getMyProviderProfile,
+  getClientReliabilityStatsBatch,
+  ClientReliabilityStats,
+  getOrCreateConversation,
 } from '../../services/databaseService';
-import type { ClienteleMember, DbPromotion, DbBooking } from '../../types/database';
+import type { ClienteleMember, DbBooking } from '../../types/database';
 import { useProviderDialog } from '../../components/ProviderDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { formatTime12 } from '../../utils/dateUtils';
+import SlidingTabs from '../../components/SlidingTabs';
+import { toUserMessage } from '../../utils/userFacingError';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -68,10 +74,6 @@ function avatarColor(name: string) {
 function initials(name: string) {
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 }
-function formatDate(iso: string) {
-  try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
-  catch { return iso; }
-}
 function formatShort(iso: string) {
   try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
   catch { return iso; }
@@ -79,14 +81,6 @@ function formatShort(iso: string) {
 function daysSince(iso: string) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
 }
-function discountLabel(p: DbPromotion) {
-  if (p.discount_text) return p.discount_text;
-  if (p.discount_percent) return `${p.discount_percent}% OFF`;
-  if (p.discount_amount) return `£${p.discount_amount} OFF`;
-  return 'OFFER';
-}
-function isExpired(v: string) { return new Date(v) < new Date(); }
-
 // ── Tab Bar ───────────────────────────────────────────────────────────────────
 
 type Tab = 'all' | 'repeat' | 'new' | 'lapsed';
@@ -94,106 +88,32 @@ type Tab = 'all' | 'repeat' | 'new' | 'lapsed';
 function TabBar({ active, onChange, counts, P }: {
   active: Tab; onChange: (t: Tab) => void; counts: Record<Tab, number>; P: typeof LIGHT;
 }) {
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'all', label: 'All' }, { key: 'repeat', label: 'Repeat' },
-    { key: 'new', label: 'New' }, { key: 'lapsed', label: 'Lapsed' },
+  const tabs = [
+    { key: 'all' as Tab, label: 'All', count: counts.all },
+    { key: 'repeat' as Tab, label: 'Repeat', count: counts.repeat },
+    { key: 'new' as Tab, label: 'New', count: counts.new },
+    { key: 'lapsed' as Tab, label: 'Lapsed', count: counts.lapsed },
   ];
   return (
-    <View style={[tbSt.row, { backgroundColor: P.surface }]}>
-      {tabs.map(t => (
-        <TouchableOpacity key={t.key}
-          style={[tbSt.tab, active === t.key && { backgroundColor: P.accent }]}
-          onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(t.key); }} activeOpacity={0.7}>
-          <Text style={[tbSt.label, { color: active === t.key ? P.ice : P.sub }]}>{t.label}</Text>
-          <View style={[tbSt.badge, active === t.key && { backgroundColor: P.iconBg }]}>
-            <Text style={[tbSt.badgeText, { color: active === t.key ? P.ice : P.sub }]}>{counts[t.key]}</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
+    <View style={[tbSt.wrap, { backgroundColor: P.surface }]}>
+      <SlidingTabs
+        tabs={tabs}
+        activeKey={active}
+        onPress={onChange}
+        accentColor={P.accent}
+        activeTextColor={P.ice}
+        inactiveTextColor={P.sub}
+        scrollable={false}
+        height={40}
+      />
     </View>
   );
 }
 const tbSt = StyleSheet.create({
-  row:      { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
-  tab:      { flex: 1, paddingVertical: 8, borderRadius: 9, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 4 },
-  label:    { fontSize: 12, fontWeight: '700' },
-  badge:    { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 7 },
-  badgeText:{ fontSize: 10, fontWeight: '700' },
-});
-
-// ── Promo Picker Sheet ─────────────────────────────────────────────────────────
-
-function PromoPickerSheet({ visible, promos, clientName, onClose, onSelect, P }: {
-  visible: boolean; promos: DbPromotion[]; clientName: string;
-  onClose: () => void; onSelect: (p: DbPromotion) => void; P: typeof LIGHT;
-}) {
-  const live = promos.filter(p => p.is_active && !isExpired(p.valid_until));
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={ppSt.backdrop} activeOpacity={1} onPress={onClose} />
-      <View style={[ppSt.sheet, { backgroundColor: P.surface }]}>
-        <View style={[ppSt.handle, { backgroundColor: P.border }]} />
-        <View style={ppSt.header}>
-          <View>
-            <Text style={[ppSt.title, { color: P.text }]}>Send Promo</Text>
-            <Text style={[ppSt.sub, { color: P.sub }]}>to {clientName}</Text>
-          </View>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-            <Ionicons name="close" size={22} color={P.sub} />
-          </TouchableOpacity>
-        </View>
-        {live.length === 0 ? (
-          <View style={ppSt.empty}>
-            <Ionicons name="pricetag-outline" size={28} color={P.sub} />
-            <Text style={[ppSt.emptyText, { color: P.text }]}>No live promotions</Text>
-            <Text style={[ppSt.emptySub, { color: P.sub }]}>Create a promotion first to send it to clients</Text>
-          </View>
-        ) : (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-            {live.map(p => (
-              <TouchableOpacity key={p.id} style={[ppSt.promoRow, { borderBottomColor: P.border }]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onSelect(p); }}
-                activeOpacity={0.7}>
-                <View style={[ppSt.badge, { backgroundColor: P.accent }]}>
-                  <Text style={[ppSt.badgeText, { color: P.ice }]}>{discountLabel(p)}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[ppSt.promoTitle, { color: P.text }]} numberOfLines={1}>{p.title}</Text>
-                  {p.promo_code ? (
-                    <View style={ppSt.codeRow}>
-                      <Ionicons name="ticket-outline" size={10} color={P.accent} />
-                      <Text style={[ppSt.codeText, { color: P.accent }]}>{p.promo_code}</Text>
-                    </View>
-                  ) : p.description ? (
-                    <Text style={[ppSt.promoDesc, { color: P.sub }]} numberOfLines={1}>{p.description}</Text>
-                  ) : null}
-                </View>
-                <Ionicons name="send-outline" size={14} color={P.accent} />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-    </Modal>
-  );
-}
-const ppSt = StyleSheet.create({
-  backdrop:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:      { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 12, maxHeight: '70%' },
-  handle:     { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  title:      { fontSize: 18, fontWeight: '700' },
-  sub:        { fontSize: 12, marginTop: 2 },
-  empty:      { alignItems: 'center', paddingVertical: 32, gap: 8 },
-  emptyText:  { fontSize: 15, fontWeight: '700' },
-  emptySub:   { fontSize: 12, textAlign: 'center' },
-  promoRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  badge:      { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  badgeText:  { fontSize: 11, fontWeight: '800' },
-  promoTitle: { fontSize: 14, fontWeight: '600' },
-  promoDesc:  { fontSize: 12, marginTop: 2 },
-  codeRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  codeText:   { fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  // Row + fixed height: SlidingTabs (scrollable={false}) renders a flex:1
+  // wrapper, so its parent must be a bounded-height row or the bar collapses
+  // thin and the sliding indicator overflows onto the list below.
+  wrap: { flexDirection: 'row', height: 48, marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
 });
 
 // ── Client History Sheet ───────────────────────────────────────────────────────
@@ -258,7 +178,7 @@ function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: 
 }
 const chSt = StyleSheet.create({
   backdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 12, maxHeight: '75%' },
+  sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '75%' },
   handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   header:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   avatar:      { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
@@ -282,12 +202,20 @@ const chSt = StyleSheet.create({
 
 type AudienceKey = 'all' | 'repeat' | 'new' | 'lapsed';
 
-function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onError, P }: {
+function tomorrow9am() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d;
+}
+
+function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onScheduled, onError, P }: {
   visible: boolean;
   counts: Record<AudienceKey, number>;
   clients: ClienteleMember[];
   onClose: () => void;
   onSent: (count: number) => void;
+  onScheduled: (when: Date) => void;
   onError: (msg: string) => void;
   P: typeof LIGHT;
 }) {
@@ -296,6 +224,11 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onError,
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [schedAt, setSchedAt] = useState<Date>(tomorrow9am);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const { isDarkMode } = useTheme();
 
   const audienceOptions: { key: AudienceKey; label: string; icon: string }[] = [
     { key: 'all',    label: 'All clients',    icon: 'people-outline' },
@@ -314,17 +247,66 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onError,
   const recipientCount = counts[audience];
   const canSend = title.trim().length > 0 && body.trim().length > 0 && recipientCount > 0 && !sending;
 
+  const sheetRef = useRef<BottomSheet>(null);
+  const [everOpened, setEverOpened] = useState(false);
+  // "90%" — NOT "%90". @gorhom/bottom-sheet silently fails to parse the
+  // reversed form, which makes the sheet behave like a full-height modal
+  // instead of snapping to the intended height. Tall enough that the Send
+  // button clears the home indicator instead of being cut off at the bottom.
+  const snapPoints = useMemo(() => ['90%'], []);
+
+  useEffect(() => {
+    if (visible) {
+      setEverOpened(true);
+      setAudience('all');
+      setTitle('');
+      setBody('');
+      setErrorMsg('');
+      setScheduleMode(false);
+      setSchedAt(tomorrow9am());
+    } else {
+      sheetRef.current?.close();
+    }
+  }, [visible]);
+
+  // Waits for the `everOpened` render to actually commit before snapping
+  // open. Calling snapToIndex in the same effect pass that flips that flag
+  // fires it while the backdrop prop is still unset (state hasn't
+  // re-rendered yet), so the sheet starts animating without a backdrop and
+  // then jumps once the backdrop mounts mid-flight — visible as a double
+  // slide-up instead of one continuous motion.
+  useEffect(() => {
+    if (visible && everOpened) {
+      sheetRef.current?.snapToIndex(0);
+    }
+  }, [visible, everOpened]);
+
+  // Gated on index < 0 (not just onClose) so a drag-to-dismiss or a close()
+  // racing the backdrop's own fade can't leave the backdrop settled at a
+  // non-zero opacity with nothing left to drive it back down.
+  const handleSheetChange = useCallback((index: number) => {
+    if (index < 0) {
+      setEverOpened(false);
+      onClose();
+    }
+  }, [onClose]);
+
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) return;
     setErrorMsg('');
     setSending(true);
     try {
       const ids = recipientIds();
-      const { sent } = await sendAnnouncement(title.trim(), body.trim(), ids);
+      if (scheduleMode) {
+        await queueScheduledAnnouncement(title.trim(), body.trim(), ids, schedAt);
+        onScheduled(schedAt);
+      } else {
+        const { sent } = await sendAnnouncement(title.trim(), body.trim(), ids);
+        onSent(sent);
+      }
       setTitle('');
       setBody('');
       setAudience('all');
-      onSent(sent);
     } catch {
       setErrorMsg('Something went wrong. Please try again.');
     } finally {
@@ -333,96 +315,249 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onError,
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardDismissView style={{ flex: 1 }}>
-        <TouchableOpacity style={anSt.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[anSt.sheet, { backgroundColor: P.surface }]}>
-          <View style={[anSt.handle, { backgroundColor: P.border }]} />
-          <View style={anSt.header}>
-            <View>
-              <Text style={[anSt.title, { color: P.text }]}>New Announcement</Text>
-              <Text style={[anSt.sub, { color: P.sub }]}>{recipientCount} client{recipientCount !== 1 ? 's' : ''} will receive this</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={P.sub} />
+    <BottomSheet
+      ref={sheetRef}
+      index={-1}
+      snapPoints={snapPoints}
+      // v5 defaults enableDynamicSizing=true, which sizes the sheet to its
+      // content and SILENTLY IGNORES snapPoints — that's why raising the
+      // snap % did nothing. Off, so the 90% snap point actually applies and
+      // the Send button clears the bottom.
+      enableDynamicSizing={false}
+      enablePanDownToClose={false}
+      enableContentPanningGesture={false}
+      enableHandlePanningGesture={false}
+      onChange={handleSheetChange}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
+      backgroundStyle={{ backgroundColor: P.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32 }}
+      handleIndicatorStyle={{ backgroundColor: P.border }}
+      {...(everOpened
+        ? {
+            backdropComponent: (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
+              <BottomSheetBackdrop
+                {...props}
+                appearsOnIndex={0}
+                disappearsOnIndex={-1}
+                pressBehavior="close"
+              />
+            ),
+          }
+        : {})}
+    >
+      <View style={anSt.header}>
+        <View>
+          <Text style={[anSt.title, { color: P.text }]}>New Announcement</Text>
+          <Text style={[anSt.sub, { color: P.sub }]}>
+            {recipientCount} client{recipientCount !== 1 ? 's' : ''} will receive this
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => sheetRef.current?.close()} activeOpacity={0.7}>
+          <Ionicons name="close" size={22} color={P.sub} />
+        </TouchableOpacity>
+      </View>
+
+      <BottomSheetScrollView style={anSt.scrollFlex} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={anSt.scroll}>
+        <Text style={[anSt.label, { color: P.sub }]}>AUDIENCE</Text>
+        <View style={anSt.audienceRow}>
+          {audienceOptions.map(opt => {
+            const active = audience === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[anSt.audienceChip, { borderColor: active ? P.accent : P.border, backgroundColor: active ? P.accent + '18' : 'transparent' }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setAudience(opt.key); }}
+                activeOpacity={0.7}>
+                <Ionicons name={opt.icon as any} size={12} color={active ? P.accent : P.sub} />
+                <Text style={[anSt.audienceLabel, { color: active ? P.accent : P.sub }]}>{opt.label}</Text>
+                <View style={[anSt.countBadge, { backgroundColor: active ? P.accent + '30' : P.border }]}>
+                  <Text style={[anSt.countText, { color: active ? P.accent : P.sub }]}>{counts[opt.key]}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={[anSt.label, { color: P.sub }]}>TITLE</Text>
+        <BottomSheetTextInput
+          style={[anSt.input, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="e.g. New availability this weekend"
+          placeholderTextColor={P.sub}
+          maxLength={80}
+        />
+
+        <Text style={[anSt.label, { color: P.sub }]}>MESSAGE</Text>
+        <BottomSheetTextInput
+          style={[anSt.input, anSt.textArea, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
+          value={body}
+          onChangeText={setBody}
+          placeholder="Write your message to clients..."
+          placeholderTextColor={P.sub}
+          multiline
+          maxLength={300}
+          textAlignVertical="top"
+        />
+        <Text style={[anSt.charCount, { color: P.sub }]}>{body.length}/300</Text>
+
+        <View style={[anSt.scheduleRow, { backgroundColor: P.card, borderColor: P.border }]}>
+          <Ionicons name="alarm-outline" size={16} color={scheduleMode ? P.accent : P.sub} style={{ marginRight: 10 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[anSt.scheduleLabel, { color: P.text }]}>Schedule Send</Text>
+            <Text style={[anSt.scheduleSub, { color: P.sub }]}>Send at a specific date & time</Text>
+          </View>
+          <Switch value={scheduleMode} onValueChange={setScheduleMode}
+            trackColor={{ false: P.border, true: P.accent }} thumbColor="#fff" />
+        </View>
+
+        {scheduleMode && (
+          <View style={anSt.pickerRow}>
+            <TouchableOpacity
+              style={[anSt.pickerBtn, { backgroundColor: P.card, borderColor: P.border }]}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}>
+              <Ionicons name="calendar-outline" size={14} color={P.accent} />
+              <Text style={[anSt.pickerText, { color: P.text }]}>
+                {schedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[anSt.pickerBtn, { backgroundColor: P.card, borderColor: P.border }]}
+              onPress={() => setShowTimePicker(true)}
+              activeOpacity={0.7}>
+              <Ionicons name="time-outline" size={14} color={P.accent} />
+              <Text style={[anSt.pickerText, { color: P.text }]}>{formatTime12(schedAt)}</Text>
             </TouchableOpacity>
           </View>
+        )}
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
-            <Text style={[anSt.label, { color: P.sub }]}>AUDIENCE</Text>
-            <View style={anSt.audienceRow}>
-              {audienceOptions.map(opt => {
-                const active = audience === opt.key;
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[anSt.audienceChip, { borderColor: active ? P.accent : P.border, backgroundColor: active ? P.accent + '18' : 'transparent' }]}
-                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setAudience(opt.key); }}
-                    activeOpacity={0.7}>
-                    <Ionicons name={opt.icon as any} size={12} color={active ? P.accent : P.sub} />
-                    <Text style={[anSt.audienceLabel, { color: active ? P.accent : P.sub }]}>{opt.label}</Text>
-                    <View style={[anSt.countBadge, { backgroundColor: active ? P.accent + '30' : P.border }]}>
-                      <Text style={[anSt.countText, { color: active ? P.accent : P.sub }]}>{counts[opt.key]}</Text>
-                    </View>
+        {/* Android's native dialogs render as OS overlays with no wrapper
+            needed. iOS's inline "default" picker doesn't — it renders into
+            the surrounding layout in place, which inside this bottom sheet
+            meant it could push/cover the header above it. Matches the modal
+            wrapper RescheduleScreen already uses for the same picker. */}
+        {showDatePicker && Platform.OS === 'android' && (
+          <DateTimePicker
+            value={schedAt}
+            mode="date"
+            minimumDate={new Date()}
+            display="default"
+            onChange={(_, date) => {
+              setShowDatePicker(false);
+              if (date) {
+                const updated = new Date(schedAt);
+                updated.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                setSchedAt(updated);
+              }
+            }}
+          />
+        )}
+        {showTimePicker && Platform.OS === 'android' && (
+          <DateTimePicker
+            value={schedAt}
+            mode="time"
+            display="default"
+            onChange={(_, date) => {
+              setShowTimePicker(false);
+              if (date) {
+                const updated = new Date(schedAt);
+                updated.setHours(date.getHours(), date.getMinutes());
+                setSchedAt(updated);
+              }
+            }}
+          />
+        )}
+        {(showDatePicker || showTimePicker) && Platform.OS === 'ios' && (
+          <Modal transparent animationType="fade" visible onRequestClose={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
+            <View style={anSt.pickerModalWrap}>
+              <TouchableOpacity
+                style={anSt.pickerDismiss}
+                activeOpacity={1}
+                onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}
+              />
+              <View style={[anSt.pickerSheet, { backgroundColor: P.card }]}>
+                <View style={[anSt.pickerHeader, { borderBottomColor: P.border }]}>
+                  <Text style={[anSt.pickerHeaderLabel, { color: P.text }]}>
+                    {showDatePicker ? 'Select Date' : 'Select Time'}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
+                    <Text style={[anSt.pickerDoneLabel, { color: P.accent }]}>Done</Text>
                   </TouchableOpacity>
-                );
-              })}
+                </View>
+                {showDatePicker ? (
+                  <DateTimePicker
+                    value={schedAt}
+                    mode="date"
+                    minimumDate={new Date()}
+                    display="spinner"
+                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                    textColor={P.text}
+                    style={{ width: '100%' }}
+                    onChange={(_, date) => {
+                      if (date) {
+                        const updated = new Date(schedAt);
+                        updated.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                        setSchedAt(updated);
+                      }
+                    }}
+                  />
+                ) : (
+                  <DateTimePicker
+                    value={schedAt}
+                    mode="time"
+                    display="spinner"
+                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                    textColor={P.text}
+                    minuteInterval={5}
+                    style={{ width: '100%' }}
+                    onChange={(_, date) => {
+                      if (date) {
+                        const updated = new Date(schedAt);
+                        updated.setHours(date.getHours(), date.getMinutes());
+                        setSchedAt(updated);
+                      }
+                    }}
+                  />
+                )}
+              </View>
             </View>
+          </Modal>
+        )}
 
-            <Text style={[anSt.label, { color: P.sub }]}>TITLE</Text>
-            <TextInput
-              style={[anSt.input, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. New availability this weekend"
-              placeholderTextColor={P.sub}
-              maxLength={80}
-            />
-
-            <Text style={[anSt.label, { color: P.sub }]}>MESSAGE</Text>
-            <TextInput
-              style={[anSt.input, anSt.textArea, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
-              value={body}
-              onChangeText={setBody}
-              placeholder="Write your message to clients..."
-              placeholderTextColor={P.sub}
-              multiline
-              maxLength={300}
-              textAlignVertical="top"
-            />
-            <Text style={[anSt.charCount, { color: P.sub }]}>{body.length}/300</Text>
-
-            <TouchableOpacity
-              style={[anSt.sendBtn, { backgroundColor: canSend ? P.accent : P.border }]}
-              onPress={handleSend}
-              disabled={!canSend}
-              activeOpacity={0.8}>
-              {sending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="megaphone-outline" size={16} color="#fff" />
-                  <Text style={anSt.sendBtnText}>Send to {recipientCount} client{recipientCount !== 1 ? 's' : ''}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            {!!errorMsg && (
-              <Text style={anSt.errorText}>{errorMsg}</Text>
-            )}
-          </ScrollView>
-        </View>
-      </KeyboardDismissView>
-    </Modal>
+        <TouchableOpacity
+          style={[anSt.sendBtn, { backgroundColor: canSend ? P.accent : P.border }]}
+          onPress={handleSend}
+          disabled={!canSend}
+          activeOpacity={0.8}>
+          {sending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name={scheduleMode ? 'alarm-outline' : 'megaphone-outline'} size={16} color="#fff" />
+              <Text style={anSt.sendBtnText}>
+                {scheduleMode
+                  ? `Schedule for ${recipientCount} client${recipientCount !== 1 ? 's' : ''}`
+                  : `Send to ${recipientCount} client${recipientCount !== 1 ? 's' : ''}`}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+        {!!errorMsg && (
+          <Text style={anSt.errorText}>{errorMsg}</Text>
+        )}
+      </BottomSheetScrollView>
+    </BottomSheet>
   );
 }
 
 const anSt = StyleSheet.create({
-  backdrop:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:        { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 12, maxHeight: '85%' },
-  handle:       { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, marginBottom: 12 },
   title:        { fontSize: 18, fontWeight: '700' },
   sub:          { fontSize: 12, marginTop: 2 },
+  scrollFlex:   { flex: 1 },
+  scroll:       { paddingHorizontal: 20, paddingBottom: 64 },
   label:        { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8, marginTop: 16 },
   audienceRow:  { gap: 8 },
   audienceChip: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
@@ -432,23 +567,40 @@ const anSt = StyleSheet.create({
   input:        { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
   textArea:     { minHeight: 100, marginTop: 0 },
   charCount:    { fontSize: 11, textAlign: 'right', marginTop: 5 },
+  scheduleRow:  { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12, marginTop: 16 },
+  scheduleLabel:{ fontSize: 14, fontWeight: '600' },
+  scheduleSub:  { fontSize: 12, marginTop: 2 },
+  pickerRow:    { flexDirection: 'row', gap: 8, marginTop: 10 },
+  pickerBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 11 },
+  pickerText:   { fontSize: 13, fontWeight: '600' },
   sendBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 20 },
   sendBtnText:  { fontSize: 15, fontWeight: '700', color: '#fff' },
   errorText:    { fontSize: 13, color: '#FF6868', textAlign: 'center', marginTop: 10 },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
+  pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
+  pickerDoneLabel:   { fontSize: 15, fontWeight: '700' },
 });
 
 // ── Client Card ───────────────────────────────────────────────────────────────
 
-function ClientCard({ member, onSendPromo, onRebook, onViewHistory, lapsed, P }: {
+function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliability, P }: {
   member: ClienteleMember;
-  onSendPromo: (m: ClienteleMember) => void;
+  onMessage: (m: ClienteleMember) => void;
   onRebook: (m: ClienteleMember) => void;
   onViewHistory: (m: ClienteleMember) => void;
   lapsed?: boolean;
+  // No-show / late-cancel history this client has with THIS provider
+  // (client_provider_reliability, batch-fetched once for the whole list —
+  // see getClientReliabilityStatsBatch). Undefined/zero = nothing to show.
+  reliability?: ClientReliabilityStats | undefined;
   P: typeof LIGHT;
 }) {
   const color = avatarColor(member.customer_name);
   const days = daysSince(member.last_booking_date);
+  const hasReliabilityFlag = !!reliability && (reliability.noShowCount > 0 || reliability.lateCancelCount > 0);
 
   return (
     <TouchableOpacity style={[ccSt.wrap, { backgroundColor: P.surface }]} onPress={() => onViewHistory(member)} activeOpacity={0.8}>
@@ -467,6 +619,17 @@ function ClientCard({ member, onSendPromo, onRebook, onViewHistory, lapsed, P }:
         <Text style={[ccSt.meta, { color: P.sub }]}>
           {member.booking_count} {member.booking_count === 1 ? 'booking' : 'bookings'} · Last {formatShort(member.last_booking_date)}
         </Text>
+        {hasReliabilityFlag && (
+          <View style={ccSt.reliabilityRow}>
+            <Ionicons name="alert-circle-outline" size={11} color="#FF9500" />
+            <Text style={[ccSt.reliabilityText, { color: '#FF9500' }]}>
+              {[
+                reliability!.noShowCount > 0 ? `${reliability!.noShowCount} no-show${reliability!.noShowCount === 1 ? '' : 's'}` : null,
+                reliability!.lateCancelCount > 0 ? `${reliability!.lateCancelCount} late cancel${reliability!.lateCancelCount === 1 ? '' : 's'}` : null,
+              ].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+        )}
       </View>
       <View style={ccSt.right}>
         {member.total_spent > 0 && (
@@ -481,10 +644,10 @@ function ClientCard({ member, onSendPromo, onRebook, onViewHistory, lapsed, P }:
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[ccSt.btn, { borderColor: P.border }]}
-            onPress={e => { e.stopPropagation(); Haptics.selectionAsync().catch(() => {}); onSendPromo(member); }}
+            onPress={e => { e.stopPropagation(); Haptics.selectionAsync().catch(() => {}); onMessage(member); }}
             activeOpacity={0.7}>
-            <Ionicons name="pricetag-outline" size={11} color={P.accent} />
-            <Text style={[ccSt.btnText, { color: P.accent }]}>Promo</Text>
+            <Ionicons name="chatbubble-ellipses-outline" size={11} color={P.accent} />
+            <Text style={[ccSt.btnText, { color: P.accent }]}>Message</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -506,6 +669,8 @@ const ccSt = StyleSheet.create({
   btnText:     { fontSize: 11, fontWeight: '700' },
   lapsedBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(255,104,104,0.15)' },
   lapsedText:  { fontSize: 10, fontWeight: '600' },
+  reliabilityRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  reliabilityText: { fontSize: 11, fontWeight: '600' },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -514,11 +679,11 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const [clients, setClients] = useState<ClienteleMember[]>([]);
-  const [promos, setPromos] = useState<DbPromotion[]>([]);
+  const [reliabilityByClient, setReliabilityByClient] = useState<Record<string, ClientReliabilityStats>>({});
   const [providerName, setProviderName] = useState('');
+  const [providerId, setProviderId] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('all');
-  const [promoPickerFor, setPromoPickerFor] = useState<ClienteleMember | null>(null);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<ClienteleMember | null>(null);
   const [historyBookings, setHistoryBookings] = useState<DbBooking[]>([]);
@@ -529,26 +694,34 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, promoData, profile] = await Promise.all([
+      const [data, profile] = await Promise.all([
         getProviderClientele(),
-        getMyPromotions(),
         getMyProviderProfile(),
       ]);
       setClients(data);
-      setPromos(promoData);
       setProviderName(profile?.display_name ?? '');
+      setProviderId(profile?.id ?? '');
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+
+      // Batched, not per-card — one query for the whole list's reliability
+      // history (see CLAUDE.md's no-N+1 rule). Best-effort: a failure here
+      // shouldn't block the clientele list itself from rendering.
+      if (data.length > 0) {
+        getClientReliabilityStatsBatch(data.map(c => c.user_id))
+          .then(setReliabilityByClient)
+          .catch(() => {});
+      }
     } catch (e: any) {
-      showToast(e.message ?? 'Could not load clientele', 'error');
+      showToast(toUserMessage(e, 'Could not load your clientele.', 'ProviderClienteleScreen.load'), 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fadeAnim, showToast]);
 
   useFocusEffect(useCallback(() => {
     fadeAnim.setValue(0);
     load();
-  }, [load]));
+  }, [fadeAnim, load]));
 
   const repeatClients = clients.filter(c => c.booking_count >= 2);
   const newClients    = clients.filter(c => c.booking_count === 1);
@@ -556,29 +729,39 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const displayed = tab === 'all' ? clients : tab === 'repeat' ? repeatClients : tab === 'new' ? newClients : lapsedClients;
   const counts = { all: clients.length, repeat: repeatClients.length, new: newClients.length, lapsed: lapsedClients.length };
 
-  const handleSendPromo = async (promo: DbPromotion) => {
-    if (!promoPickerFor) return;
-    const client = promoPickerFor;
-    setPromoPickerFor(null);
-    try {
-      await sendPromoToClient(promo, client.user_id);
-      showToast(`Promo sent to ${client.customer_name}`);
-    } catch (e: any) {
-      showToast(e.message ?? 'Could not send promo', 'error');
-    }
-  };
-
   const handleAnnouncementSent = (count: number) => {
     setAnnouncementOpen(false);
     showToast(`Announcement sent to ${count} client${count !== 1 ? 's' : ''}`);
   };
+
+  const handleAnnouncementScheduled = (when: Date) => {
+    setAnnouncementOpen(false);
+    showToast(`Scheduled for ${when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} at ${formatTime12(when)}`);
+  };
+
+  // Opens the real in-app conversation with this client rather than a
+  // one-off announcement — same path the Calendar tab and Inbox use, so the
+  // thread is shared instead of forking into a separate broadcast channel.
+  const handleMessage = useCallback(async (member: ClienteleMember) => {
+    if (!providerId) return;
+    try {
+      const conversationId = await getOrCreateConversation(providerId, member.user_id);
+      navigation.navigate('ProviderConversation', {
+        conversationId,
+        clientUserId: member.user_id,
+        clientName: member.customer_name,
+      });
+    } catch (e: any) {
+      showToast(toUserMessage(e, 'Could not open that conversation.', 'ProviderClienteleScreen.message'), 'error');
+    }
+  }, [providerId, navigation, showToast]);
 
   const handleRebook = async (member: ClienteleMember) => {
     try {
       await sendRebookPrompt(member.user_id, providerName);
       showToast(`Rebook nudge sent to ${member.customer_name}`);
     } catch (e: any) {
-      showToast(e.message ?? 'Could not send rebook prompt', 'error');
+      showToast(toUserMessage(e, 'Could not send that rebook prompt.', 'ProviderClienteleScreen.rebook'), 'error');
     }
   };
 
@@ -590,7 +773,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       const data = await getClientBookingHistory(member.user_id);
       setHistoryBookings(data);
     } catch (e: any) {
-      showToast(e.message ?? 'Could not load history', 'error');
+      showToast(toUserMessage(e, 'Could not load that history.', 'ProviderClienteleScreen.history'), 'error');
     } finally {
       setHistoryLoading(false);
     }
@@ -665,7 +848,8 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                 <ClientCard
                   member={item}
                   lapsed={tab === 'lapsed' || daysSince(item.last_booking_date) > 60}
-                  onSendPromo={m => setPromoPickerFor(m)}
+                  reliability={reliabilityByClient[item.user_id]}
+                  onMessage={handleMessage}
                   onRebook={handleRebook}
                   onViewHistory={handleViewHistory}
                   P={P}
@@ -684,16 +868,8 @@ export default function ProviderClienteleScreen({ navigation }: any) {
         clients={clients}
         onClose={() => setAnnouncementOpen(false)}
         onSent={handleAnnouncementSent}
+        onScheduled={handleAnnouncementScheduled}
         onError={msg => showToast(msg, 'error')}
-        P={P}
-      />
-
-      <PromoPickerSheet
-        visible={promoPickerFor !== null}
-        promos={promos}
-        clientName={promoPickerFor?.customer_name ?? ''}
-        onClose={() => setPromoPickerFor(null)}
-        onSelect={handleSendPromo}
         P={P}
       />
 
@@ -730,4 +906,11 @@ const s = StyleSheet.create({
   emptyIcon:        { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   emptyTitle:       { fontSize: 18, fontWeight: '700' },
   emptySub:         { fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  modalBackdrop:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  modalCard:        { maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  modalHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  modalTitle:       { fontSize: 17, fontWeight: '700', flex: 1, marginRight: 12 },
+  modalRow:         { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  modalRowTitle:    { fontSize: 15, fontWeight: '600' },
+  modalRowSub:      { fontSize: 12, marginTop: 3 },
 });

@@ -4,61 +4,58 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   TouchableOpacity,
-  Image,
   StatusBar,
   StyleSheet,
-  Alert,
   Modal,
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
-import { useBooking, AppointmentData } from '../../contexts/BookingContext';
+import type { EmergencyRequest } from '../../contexts/CartContext';
+import { useBooking, AppointmentData , BookingError } from '../../contexts/BookingContext';
 import { BookingService, DepositPolicy } from '../../services/bookingService';
 import { AvailabilityService, type BackToBackSlot } from '../../services/AvailabilityService';
 import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../../services/stripeService';
 import {
-  getProviderDepositPoliciesByDisplayNames,
+  getProviderCheckoutMetadata,
   ProviderDepositPolicy,
   validatePromoCode,
-  getUserHealthProfile,
-  getConsultationRequiredProviderIds,
-  getProviderIdsWithBookingHistory,
-  getConsultationServiceIds,
-  getProviderConsultationService,
-} from '../../services/databaseService';
+  getServiceSafetyFlags,
+  prepareCheckout, cancelCheckout, getMyLastClientAddress } from '../../services/databaseService';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
-import { FONT_SIZES } from '../../constants/Typeography';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { AppTheme } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
-import { getMobileProviderDisplayNames } from '../../services/databaseService';
-import { BookingError } from '../../contexts/BookingContext';
 import { useAppDialog } from '../../components/AppDialog';
 import { BookingSheet, type BookingSheetResult } from '../../components/BookingSheet';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 
-import { supabase } from '../../lib/supabase';
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
 import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
+import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
+import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
+import { calculatePlatformFee } from '../../features/cart/platformFee';
 
-// Flip to true to switch checkout from the mock PaymentModal (fake, instant,
-// no real Stripe call) to StripePaymentModal (real test-mode Stripe Payment
-// Sheet — card, Apple Pay, Google Pay). Both share the same props interface,
-// so this is the only line that needs to change either direction. Forced to
-// false under Expo Go regardless of this flag — @stripe/stripe-react-native
-// has no native module there, so StripePaymentModal would crash on mount.
-const USE_STRIPE_PAYMENTS = false && !env.isExpoGo;
+// Keep real payments opt-in until Stripe is explicitly switched on for a
+// release. Expo Go can never use this native module.
+const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled && !env.isExpoGo;
 
 // Real useStripe() throws at import time under Expo Go (TurboModuleRegistry.
 // getEnforcing has no native module to find there). StripePaymentModal below
@@ -69,9 +66,9 @@ const USE_STRIPE_PAYMENTS = false && !env.isExpoGo;
 const useStripe: () => { initPaymentSheet: (...args: any[]) => Promise<any>; presentPaymentSheet: (...args: any[]) => Promise<any> } =
   env.isExpoGo
     ? () => ({ initPaymentSheet: async () => ({}), presentPaymentSheet: async () => ({}) })
+    // The native module cannot be statically imported in Expo Go.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     : require('@stripe/stripe-react-native').useStripe;
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
@@ -85,6 +82,145 @@ interface ServiceBooking {
   selectedTime: string;
   notes: string;
   isDepositOnly?: boolean;
+  /** Present when this time is only bookable as a request the provider has
+   *  to accept (see CartItem.emergencyRequest). */
+  emergencyRequest?: EmergencyRequest;
+  /** This provider's actual deposit policy (fixed £ or %), when one was
+   *  fetched — carried through to BookingService.createAppointmentData so the
+   *  real amount is what gets written, not its legacy 20% fallback. Absent
+   *  only when providerDepositPolicies has nothing for this provider. */
+  depositPolicy?: DepositPolicy;
+}
+
+/** AvailabilityService phrases its findings for its own callers; the cart has
+ *  one vocabulary of its own (CART_ISSUE) so a reason on a card never rewrites
+ *  itself into different words when the server confirms what the local pass
+ *  already said. Anything unrecognised passes through — a real message the
+ *  client can read beats a shrug, and it shows up in the logs as a phrasing
+ *  that should be added here. */
+function toCartIssue(serviceMessage: string): string {
+  switch (serviceMessage.trim()) {
+    case 'This time slot conflicts with another service in your cart': return CART_ISSUE.overlap;
+    case 'This time slot is no longer available.':                     return CART_ISSUE.slotTaken;
+    case 'Time slot is no longer available':                           return CART_ISSUE.slotTaken;
+    case "This time is outside the provider's working hours.":         return CART_ISSUE.outsideHours;
+    case 'This time is outside the provider\u2019s working hours.':        return CART_ISSUE.outsideHours;
+    case 'Provider is not available on this date.':                    return CART_ISSUE.dayUnavailable;
+    case "This provider isn't set up for booking yet.":                return CART_ISSUE.providerUnbookable;
+    case 'This service is no longer available from this provider. Please remove it to continue.':
+                                                                       return CART_ISSUE.serviceUnavailable;
+    default:                                                           return serviceMessage;
+  }
+}
+
+// How recently a cart item must have been added for the cart to treat it as
+// "just added" and leave its provider section expanded on first mount. Wide
+// enough to cover adding a booking and then navigating to the cart (which
+// remounts this screen), short enough that reopening the cart later still
+// gets the fully-collapsed scannable list.
+const JUST_ADDED_WINDOW_MS = 60_000;
+
+/** "Ana", "Ana and Bea", "Ana, Bea and Cleo" — for naming the mobile
+ *  providers in a sentence rather than saying "your provider" and leaving a
+ *  multi-provider cart to guess which one is travelling. */
+function formatNameList(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0]!;
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
+}
+
+// The checkout summary goes full screen once it stops being a glance: at or
+// above this many services, OR above this many providers. Each extra
+// provider costs a whole card of chrome (header, logo, subtotal) on top of
+// its own appointments, so provider count runs out of room independently of
+// service count. See the Booking Summary <Modal>.
+const FULL_SCREEN_SUMMARY_THRESHOLD = 5;
+const FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD = 3;
+
+/** Chrome around the checkout summary's content. Two presentations, one
+ *  body: a centred card for a small cart, a full screen with a pinned
+ *  action row for a large one. Kept at module scope (not inlined in
+ *  CartScreen's render) so flipping between them doesn't remount the
+ *  content on every parent render.
+ *
+ *  The card pins its action row too. The card presentation was removed once
+ *  because its fixed 90%-wide / 85%-tall box turned into a cramped inner
+ *  scroll the moment appointments carried add-ons or a group block, with the
+ *  Terms checkbox and Confirm & Pay pushed below the fold and no scrollbar
+ *  or bounce to hint they were there — so the actions live outside the
+ *  card's ScrollView now, not at the bottom of it. */
+function SummaryShell({
+  fullScreen,
+  P,
+  onBack,
+  actions,
+  children,
+}: {
+  fullScreen: boolean;
+  P: AppTheme;
+  onBack: () => void;
+  actions: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  if (!fullScreen) {
+    return (
+      <View style={styles.modalOverlayNoBlur}>
+        <View style={[styles.reviewModalContainer, styles.summaryModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
+          <ScrollView style={styles.summaryCardScroll} showsVerticalScrollIndicator={true}>
+            <View style={styles.reviewModalContent}>
+              <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
+              <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>Review your appointments before payment</Text>
+              {children}
+            </View>
+          </ScrollView>
+          <View style={[styles.summaryCardFooter, { borderTopColor: P.border }]}>
+            <View style={styles.reviewButtonRow}>{actions}</View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    // Own SafeAreaProvider: a fullScreen modal renders into its own native
+    // surface that the app-root provider doesn't measure, so insets would
+    // come back zero without it. Same pattern as ImageDetailModal and
+    // ProviderProfileScreen.
+    <SafeAreaProvider>
+      <SafeAreaView style={[styles.summaryScreen, { backgroundColor: P.bg }]} edges={['top', 'bottom', 'left', 'right']}>
+        <View style={[styles.summaryHeader, { borderBottomColor: P.border }]}>
+          <TouchableOpacity
+            style={styles.summaryBackBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              onBack();
+            }}
+          >
+            <Ionicons name="chevron-back" size={24} color={P.text} />
+          </TouchableOpacity>
+          <View style={styles.summaryHeaderTitles}>
+            <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
+            <Text style={[styles.reviewModalSubtitle, { color: P.sub, marginBottom: 0 }]}>Review your appointments before payment</Text>
+          </View>
+        </View>
+        <ScrollView
+          style={styles.summaryScroll}
+          contentContainerStyle={styles.summaryScrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+        {/* Pinned action row — never scrolls out of reach on a long
+            multi-provider cart. */}
+        <View style={[styles.summaryFooter, { borderTopColor: P.border, backgroundColor: P.bg }]}>
+          <View style={styles.reviewButtonRow}>{actions}</View>
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
 }
 
 // One card in a provider's section: either a standalone service, or several
@@ -93,58 +229,47 @@ type CartRenderUnit =
   | { kind: 'single'; item: CartItem }
   | { kind: 'group'; batchId: string; items: CartItem[] };
 
-/**
- * Minutes since midnight, for ordering/spanning times within a grouped card.
- * Accepts the same shapes formatTime12 does ("14:30", "2:30 PM"). Returns
- * Number.MAX_SAFE_INTEGER for an unparseable/empty time so unscheduled items
- * sort last rather than jumping to the front as 0.
- */
-function to24hMinutes(time: string | undefined): number {
-  if (!time) return Number.MAX_SAFE_INTEGER;
-  const ampm = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])\.?[Mm]\.?$/.exec(time.trim());
-  if (ampm) {
-    let h = Number(ampm[1]) % 12;
-    if (ampm[3]!.toLowerCase() === 'p') h += 12;
-    return h * 60 + Number(ampm[2]);
-  }
-  const h24 = /^(\d{1,2}):(\d{2})/.exec(time.trim());
-  if (h24) return Number(h24[1]) * 60 + Number(h24[2]);
-  return Number.MAX_SAFE_INTEGER;
-}
-
-/** Parses a duration label ("60 min", "1h 30min", "1h") into minutes. */
-function durationToMinutes(duration: string | undefined): number {
-  if (!duration) return 0;
-  const hours = /(\d+)\s*h/i.exec(duration);
-  const mins = /(\d+)\s*m/i.exec(duration);
-  if (!hours && !mins) {
-    const bare = /(\d+)/.exec(duration);
-    return bare ? Number(bare[1]) : 0;
-  }
-  return (hours ? Number(hours[1]) * 60 : 0) + (mins ? Number(mins[1]) : 0);
-}
-
-/** "2:00pm – 3:45pm · 1h 45m" for a grouped card's header. */
-function formatTimeSpan(startMinutes: number, endMinutes: number): string {
-  const toLabel = (m: number) => {
-    const h = Math.floor(m / 60) % 24;
-    const mm = String(m % 60).padStart(2, '0');
-    const suffix = h >= 12 ? 'pm' : 'am';
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    return `${suffix === 'am' ? String(h12).padStart(2, '0') : h12}:${mm}${suffix}`;
-  };
-  const total = Math.max(0, endMinutes - startMinutes);
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  const lengthLabel = h > 0 ? `${h}h${m ? ` ${m}m` : ''}` : `${m}m`;
-  return `${toLabel(startMinutes)} – ${toLabel(endMinutes)} · ${lengthLabel}`;
-}
-
 // Effective Item for Payment Modal
 interface EffectiveCartItem {
   item: CartItem;
   effectivePrice: number;
   isDeposit: boolean;
+}
+
+// Prices a FROZEN checkout snapshot (never live cart state — see
+// paymentSheetCartItems). Each booking's own depositPolicy, resolved and
+// stamped in at snapshot time, is what's used — never a fresh lookup into
+// live providerDepositPolicies, which can resolve to a different value
+// while a screen built from this is still on-screen post-snapshot.
+function pricedCheckoutItems(
+  items: CartItem[],
+  bookings: Record<string, ServiceBooking>,
+): EffectiveCartItem[] {
+  return items.map(item => {
+    const booking = bookings[item.id];
+    const full = getCartItemFullPrice(item);
+    const isDeposit = !!booking?.isDepositOnly;
+    const effectivePrice = isDeposit
+      ? BookingService.calculateDeposit(full, booking?.depositPolicy)
+      : full;
+    return { item, effectivePrice, isDeposit };
+  });
+}
+
+// Subtotal/fee/total from a pricedCheckoutItems() result. The single source
+// both the review screen's Totals block AND paymentTotal (what the payment
+// sheet and success modal show) derive from, so they can't independently
+// drift from each other — see handleCheckout's setPaymentTotal call and the
+// frozenCheckoutTotals memo below.
+function checkoutTotalsFrom(priced: EffectiveCartItem[]): { subtotal: number; fee: number; total: number } {
+  const fullPaymentSubtotal = priced.reduce(
+    (sum, { isDeposit, effectivePrice }) => (isDeposit ? sum : sum + effectivePrice),
+    0,
+  );
+  const isDepositOnlyCheckout = priced.length > 0 && priced.every(({ isDeposit }) => isDeposit);
+  const fee = calculatePlatformFee(fullPaymentSubtotal, isDepositOnlyCheckout);
+  const subtotal = priced.reduce((sum, { effectivePrice }) => sum + effectivePrice, 0);
+  return { subtotal, fee, total: subtotal + fee };
 }
 
 // Payment Modal Component
@@ -153,6 +278,9 @@ interface PaymentModalProps {
   onClose: () => void;
   effectiveCartItems: EffectiveCartItem[];
   totalAmount: number;
+  /** Present only for the real Stripe route. Its amount and held bookings are
+   * already server-created before the payment sheet opens. */
+  checkoutBatchId?: string | null;
   // paymentIntentId is only ever passed by StripePaymentModal — the mock
   // PaymentModal never sets it, so it stays undefined and payment_intent_id
   // on the booking stays null, same as before either modal existed.
@@ -174,7 +302,7 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentComplete,
     onBookingFailed,
   }) => {
-    const { theme, isDarkMode, palette: P } = useTheme();
+    const { theme, palette: P } = useTheme();
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
       'card' | 'paypal' | 'apple' | 'google'
     >('card');
@@ -192,7 +320,6 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
       { id: 'google', name: 'Google Pay', icon: '🔵' },
     ];
 
-    const [showSuccessModal, setShowSuccessModal] = useState(false);
     const processingRef = useRef(false);
 
 const handlePayment = useCallback(async () => {
@@ -248,14 +375,6 @@ const handlePayment = useCallback(async () => {
     }
 
     if (__DEV__) {
-      logger.log(`\n[${timestamp()}] Setting success modal visible...`);
-    }
-    setShowSuccessModal(true);
-    if (__DEV__) {
-      logger.log(`[${timestamp()}] Success modal set to visible`);
-    }
-
-    if (__DEV__) {
       logger.log(`\n${'='.repeat(60)}`);
       logger.log(`[${timestamp()}] PAYMENT FLOW COMPLETE`);
       logger.log(`${'='.repeat(60)}\n`);
@@ -289,7 +408,7 @@ const handlePayment = useCallback(async () => {
       logger.log(`[${timestamp()}] isProcessing set to false\n`);
     }
   }
-}, [totalAmount, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed]);
+}, [selectedPaymentMethod, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed]);
 
     const formatCardNumber = (text: string) => {
       const cleaned = text.replace(/\s/g, '');
@@ -313,7 +432,13 @@ const handlePayment = useCallback(async () => {
               {/* Payment Header */}
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
-                <TouchableOpacity style={styles.paymentCloseButton} onPress={onClose}>
+                <TouchableOpacity
+                  style={styles.paymentCloseButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    onClose();
+                  }}
+                >
                   <Text style={[styles.paymentCloseText, { color: theme.text }]}>×</Text>
                 </TouchableOpacity>
               </View>
@@ -333,7 +458,7 @@ const handlePayment = useCallback(async () => {
                   ))}
                   <View style={styles.orderTotal}>
                     <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
-                      {effectiveCartItems.some(i => i.isDeposit) ? 'Pay Now' : 'Total'}
+                      Total
                     </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
@@ -348,9 +473,12 @@ const handlePayment = useCallback(async () => {
                       style={[
                         styles.paymentMethodItem,
                         { backgroundColor: P.surface, borderColor: 'transparent' },
-                        selectedPaymentMethod === method.id && { borderColor: P.accent, backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.1)' : 'rgba(92,64,51,0.1)') },
+                        selectedPaymentMethod === method.id && { borderColor: P.accent, backgroundColor: P.accentDim },
                       ]}
-                      onPress={() => setSelectedPaymentMethod(method.id as any)}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setSelectedPaymentMethod(method.id as any);
+                      }}
                     >
                       <Text style={styles.paymentMethodIcon}>{method.icon}</Text>
                       <Text style={[styles.paymentMethodName, { color: theme.text }]}>{method.name}</Text>
@@ -437,14 +565,17 @@ const handlePayment = useCallback(async () => {
 
               {/* Payment Button */}
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.5)' : 'rgba(92,64,51,0.5)') }]}
-                onPress={handlePayment}
+                style={[styles.payButton, { backgroundColor: isProcessing ? P.accentDim : P.accent }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  handlePayment();
+                }}
                 disabled={isProcessing}
               >
                 {isProcessing ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={P.onAccent} size="small" />
                 ) : (
-                  <Text style={styles.payButtonText}>Pay £{totalAmount.toFixed(2)}</Text>
+                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
             </SafeAreaView>
@@ -454,6 +585,8 @@ const handlePayment = useCallback(async () => {
     );
   }
 );
+
+PaymentModal.displayName = 'PaymentModal';
 
 // Real Stripe payment flow — card, Apple Pay, and Google Pay via Stripe's
 // own Payment Sheet (PayPal shows up automatically too, once PayPal is
@@ -476,6 +609,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onClose,
     effectiveCartItems,
     totalAmount,
+    checkoutBatchId,
     onPaymentSuccess,
     onPaymentComplete,
     onBookingFailed,
@@ -483,7 +617,6 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     const { theme, isDarkMode, palette: P } = useTheme();
     const { initPaymentSheet, presentPaymentSheet } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
-    const [showSuccessModal, setShowSuccessModal] = useState(false);
     const processingRef = useRef(false);
 
     const handlePayment = useCallback(async () => {
@@ -497,8 +630,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       setIsProcessing(true);
 
       try {
+        if (!checkoutBatchId) {
+          throw new Error('Checkout has expired. Please review your booking and try again.');
+        }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
-        const { clientSecret, paymentIntentId } = await createPaymentIntent(totalAmount);
+        const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
 
         // Theme the sheet to match the app's own palette (bound to the
         // app's own isDarkMode, not the OS setting Stripe would otherwise
@@ -524,7 +660,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             colors: stripeColors,
             shapes: { borderRadius: 20, borderWidth: 1 },
             primaryButton: {
-              colors: { background: P.accent, text: '#FFFFFF', border: P.accent },
+              colors: { background: P.accent, text: P.onAccent, border: P.accent },
               shapes: { borderRadius: 20 },
             },
           },
@@ -534,9 +670,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           // unblocks the build but Apple Pay won't actually appear/function
           // until that registration is real.
           applePay: { merchantCountryCode: 'GB' },
-          // Works out of the box in Stripe test mode. app.json's plugin
-          // config also needs enableGooglePay: true (currently false) for
-          // this to take effect on Android.
+          // Works in Stripe test mode. app.json enables Google Pay for
+          // Android; production still requires a fully configured Stripe
+          // account and release signing.
           googlePay: { merchantCountryCode: 'GB', testEnv: __DEV__ },
         });
         if (initError) {
@@ -557,50 +693,26 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           throw new Error(presentError.message || 'Payment failed. Please try again.');
         }
 
-        if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Calling onPaymentSuccess...`);
+        if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
         try {
+          // This Edge call converts the database hold to bookings and captures
+          // the exact server-calculated amount. It is intentionally one
+          // operation: this screen never writes bookings or chooses a charge.
+          await capturePaymentIntent(checkoutBatchId, paymentIntentId);
           await onPaymentSuccess('card', paymentIntentId);
-          // Booking exists now — actually take the payment. If this specific
-          // call fails, the booking still stands (don't fail the whole flow
-          // retroactively for something the client already got); it just
-          // means the authorised card needs a manual capture from the
-          // Stripe dashboard before the ~7-day hold expires.
-          try {
-            await capturePaymentIntent(paymentIntentId);
-          } catch (captureError) {
-            logger.error(`💰 [${timestamp()}] ⚠️ Booking succeeded but capture FAILED — needs manual Stripe capture:`, paymentIntentId, captureError);
-          }
         } catch (bookingError) {
           logger.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED:`, bookingError);
-          // A multi-service cart can partially succeed — some bookings
-          // persisted before a sibling item failed. Cancelling the WHOLE
-          // authorisation in that case would leave those succeeded bookings
-          // marked paid in the DB while the card was never actually
-          // charged for them. Capture only what was actually earned instead;
-          // only cancel outright when nothing booked at all.
-          const succeededAmount = bookingError instanceof BookingError ? bookingError.succeededAmountPaid : 0;
-          if (succeededAmount > 0) {
-            try {
-              await capturePaymentIntent(paymentIntentId, succeededAmount);
-            } catch (captureError) {
-              logger.error(`💰 [${timestamp()}] ⚠️ Partial booking succeeded but partial capture FAILED — needs manual Stripe capture of £${succeededAmount.toFixed(2)}:`, paymentIntentId, captureError);
-            }
-          } else {
-            // Nothing booked — release the card hold so the client is never
-            // left charged with nothing to show for it. Best-effort: if this
-            // also fails, the hold still auto-expires (~7 days).
-            try {
-              await cancelPaymentIntent(paymentIntentId);
-            } catch (cancelError) {
-              logger.error(`💰 [${timestamp()}] ⚠️ Failed to release payment hold after booking failure:`, paymentIntentId, cancelError);
-            }
+          // If finalisation failed before capture, release the Stripe hold and
+          // the database reservation. A successfully captured payment is not
+          // cancelled by this best-effort cleanup.
+          try { await cancelPaymentIntent(checkoutBatchId, paymentIntentId); } catch (cancelError) {
+            logger.error(`💰 [${timestamp()}] Failed to release payment hold:`, paymentIntentId, cancelError);
           }
           throw bookingError;
         }
 
         await new Promise(resolve => setTimeout(resolve, 500));
         onPaymentComplete();
-        setShowSuccessModal(true);
       } catch (error) {
         logger.error(`❌ [${timestamp()}] PAYMENT ERROR:`, error);
         onClose();
@@ -617,7 +729,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme, isDarkMode]);
+    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme, isDarkMode]);
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent={true}>
@@ -626,7 +738,13 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             <SafeAreaView style={styles.paymentModalContent}>
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
-                <TouchableOpacity style={styles.paymentCloseButton} onPress={onClose}>
+                <TouchableOpacity
+                  style={styles.paymentCloseButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    onClose();
+                  }}
+                >
                   <Text style={[styles.paymentCloseText, { color: theme.text }]}>×</Text>
                 </TouchableOpacity>
               </View>
@@ -645,7 +763,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   ))}
                   <View style={styles.orderTotal}>
                     <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
-                      {effectiveCartItems.some(i => i.isDeposit) ? 'Pay Now' : 'Total'}
+                      Total
                     </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
@@ -663,14 +781,17 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
               </ScrollView>
 
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.5)' : 'rgba(92,64,51,0.5)') }]}
-                onPress={handlePayment}
+                style={[styles.payButton, { backgroundColor: isProcessing ? P.accentDim : P.accent }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  handlePayment();
+                }}
                 disabled={isProcessing}
               >
                 {isProcessing ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={P.onAccent} size="small" />
                 ) : (
-                  <Text style={styles.payButtonText}>Pay £{totalAmount.toFixed(2)}</Text>
+                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
             </SafeAreaView>
@@ -681,6 +802,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
   }
 );
 
+StripePaymentModal.displayName = 'StripePaymentModal';
+
 // Service Card Component
 interface ServiceCardProps {
   item: CartItem;
@@ -689,7 +812,13 @@ interface ServiceCardProps {
   onEdit: (item: CartItem) => void;
   allCartItems: CartItem[];
   depositPolicy?: ProviderDepositPolicy;
-  hasConflict?: boolean;
+  /** Why this item can't be checked out, in the client's words — undefined
+   *  when it's fine. Carried as the message rather than a boolean because the
+   *  reasons are not interchangeable: "no time picked yet", "clashes with
+   *  another service in your cart" and "someone else took this slot" need
+   *  different actions, and a card that states the wrong one sends the client
+   *  to re-pick a time that was never the problem. */
+  issue?: string;
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = memo(
@@ -700,35 +829,22 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     onEdit,
     allCartItems,
     depositPolicy,
-    hasConflict,
+    issue,
   }) => {
-    const { theme, palette: P } = useTheme();
+    // palette (P), not theme — this card only ever renders on the client
+    // cart, and theme is scoped to whichever hat last set it, not
+    // necessarily the client palette. See DESIGN_SYSTEM.md's AppDialog note
+    // for the same class of bug.
+    const { palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
 
-    // Calculate total price safely with null checks
-    const totalPrice = useMemo(() => {
-      try {
-        const basePrice = Number(item?.price) || 0;
-        const addOnsTotal = (item?.addOns || []).reduce((sum: number, addOn: any) => {
-          return sum + (Number(addOn?.price) || 0);
-        }, 0);
-        return basePrice + addOnsTotal;
-      } catch (error) {
-        logger.error('Error calculating price:', error);
-        return Number(item?.price) || 0;
-      }
-    }, [item?.price, item?.addOns]);
+    const totalPrice = useMemo(() => getCartItemFullPrice(item), [item]);
 
     // Add-ons are surfaced as their own labelled line (not silently merged
     // into the service name list) so the client can see what the extras are
     // and what they add before paying.
-    const addOnsSummary = useMemo(() => {
-      const list = (item?.addOns || []).filter((a: any) => a?.name);
-      if (list.length === 0) return null;
-      const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
-      return { count: list.length, total, names: list.map((a: any) => a.name).join(', ') };
-    }, [item?.addOns]);
+    const addOnsSummary = useMemo(() => getCartAddOnsSummary(item), [item]);
 
     const depositPolicyArg = useMemo((): DepositPolicy | number => {
       if (!depositPolicy) return 20;
@@ -745,12 +861,16 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const handleRemove = useCallback(async () => {
       try {
         setIsLoading(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         showConfirm('Remove Service', `Remove ${item.serviceName} from cart?`, [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Remove',
             style: 'destructive',
-            onPress: () => onRemove(item.id),
+            onPress: () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+              onRemove(item.id);
+            },
           },
         ]);
       } catch (error) {
@@ -773,7 +893,13 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
         fallback={(error, retry) => (
           <View style={styles.errorCard}>
             <Text style={styles.errorText}>Error loading service card</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={retry}>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                retry();
+              }}
+            >
               <Text style={styles.retryText}>Retry</Text>
             </TouchableOpacity>
           </View>
@@ -782,44 +908,57 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
         <View style={[
           styles.serviceCard,
           styles.serviceCardShadow,
-          { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
+          { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
         ]}>
-          {hasConflict && (
+          {issue && (
             <View style={styles.conflictBanner}>
               <Ionicons name="alert-circle" size={14} color="#F44336" />
-              <Text style={styles.conflictBannerText}>
-                This time is no longer available — pick a new time
+              <Text style={styles.conflictBannerText}>{issue}</Text>
+            </View>
+          )}
+          {/* An out-of-hours time looks exactly like an ordinary one once it
+              reaches the cart, and it isn't: the client is about to pay for
+              something the provider can still decline. Deliberately amber
+              rather than the by-request red used in the picker — in THIS
+              screen red already means "this item has a conflict, fix it", and
+              a request is not a fault. */}
+          {bookingInfo?.emergencyRequest && (
+            <View style={styles.requestBanner}>
+              <Ionicons name="time-outline" size={14} color="#FF9500" />
+              <Text style={styles.requestBannerText}>
+                Outside their usual hours — they have to accept this before it's booked.
               </Text>
             </View>
           )}
           {/* Header binds the service to its price on one line, with the
-              duration tucked directly under the name — previously the title
-              sat alone above a full-width gap and the price lived on a
-              separate row, which read as three loose bands rather than one
-              card. */}
+              duration tucked directly under the name. Colours read from `P`
+              (the hat-aware palette), never `theme`: this card only ever
+              renders on the client cart, and `theme` is scoped to whichever
+              hat last set it, not necessarily the client palette — the same
+              class of bug DESIGN_SYSTEM.md flags for AppDialog. */}
           <View style={styles.serviceHeader}>
             <View style={styles.serviceInfo}>
-              <Text style={[styles.serviceName, { color: theme.text }]} numberOfLines={2}>
+              <Text style={[styles.serviceName, { color: P.text }]} numberOfLines={2}>
                 {serviceName}
                 {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
                 {bookingInfo.isDepositOnly && ' (Deposit)'}
               </Text>
-              <Text style={[styles.priceSummaryText, { color: theme.secondaryText }]} numberOfLines={1}>
+              <Text style={[styles.priceSummaryText, { color: P.sub }]} numberOfLines={1}>
                 {duration}
               </Text>
             </View>
-            <Text style={[styles.priceSummaryValue, { color: P.accent }]}>
+            <Text style={[styles.priceSummaryValue, { color: P.accentText }]}>
               £{effectivePrice.toFixed(2)}
             </Text>
             <TouchableOpacity
-              style={[styles.removeButton, isLoading && styles.disabledButton]}
+              style={[styles.removeButton, { backgroundColor: P.accentDim, borderColor: P.border }, isLoading && styles.disabledButton]}
               onPress={handleRemove}
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="#333" />
+                <ActivityIndicator size="small" color={P.text} />
               ) : (
-                <Text style={styles.removeText}>×</Text>
+                <Text style={[styles.removeText, { color: P.text }]}>×</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -832,14 +971,14 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           {(addOnsSummary || bookingInfo.isDepositOnly || !!bookingInfo.notes) && (
             <View style={styles.serviceMetaBlock}>
               {addOnsSummary && (
-                <Text style={[styles.priceSummaryAddOns, { color: theme.text }]} numberOfLines={2}>
+                <Text style={[styles.priceSummaryAddOns, { color: P.text }]} numberOfLines={2}>
                   + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
                   {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
                 </Text>
               )}
               {bookingInfo.isDepositOnly && (
-                <Text style={[styles.depositNote, { color: theme.secondaryText }]}>
-                  Deposit now — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} due at appointment
+                <Text style={[styles.depositNote, { color: P.sub }]}>
+                  Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
                 </Text>
               )}
               {!!bookingInfo.notes && (
@@ -855,7 +994,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               service edits directly, no chooser in between. */}
           <View style={[styles.dateRow, { borderTopColor: P.border }]}>
             <Text
-              style={[styles.dateText, { color: theme.secondaryText }, !isScheduled && styles.dateTextWarning]}
+              style={[styles.dateText, { color: P.sub }, !isScheduled && styles.dateTextWarning]}
               numberOfLines={2}
             >
               {isScheduled
@@ -864,11 +1003,14 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             </Text>
             <TouchableOpacity
               style={[styles.itemEditButton, { borderColor: P.accent }]}
-              onPress={() => onEdit(item)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                onEdit(item);
+              }}
               activeOpacity={0.8}
             >
-              <Ionicons name="pencil-outline" size={12} color={P.accent} />
-              <Text style={[styles.itemEditButtonText, { color: P.accent }]}>Edit</Text>
+              <Ionicons name="pencil-outline" size={12} color={P.accentText} />
+              <Text style={[styles.itemEditButtonText, { color: P.accentText }]}>Edit</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -877,6 +1019,8 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     );
   }
 );
+
+ServiceCard.displayName = 'ServiceCard';
 
 // Grouped card — several of one provider's services scheduled back-to-back on
 // a single day (shared bookingBatchId). Renders as ONE card with the shared
@@ -889,11 +1033,15 @@ interface GroupedServiceCardProps {
   /** Opens the chooser for this group — which service (or the whole group). */
   onEditGroup: (items: CartItem[]) => void;
   depositPolicy?: ProviderDepositPolicy;
-  conflictedIds: Set<string>;
+  /** itemId → why that service can't be checked out. A group card is one
+   *  appointment made of several services, so the card banner names which
+   *  service is at fault and the row itself repeats the reason — otherwise a
+   *  four-service group flags red with nothing saying which row to fix. */
+  issuesByItemId: ReadonlyMap<string, string>;
 }
 
 const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
-  ({ items, getBooking, onRemove, onEditGroup, depositPolicy, conflictedIds }) => {
+  ({ items, getBooking, onRemove, onEditGroup, depositPolicy, issuesByItemId }) => {
     const { theme, palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
 
@@ -903,9 +1051,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     }, [depositPolicy]);
 
     const priceOf = useCallback((item: CartItem) => {
-      const base = Number(item?.price) || 0;
-      const addOns = (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
-      const full = base + addOns;
+      const full = getCartItemFullPrice(item);
       return getBooking(item.id).isDepositOnly
         ? BookingService.calculateDeposit(full, depositPolicyArg)
         : full;
@@ -921,11 +1067,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     // services come to, what's charged now, and what's left for the
     // appointment. Deposits are per-service — the provider sets that on each
     // one — so these are summed per item, not derived from the group total.
-    const fullPriceOf = useCallback((item: CartItem) => {
-      const base = Number(item?.price) || 0;
-      const addOns = (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
-      return base + addOns;
-    }, []);
+    const fullPriceOf = useCallback((item: CartItem) => getCartItemFullPrice(item), []);
 
     const hasDeposit = useMemo(
       () => items.some(item => getBooking(item.id).isDepositOnly),
@@ -956,15 +1098,31 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
     const isScheduled = Boolean(firstBooking.selectedDate && firstBooking.selectedTime);
     const spanKnown = isScheduled && startMinutes !== Number.MAX_SAFE_INTEGER && endMinutes > startMinutes;
-    const hasConflict = items.some(i => conflictedIds.has(i.id));
+    // Every flagged service in this group, in render order, so the banner can
+    // name them rather than the client having to guess which of four rows the
+    // red border is about.
+    const flagged = useMemo(
+      () => items.map(i => ({ item: i, issue: issuesByItemId.get(i.id) }))
+                 .filter((f): f is { item: CartItem; issue: string } => Boolean(f.issue)),
+      [items, issuesByItemId],
+    );
+    const hasConflict = flagged.length > 0;
 
     const handleRemoveOne = useCallback((item: CartItem) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       showConfirm(
         'Remove Service',
         `Remove ${item.serviceName} from this appointment?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Remove', style: 'destructive', onPress: () => onRemove(item.id) },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+              onRemove(item.id);
+            },
+          },
         ]
       );
     }, [onRemove, showConfirm]);
@@ -975,11 +1133,13 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
         styles.serviceCardShadow,
         { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
       ]}>
-        {hasConflict && (
+        {flagged.length > 0 && (
           <View style={styles.conflictBanner}>
             <Ionicons name="alert-circle" size={14} color="#F44336" />
             <Text style={styles.conflictBannerText}>
-              This time is no longer available — pick a new time
+              {flagged.length === 1
+                ? `${flagged[0]!.item.serviceName}: ${flagged[0]!.issue}`
+                : `${flagged.length} services in this appointment need attention`}
             </Text>
           </View>
         )}
@@ -990,19 +1150,22 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
             straight through. */}
         <View style={styles.groupHeader}>
           <View style={[styles.groupBadge, { backgroundColor: P.accent }]}>
-            <Ionicons name="link" size={11} color="#FFFFFF" />
-            <Text style={styles.groupBadgeText}>
+            <Ionicons name="link" size={11} color={P.onAccent} />
+            <Text style={[styles.groupBadgeText, { color: P.onAccent }]}>
               GROUP BOOKING · {items.length}
             </Text>
           </View>
           <View style={styles.groupHeaderSpacer} />
           <TouchableOpacity
             style={[styles.itemEditButton, { borderColor: P.accent }]}
-            onPress={() => onEditGroup(items)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              onEditGroup(items);
+            }}
             activeOpacity={0.8}
           >
-            <Ionicons name="pencil-outline" size={12} color={P.accent} />
-            <Text style={[styles.itemEditButtonText, { color: P.accent }]}>Edit</Text>
+            <Ionicons name="pencil-outline" size={12} color={P.accentText} />
+            <Text style={[styles.itemEditButtonText, { color: P.accentText }]}>Edit</Text>
           </TouchableOpacity>
         </View>
         <Text
@@ -1031,6 +1194,9 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                   <Text style={[styles.groupRowMeta, { color: theme.secondaryText }]} numberOfLines={1}>
                     {item.duration}
                   </Text>
+                  {issuesByItemId.get(item.id) && (
+                    <Text style={styles.groupRowIssue}>{issuesByItemId.get(item.id)}</Text>
+                  )}
                   {/* Same labelled add-on line as the single card, so both
                       card types read consistently. */}
                   {(() => {
@@ -1054,7 +1220,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                     </Text>
                   )}
                 </View>
-                <Text style={[styles.groupRowPrice, { color: P.accent }]}>
+                <Text style={[styles.groupRowPrice, { color: P.accentText }]}>
                   £{priceOf(item).toFixed(2)}
                 </Text>
                 <TouchableOpacity
@@ -1093,7 +1259,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
               </View>
               <View style={styles.groupFooterRow}>
                 <Text style={[styles.groupFooterTotalLabel, { color: theme.text }]}>Deposit due now</Text>
-                <Text style={[styles.groupFooterValue, { color: P.accent }]}>
+                <Text style={[styles.groupFooterValue, { color: P.accentText }]}>
                   £{groupTotal.toFixed(2)}
                 </Text>
               </View>
@@ -1103,7 +1269,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
               <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
                 {items.length} services
               </Text>
-              <Text style={[styles.groupFooterValue, { color: P.accent }]}>
+              <Text style={[styles.groupFooterValue, { color: P.accentText }]}>
                 £{groupTotal.toFixed(2)}
               </Text>
             </View>
@@ -1115,25 +1281,273 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
   }
 );
 
+GroupedServiceCard.displayName = 'GroupedServiceCard';
+
+interface CartProviderSectionProps {
+  providerName: string;
+  providerItems: CartItem[];
+  providerData: { instanceCount: number; total: number };
+  renderUnits: CartRenderUnit[];
+  isCollapsed: boolean;
+  issuesByItemId: ReadonlyMap<string, string>;
+  depositPolicy?: ProviderDepositPolicy;
+  allCartItems: CartItem[];
+  getBooking: (itemId: string) => ServiceBooking;
+  onNavigateProvider: (items: CartItem[]) => void;
+  onRemove: (itemId: string) => void;
+  onEdit: (item: CartItem) => void;
+  onEditGroup: (items: CartItem[]) => void;
+  onToggleCollapsed: (providerName: string) => void;
+}
+
+const CartProviderSection = memo(function CartProviderSection({
+  providerName,
+  providerItems,
+  providerData,
+  renderUnits,
+  isCollapsed,
+  issuesByItemId,
+  depositPolicy,
+  allCartItems,
+  getBooking,
+  onNavigateProvider,
+  onRemove,
+  onEdit,
+  onEditGroup,
+  onToggleCollapsed,
+}: CartProviderSectionProps) {
+  const { palette: P } = useTheme();
+  const flaggedCount = providerItems.filter(item => issuesByItemId.has(item.id)).length;
+  const displayName = providerItems[0]?.providerDisplayName ?? providerName;
+
+  return (
+    <View style={[styles.providerSection, {
+      backgroundColor: P.card,
+      borderColor: flaggedCount > 0 ? '#F44336' : P.border,
+      borderWidth: flaggedCount > 0 ? 1.5 : StyleSheet.hairlineWidth,
+    }]}>
+      <View style={styles.providerHeader}>
+        <TouchableOpacity onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          onNavigateProvider(providerItems);
+        }}>
+          <View style={styles.providerLogoContainer}>
+            {providerItems[0]?.providerImage ? (
+              <Image source={providerItems[0].providerImage} style={[styles.providerLogo, { borderColor: P.accentDim }]} />
+            ) : (
+              <View style={[styles.providerLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
+            )}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.providerInfo}>
+          <Text style={[styles.providerName, { color: P.text }]}>{displayName}</Text>
+          <View style={[styles.serviceTypePill, { backgroundColor: P.accentDim, borderColor: P.accentDim }]}>
+            <Text style={[styles.serviceTypeText, { color: P.accentText }]}>
+              {providerItems[0]?.providerService || 'SERVICES'}
+            </Text>
+          </View>
+          <Text style={[styles.providerStats, { color: P.sub }]}>
+            {providerData.instanceCount} appointments • £{providerData.total.toFixed(2)}
+          </Text>
+          {flaggedCount > 0 ? (
+            <Text style={styles.providerIssueCount}>
+              {flaggedCount === 1 ? '1 service needs attention' : `${flaggedCount} services need attention`}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      {!isCollapsed ? (
+        <View style={styles.servicesList}>
+          {renderUnits.map((unit, index) => (
+            <View key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id} style={styles.serviceItemWrapper}>
+              {unit.kind === 'group' ? (
+                <GroupedServiceCard
+                  items={unit.items}
+                  getBooking={getBooking}
+                  onRemove={onRemove}
+                  onEditGroup={onEditGroup}
+                  issuesByItemId={issuesByItemId}
+                  {...(depositPolicy !== undefined ? { depositPolicy } : {})}
+                />
+              ) : (
+                <ServiceCard
+                  item={unit.item}
+                  bookingInfo={getBooking(unit.item.id)}
+                  onRemove={onRemove}
+                  onEdit={onEdit}
+                  allCartItems={allCartItems}
+                  {...(issuesByItemId.has(unit.item.id) ? { issue: issuesByItemId.get(unit.item.id)! } : {})}
+                  {...(depositPolicy !== undefined ? { depositPolicy } : {})}
+                />
+              )}
+              {index < renderUnits.length - 1 ? <View style={[styles.serviceSeparator, { backgroundColor: P.accentDim }]} /> : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <TouchableOpacity
+        style={[styles.collapseHandle, { borderTopColor: P.border }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          onToggleCollapsed(providerName);
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.collapseHandleText, { color: P.sub }]}>
+          {isCollapsed
+            ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
+            : 'Hide'}
+        </Text>
+        <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={P.sub} />
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+const CartCheckoutFooter = memo(function CartCheckoutFooter({
+  appliedPromos,
+  itemsByProvider,
+  itemPromoDiscounts,
+  subtotal,
+  promoSavings,
+  platformFee,
+  finalTotal,
+  isLoading,
+  bottomInset,
+  showGuide,
+  onCheckout,
+}: {
+  appliedPromos: Record<string, DbPromotion>;
+  itemsByProvider: Record<string, CartItem[]>;
+  itemPromoDiscounts: Record<string, number>;
+  subtotal: number;
+  promoSavings: number;
+  platformFee: number;
+  finalTotal: number;
+  isLoading: boolean;
+  bottomInset: number;
+  showGuide: boolean;
+  onCheckout: () => void;
+}) {
+  const { palette: P } = useTheme();
+  return (
+    <>
+      {Object.keys(appliedPromos).length > 0 ? (
+        <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
+          {Object.entries(appliedPromos).map(([providerKey, promo]) => {
+            const providerItems = itemsByProvider[providerKey];
+            if (!providerItems?.length) return null;
+            const discount = providerItems.reduce((sum, item) => sum + (itemPromoDiscounts[item.id] ?? 0), 0);
+            return (
+              <View key={providerKey} style={styles.appliedPromoRow}>
+                <Text style={[styles.appliedPromoCode, { color: P.accentText }]}>{promo.promo_code?.toUpperCase()}</Text>
+                <Text style={[styles.appliedPromoProvider, { color: P.sub }]} numberOfLines={1}>
+                  {providerItems[0]?.providerDisplayName ?? providerKey}
+                </Text>
+                <Text style={styles.appliedPromoSaving}>−£{discount.toFixed(2)}</Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
+      <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+        <View style={styles.summaryRow}>
+          <Text style={[styles.summaryLabel, { color: P.text }]}>Subtotal</Text>
+          <Text style={[styles.summaryValue, { color: P.text }]}>£{subtotal.toFixed(2)}</Text>
+        </View>
+        {promoSavings > 0 ? (
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: '#30D158' }]}>Promo Discount</Text>
+            <Text style={[styles.summaryValue, { color: '#30D158' }]}>−£{promoSavings.toFixed(2)}</Text>
+          </View>
+        ) : null}
+        {platformFee > 0 ? (
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: P.text }]}>Platform Fee</Text>
+            <Text style={[styles.summaryValue, { color: P.text }]}>£{platformFee.toFixed(2)}</Text>
+          </View>
+        ) : null}
+        <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: P.border }]}>
+          <Text style={[styles.totalLabel, { color: P.text }]}>Total</Text>
+          <Text style={[styles.totalValue, { color: P.text }]}>£{finalTotal.toFixed(2)}</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[
+          styles.checkoutButton,
+          { backgroundColor: P.accent, marginBottom: Math.max(spacing.xxl, FLOATING_TAB_BAR_CLEARANCE - bottomInset) },
+          isLoading && styles.disabledButton,
+        ]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          onCheckout();
+        }}
+        disabled={isLoading}
+      >
+        {isLoading ? <ActivityIndicator color={P.onAccent} size="small" /> : (
+          <Text style={[styles.checkoutText, { color: P.onAccent }]}>Book All • £{finalTotal.toFixed(2)}</Text>
+        )}
+      </TouchableOpacity>
+
+      {showGuide ? (
+        <View style={styles.multiBookingGuide}>
+          <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>Booking more than one service?</Text>
+          <View style={styles.multiBookingGuideList}>
+            {[
+              'Each service above gets its own appointment time',
+              'Mix services from different providers in one cart',
+              'Set a date and time for every service, then check out once',
+            ].map(tip => (
+              <View key={tip} style={styles.multiBookingGuideRow}>
+                <Text style={[styles.multiBookingGuideTick, { color: P.accentText }]}>✓</Text>
+                <Text style={[styles.multiBookingGuideBody, { color: P.sub }]}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </>
+  );
+});
+
 // Main Cart Screen Component
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  // A SECOND host, rendered inside the "Confirm Your Details" <Modal> rather
+  // than beside it. The screen-level DialogHost above is a sibling of that
+  // modal, and iOS won't present a modal from a sibling subtree while another
+  // is already up — so the validation alerts below raised from there were
+  // never visible, and tapping Continue with a blank name did nothing at all.
+  // Same nesting the payment sheet uses for its own in-modal alerts.
+  const { showAlert: showReviewAlert, DialogHost: ReviewDialogHost } = useAppDialog();
   const insets = useSafeAreaInsets();
 
   const {
     items,
     totalItems,
-    totalPrice,
     removeFromCart,
     updateCartItem,
     clearCart,
-    getServiceFee,
-    getFinalTotal,
     getItemsByProvider,
     getBookingSummary,
-    addToCart,
+    cartError,
+    clearCartError,
   } = useCart();
+
+  // The cart reducer has no access to a dialog system of its own (it's a
+  // plain function outside React), so a failure there surfaces through
+  // cartError instead — show it the same way as every other cart failure,
+  // then clear it so it doesn't reappear on the next unrelated render.
+  useEffect(() => {
+    if (!cartError) return;
+    showAlert('Cart Error', cartError);
+    clearCartError();
+  }, [cartError, clearCartError, showAlert]);
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
   const { user, updateUser } = useAuth();
@@ -1147,23 +1561,18 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // items for one provider. Only ever set for providers with >1 service.
   const [pickerItems, setPickerItems] = useState<CartItem[] | null>(null);
   // Non-null while the group date/time picker is up, holding the group's items
-  // in running order. The client picks the day, then a start time out of the
-  // options where the WHOLE chain fits back-to-back.
+  // in running order. The calendar itself owns date AND time selection here —
+  // it's fed a chain-fit resolver (see groupSlotResolver) so the times it
+  // offers are starts where every service still fits back-to-back.
   const [groupRescheduleItems, setGroupRescheduleItems] = useState<CartItem[] | null>(null);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState<string>('');
-  // Chain start options for groupRescheduleDate — each entry is a full
-  // schedule (one slot per service), so picking one assigns every service at
-  // once. Null while the lookup for the selected day is still running.
-  const [groupRescheduleOptions, setGroupRescheduleOptions] = useState<BackToBackSlot[][] | null>(null);
-  const [groupRescheduleChoice, setGroupRescheduleChoice] = useState<BackToBackSlot[] | null>(null);
+  const [groupRescheduleTime, setGroupRescheduleTime] = useState<string>('');
+  // Chains for the picked day, keyed by their start time, so the time the
+  // client taps in the calendar resolves back to a full per-service schedule.
+  const groupChainsByStart = useRef<Map<string, BackToBackSlot[]>>(new Map());
   // Providers whose section is collapsed to just its header. Collapsed-by-key
   // rather than expanded-by-key so a newly added provider defaults to open.
   const [collapsedProviders, setCollapsedProviders] = useState<Set<string>>(new Set());
-  // Set right after auto-adding a required consultation to the cart (see
-  // handleCheckout) — the effect below opens its date/time picker as soon
-  // as the new item actually shows up in `items`, since addToCart() is a
-  // dispatch and the item isn't available synchronously.
-  const [pendingConsultationSchedule, setPendingConsultationSchedule] = useState<{ providerId: string; serviceId: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -1186,7 +1595,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [checkoutSnapshot, setCheckoutSnapshot] = useState<{
   items: CartItem[];
   bookings: Record<string, ServiceBooking>;
-}>({ items: [], bookings: {} });
+  // Frozen alongside items/bookings for the same reason: a checkout-metadata
+  // refetch resolving between "Confirm & Pay" and the address actually being
+  // sent to createBookingsFromCart must not change which providers get the
+  // client's address mid-checkout.
+  mobileProviderNames: string[];
+}>({ items: [], bookings: {}, mobileProviderNames: [] });
   // The review list is built from the same render units the cart itself uses:
   // services sharing a bookingBatchId collapse into ONE group block with a
   // shared header and subtotal, rather than repeating a "group booking" tag
@@ -1220,23 +1634,302 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     });
     return units;
   }, [checkoutSnapshot]);
+
+  // One appointment block in the checkout summary — a plain service, or a
+  // whole back-to-back group batch collapsed into a single bordered block.
+  // Extracted from the summary's JSX so the same renderer can be used under
+  // each provider heading (see checkoutProviderSections).
+  const renderCheckoutUnit = useCallback((unit: CartRenderUnit, prevUnit: CartRenderUnit | undefined) => {
+    // Price for one snapshot item, using the provider's actual
+    // deposit policy (percent OR flat £) — never the 20%
+    // fallback, which silently ignores fixed-fee policies.
+    const priceOf = (item: CartItem) => {
+      const booking = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
+      const full = getCartItemFullPrice(item);
+      if (!booking.isDepositOnly) return full;
+      // The booking's OWN frozen depositPolicy, stamped in at snapshot
+      // time — never a fresh lookup into live providerDepositPolicies,
+      // which can resolve to a different value while this review screen
+      // (the one Confirm & Pay is actually pressed from) is still open.
+      return BookingService.calculateDeposit(full, booking.depositPolicy);
+    };
+    // Add-ons are named and priced here too — this is the last
+    // screen before paying, so it must account for the number
+    // being charged.
+    const renderAddOns = (item: CartItem) => {
+      const list = (item.addOns || []).filter((a: any) => a?.name);
+      if (list.length === 0) return null;
+      const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+      return (
+        <Text style={[styles.summaryItemAddOns, { color: P.text }]} numberOfLines={2}>
+          + {list.length} add-on{list.length === 1 ? '' : 's'} (£{total.toFixed(2)}):{' '}
+          {list.map((a: any) => a.name).join(', ')}
+        </Text>
+      );
+    };
+
+    // Divider only between two plain items. A group draws its
+    // own bordered box, so a divider directly above or below
+    // one reads as a doubled line. `prevUnit` is the previous
+    // unit within this provider's section, not the flat list —
+    // the first item under a provider heading never wants one.
+    const divider = prevUnit?.kind === 'single'
+      ? <View style={[styles.summaryDivider, { backgroundColor: P.sep }]} />
+      : null;
+
+    // A group renders as ONE block: shared provider/date/span
+    // header, its services as indented rows, and a subtotal —
+    // so it reads as a single appointment rather than N
+    // unrelated bookings each carrying a repeated group tag.
+    if (unit.kind === 'group') {
+      const first = unit.items[0]!;
+      const firstBooking = (checkoutSnapshot.bookings[first.id] || {}) as ServiceBooking;
+      const last = unit.items[unit.items.length - 1]!;
+      const lastBooking = (checkoutSnapshot.bookings[last.id] || {}) as ServiceBooking;
+      const startMinutes = to24hMinutes(firstBooking.selectedTime);
+      const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
+      const spanKnown = !!firstBooking.selectedDate
+        && startMinutes !== Number.MAX_SAFE_INTEGER
+        && endMinutes > startMinutes;
+      const groupTotal = unit.items.reduce((sum, i) => sum + priceOf(i), 0);
+
+      return (
+        // No divider above a group — its own border already
+        // separates it from whatever precedes it, and both
+        // together reads as a doubled line.
+        <View
+          key={unit.batchId}
+          style={[styles.summaryGroupBlock, { borderColor: P.accent, backgroundColor: P.accentDim }]}
+        >
+          <View style={[styles.summaryGroupBadge, { backgroundColor: P.accent }]}>
+            <Ionicons name="link" size={10} color={P.onAccent} />
+            <Text style={[styles.summaryGroupBadgeText, { color: P.onAccent }]}>
+              GROUP BOOKING · {unit.items.length}
+            </Text>
+          </View>
+          {/* No provider line here any more — the section heading this block
+              sits under already names them (checkoutProviderSections). */}
+          {!!firstBooking.selectedDate && (
+            <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
+              {formatLongDateNoYear(firstBooking.selectedDate)}
+              {spanKnown ? ` · ${formatTimeSpan(startMinutes, endMinutes)}` : ''}
+            </Text>
+          )}
+
+          {/* One row per service — no per-row date or
+              provider, the header owns both. */}
+          <View style={styles.summaryGroupRows}>
+            {unit.items.map(groupItem => {
+              const gb = (checkoutSnapshot.bookings[groupItem.id] || {}) as ServiceBooking;
+              return (
+                <View key={groupItem.id} style={styles.summaryGroupRow}>
+                  <View style={styles.summaryItemRow}>
+                    <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
+                      {groupItem.serviceName}{gb.isDepositOnly ? ' (Dep.)' : ''}
+                    </Text>
+                    <Text style={[styles.summaryItemPrice, { color: P.accentText }]}>
+                      £{priceOf(groupItem).toFixed(2)}
+                    </Text>
+                  </View>
+                  {!!gb.selectedTime && (
+                    <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
+                      {formatTime12(gb.selectedTime)} · {groupItem.duration}
+                    </Text>
+                  )}
+                  {gb.emergencyRequest && (
+                    <Text style={styles.summaryItemRequestNote}>
+                      Request · outside their hours, can be declined
+                    </Text>
+                  )}
+                  {renderAddOns(groupItem)}
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={[styles.summaryGroupFooter, { borderTopColor: P.sep }]}>
+            <Text style={[styles.summaryGroupFooterLabel, { color: P.sub }]}>
+              {unit.items.length} services back-to-back
+            </Text>
+            <Text style={[styles.summaryGroupFooterValue, { color: P.accentText }]}>
+              £{groupTotal.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    const item = unit.item;
+    const b = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
+    return (
+      <View key={item.id}>
+        {divider}
+        <View style={styles.summaryBookingItem}>
+          <View style={styles.summaryItemRow}>
+            <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
+              {item.serviceName}{b.isDepositOnly ? ' (Dep.)' : ''}
+            </Text>
+            <Text style={[styles.summaryItemPrice, { color: P.accentText }]}>
+              £{priceOf(item).toFixed(2)}
+            </Text>
+          </View>
+          {renderAddOns(item)}
+          {b.selectedDate && b.selectedTime && (
+            <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
+              {formatLongDateNoYear(b.selectedDate)} · {formatTime12(b.selectedTime)}
+            </Text>
+          )}
+          {/* Last screen before paying, so it has to say which of these the
+              provider can still turn down. */}
+          {b.emergencyRequest && (
+            <Text style={styles.summaryItemRequestNote}>
+              Request · outside their hours, can be declined
+            </Text>
+          )}
+        </View>
+      </View>
+    );
+  }, [checkoutSnapshot, P]);
+
+  // The checkout summary lists appointments grouped by provider. This is a
+  // presentation grouping only — unrelated to a GROUP BOOKING (a
+  // bookingBatchId batch of services booked back-to-back in one sitting,
+  // which stays its own bordered block inside whichever provider owns it).
+  // Providers appear in the order their first appointment appears in the
+  // cart, so the summary reads in the same order the cart above it did.
+  const checkoutProviderSections = useMemo(() => {
+    const priceOfItem = (item: CartItem) => {
+      const booking = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
+      const full = getCartItemFullPrice(item);
+      if (!booking.isDepositOnly) return full;
+      // Frozen at snapshot time — see the matching comment on renderCheckoutUnit's priceOf.
+      return BookingService.calculateDeposit(full, booking.depositPolicy);
+    };
+
+    const sections = new Map<string, {
+      providerKey: string;
+      providerLabel: string;
+      providerService: string;
+      providerImage: CartItem['providerImage'];
+      units: CartRenderUnit[];
+      appointmentCount: number;
+      total: number;
+    }>();
+
+    checkoutRenderUnits.forEach(unit => {
+      const first = unit.kind === 'group' ? unit.items[0]! : unit.item;
+      // providerName is the stable cart key; providerDisplayName is what the
+      // client actually calls them. Group on the key, label with the name —
+      // the same split the cart's own provider sections use.
+      const key = first.providerName ?? first.providerDisplayName ?? '';
+      const label = first.providerDisplayName ?? first.providerName ?? '';
+      const members = unit.kind === 'group' ? unit.items : [unit.item];
+      const existing = sections.get(key);
+      const subtotal = members.reduce((sum, item) => sum + priceOfItem(item), 0);
+      if (existing) {
+        existing.units.push(unit);
+        existing.appointmentCount += members.length;
+        existing.total += subtotal;
+      } else {
+        sections.set(key, {
+          providerKey: key,
+          providerLabel: label,
+          providerService: first.providerService ?? '',
+          providerImage: first.providerImage,
+          units: [unit],
+          appointmentCount: members.length,
+          total: subtotal,
+        });
+      }
+    });
+
+    return [...sections.values()];
+  }, [checkoutRenderUnits, checkoutSnapshot]);
   // Correlation id for the on_hold rows reserved when the user commits to
   // payment (see holdCartBookingSlots below) — threaded through to
   // handlePaymentSuccess so createBookingsFromCart can claim the same
   // batch instead of inserting fresh rows. Null whenever no hold is
   // currently outstanding (not yet created, already claimed, or released).
   const [holdBatchId, setHoldBatchId] = useState<string | null>(null);
+  // Secure Stripe checkout owns a separate server batch. Kept distinct from
+  // the legacy hold batch while the mock checkout remains available in Expo
+  // Go and during the staged release.
+  const [serverCheckoutBatchId, setServerCheckoutBatchId] = useState<string | null>(null);
   // True only while the "Confirm & Pay" tap's holdCartCheckoutSlots call is
   // in flight — guards against a double-tap firing two hold batches for
   // the same cart.
   const [isReservingSlots, setIsReservingSlots] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  // Cart item ids that failed to book on the last checkout attempt (e.g.
-  // "time slot no longer available") — flagged with a banner on their
-  // ServiceCard so the client can see which item needs a new time, instead
-  // of just reading a one-off alert and having no visible next step. Cleared
-  // whenever the item is edited/removed or a new checkout attempt starts.
-  const [conflictedItemIds, setConflictedItemIds] = useState<Set<string>>(new Set());
+  // Cart item id → what's wrong with it, flagged on that item's own card so
+  // the client can see WHICH booking needs attention and why, instead of
+  // reading a one-off alert that names no service and leaves no visible next
+  // step. Written by every checkout precondition (unscheduled, invalid date,
+  // scheduling conflict) as well as by a failed booking attempt. Cleared when
+  // the item is edited or removed, and at the start of each checkout attempt.
+  const [itemIssues, setItemIssues] = useState<ReadonlyMap<string, string>>(new Map());
+
+  const clearItemIssue = useCallback((itemId: string) => {
+    setItemIssues(prev => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Map(prev);
+      next.delete(itemId);
+      return next;
+    });
+  }, []);
+
+  /** The cart's scheduling check in one place: two items for the same provider
+   *  overlapping each other, or a slot taken in Supabase since it was picked.
+   *  Returns itemId → reason, empty when everything is still bookable. Shared
+   *  so the pre-checkout gate and the slot-hold failure path can never disagree
+   *  about which service is at fault. */
+  const identifyCartConflicts = useCallback(async (
+    cartItems: CartItem[],
+    getBooking: (itemId: string) => ServiceBooking | undefined,
+  ): Promise<{ flags: Map<string, string>; messages: string[] }> => {
+    const check = await AvailabilityService.validateCartBookings(
+      cartItems.map(item => {
+        const booking = getBooking(item.id);
+        return {
+          providerName: item.providerId ?? item.providerName,
+          date: booking?.selectedDate ?? '',
+          time: booking?.selectedTime ?? '',
+          duration: item.duration,
+          cartItemId: item.id,
+          serviceId: item.serviceId,
+          // See BookingContext's copy of this list: an accepted out-of-hours
+          // request must not be re-flagged as a conflict by the cart.
+          isEmergencyRequest: !!item.emergencyRequest,
+        };
+      })
+    );
+    // Two readings of the same findings. `flags` is what goes on a card: a
+    // short label in the cart's own vocabulary. `messages` is what goes in the
+    // dialog, where there is room to name what actually clashed. They differ
+    // only for a coded conflict; for the fixed ones the label IS the sentence.
+    const flags = new Map<string, string>();
+    const messages: string[] = [];
+    check.conflicts.forEach(c => {
+      // A coded conflict's message names something (a provider, an
+      // appointment) that isn't necessarily visible on screen — the label is
+      // a short, always-safe card summary; the full sentence is dialog-only.
+      const codeLabel =
+        c.code === 'clientClash' ? CART_ISSUE.clientClash :
+        c.code === 'cartCrossProviderClash' ? CART_ISSUE.crossProviderClash :
+        undefined;
+      const label = codeLabel ?? toCartIssue(c.message);
+      if (!flags.has(c.cartItemId)) flags.set(c.cartItemId, label);
+      const detail = codeLabel ? c.message : label;
+      if (!messages.includes(detail)) messages.push(detail);
+    });
+    return { flags, messages };
+  }, []);
+
+  // Removing an item takes its flag with it, so a stale reason can never
+  // reappear against a re-added service.
+  const handleRemoveFromCart = useCallback((itemId: string) => {
+    removeFromCart(itemId);
+    clearItemIssue(itemId);
+  }, [removeFromCart, clearItemIssue]);
 
   // Customer details review modal state
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -1246,21 +1939,103 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [reviewPhone, setReviewPhone] = useState('');
   const [saveAsDefault, setSaveAsDefault] = useState(false);
   const [agreedToPolicy, setAgreedToPolicy] = useState(false);
+  // Service-level patch-test/pregnancy-safety flags for whatever's in the
+  // checkout snapshot — folded into the single Terms checkbox above rather
+  // than a separate one (see supabase/migrations/
+  // 20260817085443_safety_acknowledgement_checkout.sql, which
+  // prepare_checkout enforces server-side regardless of this UI state).
+  const [safetyFlagsByServiceId, setSafetyFlagsByServiceId] = useState<
+    Map<string, { patchTestRequired: boolean; isPregnancySafe: boolean }>
+  >(new Map());
   const [confirmedCustomerInfo, setConfirmedCustomerInfo] = useState<{
     name: string; email: string; phone: string;
   } | null>(null);
   const [showBookingSummaryModal, setShowBookingSummaryModal] = useState(false);
-  const [hasMobileProvider, setHasMobileProvider] = useState(false);
-  const [clientAddress, setClientAddress] = useState('');
-  // Providers in the cart that require a consultation before a new client's
-  // first booking, which of those the client already has history with, and
-  // which cart items are themselves consultation bookings — used to block
-  // checkout on a non-consultation service with a first-time provider that
-  // requires one. App-level check, same as every other createBooking()
-  // checkout validation (date-in-past, availability, blocked dates).
-  const [consultationRequiredProviderIds, setConsultationRequiredProviderIds] = useState<Set<string>>(new Set());
-  const [providersWithHistory, setProvidersWithHistory] = useState<Set<string>>(new Set());
-  const [consultationServiceIds, setConsultationServiceIds] = useState<Set<string>>(new Set());
+  // A small cart stays a centred card; anything bigger takes the whole
+  // screen. Provider count is counted off checkoutProviderSections rather
+  // than the raw items, so it uses the exact same grouping key the summary
+  // itself renders sections with. See FULL_SCREEN_SUMMARY_THRESHOLD.
+  const useFullScreenSummary =
+    checkoutSnapshot.items.length >= FULL_SCREEN_SUMMARY_THRESHOLD
+    || checkoutProviderSections.length > FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD;
+  // Summary → back to the customer-details review step. Shared by the
+  // header chevron, the Back button and the Android hardware back gesture,
+  // so all three land in the same place.
+  const backFromSummary = useCallback(() => {
+    setShowBookingSummaryModal(false);
+    setShowReviewModal(true);
+  }, []);
+  // Names, not just a boolean: with more than one provider in the cart the
+  // client needs to know WHICH of them is coming to them, since the address
+  // they type is only used by those.
+  const [mobileProviderNames, setMobileProviderNames] = useState<string[]>([]);
+  // True when the last attempt to fetch checkout-facing provider metadata
+  // (deposit policies + which providers are mobile) failed. Checkout is
+  // blocked while this is true — see handleCheckout — rather than silently
+  // proceeding on guessed data (every provider treated as non-mobile, every
+  // deposit falling back to the generic 20%).
+  const [checkoutMetadataError, setCheckoutMetadataError] = useState(false);
+  // The provider names covered by the last COMPLETED (successful) metadata
+  // fetch — lets handleCheckout tell "this provider's fetch just hasn't
+  // landed yet" (name absent here, self-resolves in a moment) apart from
+  // "the fetch completed and this provider genuinely isn't in it any more"
+  // (name present here but missing from providerDepositPolicies — dropped
+  // out of getProviderCheckoutMetadata's has_gone_live/is_active filter).
+  // Without this split, both cases looked identical and got flagged with
+  // the same "isn't taking bookings" reason, which is simply false for the
+  // ordinary in-flight case.
+  const [resolvedProviderNames, setResolvedProviderNames] = useState<Set<string>>(new Set());
+  // Mirrors the address saved on the account. It's no longer editable here —
+  // the checkout row is a button through to ProfileInfo — so this only ever
+  // reflects what's stored, and re-syncs when the user comes back from
+  // setting it there.
+  const [clientAddress, setClientAddress] = useState(user?.clientAddress ?? '');
+  // Re-sync after a trip to ProfileInfo to set it (AuthContext.updateUser
+  // refreshes `user`, which lands here on the way back). Never clears what's
+  // already shown, so a transient null while the profile reloads can't wipe
+  // the field mid-checkout.
+  useEffect(() => {
+    if (user?.clientAddress) setClientAddress(user.clientAddress);
+  }, [user?.clientAddress]);
+
+  // Send the client to their account to set an address with the real
+  // geocoded picker. Profile is a sibling tab, so this hops stacks via the
+  // tab navigator — same shape as handleContinueShopping's jump to Home.
+  //
+  // Confirm Your Details is a modal over this screen, so it has to close to
+  // get there. The trip is recorded and the sheet is reopened the moment the
+  // cart is focused again — otherwise setting an address dropped the user
+  // back on the cart list with no trace of the checkout they were halfway
+  // through, and they'd have to find Checkout and re-confirm from scratch.
+  const returnToReviewOnFocusRef = useRef(false);
+  const openAddressSettings = useCallback(() => {
+    returnToReviewOnFocusRef.current = true;
+    setShowReviewModal(false);
+    // Which tab this cart is actually mounted in. CartScreen is registered in
+    // the Cart, Explore and Home stacks, so "go back to the cart" has to mean
+    // *this* instance — the other two hold none of the checkout state, and
+    // landing on one of them would look like the checkout had been discarded.
+    const parent = navigation.getParent();
+    const parentState = parent?.getState();
+    const originTab = parentState?.routes[parentState.index]?.name;
+    parent?.navigate('Profile', {
+      screen: 'ProfileInfo',
+      params: { returnToTab: originTab },
+    });
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (!returnToReviewOnFocusRef.current) return;
+      // Cleared on the first return whether or not an address was actually
+      // saved — coming back is the signal, not succeeding. The review state
+      // (name/phone/email, the checkout snapshot) is untouched by the trip,
+      // since switching tabs doesn't unmount this screen.
+      returnToReviewOnFocusRef.current = false;
+      setShowReviewModal(true);
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   // Memoize expensive calculations properly
   const itemsByProvider = useMemo(() => {
@@ -1270,7 +2045,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       logger.error('Error getting items by provider:', error);
       return {};
     }
-  }, [items]);
+  }, [getItemsByProvider]);
 
   const bookingSummary = useMemo(() => {
     try {
@@ -1284,15 +2059,109 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         providers: {},
       };
     }
-  }, [items, totalPrice]);
+  }, [getBookingSummary]);
 
-  // Fetch deposit policies for all providers in the cart whenever items change
+  // Collapse behaviour has two jobs, both so the cart opens as a scannable
+  // list of provider headers rather than a wall of cards:
+  //
+  //   1. On entry, every section starts collapsed — whatever was already in
+  //      the cart is summarised by its header, not expanded.
+  //   2. When a booking is added, every *other* section collapses and only
+  //      the section that received it is left open, so the new booking is
+  //      what's actually visible with space around it.
+  //
+  // Tracked by item id (not just provider key) so adding a second service to
+  // a provider already in the cart counts as an add too, not only a
+  // brand-new provider.
+  const knownItemIdsRef = useRef<Set<string> | null>(null);
   useEffect(() => {
-    if (items.length === 0) { setProviderDepositPolicies({}); return; }
+    const providerKeys = Object.keys(itemsByProvider);
+    const currentItemIds = new Set(items.map(i => i.id));
+
+    // First run for this mount. Rule 1 (collapse everything) can't apply
+    // blindly here: the commonest way to reach the cart is to add a booking
+    // on a provider profile and then open the cart, and that MOUNTS this
+    // screen — so the item that was just added arrived before the ref
+    // existed, and collapsing everything hid the very booking the user came
+    // to look at. Anything added in the last JUST_ADDED_WINDOW_MS is treated
+    // as "just added" and its section is left open, which is the same
+    // outcome rule 2 produces when the cart was already on screen.
+    if (knownItemIdsRef.current === null) {
+      knownItemIdsRef.current = currentItemIds;
+      const justAddedCutoff = Date.now() - JUST_ADDED_WINDOW_MS;
+      const recentlyAddedProviders = new Set(
+        items
+          .filter(i => {
+            const addedAt = Date.parse(i.addedAt ?? '');
+            return Number.isFinite(addedAt) && addedAt >= justAddedCutoff;
+          })
+          .map(i => i.providerName || 'Unknown Provider'),
+      );
+      if (providerKeys.length > 0) {
+        setCollapsedProviders(
+          new Set(providerKeys.filter(k => !recentlyAddedProviders.has(k))),
+        );
+      }
+      return;
+    }
+
+    const previousItemIds = knownItemIdsRef.current;
+    knownItemIdsRef.current = currentItemIds;
+
+    // Which providers gained an item since last time? (Removals don't
+    // re-collapse anything — you're still working in that section.)
+    const providersWithNewItems = new Set(
+      items
+        .filter(i => !previousItemIds.has(i.id))
+        // Same fallback CartContext's itemsByProvider grouping uses, so an
+        // item with no provider name still maps onto its rendered section.
+        .map(i => i.providerName || 'Unknown Provider'),
+    );
+    if (providersWithNewItems.size === 0) return;
+
+    // Collapse every section except the one(s) that just received an item.
+    setCollapsedProviders(
+      new Set(providerKeys.filter(k => !providersWithNewItems.has(k))),
+    );
+  }, [items, itemsByProvider]);
+
+  // Fetch checkout-facing provider metadata in one bounded request whenever
+  // the providers represented in the cart change.
+  useEffect(() => {
+    if (items.length === 0) {
+      setProviderDepositPolicies({});
+      setMobileProviderNames([]);
+      setCheckoutMetadataError(false);
+      setResolvedProviderNames(new Set());
+      return;
+    }
     const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
-    getProviderDepositPoliciesByDisplayNames(names)
-      .then(policies => setProviderDepositPolicies(policies))
-      .catch(() => {}); // silently fall back to default 20% on error
+    let cancelled = false;
+    getProviderCheckoutMetadata(names)
+      .then(({ depositPolicies, mobileProviderNames }) => {
+        if (cancelled) return;
+        setProviderDepositPolicies(depositPolicies);
+        setMobileProviderNames(names.filter(name => mobileProviderNames.has(name)));
+        setCheckoutMetadataError(false);
+        setResolvedProviderNames(new Set(names));
+      })
+      .catch(error => {
+        if (cancelled) return;
+        // Fails CLOSED, not open. A mobile provider's address requirement
+        // and a provider's real deposit policy are money/data-safety facts,
+        // not cosmetic ones — silently treating every provider as
+        // non-mobile and every deposit as the generic 20% fallback used to
+        // let checkout proceed on guessed data with nothing shown to the
+        // client. Deliberately leaving providerDepositPolicies/
+        // mobileProviderNames untouched here rather than resetting them: a
+        // client who already fetched this data successfully once still
+        // sees accurate cards. handleCheckout blocks on
+        // checkoutMetadataError regardless, so a first-ever failed fetch
+        // (nothing fetched yet) can't reach checkout on defaults either.
+        logger.error('Could not fetch checkout metadata (deposit policies / mobile providers):', error);
+        setCheckoutMetadataError(true);
+      });
+    return () => { cancelled = true; };
   }, [items]);
 
   // ── Promo codes ────────────────────────────────────────────────────────────
@@ -1347,6 +2216,19 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
   }, [items, handleApplyPromoToProvider]);
 
+  // One batched query for every service in the review snapshot, not a
+  // per-item fetch — drives the safety-acknowledgement line folded into the
+  // Terms checkbox below.
+  useEffect(() => {
+    const ids = checkoutSnapshot.items.map(i => i.serviceId).filter(Boolean);
+    if (ids.length === 0) { setSafetyFlagsByServiceId(new Map()); return; }
+    let cancelled = false;
+    getServiceSafetyFlags(ids)
+      .then(map => { if (!cancelled) setSafetyFlagsByServiceId(map); })
+      .catch(() => { if (!cancelled) setSafetyFlagsByServiceId(new Map()); });
+    return () => { cancelled = true; };
+  }, [checkoutSnapshot.items]);
+
   // Absolute £ discount per cart item (off base+add-ons, capped at the base
   // price). A provider-wide code can still be restricted to specific
   // services or a category — items outside that scope get no discount even
@@ -1359,8 +2241,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       if (promo.service_ids && promo.service_ids.length > 0 && !promo.service_ids.includes(item.serviceId)) continue;
       if (promo.service_category &&
           promo.service_category.toUpperCase() !== (item.providerService ?? '').toUpperCase()) continue;
-      const itemTotal = (Number(item.price) || 0) +
-        (item.addOns ?? []).reduce((s, a) => s + (Number(a.price) || 0), 0);
+      const itemTotal = getCartItemFullPrice(item);
       let off = 0;
       if (promo.discount_percent && promo.discount_percent > 0) {
         off = (itemTotal * promo.discount_percent) / 100;
@@ -1373,11 +2254,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     return discounts;
   }, [appliedPromos, items]);
 
-  const totalPromoDiscount = useMemo(
-    () => Object.values(itemPromoDiscounts).reduce((s, v) => s + v, 0),
-    [itemPromoDiscounts]
-  );
-
   // Read-model derived straight from each CartItem — scheduling, notes, and
   // payment choice all live on the item now (set on the provider profile, or
   // changed later via BookingSheet's edit mode + updateCartItem), so this
@@ -1385,15 +2261,38 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const bookingsByItemId = useMemo((): Record<string, ServiceBooking> => {
     const map: Record<string, ServiceBooking> = {};
     items.forEach(item => {
+      // The real per-provider deposit policy, when one was fetched — this is
+      // what BookingService.createAppointmentData actually books the deposit
+      // against. Without it, every deposit booking silently used the legacy
+      // 20% fallback regardless of what the card displayed.
+      const rawPolicy = providerDepositPolicies[item.providerDisplayName ?? item.providerName];
+      const depositPolicy = toDepositPolicy(rawPolicy);
+      // A provider can change their deposit rules after an item was already
+      // added to the cart with a different payment choice. Once this
+      // provider's live policy has actually been fetched, it wins over
+      // whatever the item still says in both directions: switched to
+      // full-payment-only, isDepositOnly must not survive into checkout
+      // (booking deposit-only with no resolvable deposit policy charges
+      // the client £0 for the service); switched to deposit-mandatory, a
+      // client who chose "pay in full" must move to the deposit the
+      // provider now requires. Nothing to reconcile against until the
+      // policy has been fetched at least once.
+      const isDepositOnly = rawPolicy && !rawPolicy.depositAvailable
+        ? false
+        : rawPolicy?.depositOnly
+          ? true
+          : (item.isDepositOnly ?? false);
       map[item.id] = {
         selectedDate: item.selectedDate ?? '',
         selectedTime: item.selectedTime ?? '',
         notes: item.notes ?? '',
-        isDepositOnly: item.isDepositOnly ?? false,
+        isDepositOnly,
+        ...(item.emergencyRequest ? { emergencyRequest: item.emergencyRequest } : {}),
+        ...(depositPolicy ? { depositPolicy } : {}),
       };
     });
     return map;
-  }, [items]);
+  }, [items, providerDepositPolicies]);
 
   const getServiceBooking = useCallback(
     (itemId: string): ServiceBooking =>
@@ -1405,20 +2304,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const effectiveTotal = useMemo(() => {
     return items.reduce((sum, item) => {
       const booking = getServiceBooking(item.id);
-      // Inline calculation without nested useMemo
-      const basePrice = Number(item?.price) || 0;
-      const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => {
-        return s + (Number(addOn?.price) || 0);
-      }, 0);
       // Promo discount comes off before any deposit is calculated
-      const itemTotalPrice = basePrice + addOnsTotal - (itemPromoDiscounts[item.id] ?? 0);
+      const itemTotalPrice = getCartItemFullPrice(item) - (itemPromoDiscounts[item.id] ?? 0);
       let effectiveItemPrice: number;
       if (booking.isDepositOnly) {
         const provName = item.providerDisplayName ?? item.providerName;
-        const pol = providerDepositPolicies[provName];
-        const policyArg: DepositPolicy | number = pol
-          ? { type: pol.depositType, amount: pol.depositAmount }
-          : 20;
+        const policyArg = resolveDepositPolicyArg(providerDepositPolicies, provName);
         effectiveItemPrice = BookingService.calculateDeposit(itemTotalPrice, policyArg);
       } else {
         effectiveItemPrice = itemTotalPrice;
@@ -1427,9 +2318,103 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }, 0);
   }, [items, getServiceBooking, providerDepositPolicies, itemPromoDiscounts]);
 
+  // Everything wrong with the cart that needs no network: a line with no time,
+  // a date that didn't survive being stored, and two services for the same
+  // provider booked over each other. All of it compares values already in
+  // memory, so there is no reason to make the client tap checkout to find out.
+  // Only the checks that genuinely need Supabase (has someone ELSE taken this
+  // slot, is the provider still working that day, is the promo still live) wait
+  // for the checkout attempt.
+  const localItemIssues = useMemo(
+    () => findCartItemIssues(items.map(item => {
+      const booking = getServiceBooking(item.id);
+      return {
+        itemId: item.id,
+        providerKey: item.providerId ?? item.providerName,
+        date: booking.selectedDate,
+        time: booking.selectedTime,
+        duration: item.duration,
+      };
+    })),
+    [items, getServiceBooking],
+  );
+
+  // A stored date/time the app can't parse back shouldn't be possible — the
+  // sheet only ever writes formats it understands. The client is shown the
+  // ordinary "pick a date and time" for it (see findCartItemIssues), so this is
+  // the only place the real value is recoverable. Logged, never surfaced.
+  useEffect(() => {
+    items.forEach(item => {
+      const booking = getServiceBooking(item.id);
+      if (!booking.selectedDate || !booking.selectedTime) return;
+      const badDate = isNaN(new Date(booking.selectedDate).getTime());
+      const badTime = to24hMinutes(booking.selectedTime) === Number.MAX_SAFE_INTEGER;
+      if (badDate || badTime) {
+        logger.error(
+          'Cart item has an unparseable schedule:',
+          { itemId: item.id, service: item.serviceName, date: booking.selectedDate, time: booking.selectedTime },
+        );
+      }
+    });
+  }, [items, getServiceBooking]);
+
+  // What the cards actually render. A reason recorded from a checkout attempt
+  // wins over the local pass — it's the more specific finding, and it's the one
+  // the client just saw an alert about.
+  const displayedItemIssues = useMemo(() => {
+    if (itemIssues.size === 0) return localItemIssues;
+    if (localItemIssues.size === 0) return itemIssues;
+    return new Map([...localItemIssues, ...itemIssues]);
+  }, [localItemIssues, itemIssues]);
+
+  // Which provider sections hold a flagged service. Keyed exactly as
+  // itemsByProvider groups them, so a section can be looked up by it.
+  const flaggedProviderKeys = useMemo(() => {
+    const keys = new Set<string>();
+    items.forEach(item => {
+      if (displayedItemIssues.has(item.id)) keys.add(item.providerName || 'Unknown Provider');
+    });
+    return keys;
+  }, [items, displayedItemIssues]);
+
+  // A flagged card is worthless behind a collapsed section — the client is
+  // told something needs attention and shown a closed header. Opening it is
+  // the whole point of flagging, so any provider that gains an issue is
+  // expanded. Keyed on the set of flagged providers rather than running
+  // continuously, so re-collapsing the section by hand still sticks; the
+  // header keeps its own marker for that case.
+  const flaggedProvidersKey = useMemo(
+    () => [...flaggedProviderKeys].sort().join('\u0000'),
+    [flaggedProviderKeys],
+  );
+  useEffect(() => {
+    if (flaggedProviderKeys.size === 0) return;
+    setCollapsedProviders(prev => {
+      if (![...flaggedProviderKeys].some(k => prev.has(k))) return prev;
+      const next = new Set(prev);
+      flaggedProviderKeys.forEach(k => next.delete(k));
+      return next;
+    });
+    // flaggedProvidersKey is the value dependency — the Set identity changes on
+    // every render that recomputes it, which would re-open a hand-collapsed
+    // section forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flaggedProvidersKey]);
+
+  // The fee is separate from provider money: tiered for a full-payment
+  // checkout, or £0.99 for an all-deposit checkout.
+  const platformFee = useMemo(() => {
+    const fullPaymentSubtotal = items.reduce((sum, item) => {
+      if (getServiceBooking(item.id).isDepositOnly) return sum;
+      return sum + Math.max(0, getCartItemFullPrice(item) - (itemPromoDiscounts[item.id] ?? 0));
+    }, 0);
+    const isDepositOnlyCheckout = items.length > 0 && items.every(item => getServiceBooking(item.id).isDepositOnly);
+    return calculatePlatformFee(fullPaymentSubtotal, isDepositOnlyCheckout);
+  }, [items, getServiceBooking, itemPromoDiscounts]);
+
   const effectiveFinalTotal = useMemo(
-    () => effectiveTotal + getServiceFee(),
-    [effectiveTotal, getServiceFee]
+    () => effectiveTotal + platformFee,
+    [effectiveTotal, platformFee]
   );
 
   // Same as effectiveTotal but WITHOUT promo discounts — used so the summary
@@ -1438,15 +2423,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const effectiveTotalNoPromo = useMemo(() => {
     return items.reduce((sum, item) => {
       const booking = getServiceBooking(item.id);
-      const basePrice = Number(item?.price) || 0;
-      const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => s + (Number(addOn?.price) || 0), 0);
-      const itemTotalPrice = basePrice + addOnsTotal;
+      const itemTotalPrice = getCartItemFullPrice(item);
       if (booking.isDepositOnly) {
         const provName = item.providerDisplayName ?? item.providerName;
-        const pol = providerDepositPolicies[provName];
-        const policyArg: DepositPolicy | number = pol
-          ? { type: pol.depositType, amount: pol.depositAmount }
-          : 20;
+        const policyArg = resolveDepositPolicyArg(providerDepositPolicies, provName);
         return sum + BookingService.calculateDeposit(itemTotalPrice, policyArg);
       }
       return sum + itemTotalPrice;
@@ -1494,52 +2474,64 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     return units;
   }, [getServiceBooking]);
 
-  // Whether any item in the cart is deposit-only. When true the summary's
-  // bottom line isn't the cost of the services — it's just the amount being
-  // charged now — so the label says "Pay Now" instead of "Total". The
-  // per-item remaining balance stays on the individual service cards; the
-  // app deliberately doesn't total up or track off-app balances here.
-  const hasDepositItem = useMemo(
-    () => items.some(item => getServiceBooking(item.id).isDepositOnly),
-    [items, getServiceBooking]
+  // Line items for the payment sheet, built from the FROZEN checkout
+  // snapshot rather than live cart state. The sheet, handlePaymentSuccess,
+  // and the success modal must all show and charge the exact numbers
+  // frozen at "Confirm & Pay" — checkoutSnapshot.items already has promo
+  // discounts baked into their price, and each booking's own depositPolicy
+  // was resolved and stamped in at snapshot time (see bookingsByItemId
+  // above). Re-reading live providerDepositPolicies/itemPromoDiscounts here
+  // instead was the bug: a deposit-policy fetch resolving while the sheet
+  // was open could change what it showed mid-payment, independently of
+  // what BookingService.createAppointmentData actually charges from the
+  // same (unchanged) snapshot.
+  const paymentSheetCartItems = useMemo(
+    (): EffectiveCartItem[] => pricedCheckoutItems(checkoutSnapshot.items, checkoutSnapshot.bookings),
+    [checkoutSnapshot],
   );
 
-  // Compute effective cart items for payment modal
-  const effectiveCartItems = useMemo(() => {
-    return items.map(item => {
-      const booking = getServiceBooking(item.id);
-      const basePrice = Number(item?.price) || 0;
-      const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => {
-        return s + (Number(addOn?.price) || 0);
-      }, 0);
-      const itemTotalPrice = basePrice + addOnsTotal - (itemPromoDiscounts[item.id] ?? 0);
-      let effectivePrice: number;
-      if (booking.isDepositOnly) {
-        const provName = item.providerDisplayName ?? item.providerName;
-        const pol = providerDepositPolicies[provName];
-        const policyArg: DepositPolicy | number = pol
-          ? { type: pol.depositType, amount: pol.depositAmount }
-          : 20;
-        effectivePrice = BookingService.calculateDeposit(itemTotalPrice, policyArg);
-      } else {
-        effectivePrice = itemTotalPrice;
-      }
-      return { item, effectivePrice, isDeposit: !!booking.isDepositOnly };
-    });
-  }, [items, getServiceBooking, providerDepositPolicies, itemPromoDiscounts]);
+  // Subtotal/fee/total for the review screen's own Totals block AND (via
+  // checkoutTotalsFrom, the same function handleCheckout calls to set
+  // paymentTotal) the payment sheet and success modal — one source, so this
+  // number can never drift from what gets charged. Review is the screen
+  // Confirm & Pay is actually pressed from, so it's just as load-bearing as
+  // the payment sheet itself.
+  const frozenCheckoutTotals = useMemo(
+    () => checkoutTotalsFrom(paymentSheetCartItems),
+    [paymentSheetCartItems],
+  );
 
   const handleEditItem = useCallback((item: CartItem) => {
     setEditingItem(item);
     setShowBookingSheet(true);
-    // Editing is how the client acts on a conflict flag — clear it so the
-    // banner doesn't linger once they've picked a new time.
-    setConflictedItemIds(prev => {
-      if (!prev.has(item.id)) return prev;
-      const next = new Set(prev);
-      next.delete(item.id);
-      return next;
-    });
-  }, []);
+    // Editing is how the client acts on a flag — clear it so the banner
+    // doesn't linger once they've picked a new time.
+    clearItemIssue(item.id);
+  }, [clearItemIssue]);
+
+  // A flag from a network check describes the world at the moment it ran, so
+  // it must not outlive that moment. Editing and removing already clear one,
+  // and starting a fresh checkout clears them all — but a client who leaves
+  // to look at the provider's profile, sees the time is plainly still on
+  // offer, and comes back was stuck being told it was gone, with no way to
+  // dismiss it. Re-check on focus and take whatever comes back, including
+  // nothing.
+  //
+  // Only when something is actually flagged: with a clean cart this would be
+  // a Supabase round trip on every visit to buy nothing.
+  const revalidateRef = useRef<() => void>(() => {});
+  revalidateRef.current = () => {
+    if (itemIssues.size === 0) return;
+    let cancelled = false;
+    void identifyCartConflicts(items, getServiceBooking)
+      .then(found => { if (!cancelled) setItemIssues(found.flags); })
+      // Leave the existing flags alone on a failed re-check. They may well be
+      // stale, but silently clearing them on a network blip would wave the
+      // client through to a checkout that fails again for the same reason.
+      .catch(e => logger.error('Could not re-check cart flags on focus:', e));
+    return () => { cancelled = true; };
+  };
+  useFocusEffect(useCallback(() => revalidateRef.current(), []));
 
   // Picking a single service out of the chooser. If that service is currently
   // part of a group, editing it means it no longer runs back-to-back with the
@@ -1593,47 +2585,71 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       setPickerItems(null);
       setGroupRescheduleItems(groupItems);
       setGroupRescheduleDate('');
-      setGroupRescheduleOptions(null);
-      setGroupRescheduleChoice(null);
+      setGroupRescheduleTime('');
+      groupChainsByStart.current = new Map();
     },
     []
   );
 
-  // Load the start times the whole chain fits at on the picked day. Runs only
-  // while the group picker is open with a date chosen — the options are for
-  // THAT day, so they're cleared and refetched whenever the day changes.
-  useEffect(() => {
-    const groupItems = groupRescheduleItems;
-    if (!groupItems || !groupRescheduleDate) return;
-    let cancelled = false;
-    setGroupRescheduleOptions(null);
-    setGroupRescheduleChoice(null);
-    (async () => {
+  // What counts as a bookable time for this group: a start where the WHOLE
+  // chain fits back-to-back, not where the first service alone fits. Handed to
+  // the calendar so its day pills and its time row both use this rule — the
+  // calendar's default single-service lookup would offer times the group can't
+  // actually take. Each day's chains are cached by start time so tapping a
+  // time resolves straight back to its full per-service schedule.
+  const groupSlotResolver = useCallback(
+    async (date: string): Promise<string[]> => {
+      const groupItems = groupRescheduleItems;
+      if (!groupItems || groupItems.length === 0) return [];
       try {
         const providerKey = groupItems[0]!.providerId ?? groupItems[0]!.providerName;
-        const options = await AvailabilityService.findAllBackToBackSlots(
+        const chains = await AvailabilityService.findAllBackToBackSlots(
           providerKey,
           groupItems.map(item => ({ serviceId: item.serviceId, duration: item.duration })),
-          groupRescheduleDate,
+          date,
         );
-        // A stale response for a day the client already moved off must not
-        // overwrite the current day's options.
-        if (cancelled) return;
-        setGroupRescheduleOptions(options ?? []);
+        if (!chains) return [];
+        chains.forEach(chain => {
+          groupChainsByStart.current.set(`${date}|${chain[0]!.time}`, chain);
+        });
+        return chains.map(chain => chain[0]!.time);
       } catch (error) {
-        logger.error('Error loading group reschedule slots:', error);
-        if (!cancelled) setGroupRescheduleOptions([]);
+        logger.error('Error resolving group slots:', error);
+        return [];
       }
-    })();
-    return () => { cancelled = true; };
-  }, [groupRescheduleItems, groupRescheduleDate]);
+    },
+    [groupRescheduleItems]
+  );
+
+  // The chain behind the currently picked day+time, or null before both are
+  // chosen — also what the preview list and the confirm button read.
+  const groupRescheduleChain = useMemo(
+    () => (groupRescheduleDate && groupRescheduleTime
+      ? groupChainsByStart.current.get(`${groupRescheduleDate}|${groupRescheduleTime}`) ?? null
+      : null),
+    [groupRescheduleDate, groupRescheduleTime]
+  );
+
+  // "2h 45m total" for the picked chain — start of the first service to the
+  // end of the last, so it reflects the real appointment length rather than
+  // the sum of the services (which would ignore any gaps between them).
+  const groupRescheduleSpanLabel = useMemo(() => {
+    if (!groupRescheduleChain || groupRescheduleChain.length === 0) return '';
+    const startMinutes = to24hMinutes(groupRescheduleChain[0]!.time);
+    const endMinutes = to24hMinutes(groupRescheduleChain[groupRescheduleChain.length - 1]!.endTime);
+    if (startMinutes === Number.MAX_SAFE_INTEGER || endMinutes <= startMinutes) return '';
+    const total = endMinutes - startMinutes;
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return `${h > 0 ? `${h}h` : ''}${h > 0 && m > 0 ? ' ' : ''}${m > 0 ? `${m}m` : ''} total`;
+  }, [groupRescheduleChain]);
 
   // Commit the picked chain — every service moves to the new day at its own
   // slot, and the group stays one group (same batch id reused, or minted if
   // these somehow weren't grouped yet).
   const handleConfirmGroupReschedule = useCallback(() => {
     const groupItems = groupRescheduleItems;
-    const schedule = groupRescheduleChoice;
+    const schedule = groupRescheduleChain;
     if (!groupItems || !schedule || !groupRescheduleDate) return;
     const existingBatchIds = new Set(
       groupItems.map(i => i.bookingBatchId).filter(Boolean) as string[]
@@ -1650,7 +2666,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       });
     });
     setGroupRescheduleItems(null);
-  }, [groupRescheduleItems, groupRescheduleChoice, groupRescheduleDate, updateCartItem]);
+  }, [groupRescheduleItems, groupRescheduleChain, groupRescheduleDate, updateCartItem]);
 
   const toggleProviderCollapsed = useCallback((providerName: string) => {
     setCollapsedProviders(prev => {
@@ -1660,19 +2676,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       return next;
     });
   }, []);
-
-  // Opens the date/time picker for an auto-added required consultation as
-  // soon as it actually appears in the cart.
-  useEffect(() => {
-    if (!pendingConsultationSchedule) return;
-    const newItem = items.find(
-      i => i.providerId === pendingConsultationSchedule.providerId && i.serviceId === pendingConsultationSchedule.serviceId
-    );
-    if (newItem) {
-      handleEditItem(newItem);
-      setPendingConsultationSchedule(null);
-    }
-  }, [items, pendingConsultationSchedule, handleEditItem]);
 
   const handleBookingSheetEditSubmit = useCallback(
     (result: BookingSheetResult) => {
@@ -1684,6 +2687,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           selectedTime: result.time,
           notes: result.notes,
           isDepositOnly: result.isDepositOnly,
+          ...(result.policySnapshot ? { policySnapshot: result.policySnapshot } : {}),
+          // Passed unconditionally, not spread-when-present: editing a
+          // request-only time back to an ordinary one has to CLEAR the flag,
+          // and omitting the key would silently leave the old one attached to
+          // a time it no longer describes.
+          emergencyRequest: result.emergencyRequest,
         });
       } catch (error) {
         logger.error('Error saving booking edit:', error);
@@ -1692,42 +2701,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     },
     [editingItem, updateCartItem, showAlert]
   );
-
-  // Detect if any provider in the cart is mobile (travels to client)
-  useEffect(() => {
-    if (items.length === 0) { setHasMobileProvider(false); return; }
-    const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
-    getMobileProviderDisplayNames(names)
-      .then(mobileSet => setHasMobileProvider(mobileSet.size > 0))
-      .catch(() => setHasMobileProvider(false));
-  }, [items]);
-
-  // Detect providers that require a consultation before a new client's first
-  // booking, which of those the client already has booking history with, and
-  // which cart items are themselves consultation services.
-  useEffect(() => {
-    if (items.length === 0) {
-      setConsultationRequiredProviderIds(new Set());
-      setProvidersWithHistory(new Set());
-      setConsultationServiceIds(new Set());
-      return;
-    }
-    const providerIds = [...new Set(items.map(i => i.providerId).filter((id): id is string => !!id))];
-    const serviceIds = [...new Set(items.map(i => i.serviceId).filter((id): id is string => !!id && UUID_RE.test(id)))];
-
-    getConsultationRequiredProviderIds(providerIds)
-      .then(async requiredSet => {
-        setConsultationRequiredProviderIds(requiredSet);
-        if (requiredSet.size === 0) { setProvidersWithHistory(new Set()); return; }
-        const historySet = await getProviderIdsWithBookingHistory([...requiredSet]);
-        setProvidersWithHistory(historySet);
-      })
-      .catch(() => { setConsultationRequiredProviderIds(new Set()); setProvidersWithHistory(new Set()); });
-
-    getConsultationServiceIds(serviceIds)
-      .then(setConsultationServiceIds)
-      .catch(() => setConsultationServiceIds(new Set()));
-  }, [items]);
 
   // Navigation handlers - BACK TO HOME
   const onRefresh = useCallback(async () => {
@@ -1746,6 +2719,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         text: 'Clear',
         style: 'destructive',
         onPress: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
           try {
             clearCart();
             setError(null);
@@ -1770,86 +2744,74 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       logger.log('Items:', items.map(i => i.serviceName));
     }
 
-    // Providers who require a consultation before a new client's first
-    // booking: auto-add their consultation service to the cart and open its
-    // date/time picker immediately (via pendingConsultationSchedule, handled
-    // in the effect above) rather than blocking with nowhere to go, or
-    // silently adding it and hoping the client finds it themselves.
-    if (consultationRequiredProviderIds.size > 0) {
-      const needsConsultation = items.filter(item => {
-        if (!item.providerId || !consultationRequiredProviderIds.has(item.providerId)) return false;
-        if (item.serviceId && consultationServiceIds.has(item.serviceId)) return false; // this item IS the consultation
-        if (providersWithHistory.has(item.providerId)) return false; // already a returning client
-        const bookingConsultationInCart = items.some(
-          other => other.providerId === item.providerId && other.serviceId && consultationServiceIds.has(other.serviceId)
-        );
-        return !bookingConsultationInCart;
-      });
-      // One at a time — if a client somehow needs consultations with two
-      // different providers in the same cart, they'll get prompted for the
-      // second on their next checkout attempt after finishing the first.
-      const triggeringItem = needsConsultation[0];
-      if (triggeringItem?.providerId) {
-        const providerLabel = triggeringItem.providerDisplayName ?? triggeringItem.providerName;
-        const consultService = await getProviderConsultationService(triggeringItem.providerId);
-        setIsLoading(false);
-        if (!consultService) {
-          showAlert(
-            'Consultation Required',
-            `${providerLabel} requires a consultation before a new client's first booking but hasn't set one up yet — please message them directly.`
-          );
-          return;
-        }
-        const mins = consultService.durationMinutes;
-        const durationLabel = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h${mins % 60 ? ` ${mins % 60}min` : ''}`;
-        addToCart({
-          providerName: triggeringItem.providerName,
-          providerDisplayName: triggeringItem.providerDisplayName,
-          providerSlug: triggeringItem.providerSlug,
-          providerId: triggeringItem.providerId,
-          providerImage: triggeringItem.providerImage,
-          providerService: consultService.categoryName,
-          service: {
-            id: consultService.id,
-            name: consultService.name,
-            price: consultService.price,
-            duration: durationLabel,
-            description: consultService.description,
-          },
-          quantity: 1,
-        });
-        // No alert here — BookingSheet opens right after (via the effect
-        // above once the new item lands in `items`) and its own header
-        // shows the consultation's name and price, which is enough to tell
-        // the client what's happening without stacking two modals at once
-        // (unreliable on Android, per BookingSheet's own opening comment).
-        setPendingConsultationSchedule({ providerId: triggeringItem.providerId, serviceId: consultService.id });
-        return;
-      }
-    }
+    // Every checkout precondition below flags the offending item(s) as well as
+    // raising the alert. The alert stays short on purpose — it says THAT
+    // something is wrong and is then dismissed and gone; the per-service detail
+    // (which service, why, what to do) lives on the flagged cards, which are
+    // still there when the client goes looking for what to fix.
+    //
+    // Starting a fresh attempt clears flags recorded by the LAST attempt, so a
+    // resolved item doesn't stay red. The local pass is derived from the cart
+    // itself, so it survives this and is still on screen below.
+    setItemIssues(new Map());
 
-    // Validate all items have schedules
-    const unscheduled = items.filter(item => {
-      const booking = getServiceBooking(item.id);
-      return !booking.selectedDate || !booking.selectedTime;
-    });
-
-    if (unscheduled.length > 0) {
+    // The last attempt to fetch each cart provider's live deposit policy and
+    // mobile/address requirement failed. Proceeding anyway is exactly what
+    // used to let a mobile provider's booking go out with no client address
+    // and every deposit silently fall back to the generic 20% — checking out
+    // on guessed data instead of surfacing the failure and letting the
+    // client retry.
+    if (checkoutMetadataError) {
       showAlert(
-        'Schedule Required',
-        `Please schedule ${unscheduled.length} appointment(s) before checkout.`
+        'Could not verify checkout details',
+        'We couldn’t confirm this provider’s current price and address requirements. Please try again.',
       );
       return;
     }
 
-    // Validate booking data
-    const hasInvalidDate = items.some(item => {
-      const booking = getServiceBooking(item.id);
-      return booking.selectedDate && isNaN(new Date(booking.selectedDate).getTime());
-    });
+    // Every provider represented in the cart needs an entry in
+    // providerDepositPolicies before its price/deposit-availability can be
+    // trusted — a missing entry means either the checkout-metadata fetch is
+    // still in flight (the cart hydrates from AsyncStorage and renders
+    // instantly, well before that network round trip lands, so tapping
+    // Checkout immediately is a real, ordinary race, not an edge case) or
+    // the provider has dropped out of getProviderCheckoutMetadata's
+    // has_gone_live/is_active filter since the item was added. Distinct
+    // from checkoutMetadataError above: the fetch didn't fail, it just
+    // hasn't said anything about this provider yet.
+    const unresolvedProviderNames = new Set(
+      items
+        .map(item => item.providerDisplayName ?? item.providerName)
+        .filter(name => !(name in providerDepositPolicies)),
+    );
+    if (unresolvedProviderNames.size > 0) {
+      // Split by whether a COMPLETED fetch actually said anything about this
+      // provider yet. Still-unresolved-because-in-flight is the ordinary
+      // case and self-resolves in a moment — nothing gets flagged red, or
+      // the banner would outlive the problem. Resolved-but-still-missing
+      // means the provider genuinely dropped out of has_gone_live/is_active
+      // since the item was added — that's really providerUnbookable.
+      const genuinelyUnbookable = [...unresolvedProviderNames].filter(name => resolvedProviderNames.has(name));
+      if (genuinelyUnbookable.length > 0) {
+        const unbookableSet = new Set(genuinelyUnbookable);
+        setItemIssues(new Map(
+          items
+            .filter(item => unbookableSet.has(item.providerDisplayName ?? item.providerName))
+            .map(item => [item.id, CART_ISSUE.providerUnbookable] as const),
+        ));
+        showAlert('Provider no longer available', 'One or more providers in your cart are no longer taking bookings — remove them to continue.');
+      } else {
+        showAlert('Still confirming your cart', 'Still checking current pricing for a provider in your cart — try again in a few seconds.');
+      }
+      return;
+    }
 
-    if (hasInvalidDate) {
-      showAlert('Check your appointment times', 'One of your appointment dates isn\'t valid. Please pick it again.');
+    // No date/time, or a date that didn't survive being stored. The cards have
+    // already been red since the moment either appeared — this is the same
+    // finding, not a second one, so it reuses it rather than re-deriving it
+    // with wording that could drift out of step.
+    if (localItemIssues.size > 0) {
+      showAlert('Schedule Required', 'Some services in your cart need attention before checkout.');
       return;
     }
 
@@ -1857,24 +2819,89 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // overlap each other, or a slot that's since been taken by someone else's
     // booking in Supabase — BEFORE the payment sheet opens. Without this,
     // the first conflict either of those produces is only discovered by
-    // createBooking()'s own insert-time check, mid-checkout, after the card
+    // the claim RPC's own insert-time check, mid-checkout, after the card
     // has already been authorised.
-    const conflictCheck = await AvailabilityService.validateCartBookings(
-      items.map(item => {
-        const booking = getServiceBooking(item.id);
-        return {
-          providerName: item.providerId ?? item.providerName,
-          date: booking.selectedDate,
-          time: booking.selectedTime,
-          duration: item.duration,
-          cartItemId: item.id,
-          serviceId: item.serviceId,
-        };
-      })
-    );
-    if (!conflictCheck.isValid) {
-      const messages = [...new Set(conflictCheck.conflicts.map(c => c.message))].join('\n');
-      showAlert('Scheduling Conflict', messages);
+    // A promo validated when the item was added, or auto-applied from a "Book
+    // Now" tap — neither of which says anything about whether it is still live
+    // now. An expired code silently discounts the total the client is shown
+    // while prepare_checkout charges the real price, so this has to be caught
+    // before the payment sheet, not after. One query per provider holding a
+    // code, which is one or two in practice, run together.
+    const promoProviders = Object.keys(appliedPromos);
+    if (promoProviders.length > 0) {
+      const rechecked = await Promise.all(
+        promoProviders.map(async providerKey => {
+          const providerItems = itemsByProvider[providerKey];
+          const displayName = providerItems?.[0]?.providerDisplayName ?? providerKey;
+          const code = appliedPromos[providerKey]?.promo_code;
+          if (!code) return { providerKey, stillValid: false };
+          try {
+            return { providerKey, stillValid: Boolean(await validatePromoCode(displayName, code)) };
+          } catch (error) {
+            // Couldn't reach the check. Treating that as "expired" would strip
+            // a discount the client is entitled to over a dropped connection,
+            // so it passes — prepare_checkout re-derives the price server-side
+            // and is the actual authority on what gets charged.
+            logger.error('Could not re-check promo code at checkout:', error);
+            return { providerKey, stillValid: true };
+          }
+        }),
+      );
+
+      const expired = rechecked.filter(r => !r.stillValid).map(r => r.providerKey);
+      if (expired.length > 0) {
+        // Dropped from state as well as flagged: leaving it applied would keep
+        // showing a discount that no longer exists, and the client would be
+        // told to fix something the cart still claims is fine.
+        setAppliedPromos(prev => {
+          const next = { ...prev };
+          expired.forEach(key => delete next[key]);
+          return next;
+        });
+        const expiredSet = new Set(expired);
+        setItemIssues(new Map(
+          items
+            .filter(item => expiredSet.has(item.providerName))
+            .map(item => [item.id, CART_ISSUE.promoExpired] as const),
+        ));
+        showAlert('Promo code no longer valid', 'The price has been updated. Check your cart before paying.');
+        return;
+      }
+    }
+
+    // A provider can turn off deposit payments (or make one mandatory) after
+    // an item was added with a different payment choice. bookingsByItemId
+    // already reconciles isDepositOnly against the live-fetched policy in
+    // both directions, so comparing that reconciled value back against what
+    // the item itself still says finds every card whose payment choice
+    // silently changed since it was added — without this, checkout would
+    // proceed on a card that still shows the client's original choice but
+    // charges (or requires) a different amount.
+    const depositMismatches = items.filter(item => {
+      const booking = bookingsByItemId[item.id];
+      return booking != null && !!item.isDepositOnly !== !!booking.isDepositOnly;
+    });
+    if (depositMismatches.length > 0) {
+      const mismatchIds = new Set(depositMismatches.map(item => item.id));
+      setItemIssues(new Map(
+        items
+          .filter(item => mismatchIds.has(item.id))
+          .map(item => [
+            item.id,
+            item.isDepositOnly ? CART_ISSUE.depositNoLongerOffered : CART_ISSUE.depositNowRequired,
+          ] as const),
+      ));
+      showAlert('Payment option changed', 'One or more providers changed their deposit policy — review the updated price before paying.');
+      return;
+    }
+
+    // Each conflict names the cart item it belongs to, so the reason goes onto
+    // that item's own card rather than being flattened into one de-duplicated
+    // blob of text with nothing tying a line back to a service.
+    const issues = await identifyCartConflicts(items, getServiceBooking);
+    if (issues.flags.size > 0) {
+      setItemIssues(issues.flags);
+      showAlert('Scheduling Conflict', issues.messages.join('\n'));
       return;
     }
 
@@ -1901,13 +2928,22 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const snapshot = {
       items: snapshotItems,
       bookings: snapshotBookings,
+      mobileProviderNames,
     };
     if (__DEV__) {
       logger.log('Snapshot captured:', snapshot.items.length, 'items');
     }
     setCheckoutSnapshot(snapshot);
 
-    setPaymentTotal(effectiveFinalTotal);
+    // Derived from the snapshot object just built (via the same
+    // pricedCheckoutItems/checkoutTotalsFrom pair frozenCheckoutTotals uses),
+    // not the live effectiveFinalTotal memo — checkoutSnapshot state hasn't
+    // re-rendered yet at this point, so reading frozenCheckoutTotals directly
+    // here would still see the PREVIOUS snapshot. Calling the same two pure
+    // functions on `snapshot` itself keeps this structurally equal to what
+    // frozenCheckoutTotals.total computes next render, rather than two
+    // independent formulas that could drift apart under a future edit.
+    setPaymentTotal(checkoutTotalsFrom(pricedCheckoutItems(snapshot.items, snapshot.bookings)).total);
 
     // Show review modal pre-filled with user data
     setReviewName(user?.name || '');
@@ -1916,28 +2952,75 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setSaveAsDefault(false);
     setIsEditingDetails(false);
     setShowReviewModal(true);
+
+    // Prefill the address instead of making a mobile-booking client retype it
+    // every checkout. The saved account default (set via the checkbox below)
+    // wins; failing that, fall back to whatever address their last mobile
+    // booking used, so returning clients who predate the saved default still
+    // get one. The fallback is deliberately not awaited — the field is
+    // editable and only required when a mobile provider is in the cart, so a
+    // slow lookup shouldn't hold up the review step — and it only ever fills a
+    // still-empty field, so it can't overwrite what the client has typed.
+    if (snapshot.mobileProviderNames.length > 0) {
+      if (user?.clientAddress) {
+        setClientAddress(user.clientAddress);
+      } else {
+        getMyLastClientAddress()
+          .then(saved => {
+            if (saved) setClientAddress(prev => (prev.trim() ? prev : saved));
+          })
+          .catch(err => logger.error('Could not prefill saved address:', err));
+      }
+    }
   } catch (error) {
     logger.error('Checkout error:', error);
-    showAlert('Something went wrong', 'We couldn\'t start checkout. Please try again.');
+    // This is the outer catch for the whole precondition chain above, but in
+    // practice the only step in it that can actually fail here is
+    // identifyCartConflicts()'s Supabase round-trip (a network/availability
+    // check) — everything else between here and the top is synchronous local
+    // state. Name that instead of a generic "something went wrong," since
+    // it's almost always what actually happened.
+    showAlert('Could not check availability', "We couldn't check your appointment times. Please check your connection and try again.");
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, consultationRequiredProviderIds, consultationServiceIds, providersWithHistory, addToCart]);
+}, [items, getServiceBooking, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, mobileProviderNames, identifyCartConflicts, localItemIssues, itemsByProvider, checkoutMetadataError, providerDepositPolicies, resolvedProviderNames]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
+    // Validate name is provided — this becomes the permanent customer_name
+    // snapshot on the booking row (providers see it on every booking card,
+    // in analytics, clientele, etc.), so an empty value here isn't just a
+    // blank field, it's a silent "Client"/'—' fallback everywhere downstream.
+    if (!reviewName.trim()) {
+      showReviewAlert('Name Required', 'Please enter your name to continue.');
+      setIsEditingDetails(true);
+      return;
+    }
     // Validate phone is provided
     if (!reviewPhone.trim()) {
-      showAlert('Phone Required', 'Please enter your phone number to continue.');
+      showReviewAlert('Phone Required', 'Please enter your phone number to continue.');
+      setIsEditingDetails(true);
       return;
     }
     const digitsOnly = reviewPhone.replace(/[\s\-()+ ]/g, '');
     if (digitsOnly.length < 10) {
-      showAlert('Check your phone number', 'Please enter a valid phone number.');
+      showReviewAlert('Check your phone number', 'Please enter a valid phone number.');
+      setIsEditingDetails(true);
       return;
     }
-    if (hasMobileProvider && !clientAddress.trim()) {
-      showAlert('Address Required', 'Your provider is mobile and will travel to you. Please enter your address.');
+    // Reads the frozen checkoutSnapshot.mobileProviderNames, not the live
+    // state — this runs strictly after handleCheckout captured the snapshot
+    // (the review modal can't be open otherwise), and it has to agree with
+    // what handlePaymentSuccess actually stamps onto the booking, or a
+    // refetch landing in between could gate on a provider list the write
+    // no longer uses.
+    const reviewMobileProviderNames = checkoutSnapshot.mobileProviderNames;
+    if (reviewMobileProviderNames.length > 0 && !clientAddress.trim()) {
+      showReviewAlert(
+        'Address Required',
+        `${formatNameList(reviewMobileProviderNames)} ${reviewMobileProviderNames.length === 1 ? 'is a mobile provider' : 'are mobile providers'} and will come to you. Tap "Add your address" to set it on your account first.`,
+      );
       return;
     }
 
@@ -1950,7 +3033,17 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // to the DB, so including it here silently desyncs local user.email from
     // the real auth email without ever actually changing it server-side.
     if (saveAsDefault) {
-      await updateUser({ name: reviewName, phone: reviewPhone });
+      try {
+        // Address is deliberately not written here any more — it's owned by
+        // ProfileInfo's AddressPicker, which saves it to the account at the
+        // moment it's picked. Writing it back from this screen's mirror
+        // could only ever re-save the same value, or clobber a newer one.
+        await updateUser({ name: reviewName, phone: reviewPhone });
+      } catch (err) {
+        // Don't block checkout on this — the entered details still carry
+        // through to the booking itself via customerInfo above.
+        logger.error('Failed to save default contact details:', err);
+      }
     }
 
     // Re-confirm agreement per checkout attempt rather than letting a stale
@@ -1958,7 +3051,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setAgreedToPolicy(false);
     setShowReviewModal(false);
     setShowBookingSummaryModal(true);
-  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showAlert, hasMobileProvider, clientAddress]);
+  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showReviewAlert, checkoutSnapshot, clientAddress]);
 
 const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIntentId?: string) => {
   if (__DEV__) {
@@ -1968,6 +3061,13 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
   }
 
   try {
+    // The secure Stripe route has already finalised its server-owned holds in
+    // the Edge Function. Do not fall through to the legacy client insert
+    // path, which would duplicate the appointments.
+    if (USE_STRIPE_PAYMENTS && serverCheckoutBatchId) {
+      setServerCheckoutBatchId(null);
+      return;
+    }
     // Step 0: Check snapshot
     if (__DEV__) {
       logger.log('STEP 0: Checking snapshot...');
@@ -2049,23 +3149,17 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       ...(paymentIntentId ? { paymentIntentId } : {}),
     }));
 
-    // Fetch client health data so the provider sees it immediately on the booking.
-    // Allergies and medical notes are critical for the provider before accepting.
-    try {
-      const healthProfile = await getUserHealthProfile(user?.id ?? '');
-      const parts: string[] = [];
-      if (healthProfile?.allergies?.length) parts.push(`Allergies: ${(healthProfile.allergies as string[]).join(', ')}`);
-      if (healthProfile?.medical_notes) parts.push(`Medical notes: ${healthProfile.medical_notes}`);
-      if (parts.length) {
-        const healthPrefix = `Health info: ${parts.join(' | ')}\n`;
-        appointmentData = appointmentData.map(a => ({
-          ...a,
-          notes: healthPrefix + (a.notes || ''),
-        }));
-      }
-    } catch {
-      // Non-critical — booking proceeds without health data prefix
-    }
+    // NOTE: the client's allergies/medical notes are deliberately NOT copied
+    // into `notes` here. This used to prepend a "Health info: ..." line to
+    // every booking's notes, which meant (a) the client's own booking detail
+    // showed text under "YOUR NOTES" that they never typed — often the only
+    // thing there, on a booking where they'd written nothing — and (b) the
+    // provider saw the same facts twice, since ProviderBookingDetailScreen
+    // already reads the live client profile and renders allergies and
+    // medical notes in its own "Health & Alerts" section (plus the alert
+    // strip at the top). Copying health-adjacent data into a free-text field
+    // also froze it at checkout time, so a client updating their allergies
+    // afterwards left a stale copy on the booking forever.
 
     // Step 3: Create bookings IN CONTEXT
     if (__DEV__) {
@@ -2081,7 +3175,30 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       // batch is either now claimed, or claim found nothing live and every
       // item fell back to a normal insert; either way there's nothing left
       // to release.
-      await createBookingsFromCart(itemsToBook, appointmentData, clientAddress.trim() || undefined, holdBatchId ?? undefined);
+      // Scoped to the mobile providers in this cart, not the cart as a whole:
+      // `clientAddress` is seeded from the account's saved default whether or
+      // not anyone in the cart travels, so passing it unconditionally stamped
+      // the client's home address onto salon bookings too. Reads the FROZEN
+      // checkoutSnapshot.mobileProviderNames, not the live state — a
+      // checkout-metadata refetch resolving between "Confirm & Pay" and here
+      // must not change which providers actually receive the address.
+      const snapshotMobileProviderNames = checkoutSnapshot.mobileProviderNames;
+      await createBookingsFromCart(
+        itemsToBook,
+        appointmentData,
+        snapshotMobileProviderNames.length > 0 && clientAddress.trim()
+          ? {
+              address: clientAddress.trim(),
+              // From the account, not this screen: the area is picked once in
+              // Account > Your Address and inherited by every booking, the
+              // same way the saved address already is. Undefined when they
+              // have never picked one, and the DB derives a fallback.
+              area: user?.clientArea ?? null,
+              providerNames: snapshotMobileProviderNames,
+            }
+          : undefined,
+        holdBatchId ?? undefined,
+      );
       setHoldBatchId(null);
       if (__DEV__) {
         logger.log('STEP 3 COMPLETE - createBookingsFromCart returned');
@@ -2122,7 +3239,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     logger.error('║ errorType :', isBookingErr ? 'BookingError' : ((error as any)?.name ?? typeof error));
     if (pgCode) logger.error('║ pgCode    :', pgCode); // e.g. 23505 = slot taken, 42501 = RLS
     logger.error('║ userId    :', user?.id ?? '(none)');
-    logger.error('║ paidTotal :', `£${effectiveFinalTotal?.toFixed?.(2) ?? '?'} via ${paymentMethod}`);
+    logger.error('║ paidTotal :', `£${paymentTotal?.toFixed?.(2) ?? '?'} via ${paymentMethod}`);
     logger.error(
       '║ items     :',
       checkoutSnapshot.items.map(i => {
@@ -2153,14 +3270,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       const failedIds = checkoutSnapshot.items
         .map(i => i.id)
         .filter(id => !error.succeededCartItemIds.includes(id));
-      setConflictedItemIds(new Set(failedIds));
+      // 23505 is the overlap constraint — someone else took the slot between
+      // the availability check and the insert. Anything else failed for a
+      // reason we can't attribute to the time, so don't tell the client to
+      // re-pick one.
+      const reason = pgCode === '23505' ? CART_ISSUE.takenWhilePaying : CART_ISSUE.bookingFailed;
+      setItemIssues(new Map(failedIds.map(id => [id, reason])));
     }
     // The caller (PaymentModal.handlePayment) owns showing the single
     // "Booking Failed" alert and closing the payment sheet — this only needs
     // to propagate the error up to it (after the diagnostics above).
     throw error;
   }
-}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart]);
+}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, paymentTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress]);
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
@@ -2178,40 +3300,39 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
   // Create dynamic styles based on theme
   const dynamicStyles = useMemo(() => StyleSheet.create({
-    backText: { fontSize: 18, fontWeight: '600', color: theme.text, marginTop: -2 },
     headerTitle: { fontSize: 26, fontWeight: '600', fontFamily: 'BakbakOne-Regular', color: theme.text },
     title: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text },
     providerName: { fontSize: 12, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 2 },
-    providerStats: { fontSize: 9, fontFamily: 'Jura-VariableFont_wght bold', fontWeight: '500', color: theme.secondaryText, marginTop: 3 },
+    providerStats: { fontSize: 9, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginTop: 3 },
     serviceName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 3 },
-    serviceDuration: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 6 },
+    serviceDuration: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 6 },
     addOnsTitle: { fontSize: 9, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 5 },
-    baseServicePrice: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght bold', color: theme.secondaryText, marginBottom: 3, fontWeight: '300' },
-    addOnItem: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght bold', color: theme.secondaryText, marginBottom: 2, paddingLeft: 3 },
+    baseServicePrice: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 3, fontWeight: '500' },
+    addOnItem: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 2, paddingLeft: 3 },
     fallbackTitle: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 10, textAlign: 'center' },
-    fallbackLabel: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.text, marginBottom: 3, marginTop: 6 },
+    fallbackLabel: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text, marginBottom: 3, marginTop: 6 },
     notesTitle: { fontSize: 14, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 3 },
-    notesSubtitle: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText },
+    notesSubtitle: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText },
     characterCount: { fontSize: 8, color: theme.secondaryText, textAlign: 'right', marginBottom: 12 },
     cancelText: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text },
-    summaryLabel: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.text },
-    summaryValue: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.text, fontWeight: '600' },
-    serviceFeeNote: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, textAlign: 'right', marginTop: 2 },
+    summaryLabel: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text },
+    summaryValue: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.text, fontWeight: '700' },
+    serviceFeeNote: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, textAlign: 'right', marginTop: 2 },
     totalLabel: { fontSize: 17, fontFamily: 'BakbakOne-Regular', color: theme.text },
     totalValue: { fontSize: 18, fontFamily: 'BakbakOne-Regular', color: theme.text },
     emptyTitle: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 8 },
-    emptyText: { fontSize: 11, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 16, textAlign: 'center' },
+    emptyText: { fontSize: 11, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 16, textAlign: 'center' },
     paymentTitle: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text },
     paymentCloseText: { fontSize: 14, color: theme.text, fontWeight: 'bold' },
     orderSummaryTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 8 },
-    orderItemName: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.text, flex: 1 },
+    orderItemName: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text, flex: 1 },
     orderItemPrice: { fontSize: 10, fontFamily: 'BakbakOne-Regular', color: theme.text },
     orderTotalLabel: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text },
     orderTotalAmount: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text, fontWeight: 'bold' },
     paymentMethodsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
     paymentMethodName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, flex: 1 },
     cardDetailsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
-    cardInput: { borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'Jura-VariableFont_wght', borderWidth: 1 },
+    cardInput: { borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', borderWidth: 1 },
     liquidGlassSuccessCheckmark: { fontSize: 28, color: theme.text, fontWeight: 'bold' },
     liquidGlassSuccessTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18, color: theme.text, marginBottom: 6, textAlign: 'center' },
     liquidGlassSuccessButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: theme.text, fontWeight: '600' },
@@ -2228,6 +3349,54 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     [items, getServiceBooking]
   );
 
+  const cartProviderRows = useMemo(
+    () => Object.entries(itemsByProvider).filter(([providerName, providerItems]) => (
+      providerItems.length > 0 && bookingSummary.providers?.[providerName] != null
+    )),
+    [bookingSummary.providers, itemsByProvider],
+  );
+
+  const renderCartProviderRow = useCallback(({
+    item: [providerName, providerItems],
+  }: {
+    item: [string, CartItem[]];
+  }) => {
+    const providerData = bookingSummary.providers?.[providerName];
+    if (!providerData) return null;
+    const policyKey = providerItems[0]?.providerDisplayName ?? providerName;
+    const policy = providerDepositPolicies[policyKey];
+    return (
+      <CartProviderSection
+        providerName={providerName}
+        providerItems={providerItems}
+        providerData={providerData}
+        renderUnits={buildRenderUnits(providerItems)}
+        isCollapsed={collapsedProviders.has(providerName)}
+        issuesByItemId={displayedItemIssues}
+        allCartItems={items}
+        getBooking={getServiceBooking}
+        onNavigateProvider={navigateToProvider}
+        onRemove={handleRemoveFromCart}
+        onEdit={handleEditItem}
+        onEditGroup={setPickerItems}
+        onToggleCollapsed={toggleProviderCollapsed}
+        {...(policy !== undefined ? { depositPolicy: policy } : {})}
+      />
+    );
+  }, [
+    bookingSummary.providers,
+    buildRenderUnits,
+    collapsedProviders,
+    displayedItemIssues,
+    getServiceBooking,
+    handleEditItem,
+    handleRemoveFromCart,
+    items,
+    navigateToProvider,
+    providerDepositPolicies,
+    toggleProviderCollapsed,
+  ]);
+
   return (
     <ErrorBoundary>
       <ThemedBackground style={{ flex: 1 }}>
@@ -2237,10 +3406,13 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
           <View style={[styles.header, { backgroundColor: P.bg, borderBottomColor: P.border }]}>
             <TouchableOpacity
               style={[styles.backButton, { backgroundColor: P.surface, borderColor: P.border }]}
-              onPress={handleContinueShopping}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                handleContinueShopping();
+              }}
               activeOpacity={0.7}
             >
-              <Text style={dynamicStyles.backText}>←</Text>
+              <Ionicons name="chevron-back" size={20} color={theme.text} />
             </TouchableOpacity>
 
             <Text style={dynamicStyles.headerTitle}>Cart ({String(totalItems ?? 0)})</Text>
@@ -2248,21 +3420,28 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             <View style={styles.headerRightButtons}>
               {/* View Bookings Button */}
               <TouchableOpacity
-                style={[styles.bookingsButton, { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.18)' : 'rgba(92,64,51,0.18)') }]}
+                style={[styles.bookingsButton, { backgroundColor: P.accentDim }]}
                 onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   try {
                     navigation.navigate('Bookings'); // NAVIGATES TO BOOKINGS SCREEN
                   } catch (error) {
                     logger.error('Bookings navigation error:', error);
-                    Alert.alert('Navigation Error', 'Unable to open bookings');
+                    showAlert('Navigation Error', 'Unable to open bookings');
                   }
                 }}
               >
-                <Text style={styles.bookingsText}>View Bookings</Text>
+                <Text style={[styles.bookingsText, { color: P.accentText }]}>View Bookings</Text>
               </TouchableOpacity>
               {/* Clear Button */}
               {items.length > 0 && (
-                <TouchableOpacity style={styles.clearButton} onPress={handleClearCart}>
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    handleClearCart();
+                  }}
+                >
                   <Text style={styles.clearText}>Clear</Text>
                 </TouchableOpacity>
               )}
@@ -2273,426 +3452,530 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
           {error && (
             <View style={styles.errorBanner}>
               <Text style={styles.errorBannerText}>{error}</Text>
-              <TouchableOpacity onPress={() => setError(null)}>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setError(null);
+                }}
+              >
                 <Text style={styles.errorDismiss}>×</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Confirm Your Details Modal */}
-          <Modal visible={showReviewModal} animationType="fade" transparent={true}>
-            <View style={styles.modalOverlayNoBlur}>
-              <View style={[styles.reviewModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
-                <View style={styles.reviewModalContent}>
-                  {/* Title row with Edit button */}
-                  <View style={styles.reviewTitleRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.reviewModalTitle, { color: P.text }]}>Confirm Your Details</Text>
-                      <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>
-                        This info will be shared with your provider
-                      </Text>
+          {/* Confirm Your Details Modal.
+
+              Wrapped so a tap anywhere off an input dismisses the keyboard:
+              the phone and address fields open a numeric/plain keypad with
+              no return key, which left no way at all to put the keyboard
+              away and reach the buttons underneath. TextInputs claim the
+              touch responder themselves, so moving between fields still
+              works — only taps on inert areas dismiss. */}
+          <Modal
+            visible={showReviewModal}
+            animationType="fade"
+            transparent={true}
+            onRequestClose={() => setShowReviewModal(false)}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <View style={styles.modalOverlayNoBlur}>
+                <KeyboardDismissView style={styles.reviewKeyboardWrap}>
+                  <View style={[styles.reviewModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
+                    <View style={styles.reviewModalContent}>
+                      {/* Title row with Edit button */}
+                      <View style={styles.reviewTitleRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.reviewModalTitle, { color: P.text }]}>Confirm Your Details</Text>
+                          <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>
+                            This info will be shared with your provider
+                          </Text>
+                        </View>
+                        {!isEditingDetails && (
+                          <TouchableOpacity
+                            style={[styles.reviewEditBtn, { backgroundColor: P.accentDim, borderColor: P.border }]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                              setIsEditingDetails(true);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.reviewEditText, { color: P.accentText }]}>Edit</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Name */}
+                      <View style={styles.reviewFieldGroup}>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>NAME</Text>
+                        {isEditingDetails ? (
+                          <TextInput
+                            style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                            value={reviewName}
+                            onChangeText={setReviewName}
+                            placeholder="Your name"
+                            placeholderTextColor={P.sub}
+                          />
+                        ) : (
+                          <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewName || '—'}</Text>
+                        )}
+                      </View>
+
+                      {/* Email */}
+                      <View style={styles.reviewFieldGroup}>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>EMAIL</Text>
+                        {isEditingDetails ? (
+                          <TextInput
+                            style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                            value={reviewEmail}
+                            onChangeText={setReviewEmail}
+                            placeholder="your@email.com"
+                            placeholderTextColor={P.sub}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                          />
+                        ) : (
+                          <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewEmail || '—'}</Text>
+                        )}
+                      </View>
+
+                      {/* Phone */}
+                      <View style={styles.reviewFieldGroup}>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>PHONE NUMBER</Text>
+                        {isEditingDetails ? (
+                          <TextInput
+                            style={[styles.reviewInput, {
+                              color: P.text,
+                              borderColor: !reviewPhone.trim() ? '#FF3B30' : P.border,
+                              backgroundColor: P.surface,
+                            }]}
+                            value={reviewPhone}
+                            onChangeText={setReviewPhone}
+                            placeholder="+44 7700 900000"
+                            placeholderTextColor={P.sub}
+                            keyboardType="phone-pad"
+                          />
+                        ) : (
+                          <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewPhone || '—'}</Text>
+                        )}
+                        {isEditingDetails && !reviewPhone.trim() && (
+                          <Text style={styles.reviewPhoneWarning}>Phone number is required to book</Text>
+                        )}
+                      </View>
+
+                      {/* Address — only shown when a mobile provider is in
+                          the cart. No longer a free-text field here: it opens
+                          the account screen, where the same geocoded
+                          AddressPicker providers use stores it on the
+                          account. Typing it here meant a different,
+                          unvalidated string every checkout, for the one
+                          field a provider actually has to navigate to. */}
+                      {checkoutSnapshot.mobileProviderNames.length > 0 && (
+                        <View style={styles.reviewFieldGroup}>
+                          <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
+                          <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
+                            {formatNameList(checkoutSnapshot.mobileProviderNames)}{' '}
+                            {checkoutSnapshot.mobileProviderNames.length === 1
+                              ? 'is a mobile provider'
+                              : 'are mobile providers'} and will come to you
+                          </Text>
+                          <TouchableOpacity
+                            style={[styles.reviewAddressBtn, {
+                              borderColor: clientAddress.trim() ? P.border : '#FF3B30',
+                              backgroundColor: P.surface,
+                            }]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                              openAddressSettings();
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons
+                              name="location-outline"
+                              size={16}
+                              color={clientAddress.trim() ? P.sub : '#FF3B30'}
+                            />
+                            <Text
+                              style={[styles.reviewAddressBtnText, { color: clientAddress.trim() ? P.text : '#FF3B30' }]}
+                              numberOfLines={2}
+                            >
+                              {clientAddress.trim() || 'Add your address'}
+                            </Text>
+                            <Ionicons name="chevron-forward" size={16} color={P.sub} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {/* Save as Default — only in edit mode */}
+                      {isEditingDetails && (
+                        <TouchableOpacity
+                          style={styles.reviewCheckboxRow}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            setSaveAsDefault(!saveAsDefault);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.reviewCheckbox, {
+                            borderColor: P.border,
+                            backgroundColor: saveAsDefault ? P.accent : 'transparent',
+                          }]}>
+                            {saveAsDefault && <Text style={[styles.reviewCheckmark, { color: P.onAccent }]}>✓</Text>}
+                          </View>
+                          <Text style={[styles.reviewCheckboxLabel, { color: P.text }]}>
+                            Set as default for future bookings
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Buttons */}
+                      <View style={[styles.reviewButtonRow, isEditingDetails && { marginTop: 8 }]}>
+                        <TouchableOpacity
+                          style={[styles.reviewCancelBtn, { borderColor: P.border }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            if (isEditingDetails) {
+                              setIsEditingDetails(false);
+                            } else {
+                              setShowReviewModal(false);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.reviewCancelText, { color: P.text }]}>
+                            {isEditingDetails ? 'Done' : 'Cancel'}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            handleReviewConfirm();
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.reviewConfirmText, { color: P.onAccent }]}>Continue</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    {!isEditingDetails && (
-                      <TouchableOpacity
-                        style={[styles.reviewEditBtn, { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.12)' : 'rgba(92,64,51,0.12)'), borderColor: P.border }]}
-                        onPress={() => setIsEditingDetails(true)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.reviewEditText, { color: P.accent }]}>Edit</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
+                </KeyboardDismissView>
+              </View>
+            </TouchableWithoutFeedback>
+            {/* Nested INSIDE this modal on purpose — see showReviewAlert. */}
+            <ReviewDialogHost />
+          </Modal>
 
-                  {/* Name */}
-                  <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>NAME</Text>
-                    {isEditingDetails ? (
-                      <TextInput
-                        style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
-                        value={reviewName}
-                        onChangeText={setReviewName}
-                        placeholder="Your name"
-                        placeholderTextColor={P.sub}
+          {/* Booking Summary. A small cart stays a centred card — that reads
+              as a confirmation step, and blowing four lines up to fill a
+              phone screen feels heavier than the decision is. From
+              FULL_SCREEN_SUMMARY_THRESHOLD appointments (or more than
+              FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD providers) up it goes
+              full screen instead, where the card would otherwise become a
+              cramped inner scroll.
+
+              `key` forces a remount when the presentation flips — React
+              Native's Modal doesn't apply a changed
+              transparent/presentationStyle to an already-mounted modal. */}
+          <Modal
+            key={useFullScreenSummary ? 'summary-fullscreen' : 'summary-card'}
+            visible={showBookingSummaryModal}
+            animationType={useFullScreenSummary ? 'slide' : 'fade'}
+            transparent={!useFullScreenSummary}
+            {...(useFullScreenSummary ? { presentationStyle: 'fullScreen' as const } : {})}
+            onRequestClose={backFromSummary}
+          >
+            <SummaryShell
+              fullScreen={useFullScreenSummary}
+              P={P}
+              onBack={backFromSummary}
+              actions={<>
+                  <TouchableOpacity
+                    style={[styles.reviewCancelBtn, { borderColor: P.border }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      backFromSummary();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.reviewCancelText, { color: P.text }]}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.reviewConfirmBtn, { backgroundColor: (!agreedToPolicy || isReservingSlots) ? P.accentDim : P.accent }]}
+                    onPress={async () => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      console.log('[CartScreen] Confirm & Pay pressed', { agreedToPolicy, isReservingSlots, itemCount: checkoutSnapshot.items.length });
+                      // This checkbox is the ONLY place the client agrees to
+                      // the Terms and each provider's cancellation policy —
+                      // the booking sheets deliberately no longer ask a second
+                      // time. It gates this button, so reaching here means
+                      // consent was given.
+                      //
+                      // The moment it happened is NOT stamped here. This used
+                      // to write a timestamp onto the live cart items, which
+                      // checkout never read (it books from checkoutSnapshot,
+                      // captured earlier), so every row landed with
+                      // policy_accepted_at NULL — and a second attempt in the
+                      // same session sent the FIRST attempt's leftover time.
+                      // Both are now unrepresentable: the timestamp comes from
+                      // the database clock inside hold_cart_booking_slots(),
+                      // which also refuses the whole batch if the consent flags
+                      // below are absent. See
+                      // 20260827115930_consent_recorded_before_payment.sql.
+                      // Reserve every item's slot as an on_hold booking
+                      // BEFORE opening the payment sheet — closes the
+                      // window between "committed to paying" and
+                      // "booking actually inserted" that the claim RPC's
+                      // insert-time-only conflict check leaves open for
+                      // the whole payment-sheet interaction.
+                      setIsReservingSlots(true);
+                      try {
+                        if (USE_STRIPE_PAYMENTS) {
+                          const intent = checkoutSnapshot.items.map(item => {
+                            const booking = checkoutSnapshot.bookings[item.id];
+                            if (!item.providerId || !booking?.selectedDate || !booking.selectedTime) {
+                              throw new Error('Every service needs a provider, date and time before payment.');
+                            }
+                            return {
+                              provider_id: item.providerId,
+                              service_id: item.serviceId,
+                              booking_date: booking.selectedDate,
+                              booking_time: booking.selectedTime,
+                              add_on_ids: (item.addOns ?? []).map(addOn => String(addOn.id)),
+                              use_deposit: Boolean(booking.isDepositOnly),
+                              notes: booking.notes,
+                              // The single Terms checkbox above folds in
+                              // safety acknowledgement when relevant — it
+                              // can't be checked while it's required and
+                              // unread, so agreedToPolicy IS the ack here.
+                              // prepare_checkout re-derives whether each
+                              // service actually needs this and rejects
+                              // if missing, regardless of this value.
+                              safety_ack: agreedToPolicy,
+                              // Set when the client accepted the out-of-hours
+                              // confirmation in the booking sheet. The ack
+                              // travels with it because prepare_checkout
+                              // requires one whenever the flag is set, and
+                              // this checkbox is a different agreement (the
+                              // Cerviced-wide terms) from the one that was
+                              // shown then.
+                              ...(booking.emergencyRequest
+                                ? { emergency: true, emergency_ack: true }
+                                : {}),
+                            };
+                          });
+                          const prepared = await prepareCheckout(intent);
+                          setServerCheckoutBatchId(prepared.checkoutBatchId);
+                          setPaymentTotal(prepared.amountDue);
+                        } else {
+                          console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
+                          const batchId = await holdCartCheckoutSlots(
+                            checkoutSnapshot.items,
+                            checkoutSnapshot.bookings,
+                            // Same single checkbox the Stripe branch above
+                            // sends as safety_ack — it can't be ticked while
+                            // a safety requirement is unread, so it answers
+                            // both questions.
+                            { policyAccepted: agreedToPolicy, safetyAcknowledged: agreedToPolicy }
+                          );
+                          console.log('[CartScreen] holdCartCheckoutSlots succeeded', batchId);
+                          setHoldBatchId(batchId);
+                        }
+                        setShowBookingSummaryModal(false);
+                        setShowPaymentModal(true);
+                      } catch (err) {
+                        logger.error('[CartScreen] holdCartCheckoutSlots FAILED:', err);
+                        // prepareCheckout() throws the raw Supabase PostgrestError
+                        // (which DOES extend Error) rather than a BookingError, so a
+                        // deliberate DB guard message — the safety-ack gate's plain
+                        // RAISE EXCEPTION, which Postgres defaults to SQLSTATE P0001 —
+                        // needs unwrapping too, not just BookingError, or the client
+                        // never learns WHY. But PostgrestError carries the SAME shape
+                        // for a genuine technical failure (RLS, a constraint
+                        // violation, anything else with a real Postgres code), so
+                        // unwrapping has to stop at P0001 — anything else falls back
+                        // to the generic line instead of showing raw Postgres text.
+                        const isTechnical = (err as any)?.code && (err as any).code !== 'P0001';
+                        const message = err instanceof BookingError
+                          ? err.message
+                          : err instanceof Error && !isTechnical
+                            ? err.message.replace(/^Error:\s*/, '')
+                            : "We couldn't reserve that time. Please try again.";
+                        const title = err instanceof BookingError ? 'Scheduling Conflict' : 'Booking Not Completed';
+                        // Close the summary sheet FIRST. CartScreen's
+                        // DialogHost is a sibling of this <Modal>, not a
+                        // child, so an alert raised while the sheet is
+                        // still presented never reaches the screen — the
+                        // failure looked completely silent. Same
+                        // close-then-alert order the payment sheet already
+                        // uses on its own failure path.
+                        setShowBookingSummaryModal(false);
+                        showAlert(title, message);
+                        // The hold RPC reserves the whole cart in one call, so
+                        // its failure names no service — flagging all of them
+                        // would blame services that are fine. Re-run the same
+                        // per-item availability check the checkout button used
+                        // to find which slot actually went, and flag only
+                        // those. A round trip on a failure path is worth the
+                        // client knowing which card to fix; if it comes back
+                        // clean (the hold failed for some other reason) the
+                        // alert stands on its own and nothing is flagged.
+                        void identifyCartConflicts(
+                          checkoutSnapshot.items,
+                          itemId => checkoutSnapshot.bookings[itemId],
+                        )
+                          // Set unconditionally, including an empty result.
+                          // Guarding on found.size > 0 left the previous
+                          // attempt's flags on screen when the recheck came
+                          // back clean — the card kept saying a time was gone
+                          // while the picker still offered it, and only Edit
+                          // or Remove could clear it.
+                          .then(found => setItemIssues(found.flags))
+                          .catch(e => logger.error('Could not identify which cart item conflicts:', e));
+                      } finally {
+                        setIsReservingSlots(false);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                    disabled={!agreedToPolicy || isReservingSlots}
+                  >
+                    {isReservingSlots
+                      ? <ActivityIndicator color={P.onAccent} />
+                      : <Text style={[styles.reviewConfirmText, { color: agreedToPolicy ? P.onAccent : P.sub }]}>Confirm & Pay</Text>}
+                  </TouchableOpacity>
+              </>}
+            >
+
+              {/* Customer info */}
+              {confirmedCustomerInfo && (
+                <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
+                  <Text style={[styles.summarySectionTitle, { color: P.sub }]}>CUSTOMER</Text>
+                  <Text style={[styles.summaryCustomerName, { color: P.text }]}>{confirmedCustomerInfo.name}</Text>
+                  {!!confirmedCustomerInfo.email && (
+                    <Text style={[styles.summaryCustomerDetail, { color: P.sub }]}>{confirmedCustomerInfo.email}</Text>
+                  )}
+                  <Text style={[styles.summaryCustomerDetail, { color: P.sub }]}>{confirmedCustomerInfo.phone}</Text>
+                </View>
+              )}
+
+              {/* Appointments, one card per provider.
+
+                  A bare heading with a hairline under it wasn't legible as a
+                  grouping — it read as one more line of text in the same
+                  list. Each provider now gets its own bordered card with a
+                  tinted header (logo, name, category, count and subtotal)
+                  and its appointments contained inside it, which is the same
+                  shape as the cart's own provider sections directly behind
+                  this sheet.
+
+                  Not the same thing as a GROUP BOOKING: that's services
+                  deliberately booked back-to-back in one sitting, and it
+                  stays its own badged block INSIDE whichever provider card
+                  owns it. This grouping is simply "everything you're booking
+                  with this provider", however far apart the dates are. */}
+              <Text style={[styles.summarySectionTitle, { color: P.sub, marginTop: 4 }]}>APPOINTMENTS</Text>
+              {checkoutProviderSections.map(section => (
+                <View
+                  key={section.providerKey}
+                  style={[styles.summaryProviderCard, { backgroundColor: P.card, borderColor: P.border }]}
+                >
+                  <View style={[styles.summaryProviderHeader, { backgroundColor: P.accentDim, borderBottomColor: P.border }]}>
+                    {section.providerImage ? (
+                      <Image
+                        source={section.providerImage}
+                        style={[styles.summaryProviderLogo, { borderColor: P.accentDim }]}
+                        transition={0}
                       />
                     ) : (
-                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewName || '—'}</Text>
+                      <View style={[styles.summaryProviderLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
                     )}
-                  </View>
-
-                  {/* Email */}
-                  <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>EMAIL</Text>
-                    {isEditingDetails ? (
-                      <TextInput
-                        style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
-                        value={reviewEmail}
-                        onChangeText={setReviewEmail}
-                        placeholder="your@email.com"
-                        placeholderTextColor={P.sub}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                      />
-                    ) : (
-                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewEmail || '—'}</Text>
-                    )}
-                  </View>
-
-                  {/* Phone */}
-                  <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>PHONE NUMBER</Text>
-                    {isEditingDetails ? (
-                      <TextInput
-                        style={[styles.reviewInput, {
-                          color: P.text,
-                          borderColor: !reviewPhone.trim() ? '#FF3B30' : P.border,
-                          backgroundColor: P.surface,
-                        }]}
-                        value={reviewPhone}
-                        onChangeText={setReviewPhone}
-                        placeholder="+44 7700 900000"
-                        placeholderTextColor={P.sub}
-                        keyboardType="phone-pad"
-                      />
-                    ) : (
-                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewPhone || '—'}</Text>
-                    )}
-                    {isEditingDetails && !reviewPhone.trim() && (
-                      <Text style={styles.reviewPhoneWarning}>Phone number is required to book</Text>
-                    )}
-                  </View>
-
-                  {/* Address — only shown when a mobile provider is in the cart */}
-                  {hasMobileProvider && (
-                    <View style={styles.reviewFieldGroup}>
-                      <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
-                      <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
-                        Your provider is mobile and will come to you
+                    <View style={styles.summaryProviderHeaderText}>
+                      <Text style={[styles.summaryProviderName, { color: P.text }]} numberOfLines={1}>
+                        {section.providerLabel}
                       </Text>
-                      {isEditingDetails ? (
-                        <TextInput
-                          style={[styles.reviewInput, {
-                            color: P.text, borderColor: !clientAddress.trim() ? '#FF3B30' : P.border, backgroundColor: P.surface,
-                          }]}
-                          value={clientAddress}
-                          onChangeText={setClientAddress}
-                          placeholder="e.g. 12 High Street, London, SW1A 1AA"
-                          placeholderTextColor={P.sub}
-                          autoCapitalize="words"
-                        />
-                      ) : (
-                        <Text style={[styles.reviewFieldValue, { color: clientAddress ? P.text : '#FF3B30' }]}>
-                          {clientAddress || 'Address required'}
+                      {!!section.providerService && (
+                        <Text style={[styles.summaryProviderMeta, { color: P.sub }]} numberOfLines={1}>
+                          {section.providerService}
                         </Text>
                       )}
                     </View>
-                  )}
-
-                  {/* Save as Default — only in edit mode */}
-                  {isEditingDetails && (
-                    <TouchableOpacity
-                      style={styles.reviewCheckboxRow}
-                      onPress={() => setSaveAsDefault(!saveAsDefault)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.reviewCheckbox, {
-                        borderColor: P.border,
-                        backgroundColor: saveAsDefault ? P.accent : 'transparent',
-                      }]}>
-                        {saveAsDefault && <Text style={styles.reviewCheckmark}>✓</Text>}
-                      </View>
-                      <Text style={[styles.reviewCheckboxLabel, { color: P.text }]}>
-                        Set as default for future bookings
+                    <View style={styles.summaryProviderTotals}>
+                      <Text style={[styles.summaryProviderTotal, { color: P.accentText }]}>
+                        £{section.total.toFixed(2)}
                       </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Buttons */}
-                  <View style={[styles.reviewButtonRow, isEditingDetails && { marginTop: 8 }]}>
-                    <TouchableOpacity
-                      style={[styles.reviewCancelBtn, { borderColor: P.border }]}
-                      onPress={() => {
-                        if (isEditingDetails) {
-                          setIsEditingDetails(false);
-                        } else {
-                          setShowReviewModal(false);
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.reviewCancelText, { color: P.text }]}>
-                        {isEditingDetails ? 'Done' : 'Cancel'}
+                      <Text style={[styles.summaryProviderMeta, { color: P.sub }]}>
+                        {section.appointmentCount} {section.appointmentCount === 1 ? 'appointment' : 'appointments'}
                       </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }]}
-                      onPress={handleReviewConfirm}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.reviewConfirmText}>Continue</Text>
-                    </TouchableOpacity>
+                    </View>
+                  </View>
+                  <View style={styles.summaryProviderBody}>
+                    {section.units.map((unit, index) => renderCheckoutUnit(unit, section.units[index - 1]))}
                   </View>
                 </View>
+              ))}
+
+              {/* Totals */}
+              <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
+                <View style={styles.summaryTotalRow}>
+                  <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Subtotal</Text>
+                  <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{frozenCheckoutTotals.subtotal.toFixed(2)}</Text>
+                </View>
+                {frozenCheckoutTotals.fee > 0 && <View style={styles.summaryTotalRow}>
+                  <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Platform Fee</Text>
+                  <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{frozenCheckoutTotals.fee.toFixed(2)}</Text>
+                </View>}
+                <View style={[styles.summaryTotalRow, styles.summaryGrandTotalRow, { borderTopColor: P.sep }]}>
+                  <Text style={[styles.summaryGrandLabel, { color: P.text }]}>Total</Text>
+                  <Text style={[styles.summaryGrandValue, { color: P.accentText }]}>£{frozenCheckoutTotals.total.toFixed(2)}</Text>
+                </View>
               </View>
-            </View>
-          </Modal>
 
-          {/* Booking Summary Modal */}
-          <Modal visible={showBookingSummaryModal} animationType="fade" transparent={true}>
-            <View style={styles.modalOverlayNoBlur}>
-              <View style={[styles.reviewModalContainer, styles.summaryModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
-                <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-                  <View style={styles.reviewModalContent}>
-                    <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
-                    <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>Review your appointments before payment</Text>
-
-                    {/* Customer info */}
-                    {confirmedCustomerInfo && (
-                      <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
-                        <Text style={[styles.summarySectionTitle, { color: P.sub }]}>CUSTOMER</Text>
-                        <Text style={[styles.summaryCustomerName, { color: P.text }]}>{confirmedCustomerInfo.name}</Text>
-                        {!!confirmedCustomerInfo.email && (
-                          <Text style={[styles.summaryCustomerDetail, { color: P.sub }]}>{confirmedCustomerInfo.email}</Text>
-                        )}
-                        <Text style={[styles.summaryCustomerDetail, { color: P.sub }]}>{confirmedCustomerInfo.phone}</Text>
+              {/* Policy & Terms agreement — folds in a safety-info
+                  acknowledgement when any item's service requires a
+                  patch test or is flagged unsafe in pregnancy. This is
+                  relaying the PROVIDER's stated requirement for that
+                  service, not a CERVICED safety determination.
+                  prepare_checkout enforces this server-side regardless
+                  of this checkbox — see supabase/migrations/
+                  20260817085443_safety_acknowledgement_checkout.sql. */}
+              {(() => {
+                const safetyItems = checkoutSnapshot.items.filter(i => {
+                  const f = safetyFlagsByServiceId.get(i.serviceId);
+                  return f && (f.patchTestRequired || !f.isPregnancySafe);
+                });
+                const needsSafetyAck = safetyItems.length > 0;
+                return (
+                  <>
+                    {needsSafetyAck && (
+                      <View style={[styles.safetyAckNotice, { backgroundColor: P.surface, borderColor: P.border }]}>
+                        <Text style={[styles.safetyAckNoticeText, { color: P.sub }]}>
+                          {safetyItems.length === 1
+                            ? `${safetyItems[0]!.serviceName}'s provider has flagged safety information for this treatment (patch test and/or pregnancy) — see the service page for details.`
+                            : `${safetyItems.length} services in this order have provider-flagged safety information (patch test and/or pregnancy) — see each service page for details.`}
+                        </Text>
                       </View>
                     )}
-
-                    {/* Appointments */}
-                    <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
-                      <Text style={[styles.summarySectionTitle, { color: P.sub }]}>APPOINTMENTS</Text>
-                      {checkoutRenderUnits.map((unit, index) => {
-                        // Price for one snapshot item, using the provider's actual
-                        // deposit policy (percent OR flat £) — never the 20%
-                        // fallback, which silently ignores fixed-fee policies.
-                        const priceOf = (item: CartItem) => {
-                          const booking = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
-                          const full = (Number(item?.price) || 0)
-                            + (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
-                          if (!booking.isDepositOnly) return full;
-                          const policy = providerDepositPolicies[item.providerDisplayName ?? item.providerName];
-                          const policyArg: DepositPolicy | number = policy
-                            ? { type: policy.depositType, amount: policy.depositAmount }
-                            : 20;
-                          return BookingService.calculateDeposit(full, policyArg);
-                        };
-                        // Add-ons are named and priced here too — this is the last
-                        // screen before paying, so it must account for the number
-                        // being charged.
-                        const renderAddOns = (item: CartItem) => {
-                          const list = (item.addOns || []).filter((a: any) => a?.name);
-                          if (list.length === 0) return null;
-                          const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
-                          return (
-                            <Text style={[styles.summaryItemAddOns, { color: P.text }]} numberOfLines={2}>
-                              + {list.length} add-on{list.length === 1 ? '' : 's'} (£{total.toFixed(2)}):{' '}
-                              {list.map((a: any) => a.name).join(', ')}
-                            </Text>
-                          );
-                        };
-
-                        // Divider only between two plain items. A group draws its
-                        // own bordered box, so a divider directly above or below
-                        // one reads as a doubled line.
-                        const divider = index > 0 && checkoutRenderUnits[index - 1]!.kind === 'single'
-                          ? <View style={[styles.summaryDivider, { backgroundColor: P.sep }]} />
-                          : null;
-
-                        // A group renders as ONE block: shared provider/date/span
-                        // header, its services as indented rows, and a subtotal —
-                        // so it reads as a single appointment rather than N
-                        // unrelated bookings each carrying a repeated group tag.
-                        if (unit.kind === 'group') {
-                          const first = unit.items[0]!;
-                          const firstBooking = (checkoutSnapshot.bookings[first.id] || {}) as ServiceBooking;
-                          const last = unit.items[unit.items.length - 1]!;
-                          const lastBooking = (checkoutSnapshot.bookings[last.id] || {}) as ServiceBooking;
-                          const startMinutes = to24hMinutes(firstBooking.selectedTime);
-                          const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
-                          const spanKnown = !!firstBooking.selectedDate
-                            && startMinutes !== Number.MAX_SAFE_INTEGER
-                            && endMinutes > startMinutes;
-                          const groupTotal = unit.items.reduce((sum, i) => sum + priceOf(i), 0);
-
-                          return (
-                            // No divider above a group — its own border already
-                            // separates it from whatever precedes it, and both
-                            // together reads as a doubled line.
-                            <View
-                              key={unit.batchId}
-                              style={[styles.summaryGroupBlock, { borderColor: P.accent, backgroundColor: P.accentDim }]}
-                            >
-                              <View style={[styles.summaryGroupBadge, { backgroundColor: P.accent }]}>
-                                <Ionicons name="link" size={10} color="#FFFFFF" />
-                                <Text style={styles.summaryGroupBadgeText}>
-                                  GROUP BOOKING · {unit.items.length}
-                                </Text>
-                              </View>
-                              <Text style={[styles.summaryItemProvider, { color: P.sub }]}>
-                                {first.providerDisplayName ?? first.providerName ?? ''}
-                              </Text>
-                              {!!firstBooking.selectedDate && (
-                                <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
-                                  {formatLongDateNoYear(firstBooking.selectedDate)}
-                                  {spanKnown ? ` · ${formatTimeSpan(startMinutes, endMinutes)}` : ''}
-                                </Text>
-                              )}
-
-                              {/* One row per service — no per-row date or
-                                  provider, the header owns both. */}
-                              <View style={styles.summaryGroupRows}>
-                                {unit.items.map(groupItem => {
-                                  const gb = (checkoutSnapshot.bookings[groupItem.id] || {}) as ServiceBooking;
-                                  return (
-                                    <View key={groupItem.id} style={styles.summaryGroupRow}>
-                                      <View style={styles.summaryItemRow}>
-                                        <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
-                                          {groupItem.serviceName}{gb.isDepositOnly ? ' (Dep.)' : ''}
-                                        </Text>
-                                        <Text style={[styles.summaryItemPrice, { color: P.accent }]}>
-                                          £{priceOf(groupItem).toFixed(2)}
-                                        </Text>
-                                      </View>
-                                      {!!gb.selectedTime && (
-                                        <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
-                                          {formatTime12(gb.selectedTime)} · {groupItem.duration}
-                                        </Text>
-                                      )}
-                                      {renderAddOns(groupItem)}
-                                    </View>
-                                  );
-                                })}
-                              </View>
-
-                              <View style={[styles.summaryGroupFooter, { borderTopColor: P.sep }]}>
-                                <Text style={[styles.summaryGroupFooterLabel, { color: P.sub }]}>
-                                  {unit.items.length} services back-to-back
-                                </Text>
-                                <Text style={[styles.summaryGroupFooterValue, { color: P.accent }]}>
-                                  £{groupTotal.toFixed(2)}
-                                </Text>
-                              </View>
-                            </View>
-                          );
-                        }
-
-                        const item = unit.item;
-                        const b = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
-                        return (
-                          <View key={item.id}>
-                            {divider}
-                            <View style={styles.summaryBookingItem}>
-                              <View style={styles.summaryItemRow}>
-                                <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
-                                  {item.serviceName}{b.isDepositOnly ? ' (Dep.)' : ''}
-                                </Text>
-                                <Text style={[styles.summaryItemPrice, { color: P.accent }]}>
-                                  £{priceOf(item).toFixed(2)}
-                                </Text>
-                              </View>
-                              <Text style={[styles.summaryItemProvider, { color: P.sub }]}>
-                                {item.providerDisplayName ?? item.providerName ?? ''}
-                              </Text>
-                              {renderAddOns(item)}
-                              {b.selectedDate && b.selectedTime && (
-                                <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
-                                  {formatLongDateNoYear(b.selectedDate)} · {formatTime12(b.selectedTime)}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-
-                    {/* Totals */}
-                    <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
-                      <View style={styles.summaryTotalRow}>
-                        <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Subtotal</Text>
-                        <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{effectiveTotal.toFixed(2)}</Text>
-                      </View>
-                      <View style={styles.summaryTotalRow}>
-                        <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Platform Fee</Text>
-                        <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{getServiceFee().toFixed(2)}</Text>
-                      </View>
-                      <View style={[styles.summaryTotalRow, styles.summaryGrandTotalRow, { borderTopColor: P.sep }]}>
-                        <Text style={[styles.summaryGrandLabel, { color: P.text }]}>{hasDepositItem ? 'Pay Now' : 'Total'}</Text>
-                        <Text style={[styles.summaryGrandValue, { color: P.accent }]}>£{effectiveFinalTotal.toFixed(2)}</Text>
-                      </View>
-                    </View>
-
-                    {/* Policy & Terms agreement */}
                     <TouchableOpacity
                       style={styles.reviewCheckboxRow}
-                      onPress={() => { console.log('[CartScreen] checkbox toggled', !agreedToPolicy); setAgreedToPolicy(!agreedToPolicy); }}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); console.log('[CartScreen] checkbox toggled', !agreedToPolicy); setAgreedToPolicy(!agreedToPolicy); }}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.reviewCheckbox, {
                         borderColor: P.border,
                         backgroundColor: agreedToPolicy ? P.accent : 'transparent',
                       }]}>
-                        {agreedToPolicy && <Text style={styles.reviewCheckmark}>✓</Text>}
+                        {agreedToPolicy && <Text style={[styles.reviewCheckmark, { color: P.onAccent }]}>✓</Text>}
                       </View>
                       {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
                       <Text style={[styles.reviewCheckboxLabel, { color: P.text, flex: 1 }]}>
                         I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and each provider's cancellation policy
+                        {needsSafetyAck ? ', and confirm I have seen the safety information above' : ''}
                       </Text>
                     </TouchableOpacity>
+                  </>
+                );
+              })()}
 
-                    {/* Buttons */}
-                    <View style={styles.reviewButtonRow}>
-                      <TouchableOpacity
-                        style={[styles.reviewCancelBtn, { borderColor: P.border }]}
-                        onPress={() => {
-                          setShowBookingSummaryModal(false);
-                          setShowReviewModal(true);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.reviewCancelText, { color: P.text }]}>Back</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }, (!agreedToPolicy || isReservingSlots) && styles.payButtonDisabled]}
-                        onPress={async () => {
-                          console.log('[CartScreen] Confirm & Pay pressed', { agreedToPolicy, isReservingSlots, itemCount: checkoutSnapshot.items.length });
-                          // Reserve every item's slot as an on_hold booking
-                          // BEFORE opening the payment sheet — closes the
-                          // window between "committed to paying" and
-                          // "booking actually inserted" that createBooking()'s
-                          // insert-time-only conflict check leaves open for
-                          // the whole payment-sheet interaction.
-                          setIsReservingSlots(true);
-                          try {
-                            console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
-                            const batchId = await holdCartCheckoutSlots(
-                              checkoutSnapshot.items,
-                              checkoutSnapshot.bookings
-                            );
-                            console.log('[CartScreen] holdCartCheckoutSlots succeeded', batchId);
-                            setHoldBatchId(batchId);
-                            setShowBookingSummaryModal(false);
-                            setShowPaymentModal(true);
-                          } catch (err) {
-                            console.log('[CartScreen] holdCartCheckoutSlots FAILED', err);
-                            const message = err instanceof BookingError
-                              ? err.message
-                              : "We couldn't reserve that time. Please try again.";
-                            showAlert('Scheduling Conflict', message);
-                          } finally {
-                            setIsReservingSlots(false);
-                          }
-                        }}
-                        activeOpacity={0.8}
-                        disabled={!agreedToPolicy || isReservingSlots}
-                      >
-                        {isReservingSlots
-                          ? <ActivityIndicator color="#FFFFFF" />
-                          : <Text style={styles.reviewConfirmText}>Confirm & Pay</Text>}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </ScrollView>
-              </View>
-            </View>
+            </SummaryShell>
           </Modal>
 
           {/* Payment Modal - PASS EFFECTIVE ITEMS & TOTAL */}
@@ -2710,10 +3993,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     releaseCartCheckoutSlots(holdBatchId);
                     setHoldBatchId(null);
                   }
+                  if (serverCheckoutBatchId) {
+                    cancelCheckout(serverCheckoutBatchId).catch(error => logger.error('Could not release secure checkout:', error));
+                    setServerCheckoutBatchId(null);
+                  }
                   setShowPaymentModal(false);
                 }}
-                effectiveCartItems={effectiveCartItems}
-                totalAmount={effectiveFinalTotal}
+                effectiveCartItems={paymentSheetCartItems}
+                totalAmount={paymentTotal}
+                checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
                 onPaymentComplete={() => {
                   clearCart(); // Clear cart immediately after payment simulation
@@ -2730,6 +4018,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   if (holdBatchId) {
                     releaseCartCheckoutSlots(holdBatchId);
                     setHoldBatchId(null);
+                  }
+                  if (serverCheckoutBatchId) {
+                    cancelCheckout(serverCheckoutBatchId).catch(error => logger.error('Could not release secure checkout:', error));
+                    setServerCheckoutBatchId(null);
                   }
                   showAlert('Booking Failed', message);
                 }}
@@ -2758,25 +4050,27 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
                     <View style={styles.successButtonsContainer}>
                       <TouchableOpacity
-                        style={styles.liquidGlassSuccessButton}
+                        style={[styles.liquidGlassSuccessButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
                         onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setShowPaymentSuccessModal(false);
                           navigation.navigate('Bookings'); // ✅ JUST NAVIGATE - bookings already created
                         }}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accent }]}>View Bookings</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accentText }]}>View Bookings</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.liquidGlassSuccessButton}
+                        style={[styles.liquidGlassSuccessButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
                         onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setShowPaymentSuccessModal(false);
                           handleContinueShopping();
                         }}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accent }]}>Continue Shopping</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accentText }]}>Continue Shopping</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2797,7 +4091,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             <TouchableOpacity
               style={styles.pickerOverlay}
               activeOpacity={1}
-              onPress={() => setPickerItems(null)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                setPickerItems(null);
+              }}
             >
               <TouchableOpacity
                 activeOpacity={1}
@@ -2820,10 +4117,13 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     option — the per-service rows below all break the group. */}
                 <TouchableOpacity
                   style={[styles.pickerRow, styles.pickerRowFirst, { borderColor: P.border }]}
-                  onPress={() => handlePickerSelectGroup(pickerItems ?? [])}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    handlePickerSelectGroup(pickerItems ?? []);
+                  }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="link" size={16} color={P.accent} />
+                  <Ionicons name="link" size={16} color={P.accentText} />
                   <View style={styles.pickerRowInfo}>
                     <Text style={[styles.pickerRowName, { color: theme.text }]} numberOfLines={1}>
                       Reschedule all {(pickerItems ?? []).length} to a new day
@@ -2832,7 +4132,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       Pick a date & time — they stay one group, back-to-back
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={P.accent} />
+                  <Ionicons name="chevron-forward" size={18} color={P.accentText} />
                 </TouchableOpacity>
 
                 <Text style={[styles.pickerSectionLabel, { color: P.sub }]}>
@@ -2851,7 +4151,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     <TouchableOpacity
                       key={pItem.id}
                       style={[styles.pickerRow, { borderColor: P.border }]}
-                      onPress={() => handlePickerSelect(pItem)}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        handlePickerSelect(pItem);
+                      }}
                       activeOpacity={0.7}
                     >
                       <View style={styles.pickerRowInfo}>
@@ -2876,13 +4179,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           Leaves the group
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={18} color={P.accent} />
+                      <Ionicons name="chevron-forward" size={18} color={P.accentText} />
                     </TouchableOpacity>
                   );
                 })}
                 <TouchableOpacity
                   style={styles.pickerCancel}
-                  onPress={() => setPickerItems(null)}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setPickerItems(null);
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.pickerCancelText, { color: P.sub }]}>Cancel</Text>
@@ -2915,7 +4221,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     </Text>
                   </View>
                   <TouchableOpacity
-                    onPress={() => setGroupRescheduleItems(null)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setGroupRescheduleItems(null);
+                    }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     activeOpacity={0.7}
                   >
@@ -2924,79 +4233,44 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-                  {/* Date only — the times below are chain start times, not
-                      this-service slots, so the calendar's own slot list would
-                      be wrong here. */}
+                  {/* The calendar owns BOTH date and time here — the times it
+                      shows are chain starts (see groupSlotResolver), so its own
+                      day pills and time row already reflect the group's real
+                      availability. No second time list. */}
+                  <Text style={[styles.pickerSectionLabel, { color: P.sub }]}>
+                    Times shown fit all {(groupRescheduleItems ?? []).length} back-to-back
+                  </Text>
                   <ModernBeautyCalendar
                     selectedDate={groupRescheduleDate}
                     onDateSelect={setGroupRescheduleDate}
-                    onTimeSelect={() => {}}
+                    selectedTime={groupRescheduleTime}
+                    onTimeSelect={setGroupRescheduleTime}
                     providerName={
                       (groupRescheduleItems ?? [])[0]?.providerId
                       ?? (groupRescheduleItems ?? [])[0]?.providerName
                       ?? ''
                     }
+                    slotResolver={groupSlotResolver}
                     accentColor={P.accent}
                     textColor={theme.text}
                     subColor={P.sub}
                     surfaceColor={P.surface}
                   />
 
-                  {!!groupRescheduleDate && (
-                    <View style={styles.groupSheetSection}>
-                      <Text style={[styles.pickerSectionLabel, { color: P.sub }]}>
-                        Start time — all {(groupRescheduleItems ?? []).length} run back-to-back
-                      </Text>
-
-                      {groupRescheduleOptions === null && (
-                        <View style={styles.groupSheetLoadingRow}>
-                          <ActivityIndicator size="small" color={P.accent} />
-                          <Text style={[styles.groupSheetLoadingText, { color: P.sub }]}>
-                            Finding times that fit all {(groupRescheduleItems ?? []).length}…
-                          </Text>
-                        </View>
-                      )}
-
-                      {groupRescheduleOptions?.length === 0 && (
-                        <Text style={[styles.groupSheetEmptyText, { color: P.sub }]}>
-                          No room for all {(groupRescheduleItems ?? []).length} services back-to-back on this day. Try another date.
-                        </Text>
-                      )}
-
-                      <View style={styles.groupSheetTimeWrap}>
-                        {(groupRescheduleOptions ?? []).map(option => {
-                          const start = option[0]!.time;
-                          const selected = groupRescheduleChoice?.[0]?.time === start;
-                          return (
-                            <TouchableOpacity
-                              key={start}
-                              style={[
-                                styles.groupSheetTimeChip,
-                                { backgroundColor: P.surface, borderColor: selected ? P.accent : 'transparent' },
-                              ]}
-                              onPress={() => setGroupRescheduleChoice(option)}
-                              activeOpacity={0.75}
-                            >
-                              <Text
-                                style={[
-                                  styles.groupSheetTimeText,
-                                  { color: selected ? P.accent : theme.text },
-                                ]}
-                              >
-                                {start}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  )}
-
                   {/* Exactly what each service ends up at, before committing —
-                      the old flow showed this only in a confirm dialog after
-                      the day had already been chosen for them. */}
-                  {groupRescheduleChoice && (
+                      led by the overall span, so the appointment's real
+                      footprint is the headline rather than something the
+                      client has to infer from a list of start times. */}
+                  {groupRescheduleChain && (
                     <View style={[styles.groupSheetPreview, { borderColor: P.sep }]}>
+                      <View style={styles.groupSheetSpanRow}>
+                        <Text style={[styles.groupSheetSpanText, { color: theme.text }]}>
+                          {groupRescheduleChain[0]!.time} – {groupRescheduleChain[groupRescheduleChain.length - 1]!.endTime}
+                        </Text>
+                        <Text style={[styles.groupSheetSpanTotal, { color: P.sub }]}>
+                          {groupRescheduleSpanLabel}
+                        </Text>
+                      </View>
                       {(groupRescheduleItems ?? []).map((item, i) => (
                         <View key={item.id} style={styles.groupSheetPreviewRow}>
                           <Text
@@ -3005,8 +4279,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           >
                             {item.serviceName}
                           </Text>
-                          <Text style={[styles.groupSheetPreviewTime, { color: P.accent }]}>
-                            {groupRescheduleChoice[i]!.time}
+                          <Text style={[styles.groupSheetPreviewTime, { color: P.accentText }]}>
+                            {groupRescheduleChain[i]!.time} – {groupRescheduleChain[i]!.endTime}
                           </Text>
                         </View>
                       ))}
@@ -3017,15 +4291,17 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 <TouchableOpacity
                   style={[
                     styles.groupSheetConfirm,
-                    { backgroundColor: P.accent },
-                    !groupRescheduleChoice && styles.payButtonDisabled,
+                    { backgroundColor: groupRescheduleChain ? P.accent : P.accentDim },
                   ]}
-                  onPress={handleConfirmGroupReschedule}
-                  disabled={!groupRescheduleChoice}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    handleConfirmGroupReschedule();
+                  }}
+                  disabled={!groupRescheduleChain}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.groupSheetConfirmText}>
-                    {groupRescheduleChoice
+                  <Text style={[styles.groupSheetConfirmText, { color: groupRescheduleChain ? P.onAccent : P.sub }]}>
+                    {groupRescheduleChain
                       ? `Move all to ${formatLongDateNoYear(groupRescheduleDate)}`
                       : 'Pick a date & time'}
                   </Text>
@@ -3062,252 +4338,62 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 selectedTime: editingItem.selectedTime,
                 notes: editingItem.notes,
                 isDepositOnly: editingItem.isDepositOnly,
+                emergencyRequest: editingItem.emergencyRequest,
               }}
             />
           )}
 
-          <ScrollView
+          <FlatList
             style={styles.content}
+            data={items.length > 0 ? cartProviderRows : []}
+            keyExtractor={([providerName]) => providerName}
+            renderItem={renderCartProviderRow}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
-            nestedScrollEnabled={true}
             keyboardShouldPersistTaps="handled"
+            initialNumToRender={3}
+            maxToRenderPerBatch={3}
+            windowSize={5}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={isDarkMode ? '#AF9197' : '#5C4033'}
-                colors={[(isDarkMode ? '#AF9197' : '#5C4033')]}
-                progressBackgroundColor={isDarkMode ? '#252220' : '#FFF'}
+                tintColor={P.accent}
+                colors={[P.accent]}
+                progressBackgroundColor={P.card}
               />
             }
-          >
-            {items.length > 0 ? (
-              <>
-                {/* Provider Sections — collapsible, so a cart with several
-                    providers stays scannable instead of becoming a wall of
-                    cards. Collapsed shows the header (and its totals) only. */}
-                {Object.entries(itemsByProvider).map(([providerName, providerItems]) => {
-                  const providerData = bookingSummary.providers?.[providerName];
-
-                  if (!providerData || !providerItems?.length) return null;
-
-                  const isCollapsed = collapsedProviders.has(providerName);
-                  const renderUnits = buildRenderUnits(providerItems);
-
-                  return (
-                    <View key={providerName} style={[styles.providerSection, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {/* Provider Header — no Edit button here: editing acts on
-                          a card (a single service, or a whole group), not on
-                          the provider as a whole. */}
-                      <View style={styles.providerHeader}>
-                        <TouchableOpacity onPress={() => navigateToProvider(providerItems)}>
-                          <View style={styles.providerLogoContainer}>
-                            {providerItems[0]?.providerImage ? (
-                              <Image
-                                source={providerItems[0].providerImage}
-                                style={styles.providerLogo}
-                              />
-                            ) : (
-                              <View style={[styles.providerLogo, { backgroundColor: isDarkMode ? '#333' : '#EEE' }]} />
-                            )}
-                          </View>
-                        </TouchableOpacity>
-
-                        <View style={styles.providerInfo}>
-                          <Text style={dynamicStyles.providerName}>
-                            {providerItems[0]?.providerDisplayName ?? providerName}
-                          </Text>
-
-                          {/* Service Type with Translucent Pill Background */}
-                          <View style={styles.serviceTypePill}>
-                            <Text style={styles.serviceTypeText}>
-                              {providerItems[0]?.providerService || 'SERVICES'}
-                            </Text>
-                          </View>
-
-                          <Text style={dynamicStyles.providerStats}>
-                            {providerData.instanceCount} appointments • £
-                            {providerData.total.toFixed(2)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Services — one card per render unit: a grouped card
-                          for services scheduled together, a single card for
-                          everything else. Hidden entirely when collapsed. */}
-                      {!isCollapsed && (
-                        <View style={styles.servicesList}>
-                          {renderUnits.map((unit, index) => {
-                            const policyKey = providerItems[0]?.providerDisplayName ?? providerName;
-                            const policy = providerDepositPolicies[policyKey];
-                            return (
-                              <View
-                                key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id}
-                                style={styles.serviceItemWrapper}
-                              >
-                                {unit.kind === 'group' ? (
-                                  <GroupedServiceCard
-                                    items={unit.items}
-                                    getBooking={getServiceBooking}
-                                    onRemove={removeFromCart}
-                                    onEditGroup={setPickerItems}
-                                    conflictedIds={conflictedItemIds}
-                                    {...(policy !== undefined ? { depositPolicy: policy } : {})}
-                                  />
-                                ) : (
-                                  <ServiceCard
-                                    item={unit.item}
-                                    bookingInfo={getServiceBooking(unit.item.id)}
-                                    onRemove={removeFromCart}
-                                    onEdit={handleEditItem}
-                                    allCartItems={items}
-                                    hasConflict={conflictedItemIds.has(unit.item.id)}
-                                    {...(policy !== undefined ? { depositPolicy: policy } : {})}
-                                  />
-                                )}
-                                {/* Visual Separator */}
-                                {index < renderUnits.length - 1 && (
-                                  <View style={styles.serviceSeparator} />
-                                )}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-
-                      {/* Collapse/expand handle — sits at the bottom of the
-                          card so collapsing a long section leaves the control
-                          under your thumb rather than scrolled off the top. */}
-                      <TouchableOpacity
-                        style={[styles.collapseHandle, { borderTopColor: P.border }]}
-                        onPress={() => toggleProviderCollapsed(providerName)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.collapseHandleText, { color: P.sub }]}>
-                          {isCollapsed
-                            ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
-                            : 'Hide'}
-                        </Text>
-                        <Ionicons
-                          name={isCollapsed ? 'chevron-down' : 'chevron-up'}
-                          size={16}
-                          color={P.sub}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-
-                {/* Applied promo codes recap — one code per provider, entered
-                    once on that provider's section above; this rolls up
-                    what's active across all of them. */}
-                {Object.keys(appliedPromos).length > 0 && (
-                  <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
-                    {Object.entries(appliedPromos).map(([providerKey, promo]) => {
-                      const providerItems = itemsByProvider[providerKey];
-                      if (!providerItems?.length) return null;
-                      const providerDiscount = providerItems.reduce((s, it) => s + (itemPromoDiscounts[it.id] ?? 0), 0);
-                      return (
-                        <View key={providerKey} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: P.accent }}>
-                            {promo.promo_code?.toUpperCase()}
-                          </Text>
-                          <Text style={{ flex: 1, fontSize: 12, color: P.sub }} numberOfLines={1}>
-                            {providerItems[0]?.providerDisplayName ?? providerKey}
-                          </Text>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
-                            −£{providerDiscount.toFixed(2)}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {/* Summary - USE EFFECTIVE TOTALS + SERVICE FEE NOTE */}
-                <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <View style={styles.summaryRow}>
-                    <Text style={dynamicStyles.summaryLabel}>Subtotal</Text>
-                    <Text style={dynamicStyles.summaryValue}>£{effectiveTotalNoPromo.toFixed(2)}</Text>
-                  </View>
-                  {promoSavingsShown > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={[dynamicStyles.summaryLabel, { color: '#30D158' }]}>Promo Discount</Text>
-                      <Text style={[dynamicStyles.summaryValue, { color: '#30D158' }]}>−£{promoSavingsShown.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  <View style={styles.summaryRow}>
-                    <Text style={dynamicStyles.summaryLabel}>Platform Fee</Text>
-                    <Text style={dynamicStyles.summaryValue}>£{getServiceFee().toFixed(2)}</Text>
-                  </View>
-                  <View style={[styles.summaryRow, styles.totalRow]}>
-                    <Text style={dynamicStyles.totalLabel}>{hasDepositItem ? 'Pay Now' : 'Total'}</Text>
-                    <Text style={dynamicStyles.totalValue}>£{effectiveFinalTotal.toFixed(2)}</Text>
-                  </View>
-                </View>
-
-                {/* Checkout Button - USE EFFECTIVE TOTAL. marginBottom tops up
-                    to FLOATING_TAB_BAR_CLEARANCE on top of whatever the
-                    screen's own SafeAreaView already reserves for the home
-                    indicator (insets.bottom) — this screen sits under
-                    IslandPillTabBar's floating pill, and a flat spacing.xxl
-                    margin left "Book All" sitting right under it. */}
-                <TouchableOpacity
-                  style={[
-                    styles.checkoutButton,
-                    { backgroundColor: P.accent, marginBottom: Math.max(spacing.xxl, FLOATING_TAB_BAR_CLEARANCE - insets.bottom) },
-                    isLoading && styles.disabledButton,
-                  ]}
-                  onPress={handleCheckout}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.checkoutText}>
-                      Book All • £{effectiveFinalTotal.toFixed(2)}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-
-                {/* Multi-booking guide — only relevant once there's still an
-                    unscheduled item; items added from the provider profile
-                    already arrive with their own date/time, so this stays
-                    hidden for the now-common fully-scheduled cart. */}
-                {hasUnscheduledItems && (
-                  <View style={styles.multiBookingGuide}>
-                    <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>
-                      Booking more than one service?
-                    </Text>
-                    <View style={styles.multiBookingGuideList}>
-                      {[
-                        'Each service above gets its own appointment time',
-                        'Mix services from different providers in one cart',
-                        'Set a date and time for every service, then check out once',
-                      ].map((tip) => (
-                        <View key={tip} style={styles.multiBookingGuideRow}>
-                          <Text style={[styles.multiBookingGuideTick, { color: P.accent }]}>✓</Text>
-                          <Text style={[styles.multiBookingGuideBody, { color: P.sub }]}>{tip}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </>
-            ) : (
+            ListFooterComponent={items.length > 0 ? (
+              <CartCheckoutFooter
+                appliedPromos={appliedPromos}
+                itemsByProvider={itemsByProvider}
+                itemPromoDiscounts={itemPromoDiscounts}
+                subtotal={effectiveTotalNoPromo}
+                promoSavings={promoSavingsShown}
+                platformFee={platformFee}
+                finalTotal={effectiveFinalTotal}
+                isLoading={isLoading}
+                bottomInset={insets.bottom}
+                showGuide={hasUnscheduledItems}
+                onCheckout={handleCheckout}
+              />
+            ) : null}
+            ListEmptyComponent={(
               <View style={styles.emptyCart}>
                 <Text style={dynamicStyles.emptyTitle}>Cart is Empty</Text>
                 <Text style={dynamicStyles.emptyText}>Add services to get started</Text>
                 <TouchableOpacity
                   style={[styles.browseButton, { backgroundColor: P.accent }]}
-                  onPress={handleContinueShopping}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    handleContinueShopping();
+                  }}
                 >
-                  <Text style={styles.browseText}>Browse Services</Text>
+                  <Text style={[styles.browseText, { color: P.onAccent }]}>Browse Services</Text>
                 </TouchableOpacity>
               </View>
             )}
-          </ScrollView>
+          />
         </SafeAreaView>
       </ThemedBackground>
       <DialogHost />
@@ -3322,12 +4408,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: fonts.body.medium,
-    color: '#AF9197',
-  },
-
   // Header
   header: {
     flexDirection: 'row',
@@ -3344,11 +4424,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backText: {
-    fontSize: fonts.body.large,
-    fontWeight: '600',
-    marginTop: -2,
   },
   headerTitle: {
     fontSize: fonts.title.large,
@@ -3373,13 +4448,11 @@ const styles = StyleSheet.create({
   bookingsButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(175,145,151,0.18)',
     borderRadius: dimensions.card.smallBorderRadius,
   },
   bookingsText: {
     fontSize: 11,
     fontFamily: 'BakbakOne-Regular',
-    color: '#AF9197',
   },
   clearButton: {
     paddingHorizontal: spacing.md,
@@ -3473,26 +4546,22 @@ const styles = StyleSheet.create({
     height: dimensions.providerLogo.size + 10,
     borderRadius: (dimensions.providerLogo.size + 10) / 2,
     borderWidth: dimensions.providerLogo.borderWidth,
-    borderColor: 'rgba(175,145,151,0.25)',
   },
   providerLogoContainer: {
     position: 'relative',
     marginRight: dimensions.providerLogo.marginRight + 4,
   },
   serviceTypePill: {
-    backgroundColor: 'rgba(175,145,151,0.15)',
     borderRadius: dimensions.card.smallBorderRadius,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     alignSelf: 'flex-start',
     marginVertical: spacing.xs,
     borderWidth: 1,
-    borderColor: 'rgba(175,145,151,0.3)',
   },
   serviceTypeText: {
     fontSize: fonts.serviceTag,
     fontFamily: 'BakbakOne-Regular',
-    color: '#AF9197',
     fontWeight: 'bold',
   },
   providerInfo: {
@@ -3506,8 +4575,8 @@ const styles = StyleSheet.create({
   },
   providerStats: {
     fontSize: fonts.ratingText,
-    fontFamily: 'Jura-VariableFont_wght bold',
-    fontWeight: '500',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     marginTop: spacing.sm,
   },
@@ -3523,7 +4592,6 @@ const styles = StyleSheet.create({
   },
   serviceSeparator: {
     height: 1,
-    backgroundColor: 'rgba(175,145,151,0.25)',
     marginVertical: spacing.lg,
     marginHorizontal: spacing.md,
     borderRadius: 1,
@@ -3543,6 +4611,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
+  summaryItemRequestNote: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FF9500', marginTop: 2 },
   conflictBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3559,6 +4628,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+  requestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: spacing.sm,
+  },
+  requestBannerText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '600', color: '#FF9500' },
   serviceHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -3570,19 +4650,19 @@ const styles = StyleSheet.create({
   serviceName: {
     fontSize: fonts.serviceText,
     fontFamily: 'BakbakOne-Regular',
-    color: '#000',
     marginBottom: 1,
+  },
+  // Duration, directly under the service name in the header.
+  priceSummaryText: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   // Add-ons/deposit/notes as one tight block under the header, rather than
   // three separately-margined full-width rows.
   serviceMetaBlock: {
     marginTop: spacing.xs,
     gap: 2,
-  },
-  // Duration, directly under the service name in the header.
-  priceSummaryText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
   },
   // Bold/darker so add-ons read as labelled paid extras rather than blending
   // into the plain secondary-text lines around them. Spacing is owned by the
@@ -3600,20 +4680,18 @@ const styles = StyleSheet.create({
   depositNote: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   removeButton: {
     width: dimensions.button.small.width,
     height: dimensions.button.small.height,
     borderRadius: dimensions.button.small.borderRadius,
-    backgroundColor: 'rgba(175,145,151,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.1)',
   },
   removeText: {
     fontSize: fonts.title.medium,
-    color: '#333',
     fontWeight: 'bold',
   },
 
@@ -3630,6 +4708,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     flexShrink: 1,
     marginRight: spacing.sm,
   },
@@ -3668,6 +4747,7 @@ const styles = StyleSheet.create({
   pickerSubtitle: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
@@ -3681,6 +4761,7 @@ const styles = StyleSheet.create({
   pickerRowHint: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: 1,
   },
 
@@ -3709,46 +4790,26 @@ const styles = StyleSheet.create({
   groupSheetHeaderText: {
     flex: 1,
   },
-  groupSheetSection: {
-    marginTop: spacing.md,
-  },
-  groupSheetLoadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  groupSheetLoadingText: {
-    fontSize: fonts.body.small,
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-  groupSheetEmptyText: {
-    fontSize: fonts.body.small,
-    fontFamily: 'Jura-VariableFont_wght',
-    paddingVertical: spacing.md,
-    lineHeight: 18,
-  },
-  groupSheetTimeWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  groupSheetTimeChip: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 10,
-    borderWidth: 2,
-  },
-  groupSheetTimeText: {
-    fontSize: fonts.body.small,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-  },
   groupSheetPreview: {
     marginTop: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  groupSheetSpanRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  groupSheetSpanText: {
+    fontSize: fonts.title.small,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  groupSheetSpanTotal: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupSheetPreviewRow: {
     flexDirection: 'row',
@@ -3761,6 +4822,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupSheetPreviewTime: {
     fontSize: fonts.body.small,
@@ -3808,6 +4870,7 @@ const styles = StyleSheet.create({
   groupHeaderSpan: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: 1,
   },
   groupRows: {
@@ -3831,6 +4894,23 @@ const styles = StyleSheet.create({
   groupRowMeta: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+  },
+  providerIssueCount: {
+    color: '#F44336',
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  // Same red as the card banner and border, so a flagged row reads as part of
+  // the same signal rather than a second, unrelated warning colour.
+  groupRowIssue: {
+    color: '#F44336',
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    marginTop: 2,
   },
   groupRowAddOns: {
     fontSize: fonts.body.xsmall,
@@ -3841,6 +4921,7 @@ const styles = StyleSheet.create({
   groupRowDeposit: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: 1,
   },
   groupRowPrice: {
@@ -3867,6 +4948,7 @@ const styles = StyleSheet.create({
   groupFooterLabel: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupFooterTotalLabel: {
     fontSize: fonts.body.xsmall,
@@ -3887,6 +4969,7 @@ const styles = StyleSheet.create({
   pickerRowMeta: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   pickerCancel: {
     alignItems: 'center',
@@ -3912,6 +4995,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+  appliedPromoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 },
+  appliedPromoCode: { fontSize: 13, fontWeight: '700' },
+  appliedPromoProvider: { flex: 1, fontSize: 12 },
+  appliedPromoSaving: { fontSize: 12, fontWeight: '700', color: '#30D158' },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3920,18 +5007,20 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: '#000',
   },
   summaryValue: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
     color: '#000',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   serviceFeeNote: {
     // ADD THIS
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     textAlign: 'right',
     marginTop: spacing.xs,
@@ -3956,7 +5045,6 @@ const styles = StyleSheet.create({
 
   // Checkout Button
   checkoutButton: {
-    backgroundColor: '#AF9197',
     borderRadius: dimensions.button.large.borderRadius,
     padding: spacing.lg,
     marginBottom: spacing.xxl,
@@ -3998,6 +5086,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     lineHeight: 16,
   },
 
@@ -4017,12 +5106,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     marginBottom: spacing.xxl,
     textAlign: 'center',
   },
   browseButton: {
-    backgroundColor: '#AF9197',
     borderRadius: dimensions.card.borderRadius,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
@@ -4123,6 +5212,7 @@ const styles = StyleSheet.create({
   orderItemName: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: '#000', // CLEAR BLACK
     flex: 1,
   },
@@ -4168,10 +5258,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  selectedPaymentMethod: {
-    borderColor: '#AF9197',
-    backgroundColor: 'rgba(175,145,151,0.1)',
-  },
   paymentMethodIcon: {
     fontSize: fonts.title.small,
     marginRight: spacing.md,
@@ -4191,14 +5277,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  selectedPaymentMethodRadio: {
-    borderColor: '#AF9197',
-  },
   paymentMethodRadioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#AF9197',
   },
   cardDetails: {
     marginBottom: spacing.xxl,
@@ -4215,6 +5297,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardRow: {
@@ -4225,15 +5308,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   payButton: {
-    backgroundColor: '#AF9197',
     borderRadius: dimensions.button.large.borderRadius,
     padding: spacing.lg,
     alignItems: 'center',
     margin: spacing.xl,
     marginTop: 0,
-  },
-  payButtonDisabled: {
-    backgroundColor: 'rgba(175,145,151,0.5)',
   },
   payButtonText: {
     fontSize: fonts.body.large,
@@ -4307,14 +5386,12 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   liquidGlassSuccessButton: {
-    backgroundColor: 'rgba(175,145,151,0.12)',
     borderRadius: dimensions.card.smallBorderRadius,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     width: '100%',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(175,145,151,0.3)',
   },
   liquidGlassSuccessButtonText: {
     fontFamily: 'BakbakOne-Regular',
@@ -4324,6 +5401,29 @@ const styles = StyleSheet.create({
   },
 
   // Review Modal Styles
+  // KeyboardAvoidingView wrapper around the card — sized to the card, not
+  // flex:1, so it doesn't stretch over the whole dimmed overlay and swallow
+  // the backdrop taps that dismiss the keyboard.
+  // Address row in Confirm Your Details — a button through to the account's
+  // AddressPicker, not an input.
+  reviewAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  reviewAddressBtnText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+  },
+  reviewKeyboardWrap: {
+    width: '100%',
+    alignItems: 'center',
+  },
   reviewModalContainer: {
     width: '90%',
     maxWidth: 400,
@@ -4343,6 +5443,7 @@ const styles = StyleSheet.create({
   },
   reviewModalSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     marginBottom: 20,
   },
@@ -4357,6 +5458,7 @@ const styles = StyleSheet.create({
   },
   reviewInput: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 15,
     borderWidth: 1.5,
     borderRadius: 12,
@@ -4365,10 +5467,21 @@ const styles = StyleSheet.create({
   },
   reviewPhoneWarning: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
     color: '#FF3B30',
     marginTop: 4,
     marginLeft: 4,
+  },
+  safetyAckNotice: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+  },
+  safetyAckNoticeText: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   reviewCheckboxRow: {
     flexDirection: 'row',
@@ -4392,6 +5505,7 @@ const styles = StyleSheet.create({
   },
   reviewCheckboxLabel: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
   },
   requiredAsterisk: {
@@ -4449,14 +5563,110 @@ const styles = StyleSheet.create({
   },
   reviewFieldValue: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 15,
     paddingVertical: 10,
     paddingHorizontal: 4,
   },
 
-  // Booking Summary Modal
+  // Booking Summary — centred-card presentation (small carts)
   summaryModalContainer: {
     maxHeight: '85%',
+  },
+  // flexShrink so the pinned footer below it always keeps its own height
+  // inside the card's capped box, instead of the scroll eating it.
+  summaryCardScroll: {
+    flexShrink: 1,
+  },
+  summaryCardFooter: {
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+
+  // Booking Summary — full-screen presentation (FULL_SCREEN_SUMMARY_THRESHOLD+)
+  summaryScreen: {
+    flex: 1,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  summaryBackBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryHeaderTitles: {
+    flex: 1,
+  },
+  summaryScroll: {
+    flex: 1,
+  },
+  summaryScrollContent: {
+    padding: 20,
+    paddingBottom: 28,
+  },
+  summaryFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+
+  // Same-provider grouping in the APPOINTMENTS section — one card each,
+  // mirroring the cart's own provider sections so the grouping reads the
+  // same way in both places.
+  summaryProviderCard: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  summaryProviderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  summaryProviderLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  summaryProviderHeaderText: {
+    flex: 1,
+  },
+  summaryProviderTotals: {
+    alignItems: 'flex-end',
+  },
+  summaryProviderTotal: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+  },
+  summaryProviderBody: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  summaryProviderName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    letterSpacing: 0.3,
+  },
+  summaryProviderMeta: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    marginTop: 1,
   },
   summarySection: {
     borderRadius: 12,
@@ -4477,6 +5687,7 @@ const styles = StyleSheet.create({
   },
   summaryCustomerDetail: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     marginBottom: 2,
   },
@@ -4499,11 +5710,6 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
   },
-  summaryItemProvider: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    marginBottom: 2,
-  },
   summaryItemAddOns: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
@@ -4512,6 +5718,7 @@ const styles = StyleSheet.create({
   },
   summaryItemDateTime: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
   },
   // Group block: its own rounded, accent-bordered box so the grouped services
@@ -4573,12 +5780,13 @@ const styles = StyleSheet.create({
   },
   summaryTotalLabel: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
   },
   summaryTotalValue: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   summaryGrandTotalRow: {
     borderTopWidth: StyleSheet.hairlineWidth,

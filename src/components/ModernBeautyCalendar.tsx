@@ -2,8 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutAnimation, Modal, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { AvailabilityService } from '../services/AvailabilityService';
+import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
 import { formatLongDateNoYear } from '../utils/dateUtils';
+import { RequestTimePanel } from './RequestTimePanel';
+
+/** Emergency/by-request outline. Deliberately NOT the caller's accent: every
+ *  other colour in this picker is derived from whatever sheet it's sitting in,
+ *  because those all mean "this is bookable". This one means the opposite —
+ *  it needs the same warning read on every backdrop, so it's fixed. Applied to
+ *  the DATE pill and the TIME chip alike, so a red-outlined day and a
+ *  red-outlined time are visibly the same fact. */
+const EMERGENCY_OUTLINE = '#FF3B30';
 
 // LayoutAnimation is opt-in on old-architecture Android; without this the
 // collapse/expand below snaps instead of animating there.
@@ -11,11 +21,28 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type TimeSlot = string;
+/** One offerable start time. `reasons` is empty for an ordinary slot, and
+ *  names the provider's own rules the time breaks when it's only bookable as
+ *  a request they have to accept (see AvailabilityService.TimeSlot). */
+/** One time in the day's grid. `blocked` is set when the time exists but
+ *  can't be taken — already booked, already gone, or inside the provider's
+ *  notice window. Those still render, greyed and inert: a day shown as an
+ *  empty space can't be told apart from one that failed to load, and hiding
+ *  a booked-out morning quietly rewrites how busy the provider looks. */
+export type TimeSlot = {
+  time: string;
+  reasons: EmergencyReason[];
+  blocked?: 'booked' | 'past' | 'notice' | undefined;
+};
 
-type DayData = {
+export type DayData = {
+  /** Ordinary, unconditional slots only — a day that can ONLY be requested
+   *  is not "available", and must not read as one on the day strip or drive
+   *  the auto-jump below. */
   available: number;
-  status: 'past' | 'available' | 'closed' | 'unavailable';
+  /** Slots offered only as a request. */
+  requestable: number;
+  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'over' | 'unavailable';
   times: TimeSlot[];
 };
 
@@ -28,14 +55,20 @@ type WeekDay = {
   dayNumber: number;
   isToday: boolean;
   available: number;
-  status: 'past' | 'available' | 'closed' | 'unavailable';
+  requestable: number;
+  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'over' | 'unavailable';
   times: TimeSlot[];
 };
 
 type ModernBeautyCalendarProps = {
   selectedDate?: string;
   onDateSelect: (date: string) => void;
-  onTimeSelect: (time: string) => void;
+  /** `requestReasons` is present only when the client picked a slot the
+   *  provider's own rules exclude and they've opted into being asked anyway
+   *  — the caller is responsible for confirming that with them before the
+   *  booking goes anywhere. Absent for every ordinary slot, so a caller that
+   *  ignores it keeps working unchanged. */
+  onTimeSelect: (time: string, requestReasons?: EmergencyReason[]) => void;
   selectedTime?: string;
   providerName?: string;
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
@@ -53,6 +86,25 @@ type ModernBeautyCalendarProps = {
   textColor: string;
   subColor: string;
   surfaceColor: string;
+  /** Overrides how a day's bookable times are resolved. Default (undefined) is
+   *  this-service slots via getAvailableSlots. The cart's group reschedule
+   *  passes a chain-fit resolver instead, so the day pills AND the time row
+   *  both reflect "every service in the group fits back-to-back", rather than
+   *  offering times only the first service could take. Must be stable
+   *  (useCallback) — it's a dependency of the weekly availability fetch. */
+  slotResolver?: (date: string) => Promise<string[]>;
+  /** How to NAME the provider in by-request copy. `providerName` above is an
+   *  identifier and is frequently a raw UUID, so it can't be shown to anyone.
+   *  Falls back to "the provider" when absent. */
+  providerLabel?: string;
+  /** Opt IN to offering times the provider only accepts as a request (see
+   *  AvailabilityService's EmergencyRequestPolicy). Defaults to false, and
+   *  deliberately so: a caller that shows these has to carry the resulting
+   *  flag all the way through to checkout, or the booking is rejected by the
+   *  same rule that made it a request in the first place. Every picker that
+   *  can't do that — reschedule, group chains, the consultation prerequisite
+   *  — simply never sees them. */
+  allowRequests?: boolean;
 };
 
 // Local YYYY-MM-DD — date.toISOString() converts to UTC first, which shifts
@@ -76,6 +128,47 @@ const toLocalDateString = (date: Date): string => {
   return `${y}-${m}-${d}`;
 };
 
+/**
+ * A day's summary from its offerable times. A day whose ONLY times are
+ * by-request is 'request', not 'available': it stays tappable, but it must
+ * not claim ordinary availability on the day strip, in the month dots, or to
+ * the auto-jump — those all mean "you can just book this".
+ *
+ * `isFullyBooked` separates the two ways a day can end up with nothing to
+ * offer. Without it both collapsed to 'closed', so a provider booked solid on
+ * Tuesday looked exactly like a provider who never works Tuesdays — same grey
+ * pill, same empty dot, same dead tap. Those want opposite responses from a
+ * client (wait for this provider vs. pick another day), so they can't share a
+ * state. Note this is NOT the same question the availability strip's 'full'
+ * answers (booked minutes vs open minutes): this one is about THIS service's
+ * slot grid, so a day with only 20 minutes free is full for a 2-hour service
+ * and open for a 15-minute one.
+ */
+export const dayDataFrom = (times: TimeSlot[], isFullyBooked = false): DayData => {
+  // Blocked times are in `times` so they can be shown, but they are not on
+  // offer — counting them would put an availability dot on a day with
+  // nothing left and send the auto-jump to it.
+  const offerable = times.filter(slot => !slot.blocked);
+  const available = offerable.filter(slot => slot.reasons.length === 0).length;
+  const requestable = offerable.length - available;
+  return {
+    available,
+    requestable,
+    status: available > 0
+      ? 'available'
+      : requestable > 0
+        ? 'request'
+        : isFullyBooked
+          ? 'full'
+          // The day had times and none can be reached any more, but nobody
+          // took them — they've simply been and gone (or are inside the
+          // provider's notice window). Not 'closed', which means the provider
+          // never works this day and is what makes a pill untappable.
+          : times.length > 0 ? 'over' : 'closed',
+    times,
+  };
+};
+
 export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   selectedDate,
   onDateSelect,
@@ -90,6 +183,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   textColor,
   subColor,
   surfaceColor,
+  slotResolver,
+  providerLabel,
+  allowRequests = false,
 }) => {
   // Popup border — a low-alpha tint of the text colour, so it reads as a
   // hairline on either a light or dark backdrop without a separate flag.
@@ -99,9 +195,28 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [showTimeSelection, setShowTimeSelection] = useState<boolean>(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(false);
   const [showFullCalendar, setShowFullCalendar] = useState<boolean>(false);
+  const [showRequestPanel, setShowRequestPanel] = useState<boolean>(false);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
+  // A provider can go live with zero rows in provider_availability — nothing
+  // upstream (search, go-live gating) currently prevents it. Without this,
+  // that renders as every day showing 'closed', identical to a provider
+  // simply not working that day, and the client only learns the real reason
+  // from the booking attempt's rejection after picking a date AND time. Checked
+  // once per provider via the same getAvailabilitySummary state the
+  // provider's own profile already computes ('unpublished' vs 'closed').
+  const [providerUnpublished, setProviderUnpublished] = useState<boolean>(false);
+  // This provider's emergency-request opt-ins. Needed here — not just inside
+  // getAvailableSlots — because the booking-window rule is enforced on the
+  // DATE before any slot lookup happens (see maxDate below), so a provider
+  // who accepts requests beyond their window would otherwise still have
+  // those dates greyed out. Starts fully closed and stays that way for any
+  // provider that hasn't opted in.
+  const [emergencyPolicy, setEmergencyPolicy] = useState<EmergencyRequestPolicy>({
+    outsideHours: false, blockedDates: false, shortNotice: false, beyondWindow: false,
+    beforeMins: null, afterMins: null,
+  });
   // Once the client has actively picked a time, the whole picker collapses to
   // a one-line summary — a week strip plus ~20 time chips is the single
   // largest block in the booking sheet, and it's pure noise once the choice
@@ -113,6 +228,19 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // Guards the auto-jump-to-next-availability below so it fires once per
   // provider/service, not on every manual week navigation.
   const autoJumpedRef = useRef(false);
+  // Effects are declared before the helpers below to keep related availability
+  // state together. Refs let those effects invoke the latest helper without
+  // recreating the availability fetch on every render.
+  const generateWeeklyAvailabilityRef = useRef<() => Promise<void>>(async () => {});
+  const getWeekDaysRef = useRef<() => WeekDay[]>(() => []);
+  // Which weekly fetch is current. generateWeeklyAvailability awaits up to
+  // seven per-day lookups and then REPLACES the whole slots map, so two runs
+  // overlapping (paging weeks quickly, or slotResolver changing when a
+  // service is pulled out of a group) let the slower, older run land last —
+  // the map then holds the previous week's dates, every visible day falls
+  // through to the 'unavailable' default in getWeekDays, and a week with real
+  // openings renders as completely closed.
+  const fetchSeqRef = useRef(0);
 
   // Resolve the provider ONCE up front so a bad/stale name shows a clear
   // message instead of rendering as an indistinguishable "fully booked"
@@ -121,15 +249,31 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     let cancelled = false;
     if (!providerName) { setProviderFound(true); return; }
     setProviderFound(null);
+    setProviderUnpublished(false);
     AvailabilityService.resolveProvider(providerName).then(id => {
-      if (!cancelled) setProviderFound(!!id);
+      if (cancelled) return;
+      setProviderFound(!!id);
+      if (!id) return;
+      AvailabilityService.getAvailabilitySummary(providerName).then(summary => {
+        if (!cancelled && summary?.state === 'unpublished') setProviderUnpublished(true);
+      });
+      // The emergency-request opt-ins only ever change what this picker shows
+      // when it's allowed to offer request slots at all. When it isn't (the
+      // common case — the feature flag is off), skip the round trip: fetching
+      // it would land as a state change that re-runs the whole weekly slot
+      // fetch a second time for nothing, which is the lag on first open.
+      if (allowRequests) {
+        AvailabilityService.getEmergencyRequestPolicy(providerName).then(policy => {
+          if (!cancelled) setEmergencyPolicy(policy);
+        });
+      }
     });
     return () => { cancelled = true; };
-  }, [providerName]);
+  }, [providerName, allowRequests]);
 
   useEffect(() => {
-    generateWeeklyAvailability();
-  }, [currentWeek, providerName, serviceDuration, serviceId, maxDate]);
+    generateWeeklyAvailabilityRef.current();
+  }, [currentWeek, providerName, serviceDuration, serviceId, maxDate, slotResolver, emergencyPolicy, allowRequests]);
 
   // A new provider/service is a genuinely different schedule to check —
   // allow one fresh auto-jump attempt for it.
@@ -142,21 +286,38 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // earliest date that has one. Runs once per provider/service; manual
   // navigation afterwards is left alone even if it lands on an empty week.
   useEffect(() => {
-    if (autoJumpedRef.current || isLoadingSlots || !providerName || providerFound !== true) return;
+    if (autoJumpedRef.current || isLoadingSlots || !providerName || providerFound !== true || providerUnpublished) return;
     if (Object.keys(availableSlots).length === 0) return;
 
-    const thisWeekHasOpening = getWeekDays().some(day => day.status === 'available');
-    if (thisWeekHasOpening) {
+    // A week whose only openings are by-request still counts: jumping past
+    // it would hide times the provider has explicitly offered to consider.
+    const weekDaysNow = getWeekDaysRef.current();
+    const firstOpening = weekDaysNow
+      .find(day => day.status === 'available' || day.status === 'request');
+    if (firstOpening) {
       autoJumpedRef.current = true;
+      // Select it here rather than leaving the sheet's own slot resolver to
+      // do it. That resolver is several sequential round trips deep, and
+      // until SOMETHING sets a date this section renders nothing at all —
+      // so the whole time grid sat blank behind "Finding your earliest
+      // available time…" even though this week's slots had already arrived.
+      // It still runs, and still wins if it lands on something better; this
+      // just stops the grid waiting on it.
+      if (!selectedDate) onDateSelect(firstOpening.dateString);
       return;
     }
     autoJumpedRef.current = true;
+    // findNextAvailableDate only knows single-service availability, so under a
+    // custom resolver it would jump to a day this caller considers unbookable.
+    // Leave the client on the current week instead — the day pills already
+    // show, correctly, that nothing here fits.
+    if (slotResolver) return;
     AvailabilityService.findNextAvailableDate(providerName, serviceDuration, serviceId).then(nextDate => {
       if (!nextDate) return;
       setCurrentWeek(new Date(nextDate + 'T00:00:00'));
       onDateSelect(nextDate);
     });
-  }, [availableSlots, isLoadingSlots, providerName, providerFound, serviceDuration, serviceId, onDateSelect]);
+  }, [availableSlots, isLoadingSlots, providerName, providerFound, providerUnpublished, serviceDuration, serviceId, onDateSelect, slotResolver, selectedDate]);
 
   useEffect(() => {
     // ✅ FIXED: Proper null check with early return
@@ -185,10 +346,87 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   }, [selectedDate]);
 
   const generateWeeklyAvailability = async () => {
+    const seq = ++fetchSeqRef.current;
     setIsLoadingSlots(true);
     const startOfWeek = getStartOfWeek(currentWeek);
     const slots: SlotsMap = {};
 
+    // Resolve ONE day. Pulled out of the loop below so the seven can run
+    // concurrently — this used to be a sequential `for` with an await inside,
+    // so opening the picker (or paging a week) cost seven round trips end to
+    // end and the spinner sat there for all of them. They don't depend on
+    // each other, and AvailabilityService de-dupes the provider-level reads
+    // they share, so the whole week now costs roughly what one day did.
+    const resolveDay = async (date: Date, dateString: string): Promise<DayData> => {
+      if (!providerName) {
+        return dayDataFrom(generateBeautyTimeSlots(dateString, date.getDay(), providerName));
+      }
+      try {
+        // A custom resolver only ever yields ordinary slots — it has no
+        // notion of the provider's emergency opt-ins, so nothing it
+        // returns may be presented as a request.
+        if (slotResolver) {
+          return dayDataFrom((await slotResolver(dateString)).map(time => ({ time, reasons: [] })));
+        }
+        // getAvailableSlots returns the day's WHOLE grid, taken times
+        // included and flagged — so an empty grid means the provider
+        // isn't working, while a grid where every entry is taken means
+        // they're booked out. Filtering first threw that away.
+        const grid = await AvailabilityService.getAvailableSlots(
+          providerName,
+          dateString,
+          serviceDuration,
+          serviceId,
+          // Ask for the times that have gone as well as the ones left, so a
+          // day that's over still shows its shape.
+          true,
+        );
+        // Fullness is measured over ORDINARY slots only. By-request times
+        // must not answer it in either direction: they'd mask a genuinely
+        // booked-out day at an opted-in provider (there is always a free 4am),
+        // and their absence must not make a day the provider simply doesn't
+        // work look "booked", which would blame other clients for it.
+        const ordinary = grid.filter(slot => !slot.isByRequest);
+        const isFullyBooked = ordinary.length > 0 && ordinary.every(slot => slot.isBooked);
+
+        // Everything the day contains, each carrying whether it can be taken.
+        // A by-request time this caller isn't allowed to offer is dropped
+        // outright rather than greyed — greying it would advertise a time
+        // this picker can't carry through checkout anyway.
+        const slots: TimeSlot[] = grid
+          .filter(slot => allowRequests || !slot.isByRequest)
+          .map(slot => ({
+            time: slot.time,
+            reasons: slot.requestReasons ?? [],
+            ...(slot.isBooked
+              ? { blocked: 'booked' as const }
+              : slot.unbookable
+                ? { blocked: slot.unbookable }
+                : {}),
+          }));
+
+        // The filter above can leave nothing when every slot the day has is
+        // by-request (a beyond-window or blocked day at a provider who takes
+        // requests) — but if any of those were BOOKED, the day still has real
+        // activity on it. Falling through to dayDataFrom([]) would call it
+        // 'closed' ("provider doesn't work this day"), which is both wrong and,
+        // since that state is untappable, hides a genuinely booked-out day.
+        // Keep the booked ones visible so it reads as full instead.
+        if (slots.length === 0 && grid.some(slot => slot.isBooked)) {
+          const bookedOnly: TimeSlot[] = grid
+            .filter(slot => slot.isBooked)
+            .map(slot => ({ time: slot.time, reasons: [], blocked: 'booked' as const }));
+          return dayDataFrom(bookedOnly, true);
+        }
+
+        return dayDataFrom(slots, isFullyBooked);
+      } catch {
+        // Fallback to base schedule without booking filter
+        return dayDataFrom(generateBeautyTimeSlots(dateString, date.getDay(), providerName));
+      }
+    };
+
+    const pending: Promise<void>[] = [];
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
@@ -196,63 +434,38 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       const isPast = date < new Date() && date.toDateString() !== new Date().toDateString();
 
       if (isPast) {
-        slots[dateString] = { available: 0, status: 'past', times: [] };
+        slots[dateString] = { available: 0, requestable: 0, status: 'past', times: [] };
         continue;
       }
 
-      // Enforce booking window: dates beyond maxDate are unavailable
-      if (maxDate !== undefined) {
+      // Enforce booking window: dates beyond maxDate are unavailable — unless
+      // this provider takes requests beyond it, in which case the date is
+      // left in and getAvailableSlots decides (it applies the same window
+      // rule itself, and returns by-request slots when the opt-in is on).
+      // Without this the picker would grey out dates the provider has
+      // explicitly said they'll consider.
+      if (maxDate !== undefined && !(allowRequests && emergencyPolicy.beyondWindow)) {
         const maxDateMidnight = new Date(maxDate);
         maxDateMidnight.setHours(23, 59, 59, 999);
         if (date > maxDateMidnight) {
-          slots[dateString] = { available: 0, status: 'unavailable', times: [] };
+          slots[dateString] = { available: 0, requestable: 0, status: 'unavailable', times: [] };
           continue;
         }
       }
 
-      // Use AvailabilityService to get slots filtered by existing bookings
-      if (providerName) {
-        try {
-          const availableTimeSlots = await AvailabilityService.getAvailableSlots(
-            providerName,
-            dateString,
-            serviceDuration,
-            serviceId
-          );
-          const openSlots = availableTimeSlots
-            .filter(slot => !slot.isBooked)
-            .map(slot => slot.time);
-
-          slots[dateString] = {
-            available: openSlots.length,
-            status: openSlots.length > 0 ? 'available' : 'closed',
-            times: openSlots
-          };
-        } catch (error) {
-          // Fallback to base schedule without booking filter
-          const dayOfWeek = date.getDay();
-          const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
-          slots[dateString] = {
-            available: times.length,
-            status: times.length > 0 ? 'available' : 'closed',
-            times
-          };
-        }
-      } else {
-        // No provider specified, use default slots
-        const dayOfWeek = date.getDay();
-        const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
-        slots[dateString] = {
-          available: times.length,
-          status: times.length > 0 ? 'available' : 'closed',
-          times
-        };
-      }
+      pending.push(resolveDay(date, dateString).then(day => { slots[dateString] = day; }));
     }
 
+    await Promise.all(pending);
+
+    // A newer run started while this one was awaiting — its result is the
+    // one that matches what's on screen, so drop this entirely (including
+    // the spinner, which the newer run still owns).
+    if (seq !== fetchSeqRef.current) return;
     setAvailableSlots(slots);
     setIsLoadingSlots(false);
   };
+  generateWeeklyAvailabilityRef.current = generateWeeklyAvailability;
 
   const getStartOfWeek = (date: Date): Date => {
     const d = new Date(date);
@@ -271,7 +484,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     return [
       '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
       '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM'
-    ];
+    ].map(time => ({ time, reasons: [] }));
   };
 
   const navigateWeek = (direction: number) => {
@@ -306,6 +519,44 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     return days;
   };
 
+  // A day the user actually TAPPED invalidates whatever time is already
+  // selected: the same clock time usually isn't offered on the new day, and
+  // someone moving quickly (tap a new day, go straight for Done/Continue)
+  // would otherwise submit a slot that was never available on it. Clearing
+  // the time is also what keeps the caller's Done/Continue disabled — every
+  // caller already gates on having a time — until a real pick is made.
+  //
+  // Deliberately done here in the tap handlers rather than in the
+  // selectedDate effect above: that effect cannot tell a user tap from the
+  // caller auto-resolving an earliest-available date AND time together (they
+  // land in the same render), so clearing there would wipe the time the
+  // caller had just resolved.
+  const selectDateFromTap = useCallback((dateString: string) => {
+    onDateSelect(dateString);
+    if (dateString !== selectedDate && selectedTime) onTimeSelect('');
+  }, [onDateSelect, onTimeSelect, selectedDate, selectedTime]);
+
+  /** The date being requested, defaulting to whatever the picker is already
+   *  showing. */
+  const requestPanelDate = selectedDate || toLocalDateString(new Date());
+
+  /** Only this date's by-request times. The panel never derives its own — see
+   *  RequestTimePanel's header for why that matters. */
+  const requestTimesForDate = useMemo(
+    () => (availableSlots[requestPanelDate]?.times ?? []).filter(slot => slot.reasons.length > 0),
+    [availableSlots, requestPanelDate],
+  );
+
+  /** Moving the request sheet's date has to move the WEEK with it: the slot
+   *  fetch runs a week at a time, so a date outside the current one has no
+   *  resolved times at all until its week is the one being fetched. Without
+   *  this, picking a date a month out showed an empty sheet forever. */
+  const handleRequestDateChange = useCallback((dateString: string) => {
+    const [y, m, d] = dateString.split('-').map(part => parseInt(part, 10));
+    setCurrentWeek(new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+    selectDateFromTap(dateString);
+  }, [selectDateFromTap]);
+
   const handleCalendarDaySelect = (date: Date) => {
     const dateString = toLocalDateString(date);
     const today = new Date();
@@ -319,29 +570,45 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       if (date > maxDateMidnight) return;
     }
 
+    // A day the provider doesn't work is a dead end here too — only refuse it
+    // once its slots have actually loaded and come back empty, so a date whose
+    // week hasn't been fetched yet still opens (fetching it is the point).
+    if (availableSlots[dateString]?.status === 'closed') return;
+
     // Set the week to contain this date
     setCurrentWeek(date);
-    onDateSelect(dateString);
+    selectDateFromTap(dateString);
     // Deliberately does NOT close the popup — the client picks a date (and
     // can keep browsing months / re-pick) then taps Done explicitly, rather
     // than the first tap silently dismissing the whole picker.
   };
 
   const handleDateClick = (dateString: string, dayData: DayData) => {
+    // 'past' and 'closed' are dead ends and the pill is already disabled for
+    // them — this is the backstop. Every other state has something to say
+    // (booked out, over, or "not this far ahead yet"), so it takes the tap.
     if (dayData.status === 'past' || dayData.status === 'closed') return;
     Haptics.selectionAsync().catch(() => {});
-    onDateSelect(dateString);
+    selectDateFromTap(dateString);
   };
 
   // Picking a time is the last step of the flow, so it's what collapses the
   // picker down to the summary row. Re-tapping the already-selected time
   // collapses too (rather than being a no-op) — that's the obvious gesture
   // for "yes, this one" once a slot was auto-resolved for you.
-  const handleTimeClick = (time: string) => {
+  const handleTimeClick = (time: string, requestReasons: EmergencyReason[]) => {
     Haptics.selectionAsync().catch(() => {});
-    onTimeSelect(time);
+    onTimeSelect(time, requestReasons.length > 0 ? requestReasons : undefined);
     LayoutAnimation.configureNext(COLLAPSE_ANIM);
     setIsCollapsed(true);
+  };
+
+  /** Picking from the panel closes it: the choice is made, and leaving the
+   *  panel up would mean re-opening the picker later landing on the request
+   *  list rather than on the ordinary times. */
+  const handlePanelPickTime = (time: string, reasons: EmergencyReason[]) => {
+    setShowRequestPanel(false);
+    handleTimeClick(time, reasons);
   };
 
   const handleExpand = useCallback(() => {
@@ -373,6 +640,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       const dateString = toLocalDateString(date);
       const dayData = availableSlots[dateString] || {
         available: 0,
+        requestable: 0,
         status: 'unavailable' as const,
         times: []
       };
@@ -389,6 +657,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     
     return days;
   };
+  getWeekDaysRef.current = getWeekDays;
 
   const weekDays = getWeekDays();
 
@@ -407,7 +676,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       const dateString = toLocalDateString(date);
       // If the real week-slot data already loaded for this date, use it
       if (availableSlots[dateString] !== undefined) {
-        result[dateString] = availableSlots[dateString].available > 0;
+        result[dateString] = availableSlots[dateString].available + availableSlots[dateString].requestable > 0;
       } else {
         // Fall back to the sync schedule
         const times = generateBeautyTimeSlots(dateString, date.getDay(), providerName);
@@ -491,12 +760,16 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 const isToday    = date.toDateString() === new Date().toDateString();
                 const isSelected = selectedDate === dateString;
                 const hasSlots   = !isPast && monthAvailability[dateString] === true;
-                const isBeyondMax = maxDate !== undefined && (() => {
+                const isBeyondMax = maxDate !== undefined && !(allowRequests && emergencyPolicy.beyondWindow) && (() => {
                   const maxMidnight = new Date(maxDate);
                   maxMidnight.setHours(23, 59, 59, 999);
                   return date > maxMidnight;
                 })();
-                const isDisabled = isPast || isBeyondMax;
+                // Only once this date's week has been fetched and come back as
+                // a non-working day — an un-fetched future date stays tappable
+                // so picking it can load its week.
+                const isKnownClosed = availableSlots[dateString]?.status === 'closed';
+                const isDisabled = isPast || isBeyondMax || isKnownClosed;
 
                 return (
                   <TouchableOpacity
@@ -577,12 +850,41 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         </View>
       )}
 
+      {/* ── No schedule published ────────────────────────────────────────
+          Distinct from providerFound === false (bad identifier) and from a
+          day simply being 'closed' — this provider exists but has never set
+          any hours, so the booking RPC would reject every date. The day pills
+          still render (dimmed, disabled) so the week strip's shape stays
+          recognisable instead of the section just vanishing; the time row
+          is skipped entirely since there is nothing to ever populate it. */}
+      {providerFound === true && providerUnpublished && (
+        <View style={styles.notFoundBanner}>
+          <Text style={[styles.notFoundText, { color: textColor }]}>
+            No current availability — please check back later.
+          </Text>
+        </View>
+      )}
+
       {/* ── Day pills ────────────────────────────────────────────────── */}
       {providerFound !== false && (
-      <View style={styles.daysRow}>
+      <View style={[styles.daysRow, providerUnpublished && styles.daysRowDimmed]}>
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
-          const isDisabled = day.status === 'past' || day.status === 'closed';
+          // A past day and a day the provider simply doesn't work are both
+          // dead ends — nothing to pick, nowhere to go (requests are off) —
+          // so neither takes a tap. 'over' still has a greyed grid and a
+          // badge worth showing, and 'unavailable' (too far ahead) has its
+          // own one-line explanation, so those stay tappable.
+          const isDisabled = providerUnpublished || day.status === 'past' || day.status === 'closed';
+          // Both mean "this day had times and none of them are open" — the
+          // bar below says exactly that, where an empty space would say the
+          // provider doesn't work this day.
+          const isFull = day.status === 'full' || day.status === 'over';
+          // A day the provider doesn't work, or one too far ahead to book,
+          // reads as unavailable at a glance — greyed as heavily as a past
+          // day. 'closed' is also inert (see isDisabled); 'unavailable'
+          // stays tappable so its "not this far ahead yet" note can show.
+          const isClosedDay = day.status === 'closed' || day.status === 'unavailable';
           return (
             <TouchableOpacity
               key={day.dateString}
@@ -591,6 +893,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 { backgroundColor: surfaceColor },
                 isSel && { borderWidth: 2, borderColor: accentColor },
                 isDisabled && styles.pastDayPill,
+                isClosedDay && !isSel && styles.closedDayPill,
+                // Dimmed, but less than a closed day and still tappable —
+                // it's a real day the client could have booked.
+                isFull && !isSel && styles.fullDayPill,
               ]}
               onPress={() => handleDateClick(day.dateString, day)}
               disabled={isDisabled}
@@ -602,11 +908,19 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               <Text style={[styles.dayNumberText, { color: isSel ? accentColor : textColor }]}>
                 {day.dayNumber}
               </Text>
-              {/* Availability dot */}
+              {/* Availability dot — hollow when the day can only be
+                  requested, so "just book it" and "ask and see" don't read
+                  as the same offer at a glance. */}
               <View style={styles.dotWrap}>
                 {day.available > 0
                   ? <View style={[styles.dot, { backgroundColor: accentColor }]} />
-                  : <View style={styles.dotPlaceholder} />
+                  : day.requestable > 0
+                    ? <View style={[styles.dot, styles.dotHollow, { borderColor: accentColor }]} />
+                    : isFull
+                      // A bar, not a dot: the day HAD times and they're gone.
+                      // An empty space would say the provider doesn't work.
+                      ? <View style={[styles.dotBooked, { backgroundColor: subColor }]} />
+                      : <View style={styles.dotPlaceholder} />
                 }
               </View>
             </TouchableOpacity>
@@ -616,35 +930,209 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       )}
 
       {/* ── Time slots ───────────────────────────────────────────────── */}
-      {providerFound !== false && showTimeSelection && selectedDate && (() => {
+      {providerFound !== false && !providerUnpublished && showTimeSelection && selectedDate && (() => {
         const currentSlots = availableSlots[selectedDate];
-        if (!currentSlots?.times || currentSlots.times.length === 0) return null;
-        const chunkedTimes = chunkArray(currentSlots.times, Math.ceil(currentSlots.times.length / 3));
+        // Selecting a booked-out day has to answer the question the client
+        // just asked by tapping it. Rendering nothing (what an empty times
+        // array used to do) reads as the app failing to load, and leaves them
+        // no way to tell "everything's taken" from "they don't work today" —
+        // which decides whether waiting for this provider is worth it.
+        const who = providerLabel ?? 'the provider';
+        const takesRequests = emergencyPolicy.outsideHours || emergencyPolicy.blockedDates
+          || emergencyPolicy.shortNotice || emergencyPolicy.beyondWindow;
+        const canRequest = allowRequests && takesRequests;
+
+        // Right-aligned and quiet: an ordinary booking is the main path and
+        // this is the exception beside it, not a second call to action
+        // competing with the times themselves.
+        const requestLink = canRequest && !showRequestPanel ? (
+          <TouchableOpacity
+              style={styles.requestLink}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                LayoutAnimation.configureNext(COLLAPSE_ANIM);
+                setShowRequestPanel(true);
+              }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Request a specific time from ${who}`}
+            >
+              <Text style={[styles.requestLinkText, { color: EMERGENCY_OUTLINE }]}>
+                Request a time
+              </Text>
+              <Text style={[styles.requestLinkChevron, { color: EMERGENCY_OUTLINE }]}>⌄</Text>
+          </TouchableOpacity>
+        ) : null;
+
+        const requestPanel = (
+          <RequestTimePanel
+            date={requestPanelDate}
+            onDateChange={handleRequestDateChange}
+            requestTimes={requestTimesForDate}
+            loading={isLoadingSlots}
+            onPickTime={handlePanelPickTime}
+            onBack={() => {
+              LayoutAnimation.configureNext(COLLAPSE_ANIM);
+              setShowRequestPanel(false);
+            }}
+            providerLabel={who}
+            // No ceiling at all when this provider takes requests beyond
+            // their booking window — same condition the day strip uses, so
+            // the two can't disagree about which dates are askable.
+            {...(maxDate !== undefined && !emergencyPolicy.beyondWindow ? { maxDate } : {})}
+            accentColor={accentColor}
+            surfaceColor={surfaceColor}
+            textColor={textColor}
+            subColor={subColor}
+          />
+        );
+
+        // A day with no times at all is a day this provider doesn't work.
+        // Rendering nothing left the client tapping a dead pill with no idea
+        // whether the app had failed — and if the provider takes requests,
+        // this is exactly where someone wants to ask for one.
+        if (!currentSlots?.times || currentSlots.times.length === 0) {
+          if (showRequestPanel) {
+            return <View style={styles.timeContainer}>{requestPanel}</View>;
+          }
+          return (
+            <View style={styles.timeContainer}>
+              <Text style={[styles.closedDayNotice, { color: subColor }]}>
+                {/* Beyond the booking window is a different fact from a day
+                    they don't work — the provider may well work it, just not
+                    this far out. A day that got here while they DO take
+                    beyond-window requests never reaches this branch, because
+                    it would have had request times of its own. */}
+                {currentSlots?.status === 'unavailable'
+                  ? `${who} isn't taking bookings this far ahead yet.`
+                  : canRequest
+                    ? `${who} doesn't work this day — but you can request a time.`
+                    : `${who} doesn't work this day.`}
+              </Text>
+              {canRequest && currentSlots?.status !== 'unavailable' && (
+                <View style={styles.closedDayAction}>{requestLink}</View>
+              )}
+            </View>
+          );
+        }
+
+        // Ordinary times keep their blocked entries so the day still shows
+        // its shape; by-request ones don't, because the panel only ever
+        // offers times that can actually be asked for.
+        const openTimes    = currentSlots.times.filter(slot => slot.reasons.length === 0);
+        const requestTimes = currentSlots.times.filter(slot => slot.reasons.length > 0 && !slot.blocked);
+        const bookableCount = openTimes.filter(slot => !slot.blocked).length;
+
+        // One badge above the grid, rather than a sentence replacing it. When
+        // nothing ordinary is left the grid alone can't say WHY — "all taken"
+        // and "the day's simply over" look identical greyed out, and they want
+        // opposite responses (wait for this provider vs. just pick tomorrow).
+        //
+        // "Fully booked" is claimed ONLY when every one of the day's times was
+        // actually taken by someone. A day that ends up empty because some
+        // times were booked and the rest simply expired is not booked out —
+        // saying so would blame other clients for hours nobody ever wanted,
+        // and tell this one to join a waitlist that won't help them.
+        const blockedTally = { booked: 0, past: 0, notice: 0 };
+        openTimes.forEach(slot => { if (slot.blocked) blockedTally[slot.blocked] += 1; });
+        const dayBadge = openTimes.length > 0 && bookableCount === 0
+          ? (blockedTally.past === 0 && blockedTally.notice === 0
+              ? 'Fully booked'
+              : blockedTally.past > 0
+                ? 'These times have passed'
+                : `Too soon — ${who} needs more notice`)
+          : null;
+
+        const renderGroup = (group: TimeSlot[]) => {
+          const rows = chunkArray(group, Math.ceil(group.length / 3));
+          return rows.map((timeRow, idx) => (
+            <View key={`open-${idx}`} style={styles.timeRow}>
+              {timeRow.map(slot => {
+                const timeSel = selectedTime === slot.time;
+                const blocked = !!slot.blocked;
+                // Strike-through means "someone has this" — only a booked slot
+                // earns it. A time that simply passed (or is inside the notice
+                // window) was never taken; it's greyed and inert, but crossing
+                // it out would wrongly read as another client having claimed it.
+                const taken = slot.blocked === 'booked';
+                return (
+                  <TouchableOpacity
+                    key={slot.time}
+                    style={[
+                      styles.timeTab,
+                      { backgroundColor: surfaceColor },
+                      blocked && styles.timeTabBlocked,
+                      timeSel && !blocked && { borderWidth: 2, borderColor: accentColor },
+                    ]}
+                    onPress={() => handleTimeClick(slot.time, slot.reasons)}
+                    disabled={blocked}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: blocked }}
+                    accessibilityLabel={
+                      blocked
+                        ? `${slot.time}, ${slot.blocked === 'booked' ? 'already booked'
+                            : slot.blocked === 'past' ? 'already passed' : 'too soon to book'}`
+                        : slot.time
+                    }
+                  >
+                    <Text style={[
+                      styles.timeText,
+                      { color: blocked ? subColor : timeSel ? accentColor : textColor },
+                      taken && styles.timeTextBlocked,
+                    ]}>
+                      {slot.time}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ));
+        };
+
+        // Is the time currently chosen one of the red ones? It was picked
+        // inside the request sheet, which then closed — so nothing else on
+        // this screen still says the chosen time is a request rather than a
+        // booking. This banner is the only thing that does.
+        const selectedIsRequest = !!selectedTime
+          && requestTimes.some(slot => slot.time === selectedTime);
+
+        // The panel opens IN PLACE of the ordinary grid rather than over it:
+        // these are two answers to the same question ("when?"), so showing
+        // both at once just asks the client to hold two lists at once. It
+        // also keeps this out of a Modal — see RequestTimePanel's header for
+        // why that matters on iOS.
         return (
           <View style={styles.timeContainer}>
-            {chunkedTimes.map((timeRow, idx) => (
-              <View key={idx} style={styles.timeRow}>
-                {timeRow.map(time => {
-                  const timeSel = selectedTime === time;
-                  return (
-                    <TouchableOpacity
-                      key={time}
-                      style={[
-                        styles.timeTab,
-                        { backgroundColor: surfaceColor },
-                        timeSel && { borderWidth: 2, borderColor: accentColor },
-                      ]}
-                      onPress={() => handleTimeClick(time)}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.timeText, { color: timeSel ? accentColor : textColor }]}>
-                        {time}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            {!showRequestPanel && (dayBadge || requestLink) && (
+              <View style={styles.timeHeaderRow}>
+                {dayBadge ? (
+                  <View style={[styles.dayBadge, { borderColor: withAlpha(subColor, 0.35) }]}>
+                    <Text style={[styles.dayBadgeText, { color: subColor }]}>{dayBadge}</Text>
+                  </View>
+                ) : <View />}
+                {requestLink}
               </View>
-            ))}
+            )}
+
+            {showRequestPanel ? requestPanel : (
+              openTimes.length > 0 && renderGroup(openTimes)
+            )}
+
+            {!showRequestPanel && dayBadge === 'Fully booked' && (
+              <Text style={[styles.fullDayHint, { color: subColor }]}>
+                Try another day, or join the waitlist on this provider's profile to be told if a space opens.
+              </Text>
+            )}
+
+            {selectedIsRequest && !showRequestPanel && (
+              <View style={[styles.selectedRequestBanner, { borderColor: EMERGENCY_OUTLINE }]}>
+                <Text style={[styles.selectedRequestText, { color: EMERGENCY_OUTLINE }]}>
+                  {selectedTime} is a request — {who} has to accept it
+                </Text>
+              </View>
+            )}
           </View>
         );
       })()}
@@ -695,21 +1183,49 @@ const styles = StyleSheet.create({
 
   // ── Day pills ───────────────────────────────────────────────────────
   daysRow:         { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2, marginBottom: 4 },
+  daysRowDimmed:   { opacity: 0.45 },
   dayPill:         { flex: 1, alignItems: 'center', borderRadius: 14, paddingVertical: 8, marginHorizontal: 2 },
   pastDayPill:     { opacity: 0.38 },
+  // Same weight as a past day: both mean "nothing here". Unlike a past day
+  // this one still takes a tap.
+  closedDayPill:   { opacity: 0.38 },
+  fullDayPill:     { opacity: 0.62 },
   dayText:         { fontSize: 10, fontWeight: '500', marginBottom: 3 },
   dayNumberText:   { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   dotWrap:         { height: 6, justifyContent: 'center', alignItems: 'center', marginTop: 3 },
   dot:             { width: 4, height: 4, borderRadius: 2 },
+  dotHollow:       { backgroundColor: 'transparent', borderWidth: 1 },
   dotPlaceholder:  { width: 4, height: 4 },
+  dotBooked:       { width: 7, height: 2, borderRadius: 1, opacity: 0.65 },
 
   // ── Time slots ──────────────────────────────────────────────────────
   timeContainer: { paddingTop: 10, paddingHorizontal: 2 },
+  fullDayHint:   { fontSize: 12, textAlign: 'center', paddingTop: 4, paddingHorizontal: 16, lineHeight: 17, opacity: 0.85 },
   timeRow:       { flexDirection: 'row', justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' },
   timeTab:       { paddingVertical: 6, paddingHorizontal: 13, borderRadius: 12, marginHorizontal: 3, marginBottom: 4, minWidth: 68, alignItems: 'center' },
   timeText:      { fontSize: 13, fontWeight: '500' },
+  selectedRequestBanner: {
+    borderWidth: 1.5, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12,
+    marginTop: 10, marginHorizontal: 2,
+  },
+  selectedRequestText: { fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
 
   // ── Full calendar modal ─────────────────────────────────────────────
+  // Right-aligned and quiet: an ordinary booking is the main path, and this
+  // is the exception beside it — not a second call to action competing with
+  // the times themselves.
+  timeHeaderRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
+  closedDayNotice:    { fontSize: 13, fontWeight: '600', textAlign: 'center', paddingTop: 6 },
+  closedDayAction:    { flexDirection: 'row', justifyContent: 'center', marginTop: 12 },
+  dayBadge:           { borderWidth: 1, borderRadius: 20, paddingVertical: 3, paddingHorizontal: 9 },
+  dayBadgeText:       { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.2 },
+  // Greyed and inert, not removed: the day keeps its shape so "all taken"
+  // and "never works this day" stay tellable apart.
+  timeTabBlocked:     { opacity: 0.4 },
+  timeTextBlocked:    { textDecorationLine: 'line-through' },
+  requestLink:        { flexDirection: 'row', alignItems: 'center' },
+  requestLinkText:    { fontSize: 11.5, fontWeight: '600' },
+  requestLinkChevron: { fontSize: 12, fontWeight: '700', marginLeft: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
   calendarPopup: {
     width: 300,

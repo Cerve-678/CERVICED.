@@ -1,4 +1,12 @@
-import { supabase } from '../lib/supabase';
+import {
+  getBeccaSessions,
+  getBeccaMessages,
+  createBeccaSession,
+  updateBeccaSession,
+  upsertBeccaMessage,
+  deleteBeccaSession,
+  clearBeccaSessions,
+} from './databaseService';
 import { ChatMessage } from './becca/types';
 
 /**
@@ -18,32 +26,27 @@ export interface StoredSession {
   updated_at: string;
 }
 
+/**
+ * Maps between Becca's chat types and the persistence layer. All Supabase
+ * access lives in databaseService.ts (see CLAUDE.md's access-boundary rule) —
+ * this file only shapes rows into ChatMessage/StoredSession and back.
+ */
 const beccaStorageService = {
   async loadSessions(userId: string, hat: BeccaHat): Promise<StoredSession[]> {
-    const { data, error } = await supabase
-      .from('becca_chat_sessions')
-      .select('id, title, preview, hat, created_at, updated_at')
-      .eq('user_id', userId)
-      .eq('hat', hat)
-      .order('updated_at', { ascending: false })
-      .limit(30);
-    if (error) throw error;
-    return data ?? [];
+    return (await getBeccaSessions(userId, hat)) as StoredSession[];
   },
 
   async loadMessages(sessionId: string): Promise<ChatMessage[]> {
-    const { data, error } = await supabase
-      .from('becca_chat_messages')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    return (data ?? []).map((row) => ({
+    const rows = await getBeccaMessages(sessionId);
+    // imageUri is spread conditionally rather than set to undefined: the repo
+    // compiles with exactOptionalPropertyTypes, so an explicit `undefined` is
+    // not assignable to an optional string.
+    return rows.map((row) => ({
       id: row.id,
       role: row.role as 'user' | 'assistant',
       content: row.content,
       timestamp: new Date(row.created_at),
-      imageUri: row.image_uri ?? undefined,
+      ...(row.image_uri ? { imageUri: row.image_uri } : {}),
       ...(row.metadata ?? {}),
     }));
   },
@@ -54,29 +57,21 @@ const beccaStorageService = {
     preview: string,
     hat: BeccaHat,
   ): Promise<string> {
-    const { data, error } = await supabase
-      .from('becca_chat_sessions')
-      .insert({ user_id: userId, title, preview, hat })
-      .select('id')
-      .single();
-    if (error) throw error;
-    return data.id;
+    return createBeccaSession(userId, title, preview, hat);
   },
 
   async updateSession(sessionId: string, title: string, preview: string): Promise<void> {
-    await supabase
-      .from('becca_chat_sessions')
-      .update({ title, preview, updated_at: new Date().toISOString() })
-      .eq('id', sessionId);
+    await updateBeccaSession(sessionId, title, preview);
   },
 
   async saveMessage(sessionId: string, message: ChatMessage): Promise<void> {
-    const { suggestions, providerRecommendations, imageUri, ..._ } = message as any;
+    const { suggestions, providerRecommendations, inspiration } = message as any;
     const metadata: Record<string, any> = {};
     if (suggestions) metadata['suggestions'] = suggestions;
     if (providerRecommendations) metadata['providerRecommendations'] = providerRecommendations;
+    if (inspiration) metadata['inspiration'] = inspiration;
 
-    await supabase.from('becca_chat_messages').upsert({
+    await upsertBeccaMessage({
       id: message.id,
       session_id: sessionId,
       role: message.role,
@@ -88,11 +83,7 @@ const beccaStorageService = {
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    const { error } = await supabase
-      .from('becca_chat_sessions')
-      .delete()
-      .eq('id', sessionId);
-    if (error) throw error;
+    await deleteBeccaSession(sessionId);
   },
 
   /**
@@ -101,12 +92,7 @@ const beccaStorageService = {
    * them via becca_chat_messages' ON DELETE CASCADE.
    */
   async clearSessions(userId: string, hat: BeccaHat): Promise<void> {
-    const { error } = await supabase
-      .from('becca_chat_sessions')
-      .delete()
-      .eq('user_id', userId)
-      .eq('hat', hat);
-    if (error) throw error;
+    await clearBeccaSessions(userId, hat);
   },
 };
 

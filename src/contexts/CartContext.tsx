@@ -1,10 +1,42 @@
 // src/contexts/CartContext.tsx - COMPLETE UPDATED VERSION
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
+import { Alert } from 'react-native';
 import { logger } from '../utils/logger';
 import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
+import type { EmergencyReason } from '../services/AvailabilityService';
+import { calculatePlatformFee } from '../features/cart/platformFee';
 
+/**
+ * Resolve a cart item to a real provider UUID: carried providerId → slug lookup
+ * → display-name lookup. Returns null only when the provider genuinely can't be
+ * found (deleted / renamed / offline). Used to guarantee every cart item is
+ * linked to a bookable provider, so checkout never hits "couldn't link provider".
+ */
+async function resolveCartItemProviderId(p: {
+  providerId?: string | undefined;
+  providerSlug?: string | undefined;
+  providerName: string;
+}): Promise<string | null> {
+  if (p.providerId) return p.providerId;
+  if (p.providerSlug) {
+    const bySlug = await getProviderBySlug(p.providerSlug).catch(() => null);
+    if (bySlug?.id) return bySlug.id;
+  }
+  return getProviderIdByDisplayName(p.providerName).catch(() => null);
+}
 // CartItem interface
+/** A time the provider's own scheduling rules exclude, that they've opted
+ *  into being asked for anyway. Captured in the booking sheet when the client
+ *  accepts the confirmation, and carried unchanged to checkout — the reasons
+ *  are what the confirmation named, and acknowledgedAt is what satisfies
+ *  prepare_checkout's server-side ack requirement. */
+export interface EmergencyRequest {
+  reasons: EmergencyReason[];
+  acknowledgedAt: string;
+}
+
 export interface CartItem {
   id: string;
   providerName: string;
@@ -27,11 +59,11 @@ export interface CartItem {
   instanceId?: string;
   addedAt: string;
   serviceInstanceIndex?: number;
-  addOns?: Array<{
+  addOns?: {
     id: string | number;
     name: string;
     price: number;
-  }>;
+  }[];
   /** Date/time picked on the provider profile before adding to cart. Absent
    *  for items added via other entry points (Explore "Book Now", rebook) —
    *  those still need scheduling in the cart. */
@@ -55,18 +87,44 @@ export interface CartItem {
    *  Purely a client-side/local grouping hint; createBookingsFromCart reads this
    *  to decide which provider-scoped bookings.group_booking_id each item gets. */
   bookingBatchId?: string;
+  /** The provider's cancellation/booking policy AS IT READ when this item was
+   *  added, frozen so the booking is judged by the terms the client actually
+   *  saw. Written onto bookings.policy_snapshot at claim time.
+   *
+   *  There is deliberately no companion timestamp here. WHEN the client agreed
+   *  is recorded server-side by hold_cart_booking_slots() from the database
+   *  clock, because a cart-item field could only ever hold a value the client
+   *  supplied — which is what let a second checkout attempt carry the first
+   *  attempt's time. See
+   *  20260827115930_consent_recorded_before_payment.sql. */
+  policySnapshot?: Record<string, unknown>;
+  /** Set when the picked time is only bookable as a request (see
+   *  EmergencyRequest). Absent for every ordinary booking. Cleared and
+   *  re-derived whenever the date/time changes — a request reason belongs to
+   *  the time it was accepted for, never to the item. */
+  emergencyRequest?: EmergencyRequest;
 }
 
 export interface CartState {
   items: CartItem[];
   totalItems: number;
   totalPrice: number;
+  /** Set when the reducer itself fails to apply an update (see cartReducer's
+   *  own catch). The reducer is a plain function with no access to the
+   *  screen's dialog system, so it can't show anything itself — it surfaces
+   *  the failure through state instead, and the screen watching `cartError`
+   *  is responsible for displaying and clearing it. */
+  lastError: string | null;
 }
 
 export interface CartContextType {
   items: CartItem[];
   totalItems: number;
   totalPrice: number;
+  /** Set when the cart reducer fails to apply an update. Show it via the
+   *  screen's own dialog system, then call clearCartError(). */
+  cartError: string | null;
+  clearCartError: () => void;
   addToCart: (item: AddToCartParams) => void;
   addServiceInstance: (baseItem: CartItem) => void;
   removeFromCart: (itemId: string) => void;
@@ -103,11 +161,11 @@ export interface AddToCartParams {
     duration: string;
     description: string;
     instanceId?: string | number;
-    addOns?: Array<{
+    addOns?: {
       id: string | number;
       name: string;
       price: number;
-    }>;
+    }[];
   };
   quantity?: number;
   selectedOptions?: Record<string, any>;
@@ -119,6 +177,10 @@ export interface AddToCartParams {
   isDepositOnly?: boolean | undefined;
   /** See CartItem.bookingBatchId. */
   bookingBatchId?: string | undefined;
+  /** See CartItem.policySnapshot. */
+  policySnapshot?: Record<string, unknown> | undefined;
+  /** See CartItem.emergencyRequest. */
+  emergencyRequest?: EmergencyRequest | undefined;
 }
 
 /** Fields a BookingSheet edit can change on an existing cart item. */
@@ -130,8 +192,13 @@ export interface AddToCartParams {
  * splits the item back into a standalone booking).
  */
 export type CartItemUpdates = Partial<
-  Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly'>
+  Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly' | 'providerId'>
 > & {
+  /** Explicitly `| undefined` for the same reason as bookingBatchId below:
+   *  editing a request-only time back to an ordinary one has to CLEAR this,
+   *  and a plain optional prop can't express that under
+   *  exactOptionalPropertyTypes. */
+  emergencyRequest?: EmergencyRequest | undefined;
   /** Explicitly `| undefined` (not just optional): under
    *  exactOptionalPropertyTypes, clearing the group requires passing the key
    *  with an undefined value, which a plain optional prop would reject. */
@@ -163,7 +230,8 @@ enum CartActionType {
   CLEAR_CART = 'CLEAR_CART',
   CLEAR_PROVIDER_ITEMS = 'CLEAR_PROVIDER_ITEMS',
   ADD_SERVICE_INSTANCE = 'ADD_SERVICE_INSTANCE',
-  HYDRATE = 'HYDRATE'
+  HYDRATE = 'HYDRATE',
+  CLEAR_ERROR = 'CLEAR_ERROR'
 }
 
 type CartAction =
@@ -174,12 +242,14 @@ type CartAction =
   | { type: CartActionType.CLEAR_CART }
   | { type: CartActionType.CLEAR_PROVIDER_ITEMS; payload: { providerName: string } }
   | { type: CartActionType.ADD_SERVICE_INSTANCE; payload: { baseItem: CartItem } }
-  | { type: CartActionType.HYDRATE; payload: { items: CartItem[] } };
+  | { type: CartActionType.HYDRATE; payload: { items: CartItem[] } }
+  | { type: CartActionType.CLEAR_ERROR };
 
 const initialState: CartState = {
   items: [],
   totalItems: 0,
-  totalPrice: 0
+  totalPrice: 0,
+  lastError: null
 };
 
 const safeGet = (obj: any, path: string, defaultValue: any = null): any => {
@@ -193,7 +263,7 @@ const safeGet = (obj: any, path: string, defaultValue: any = null): any => {
       current = current[key];
     }
     return current;
-  } catch (error) {
+  } catch {
     return defaultValue;
   }
 };
@@ -206,7 +276,7 @@ const generateItemId = (providerName: string, serviceId: string | number, instan
       .join('|');
     const instanceStr = instanceId ? `_inst_${instanceId}` : '';
     return `${providerName}_${serviceId}${instanceStr}_${optionsStr}`;
-  } catch (error) {
+  } catch {
     return `${providerName}_${serviceId}_${Date.now()}`;
   }
 };
@@ -249,7 +319,9 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           selectedTime,
           notes,
           isDepositOnly,
-          bookingBatchId
+          bookingBatchId,
+          policySnapshot,
+          emergencyRequest
         } = action.payload;
 
         const instanceId = forceNewInstance || safeGet(service, 'instanceId') ? 
@@ -296,7 +368,9 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             ...(selectedTime ? { selectedTime } : {}),
             ...(notes ? { notes } : {}),
             ...(isDepositOnly ? { isDepositOnly } : {}),
-            ...(bookingBatchId ? { bookingBatchId } : {})
+            ...(bookingBatchId ? { bookingBatchId } : {}),
+            ...(policySnapshot ? { policySnapshot } : {}),
+            ...(emergencyRequest ? { emergencyRequest } : {})
           };
           newItems = [...state.items, newItem];
         }
@@ -404,15 +478,19 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         return { ...state, items: action.payload.items, ...totals };
       }
 
+      case CartActionType.CLEAR_ERROR:
+        return { ...state, lastError: null };
+
       default:
         return state;
     }
   } catch (error) {
     logger.error('Cart reducer error:', error);
-    // Return state unchanged but surface the error via Alert so users know something went wrong
-    const { Alert } = require('react-native');
-    Alert.alert('Cart Error', 'Something went wrong updating your cart. Please try again.');
-    return state;
+    // A plain reducer function has no access to the screen's dialog system —
+    // surface the failure through state instead. CartScreen watches
+    // `cartError` and shows it via its own showAlert/DialogHost, then calls
+    // clearCartError() to reset this.
+    return { ...state, lastError: 'Something went wrong updating your cart. Please try again.' };
   }
 };
 
@@ -432,6 +510,36 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const stored = await storage.getItem<CartItem[]>(STORAGE_KEYS.CART_ITEMS);
         if (stored && stored.length > 0) {
           dispatch({ type: CartActionType.HYDRATE, payload: { items: stored } });
+          // State is now populated, so it's safe to allow persistence — and it
+          // must be on before the reconcile below, or the repaired/cleaned cart
+          // wouldn't be saved and the cleanup (and its notice) would repeat every
+          // launch until the user next changed the cart.
+          hydratedRef.current = true;
+
+          // Repair or drop any stored item that lost its provider link while the
+          // cart sat in storage (provider went offline, was renamed, or the item
+          // predates providerId). Items already carrying a providerId are trusted
+          // and skipped, so this is a no-op DB call in the common case.
+          const needLink = stored.filter(i => !i.providerId);
+          if (needLink.length > 0) {
+            const removedNames: string[] = [];
+            for (const it of needLink) {
+              const resolvedId = await resolveCartItemProviderId(it).catch(() => null);
+              if (resolvedId) {
+                dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
+              } else {
+                dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } });
+                removedNames.push(it.providerDisplayName ?? it.providerName);
+              }
+            }
+            if (removedNames.length > 0) {
+              const names = [...new Set(removedNames)].join(', ');
+              Alert.alert(
+                'Some items removed',
+                `${names} ${removedNames.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removedNames.length > 1 ? 'them' : 'it'} from your cart.`
+              );
+            }
+          }
         }
       } catch (error) {
         logger.error('Failed to restore cart:', error);
@@ -473,7 +581,25 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [state.items]);
 
   const addToCart = useCallback((item: AddToCartParams) => {
-    dispatch({ type: CartActionType.ADD_ITEM, payload: item });
+    // Common path: the caller already has the provider's UUID — add instantly.
+    if (item.providerId) {
+      dispatch({ type: CartActionType.ADD_ITEM, payload: item });
+      return;
+    }
+    // No providerId yet — resolve to a real provider BEFORE adding, so a cart
+    // item can never reach checkout unlinked. If the provider genuinely can't be
+    // found, don't add a dead item; tell the user gently instead.
+    (async () => {
+      const resolvedId = await resolveCartItemProviderId(item).catch(() => null);
+      if (resolvedId) {
+        dispatch({ type: CartActionType.ADD_ITEM, payload: { ...item, providerId: resolvedId } });
+      } else {
+        Alert.alert(
+          'Provider unavailable',
+          `${item.providerDisplayName ?? item.providerName} isn't available to book right now. Please try again from their profile a little later.`
+        );
+      }
+    })();
   }, []);
 
   const addServiceInstance = useCallback((baseItem: CartItem) => {
@@ -494,6 +620,10 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const clearCart = useCallback(() => {
     dispatch({ type: CartActionType.CLEAR_CART });
+  }, []);
+
+  const clearCartError = useCallback(() => {
+    dispatch({ type: CartActionType.CLEAR_ERROR });
   }, []);
 
   const clearProviderItems = useCallback((providerName: string) => {
@@ -551,7 +681,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [state.items]);
 
   const getServiceFee = useCallback(() => {
-    return Math.max(memoizedTotals.totalPrice * 0.05, 2);
+    return calculatePlatformFee(memoizedTotals.totalPrice);
   }, [memoizedTotals.totalPrice]);
 
   const getFinalTotal = useCallback(() => {
@@ -608,6 +738,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     items: state.items,
     totalItems: memoizedTotals.totalItems,
     totalPrice: memoizedTotals.totalPrice,
+    cartError: state.lastError,
+    clearCartError,
     addToCart,
     addServiceInstance,
     removeFromCart,
@@ -627,8 +759,10 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     getBookingSummary
   }), [
     state.items,
+    state.lastError,
     memoizedTotals,
     itemsByProvider,
+    clearCartError,
     addToCart,
     addServiceInstance,
     removeFromCart,

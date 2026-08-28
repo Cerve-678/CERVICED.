@@ -1,5 +1,5 @@
 // src/screens/client/BeautyProfileScreen.tsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ScrollView,
   StatusBar,
@@ -17,8 +17,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAppDialog } from '../../components/AppDialog';
-import { supabase } from '../../lib/supabase';
-import { upsertUserBeautyProfile } from '../../services/databaseService';
+import { getUserBeautyProfile, upsertUserBeautyProfile } from '../../services/databaseService';
+import { logger } from '../../utils/logger';
 import {
   type BeautyData,
   type CategoryKey,
@@ -31,10 +31,10 @@ import {
   CATEGORY_LABELS,
   type CategoryStats,
 } from '../../utils/beautyProfileStats';
+import { HAIR_TYPES } from '../../constants/hairTypes';
 
 // ── Option lists ────────────────────────────────────────────────────────────
 
-const HAIR_TYPES       = ['Straight', 'Wavy', 'Curly', 'Coily', '4A', '4B', '4C'];
 const SCALP_CONDITIONS = ['Healthy', 'Dry', 'Oily', 'Sensitive', 'Flaky'];
 const HAIR_GOALS       = ['Length retention', 'Volume', 'Colour / highlights', 'Moisture', 'Definition', 'Protective styling'];
 const SKIN_TYPES       = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'];
@@ -76,15 +76,22 @@ const GENDER_LABELS: Record<Gender, string> = {
 
 export default function BeautyProfileScreen({ navigation }: any) {
   const { user } = useAuth();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { showAlert, DialogHost } = useAppDialog();
 
   const [fetching, setFetching] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [editing,  setEditing]  = useState(false);
   const [saved,    setSaved]    = useState<BeautyData>(EMPTY_BEAUTY_DATA);
   const [draft,    setDraft]    = useState<BeautyData>(EMPTY_BEAUTY_DATA);
+  const [profileOwnerId, setProfileOwnerId] = useState<string | null>(null);
+  const loadRequestRef = useRef(0);
+  const saveRequestRef = useRef(0);
+  const savingRef = useRef(false);
+  const activeUserIdRef = useRef<string | null>(user?.id ?? null);
+  activeUserIdRef.current = user?.id ?? null;
 
   // The grid ⇄ focused-category swap. This is screen state, not navigation:
   // SAVE PROFILE is one transaction across all nine categories, so the draft
@@ -106,106 +113,127 @@ export default function BeautyProfileScreen({ navigation }: any) {
   // ── Load ─────────────────────────────────────────────────────────────────
 
   const loadProfile = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    const userId = user?.id ?? null;
     setFetching(true);
+    setLoadError(false);
+    setEditing(false);
+    setSelectedCategory(null);
+    setSaved(EMPTY_BEAUTY_DATA);
+    setDraft(EMPTY_BEAUTY_DATA);
+    if (!userId) {
+      setProfileOwnerId(null);
+      setFetching(false);
+      return;
+    }
     try {
-      const { data: authUser } = await supabase.auth.getUser();
-      const m = authUser?.user?.user_metadata ?? {};
+      const m = await getUserBeautyProfile(userId);
+      if (requestId !== loadRequestRef.current || activeUserIdRef.current !== userId) return;
       const profile: BeautyData = {
-        hairType:           m['hair_type']           ?? '',
-        scalpCondition:     m['scalp_condition']     ?? '',
-        hairGoals:          m['hair_goals']          ?? [],
-        treatmentHistory:   m['treatment_history']   ?? [],
-        skinType:           m['skin_type']           ?? '',
-        skinTone:           m['skin_tone']           ?? '',
-        skinConcerns:       m['skin_concerns']       ?? [],
-        sensitiveAreas:     m['sensitive_areas']     ?? [],
-        nailLength:         m['nail_length']         ?? '',
-        nailShape:          m['nail_shape']          ?? '',
-        lashStyle:          m['lash_style']          ?? '',
-        lashStatus:         m['lash_status']         ?? '',
-        browStyle:          m['brow_style']          ?? '',
-        browCondition:      m['brow_condition']      ?? '',
-        makeupCoverage:     m['makeup_coverage']     ?? '',
-        makeupFinish:       m['makeup_finish']       ?? '',
-        makeupEyes:         m['makeup_eyes']         ?? '',
-        makeupLips:         m['makeup_lips']         ?? '',
-        styleVibe:          m['style_vibe']          ?? '',
-        serviceInterests:   m['service_interests']   ?? [],
-        gender:             (m['gender'] as Gender | null) ?? null,
-        has_kids:           m['has_kids']            ?? false,
-        allergies:          m['allergies']           ?? [],
-        medicalNotes:       m['medical_notes']       ?? '',
-        photographyConsent: m['photography_consent'] ?? true,
+        hairType: m?.hair_type ?? '', scalpCondition: m?.scalp_condition ?? '',
+        hairGoals: m?.hair_goals ?? [], treatmentHistory: m?.treatment_history ?? [],
+        skinType: m?.skin_type ?? '', skinTone: m?.skin_tone ?? '',
+        skinConcerns: m?.skin_concerns ?? [], sensitiveAreas: m?.sensitive_areas ?? [],
+        nailLength: m?.nail_length ?? '', nailShape: m?.nail_shape ?? '',
+        lashStyle: m?.lash_style ?? '', lashStatus: m?.lash_status ?? '',
+        browStyle: m?.brow_style ?? '', browCondition: m?.brow_condition ?? '',
+        makeupCoverage: m?.makeup_coverage ?? '', makeupFinish: m?.makeup_finish ?? '',
+        makeupEyes: m?.makeup_eyes ?? '', makeupLips: m?.makeup_lips ?? '',
+        styleVibe: m?.style_vibe ?? '', serviceInterests: m?.service_interests ?? [],
+        gender: (m?.gender as Gender | null) ?? null, has_kids: m?.has_kids ?? false,
+        allergies: m?.allergies ?? [], medicalNotes: m?.medical_notes ?? '',
+        photographyConsent: m?.photography_consent ?? true,
       };
+      setProfileOwnerId(userId);
       setSaved(profile);
       setDraft(profile);
+    } catch (error) {
+      if (requestId !== loadRequestRef.current || activeUserIdRef.current !== userId) return;
+      logger.error('getUserBeautyProfile failed:', error);
+      setProfileOwnerId(userId);
+      setLoadError(true);
     } finally {
-      setFetching(false);
+      if (requestId === loadRequestRef.current && activeUserIdRef.current === userId) {
+        setFetching(false);
+      }
     }
-  }, []);
+  }, [user?.id]);
 
-  useEffect(() => { loadProfile(); }, [loadProfile]);
+  useEffect(() => {
+    saveRequestRef.current += 1;
+    savingRef.current = false;
+    setSaving(false);
+    void loadProfile();
+    return () => {
+      loadRequestRef.current += 1;
+      saveRequestRef.current += 1;
+      savingRef.current = false;
+    };
+  }, [loadProfile]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    const requestId = ++saveRequestRef.current;
+    const userId = user?.id ?? null;
+    const draftSnapshot = draft;
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
-    const { error } = await supabase.auth.updateUser({
-      data: {
-        hair_type:           draft.hairType          || null,
-        scalp_condition:     draft.scalpCondition    || null,
-        hair_goals:          draft.hairGoals,
-        treatment_history:   draft.treatmentHistory,
-        skin_type:           draft.skinType          || null,
-        skin_tone:           draft.skinTone          || null,
-        skin_concerns:       draft.skinConcerns,
-        sensitive_areas:     draft.sensitiveAreas,
-        nail_length:         draft.nailLength        || null,
-        nail_shape:          draft.nailShape         || null,
-        lash_style:          draft.lashStyle         || null,
-        lash_status:         draft.lashStatus        || null,
-        brow_style:          draft.browStyle         || null,
-        brow_condition:      draft.browCondition     || null,
-        makeup_coverage:     draft.makeupCoverage    || null,
-        makeup_finish:       draft.makeupFinish      || null,
-        makeup_eyes:         draft.makeupEyes        || null,
-        makeup_lips:         draft.makeupLips        || null,
-        style_vibe:          draft.styleVibe         || null,
-        service_interests:   draft.serviceInterests,
-        gender:              draft.gender            || null,
-        has_kids:            draft.has_kids,
-        allergies:           draft.allergies,
-        medical_notes:       draft.medicalNotes      || null,
-        photography_consent: draft.photographyConsent,
-      },
-    });
-
     // Sync all beauty profile fields to users table so providers can read them.
-    // Uses upsert in case the users row doesn't exist yet.
-    if (user?.id) {
-      upsertUserBeautyProfile(user.id, {
-        hair_type:           draft.hairType            || null,
-        skin_type:           draft.skinType            || null,
-        allergies:           draft.allergies,
-        skin_concerns:       draft.skinConcerns,
-        style_vibe:          draft.styleVibe           || null,
-        medical_notes:       draft.medicalNotes        || null,
-        photography_consent: draft.photographyConsent,
-        treatment_history:   draft.treatmentHistory,
-        gender:              draft.gender              || null,
-        has_kids:            draft.has_kids,
-      }).then(() => {});
+    // Uses upsert in case the users row doesn't exist yet. Awaited (not
+    // fire-and-forget) since this is the copy providers actually query —
+    // a silent failure here would desync health-adjacent data (allergies,
+    // medical notes) from what the client believes was saved.
+    let syncError: unknown = null;
+    if (!userId) {
+      syncError = new Error('Not authenticated');
+    } else {
+      try {
+        await upsertUserBeautyProfile(userId, {
+          hair_type:           draftSnapshot.hairType            || null,
+          scalp_condition:     draftSnapshot.scalpCondition      || null,
+          hair_goals:          draftSnapshot.hairGoals,
+          skin_type:           draftSnapshot.skinType            || null,
+          skin_tone:           draftSnapshot.skinTone            || null,
+          skin_concerns:       draftSnapshot.skinConcerns,
+          sensitive_areas:     draftSnapshot.sensitiveAreas,
+          nail_length:         draftSnapshot.nailLength          || null,
+          nail_shape:          draftSnapshot.nailShape           || null,
+          lash_style:          draftSnapshot.lashStyle           || null,
+          lash_status:         draftSnapshot.lashStatus          || null,
+          brow_style:          draftSnapshot.browStyle           || null,
+          brow_condition:      draftSnapshot.browCondition       || null,
+          makeup_coverage:     draftSnapshot.makeupCoverage      || null,
+          makeup_finish:       draftSnapshot.makeupFinish        || null,
+          makeup_eyes:         draftSnapshot.makeupEyes          || null,
+          makeup_lips:         draftSnapshot.makeupLips          || null,
+          allergies:           draftSnapshot.allergies,
+          style_vibe:          draftSnapshot.styleVibe           || null,
+          medical_notes:       draftSnapshot.medicalNotes        || null,
+          photography_consent: draftSnapshot.photographyConsent,
+          treatment_history:   draftSnapshot.treatmentHistory,
+          service_interests:   draftSnapshot.serviceInterests,
+          gender:              draftSnapshot.gender              || null,
+          has_kids:            draftSnapshot.has_kids,
+        });
+      } catch (err) {
+        syncError = err;
+        logger.error('upsertUserBeautyProfile failed:', err);
+      }
     }
 
+    if (requestId !== saveRequestRef.current || activeUserIdRef.current !== userId) return;
+    savingRef.current = false;
     setSaving(false);
-    if (error) {
+    if (syncError) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       showAlert('Error', 'Couldn\'t save your profile. Please try again.');
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setSaved(draft);
+      setSaved(draftSnapshot);
       setEditing(false);
     }
   };
@@ -251,23 +279,12 @@ export default function BeautyProfileScreen({ navigation }: any) {
 
   // ── Palette ───────────────────────────────────────────────────────────────
 
-  const P = {
-    text:   theme.text,
-    sub:    theme.secondaryText,
-    accent: theme.accent,
-    card:   isDarkMode ? '#252220' : '#FFFFFF',
-    surface: isDarkMode ? '#201D1A' : '#EDE8E2',
-    border: isDarkMode ? 'rgba(126,102,103,0.18)' : 'rgba(126,102,103,0.14)',
-    sep:    isDarkMode ? 'rgba(126,102,103,0.10)' : 'rgba(126,102,103,0.08)',
-    chipOn: isDarkMode ? 'rgba(175,145,151,0.35)' : 'rgba(92,64,51,0.2)',
-    chipBorderOn: isDarkMode ? 'rgba(175,145,151,0.55)' : 'rgba(92,64,51,0.55)',
-  };
 
   const chipStyle = (on: boolean) => [
     styles.chip,
     {
-      backgroundColor: on ? P.chipOn : P.surface,
-      borderColor: on ? P.chipBorderOn : P.border,
+      backgroundColor: on ? P.accentDim : P.surface,
+      borderColor: on ? P.accent : P.border,
     },
   ];
   const chipTextStyle = (on: boolean) => [
@@ -277,11 +294,29 @@ export default function BeautyProfileScreen({ navigation }: any) {
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
-  if (fetching) {
+  if (fetching || profileOwnerId !== (user?.id ?? null)) {
     return (
       <ThemedBackground style={styles.bg}>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={theme.accent} size="large" />
+          <ActivityIndicator color={P.accent} size="large" />
+        </View>
+      </ThemedBackground>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <ThemedBackground style={styles.bg}>
+        <View style={styles.loadingWrap}>
+          <Text style={{ color: P.text, marginBottom: 16 }}>
+            We couldn't load your beauty profile.
+          </Text>
+          <TouchableOpacity
+            style={[styles.saveBtn, { backgroundColor: P.accent, borderColor: P.accent }]}
+            onPress={() => { void loadProfile(); }}
+          >
+            <Text style={[styles.saveBtnText, { color: P.onAccent }]}>TRY AGAIN</Text>
+          </TouchableOpacity>
         </View>
       </ThemedBackground>
     );
@@ -501,7 +536,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
               <Switch
                 value={draft.has_kids}
                 onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, has_kids: v })); }}
-                trackColor={{ false: '#D1D1D6', true: theme.accent }}
+                trackColor={{ false: '#D1D1D6', true: P.accent }}
                 thumbColor={draft.has_kids ? '#fff' : '#f4f3f4'}
                 disabled={!editing}
               />
@@ -521,7 +556,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
             <Switch
               value={draft.photographyConsent}
               onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, photographyConsent: v })); }}
-              trackColor={{ false: '#D1D1D6', true: theme.accent }}
+              trackColor={{ false: '#D1D1D6', true: P.accent }}
               thumbColor={draft.photographyConsent ? '#fff' : '#f4f3f4'}
               disabled={!editing}
             />
@@ -546,19 +581,19 @@ export default function BeautyProfileScreen({ navigation }: any) {
         >
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={closeCategory} activeOpacity={0.5}>
-              <Text style={[styles.focusBack, { color: P.accent }]}>← ALL CATEGORIES</Text>
+              <Text style={[styles.focusBack, { color: P.accentText }]}>← ALL CATEGORIES</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => editing ? handleCancel() : (Haptics.selectionAsync().catch(() => {}), setEditing(true))}
               activeOpacity={0.5}
             >
-              <Text style={[styles.editToggle, { color: P.accent }]}>{editing ? 'Cancel' : 'Edit'}</Text>
+              <Text style={[styles.editToggle, { color: P.accentText }]}>{editing ? 'Cancel' : 'Edit'}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.focusTitleRow}>
             <Text style={[styles.focusTitle, { color: P.text }]}>{CATEGORY_LABELS[selectedCategory]}</Text>
-            <Text style={[styles.focusPct, { color: P.accent }]}>
+            <Text style={[styles.focusPct, { color: P.accentText }]}>
               {cat.complete ? '✓' : `${cat.percent}%`}
             </Text>
           </View>
@@ -583,16 +618,16 @@ export default function BeautyProfileScreen({ navigation }: any) {
           {editing && (
             <TouchableOpacity
               style={[styles.saveBtn, {
-                backgroundColor: isDarkMode ? theme.accent : 'rgba(92,64,51,0.25)',
-                borderColor: isDarkMode ? 'rgba(175,145,151,0.4)' : 'rgba(92,64,51,0.4)',
+                backgroundColor: P.accent,
+                borderColor: P.accent,
               }]}
               onPress={handleSave}
               disabled={saving}
               activeOpacity={0.75}
             >
               {saving
-                ? <ActivityIndicator color={isDarkMode ? '#1A1815' : theme.text} />
-                : <Text style={[styles.saveBtnText, { color: isDarkMode ? '#1A1815' : theme.text }]}>SAVE PROFILE</Text>}
+                ? <ActivityIndicator color={P.onAccent} />
+                : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>SAVE PROFILE</Text>}
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -628,14 +663,14 @@ export default function BeautyProfileScreen({ navigation }: any) {
             onPress={() => editing ? handleCancel() : (Haptics.selectionAsync().catch(() => {}), setEditing(true))}
             activeOpacity={0.5}
           >
-            <Text style={[styles.editToggle, { color: P.accent }]}>{editing ? 'Cancel' : 'Edit'}</Text>
+            <Text style={[styles.editToggle, { color: P.accentText }]}>{editing ? 'Cancel' : 'Edit'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ══ HERO ══════════════════════════════════════════════════════════ */}
         <View style={styles.heroTopRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.eyebrow, { color: P.accent }]}>PROFILE ANALYSIS</Text>
+            <Text style={[styles.eyebrow, { color: P.accentText }]}>PROFILE ANALYSIS</Text>
             {stats.isEmpty ? (
               <Text style={[styles.heroNumeralEmpty, { color: P.text }]}>NEW</Text>
             ) : (
@@ -644,7 +679,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
                 <Text style={[styles.heroDenominator, { color: P.sub }]}>/100</Text>
               </View>
             )}
-            <Text style={[styles.heroQualifier, { color: P.accent }]}>
+            <Text style={[styles.heroQualifier, { color: P.accentText }]}>
               {stats.isEmpty
                 ? "LET'S BEGIN"
                 : stats.overallPercent >= 80 ? 'LOOKING GREAT'
@@ -782,7 +817,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
                     <Text style={[styles.catTilePctSign, { color: cat.complete ? '#34C759' : cat.started ? P.text : P.sub }]}>%</Text>
                   </View>
                 )}
-                <Text style={[styles.catTileLabel, { color: P.accent }]} numberOfLines={2}>
+                <Text style={[styles.catTileLabel, { color: P.accentText }]} numberOfLines={2}>
                   {CATEGORY_LABELS[key]}
                 </Text>
                 {!isConsent && (

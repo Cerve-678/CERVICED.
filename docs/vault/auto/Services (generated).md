@@ -5,16 +5,25 @@
 
 #generated
 
-**27 service modules.** Curated overview: [[Services]].
+**31 service modules.** Curated overview: [[Services]].
 
 ### `src/services/acuityTransferService.ts`
 `transferFromAcuity`
+
+### `src/services/addressLookupService.ts`
+`findAddressesByPostcode` · `resolvePostcodeAddress`
 
 ### `src/services/api.ts`
 `api`
 
 ### `src/services/AvailabilityService.ts`
-`AvailabilityService`
+`AvailabilityService` · `describeEmergencyReason` · `earliestBookableStartMs` · `parseDurationToMinutes` · `parseTimeToMinutes` · `resolveSlotOffer` · `resolveWorkingWindows` · `slotStartMs` · `snapToRequestable` · `toWindowMins`
+
+### `src/services/becca/aiInterpreter.ts`
+_no named exports_
+
+### `src/services/becca/aiRuntime.ts`
+`configureBeccaAI` · `getBeccaAIInterpreter`
 
 ### `src/services/becca/capabilities/client.ts`
 `CLIENT_CAPABILITIES`
@@ -23,7 +32,7 @@
 `PROVIDER_CAPABILITIES`
 
 ### `src/services/becca/capabilities/shared.ts`
-`askChip` · `chip` · `goodNews` · `money` · `navChip` · `providerFromDb` · `softMiss`
+`askChip` · `chip` · `money` · `navChip` · `providerFromDb` · `resolveProviderDbId`
 
 ### `src/services/becca/engine.ts`
 `confirmToken` · `converse` · `respond`
@@ -34,6 +43,12 @@
 ### `src/services/becca/matcher.ts`
 `understand`
 
+### `src/services/becca/navigationContract.ts`
+`CLIENT_BECCA_SCREENS` · `CLIENT_PROFILE_SCREENS` · `isBeccaNavigationSuggestion` · `PROVIDER_PUSH_NAV` · `PROVIDER_TAB_NAV`
+
+### `src/services/becca/nvidiaInterpreter.ts`
+`nvidiaBeccaInterpreter`
+
 ### `src/services/becca/registry.ts`
 `capabilitiesFor` · `getCapability` · `toToolSchema`
 
@@ -41,7 +56,7 @@
 `CATEGORY_LABELS` · `SERVICE_CATALOGUE`
 
 ### `src/services/becca/types.ts`
-`CONFIDENCE_THRESHOLDS` · `hasUsefulHistory` · `scoreToConfidence`
+`CONFIDENCE_THRESHOLDS` · `hasUsefulHistory` · `scoreToConfidence` · `SUGGESTION_MEMORY`
 
 ### `src/services/beccaStorageService.ts`
 _no named exports_
@@ -50,16 +65,16 @@ _no named exports_
 `authenticateWithBiometrics` · `disableBiometric` · `enableBiometric` · `getBiometricLabel` · `getBiometricRefreshToken` · `isBiometricAvailable` · `isBiometricEnabled` · `updateBiometricToken`
 
 ### `src/services/bookingService.ts`
-`applyRescheduleRequestRow` · `calculatePerItemServiceCharge` · `calculateServiceCharge` · `cancelBookingInSupabase` · `DEPOSIT_PERCENTAGE` · `fetchBookingsFromSupabase` · `mapDbBookingToConfirmed` · `rescheduleBookingInSupabase` · `SERVICE_CHARGE_MINIMUM` · `SERVICE_CHARGE_RATE`
+`applyRescheduleRequestRow` · `calculatePerItemServiceCharge` · `calculateServiceCharge` · `DEPOSIT_PERCENTAGE` · `fetchBookingsFromSupabase` · `mapDbBookingToConfirmed`
 
 ### `src/services/checkoutService.ts`
 _no named exports_
 
-### `src/services/databaseService.ts`
-`addBookmark` · `addPortfolioItem` · `addProviderAvailabilityOverride` · `addProviderBlockedDate` · `attachInfoPackToBooking` · `cancelOwnBooking` · `checkIsFollowing` · `claimCartBookingSlots` · `claimWaitlistHold` · `confirmRescheduleOwnBooking` · `countProviderBookingsOnDate` · `countProviderBookingsOnDates` · `countProviderServices` · `createBooking` · `createInfoPack` · `createIntakeForm` · `declineWaitlistHold` · `deleteInfoPack` · `deleteLibraryForm` · `deleteNotification` · `deletePortfolioItem` · `deletePromotion` · `followProvider` · `getActivePromotions` · `getActiveRescheduleRequest` · `getActiveRescheduleRequestsForBookings` · `getAvailableSlots` · `getBookingAddressReleasedAt` · `getBookingById` · `getBookingTip` · `getBookingUserId` · `getBookingWithAddOnsById` · `getBookmarkedProviders` · `getClientBeautyProfile` · `getClientBookingHistory` · `getClientBookingsForAddressShare` · `getConsultationRequiredProviderIds` · `getConsultationServiceIds` · `getConversationMessages` · `getDiscoverProviders` · `getDiscoverServices` · `getEventPlanDetails` · `getInfoPacksByBooking` · `getIntakeFormByBooking` · `getIntakeFormById` · `getMobileProviderDisplayNames` · `getMyBookingActionItems` · `getMyBookings` · `getMyBookmarkCount` · `getMyEventPlans` · `getMyFollowerCount` · `getMyNotifications` · `getMyPromotions` · `getMyProviderFullAddress` · `getMyProviderIntakeForms` · `getMyProviderProfile` · `getMyProviderReviews` · `getMyProviderServices` · `getNewProviders` · `getNotificationPreferences` · `getOlderBookings` · `getOrCreateConversation` · `getPendingIntakeFormsForMe` · `getPortfolioItems` · `getProviderActivePromotions` · `getProviderAddressPolicy` · `getProviderAddressPolicyByDisplayName` · `getProviderAvailability` · `getProviderAvailabilityOverrides` · `getProviderAvailabilityWindows` · `getProviderBasicById` · `getProviderBlockedDates` · `getProviderBookingCapSettings` · `getProviderBookingCapSettingsForProviders` · `getProviderBookings` · `getProviderBookingsByDate` · `getProviderBookingsByDateRange` · `getProviderBrandingByUserId` · `getProviderBySlug` · `getProviderCancellationPolicy` · `getProviderCancellationPolicyById` · `getProviderClientele` · `getProviderConsultationService` · `getProviderContactByDisplayName` · `getProviderContactById` · `getProviderConversations` · `getProviderDepositPoliciesByDisplayNames` · `getProviderDisplayNameByUserId` · `getProviderFollowerCount` · `getProviderFormLibrary` · `getProviderIdByDisplayName` · `getProviderIdForUserId` · `getProviderIdsWithBookingHistory` · `getProviderInfoPacksByUserId` · `getProviderLocationsByDisplayNames` · `getProviderLocationsByIds` · `getProviderPortfolio` · `getProviderPriceRanges` · `getProviderReschedulePolicyByDisplayName` · `getProviderReschedulePolicyById` · `getProviderReviews` · `getProviders` · `getProviderSchedulingConstraints` · `getProviderServiceCategoryByUserId` · `getProviderUserIdById` · `getProviderWaitlist` · `getRebookableService` · `getSavedPortfolioDetails` · `getSavedPortfolioIds` · `getServicePrice` · `getSlotsTaken` · `getTopRatedProviders` · `getTrendingProviderIds` · `getUnclaimedProviderDetail` · `getUnreadNotificationCount` · `getUserBasicInfo` · `getUserBusinessInfo` · `getUserConversations` · `getUserDisplayName` · `getUserHealthProfile` · `getUserProfileById` · `getUserSignupPrefillInfo` · `getUserWaitlistEntries` · `hasReviewedBooking` · `holdCartBookingSlots` · `insertBookingUserNotification` · `insertDirectBooking` · `insertProviderNotification` · `inviteFromWaitlist` · `isProviderBookmarked` · `isSlotTaken` · `joinWaitlist` · `leaveWaitlist` · `logSearchEvent` · `markAllNotificationsRead` · `markConversationReadByProvider` · `markConversationReadByUser` · `markInfoPackViewed` · `markNotificationRead` · `markScheduledNotifSent` · `patchPromotion` · `providerCancelOwnBooking` · `releaseBookingAddress` · `releaseCartBookingSlots` · `removeBookmark` · `removeProviderAvailabilityOverride` · `removeProviderBlockedDate` · `replaceProviderAvailabilityWindows` · `requestRescheduleOwnBooking` · `respondToRescheduleRequest` · `saveFormToLibrary` · `saveNotificationPreferences` · `savePortfolioItemToDb` · `searchPortfolio` · `searchProviders` · `searchUnclaimedProviders` · `sendAnnouncement` · `sendLibraryFormToClient` · `sendPromotionNotificationsToClients` · `sendPromoToClient` · `sendProviderMessage` · `sendRebookPrompt` · `setBookingClientAddress` · `setBookingTip` · `setMyProviderFullAddress` · `submitIntakeFormAnswers` · `submitReview` · `togglePromotion` · `trackUserInteraction` · `unfollowProvider` · `unsavePortfolioItemFromDb` · `updateBookingDateTime` · `updateBookingGroupInfo` · `updateBookingStatus` · `updateClientProfileData` · `updateLibraryForm` · `updateProviderAutoAccept` · `updateProviderAutomationSettings` · `updateProviderBranding` · `updateProviderCancellationPolicy` · `updateProviderContactDetails` · `updateProviderMaxBookingsPerDay` · `updateProviderScheduleSettings` · `updateUserBusinessInfo` · `updateUserDob` · `updateUserNamePhone` · `upgradeUserToProvider` · `upsertPromotion` · `upsertProviderAvailability` · `upsertProviderRescheduleRequest` · `upsertUserAfterVerification` · `upsertUserBeautyProfile` · `validatePromoCode`
+### `src/services/clientLocationService.ts`
+`COARSE_ACCURACY_THRESHOLD_M` · `resolveClientLocation`
 
-### `src/services/emailService.ts`
-`bookingConfirmationEmail` · `bookingReminderEmail` · `clientWelcomeEmail` · `newBookingProviderEmail` · `providerWelcomeEmail` · `sendEmail`
+### `src/services/databaseService.ts`
+`addBookmark` · `addPortfolioItem` · `addProviderAvailabilityOverride` · `addProviderBlockedDate` · `attachInfoPackToBooking` · `cancelAccountDeletionRequest` · `cancelCheckout` · `cancelOwnBooking` · `cancelScheduledAnnouncement` · `checkFollowNotifyEnabled` · `checkIsFollowing` · `claimCartBookingSlots` · `claimUnclaimedProviderProfile` · `claimWaitlistHold` · `clearBeccaSessions` · `clearUserStorageFolder` · `confirmGroupReschedule` · `confirmRescheduleOwnBooking` · `countProviderBookingsOnDate` · `countProviderBookingsOnDates` · `countProviderServices` · `createBeccaSession` · `createCheckoutPaymentIntent` · `createInfoPack` · `createIntakeForm` · `createMyService` · `declineGroupRescheduleOffer` · `declineRescheduleOffer` · `declineWaitlistHold` · `deleteBeccaSession` · `deleteClientAccountProfile` · `deleteInfoPack` · `deleteLibraryForm` · `deleteNotification` · `deletePortfolioItem` · `deletePromotion` · `deleteProviderAccountProfile` · `disputeNoShow` · `extractProviderProfileFromUrl` · `finalizeCheckoutPaymentIntent` · `followProvider` · `getActivePromotions` · `getActiveRescheduleRequest` · `getActiveRescheduleRequestsForBookings` · `getAvailabilityDateBundle` · `getAvailabilityDateExceptions` · `getAvailabilityEmergencyPolicyRow` · `getAvailabilityNoticeSettings` · `getAvailabilityProviderCore` · `getAvailabilityServiceBufferRows` · `getAvailabilityWeeklyScheduleRows` · `getBeccaMessages` · `getBeccaSessions` · `getBookableServiceIds` · `getBookingAddressReleasedAt` · `getBookingById` · `getBookingTip` · `getBookingUserId` · `getBookingWithAddOnsById` · `getBookmarkedProviders` · `getClientBeautyProfile` · `getClientBookingHistory` · `getClientBookingsForAddressShare` · `getClientPointsBalance` · `getClientPointsHistory` · `getClientReliabilityStats` · `getClientReliabilityStatsBatch` · `getConsultationRequiredProviderIds` · `getConsultationServiceIds` · `getConversationMessages` · `getCurrentAuthUserId` · `getCurrentRefreshToken` · `getCurrentUserStoredPushToken` · `getDiscoverProviders` · `getDiscoverServices` · `getDiscoverUnclaimedProviders` · `getEventPlanDetails` · `getGroupBookingSiblings` · `getInfoPacksByBooking` · `getIntakeFormByBooking` · `getIntakeFormById` · `getMobileProviderDisplayNames` · `getMyBookingActionItems` · `getMyBookings` · `getMyBookmarkCount` · `getMyEventPlans` · `getMyFollowerCount` · `getMyLastClientAddress` · `getMyNotifications` · `getMyPromotionManagerCore` · `getMyPromotions` · `getMyProviderAccountEditorInfo` · `getMyProviderBranding` · `getMyProviderFullAddress` · `getMyProviderIntakeForms` · `getMyProviderMessageTemplates` · `getMyProviderProfile` · `getMyProviderProfileContext` · `getMyProviderReviews` · `getMyProviderServices` · `getMyServiceCatalogue` · `getMyTopServices` · `getMyUpcomingBookedSpans` · `getNewProviders` · `getNotificationPreferences` · `getOlderBookings` · `getOlderProviderBookings` · `getOrCreateConversation` · `getPendingIntakeFormsForMe` · `getPortfolioItems` · `getProviderActivePromotions` · `getProviderAddressPolicy` · `getProviderAddressPolicyByDisplayName` · `getProviderAudienceMatches` · `getProviderAvailability` · `getProviderAvailabilityOverrides` · `getProviderAvailabilityWindows` · `getProviderBasicById` · `getProviderBlockedDates` · `getProviderBookingCapSettings` · `getProviderBookingCapSettingsForProviders` · `getProviderBookingDetailMetadata` · `getProviderBookingPolicies` · `getProviderBookingPoliciesById` · `getProviderBookings` · `getProviderBookingsByDate` · `getProviderBookingsByDateRange` · `getProviderBookingWindowDays` · `getProviderBrandingByUserId` · `getProviderBusySpans` · `getProviderBySlug` · `getProviderCancellationPolicy` · `getProviderCancellationPolicyById` · `getProviderCheckoutMetadata` · `getProviderClientele` · `getProviderConsultationService` · `getProviderContactByDisplayName` · `getProviderContactById` · `getProviderConversations` · `getProviderDepositPoliciesByDisplayNames` · `getProviderDisplayNameByUserId` · `getProviderFollowerCount` · `getProviderFormLibrary` · `getProviderHairTypeMatches` · `getProviderIdByDisplayName` · `getProviderIdForUserId` · `getProviderIdsByServiceAudience` · `getProviderIdsWithActivePromotions` · `getProviderIdsWithBookingHistory` · `getProviderInfoPacksByUserId` · `getProviderLocationsByDisplayNames` · `getProviderLocationsByIds` · `getProviderLogoUrlByUserId` · `getProviderNoShowGraceMinutes` · `getProviderPortfolio` · `getProviderPriceRanges` · `getProviderProfileViewerContext` · `getProviderRegistrationCore` · `getProviderRegistrationDetails` · `getProviderRegistrationRecord` · `getProviderReschedulePolicyByDisplayName` · `getProviderReschedulePolicyById` · `getProviderReviews` · `getProviders` · `getProvidersAvailability` · `getProviderSchedulingConstraints` · `getProviderServiceCategoryByUserId` · `getProviderSpecialties` · `getProviderTerms` · `getProviderUnreadConversationCount` · `getProviderUserIdById` · `getProviderWaitlist` · `getRebookableService` · `getSavedPortfolioDetails` · `getSavedPortfolioIds` · `getServiceBookingDefaults` · `getServiceDurationsByIds` · `getServiceIdsByNames` · `getServiceSafetyFlags` · `getSlotsTaken` · `getTopRatedProviders` · `getTrendingProviders` · `getUnclaimedProviderDetail` · `getUnreadNotificationCount` · `getUserBasicInfo` · `getUserBeautyProfile` · `getUserBusinessInfo` · `getUserConversations` · `getUserDisplayName` · `getUserProfileById` · `getUserSignupPrefillInfo` · `getUserWaitlistEntries` · `hasBookingHistoryWithProvider` · `hasMyProviderGoLiveAddress` · `hasMyProviderTermsForm` · `hasReviewedBooking` · `holdCartBookingSlots` · `insertBookingUserNotification` · `insertDirectBooking` · `insertProviderNotification` · `insertProviderRegistrationRow` · `invalidateAvailabilityProviderCore` · `invalidateProviderAvailabilityRanges` · `inviteFromWaitlist` · `invokeBeccaAi` · `invokeSendAccountEmail` · `invokeSendSupportRequest` · `isProviderBookmarked` · `isSlotTaken` · `joinWaitlist` · `leaveWaitlist` · `logSearchEvent` · `lookupPostcodeAddress` · `lookupPostcodeAddresses` · `markAllNotificationsRead` · `markConversationReadByProvider` · `markConversationReadByUser` · `markInfoPackViewed` · `markNotificationRead` · `markProviderNoShow` · `markScheduledNotifSent` · `patchPromotion` · `prefetchProviderBySlug` · `prepareCheckout` · `promoteUserToProvider` · `providerCancelGroupBooking` · `providerCancelOwnBooking` · `providerCreateManualBooking` · `providerInitiateGroupReschedule` · `providerSlugExists` · `queueScheduledAnnouncement` · `refreshAuthSession` · `rejectRescheduleRequest` · `releaseBookingAddress` · `releaseCartBookingSlots` · `removeBookmark` · `removePortfolioStorageObject` · `removeProviderAvailabilityOverride` · `removeProviderBlockedDate` · `removeStorageObjects` · `replaceMyProviderMessageTemplates` · `replaceMyProviderSpecialties` · `replaceProviderAvailabilityWindows` · `replaceProviderServiceCatalog` · `requestProviderClaimVerification` · `requestRescheduleOwnBooking` · `resendSignupOtp` · `resolveActiveProviderIdByDisplayName` · `respondToRescheduleRequest` · `runDevReset` · `saveFormToLibrary` · `saveNotificationPreferences` · `savePortfolioItemToDb` · `saveProviderBookingPolicies` · `saveProviderWeeklySchedule` · `searchPortfolio` · `searchProviders` · `searchUnclaimedProviders` · `sendAnnouncement` · `sendConversationQuickReply` · `sendLibraryFormToClient` · `sendPasswordReset` · `sendPromotionNotificationsToClients` · `sendPromoToClient` · `sendProviderMessage` · `sendRebookPrompt` · `setAuthAutoRefresh` · `setBookingClientAddress` · `setBookingTip` · `setMyProviderFullAddress` · `setMyServiceActive` · `setProviderFollowNotify` · `setPushTokenIfChanged` · `signInWithAppleIdToken` · `signInWithEmailPassword` · `signOutCurrentSession` · `signUpWithEmail` · `submitIntakeFormAnswers` · `submitReview` · `subscribeToAuthStateChanges` · `subscribeToConversationMessages` · `subscribeToNotificationChanges` · `subscribeToNotificationInserts` · `subscribeToProviderBookingChanges` · `subscribeToProviderBookingDetailChanges` · `subscribeToRescheduleRequestChanges` · `subscribeToUserBookingChanges` · `subscribeToUserConversationChanges` · `togglePromotion` · `trackUserInteraction` · `unfollowProvider` · `unsavePortfolioItemFromDb` · `updateBeccaSession` · `updateBookingGroupInfo` · `updateBookingStatus` · `updateClientProfileData` · `updateClientProfileFields` · `updateConversationLastMessage` · `updateCurrentPassword` · `updateCurrentUserMetadata` · `updateGroupBookingStatus` · `updateLibraryForm` · `updateMyService` · `updatePasswordAndSignOut` · `updateProviderAutoAccept` · `updateProviderAutomationSettings` · `updateProviderBranding` · `updateProviderCancellationPolicy` · `updateProviderContactDetails` · `updateProviderMaxBookingsPerDay` · `updateProviderRegistrationRow` · `updateProviderRequestSettings` · `updateProviderScheduleSettings` · `updateUserBusinessInfo` · `updateUserContactDetails` · `updateUserDob` · `upgradeUserToProvider` · `uploadPublicStorageObject` · `upsertBeccaMessage` · `upsertPromotion` · `upsertProviderAvailability` · `upsertProviderRescheduleRequest` · `upsertUserAfterVerification` · `upsertUserBeautyProfile` · `upsertVerifiedUserProfile` · `validatePromoCode` · `verifyRecoveryOtp` · `verifySignupOtp`
 
 ### `src/services/ImageLoader.ts`
 `imageLoader` · `useImageLoader`
@@ -81,9 +96,6 @@ _no named exports_
 
 ### `src/services/stripeService.ts`
 `cancelPaymentIntent` · `capturePaymentIntent` · `createPaymentIntent`
-
-### `src/services/UploadService.ts`
-`uploadService` · `useUploadService`
 
 ### `src/services/userLearningService.ts`
 _no named exports_

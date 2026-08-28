@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image,
   Modal,
   StatusBar,
   Animated,
@@ -14,6 +13,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -22,7 +22,8 @@ import TabIcon from '../../components/TabIcon';
 import SlidingTabs from '../../components/SlidingTabs';
 import { HomeStackParamList } from '../../navigation/types';
 import { getActivePromotions } from '../../services/databaseService';
-import type { DbPromotionWithProvider } from '../../types/database';
+import { ThemedBackground } from '../../components/ThemedBackground';
+import type { PublicPromotionWithProvider } from '../../types/database';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 interface Offer {
@@ -40,7 +41,7 @@ interface Offer {
   service?: string;
 }
 
-function mapPromotion(p: DbPromotionWithProvider): Offer {
+function mapPromotion(p: PublicPromotionWithProvider): Offer {
   return {
     id: p.id,
     title: p.title,
@@ -81,7 +82,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
       Animated.timing(slideAnim, { toValue: 0, duration: 300, delay: index * 50, useNativeDriver: true }),
       Animated.timing(fadeAnim,  { toValue: 1, duration: 300, delay: index * 50, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, slideAnim]);
 
   const expDate = (() => {
     try {
@@ -99,7 +100,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
       >
         {/* Provider logo */}
         {offer.logo ? (
-          <Image source={offer.logo} style={styles.logo} resizeMode="cover" />
+          <Image source={offer.logo} style={styles.logo} contentFit="cover" />
         ) : (
           <View style={[styles.logo, styles.logoPlaceholder, { backgroundColor: P.surface }]}>
             <Text style={[styles.logoPlaceholderText, { color: P.sub }]}>
@@ -114,7 +115,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
               custom label — discount_text is free text, not just "20% OFF"
               — pushes the rest of the card down instead of covering it. */}
           <View style={[styles.discountBadge, { backgroundColor: P.accent }]}>
-            <Text style={[styles.discountText, { color: P.ice }]} numberOfLines={1}>{offer.discount}</Text>
+            <Text style={[styles.discountText, { color: P.onAccent }]} numberOfLines={1}>{offer.discount}</Text>
           </View>
           <Text style={[styles.providerName, { color: P.sub }]} numberOfLines={1}>
             {offer.providerName}
@@ -130,7 +131,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
           <View style={styles.footer}>
             {offer.service ? (
               <View style={[styles.servicePill, { backgroundColor: `${P.accent}18`, borderColor: `${P.accent}40` }]}>
-                <Text style={[styles.servicePillText, { color: P.accent }]}>{offer.service}</Text>
+                <Text style={[styles.servicePillText, { color: P.accentText }]}>{offer.service}</Text>
               </View>
             ) : null}
             {expDate ? (
@@ -150,7 +151,7 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'Offers'>;
 export default function OffersScreen({ navigation }: Props) {
   const { isDarkMode, palette: P } = useTheme();
 
-  const [rawPromotions, setRawPromotions] = useState<DbPromotionWithProvider[]>([]);
+  const [rawPromotions, setRawPromotions] = useState<PublicPromotionWithProvider[]>([]);
   const [selectedTab, setSelectedTab]     = useState('ALL');
   const [refreshing, setRefreshing]       = useState(false);
   const [sortBy, setSortBy]               = useState<SortKey>('newest');
@@ -213,7 +214,7 @@ export default function OffersScreen({ navigation }: Props) {
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
       headerStyle: { backgroundColor: P.bg },
       headerShadowVisible: false,
-      headerTintColor: P.accent,
+      headerTintColor: P.accentText,
       headerBackButtonDisplayMode: 'minimal',
       headerRight: () => (
         <TouchableOpacity
@@ -224,14 +225,14 @@ export default function OffersScreen({ navigation }: Props) {
           }}
           activeOpacity={0.6}
         >
-          <TabIcon name="sliders" size={17} color={sortActive ? P.accent : P.sub} />
+          <TabIcon name="sliders" size={17} color={sortActive ? P.accentText : P.sub} />
         </TouchableOpacity>
       ),
     });
   }, [navigation, P, sortActive]);
 
   return (
-    <View style={[styles.root, { backgroundColor: P.bg }]}>
+    <ThemedBackground style={styles.root}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Category tabs — same sliding-capsule tab bar as booking history,
@@ -246,6 +247,7 @@ export default function OffersScreen({ navigation }: Props) {
             setSelectedTab(tab);
           }}
           accentColor={P.accent}
+          activeTextColor={P.onAccent}
           inactiveTextColor={P.sub}
           containerStyle={styles.tabsContent}
         />
@@ -304,14 +306,14 @@ export default function OffersScreen({ navigation }: Props) {
                   <Text style={[styles.sortRowText, { color: P.text, fontWeight: active ? '700' : '400' }]}>
                     {opt.label}
                   </Text>
-                  {active && <Text style={[styles.sortCheck, { color: P.accent }]}>✓</Text>}
+                  {active && <Text style={[styles.sortCheck, { color: P.accentText }]}>✓</Text>}
                 </TouchableOpacity>
               );
             })}
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </ThemedBackground>
   );
 }
 

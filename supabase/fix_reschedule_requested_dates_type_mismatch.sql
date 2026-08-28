@@ -1,6 +1,14 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- fix_reschedule_requested_dates_type_mismatch.sql
 --
+-- SUPERSEDED — folded into supabase/fix_reschedule_flow_completion.sql
+-- (Part 6) on 2026-08-08. This file was written 2026-08-01 but never
+-- actually applied live — confirmed via pg_get_functiondef that same day,
+-- when a client hit this exact bug in production. Do not run this file on
+-- its own; deploy fix_reschedule_flow_completion.sql instead, which
+-- includes this fix plus the rest of the reschedule-flow work it depends
+-- on. Left here only for the bug-analysis history below.
+--
 -- BUG (reproduced by a client, 2026-08-01)
 -- ─────────────────────────────────────────
 -- request_reschedule_own_booking(p_booking_id UUID, p_preferred_dates TEXT[])
