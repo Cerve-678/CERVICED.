@@ -52,7 +52,8 @@ import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies,
 import type { ProviderRegistrationData } from '../../services/providerRegistrationService';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject, hasMyProviderTermsForm } from '../../services/databaseService';
+import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem } from '../../types/database';
 
 import {
@@ -69,8 +70,10 @@ import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
+import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
+import { SERVICE_BUFFER_BEFORE_OPTS, SERVICE_BUFFER_AFTER_OPTS } from '../../features/business-details/options';
 import { ChipSelect } from '../../features/provider-registration/ChipSelect';
-import { LocationPicker } from '../../features/provider-registration/LocationPicker';
+import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -256,6 +259,9 @@ interface ServiceData {
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
+  // Who this specific service is for. '' = not stated, read as "everyone" —
+  // mirrors the live services_audience_check constraint.
+  audience: 'women' | 'men' | 'kids' | 'everyone' | '';
 }
 
 // ─── Category kinds ──────────────────────────────────────────────────────────
@@ -941,7 +947,27 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   );
 };
 
+// buffer_before_mins NULL and 0 both resolve to no padding before a booking
+// (see bufferFromRow in AvailabilityService), so a 0 written by the old typed
+// field maps onto the picker's single "None" chip rather than showing up as a
+// stray "0 min" custom value.
+const bufferBeforeToPicker = (mins: number | null | undefined): string =>
+  mins == null || mins === 0 ? '' : String(mins);
+
 // Add/Edit Service Modal
+/**
+ * The FULL service editor: photos, name, price, duration, buffers,
+ * description, service type, tags, hair types, safety flags, aftercare and
+ * add-ons. Reached from this screen's category sections.
+ *
+ * There is a second, deliberately narrower editor —
+ * features/providers/ServiceEditorSheet — opened from the My Services
+ * dashboard for the day-to-day set (name, price, duration, description). That
+ * split is intentional, not a duplicate left behind: changing a price should
+ * not mean scrolling a form this long. Both write the same row; this one owns
+ * every field the other doesn't touch, so a field added here needs no
+ * counterpart there unless it's something providers change weekly.
+ */
 interface ServiceModalProps {
   visible: boolean;
   onClose: () => void;
@@ -972,6 +998,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   // generic white/grey — just blended much closer to white so they stay
   // bright and legible rather than being noticeably tinted.
   const inputTint = blend(accentColor, '#FFFFFF', 0.96);
+  // The sheet's fields are a plain tinted box with an accent-derived hairline
+  // edge, matching the quick editor on the My Services dashboard — the blur +
+  // drop shadow the rest of registration uses made every field read as a
+  // second raised surface stacked on the sheet.
+  const fieldBox = { backgroundColor: inputTint, borderColor: blend(accentColor, '#FFFFFF', 0.7) };
   const modalTintTop = blend(accentColor, '#FFFFFF', 0.93);
   const modalTintBottom = blend(accentColor, '#FFFFFF', 0.82);
   const catKey = inferCategoryKind(categoryName, fallbackKind);
@@ -992,7 +1023,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [name, setName] = useState(service?.name || '');
   const [price, setPrice] = useState(service?.price ? String(service.price) : '');
   const [duration, setDuration] = useState(service?.duration || '');
-  const [bufferBefore, setBufferBefore] = useState(service?.bufferBeforeMins?.toString() || '');
+  const [bufferBefore, setBufferBefore] = useState(bufferBeforeToPicker(service?.bufferBeforeMins));
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
   const [images, setImages] = useState<string[]>(service?.images || []);
@@ -1007,6 +1038,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [trendNames, setTrendNames] = useState<string[]>(service?.trendNames || []);
   const [trendInput, setTrendInput] = useState('');
   const [serviceType, setServiceType] = useState<ServiceData['serviceType']>(service?.serviceType || '');
+  const [audience, setAudience] = useState<ServiceData['audience']>(service?.audience || '');
   // Safety state
   const [isPregnancySafe, setIsPregnancySafe] = useState(service?.isPregnancySafe ?? false);
   const [patchTestRequired, setPatchTestRequired] = useState(
@@ -1017,6 +1049,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [contraindicationInput, setContraindicationInput] = useState('');
   const [aftercareNotes, setAftercareNotes] = useState(service?.aftercareNotes || '');
   const [hairTypesSuitable, setHairTypesSuitable] = useState<string[]>(service?.hairTypesSuitable || []);
+  // Shown inline above the save button instead of an Alert, so the reason a
+  // save was refused stays beside the button that refused it.
+  const [error, setError] = useState<string | null>(null);
+  // The duration and buffer presets live behind collapsed fields so each pair
+  // can share a row; expanded, the chips span the full sheet width. Only one
+  // buffer picker is open at a time — two half-width chip columns side by side
+  // would each wrap to a different height and leave the row ragged.
+  const [durationOpen, setDurationOpen] = useState(false);
+  const [openBuffer, setOpenBuffer] = useState<'before' | 'after' | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
   // Measured Y position of each input group, captured via onLayout — lets
@@ -1045,7 +1086,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setName(service?.name || '');
     setPrice(service?.price ? String(service.price) : '');
     setDuration(service?.duration || '');
-    setBufferBefore(service?.bufferBeforeMins?.toString() || '');
+    setBufferBefore(bufferBeforeToPicker(service?.bufferBeforeMins));
     setBufferAfter(service?.bufferAfterMins?.toString() || '');
     setDescription(service?.description || '');
     setImages(service?.images || []);
@@ -1057,6 +1098,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setTrendNames(service?.trendNames || []);
     setTrendInput('');
     setServiceType(service?.serviceType || '');
+    setAudience(service?.audience || '');
     setIsPregnancySafe(service?.isPregnancySafe ?? false);
     setPatchTestRequired(service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey)));
     setMinAge(service?.minAge?.toString() || '');
@@ -1064,6 +1106,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setContraindicationInput('');
     setAftercareNotes(service?.aftercareNotes || '');
     setHairTypesSuitable(service?.hairTypesSuitable || []);
+    setError(null);
+    setDurationOpen(false);
+    setOpenBuffer(null);
   }, [service, catKey]);
 
   const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
@@ -1090,9 +1135,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
   const handleAddAddOn = () => {
     if (!newAddOnName.trim() || !newAddOnPrice.trim()) {
-      Alert.alert('Missing Information', 'Please enter add-on name and price.');
+      tapWarn();
+      setError('Give the add-on a name and a price.');
       return;
     }
+    setError(null);
     setAddOns([...addOns, { id: Date.now(), name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
     setNewAddOnName('');
     setNewAddOnPrice('');
@@ -1114,10 +1161,20 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   };
 
   const handleSave = () => {
-    if (!name.trim() || !price.trim() || !duration.trim()) {
-      Alert.alert('Missing Information', 'Please add a service name, price and duration (the fields marked with a red *).');
+    const problem =
+      !name.trim() ? 'Give the service a name.'
+      : !price.trim() ? 'Enter a price, or 0 if it varies.'
+      : !duration.trim() ? 'Tap how long this service takes.'
+      : null;
+    if (problem) {
+      tapWarn();
+      setError(problem);
+      // The presets are collapsed by default, so pointing at a missing
+      // duration without opening them names a control that isn't on screen.
+      if (!duration.trim()) setDurationOpen(true);
       return;
     }
+    setError(null);
     onSave({
       id: service?.id || Date.now(),
       name: name.trim(),
@@ -1140,6 +1197,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       aftercareNotes: aftercareNotes.trim(),
       serviceType,
       hairTypesSuitable,
+      audience,
     });
     onClose();
   };
@@ -1168,17 +1226,51 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     { value: 'consultation', label: 'Consultation' },
   ];
 
+  const SERVICE_AUDIENCE_OPTS: { value: ServiceData['audience']; label: string }[] = [
+    { value: 'everyone', label: 'Everyone' },
+    { value: 'women',    label: 'Women' },
+    { value: 'men',      label: 'Men' },
+    { value: 'kids',     label: 'Kids' },
+  ];
+
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardDismissView style={styles.modalOverlay}>
+        {/* Tap the strip above the sheet to dismiss. Rendered first so the
+            sheet paints over it, and absolute so it doesn't take part in the
+            overlay's layout. This replaces the Cancel button the footer used
+            to carry — the sheet now has one action, like the dashboard's. */}
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => { tapLight(); onClose(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Close without saving"
+        />
+        {/* Bottom sheet, matching the quick service editor on the My Services
+            dashboard: grabber, eyebrow + title, then one accent action, and
+            the same field treatment — a small uppercase label over a plain
+            bordered box. It opens on the four fields that editor has (name,
+            price, duration, description) so the form starts where a provider
+            starts; photos, tags, safety and add-ons follow as ruled sections
+            below, since this editor still owns every field that one doesn't. */}
         <LinearGradient colors={[modalTintTop, modalTintBottom]} start={{ x: 0, y: 0 }} end={{ x: 0.3, y: 1 }} style={styles.serviceModal}>
           <SafeAreaView style={styles.modalSafeArea}>
-            <View style={[styles.modalHeader, { borderBottomColor: `${accentColor}33`, borderBottomWidth: 2 }]}>
-              <Text style={styles.modalTitle}>
-                {isEditing ? 'Edit Service' : `New ${categoryName} Service`}
-              </Text>
-              <TouchableOpacity style={[styles.modalCloseButton, { backgroundColor: `${accentColor}22` }]} onPress={() => { tapLight(); onClose(); }}>
-                <Text style={[styles.modalCloseText, { color: accentColor }]}>✕</Text>
+            <View style={styles.serviceSheetGrabber} />
+            <View style={styles.serviceSheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.serviceSheetEyebrow}>{categoryName.toUpperCase()}</Text>
+                <Text style={styles.serviceSheetTitle}>
+                  {isEditing ? 'Edit service' : 'New service'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => { tapLight(); onClose(); }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Ionicons name="close" size={22} color={accentColor} />
               </TouchableOpacity>
             </View>
 
@@ -1190,73 +1282,116 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               contentContainerStyle={{ paddingBottom: 60 }}
               onLayout={(e) => { scrollViewHeight.current = e.nativeEvent.layout.height; }}
             >
-              {/* Service Images */}
+              {/* Photos open the sheet. A service is picked off its picture
+                  before its wording, so the field a provider is most likely to
+                  skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Service Images</Text>
+                <Text style={styles.serviceSheetSection}>Service Images</Text>
                 <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} size={100} styles={styles} />
-                <Text style={styles.inputHint}>Add multiple images to showcase your service</Text>
+                <Text style={styles.serviceSheetHint}>Add multiple images to showcase your service</Text>
               </View>
 
               {/* Service Name */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
-                <RequiredLabel required styles={styles}>Service Name</RequiredLabel>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                  <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
-                </BlurView>
+                <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Service Name</RequiredLabel>
+                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
               </View>
 
-              {/* Price */}
+              {/* Price and duration share one row — they're the pair a provider
+                  decides together, and reading them apart is what made pricing
+                  a service feel like two separate decisions. Duration stays a
+                  preset tap rather than a typed value: the field collapses to
+                  the chosen preset and expands the chips full-width beneath the
+                  row, so the chips keep their tap targets at half the width. */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['price'] = e.nativeEvent.layout.y; }}>
-                <RequiredLabel required styles={styles}>Price (£)</RequiredLabel>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                  <TextInput style={styles.textInput} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('price')} />
-                </BlurView>
-              </View>
-
-              {/* Duration — tap a preset instead of typing */}
-              <View style={styles.inputGroup}>
-                <RequiredLabel required styles={styles}>Duration</RequiredLabel>
-                <Text style={styles.inputHint}>Tap how long this service takes</Text>
-                <DurationPicker value={duration} onChange={setDuration} accentColor={accentColor} styles={styles} />
-              </View>
-
-              {/* Buffer time before/after — overrides the account-wide default from Automations */}
-              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['bufferBefore'] = e.nativeEvent.layout.y; serviceInputPositions.current['bufferAfter'] = e.nativeEvent.layout.y; }}>
-                <Text style={styles.inputLabel}>Buffer Time (optional)</Text>
-                <Text style={styles.inputHint}>Blocks extra minutes around this service so back-to-back bookings can't crowd it. Leave blank to use your account default.</Text>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.inputHint, { marginBottom: 4 }]}>Before</Text>
-                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                      <TextInput style={styles.textInput} value={bufferBefore} onChangeText={setBufferBefore} placeholder="0" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('bufferBefore')} />
-                    </BlurView>
+                <View style={styles.serviceSheetPairRow}>
+                  <View style={styles.serviceSheetPairItem}>
+                    <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Price (£)</RequiredLabel>
+                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('price')} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.inputHint, { marginBottom: 4 }]}>After</Text>
-                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                      <TextInput style={styles.textInput} value={bufferAfter} onChangeText={setBufferAfter} placeholder="Default" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('bufferAfter')} />
-                    </BlurView>
+                  <View style={styles.serviceSheetPairItem}>
+                    <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Duration</RequiredLabel>
+                    <TouchableOpacity
+                      style={[styles.serviceSheetInput, styles.serviceSheetSelect, fieldBox]}
+                      onPress={() => { tapLight(); setDurationOpen(open => !open); }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={duration ? `Duration, ${duration}` : 'Choose how long this service takes'}
+                    >
+                      <Text style={[styles.serviceSheetSelectText, !duration && { color: chrome.fg(0.4) }]} numberOfLines={1}>
+                        {duration || 'Tap to choose'}
+                      </Text>
+                      <Ionicons name={durationOpen ? 'chevron-up' : 'chevron-down'} size={16} color={accentColor} />
+                    </TouchableOpacity>
                   </View>
                 </View>
+                {durationOpen && (
+                  <DurationPicker value={duration} onChange={(value) => { setDuration(value); if (value) setDurationOpen(false); }} accentColor={accentColor} styles={styles} />
+                )}
               </View>
 
               {/* Description */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
-                <Text style={styles.inputLabel}>Description</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
-                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={description} onChangeText={setDescription} placeholder="Describe your service..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} textAlignVertical="top" onFocus={() => handleInputFocus('serviceDescription')} />
-                </BlurView>
+                <Text style={styles.serviceSheetLabel}>Description</Text>
+                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
+              </View>
+
+              {/* Buffer time before/after — overrides the account-wide default
+                  set in Scheduling. Presets rather than typed minutes: these
+                  pad the blocked span around every booking of this service, so
+                  an arbitrary number (7 min, or a mistyped 300) quietly eats
+                  slots the picker then can't offer. The options are derived
+                  from the same BUFFER_OPTS that screen uses, so a service can't
+                  be given a padding the account level doesn't offer. */}
+              <View style={styles.inputGroup}>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Buffer Time (optional)</Text>
+                <Text style={styles.serviceSheetHint}>Blocks extra minutes around this service so back-to-back bookings can't crowd it. "My default" follows the buffer set in Scheduling; "None" turns it off for this service only.</Text>
+                <View style={styles.serviceSheetPairRow}>
+                  <View style={styles.serviceSheetPairItem}>
+                    <Text style={styles.serviceSheetLabel}>Before</Text>
+                    <TouchableOpacity
+                      style={[styles.serviceSheetInput, styles.serviceSheetSelect, fieldBox]}
+                      onPress={() => { tapLight(); setOpenBuffer(open => (open === 'before' ? null : 'before')); }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Buffer before, ${bufferOptionLabel(bufferBefore, SERVICE_BUFFER_BEFORE_OPTS)}`}
+                    >
+                      <Text style={styles.serviceSheetSelectText} numberOfLines={1}>{bufferOptionLabel(bufferBefore, SERVICE_BUFFER_BEFORE_OPTS)}</Text>
+                      <Ionicons name={openBuffer === 'before' ? 'chevron-up' : 'chevron-down'} size={16} color={accentColor} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.serviceSheetPairItem}>
+                    <Text style={styles.serviceSheetLabel}>After</Text>
+                    <TouchableOpacity
+                      style={[styles.serviceSheetInput, styles.serviceSheetSelect, fieldBox]}
+                      onPress={() => { tapLight(); setOpenBuffer(open => (open === 'after' ? null : 'after')); }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Buffer after, ${bufferOptionLabel(bufferAfter, SERVICE_BUFFER_AFTER_OPTS)}`}
+                    >
+                      <Text style={styles.serviceSheetSelectText} numberOfLines={1}>{bufferOptionLabel(bufferAfter, SERVICE_BUFFER_AFTER_OPTS)}</Text>
+                      <Ionicons name={openBuffer === 'after' ? 'chevron-up' : 'chevron-down'} size={16} color={accentColor} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {openBuffer === 'before' && (
+                  <BufferPicker value={bufferBefore} onChange={(value) => { setBufferBefore(value); setOpenBuffer(null); }} options={SERVICE_BUFFER_BEFORE_OPTS} accentColor={accentColor} styles={styles} />
+                )}
+                {openBuffer === 'after' && (
+                  <BufferPicker value={bufferAfter} onChange={(value) => { setBufferAfter(value); setOpenBuffer(null); }} options={SERVICE_BUFFER_AFTER_OPTS} accentColor={accentColor} styles={styles} />
+                )}
               </View>
 
               {/* ── Service Type ─────────────────────────────────────── */}
-              {/* Tag sections moved up to sit right after the core identity
-                  fields (name/price/duration/description) instead of after
-                  every kind-specific block — these describe what the service
-                  IS and are relevant to every provider type, so they shouldn't
-                  be buried below aesthetics-only fields most providers never see. */}
+              {/* Tag sections sit above the kind-specific blocks — these
+                  describe what the service IS and are relevant to every
+                  provider type, so they shouldn't be buried below
+                  aesthetics-only fields most providers never see. */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Service Type</Text>
-                <Text style={styles.inputHint}>Helps clients understand what kind of service this is</Text>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Service Type</Text>
+                <Text style={styles.serviceSheetHint}>Helps clients understand what kind of service this is</Text>
                 <View style={styles.chipGrid}>
                   {SERVICE_TYPES.map(({ value, label }) => {
                     const active = serviceType === value;
@@ -1269,25 +1404,50 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 </View>
               </View>
 
+              {/* ── Audience ─────────────────────────────────────────── */}
+              {/* Who this specific service is for — distinct from the
+                  provider-level Clientele setting (who the business serves at
+                  all). A "Men's Haircut" and a "Kids' Haircut" living under
+                  one Hair category need to say so per service so the app can
+                  suggest/match better, not just at the business level. */}
+              <View style={styles.inputGroup}>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Who's This For?</Text>
+                <Text style={styles.serviceSheetHint}>Helps the app suggest this service to the right clients</Text>
+                <View style={styles.chipGrid}>
+                  {SERVICE_AUDIENCE_OPTS.map(({ value, label }) => {
+                    const active = audience === value;
+                    return (
+                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setAudience(active ? '' : value); }}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
               {/* ── Style Tags ───────────────────────────────────────── */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Style / Vibe</Text>
-                <Text style={styles.inputHint}>How would you describe this service's aesthetic?</Text>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Style / Vibe</Text>
+                <Text style={styles.serviceSheetHint}>How would you describe this service's aesthetic?</Text>
                 <TagSelectWithOther options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} onAddOther={(t) => setSelectedTags(selectedTags.includes(t) ? selectedTags : [...selectedTags, t])} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Occasion Tags ────────────────────────────────────── */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Best For (Occasion)</Text>
-                <Text style={styles.inputHint}>When would a client typically book this?</Text>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Best For (Occasion)</Text>
+                <Text style={styles.serviceSheetHint}>When would a client typically book this?</Text>
                 <TagSelectWithOther options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} onAddOther={(t) => setSelectedOccasions(selectedOccasions.includes(t) ? selectedOccasions : [...selectedOccasions, t])} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Technique Tags ───────────────────────────────────── */}
               {techniquOptions.length > 0 && (
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Techniques Used</Text>
-                  <Text style={styles.inputHint}>Select every technique this service involves</Text>
+                  <View style={styles.serviceSheetSectionRule} />
+                  <Text style={styles.serviceSheetSection}>Techniques Used</Text>
+                  <Text style={styles.serviceSheetHint}>Select every technique this service involves</Text>
                   <TagSelectWithOther options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} onAddOther={(t) => setSelectedTechniques(selectedTechniques.includes(t) ? selectedTechniques : [...selectedTechniques, t])} accentColor={accentColor} styles={styles} />
                 </View>
               )}
@@ -1295,16 +1455,18 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* ── Outcome Tags ─────────────────────────────────────── */}
               {outcomeOptions.length > 0 && (
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Results / Outcomes</Text>
-                  <Text style={styles.inputHint}>What will the client achieve with this service?</Text>
+                  <View style={styles.serviceSheetSectionRule} />
+                  <Text style={styles.serviceSheetSection}>Results / Outcomes</Text>
+                  <Text style={styles.serviceSheetHint}>What will the client achieve with this service?</Text>
                   <TagSelectWithOther options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} onAddOther={(t) => setSelectedOutcomes(selectedOutcomes.includes(t) ? selectedOutcomes : [...selectedOutcomes, t])} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
               {/* ── Trend Names ──────────────────────────────────────── */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['trendInput'] = e.nativeEvent.layout.y; }}>
-                <Text style={styles.inputLabel}>Trend Names (Optional)</Text>
-                <Text style={styles.inputHint}>Viral names clients search for — tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Trend Names (Optional)</Text>
+                <Text style={styles.serviceSheetHint}>Viral names clients search for — tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
                 {trendNames.length > 0 && (
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
@@ -1315,9 +1477,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
-                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
-                  </BlurView>
+                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
@@ -1336,8 +1496,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                    booking. Empty selection = suits all hair types. ────── */}
               {isHair && (
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Suitable Hair Types</Text>
-                  <Text style={styles.inputHint}>Select which hair types this service suits — leave blank if it suits all</Text>
+                  <View style={styles.serviceSheetSectionRule} />
+                  <Text style={styles.serviceSheetSection}>Suitable Hair Types</Text>
+                  <Text style={styles.serviceSheetHint}>Select which hair types this service suits — leave blank if it suits all</Text>
                   <ChipSelect options={HAIR_TYPES} selected={hairTypesSuitable} onToggle={toggleTag(hairTypesSuitable, setHairTypesSuitable)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
@@ -1348,7 +1509,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {isAesthetics && (
                 <View style={[styles.inputGroup, styles.safetyCard]}>
                   <Text style={styles.safetySectionTitle}>Treatment Safety</Text>
-                  <Text style={styles.inputHint}>Required for aesthetic treatments — shown to clients under the service description</Text>
+                  <Text style={styles.serviceSheetHint}>Required for aesthetic treatments — shown to clients under the service description</Text>
 
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
@@ -1367,15 +1528,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['minAge'] = e.nativeEvent.layout.y; }}>
-                    <Text style={styles.inputLabel}>Minimum Age</Text>
-                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                      <TextInput style={styles.textInput} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('minAge')} />
-                    </BlurView>
+                    <Text style={styles.serviceSheetLabel}>Minimum Age</Text>
+                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor={chrome.fg(0.4)} keyboardType="number-pad" onFocus={() => handleInputFocus('minAge')} />
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['contraindicationInput'] = e.nativeEvent.layout.y; }}>
-                    <Text style={styles.inputLabel}>Contraindications</Text>
-                    <Text style={styles.inputHint}>Conditions that prevent this treatment — type your own, or tap a common one below</Text>
+                    <Text style={styles.serviceSheetLabel}>Contraindications</Text>
+                    <Text style={styles.serviceSheetHint}>Conditions that prevent this treatment — type your own, or tap a common one below</Text>
                     {contraindications.length > 0 && (
                       <View style={styles.chipGrid}>
                         {contraindications.map(c => (
@@ -1386,9 +1545,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       </View>
                     )}
                     <View style={styles.addAddOnRow}>
-                      <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
-                        <TextInput style={styles.textInput} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
-                      </BlurView>
+                      <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
                       <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddContraindication(); }}>
                         <Text style={styles.addAddOnButtonText}>+</Text>
                       </TouchableOpacity>
@@ -1426,16 +1583,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
               {/* ── Aftercare Notes ──────────────────────────────────── */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['aftercareNotes'] = e.nativeEvent.layout.y; }}>
-                <Text style={styles.inputLabel}>Aftercare Notes (Optional)</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
-                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={3} textAlignVertical="top" onFocus={() => handleInputFocus('aftercareNotes')} />
-                </BlurView>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Aftercare Notes (Optional)</Text>
+                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={3} onFocus={() => handleInputFocus('aftercareNotes')} />
               </View>
 
               {/* ── Add-Ons ──────────────────────────────────────────── */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; serviceInputPositions.current['newAddOnPrice'] = e.nativeEvent.layout.y; }}>
-                <Text style={styles.inputLabel}>Add-Ons (Optional)</Text>
-                <Text style={styles.inputHint}>Optional extras clients can add to this service</Text>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Add-Ons (Optional)</Text>
+                <Text style={styles.serviceSheetHint}>Optional extras clients can add to this service</Text>
                 {addOns.length > 0 && (
                   <View style={styles.addOnsContainer}>
                     {addOns.map((addOn) => (
@@ -1452,12 +1609,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.addOnNameInput, { backgroundColor: inputTint }]}>
-                    <TextInput style={styles.textInput} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('newAddOnName')} />
-                  </BlurView>
-                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.addOnPriceInput, { backgroundColor: inputTint }]}>
-                    <TextInput style={styles.textInput} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('newAddOnPrice')} />
-                  </BlurView>
+                  <TextInput style={[styles.serviceSheetInput, styles.addOnNameInput, fieldBox]} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('newAddOnName')} />
+                  <TextInput style={[styles.serviceSheetInput, styles.addOnPriceInput, fieldBox]} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('newAddOnPrice')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddAddOn(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
@@ -1465,12 +1618,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               </View>
             </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => { tapLight(); onClose(); }}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveButton, { backgroundColor: accentColor }]} onPress={() => { tapMedium(); handleSave(); }}>
-                <Text style={styles.saveButtonText}>{isEditing ? 'Save Changes' : 'Add Service'}</Text>
+            <View style={styles.serviceSheetFooter}>
+              {error ? <Text style={styles.serviceSheetError}>{error}</Text> : null}
+              <TouchableOpacity
+                style={[styles.serviceSheetSave, { backgroundColor: accentColor }]}
+                onPress={() => { tapMedium(); handleSave(); }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.serviceSheetSaveText}>
+                  {isEditing ? 'Save changes' : 'Add service'}
+                </Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
@@ -1817,12 +1974,19 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 // Preview Modal — mirrors the live ProviderProfileScreen: same theme resolution,
 // typography, and section set (including Portfolio), so what a provider sees
 // here is what a client actually sees. Rebuilt whenever that screen changes.
+//
+// `portfolio` is the WORK gallery only. Venue shots arrive separately and
+// render in their own block below it, because that is where a client meets
+// them on the real profile (inside Additional Information) — feeding the
+// masonry the raw portfolio_items list would show the provider a Portfolio
+// grid no client ever sees.
 interface PreviewModalProps {
   visible: boolean;
   onClose: () => void;
   providerData: ProviderRegistrationData;
   accentColor: string;
   portfolio: DbPortfolioItem[];
+  venuePhotos: DbPortfolioItem[];
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -1831,6 +1995,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   providerData,
   accentColor,
   portfolio,
+  venuePhotos,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -2271,6 +2436,32 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   </View>
                 </View>
               )}
+
+              {/* Venue — a horizontal strip under its own label, matching
+                  ProviderAdditionalInfoSection's "Venue" block on the real
+                  profile. Kept out of the masonry above so the preview shows
+                  the provider where these photos actually land. */}
+              {venuePhotos.length > 0 && (
+                <View style={styles.previewPortfolioSection}>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Venue</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.previewVenueStrip}
+                  >
+                    {venuePhotos.map(item => (
+                      <View key={item.id} style={styles.previewVenueTile}>
+                        <Image
+                          source={{ uri: item.image_url }}
+                          style={styles.previewVenueImage}
+                          resizeMode="cover"
+                          fadeDuration={0}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
             </View>
           </ScrollView>
@@ -2338,6 +2529,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       navigation.getParent()?.setOptions({ tabBarStyle: undefined });
     };
   }, [isFocused, navigation]);
+
+  // Refresh the "Your Terms & Conditions" card label whenever this screen
+  // regains focus — the provider may have just come back from writing them in
+  // the ProviderIntakeForm builder. Failure leaves it null (card shows the
+  // neutral label), never throws.
+  useEffect(() => {
+    if (!isFocused) return;
+    let cancelled = false;
+    hasMyProviderTermsForm()
+      .then(has => { if (!cancelled) setHasOwnTerms(has); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isFocused]);
 
   // Ref for main scrollview to enable auto-scroll to focused inputs
   const mainScrollViewRef = useRef<ScrollView>(null);
@@ -2554,9 +2758,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           .catch(() => {})
           .finally(() => setIsLoadingProvider(false));
       });
-    // Load saved policies from Supabase (source of truth), falling back to
-    // the local cache inside loadProviderPolicies. Merge over defaults so
-    // fields added later (e.g. bookingInstructions) are never undefined.
+    // Load saved policies from Supabase, the only source of truth — the
+    // device-local cache this used to fall back to was removed, because a
+    // stale copy round-tripped back through a save could revert settings
+    // changed on another device. Merge over defaults so fields added later
+    // (e.g. bookingInstructions) are never undefined.
     loadProviderPolicies(user.id)
       .then(saved => {
         if (!saved) { setPoliciesLoaded(true); return; }
@@ -2587,11 +2793,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [portfolioUploading, setPortfolioUploading] = useState(false);
   const [venuePhotoUploading, setVenuePhotoUploading] = useState(false);
   // Address/venue photos live in the same portfolio_items table and list as
-  // gallery photos (category: 'venue' distinguishes them) — they're a
-  // filtered view over portfolioItems, not a separate data source, so they
-  // show up under Portfolio wherever the full list is rendered.
-  const venuePhotos = useMemo(
-    () => portfolioItems.filter(item => item.category === 'venue'),
+  // gallery photos, distinguished only by their category — a filtered view
+  // over portfolioItems, not a separate data source. They are NOT portfolio
+  // photos anywhere they're rendered, though: on the client's profile they
+  // sit inside Additional Information, and Explore excludes them entirely,
+  // so the two grids below (and every count taken off them) are fed by the
+  // two halves of this split rather than by the raw list.
+  const { work: workPhotos, venue: venuePhotos } = useMemo(
+    () => splitPortfolioByKind(portfolioItems),
     [portfolioItems]
   );
 
@@ -2620,9 +2829,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // category is optional and only stamped when passed — omitting it keeps
   // the default gallery-upload behavior of addPortfolioItem (falls back to
-  // the provider's own service_category). Passing 'venue' is how the
-  // Address Confirmation step's photos land in the same portfolio_items
-  // table/list but stay distinguishable as their own section.
+  // the provider's own service_category). Passing VENUE_PORTFOLIO_CATEGORY is
+  // how the Address Confirmation step's photos land in the same
+  // portfolio_items table/list while staying out of the work gallery, out of
+  // Explore, and inside Additional Information on the client's profile.
   const handleAddPortfolioImages = useCallback(async (category?: string) => {
     if (!user?.id || !providerDbId) return;
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -2718,6 +2928,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // edit-save would be re-consent theatre, not a real gate.
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  // Whether this provider has written their OWN client-facing Terms &
+  // Conditions (a booking_intake_forms row, is_terms) — separate from the
+  // CERVICED platform terms `termsAccepted` above. Just toggles the card's
+  // "Set up" vs "Update" label; null until known. Editing happens on the
+  // ProviderIntakeForm builder, opened from the card near the end of the doc.
+  const [hasOwnTerms, setHasOwnTerms] = useState<boolean | null>(null);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -3123,7 +3339,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             { label: 'Introduction', value: filled(providerData.aboutText) ? 'Written' : '' },
             {
               label: 'Portfolio',
-              value: portfolioItems.length > 0 ? `${portfolioItems.length} photo${portfolioItems.length === 1 ? '' : 's'}` : '',
+              value: workPhotos.length > 0 ? `${workPhotos.length} photo${workPhotos.length === 1 ? '' : 's'}` : '',
             },
           ],
         },
@@ -3165,7 +3381,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         },
       ];
     },
-    [providerData, portfolioItems.length, serviceCount, categoryNames.length],
+    [providerData, workPhotos.length, serviceCount, categoryNames.length],
   );
 
   // Only genuinely-required, genuinely-empty fields — this is what the roll-up
@@ -3586,7 +3802,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onClose={() => setShowPreviewModal(false)}
           providerData={providerData}
           accentColor={adaptiveAccentColor}
-          portfolio={portfolioItems}
+          portfolio={workPhotos}
+          venuePhotos={venuePhotos}
         />
 
         {/* No `edges` prop: under fullScreenModal the nested provider this sits
@@ -3862,20 +4079,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     "City" filter) lives in Business Details › AboutYouScreen —
                     not duplicated here.
 
-                    Structured picker for the cities we have area data for, plain
-                    free text for everywhere else. Either way it writes the same
-                    plain string to `providerData.location`. */}
-                <LocationPicker
+                    Same stepped city → region → area picker the client uses for
+                    "Your area" (AreaPicker) — "Other city…" / "Other…" fall back
+                    to free text for anywhere we lack area data. Either way it
+                    writes the same plain string to `providerData.location`. */}
+                <AreaPicker
                   value={providerData.location}
                   onChange={(location) =>
                     setProviderData(prev => ({ ...prev, location }))
                   }
                   accentColor={adaptiveAccentColor}
-                  blurTint={chrome.blurTint}
-                  placeholderColor={chrome.fg(0.4)}
-                  iconColor={chrome.fg(0.5)}
-                  onFocus={() => handleInputFocus('location')}
-                  styles={styles}
+                  subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
                 />
               </View>
 
@@ -3975,7 +4189,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               ) : (
                 <View style={styles.portfolioGrid}>
-                  {portfolioItems.map(item => (
+                  {workPhotos.map(item => (
                     <View key={item.id} style={styles.portfolioThumbWrap}>
                       <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
                       <TouchableOpacity
@@ -4679,15 +4893,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
 
               {/* Address/venue photos — stored as portfolio_items tagged
-                  category: 'venue', so they appear under Portfolio (filtered
-                  into their own section there) instead of a separate field.
+                  VENUE_PORTFOLIO_CATEGORY, so they share the table without
+                  joining the work gallery: on the client's profile they render
+                  inside Additional Information, and Explore's feed excludes
+                  them. This grid is the only place they're managed.
                   Unlike the address text above, these are always public on
                   the profile regardless of business type or address-release
                   policy — the hint says so explicitly rather than implying
                   the same privacy the address field gets. */}
               <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS PHOTOS</Text>
               <Text style={styles.addressHint}>
-                Photos of your venue or workspace, shown publicly under Portfolio — clients booking mobile or home-based providers often look for these before choosing who to book, so adding some can help boost bookings.
+                Photos of your venue or workspace, shown publicly under Additional Information on your profile rather than in your portfolio — clients booking mobile or home-based providers often look for these before choosing who to book, so adding some can help boost bookings.
               </Text>
               <View style={[styles.portfolioGrid, styles.addressPhotoGrid]}>
                 {venuePhotos.map(item => (
@@ -4707,7 +4923,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   onPress={async () => { tapMedium();
                     setVenuePhotoUploading(true);
                     try {
-                      await handleAddPortfolioImages('venue');
+                      await handleAddPortfolioImages(VENUE_PORTFOLIO_CATEGORY);
                     } finally {
                       setVenuePhotoUploading(false);
                     }
@@ -4773,6 +4989,36 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   textAlignVertical="top"
                 />
               </BlurView>
+
+              {/* The provider's OWN client-facing Terms & Conditions — a
+                  booking_intake_forms row (is_terms), authored in the
+                  ProviderIntakeForm builder, that a client must agree to
+                  before adding this provider to their basket. Distinct from
+                  the CERVICED platform terms checkbox at the end of this
+                  document. Optional: a booking proceeds fine without one. This
+                  card is the only entry point (it used to live on Business
+                  Info). */}
+              <Text style={[styles.policyLabel, { marginTop: 18 }]}>YOUR TERMS &amp; CONDITIONS</Text>
+              <Text style={styles.addressHint}>
+                Clients read and agree to these before they can add you to their basket (optional). Written as a form on the next screen.
+              </Text>
+              <TouchableOpacity
+                style={[styles.releaseDayBtn, { alignSelf: 'stretch', justifyContent: 'space-between' }]}
+                // This screen is typed against ProfileStackParamList (its
+                // original client home) but actually renders inside the three
+                // provider stacks as `EditProfile`, each of which registers
+                // ProviderIntakeForm. The prop type can't see that, hence the
+                // cast — same reason the navigators mount it as ComponentType<any>.
+                onPress={() => { tapSelect(); (navigation as any).navigate('ProviderIntakeForm', { openTerms: true }); }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.releaseDayBtnText}>
+                  {hasOwnTerms ? 'Update your Terms & Conditions'
+                    : hasOwnTerms === false ? 'Set up your Terms & Conditions'
+                    : 'Your Terms & Conditions'}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
+              </TouchableOpacity>
 
               {/* PREFERRED PAYMENT TYPE, WHO YOU WORK WITH and LANGUAGES SPOKEN
                   moved out of registration to Business Details — payment/
@@ -6116,13 +6362,6 @@ const makeStyles = (isDark: boolean) => {
     paddingHorizontal: 20,
     paddingTop: 20,
   },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 15,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: fg(0.1),
-  },
 
   // Gradient Picker Modal
   gradientPickerModal: {
@@ -6164,12 +6403,155 @@ const makeStyles = (isDark: boolean) => {
   },
 
   // Service Modal
+  // A sheet that sits at the bottom rather than a near-fullscreen panel, so
+  // it reads the same as the quick editor on the My Services dashboard. Only
+  // ServiceModal uses this rule — the other modals keep modalHeader/
+  // modalFooter, which are shared and deliberately untouched.
   serviceModal: {
-    flex: 1,
-    marginTop: 80,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
+    marginTop: 'auto',
+    height: '92%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
+  },
+  serviceSheetGrabber: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: fg(0.25),
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  serviceSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+  },
+  serviceSheetEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.1,
+    color: fg(0.6),
+    marginBottom: 3,
+  },
+  serviceSheetTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 21,
+    color: P.text,
+  },
+  // Fields inside the service sheet only. They mirror the quick editor on the
+  // My Services dashboard: a small uppercase label over a plain bordered box,
+  // no blur and no drop shadow, so the field sits inside the sheet rather than
+  // reading as a second raised surface on top of it. The screen-wide
+  // inputLabel/inputBlur pair is deliberately left alone — every other step of
+  // registration still uses it.
+  serviceSheetLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: fg(0.68),
+    marginBottom: 6,
+  },
+  // Group headings — Photos, Scheduling, How clients find this, Safety &
+  // aftercare, Extras — plus the heading that opens each tag block inside
+  // them. Deliberately a step up from serviceSheetLabel in size, weight and
+  // contrast: with 17 blocks in one scroll, a sheet whose headings all render
+  // at field-label weight reads as one undifferentiated flow.
+  serviceSheetSection: {
+    // BakbakOne, per DESIGN_SYSTEM's one rule: uppercase/display type is
+    // BakbakOne, sentences are Jura. It's a single-weight face, so there's no
+    // fontWeight to set — the letterSpacing carries the caps instead.
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: P.text,
+    marginBottom: 8,
+  },
+  // Hairline above each group heading. The separation is what makes the
+  // sections read as sections — the heavier type alone doesn't do it once the
+  // form is this long.
+  serviceSheetSectionRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: fg(0.14),
+    marginTop: 12,
+    marginBottom: 18,
+  },
+  serviceSheetHint: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    lineHeight: 17,
+    color: fg(0.5),
+    marginBottom: 8,
+  },
+  serviceSheetInput: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 15,
+    color: P.text,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  serviceSheetInputMultiline: {
+    minHeight: 84,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
+  // A field that opens a picker rather than the keyboard — same box as
+  // serviceSheetInput, with the value and its chevron on one line.
+  serviceSheetSelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  serviceSheetSelectText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 15,
+    lineHeight: 18,
+    color: P.text,
+  },
+  serviceSheetPairRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  serviceSheetPairItem: {
+    flex: 1,
+  },
+  // Shown in the sheet instead of the Alert.alert the footer used to raise, so
+  // the reason a save didn't go through stays next to the button that refused.
+  serviceSheetError: {
+    color: '#FF453A',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  serviceSheetFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  serviceSheetSave: {
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  serviceSheetSaveText: {
+    fontFamily: 'BakbakOne-Regular',
+    color: '#FFFFFF',
+    fontSize: 15,
   },
 
   // Small Modal (Add Category Modal)
@@ -6879,6 +7261,22 @@ const makeStyles = (isDark: boolean) => {
     shadowRadius: 8,
     elevation: 3,
   },
+  // Venue strip — same tile size as the client profile's Venue block in
+  // ProviderAdditionalInfoSection (150x105), not a masonry tile.
+  previewVenueStrip: {
+    gap: 10,
+    paddingRight: 8,
+  },
+  previewVenueTile: {
+    width: 150,
+    height: 105,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  previewVenueImage: {
+    width: '100%',
+    height: '100%',
+  },
   previewPortfolioCaptionWrap: {
     position: 'absolute',
     left: 0,
@@ -7036,9 +7434,14 @@ const makeStyles = (isDark: boolean) => {
     padding: 16,
     gap: 12,
   },
+  // The Treatment Safety card's heading is the same class of subheading as
+  // serviceSheetSection and sits in the same sheet, so it takes the same face —
+  // only the colour differs, since the safety card is deliberately its own.
   safetySectionTitle: {
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
     color: '#6A1B9A',
     marginBottom: 2,
   },
@@ -7053,11 +7456,13 @@ const makeStyles = (isDark: boolean) => {
     marginRight: 12,
   },
   toggleLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    fontWeight: '600',
-    color: fg(0.75),
+    fontWeight: '800',
+    color: fg(0.85),
   },
   toggleHint: {
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
     color: fg(0.6),

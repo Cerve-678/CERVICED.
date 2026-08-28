@@ -96,6 +96,28 @@ export const BUFFER_OPTS = [
   { value: '60', label: '1 hr'   },
 ];
 
+// The per-service buffer override in the service editor, derived from
+// BUFFER_OPTS so a service can never be given a padding the account-level
+// setting doesn't offer — the two used to disagree, because the service editor
+// took free-typed minutes.
+//
+// The two directions are NOT symmetrical, and the '' option is why:
+// services.buffer_before_mins / buffer_after_mins are nullable, and NULL means
+// "no override". A NULL *before* resolves to 0, so for that field "no
+// override" and "none" are the same state and there's only one chip for it. A
+// NULL *after* inherits providers.buffer_mins, so that field needs both — one
+// chip to follow the account default, and a separate '0' to say this service
+// specifically needs no gap after it. See bufferFromRow() in AvailabilityService.
+export const SERVICE_BUFFER_BEFORE_OPTS = [
+  { value: '', label: 'None' },
+  ...BUFFER_OPTS.filter(opt => opt.value !== '0'),
+];
+
+export const SERVICE_BUFFER_AFTER_OPTS = [
+  { value: '', label: 'My default' },
+  ...BUFFER_OPTS,
+];
+
 export const SLOT_INTERVAL_OPTS = [
   { value: '15', label: 'Every 15 min' },
   { value: '30', label: 'Every 30 min' },

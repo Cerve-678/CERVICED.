@@ -10,15 +10,19 @@ interface RequiredLabelProps {
    *  Publish button. Both read from the same `missingRequired` source, so the
    *  inline flag and the summary can never disagree. */
   missing?: boolean;
+  /** Overrides the default `styles.inputLabel`. The service sheet uses its own
+   *  smaller uppercase label, so it passes that in rather than every screen
+   *  sharing one label size. */
+  labelStyle?: any;
   styles: any;
 }
 
 /** Form label with an optional required-field marker, plus an inline
  *  still-needed flag for the continuous-document layout (which has no hub to
  *  collect those warnings on). */
-export function RequiredLabel({ children, required, missing, styles }: RequiredLabelProps) {
+export function RequiredLabel({ children, required, missing, labelStyle, styles }: RequiredLabelProps) {
   const label = (
-    <Text style={styles.inputLabel}>
+    <Text style={labelStyle ?? styles.inputLabel}>
       {children}
       {required && <Text style={styles.requiredStar}> *</Text>}
     </Text>
