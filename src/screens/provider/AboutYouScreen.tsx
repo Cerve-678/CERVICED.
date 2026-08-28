@@ -62,10 +62,17 @@ export default function AboutYouScreen({ navigation }: any) {
 
   // LANGUAGE_OPTS plus anything already saved that it doesn't cover — a
   // language typed into signup's "Other" free-text input would otherwise have
-  // no chip here, leaving it invisible but still selected. 'Other' itself
-  // always trails the list and reveals a free-text box, same as signup.
+  // no chip here, leaving it invisible but still selected. The literal 'Other'
+  // is excluded from that middle set — selecting it adds 'Other' to `languages`,
+  // and it's the intentional trailing entry, so without the guard it renders
+  // twice. 'Other' always trails the list and reveals a free-text box, same as
+  // signup.
   const languageOptions = useMemo(
-    () => [...LANGUAGE_OPTS, ...languages.filter(l => !LANGUAGE_OPTS.includes(l)), 'Other'],
+    () => [
+      ...LANGUAGE_OPTS,
+      ...languages.filter(l => l !== 'Other' && !LANGUAGE_OPTS.includes(l)),
+      'Other',
+    ],
     [languages],
   );
   const showLanguagesOther = languages.includes('Other');

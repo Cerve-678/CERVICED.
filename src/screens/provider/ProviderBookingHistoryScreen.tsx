@@ -39,6 +39,7 @@ import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../../types/
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
+import { WAITLIST_HOLD_MS } from '../../constants/waitlist';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -778,13 +779,15 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                             </Text>
                           </View>
                         </View>
-                        {/* A hold (waitlist_holds.sql) reserves the slot for 3 hours from
-                            notified_at — shown as an estimate rather than fetched from
-                            the linked bookings row, since this list is optimised for
-                            provider skimming, not authoritative countdown precision. */}
+                        {/* A hold reserves the slot for WAITLIST_HOLD_MINUTES from
+                            notified_at — an estimate, not fetched from the linked
+                            bookings row, since this list is optimised for provider
+                            skimming rather than authoritative countdown precision.
+                            The window is the DB's (waitlist_hold_duration()); the
+                            constant only mirrors it for display. */}
                         {entry.status === 'notified' && entry.notified_at ? (
                           <Text style={[wl.preferredDates, { color: '#34C759' }]}>
-                            Expires around {formatTime12(new Date(new Date(entry.notified_at).getTime() + 3 * 60 * 60 * 1000))} if not confirmed
+                            Expires around {formatTime12(new Date(new Date(entry.notified_at).getTime() + WAITLIST_HOLD_MS))} if not confirmed
                           </Text>
                         ) : null}
                         {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
