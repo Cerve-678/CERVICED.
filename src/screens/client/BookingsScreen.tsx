@@ -27,7 +27,7 @@ import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useFont } from '../../contexts/FontContext';
-import { useBooking, ConfirmedBooking, BookingStatus } from '../../contexts/BookingContext';
+import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,6 +41,7 @@ import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
 import type { GroupedListItem } from '../../features/bookings/presentationTypes';
 import { BookingCard } from '../../features/bookings/BookingCard';
+import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 
@@ -49,6 +50,7 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 type Props = HomeScreenProps<'Bookings'>;
 type BookingsListRow =
   | GroupedListItem
+  | { kind: 'past-booking'; booking: ConfirmedBooking }
   | { kind: 'waitlist-header' }
   | { kind: 'waitlist'; entry: WaitlistEntry };
 
@@ -114,7 +116,9 @@ const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: T
  */
 const bookingLocationLine = (b: ConfirmedBooking): string => {
   if (isMobileBooking(b)) {
-    return b.clientAddress?.trim() ? 'Address sent' : 'Send your address in Messages';
+    return b.clientAddress?.trim()
+      ? 'Your address has been sent to the mobile provider'
+      : 'Send your address in Messages';
   }
   return b.address || 'Address to be confirmed';
 };
@@ -123,6 +127,10 @@ const CATEGORY_TABS = [
   { key: 'all' as const,  label: 'Upcoming Bookings' },
   { key: 'past' as const, label: 'Past Bookings' },
 ];
+
+// How far back the Past Bookings list (and its category filter) looks.
+// Display-only — the underlying booking rows are never touched by this.
+const PAST_BOOKINGS_VISIBLE_DAYS = 30;
 
 const WaitlistCard = React.memo(function WaitlistCard({
   entry,
@@ -222,8 +230,48 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     reloadBookings,
   } = useBooking();
 
-  const filteredPastBookings = useMemo(() => pastBookings.filter(b => !b.isPendingReschedule), [pastBookings]);
+  // Past Bookings only shows the last 30 days of history — older rows stay
+  // in the database untouched (receipts/reviews/transactions are unaffected),
+  // they just drop out of this list and its category filter.
+  const filteredPastBookings = useMemo(() => {
+    const cutoff = new Date(Date.now() - PAST_BOOKINGS_VISIBLE_DAYS * 24 * 60 * 60 * 1000);
+    return pastBookings.filter(b => !b.isPendingReschedule && createBookingDateTime(b.bookingDate, b.bookingTime) >= cutoff);
+  }, [pastBookings]);
   const filteredUpcomingBookings = useMemo(() => upcomingBookings, [upcomingBookings]);
+
+  // Past Bookings is a flat list with a category filter rather than the
+  // always-grouped sections Upcoming uses (see pastCategoryFilter below).
+  const pastCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of filteredPastBookings) set.add(resolveServiceCategory(b.serviceName, b.providerService));
+    return Array.from(set).sort();
+  }, [filteredPastBookings]);
+
+  const [pastCategoryFilter, setPastCategoryFilter] = useState<string | null>(null);
+  const [pastFilterOpen, setPastFilterOpen] = useState(false);
+  const [pastFilterAnchor, setPastFilterAnchor] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const pastFilterButtonRef = useRef<View>(null);
+
+  const openPastFilterMenu = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // measureInWindow exists on the underlying native view via NativeMethods,
+    // but isn't part of View's public ref type.
+    const node = pastFilterButtonRef.current as unknown as {
+      measureInWindow: (cb: (x: number, y: number, width: number, height: number) => void) => void;
+    } | null;
+    node?.measureInWindow((x, y, width, height) => {
+      setPastFilterAnchor({ x, y, width, height });
+      setPastFilterOpen(true);
+    });
+  }, []);
+
+  const pastBookingsFiltered = useMemo(() => {
+    const source = pastCategoryFilter
+      ? filteredPastBookings.filter(b => resolveServiceCategory(b.serviceName, b.providerService) === pastCategoryFilter)
+      : filteredPastBookings;
+    // filteredPastBookings is sorted oldest-first; history reads most-recent-first.
+    return [...source].reverse();
+  }, [filteredPastBookings, pastCategoryFilter]);
 
   const mapRef = useRef<MapView>(null);
   const mainScrollRef = useRef<FlatList<BookingsListRow>>(null);
@@ -303,6 +351,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (filter !== 'past') {
+      setPastCategoryFilter(null);
+      setPastFilterOpen(false);
+    }
     setActiveFilters(prev => {
       if (prev.has(filter)) {
         return new Set();
@@ -845,6 +897,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     if (route?.params?.openBookingId || route?.params?.highlightBookingId) {
       const bookingId = route.params.openBookingId || route.params.highlightBookingId;
       const shouldOpenReschedule = route.params.openReschedule;
+      const shouldOpenReview = route.params.openReview;
       const shouldHighlight = !!route.params.highlightBookingId;
 
       logger.log('BookingsScreen received params:', { bookingId, shouldOpenReschedule, shouldHighlight });
@@ -902,6 +955,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             }
             logger.log('Navigating to Reschedule screen');
             navigation.navigate('Reschedule', { bookingId: booking.id });
+          } else if (shouldOpenReview) {
+            // review_request's "Rate Now" — open the rating sheet directly on
+            // this screen rather than pushing BookingDetail. The modal already
+            // lives here and reads selectedBooking, which is set above.
+            logger.log('Opening rating modal for booking:', booking.id);
+            setRating(0);
+            setReviewText('');
+            setShowRatingModal(true);
           } else if (route.params?.openBookingId) {
             logger.log('Navigating to BookingDetail screen');
             navigation.navigate('BookingDetail', { bookingId: booking.id });
@@ -909,7 +970,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         }, 500);
 
         // Clear params after handling
-        navigation.setParams({ openBookingId: undefined, openReschedule: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+        navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
         if (notifBookingGiveUpRef.current) {
           clearTimeout(notifBookingGiveUpRef.current.timer);
           notifBookingGiveUpRef.current = null;
@@ -923,7 +984,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           .then(direct => {
             if (direct?.status === 'on_hold') {
               setWaitlistHold(direct);
-              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
               if (notifBookingGiveUpRef.current) {
                 clearTimeout(notifBookingGiveUpRef.current.timer);
                 notifBookingGiveUpRef.current = null;
@@ -942,7 +1003,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           notifBookingGiveUpRef.current = {
             id: bookingId!,
             timer: setTimeout(() => {
-              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
               notifBookingGiveUpRef.current = null;
             }, 8000),
           };
@@ -954,7 +1015,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setActiveFilters(new Set([route.params.initialTab]));
       navigation.setParams({ initialTab: undefined } as any);
     }
-  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule]);
+  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule]);
 
   // ✅ Update selectedBooking ONLY when modal is visible and booking state changes
   // Use ref to track last update to prevent infinite loops
@@ -1027,9 +1088,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   const listItems = useMemo((): GroupedListItem[] => {
-    let source: ConfirmedBooking[] = [];
-    if (activeFilters.has('all')) source = [...source, ...filteredUpcomingBookings];
-    if (activeFilters.has('past')) source = [...source, ...filteredPastBookings];
+    // Past Bookings renders as its own flat, category-filtered list (see
+    // pastBookingsFiltered) rather than the always-grouped sections here.
+    if (!activeFilters.has('all')) return [];
+    const source = filteredUpcomingBookings;
 
     const categoryMap = new Map<string, ConfirmedBooking[]>();
     for (const b of source) {
@@ -1044,16 +1106,21 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       items.push({ kind: 'category', serviceType, bookings });
     }
     return items;
-  }, [activeFilters, filteredUpcomingBookings, filteredPastBookings]);
+  }, [activeFilters, filteredUpcomingBookings]);
 
   const virtualizedListRows = useMemo((): BookingsListRow[] => {
-    const rows: BookingsListRow[] = isFilterView ? [...listItems] : [];
+    let rows: BookingsListRow[] = [];
+    if (activeFilters.has('past')) {
+      rows = pastBookingsFiltered.map(booking => ({ kind: 'past-booking' as const, booking }));
+    } else if (isFilterView) {
+      rows = [...listItems];
+    }
     if (waitlistEntries.length > 0) {
       rows.push({ kind: 'waitlist-header' });
       rows.push(...waitlistEntries.map(entry => ({ kind: 'waitlist' as const, entry })));
     }
     return rows;
-  }, [isFilterView, listItems, waitlistEntries]);
+  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries]);
 
   // ✅ Check if booking has been rated or tipped
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);
@@ -1064,6 +1131,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const renderServiceCategoryRow = useCallback(({ item }: { item: { serviceType: string; bookings: ConfirmedBooking[] } }) => {
     const { serviceType, bookings } = item;
     const rowHasTag = bookings.some((b: ConfirmedBooking) => b.isPendingReschedule);
+
     return (
       <View style={styles.serviceCategory}>
         <View style={styles.serviceCategoryHeader}>
@@ -1103,6 +1171,20 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     );
   }, [handleBookingPress, highlightedBookingId, recentlyAddedBookings, bookingActionItems, styles.serviceCategory, styles.serviceCategoryHeader, styles.serviceCategoryName, styles.serviceCategoryTag, styles.serviceImagesContainer]);
 
+  // Single flat row for the Past Bookings list — no category header, since
+  // grouping there is done via the filter button instead.
+  const renderPastBookingRow = useCallback(({ item: booking }: { item: ConfirmedBooking }) => (
+    <View style={styles.pastBookingRowWrap}>
+      <BookingListRow
+        booking={booking}
+        onPress={handleBookingPress}
+        isHighlighted={highlightedBookingId === booking.id}
+        isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
+        actionCount={bookingActionItems[booking.id] ?? 0}
+      />
+    </View>
+  ), [handleBookingPress, highlightedBookingId, recentlyAddedBookings, bookingActionItems, styles.pastBookingRowWrap]);
+
   const handleBookWaitlistEntry = useCallback((entry: WaitlistEntry) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     navigation.navigate('ProviderProfile', { providerId: entry.provider_id });
@@ -1117,6 +1199,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const renderBookingsListRow = useCallback(({ item }: { item: BookingsListRow }) => {
     if (item.kind === 'category') return renderServiceCategoryRow({ item });
+    if (item.kind === 'past-booking') return renderPastBookingRow({ item: item.booking });
     if (item.kind === 'waitlist-header') {
       return (
         <View style={{ paddingHorizontal: 16 }}>
@@ -1131,10 +1214,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         onLeave={handleLeaveWaitlistEntry}
       />
     );
-  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, renderServiceCategoryRow, styles.bookingsTitle]);
+  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
 
   const bookingListKeyExtractor = useCallback((item: BookingsListRow) => {
     if (item.kind === 'category') return `category-${item.serviceType}`;
+    if (item.kind === 'past-booking') return `past-${item.booking.id}`;
     if (item.kind === 'waitlist-header') return 'waitlist-header';
     return `waitlist-${item.entry.id}`;
   }, []);
@@ -1622,6 +1706,75 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 >
                   <Text style={styles.backToTrackingText}>← Back to Tracking</Text>
                 </TouchableOpacity>
+                {activeFilters.has('past') && pastCategories.length > 0 && (
+                  <View style={styles.pastFilterSection}>
+                    <TouchableOpacity
+                      ref={pastFilterButtonRef}
+                      style={[styles.pastFilterButton, { backgroundColor: P.surface, borderColor: P.border }]}
+                      onPress={openPastFilterMenu}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="filter-outline" size={14} color={P.text} />
+                      <Text style={[styles.pastFilterButtonText, { color: P.text }]} numberOfLines={1}>
+                        {pastCategoryFilter ? pastCategoryFilter.charAt(0) + pastCategoryFilter.slice(1).toLowerCase() : 'All categories'}
+                      </Text>
+                      <Ionicons name={pastFilterOpen ? 'chevron-up' : 'chevron-down'} size={14} color={P.sub} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <Modal visible={pastFilterOpen} transparent animationType="fade" onRequestClose={() => setPastFilterOpen(false)}>
+                  <Pressable style={styles.pastFilterScrim} onPress={() => setPastFilterOpen(false)}>
+                    {pastFilterAnchor && (
+                      <Pressable
+                        onPress={e => e.stopPropagation()}
+                        style={[
+                          styles.pastFilterDropdown,
+                          {
+                            backgroundColor: P.card,
+                            borderColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)',
+                            top: pastFilterAnchor.y + pastFilterAnchor.height + 6,
+                            right: screenWidth - (pastFilterAnchor.x + pastFilterAnchor.width),
+                          },
+                        ]}
+                      >
+                        <TouchableOpacity
+                          style={styles.pastFilterOption}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setPastCategoryFilter(null);
+                            setPastFilterOpen(false);
+                          }}
+                        >
+                          <Text style={[styles.pastFilterOptionText, { color: !pastCategoryFilter ? P.accent : P.text, fontWeight: !pastCategoryFilter ? '700' : '500' }]}>
+                            All
+                          </Text>
+                          {!pastCategoryFilter && <Ionicons name="checkmark" size={16} color={P.accent} />}
+                        </TouchableOpacity>
+                        {pastCategories.map(cat => {
+                          const isActive = pastCategoryFilter === cat;
+                          return (
+                            <TouchableOpacity
+                              key={cat}
+                              style={[styles.pastFilterOption, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' }]}
+                              activeOpacity={0.7}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setPastCategoryFilter(cat);
+                                setPastFilterOpen(false);
+                              }}
+                            >
+                              <Text style={[styles.pastFilterOptionText, { color: isActive ? P.accent : P.text, fontWeight: isActive ? '700' : '500' }]}>
+                                {cat.charAt(0) + cat.slice(1).toLowerCase()}
+                              </Text>
+                              {isActive && <Ionicons name="checkmark" size={16} color={P.accent} />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </Pressable>
+                    )}
+                  </Pressable>
+                </Modal>
                 {bookingsError && (
                   <View style={{
                     flexDirection: 'row',
@@ -1649,14 +1802,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     )}
                   </View>
                 )}
-                {listItems.length === 0 ? (
+                {(activeFilters.has('past') ? pastBookingsFiltered.length === 0 : listItems.length === 0) ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>
-                      {activeFilters.has('all') && activeFilters.has('past')
-                        ? 'No bookings'
-                        : activeFilters.has('all')
-                          ? 'No upcoming bookings'
-                          : 'No past bookings'}
+                      {activeFilters.has('past')
+                        ? (pastCategoryFilter ? `No ${pastCategoryFilter.toLowerCase()} bookings` : 'No past bookings')
+                        : 'No upcoming bookings'}
                     </Text>
                   </View>
                 ) : null}
@@ -2303,6 +2454,56 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
   },
   serviceImagesContainer: {
     gap: 8,
+  },
+  pastBookingRowWrap: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  pastFilterSection: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    alignItems: 'flex-end',
+  },
+  pastFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 100,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  pastFilterButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    maxWidth: 160,
+  },
+  pastFilterScrim: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  pastFilterDropdown: {
+    position: 'absolute',
+    minWidth: 170,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  pastFilterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  pastFilterOptionText: {
+    fontSize: 14,
   },
   emptyState: {
     // Not flex: 1 — this View sits inside a ScrollView's content (itself

@@ -41,6 +41,7 @@ export type HomeStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -84,6 +85,7 @@ export type BeccaStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -144,6 +146,7 @@ export type CartStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -184,6 +187,7 @@ export type ProfileStackParamList = {
     | {
         openBookingId?: string;
         openReschedule?: boolean;
+        openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
       }
@@ -245,6 +249,11 @@ export type ProviderHomeStackParamList = {
 export type ProviderServicesStackParamList = {
   ProviderServicesMain: undefined;
   EditProfile: { transferProviderId?: string } | undefined;
+  // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
+  // builder opens with the profile editor beneath it instead of at a bare tab
+  // root — same reasoning as Policies below. Only the openTerms shape is
+  // reachable from this stack.
+  ProviderIntakeForm: { openTerms: true } | undefined;
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
@@ -260,6 +269,13 @@ export type ProviderServicesStackParamList = {
   // Pushed from the availability card on the provider's own profile, so the
   // schedule opens with that profile beneath it instead of at a bare tab root.
   ProviderSchedule: undefined;
+  // Pushed from the dashboard's Booking policies / Branding cards, for the
+  // same reason ProviderSchedule is registered here rather than jumped to on
+  // the Account tab.
+  Policies: undefined;
+  Branding: undefined;
+  // Pushed from the dashboard's saved-by-clients tile, same reasoning.
+  Analytics: undefined;
   AddBooking: undefined;
   DevSettings: undefined;
 };
