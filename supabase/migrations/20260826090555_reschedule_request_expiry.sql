@@ -27,8 +27,19 @@
 -- which as an answer window would expire a request the instant it was made.
 -- A provider who asks for no notice still gets a day to reply.
 --
--- Backstopped by the start of the appointment day, whichever comes first —
--- past that point the answer is moot whatever the policy says.
+-- Backstopped by the start of the appointment day, whichever comes first, so
+-- the client wakes up on the day already knowing. That backstop deliberately
+-- BEATS the provider's own window when the two disagree: a 72h provider does
+-- not get to spend 72h and reply as the client is walking in.
+--
+-- !! SUPERSEDED IN PART BY 20260826094404. As written below the backstop is a
+-- bare LEAST against the start of the appointment day, which for a 'same_day'
+-- provider -- who skips the notice check entirely, so a client can legitimately
+-- ask ON the day -- is already in the PAST, producing a deadline 8 hours behind
+-- now and expiring the request on the next cron tick before the provider could
+-- ever see it. 094404 wraps it in a 4-hour floor and caps it at the appointment
+-- START time. Left as-run here so migration history stays honest; a fresh
+-- replay reaches the corrected state at 094404.
 --
 -- WHO IS WAITING is decided by status, never by requested_by:
 --   * 'pending'            -> always the provider. Only
@@ -105,8 +116,8 @@ BEGIN
                  WHEN '72h'      THEN 72
                  ELSE 24
                END, 24) || ' hours')::INTERVAL,
-             -- Hard backstop: once the appointment day has started, an answer
-             -- is moot whatever the policy says.
+             -- SUPERSEDED by 20260826094404 -- see the header note. This bare
+             -- backstop is already in the past for a same-day request.
              b.booking_date::TIMESTAMP
            )
      FOR UPDATE OF rr
