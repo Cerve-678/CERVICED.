@@ -65,7 +65,6 @@ Curated overview: [[Screens & Navigation]].
 - `Branding`
 - `ProviderIntakeForm`
 - `ProviderServicesMain`
-- `Policies`
 - `ProviderAccountMain`
 - `AccountInfo`
 - `BusinessDetails`
@@ -73,6 +72,7 @@ Curated overview: [[Screens & Navigation]].
 - `ServicesPricing`
 - `AboutYou`
 - `Payments`
+- `Policies`
 - `Communications`
 - `BusinessProfile`
 - `Becca`

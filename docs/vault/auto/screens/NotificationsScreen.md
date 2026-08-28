@@ -7,7 +7,9 @@ tags: [screen, client]
 **Registered route(s):** `Notifications`
 
 ## → Navigates to
-- _— none —_
+- `ProviderHome` _(navigator / dynamic)_
+- [[BookingsScreen\|Bookings]]
+- [[ProviderProfileScreen\|ProviderProfile]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

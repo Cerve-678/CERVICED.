@@ -299,6 +299,31 @@ Add the same `min_booking_notice_hrs` select + cutoff filter from `getAvailableS
 
 ---
 
+## Bug: Category-scoped promo discounts every service from a matching-category provider, not just services in that category
+
+### What's actually happening (this is a real bug, not a future idea)
+
+A promotion can be scoped to a category via `promotions.service_category` (e.g. a provider creates a "15% off HAIR" code). `CartScreen.tsx`'s `itemPromoDiscounts` memo is supposed to enforce that scope per line item:
+
+```ts
+if (promo.service_category &&
+    promo.service_category.toUpperCase() !== (item.providerService ?? '').toUpperCase()) continue;
+```
+
+But `CartItem.providerService` is the **provider's single whole-business category** (`providers.service_category` — the same value for every service that provider offers, set once at signup/InfoReg), not the individual service's own category. Every item in the cart from the same provider carries the identical `providerService` value. So this comparison can never selectively match "just the haircuts" within a HAIR-categorised provider's cart — it's really comparing the promo's category against the provider's category, which either matches for every one of that provider's services or none of them. A live "15%-off-HAIR" promo from a HAIR-categorised provider discounts every service they sell (beard trims, colour, extensions — anything), not just haircuts, as long as the promo's `service_category` happens to equal that provider's own category.
+
+The same drift exists in `MultiBookingSheet.tsx`/wherever else a promo's `service_category` is checked against `providerService` rather than a per-service category — worth grepping for `service_category` comparisons against `providerService`/`providerServiceCategory` while fixing this.
+
+### Why it's not a quick one-line fix
+
+There is currently no per-service category field to compare against — `services` (the individual bookable service row) doesn't carry its own category distinct from the provider's. Fixing this properly needs either:
+- A `services.category` column (or reuse of an existing per-service tag/type field, if one already captures this) that promo validation and `itemPromoDiscounts` compare against instead of `item.providerService`, or
+- Reframing what `service_category`-scoped promos are actually meant to scope (if "provider's category" was the intended semantics all along, the bug is only in the misleading name/copy — "15% off HAIR" — not the logic, and the fix is in provider-facing promo-creation copy instead).
+
+Needs a decision on which of those is actually intended before touching the comparison — worth checking with whoever owns Offers/Promotions before assuming the DB-column fix is the right one.
+
+---
+
 ## Emergency / Same-Day Bookings — BUILT 2026-08-21/26, conditions still open
 
 ### Status
@@ -443,6 +468,45 @@ Left untouched (so re-enabling is a one-line flip, not a rebuild):
 ### To bring it back
 
 Flip `MULTI_SERVICE_BOOKING_ENABLED` to `true` in `src/constants/featureFlags.ts`. No other changes needed unless the underlying screens/data have drifted in the meantime.
+
+---
+
+## Emergency / out-of-hours booking requests — deferred (client + provider)
+
+### What it means
+
+Emergency requests — a client picking a time the provider's own rules exclude (outside their working hours, a blocked date, inside their minimum-notice period, or beyond their booking window) and asking anyway, for the provider to accept or decline — are temporarily pulled from the client app as of 2026-08-28, alongside the split of the provider's single "Terms & Conditions" document into two:
+
+- **Terms & Conditions** (unchanged mechanism) — the `booking_intake_forms` row (`is_terms`), read via `get_provider_terms`, that a client agrees to before add-to-basket. Its editor entry point moved from Business Info into the InfoReg profile document ("Your Terms & Conditions" card near the end).
+- **Emergency Booking Policy** (new) — a free-text `emergencyBookingPolicy` key on `providers.booking_policies` (JSONB), authored on `PoliciesScreen`, that a client reads in the "scheduling conflict" prompt. `EmergencyBookingPrompt` now points at this field instead of the terms form. Both the Policies editor card and the client reader sit behind the flag.
+
+This is a UI-visibility decision, not a data/backend change.
+
+### Why it's clean to gate at one point
+
+`ModernBeautyCalendar`'s `allowRequests` prop is the single switch: when `false`, by-request slots are filtered out of the grid, `RequestTimePanel` offers nothing, and `onTimeSelect` never receives `EmergencyReason[]` — so `EmergencyBookingPrompt` never opens and `emergencyRequest` stays `null` through checkout. Both sheets hard-coded `allowRequests` to `true`; they now pass `EMERGENCY_BOOKINGS_ENABLED`.
+
+### What was done
+
+A single flag, `EMERGENCY_BOOKINGS_ENABLED` in `src/constants/featureFlags.ts`, gates:
+- `allowRequests` on the `ModernBeautyCalendar` in `BookingSheet.tsx` and `MultiBookingSheet.tsx` — client side. (The Multi sheet is already unreachable via `MULTI_SERVICE_BOOKING_ENABLED`; this is belt-and-suspenders.)
+- The entire "Requests Outside Your Availability" `Card` in `SchedulingScreen.tsx` — the provider opt-in toggles (`allow_out_of_hours_requests` etc.) and the request-window radios — provider side. Load/save still round-trip these columns, so a provider's stored choices survive.
+- The "Emergency Booking Policy" `Card` on `PoliciesScreen.tsx` — the `emergencyBookingPolicy` key still round-trips through the full-REPLACE save, so a value written once the feature returns is safe meanwhile.
+
+Left untouched (so re-enabling is a one-line flip, not a rebuild):
+- `EmergencyBookingPrompt.tsx`, `RequestTimePanel.tsx`, and the emergency-reason logic in `AvailabilityService.ts` — still present, just never triggered.
+- `prepare_checkout`'s server-side `emergency_ack` requirement, the `providers.allow_*_requests` columns, `bookings.is_emergency_request`, and the provider inbox accept/decline of an *existing* pending request (`ProviderInboxScreen.tsx`, `ProviderBookingDetailScreen.tsx`) — no data/backend change.
+- The `result.emergencyRequest` handling in `ProviderProfileScreen.tsx` / `CartScreen.tsx` and the `isRequest` display on client `BookingsScreen` / `BookingDetailScreen` — dead-but-harmless while no new requests are created.
+
+### To bring it back
+
+Engineering: flip `EMERGENCY_BOOKINGS_ENABLED` to `true` in `src/constants/featureFlags.ts`, then verify the by-request slot math still fires and that providers' stored `allow_*_requests` still round-trip. (`BookingSheet` resolves `emergencyBookingPolicy` from the `bookingPolicies` prop on the provider-profile path and self-fetches it via `getProviderBookingPoliciesById` on the cart edit path, which passes no prop — the self-fetch is itself gated on this flag.)
+
+Legal blockers to resolve **with counsel before flipping the flag** (raised by `cerviced-legal-flagger` 2026-08-28 — not live exposure while off):
+- **Snapshot the policy text properly.** `buildPolicySnapshot()` already spreads the whole `booking_policies` blob into `policy_snapshot`, so `emergencyBookingPolicy`'s value at checkout *is* frozen — but nothing reads it back (`readProviderTermsSnapshot` only pulls `providerTerms`) and nothing ties it to the `emergency_ack`. `emergency_ack_at` is a bare timestamp with no reference to which text was shown. Decide whether the emergency ack needs its own snapshot key + reader like `providerTerms` has, or stays informational-only.
+- **Consent shape.** It's the "free-text box nobody signs" pattern the T&Cs deliberately avoid by being a `policy`-type intake form. Decide whether the emergency acknowledgement needs the same per-question / timestamped-against-booking treatment.
+- **Cerviced Terms coverage.** `TermsScreen` says nothing about out-of-hours times being *requests* a provider can decline, or what happens to a payment taken when a request is declined/unanswered (ties into the no-refund-path gap, `LEGAL-COMPLIANCE-NOTES.md` items 6 and 12).
+- The `PoliciesScreen` field placeholder was scrubbed of any surcharge / off-app-payment example; keep it that way, and resolve the emergency-surcharge question ("Emergency / Same-Day Bookings" in this doc) before any money term is honoured here.
 
 ---
 
@@ -1077,3 +1141,122 @@ written back to the booking and (for a client) to their reliability count.
   the booking detail screen.** If disputes become common, the clientele
   screen's reliability badge should probably say "1 no-show, 1 disputed"
   rather than showing a bare count that a dispute silently held back.
+
+---
+
+## Notification Threading (group related notifications by booking)
+
+### What it means
+
+`NotificationsScreen` today is one flat, reverse-chronological list. A single
+booking that gets confirmed, has a reschedule requested, then answered, then
+reminded-about can produce four or five separate rows scattered through the
+list rather than reading as one story. Grouping the notifications that share a
+booking into a single collapsible thread — most recent state up front, the
+rest expandable — would read the way a real conversation does instead of a
+flat feed.
+
+### What currently exists that this could build on
+
+Every notification row already carries the key a thread would group on:
+`notifications.booking_id`, read into `Notification.bookingId` in
+`NotificationsScreen.tsx` (`mapDbNotificationToLocal`-equivalent around line
+231) and already used for tap-to-navigate ("View Booking" opens
+`BookingDetail`/`ProviderBookingDetail` with that id). Not every notification
+type carries one — `schedule_fully_booked` and similar provider-wide types are
+about the whole diary, not a booking — so a threading pass only ever groups
+the subset that already has `bookingId` set; the rest stay as standalone rows
+same as today.
+
+### What needs to happen
+
+- Group `notifications` client-side by `bookingId` (nothing server-side
+  changes — this is a presentation grouping, not a new table) into a thread
+  entry: latest notification's title/preview shown collapsed, full list on
+  expand.
+- Unread state has to work at both levels — a thread with any unread member
+  shows the unread treatment (see the accent-tinted/bordered card just built),
+  and expanding a thread should mark its members read the same way opening a
+  single notification does today (`markNotificationRead`).
+- Swipe-to-delete and the read/unread filter tabs both need to decide whether
+  they act on the thread as a whole or drill into a single member — deleting
+  a whole thread is probably right (mirrors "delete conversation"), but needs
+  a decision, not an assumption.
+- The standalone (no `bookingId`) notifications keep rendering exactly as
+  they do today, interleaved with threads in the same chronological list.
+
+### Why it's deferred
+
+Not requested yet as a build — noted here as a live idea to revisit, not a
+spec ready to implement. The read/unread visual treatment and the
+Apple-Mail-style swipe-to-delete (both landed 2026-08-28) are natural
+prerequisites this would sit on top of, so it belongs after those had a chance
+to be used for a while, not bundled into the same change.
+
+---
+
+## Search/Explore/Becca Matching on Per-Service Audience
+
+### What it means
+
+`services.audience` ('women' | 'men' | 'kids' | 'everyone', nullable = not
+stated) was added 2026-08-28 — a per-service demographic tag, editable via a
+"Who's This For?" chip section in the provider's Add/Edit Service modal
+(`InfoRegScreen.tsx`'s `ServiceModal`). The stated motivation was "so the app
+can suggest better." As of 2026-08-28, Home, Search, and Becca's two main
+capabilities all read it. Explore's own filter tabs do not yet.
+
+### What currently happens
+
+- **HomeScreen's Male/Kids sections** widen `maleProviders`/`kidsProviders`
+  to include any provider with ≥1 active service tagged `audience='men'`/
+  `'kids'` (via `getProviderIdsByServiceAudience()`, which doesn't require a
+  photo — a provider must qualify from the tag alone), plus a "Popular Men's/
+  Kids' Services" photo rail of the actual matching services (via
+  `getDiscoverServices(undefined, 15, audience)`, which DOES require a photo
+  since it's the same feed Explore uses — tap → that service's booking
+  modal). Section is positioned between Near You and Book Again. Both
+  sections still respect the pre-existing client-side personalization gate
+  in `homeSections.ts` (`user.gender`/`user.has_kids`/`service_interests`) —
+  a client who has stated a different gender and hasn't opted in won't see
+  the Male section regardless of how much matching data exists.
+- **SearchScreen** has a "Who It's For" filter (Women/Men/Kids) in
+  `FilterOptions.audience`, resolved via a new batched
+  `getProviderAudienceMatches(providerIds, audience)` scoped to the
+  already-searched candidate set — same shape as the existing `hairType`
+  filter, same "qualifies via any matching service" rule as Home.
+- **Becca** — `src/services/becca/entityResolver.ts`'s `AUDIENCE_OVERRIDES`
+  now attaches an `audience` field to the resolved `ServiceRef`
+  (`types.ts`) whenever an audience phrase is detected ("men's haircut",
+  "for my daughter"), independent of whether that phrase also overrode the
+  resolved category to MALE/KIDS. Two capabilities in
+  `capabilities/client.ts` use it: the main "find a provider" capability
+  narrows `dbProviders` via `getProviderAudienceMatches` before replying, and
+  the inspiration/gallery capability passes `audience` through to
+  `getDiscoverServices()`. **Not yet wired**: the price-lookup capability
+  ("how much are nails") and the availability capability ("who's free this
+  week") still call plain `getProviders(category)` with no audience
+  narrowing — lower-value additions, left for a follow-up rather than
+  touching every capability that calls `getProviders` in one pass.
+- **Explore still has no audience filter.** `getDiscoverServices()` accepts
+  `audience` as of 2026-08-28, but Explore's own filter tabs (`filterMap` in
+  `ExploreScreen.tsx`) have no UI entry point for it yet, distinct from the
+  existing Hair/Nails/Makeup/etc. category tabs.
+- `audience` is nullable and had zero live rows as of 2026-08-28 (brand new
+  column) — a provider has to actually pick a chip for any of the above to
+  surface anything for them.
+
+### What would need to happen for Explore
+
+Explore's own filter tabs (`filterMap` in `ExploreScreen.tsx`) would need a
+UI entry point for `audience`, then thread it into its existing
+`getDiscoverServices(category)` call the same way Becca's gallery capability
+now does (`getDiscoverServices(category, limit, audience)`).
+
+### Why the rest is deferred
+
+Price-lookup and availability-search capabilities in Becca weren't wired
+because narrowing a price average or a "who's free" list by audience is a
+smaller win than narrowing the main "find me a provider" answer, which is
+already done. Noted here so the next pass doesn't have to re-derive which
+capabilities were touched and which weren't.

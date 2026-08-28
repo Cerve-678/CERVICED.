@@ -30,6 +30,7 @@ _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
 - [[AddBookingScreen]]
 - [[ProviderAccountScreen]]
 - [[ProviderHomeScreen]]
+- [[ProviderInfoPackScreen]]
 - [[ProviderMyProfileScreen]]
 - [[BeccaScreen]]
 - [[ChangeCredentialsScreen]]

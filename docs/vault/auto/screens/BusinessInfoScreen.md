@@ -7,6 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `BusinessInfo`
 
 ## → Navigates to
+- [[ProviderIntakeFormScreen\|ProviderIntakeForm]]
 - [[ProviderCommunicationsScreen\|Communications]]
 
 ## Map
