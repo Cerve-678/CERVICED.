@@ -65,12 +65,19 @@ export const CART_ISSUE = {
   // provider it clashes with. A card is a label, not a sentence — and the
   // appointment being clashed with usually isn't even in the cart to look at.
   clientClash: 'Clashes with one of your upcoming bookings',
+  // Same split as clientClash above: the card says only THAT it clashes with
+  // another cart item; the dialog names which provider. That message names a
+  // provider whose section may be collapsed on screen, so it belongs in the
+  // dialog, not printed whole on the card.
+  crossProviderClash: 'Clashes with another service in your cart',
   slotTaken: 'This time slot is no longer available.',
   outsideHours: "This time is outside the provider's working hours.",
   dayUnavailable: 'Provider is not available on this date.',
   providerUnbookable: "This provider isn't taking bookings right now",
   serviceUnavailable: 'This service is no longer available from this provider. Please remove it to continue.',
   promoExpired: 'The promo code on this booking has expired — remove it or pick another',
+  depositNoLongerOffered: 'This provider now requires payment in full — deposit is no longer available',
+  depositNowRequired: 'This provider now requires a deposit — pay in full is no longer available',
   takenWhilePaying: 'This time was taken while you were paying — pick a new time',
   bookingFailed: "This service couldn't be booked — try again",
 } as const;
@@ -96,7 +103,9 @@ export const CART_ISSUE = {
 export function findCartItemIssues(entries: CartIssueEntry[]): Map<string, string> {
   const issues = new Map<string, string>();
 
-  const spans: { itemId: string; providerKey: string; date: string; start: number; end: number }[] = [];
+  // providerKey deliberately isn't carried onto a span — see the comment
+  // below on why the overlap check no longer filters by it.
+  const spans: { itemId: string; date: string; start: number; end: number }[] = [];
 
   for (const entry of entries) {
     if (!entry.date || !entry.time) {
@@ -110,18 +119,23 @@ export function findCartItemIssues(entries: CartIssueEntry[]): Map<string, strin
     const start = to24hMinutes(entry.time);
     spans.push({
       itemId: entry.itemId,
-      providerKey: entry.providerKey,
       date: entry.date,
       start,
       end: start + durationToMinutes(entry.duration),
     });
   }
 
+  // Deliberately NOT filtered by providerKey — the client being booked into
+  // two DIFFERENT providers at once is exactly as impossible as double-
+  // booking the same one, and it used to only surface at the checkout tap
+  // (validateCartBookings' server-side pass, which never had this filter).
+  // Catching it here means the card goes red the moment the clash exists,
+  // not after an async round trip.
   for (let i = 0; i < spans.length; i++) {
     for (let j = i + 1; j < spans.length; j++) {
       const a = spans[i]!;
       const b = spans[j]!;
-      if (a.providerKey !== b.providerKey || a.date !== b.date) continue;
+      if (a.date !== b.date) continue;
       if (a.start >= b.end || b.start >= a.end) continue;
       issues.set(a.itemId, CART_ISSUE.overlap);
       issues.set(b.itemId, CART_ISSUE.overlap);

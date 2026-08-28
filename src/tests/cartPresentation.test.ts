@@ -54,12 +54,22 @@ describe('findCartItemIssues', () => {
     ]).size).toBe(0);
   });
 
-  it('does not flag the same time across different providers or different days', () => {
-    expect(findCartItemIssues([
-      entry({ itemId: 'a', providerKey: 'provider-1' }),
-      entry({ itemId: 'b', providerKey: 'provider-2' }),
-    ]).size).toBe(0);
+  it('flags an overlap across different providers too — the client can only be in one place', () => {
+    // Regression test for the 2026-08-28 cart-checkout audit: this used to be
+    // filtered out here (providerKey mismatch) and only ever caught by
+    // AvailabilityService.validateCartBookings' server-side pass at the
+    // checkout tap — an async round trip away from the moment the clash
+    // actually exists. Same-provider overlap was already flagged; a
+    // cross-provider one is exactly as impossible in real life.
+    const issues = findCartItemIssues([
+      entry({ itemId: 'a', providerKey: 'provider-1', time: '2:00 PM', duration: '1h' }),
+      entry({ itemId: 'b', providerKey: 'provider-2', time: '2:30 PM', duration: '1h' }),
+    ]);
+    expect(issues.get('a')).toBe(CART_ISSUE.overlap);
+    expect(issues.get('b')).toBe(CART_ISSUE.overlap);
+  });
 
+  it('does not flag the same time on different days', () => {
     expect(findCartItemIssues([
       entry({ itemId: 'a', date: '2026-09-01' }),
       entry({ itemId: 'b', date: '2026-09-02' }),

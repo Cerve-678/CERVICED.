@@ -6,7 +6,6 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
-  Image,
   StatusBar,
   StyleSheet,
   Modal,
@@ -16,6 +15,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,7 +50,7 @@ import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
 import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
-import { getCartAddOnsSummary, getCartItemFullPrice } from '../../features/cart/pricing';
+import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
 
 // Keep real payments opt-in until Stripe is explicitly switched on for a
@@ -85,6 +85,11 @@ interface ServiceBooking {
   /** Present when this time is only bookable as a request the provider has
    *  to accept (see CartItem.emergencyRequest). */
   emergencyRequest?: EmergencyRequest;
+  /** This provider's actual deposit policy (fixed £ or %), when one was
+   *  fetched — carried through to BookingService.createAppointmentData so the
+   *  real amount is what gets written, not its legacy 20% fallback. Absent
+   *  only when providerDepositPolicies has nothing for this provider. */
+  depositPolicy?: DepositPolicy;
 }
 
 /** AvailabilityService phrases its findings for its own callers; the cart has
@@ -229,6 +234,42 @@ interface EffectiveCartItem {
   item: CartItem;
   effectivePrice: number;
   isDeposit: boolean;
+}
+
+// Prices a FROZEN checkout snapshot (never live cart state — see
+// paymentSheetCartItems). Each booking's own depositPolicy, resolved and
+// stamped in at snapshot time, is what's used — never a fresh lookup into
+// live providerDepositPolicies, which can resolve to a different value
+// while a screen built from this is still on-screen post-snapshot.
+function pricedCheckoutItems(
+  items: CartItem[],
+  bookings: Record<string, ServiceBooking>,
+): EffectiveCartItem[] {
+  return items.map(item => {
+    const booking = bookings[item.id];
+    const full = getCartItemFullPrice(item);
+    const isDeposit = !!booking?.isDepositOnly;
+    const effectivePrice = isDeposit
+      ? BookingService.calculateDeposit(full, booking?.depositPolicy)
+      : full;
+    return { item, effectivePrice, isDeposit };
+  });
+}
+
+// Subtotal/fee/total from a pricedCheckoutItems() result. The single source
+// both the review screen's Totals block AND paymentTotal (what the payment
+// sheet and success modal show) derive from, so they can't independently
+// drift from each other — see handleCheckout's setPaymentTotal call and the
+// frozenCheckoutTotals memo below.
+function checkoutTotalsFrom(priced: EffectiveCartItem[]): { subtotal: number; fee: number; total: number } {
+  const fullPaymentSubtotal = priced.reduce(
+    (sum, { isDeposit, effectivePrice }) => (isDeposit ? sum : sum + effectivePrice),
+    0,
+  );
+  const isDepositOnlyCheckout = priced.length > 0 && priced.every(({ isDeposit }) => isDeposit);
+  const fee = calculatePlatformFee(fullPaymentSubtotal, isDepositOnlyCheckout);
+  const subtotal = priced.reduce((sum, { effectivePrice }) => sum + effectivePrice, 0);
+  return { subtotal, fee, total: subtotal + fee };
 }
 
 // Payment Modal Component
@@ -790,7 +831,11 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     depositPolicy,
     issue,
   }) => {
-    const { theme, palette: P } = useTheme();
+    // palette (P), not theme — this card only ever renders on the client
+    // cart, and theme is scoped to whichever hat last set it, not
+    // necessarily the client palette. See DESIGN_SYSTEM.md's AppDialog note
+    // for the same class of bug.
+    const { palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
 
@@ -886,18 +931,19 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             </View>
           )}
           {/* Header binds the service to its price on one line, with the
-              duration tucked directly under the name — previously the title
-              sat alone above a full-width gap and the price lived on a
-              separate row, which read as three loose bands rather than one
-              card. */}
+              duration tucked directly under the name. Colours read from `P`
+              (the hat-aware palette), never `theme`: this card only ever
+              renders on the client cart, and `theme` is scoped to whichever
+              hat last set it, not necessarily the client palette — the same
+              class of bug DESIGN_SYSTEM.md flags for AppDialog. */}
           <View style={styles.serviceHeader}>
             <View style={styles.serviceInfo}>
-              <Text style={[styles.serviceName, { color: theme.text }]} numberOfLines={2}>
+              <Text style={[styles.serviceName, { color: P.text }]} numberOfLines={2}>
                 {serviceName}
                 {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
                 {bookingInfo.isDepositOnly && ' (Deposit)'}
               </Text>
-              <Text style={[styles.priceSummaryText, { color: theme.secondaryText }]} numberOfLines={1}>
+              <Text style={[styles.priceSummaryText, { color: P.sub }]} numberOfLines={1}>
                 {duration}
               </Text>
             </View>
@@ -925,13 +971,13 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           {(addOnsSummary || bookingInfo.isDepositOnly || !!bookingInfo.notes) && (
             <View style={styles.serviceMetaBlock}>
               {addOnsSummary && (
-                <Text style={[styles.priceSummaryAddOns, { color: theme.text }]} numberOfLines={2}>
+                <Text style={[styles.priceSummaryAddOns, { color: P.text }]} numberOfLines={2}>
                   + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
                   {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
                 </Text>
               )}
               {bookingInfo.isDepositOnly && (
-                <Text style={[styles.depositNote, { color: theme.secondaryText }]}>
+                <Text style={[styles.depositNote, { color: P.sub }]}>
                   Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
                 </Text>
               )}
@@ -948,7 +994,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               service edits directly, no chooser in between. */}
           <View style={[styles.dateRow, { borderTopColor: P.border }]}>
             <Text
-              style={[styles.dateText, { color: theme.secondaryText }, !isScheduled && styles.dateTextWarning]}
+              style={[styles.dateText, { color: P.sub }, !isScheduled && styles.dateTextWarning]}
               numberOfLines={2}
             >
               {isScheduled
@@ -1549,7 +1595,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [checkoutSnapshot, setCheckoutSnapshot] = useState<{
   items: CartItem[];
   bookings: Record<string, ServiceBooking>;
-}>({ items: [], bookings: {} });
+  // Frozen alongside items/bookings for the same reason: a checkout-metadata
+  // refetch resolving between "Confirm & Pay" and the address actually being
+  // sent to createBookingsFromCart must not change which providers get the
+  // client's address mid-checkout.
+  mobileProviderNames: string[];
+}>({ items: [], bookings: {}, mobileProviderNames: [] });
   // The review list is built from the same render units the cart itself uses:
   // services sharing a bookingBatchId collapse into ONE group block with a
   // shared header and subtotal, rather than repeating a "group booking" tag
@@ -1596,11 +1647,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const booking = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
       const full = getCartItemFullPrice(item);
       if (!booking.isDepositOnly) return full;
-      const policy = providerDepositPolicies[item.providerDisplayName ?? item.providerName];
-      const policyArg: DepositPolicy | number = policy
-        ? { type: policy.depositType, amount: policy.depositAmount }
-        : 20;
-      return BookingService.calculateDeposit(full, policyArg);
+      // The booking's OWN frozen depositPolicy, stamped in at snapshot
+      // time — never a fresh lookup into live providerDepositPolicies,
+      // which can resolve to a different value while this review screen
+      // (the one Confirm & Pay is actually pressed from) is still open.
+      return BookingService.calculateDeposit(full, booking.depositPolicy);
     };
     // Add-ons are named and priced here too — this is the last
     // screen before paying, so it must account for the number
@@ -1738,7 +1789,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         </View>
       </View>
     );
-  }, [checkoutSnapshot, providerDepositPolicies, P]);
+  }, [checkoutSnapshot, P]);
 
   // The checkout summary lists appointments grouped by provider. This is a
   // presentation grouping only — unrelated to a GROUP BOOKING (a
@@ -1751,11 +1802,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const booking = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
       const full = getCartItemFullPrice(item);
       if (!booking.isDepositOnly) return full;
-      const policy = providerDepositPolicies[item.providerDisplayName ?? item.providerName];
-      const policyArg: DepositPolicy | number = policy
-        ? { type: policy.depositType, amount: policy.depositAmount }
-        : 20;
-      return BookingService.calculateDeposit(full, policyArg);
+      // Frozen at snapshot time — see the matching comment on renderCheckoutUnit's priceOf.
+      return BookingService.calculateDeposit(full, booking.depositPolicy);
     };
 
     const sections = new Map<string, {
@@ -1796,7 +1844,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     });
 
     return [...sections.values()];
-  }, [checkoutRenderUnits, checkoutSnapshot, providerDepositPolicies]);
+  }, [checkoutRenderUnits, checkoutSnapshot]);
   // Correlation id for the on_hold rows reserved when the user commits to
   // payment (see holdCartBookingSlots below) — threaded through to
   // handlePaymentSuccess so createBookingsFromCart can claim the same
@@ -1861,9 +1909,16 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const flags = new Map<string, string>();
     const messages: string[] = [];
     check.conflicts.forEach(c => {
-      const label = c.code === 'clientClash' ? CART_ISSUE.clientClash : toCartIssue(c.message);
+      // A coded conflict's message names something (a provider, an
+      // appointment) that isn't necessarily visible on screen — the label is
+      // a short, always-safe card summary; the full sentence is dialog-only.
+      const codeLabel =
+        c.code === 'clientClash' ? CART_ISSUE.clientClash :
+        c.code === 'cartCrossProviderClash' ? CART_ISSUE.crossProviderClash :
+        undefined;
+      const label = codeLabel ?? toCartIssue(c.message);
       if (!flags.has(c.cartItemId)) flags.set(c.cartItemId, label);
-      const detail = c.code === 'clientClash' ? c.message : label;
+      const detail = codeLabel ? c.message : label;
       if (!messages.includes(detail)) messages.push(detail);
     });
     return { flags, messages };
@@ -1914,7 +1969,22 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // client needs to know WHICH of them is coming to them, since the address
   // they type is only used by those.
   const [mobileProviderNames, setMobileProviderNames] = useState<string[]>([]);
-  const hasMobileProvider = mobileProviderNames.length > 0;
+  // True when the last attempt to fetch checkout-facing provider metadata
+  // (deposit policies + which providers are mobile) failed. Checkout is
+  // blocked while this is true — see handleCheckout — rather than silently
+  // proceeding on guessed data (every provider treated as non-mobile, every
+  // deposit falling back to the generic 20%).
+  const [checkoutMetadataError, setCheckoutMetadataError] = useState(false);
+  // The provider names covered by the last COMPLETED (successful) metadata
+  // fetch — lets handleCheckout tell "this provider's fetch just hasn't
+  // landed yet" (name absent here, self-resolves in a moment) apart from
+  // "the fetch completed and this provider genuinely isn't in it any more"
+  // (name present here but missing from providerDepositPolicies — dropped
+  // out of getProviderCheckoutMetadata's has_gone_live/is_active filter).
+  // Without this split, both cases looked identical and got flagged with
+  // the same "isn't taking bookings" reason, which is simply false for the
+  // ordinary in-flight case.
+  const [resolvedProviderNames, setResolvedProviderNames] = useState<Set<string>>(new Set());
   // Mirrors the address saved on the account. It's no longer editable here —
   // the checkout row is a button through to ProfileInfo — so this only ever
   // reflects what's stored, and re-syncs when the user comes back from
@@ -2061,6 +2131,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     if (items.length === 0) {
       setProviderDepositPolicies({});
       setMobileProviderNames([]);
+      setCheckoutMetadataError(false);
+      setResolvedProviderNames(new Set());
       return;
     }
     const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
@@ -2070,9 +2142,24 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         if (cancelled) return;
         setProviderDepositPolicies(depositPolicies);
         setMobileProviderNames(names.filter(name => mobileProviderNames.has(name)));
+        setCheckoutMetadataError(false);
+        setResolvedProviderNames(new Set(names));
       })
-      .catch(() => {
-        if (!cancelled) setMobileProviderNames([]);
+      .catch(error => {
+        if (cancelled) return;
+        // Fails CLOSED, not open. A mobile provider's address requirement
+        // and a provider's real deposit policy are money/data-safety facts,
+        // not cosmetic ones — silently treating every provider as
+        // non-mobile and every deposit as the generic 20% fallback used to
+        // let checkout proceed on guessed data with nothing shown to the
+        // client. Deliberately leaving providerDepositPolicies/
+        // mobileProviderNames untouched here rather than resetting them: a
+        // client who already fetched this data successfully once still
+        // sees accurate cards. handleCheckout blocks on
+        // checkoutMetadataError regardless, so a first-ever failed fetch
+        // (nothing fetched yet) can't reach checkout on defaults either.
+        logger.error('Could not fetch checkout metadata (deposit policies / mobile providers):', error);
+        setCheckoutMetadataError(true);
       });
     return () => { cancelled = true; };
   }, [items]);
@@ -2174,16 +2261,38 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const bookingsByItemId = useMemo((): Record<string, ServiceBooking> => {
     const map: Record<string, ServiceBooking> = {};
     items.forEach(item => {
+      // The real per-provider deposit policy, when one was fetched — this is
+      // what BookingService.createAppointmentData actually books the deposit
+      // against. Without it, every deposit booking silently used the legacy
+      // 20% fallback regardless of what the card displayed.
+      const rawPolicy = providerDepositPolicies[item.providerDisplayName ?? item.providerName];
+      const depositPolicy = toDepositPolicy(rawPolicy);
+      // A provider can change their deposit rules after an item was already
+      // added to the cart with a different payment choice. Once this
+      // provider's live policy has actually been fetched, it wins over
+      // whatever the item still says in both directions: switched to
+      // full-payment-only, isDepositOnly must not survive into checkout
+      // (booking deposit-only with no resolvable deposit policy charges
+      // the client £0 for the service); switched to deposit-mandatory, a
+      // client who chose "pay in full" must move to the deposit the
+      // provider now requires. Nothing to reconcile against until the
+      // policy has been fetched at least once.
+      const isDepositOnly = rawPolicy && !rawPolicy.depositAvailable
+        ? false
+        : rawPolicy?.depositOnly
+          ? true
+          : (item.isDepositOnly ?? false);
       map[item.id] = {
         selectedDate: item.selectedDate ?? '',
         selectedTime: item.selectedTime ?? '',
         notes: item.notes ?? '',
-        isDepositOnly: item.isDepositOnly ?? false,
+        isDepositOnly,
         ...(item.emergencyRequest ? { emergencyRequest: item.emergencyRequest } : {}),
+        ...(depositPolicy ? { depositPolicy } : {}),
       };
     });
     return map;
-  }, [items]);
+  }, [items, providerDepositPolicies]);
 
   const getServiceBooking = useCallback(
     (itemId: string): ServiceBooking =>
@@ -2200,10 +2309,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       let effectiveItemPrice: number;
       if (booking.isDepositOnly) {
         const provName = item.providerDisplayName ?? item.providerName;
-        const pol = providerDepositPolicies[provName];
-        const policyArg: DepositPolicy | number = pol
-          ? { type: pol.depositType, amount: pol.depositAmount }
-          : 20;
+        const policyArg = resolveDepositPolicyArg(providerDepositPolicies, provName);
         effectiveItemPrice = BookingService.calculateDeposit(itemTotalPrice, policyArg);
       } else {
         effectiveItemPrice = itemTotalPrice;
@@ -2320,10 +2426,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const itemTotalPrice = getCartItemFullPrice(item);
       if (booking.isDepositOnly) {
         const provName = item.providerDisplayName ?? item.providerName;
-        const pol = providerDepositPolicies[provName];
-        const policyArg: DepositPolicy | number = pol
-          ? { type: pol.depositType, amount: pol.depositAmount }
-          : 20;
+        const policyArg = resolveDepositPolicyArg(providerDepositPolicies, provName);
         return sum + BookingService.calculateDeposit(itemTotalPrice, policyArg);
       }
       return sum + itemTotalPrice;
@@ -2371,25 +2474,32 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     return units;
   }, [getServiceBooking]);
 
-  // Compute effective cart items for payment modal
-  const effectiveCartItems = useMemo(() => {
-    return items.map(item => {
-      const booking = getServiceBooking(item.id);
-      const itemTotalPrice = getCartItemFullPrice(item) - (itemPromoDiscounts[item.id] ?? 0);
-      let effectivePrice: number;
-      if (booking.isDepositOnly) {
-        const provName = item.providerDisplayName ?? item.providerName;
-        const pol = providerDepositPolicies[provName];
-        const policyArg: DepositPolicy | number = pol
-          ? { type: pol.depositType, amount: pol.depositAmount }
-          : 20;
-        effectivePrice = BookingService.calculateDeposit(itemTotalPrice, policyArg);
-      } else {
-        effectivePrice = itemTotalPrice;
-      }
-      return { item, effectivePrice, isDeposit: !!booking.isDepositOnly };
-    });
-  }, [items, getServiceBooking, providerDepositPolicies, itemPromoDiscounts]);
+  // Line items for the payment sheet, built from the FROZEN checkout
+  // snapshot rather than live cart state. The sheet, handlePaymentSuccess,
+  // and the success modal must all show and charge the exact numbers
+  // frozen at "Confirm & Pay" — checkoutSnapshot.items already has promo
+  // discounts baked into their price, and each booking's own depositPolicy
+  // was resolved and stamped in at snapshot time (see bookingsByItemId
+  // above). Re-reading live providerDepositPolicies/itemPromoDiscounts here
+  // instead was the bug: a deposit-policy fetch resolving while the sheet
+  // was open could change what it showed mid-payment, independently of
+  // what BookingService.createAppointmentData actually charges from the
+  // same (unchanged) snapshot.
+  const paymentSheetCartItems = useMemo(
+    (): EffectiveCartItem[] => pricedCheckoutItems(checkoutSnapshot.items, checkoutSnapshot.bookings),
+    [checkoutSnapshot],
+  );
+
+  // Subtotal/fee/total for the review screen's own Totals block AND (via
+  // checkoutTotalsFrom, the same function handleCheckout calls to set
+  // paymentTotal) the payment sheet and success modal — one source, so this
+  // number can never drift from what gets charged. Review is the screen
+  // Confirm & Pay is actually pressed from, so it's just as load-bearing as
+  // the payment sheet itself.
+  const frozenCheckoutTotals = useMemo(
+    () => checkoutTotalsFrom(paymentSheetCartItems),
+    [paymentSheetCartItems],
+  );
 
   const handleEditItem = useCallback((item: CartItem) => {
     setEditingItem(item);
@@ -2645,6 +2755,57 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // itself, so it survives this and is still on screen below.
     setItemIssues(new Map());
 
+    // The last attempt to fetch each cart provider's live deposit policy and
+    // mobile/address requirement failed. Proceeding anyway is exactly what
+    // used to let a mobile provider's booking go out with no client address
+    // and every deposit silently fall back to the generic 20% — checking out
+    // on guessed data instead of surfacing the failure and letting the
+    // client retry.
+    if (checkoutMetadataError) {
+      showAlert(
+        'Could not verify checkout details',
+        'We couldn’t confirm this provider’s current price and address requirements. Please try again.',
+      );
+      return;
+    }
+
+    // Every provider represented in the cart needs an entry in
+    // providerDepositPolicies before its price/deposit-availability can be
+    // trusted — a missing entry means either the checkout-metadata fetch is
+    // still in flight (the cart hydrates from AsyncStorage and renders
+    // instantly, well before that network round trip lands, so tapping
+    // Checkout immediately is a real, ordinary race, not an edge case) or
+    // the provider has dropped out of getProviderCheckoutMetadata's
+    // has_gone_live/is_active filter since the item was added. Distinct
+    // from checkoutMetadataError above: the fetch didn't fail, it just
+    // hasn't said anything about this provider yet.
+    const unresolvedProviderNames = new Set(
+      items
+        .map(item => item.providerDisplayName ?? item.providerName)
+        .filter(name => !(name in providerDepositPolicies)),
+    );
+    if (unresolvedProviderNames.size > 0) {
+      // Split by whether a COMPLETED fetch actually said anything about this
+      // provider yet. Still-unresolved-because-in-flight is the ordinary
+      // case and self-resolves in a moment — nothing gets flagged red, or
+      // the banner would outlive the problem. Resolved-but-still-missing
+      // means the provider genuinely dropped out of has_gone_live/is_active
+      // since the item was added — that's really providerUnbookable.
+      const genuinelyUnbookable = [...unresolvedProviderNames].filter(name => resolvedProviderNames.has(name));
+      if (genuinelyUnbookable.length > 0) {
+        const unbookableSet = new Set(genuinelyUnbookable);
+        setItemIssues(new Map(
+          items
+            .filter(item => unbookableSet.has(item.providerDisplayName ?? item.providerName))
+            .map(item => [item.id, CART_ISSUE.providerUnbookable] as const),
+        ));
+        showAlert('Provider no longer available', 'One or more providers in your cart are no longer taking bookings — remove them to continue.');
+      } else {
+        showAlert('Still confirming your cart', 'Still checking current pricing for a provider in your cart — try again in a few seconds.');
+      }
+      return;
+    }
+
     // No date/time, or a date that didn't survive being stored. The cards have
     // already been red since the moment either appeared — this is the same
     // finding, not a second one, so it reuses it rather than re-deriving it
@@ -2708,6 +2869,32 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       }
     }
 
+    // A provider can turn off deposit payments (or make one mandatory) after
+    // an item was added with a different payment choice. bookingsByItemId
+    // already reconciles isDepositOnly against the live-fetched policy in
+    // both directions, so comparing that reconciled value back against what
+    // the item itself still says finds every card whose payment choice
+    // silently changed since it was added — without this, checkout would
+    // proceed on a card that still shows the client's original choice but
+    // charges (or requires) a different amount.
+    const depositMismatches = items.filter(item => {
+      const booking = bookingsByItemId[item.id];
+      return booking != null && !!item.isDepositOnly !== !!booking.isDepositOnly;
+    });
+    if (depositMismatches.length > 0) {
+      const mismatchIds = new Set(depositMismatches.map(item => item.id));
+      setItemIssues(new Map(
+        items
+          .filter(item => mismatchIds.has(item.id))
+          .map(item => [
+            item.id,
+            item.isDepositOnly ? CART_ISSUE.depositNoLongerOffered : CART_ISSUE.depositNowRequired,
+          ] as const),
+      ));
+      showAlert('Payment option changed', 'One or more providers changed their deposit policy — review the updated price before paying.');
+      return;
+    }
+
     // Each conflict names the cart item it belongs to, so the reason goes onto
     // that item's own card rather than being flattened into one de-duplicated
     // blob of text with nothing tying a line back to a service.
@@ -2741,13 +2928,22 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const snapshot = {
       items: snapshotItems,
       bookings: snapshotBookings,
+      mobileProviderNames,
     };
     if (__DEV__) {
       logger.log('Snapshot captured:', snapshot.items.length, 'items');
     }
     setCheckoutSnapshot(snapshot);
 
-    setPaymentTotal(effectiveFinalTotal);
+    // Derived from the snapshot object just built (via the same
+    // pricedCheckoutItems/checkoutTotalsFrom pair frozenCheckoutTotals uses),
+    // not the live effectiveFinalTotal memo — checkoutSnapshot state hasn't
+    // re-rendered yet at this point, so reading frozenCheckoutTotals directly
+    // here would still see the PREVIOUS snapshot. Calling the same two pure
+    // functions on `snapshot` itself keeps this structurally equal to what
+    // frozenCheckoutTotals.total computes next render, rather than two
+    // independent formulas that could drift apart under a future edit.
+    setPaymentTotal(checkoutTotalsFrom(pricedCheckoutItems(snapshot.items, snapshot.bookings)).total);
 
     // Show review modal pre-filled with user data
     setReviewName(user?.name || '');
@@ -2765,7 +2961,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // editable and only required when a mobile provider is in the cart, so a
     // slow lookup shouldn't hold up the review step — and it only ever fills a
     // still-empty field, so it can't overwrite what the client has typed.
-    if (hasMobileProvider) {
+    if (snapshot.mobileProviderNames.length > 0) {
       if (user?.clientAddress) {
         setClientAddress(user.clientAddress);
       } else {
@@ -2788,7 +2984,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, hasMobileProvider, identifyCartConflicts, localItemIssues, itemsByProvider]);
+}, [items, getServiceBooking, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, mobileProviderNames, identifyCartConflicts, localItemIssues, itemsByProvider, checkoutMetadataError, providerDepositPolicies, resolvedProviderNames]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -2813,10 +3009,17 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       setIsEditingDetails(true);
       return;
     }
-    if (hasMobileProvider && !clientAddress.trim()) {
+    // Reads the frozen checkoutSnapshot.mobileProviderNames, not the live
+    // state — this runs strictly after handleCheckout captured the snapshot
+    // (the review modal can't be open otherwise), and it has to agree with
+    // what handlePaymentSuccess actually stamps onto the booking, or a
+    // refetch landing in between could gate on a provider list the write
+    // no longer uses.
+    const reviewMobileProviderNames = checkoutSnapshot.mobileProviderNames;
+    if (reviewMobileProviderNames.length > 0 && !clientAddress.trim()) {
       showReviewAlert(
         'Address Required',
-        `${formatNameList(mobileProviderNames)} ${mobileProviderNames.length === 1 ? 'is a mobile provider' : 'are mobile providers'} and will come to you. Tap "Add your address" to set it on your account first.`,
+        `${formatNameList(reviewMobileProviderNames)} ${reviewMobileProviderNames.length === 1 ? 'is a mobile provider' : 'are mobile providers'} and will come to you. Tap "Add your address" to set it on your account first.`,
       );
       return;
     }
@@ -2848,7 +3051,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setAgreedToPolicy(false);
     setShowReviewModal(false);
     setShowBookingSummaryModal(true);
-  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showReviewAlert, hasMobileProvider, mobileProviderNames, clientAddress]);
+  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showReviewAlert, checkoutSnapshot, clientAddress]);
 
 const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIntentId?: string) => {
   if (__DEV__) {
@@ -2975,11 +3178,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       // Scoped to the mobile providers in this cart, not the cart as a whole:
       // `clientAddress` is seeded from the account's saved default whether or
       // not anyone in the cart travels, so passing it unconditionally stamped
-      // the client's home address onto salon bookings too.
+      // the client's home address onto salon bookings too. Reads the FROZEN
+      // checkoutSnapshot.mobileProviderNames, not the live state — a
+      // checkout-metadata refetch resolving between "Confirm & Pay" and here
+      // must not change which providers actually receive the address.
+      const snapshotMobileProviderNames = checkoutSnapshot.mobileProviderNames;
       await createBookingsFromCart(
         itemsToBook,
         appointmentData,
-        hasMobileProvider && clientAddress.trim()
+        snapshotMobileProviderNames.length > 0 && clientAddress.trim()
           ? {
               address: clientAddress.trim(),
               // From the account, not this screen: the area is picked once in
@@ -2987,7 +3194,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
               // same way the saved address already is. Undefined when they
               // have never picked one, and the DB derives a fallback.
               area: user?.clientArea ?? null,
-              providerNames: mobileProviderNames,
+              providerNames: snapshotMobileProviderNames,
             }
           : undefined,
         holdBatchId ?? undefined,
@@ -3032,7 +3239,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     logger.error('║ errorType :', isBookingErr ? 'BookingError' : ((error as any)?.name ?? typeof error));
     if (pgCode) logger.error('║ pgCode    :', pgCode); // e.g. 23505 = slot taken, 42501 = RLS
     logger.error('║ userId    :', user?.id ?? '(none)');
-    logger.error('║ paidTotal :', `£${effectiveFinalTotal?.toFixed?.(2) ?? '?'} via ${paymentMethod}`);
+    logger.error('║ paidTotal :', `£${paymentTotal?.toFixed?.(2) ?? '?'} via ${paymentMethod}`);
     logger.error(
       '║ items     :',
       checkoutSnapshot.items.map(i => {
@@ -3075,7 +3282,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     // to propagate the error up to it (after the diagnostics above).
     throw error;
   }
-}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress, hasMobileProvider, mobileProviderNames]);
+}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, paymentTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress]);
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
@@ -3362,12 +3569,12 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           account. Typing it here meant a different,
                           unvalidated string every checkout, for the one
                           field a provider actually has to navigate to. */}
-                      {hasMobileProvider && (
+                      {checkoutSnapshot.mobileProviderNames.length > 0 && (
                         <View style={styles.reviewFieldGroup}>
                           <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
                           <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
-                            {formatNameList(mobileProviderNames)}{' '}
-                            {mobileProviderNames.length === 1
+                            {formatNameList(checkoutSnapshot.mobileProviderNames)}{' '}
+                            {checkoutSnapshot.mobileProviderNames.length === 1
                               ? 'is a mobile provider'
                               : 'are mobile providers'} and will come to you
                           </Text>
@@ -3676,7 +3883,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       <Image
                         source={section.providerImage}
                         style={[styles.summaryProviderLogo, { borderColor: P.accentDim }]}
-                        fadeDuration={0}
+                        transition={0}
                       />
                     ) : (
                       <View style={[styles.summaryProviderLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
@@ -3710,15 +3917,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
               <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
                 <View style={styles.summaryTotalRow}>
                   <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Subtotal</Text>
-                  <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{effectiveTotal.toFixed(2)}</Text>
+                  <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{frozenCheckoutTotals.subtotal.toFixed(2)}</Text>
                 </View>
-                {platformFee > 0 && <View style={styles.summaryTotalRow}>
+                {frozenCheckoutTotals.fee > 0 && <View style={styles.summaryTotalRow}>
                   <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Platform Fee</Text>
-                  <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{platformFee.toFixed(2)}</Text>
+                  <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{frozenCheckoutTotals.fee.toFixed(2)}</Text>
                 </View>}
                 <View style={[styles.summaryTotalRow, styles.summaryGrandTotalRow, { borderTopColor: P.sep }]}>
                   <Text style={[styles.summaryGrandLabel, { color: P.text }]}>Total</Text>
-                  <Text style={[styles.summaryGrandValue, { color: P.accentText }]}>£{effectiveFinalTotal.toFixed(2)}</Text>
+                  <Text style={[styles.summaryGrandValue, { color: P.accentText }]}>£{frozenCheckoutTotals.total.toFixed(2)}</Text>
                 </View>
               </View>
 
@@ -3792,8 +3999,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   }
                   setShowPaymentModal(false);
                 }}
-                effectiveCartItems={effectiveCartItems}
-                totalAmount={USE_STRIPE_PAYMENTS && serverCheckoutBatchId ? paymentTotal : effectiveFinalTotal}
+                effectiveCartItems={paymentSheetCartItems}
+                totalAmount={paymentTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
                 onPaymentComplete={() => {
@@ -4405,17 +4612,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   summaryItemRequestNote: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FF9500', marginTop: 2 },
-  requestBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 149, 0, 0.12)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: spacing.sm,
-  },
-  requestBannerText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '600', color: '#FF9500' },
   conflictBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4432,6 +4628,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+  requestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: spacing.sm,
+  },
+  requestBannerText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '600', color: '#FF9500' },
   serviceHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -4443,20 +4650,19 @@ const styles = StyleSheet.create({
   serviceName: {
     fontSize: fonts.serviceText,
     fontFamily: 'BakbakOne-Regular',
-    color: '#000',
     marginBottom: 1,
-  },
-  // Add-ons/deposit/notes as one tight block under the header, rather than
-  // three separately-margined full-width rows.
-  serviceMetaBlock: {
-    marginTop: spacing.xs,
-    gap: 2,
   },
   // Duration, directly under the service name in the header.
   priceSummaryText: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
+  },
+  // Add-ons/deposit/notes as one tight block under the header, rather than
+  // three separately-margined full-width rows.
+  serviceMetaBlock: {
+    marginTop: spacing.xs,
+    gap: 2,
   },
   // Bold/darker so add-ons read as labelled paid extras rather than blending
   // into the plain secondary-text lines around them. Spacing is owned by the

@@ -1318,6 +1318,11 @@ export const AvailabilityService = {
           message: elsewhere
             ? `This overlaps your ${elsewhere.providerName} appointment in this cart — you can't be in both places at once.`
             : `This time slot conflicts with another service in your cart`,
+          // The provider name is baked into the message above, so CartScreen
+          // can't string-match it into a short card label the way it does
+          // for the fixed same-provider wording — same reason clientClash
+          // carries a code instead of relying on toCartIssue().
+          ...(elsewhere ? { code: 'cartCrossProviderClash' as const } : {}),
         });
         continue;
       }
