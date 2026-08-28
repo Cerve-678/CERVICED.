@@ -6,12 +6,20 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/navigationRef';
+import { navigateNested, navigateTab } from '../navigation/rootNavigate';
 import { requestMode } from '../navigation/modeController';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { markNotificationRead, getProviderBasicById } from './databaseService';
+import { logger } from '../utils/logger';
 
 export interface NotificationTapData {
   type?: string;
   booking_id?: string;
+  /** Present since the push payload started carrying it — without it, every
+   *  notification whose destination is a PROVIDER rather than a booking (chat,
+   *  provider profiles, provider broadcasts) could only ever dump the user on
+   *  the notifications list. */
+  provider_id?: string;
   notification_id?: string;
   [key: string]: unknown;
 }
@@ -24,11 +32,11 @@ const BOOKING_TYPES = new Set([
   'booking_in_progress',
   'no_show',
   'provider_no_show',
+  'no_show_disputed',
   'booking_reminder',
   'booking_cancelled',
   'payment_success',
   'review_request',
-  'review_received',
   'reschedule_request',
   'reschedule_response',
   'reschedule_provider_response',
@@ -38,6 +46,9 @@ const BOOKING_TYPES = new Set([
   // refers to is already closed, so openReschedule below deliberately excludes
   // it. The booking itself is unchanged and is what the reader needs to see.
   'reschedule_expired',
+  // The useful destination is the booking, where Cancel lives — NOT the
+  // reschedule flow, which is exactly what has gone unanswered.
+  'cancel_window_closing',
   'pending_booking_reminder',
   'intake_form_received',
   'info_pack_received',
@@ -49,30 +60,20 @@ const BOOKING_TYPES = new Set([
   'waitlist_slot_available',
 ]);
 
-/**
- * Deep-link into a screen inside a tab's stack.
- *
- * Always routes through an explicit tab rather than dispatching a bare screen
- * name. A bare `navigate('Bookings')` is handled by neither the root stack nor
- * the tab navigator, so it falls through to whichever tab happens to be focused
- * — landing the user in the Becca/Cart/Profile copy of the screen, or doing
- * nothing at all on Explore, which has no Bookings screen.
- *
- * `initial: false` is what puts the tab's root screen UNDERNEATH the target.
- * Without it, a nested navigate into a stack that hasn't mounted yet (bottom
- * tabs are lazy) initialises that stack with the target as its ONLY route — so
- * going back has nothing to pop, bubbles up to the tab navigator, and switches
- * tabs instead of returning to the screen the user expects.
- */
-function navigateNested(tab: string, screen: string, params?: Record<string, unknown>) {
-  if (!navigationRef.isReady()) return;
-  (navigationRef as any).navigate(tab, { screen, params, initial: false });
-}
-
 export async function handleNotificationTap(data: NotificationTapData): Promise<void> {
   if (!navigationRef.isReady()) return;
 
-  const { type, booking_id } = data;
+  const { type, booking_id, provider_id, notification_id } = data;
+
+  // Opening a notification is what "reading" it means — the in-app list already
+  // marks on tap, but a push tap deep-links straight past that list, so these
+  // stayed unread forever and the badge count kept counting them. Fire and
+  // forget: a failed write must never block or delay the navigation below.
+  if (notification_id) {
+    markNotificationRead(notification_id).catch(err =>
+      logger.warn('[NotificationTap] Failed to mark notification read:', err),
+    );
+  }
 
   const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
   // Route by who the notification is FOR (recipient_role from the push payload),
@@ -139,6 +140,9 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
       navigateNested('Home', 'Bookings', {
         openBookingId: booking_id,
         openReschedule,
+        // Matches the in-app list: "Rate Now" must land on the rating form,
+        // not on the booking with the rating control left to be found.
+        openReview: type === 'review_request',
         highlightBookingId: booking_id,
       });
     }
@@ -155,20 +159,71 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Review received (provider) ───────────────────────────────────────────────
+  // Lands on the provider's own profile, where the Reviews card lives — not on
+  // the booking the review came from, which shows no review at all. That
+  // profile is the ROOT of the MyServices tab, hence navigateTab.
+  if (type === 'review_received') {
+    if (isProvider) {
+      navigateTab('MyServices');
+    } else {
+      openNotifications();
+    }
+    return;
+  }
+
   // ── Message types ────────────────────────────────────────────────────────────
   if (type === 'provider_message' || type === 'new_message') {
     if (isProvider) {
       navigateNested('ProviderHome', 'ProviderInbox', { initialFilter: 'messages' });
+      return;
+    }
+    // Client chat is keyed by the provider's SLUG, not their id, so it needs one
+    // lookup before it can navigate. This used to give up and dump the user on
+    // the notifications list to tap a second time; the push payload now carries
+    // provider_id, so the tap can finish the job.
+    if (!provider_id) {
+      openNotifications();
+      return;
+    }
+    try {
+      const prov = await getProviderBasicById(provider_id);
+      if (!prov) {
+        openNotifications();
+        return;
+      }
+      navigateNested('Home', 'ProviderChat', {
+        providerId: prov.slug,
+        providerDbId: provider_id,
+        providerName: prov.display_name,
+      });
+    } catch (err) {
+      // A lookup failure must still leave the user somewhere useful.
+      logger.warn('[NotificationTap] Provider lookup failed for chat:', err);
+      openNotifications();
+    }
+    return;
+  }
+
+  // ── Provider-destination types ───────────────────────────────────────────────
+  // These point at a provider rather than a booking. Client-only: a provider
+  // deep-linked into ProviderProfile would land in the client navigator.
+  if (
+    type === 'new_provider' ||
+    type === 'announcement' ||
+    type === 'birthday_greeting' ||
+    type === 'post_appt_check_in'
+  ) {
+    if (!isProvider && provider_id) {
+      navigateNested('Home', 'ProviderProfile', { providerId: provider_id, source: 'notification' });
     } else {
-      // Client chat requires a provider slug lookup — land on Notifications so
-      // the in-app handler can do the async lookup when the user taps the item.
       openNotifications();
     }
     return;
   }
 
   // ── Everything else → Notifications screen ───────────────────────────────────
-  // (new_provider, announcement, promotion, waitlist_slot_available, etc.)
-  // These need provider_id for deep linking; the in-app handler covers them.
+  // (promotion, daily_recap, schedule_fully_booked, etc.) Either they have no
+  // specific destination, or the in-app handler covers them.
   openNotifications();
 }

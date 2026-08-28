@@ -8,10 +8,11 @@ import {
   RefreshControl,
   Modal,
   ScrollView,
-  Image,
   StatusBar,
   Animated,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFont } from '../../contexts/FontContext';
 import { BellIcon } from '../../components/IconLibrary';
@@ -27,13 +28,20 @@ import {
 } from '../../services/databaseService';
 import type { DbNotification } from '../../types/database';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
+// react-native's own TouchableOpacity runs its own touch responder
+// independently of Swipeable's PanGestureHandler, so a swipe attempt that
+// hasn't yet crossed the pan threshold can still register as a press on this
+// row — this gesture-handler-native version arbitrates through the same
+// gesture system Swipeable uses, so a swipe reliably wins over a tap.
+import { TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 
 import { HomeScreenProps } from '../../navigation/types';
+import { navigateNested, navigateTab, navigateAfterDismiss } from '../../navigation/rootNavigate';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useAuth } from '../../contexts/AuthContext';
-import { CommonActions, StackActions } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { logger } from '../../utils/logger';
@@ -42,9 +50,11 @@ interface Notification {
   id: string;
   type: 'booking_pending'   | 'booking_confirmed'   | 'booking_declined'
       | 'booking_cancelled'  | 'booking_reminder'    | 'booking_in_progress'
-      | 'no_show'            | 'provider_no_show'    | 'payment_success'     | 'new_provider'
+      | 'no_show'            | 'provider_no_show'    | 'no_show_disputed'
+      | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
+      | 'cancel_window_closing'
       | 'review_request'    | 'review_received'
       | 'promotion'          | 'intake_form_reminder' | 'provider_message'
       | 'new_message'         | 'pending_booking_reminder'
@@ -155,6 +165,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const isMountedRef = useRef(true);
 
+  // Only one row's delete bubble should be open at a time (iOS Mail
+  // behaviour) — closing whichever row is currently open when another one
+  // starts to open, rather than letting several sit open simultaneously.
+  const rowSwipeablesRef = useRef<Map<string, React.ElementRef<typeof Swipeable>>>(new Map());
+  const openRowIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -178,13 +194,22 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const dismissThenNavigate = useCallback((navigateFn: () => void) => {
     if (navigation.canGoBack()) {
       navigation.dispatch(CommonActions.goBack() as any);
-      defer(navigateFn, 500);
+      // NOT defer(): that timer is owned by THIS screen, and the goBack() above
+      // unmounts it — the unmount cleanup clears the timer before it can ever
+      // fire, so the onward navigation silently never happened. That was the
+      // bug behind "Open Chat does nothing", and it hit every path routed
+      // through here (Open Inbox, provider booking deep-links, provider
+      // profiles) in both hats. navigateAfterDismiss() is module-scoped and
+      // navigates via navigationRef, both of which outlive this screen — so
+      // `navigateFn` must use navigateNested(), never the captured
+      // `navigation` prop, which is dead once this screen is gone.
+      navigateAfterDismiss(navigateFn, 500);
     } else {
       // Nothing to dismiss — we're already at the stack root, so navigate directly
       // rather than firing a goBack() that no navigator can handle.
       navigateFn();
     }
-  }, [navigation, defer]);
+  }, [navigation]);
 
   // Dismiss with no onward navigation (the notification has nowhere specific to go).
   const dismissOnly = useCallback(() => {
@@ -271,9 +296,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
+           'cancel_window_closing',
            'rebooking_nudge', 'daily_recap'].includes(n.type)
         );
       case 'reviews':
@@ -348,10 +374,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // handler already does) guarantees the destination stack regardless of where
   // Notifications was opened from.
   const navigateProviderHome = useCallback((screen: string, params?: Record<string, unknown>) => {
-    dismissThenNavigate(() => {
-      (navigation as any).getParent()?.navigate('ProviderHome', { screen, params, initial: false });
-    });
-  }, [navigation, dismissThenNavigate]);
+    dismissThenNavigate(() => navigateNested('ProviderHome', screen, params));
+  }, [dismissThenNavigate]);
 
   // ✅ Handle notification action (View Booking, Reschedule, etc.)
   const handleNotificationAction = useCallback((notification: Notification) => {
@@ -389,16 +413,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'booking_in_progress' ||
         notification.type === 'no_show' ||
         notification.type === 'provider_no_show' ||
+        notification.type === 'no_show_disputed' ||
         notification.type === 'booking_reminder' ||
         notification.type === 'booking_cancelled' ||
         notification.type === 'payment_success' ||
         notification.type === 'review_request' ||
-        notification.type === 'review_received' ||
         notification.type === 'reschedule_request' ||
         notification.type === 'reschedule_provider_response' ||
         notification.type === 'reschedule_confirmed' ||
         notification.type === 'reschedule_declined' ||
         notification.type === 'reschedule_expired' ||
+        notification.type === 'cancel_window_closing' ||
         notification.type === 'intake_form_received' ||
         notification.type === 'info_pack_received' ||
         notification.type === 'address_released' ||
@@ -408,6 +433,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
       const openReschedule = notification.type === 'reschedule_request' ||
                             notification.type === 'reschedule_provider_response';
+      // "Rate Now" has to land on the rating form. Without this it fell through
+      // to the generic booking deep-link and opened BookingDetail, leaving the
+      // client to go and find the rate control themselves — the button promised
+      // an action the destination didn't offer.
+      const openReview = notification.type === 'review_request';
 
       defer(() => {
         if (isProviderRef.current) {
@@ -426,16 +456,20 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
             logger.log('Provider — no bookingId, falling back to ProviderSchedule');
           }
         } else {
-          // Client: dismiss the modal first, then navigate to Bookings.
-          // StackActions.replace() straight from a modal-presented route to a
-          // card-presented one fights the native dismiss/push transitions and
-          // hangs the screen — every other path here dismisses first, then
-          // navigates after the dismiss animation finishes.
+          // Client: dismiss the sheet first, then navigate — replacing straight
+          // from a modal-presented route to a card-presented one fights the
+          // native dismiss/push transitions and hangs the screen.
+          //
+          // Explicitly through the Home tab, for the same reason the provider
+          // side targets ProviderHome above: Notifications is registered in
+          // EVERY tab's stack, so a replace() landed Bookings in whichever tab
+          // Notifications happened to be opened from — open it from Cart and
+          // the client's bookings appeared inside the Cart stack.
           const bookingsParams = notification.bookingId
-            ? { openBookingId: notification.bookingId, openReschedule, highlightBookingId: notification.bookingId }
+            ? { openBookingId: notification.bookingId, openReschedule, openReview, highlightBookingId: notification.bookingId }
             : {};
           logger.log('Client — navigating to Bookings:', bookingsParams);
-          navigation.dispatch(StackActions.replace('Bookings', bookingsParams));
+          dismissThenNavigate(() => navigateNested('Home', 'Bookings', bookingsParams));
         }
       }, 300);
     } else if (notification.type === 'waitlist_slot_available') {
@@ -448,16 +482,16 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       if (notification.bookingId) {
         const bookingId = notification.bookingId;
         defer(() => {
-          navigation.dispatch(StackActions.replace('Bookings', { openBookingId: bookingId, highlightBookingId: bookingId }));
+          dismissThenNavigate(() =>
+            navigateNested('Home', 'Bookings', { openBookingId: bookingId, highlightBookingId: bookingId })
+          );
         }, 300);
       } else if (notification.providerId) {
         const providerId = notification.providerId;
         defer(() => {
-          dismissThenNavigate(() => {
-            navigation.dispatch(
-              CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
-            );
-          });
+          dismissThenNavigate(() =>
+            navigateNested('Home', 'ProviderProfile', { providerId, source: 'notification' })
+          );
         }, 300);
       }
     } else if (notification.type === 'new_provider') {
@@ -472,7 +506,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
       defer(() => {
         logger.log('Navigation to ProviderProfile executed with ID:', providerId);
-        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId, source: 'notification' }));
+        dismissThenNavigate(() =>
+          navigateNested('Home', 'ProviderProfile', { providerId, source: 'notification' })
+        );
       }, 300);
     } else if (notification.type === 'promotion') {
       // A promotion has no specific destination — dismissing the sheet returns the
@@ -489,11 +525,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       if (notification.providerId) {
         const providerId = notification.providerId;
         defer(() => {
-          dismissThenNavigate(() => {
-            navigation.dispatch(
-              CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
-            );
-          });
+          dismissThenNavigate(() =>
+            navigateNested('Home', 'ProviderProfile', { providerId, source: 'notification' })
+          );
         }, 300);
       } else {
         defer(dismissOnly, 300);
@@ -515,6 +549,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         });
         logger.log('Provider — navigating to ProviderIntakeForm:', bookingId);
       }, 300);
+    } else if (notification.type === 'review_received') {
+      // A review lands on the provider's own profile, where the Reviews card
+      // actually lives — not on the booking it came from. The booking is not
+      // what "View Review" is promising, and BookingDetail shows no review at
+      // all. The profile is the ROOT of the MyServices tab, hence navigateTab.
+      defer(() => {
+        dismissThenNavigate(() => navigateTab('MyServices'));
+      }, 300);
     } else if (notification.type === 'provider_message') {
       logger.log('Navigating to ProviderInbox (Messages)');
       defer(() => {
@@ -535,14 +577,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           // This await gives the user ample time to dismiss the sheet themselves,
           // so re-check liveness before touching the navigator.
           if (!prov || !isMountedRef.current) return;
-          dismissThenNavigate(() => {
-            navigation.dispatch(
-              CommonActions.navigate({
-                name: 'ProviderChat',
-                params: { providerId: prov.slug, providerDbId, providerName: prov.display_name },
-              }) as any
-            );
-          });
+          dismissThenNavigate(() =>
+            navigateNested('Home', 'ProviderChat', {
+              providerId: prov.slug,
+              providerDbId,
+              providerName: prov.display_name,
+            })
+          );
         }, 300);
       }
     } else if (notification.type === 'schedule_fully_booked') {
@@ -600,11 +641,15 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Bell color logic based on notification type
   const getBellColor = (type: string) => {
     if (['booking_cancelled', 'booking_declined', 'no_show', 'provider_no_show', 'reschedule_declined'].includes(type)) return '#FF1744';
+    // Amber, not the red the no-show itself uses: nothing was decided here.
+    // The booking is untouched and the disagreement is open, which is
+    // exactly what amber means everywhere else on this screen.
+    if (type === 'no_show_disputed') return '#FF9500';
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
     // is off" when the appointment is exactly as it was.
-    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
+    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
     if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in'].includes(type)) return P.accentText;
     return '#FF9800';
@@ -626,12 +671,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Past Bookings';
       case 'no_show':
       case 'provider_no_show':
+      case 'no_show_disputed':
         return 'View Booking';
       case 'reschedule_declined':
       // The request is closed and the booking is unchanged, so the only useful
       // destination is the booking itself — not "Reschedule Now", which would
       // point at a flow the provider's notice window may now refuse.
       case 'reschedule_expired':
+        return 'View Booking';
+      // The point of this one is that cancelling is still possible, but not
+      // for much longer — the booking is where that decision gets made.
+      case 'cancel_window_closing':
         return 'View Booking';
       case 'pending_booking_reminder':
         return 'Respond Now';
@@ -675,33 +725,53 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     }
   };
 
-  // ✅ Render swipe-to-delete action
-  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>, item: Notification) => {
-    const trans = dragX.interpolate({
-      inputRange: [-100, 0],
-      outputRange: [0, 100],
+  // ✅ Render swipe-to-delete action — Apple Mail-style: a round red "bubble"
+  // pinned to the trailing edge (Swipeable already positions this container
+  // as the row is dragged, so no extra translateX here) that pops in with a
+  // spring overshoot as it crosses the reveal threshold, rather than a flat
+  // rectangular bar.
+  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, _dragX: Animated.AnimatedInterpolation<number>, item: Notification) => {
+    const scale = progress.interpolate({
+      inputRange: [0, 0.5, 0.7, 1],
+      outputRange: [0.4, 1.15, 0.92, 1],
       extrapolate: 'clamp',
     });
 
     return (
-      <Animated.View style={[styles.deleteAction, { transform: [{ translateX: trans }] }]}>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => deleteNotification(item.id)}
-        >
-          <Text style={styles.deleteText}>Delete</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      <View style={styles.deleteAction}>
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <TouchableOpacity
+            style={styles.deleteBubble}
+            onPress={() => deleteNotification(item.id)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="trash" size={22} color="#FFF" />
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
     );
   };
 
   // ✅ Render individual notification card
   const renderNotification = ({ item }: { item: Notification }) => (
     <Swipeable
+      ref={(ref) => {
+        if (ref) rowSwipeablesRef.current.set(item.id, ref);
+        else rowSwipeablesRef.current.delete(item.id);
+      }}
       renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
       overshootRight={false}
+      onSwipeableWillOpen={() => {
+        if (openRowIdRef.current && openRowIdRef.current !== item.id) {
+          rowSwipeablesRef.current.get(openRowIdRef.current)?.close();
+        }
+        openRowIdRef.current = item.id;
+      }}
+      onSwipeableClose={() => {
+        if (openRowIdRef.current === item.id) openRowIdRef.current = null;
+      }}
     >
-      <TouchableOpacity
+      <GestureTouchableOpacity
         activeOpacity={0.8}
         onPress={() => showFullMessage(item)}
         style={styles.notificationItem}
@@ -709,15 +779,22 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         <View
           style={[
             styles.notificationBlur,
-            { backgroundColor: P.card, borderColor: P.border },
-            !item.read && styles.unreadNotification
+            item.read
+              ? { backgroundColor: P.card, borderColor: P.border }
+              : {
+                  backgroundColor: P.accentDim,
+                  borderColor: P.accent,
+                  borderLeftWidth: 3,
+                  borderLeftColor: P.accent,
+                },
           ]}
         >
           <View style={styles.notificationHeader}>
             <View style={styles.notificationLeft}>
               <View style={[
                 styles.iconContainer,
-                { backgroundColor: `${getBellColor(item.type)}15` }
+                { backgroundColor: `${getBellColor(item.type)}${item.read ? '0D' : '15'}` },
+                item.read && { opacity: 0.6 },
               ]}>
                 <BellIcon
                   size={24}
@@ -728,7 +805,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 <Image
                   source={item.providerImage}
                   style={styles.providerImage}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
               )}
             </View>
@@ -739,7 +816,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   textStyles.button,
                   styles.notificationTitle,
                   styles.notificationTitleBold,
-                  { color: P.text },
+                  { color: item.read ? P.sub : P.text },
                   !item.read && styles.unreadTitle
                 ]} numberOfLines={1}>
                   {item.title}
@@ -767,7 +844,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
             </View>
           </View>
         </View>
-      </TouchableOpacity>
+      </GestureTouchableOpacity>
     </Swipeable>
   );
 
@@ -912,7 +989,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                             <Image
                               source={selectedNotification.providerImage}
                               style={styles.popupProviderImage}
-                              resizeMode="cover"
+                              contentFit="cover"
                             />
                           )}
                         </View>
@@ -1053,10 +1130,6 @@ const styles = StyleSheet.create({
     borderRadius: dimensions.card.smallBorderRadius,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing.lg,
-  },
-  unreadNotification: {
-    backgroundColor: 'rgba(74,35,64,0.06)',
-    borderColor: 'rgba(74,35,64,0.3)',
   },
   notificationHeader: { flexDirection: 'row', gap: spacing.gap.md },
   notificationLeft: { alignItems: 'center', gap: spacing.gap.sm },
@@ -1208,24 +1281,18 @@ const styles = StyleSheet.create({
 
   // Swipe to delete styles
   deleteAction: {
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    marginBottom: 16,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  deleteButton: {
-    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    width: 100,
+    width: 74,
+    marginBottom: 16,
   },
-  deleteText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-    fontFamily: 'BakbakOne-Regular',
+  deleteBubble: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // Bold notification title

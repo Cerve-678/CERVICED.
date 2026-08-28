@@ -135,7 +135,18 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
             title: row.title,
             body: row.message,
             sound: 'default',
-            data: { booking_id: row.booking_id, notification_id: row.id, type: row.type, recipient_role: row.recipient_role },
+            // Mirrors the production Edge Function's payload field-for-field —
+            // provider_id included, or chat/profile deep-links would work in a
+            // real build and silently not in Expo Go. Note this dev bridge does
+            // NOT apply the notification-preference gate the Edge Function
+            // does; it exists to prove routing, not delivery policy.
+            data: {
+              booking_id: row.booking_id,
+              provider_id: row.provider_id,
+              notification_id: row.id,
+              type: row.type,
+              recipient_role: row.recipient_role,
+            },
           },
           trigger: null,
         }).catch(() => {});
