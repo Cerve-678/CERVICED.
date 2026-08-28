@@ -130,8 +130,22 @@ export default function SlidingTabs<K extends string = string>({
   }, [indicatorX, indicatorW, scrollable, centerContent, springSpeed, springBounciness]);
 
   const handleLayout = useCallback((key: string, x: number, width: number) => {
+    const prev = layouts.current[key];
+    const moved = !prev || prev.x !== x || prev.width !== width;
     layouts.current[key] = { x, width };
-    if (indicatorReady) return;
+
+    if (indicatorReady) {
+      // Already initialised: a tab can still be re-measured after this point —
+      // equalWidth's second pass widens every tab from its natural size to the
+      // shared max, a container resize or a late font load shifts them too.
+      // handleLayout used to bail out here, leaving the indicator stuck at the
+      // first-pass geometry, so the accent fill ended up narrower than the tab
+      // it's meant to sit behind ("doesn't fill properly"). Re-snap it (no
+      // animation — this is a layout correction, not a user action).
+      if (moved && key === activeKey) slideTo(key, false);
+      return;
+    }
+
     if (key === activeKey) {
       // Snap straight to the active tab's position (no animation) the
       // moment we know it, then readiness lets the effect below take over.
