@@ -22,9 +22,11 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
-SINCE:  --
-SCOPE:  --
+OWNER:  session on branch fix/hat-truth-server-side
+SINCE:  2026-08-29
+SCOPE:  delete_provider_profile() — read has_client_profile instead of the
+        replaced `dob IS NOT NULL` inference, and reset the auth metadata
+        role mirror when the provider hat is dropped.
 ```
 
 ### Applied 2026-08-28 (client loyalty points — earning side)

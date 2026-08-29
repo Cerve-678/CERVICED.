@@ -18,6 +18,7 @@ import {
   setAuthAutoRefresh,
   signOutCurrentSession,
   subscribeToAuthStateChanges,
+  syncAuthRoleMetadata,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
@@ -683,6 +684,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await logout();
       return;
     }
+    // The RPC resets users.role to 'user' server-side but cannot reach the
+    // auth metadata mirror the app holds in the current session. Sync it here
+    // so this device stops advertising a provider hat immediately, rather than
+    // waiting on a token refresh — otherwise a profile-fetch failure before
+    // then falls back to metadata and restores the hat that was just deleted.
+    await syncAuthRoleMetadata('user');
     // Client hat kept — drop out of provider mode and resync role/profile
     // state from the DB (role is reset to 'user' server-side).
     if (activeMode === 'provider') await applyMode('client');
