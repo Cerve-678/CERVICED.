@@ -439,6 +439,13 @@ export interface DbServiceImage {
    * guessed ratio is what makes a landscape photo render in a portrait box.
    */
   aspect_ratio: number | null;
+  /**
+   * How the provider chose to have this photo framed: 'cover' fills the
+   * display box and may crop, 'contain' fits the whole photo and letterboxes.
+   * NOT NULL with a 'cover' default, so every legacy row reads as today's
+   * behaviour — see supabase/migrations/20260829011733_service_image_fit.sql.
+   */
+  fit: "cover" | "contain";
 }
 
 export interface DbServiceAddOn {
@@ -910,7 +917,7 @@ export interface DiscoverServiceWithProvider {
   name: string;
   description: string | null;
   price: number;
-  service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio">[];
+  service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio" | "fit">[];
   provider: Pick<
     DbProvider,
     | "id"

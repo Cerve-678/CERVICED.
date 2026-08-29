@@ -128,6 +128,9 @@ const TEAM_SIZE_LABELS: Record<string, string> = {
 };
 type ServiceData = ProviderProfileService;
 
+// Most dots the 60px pill ever shows, however many images the service has.
+const MAX_PILL_DOTS = 3;
+
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
 const MultiImagePill: React.FC<{
   images: any[];
@@ -137,6 +140,22 @@ const MultiImagePill: React.FC<{
 }> = React.memo(({ images, onPress, imageStyle, containerStyle }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const w = imageStyle.width ?? 60;
+
+  // The pill is only 60px wide, so a dot per image turns into an unreadable
+  // smear the moment a service has more than a handful of photos. Show a
+  // three-dot window that slides with the active image instead — it still
+  // says "there's more this way" without pretending to be a countable index.
+  const dotWindow = useMemo(() => {
+    const total = images.length;
+    if (total <= MAX_PILL_DOTS) {
+      return Array.from({ length: total }, (_, i) => i);
+    }
+    const start = Math.min(
+      Math.max(activeIdx - 1, 0),
+      total - MAX_PILL_DOTS,
+    );
+    return Array.from({ length: MAX_PILL_DOTS }, (_, i) => start + i);
+  }, [images.length, activeIdx]);
 
   return (
     <View style={{ alignItems: "center", marginRight: 15 }}>
@@ -166,7 +185,7 @@ const MultiImagePill: React.FC<{
       </View>
       {images.length > 1 && (
         <View style={{ flexDirection: "row", gap: 3, marginTop: 5 }}>
-          {images.map((_, i) => (
+          {dotWindow.map((i) => (
             <View
               key={i}
               style={{

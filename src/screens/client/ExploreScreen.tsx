@@ -388,11 +388,23 @@ const ExploreScreen = memo(() => {
   const mapDbServiceToCards = useCallback((s: DiscoverServiceWithProvider): PortfolioItem[] => {
     const images = [...s.service_images].sort((a, b) => a.sort_order - b.sort_order);
     const imageSources = images.map(img => ({ uri: img.url }));
+    // Same order as imageSources — the detail modal sizes its carousel from
+    // the whole set rather than from whichever photo was tapped. Same 0.8
+    // fallback as the per-card ratio below, so a legacy null never lands as
+    // NaN in the median.
+    const imageAspectRatios = images.map(img => img.aspect_ratio ?? 0.8);
+    // Same order again. 'cover' is the column default, so a provider who has
+    // never touched the control still gets exactly today's behaviour.
+    const imageFits = images.map(img =>
+      img.fit === 'contain' ? ('contain' as const) : ('cover' as const),
+    );
     const p = s.provider;
     return images.map((img, idx) => ({
       id: `service-${s.id}__${idx}`,
       image: { uri: img.url },
       images: imageSources,
+      imageAspectRatios,
+      imageFits,
       caption: s.description ?? '',
       serviceName: s.name,
       category: p.service_category as unknown as ServiceCategory,

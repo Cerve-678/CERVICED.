@@ -49,7 +49,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // Supabase registration service
 import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
-import type { ProviderRegistrationData } from '../../services/providerRegistrationService';
+import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject, hasMyProviderTermsForm } from '../../services/databaseService';
@@ -69,6 +69,8 @@ import { logger } from '../../utils/logger';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
+import { ServiceImageCropper } from '../../features/provider-registration/ServiceImageCropper';
+import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
 import { SERVICE_BUFFER_BEFORE_OPTS, SERVICE_BUFFER_AFTER_OPTS } from '../../features/business-details/options';
@@ -242,7 +244,7 @@ interface ServiceData {
   bufferBeforeMins: number | null;
   bufferAfterMins: number | null;
   description: string;
-  images: string[];
+  images: ServiceImageDraft[];
   addOns: AddOnData[];
   // Discoverability tags
   tags: string[];
@@ -1026,7 +1028,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [bufferBefore, setBufferBefore] = useState(bufferBeforeToPicker(service?.bufferBeforeMins));
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
-  const [images, setImages] = useState<string[]>(service?.images || []);
+  const [images, setImages] = useState<ServiceImageDraft[]>(service?.images || []);
+  // Freshly-picked URIs waiting to be framed. They are deliberately NOT added
+  // to `images` yet — a provider who backs out of the cropper should end up
+  // with the set they started with, not a half-added batch.
+  const [pendingCropUris, setPendingCropUris] = useState<string[]>([]);
   const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
@@ -1127,11 +1133,45 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.length) {
-      setImages([...images, ...result.assets.map(a => a.uri)]);
+      // Straight into the cropper rather than into the set: every photo is
+      // re-rendered to JPEG on the way through, which is also what stops an
+      // iOS HEIC being uploaded under a .jpg name (see ServiceImageCropper).
+      setPendingCropUris(result.assets.map(a => a.uri));
     }
   };
 
+  const handleCropperDone = (framed: ServiceImageDraft[]) => {
+    setPendingCropUris([]);
+    if (framed.length > 0) setImages(prev => [...prev, ...framed]);
+  };
+
   const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
+
+  // Array order IS the stored order — it becomes service_images.sort_order on
+  // save, and index 0 is the photo that leads the service everywhere it's
+  // shown. Splice-then-insert rather than a swap, so dragging across several
+  // slots moves one photo through them instead of exchanging the two ends.
+  // Framing is per photo, not per service — a provider may want a wide shot
+  // shown whole and a close-up filling the frame in the same set.
+  const handleToggleImageFit = (index: number) => {
+    setImages(prev =>
+      prev.map((img, i) =>
+        i === index
+          ? { ...img, fit: img.fit === 'cover' ? 'contain' : 'cover' }
+          : img,
+      ),
+    );
+  };
+
+  const handleReorderImages = (from: number, to: number) => {
+    setImages(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      if (moved === undefined) return prev;
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
 
   const handleAddAddOn = () => {
     if (!newAddOnName.trim() || !newAddOnPrice.trim()) {
@@ -1287,7 +1327,20 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
-                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} size={100} styles={styles} />
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onReorder={handleReorderImages} size={100} styles={styles} />
+                <ServiceImageCropper
+                  visible={pendingCropUris.length > 0}
+                  uris={pendingCropUris}
+                  onDone={handleCropperDone}
+                  onCancel={() => setPendingCropUris([])}
+                  palette={{
+                    bg: chrome.surf(0.98),
+                    card: chrome.surf(0.35),
+                    text: chrome.fg(0.92),
+                    sub: chrome.fg(0.55),
+                    accent: accentColor,
+                  }}
+                />
                 <Text style={styles.serviceSheetHint}>Add multiple images to showcase your service</Text>
               </View>
 
@@ -2276,7 +2329,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                               description text starts at the same x on every card */}
                           {service.images && service.images.length > 0 ? (
                             <Image
-                              source={{ uri: service.images[0] }}
+                              source={{ uri: service.images[0]?.uri }}
                               style={styles.previewServiceImage}
                               resizeMode="cover"
                               fadeDuration={0}
@@ -2821,8 +2874,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // moment behind the loading gate above — track it separately so the
     // Portfolio card shows a spinner instead of a bare "no photos yet" flash.
     setPortfolioLoading(true);
-    getProviderPortfolio(providerDbId)
-      .then(setPortfolioItems)
+    // includeVenue: the Address step's grid is where venue shots are managed,
+    // so this screen is the other caller that needs both halves.
+    getProviderPortfolio(providerDbId, { includeVenue: true })
+      .then(({ work, venue }) => setPortfolioItems([...work, ...venue]))
       .catch(() => {})
       .finally(() => setPortfolioLoading(false));
   }, [providerDbId]);
@@ -2962,6 +3017,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // re-render, so reading the `categoryOrder` state directly there was
   // occasionally acting on a one-step-stale order and glitching the reorder.
   const categoryOrderRef = useRef<string[]>([]);
+  // The pill order as it was when the drag was granted. dragBaselineRef
+  // freezes each pill's x for the whole gesture, so the slot maths has to walk
+  // the order those x values belong to — see applyDragPosition.
+  const dragOrderBaselineRef = useRef<string[]>([]);
   const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
   // The just-dropped pill skips one layout-transition frame while it returns
   // from absolute positioning to the flex row. Without this, Reanimated tries
@@ -3423,6 +3482,30 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     return () => clearTimeout(t);
   }, [selectedCategory]);
 
+  // Array order IS the stored order: saveProviderToSupabase writes each
+  // service's index as its sort_order, and that's what drives the order
+  // clients see. Rebuilt from the dragged key list rather than spliced, so the
+  // result matches exactly what the drag showed.
+  const handleSetServiceOrder = useCallback((categoryName: string, orderedIds: string[]) => {
+    setProviderData(prev => {
+      const current = prev.categories[categoryName];
+      if (!current) return prev;
+      const byId = new Map(current.map(svc => [String(svc.id), svc]));
+      const next = orderedIds
+        .map(id => byId.get(id))
+        .filter((svc): svc is ServiceData => svc !== undefined);
+      // Anything the drag didn't know about (added mid-gesture) keeps its
+      // place at the end rather than being dropped.
+      for (const svc of current) {
+        if (!orderedIds.includes(String(svc.id))) next.push(svc);
+      }
+      return {
+        ...prev,
+        categories: { ...prev.categories, [categoryName]: next },
+      };
+    });
+  }, []);
+
   const handleSetCategoryOrder = useCallback((order: string[]) => {
     setProviderData(prev => {
       const newCategories: Record<string, ServiceData[]> = {};
@@ -3430,6 +3513,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       return { ...prev, categories: newCategories };
     });
   }, []);
+
+  // Drag-to-reorder for the services inside the selected category. Keyed by
+  // service id as a string, since that's what survives a reorder — an index
+  // key would follow the slot rather than the service.
+  const selectedCategoryServices = providerData.categories[selectedCategory];
+  const serviceDragKeys = useMemo(
+    () => (selectedCategoryServices ?? []).map(svc => String(svc.id)),
+    [selectedCategoryServices],
+  );
+  const serviceDragOnReorder = useCallback(
+    (orderedIds: string[]) => handleSetServiceOrder(selectedCategory, orderedIds),
+    [handleSetServiceOrder, selectedCategory],
+  );
+  const serviceDrag = useVerticalDragReorder({
+    keys: serviceDragKeys,
+    onReorder: serviceDragOnReorder,
+  });
 
   const stopCategoryAutoScroll = useCallback(() => {
     if (dragAutoScrollFrameRef.current != null) {
@@ -3451,7 +3551,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // trailing-edge calculation made users drag almost a full pill width
     // before anything moved, which felt sticky rather than like drag-and-drop.
     const referenceX = draggedLeft + draggedWidth / 2;
-    const others = categoryOrderRef.current.filter(n => n !== name);
+    // Walks the order the frozen x values were measured in, NOT the live one.
+    // This used to read categoryOrderRef, which this function itself reorders
+    // on every swap — so from the first swap onwards the loop was scanning a
+    // list whose baseline x values no longer ascended with it. The early
+    // `break` then fired against whichever pill happened to sit at that index,
+    // so the target index jumped around and the pill stopped tracking slots
+    // properly after the first one. Iterating the baseline order keeps the x
+    // values monotonic, which is the assumption the break depends on, and
+    // makes the result a pure function of finger position: the same place
+    // always produces the same order, rather than one that depends on the path
+    // taken to get there.
+    const others = dragOrderBaselineRef.current.filter(n => n !== name);
     let target = others.length;
     for (let i = 0; i < others.length; i++) {
       const otherName = others[i];
@@ -3537,6 +3648,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // the instant the finger touches down.
     const armDrag = (pageX: number) => {
       dragBaselineRef.current = { ...pillLayoutRef.current };
+      dragOrderBaselineRef.current = [...categoryOrderRef.current];
       dragGrantXRef.current = dragBaselineRef.current[name]?.x ?? 0;
       dragTargetRef.current = categoryOrderRef.current.indexOf(name);
       dragAutoScrollDeltaRef.current = 0;
@@ -3886,7 +3998,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // the pill dragging), and would occasionally win outright and cut
               // the drag gesture short, which is also why reordering could look
               // like the other pills weren't reacting to the drag at all.
-              scrollEnabled={!draggingCategory}
+              //
+              // The service-card drag needs this even more than the pills do:
+              // that one is VERTICAL inside this vertical scroller, so the two
+              // gestures are the same gesture and the native recognizer wins
+              // every time it's left enabled. (The image strip never hit this —
+              // a horizontal drag inside a horizontal strip isn't competing
+              // with the page's vertical scroll at all.) Refusing termination
+              // once armed is necessary but not sufficient on iOS, where a pan
+              // already in flight isn't always stopped by this flag alone.
+              scrollEnabled={!draggingCategory && !serviceDrag.draggingKey}
             >
             {/* The measurement origin for every field's auto-scroll position.
                 measureLayout against this node yields true content offsets —
@@ -4594,10 +4715,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 >
                                   {item}
                                 </Text>
-                                {/* Dedicated drag handle — the only part of the pill that
-                                    starts a reorder, so tapping, long-pressing and
-                                    side-scrolling the strip are never mistaken for a drag. */}
-                                <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}>
+                                {/* Dedicated drag handle. Unlike a service card or an
+                                    image thumbnail, the pill itself can't be the grab
+                                    area: it already owns a tap (select) AND a long-press
+                                    (the Edit/Move/Delete menu), and that menu fires at
+                                    ~500ms — right in the middle of a drag that armed at
+                                    220ms — so holding the pill would pop an Alert over
+                                    the gesture. The handle stays; its touch target is
+                                    generous so it doesn't have to be aimed for. */}
+                                <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 16, bottom: 16, left: 12, right: 14 }}>
                                   <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
                                 </View>
                               </BlurView>
@@ -4619,8 +4745,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     {/* Services in Selected Category */}
                     {selectedCategory && (
                       <View style={styles.categoryServicesContainer}>
-                        {providerData.categories[selectedCategory]?.map((service) => (
-                          <View key={service.id} style={styles.serviceItemCard}>
+                        {serviceDrag.orderedKeys.map((serviceKey) => {
+                          const service = providerData.categories[selectedCategory]
+                            ?.find(svc => String(svc.id) === serviceKey);
+                          if (!service) return null;
+                          return (
+                          <Animated.View
+                            key={service.id}
+                            onLayout={serviceDrag.onItemLayout(serviceKey)}
+                            // Hold anywhere on the card, exactly like the image
+                            // thumbnails — not a small dedicated handle. Edit and
+                            // Delete sit deeper in the tree and claim their own
+                            // taps first, so they still work; the handle glyph
+                            // below stays purely as the affordance that says the
+                            // card can be moved.
+                            {...(serviceDrag.orderedKeys.length > 1
+                              ? serviceDrag.getHandlers(serviceKey)
+                              : {})}
+                            style={[styles.serviceItemCard, serviceDrag.getItemStyle(serviceKey)]}
+                          >
                             <BlurView intensity={50} tint={chrome.blurTint} style={styles.serviceCardBlur}>
                               <LinearGradient
                                 colors={[chrome.surf(0.3), 'transparent']}
@@ -4637,12 +4780,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                       horizontal
                                       pagingEnabled
                                       showsHorizontalScrollIndicator={false}
-                                      keyExtractor={(_, index) => index.toString()}
+                                      keyExtractor={(item, index) => `${item.uri}-${index}`}
                                       renderItem={({ item }) => (
                                         <Image
-                                          source={{ uri: item }}
+                                          source={{ uri: item.uri }}
                                           style={styles.serviceImage}
-                                          resizeMode="cover"
+                                          // The provider's own framing choice, so
+                                          // this row shows what clients will see
+                                          // rather than always cropping.
+                                          resizeMode={item.fit}
                                           fadeDuration={0}
                                         />
                                       )}
@@ -4698,11 +4844,21 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   >
                                     <Text style={styles.deleteServiceText}>×</Text>
                                   </TouchableOpacity>
+                                  {/* Dedicated drag handle, same as the category
+                                      pills' — the only part of the card that starts
+                                      a reorder, so tapping Edit/Delete and scrolling
+                                      the page are never mistaken for a drag. */}
+                                  {serviceDrag.orderedKeys.length > 1 && (
+                                    <View style={styles.serviceDragHandle} pointerEvents="none">
+                                      <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
+                                    </View>
+                                  )}
                                 </View>
                               </View>
                             </BlurView>
-                          </View>
-                        ))}
+                          </Animated.View>
+                          );
+                        })}
 
                         {/* Add Service Button — opens the template picker first */}
                         <TouchableOpacity
@@ -6018,7 +6174,13 @@ const makeStyles = (isDark: boolean) => {
   },
   categoryDragHandle: {
     marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  serviceDragHandle: {
+    marginLeft: 4,
     paddingHorizontal: 2,
+    justifyContent: 'center',
   },
   // Matches the section cards: same radius scale, same accent-tinted border,
   // same rose tint-shadow, so a service card reads as the same material.
@@ -6745,6 +6907,46 @@ const makeStyles = (isDark: boolean) => {
     flexDirection: 'row',
     gap: 6,
     marginTop: 10,
+  },
+  // Sits on the first thumbnail so "the first one leads your service" is
+  // visible on the strip itself, not only in the hint below it.
+  coverBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  coverBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  // Bottom-right so it never sits under the remove button (top-right) or the
+  // Cover badge (bottom-left).
+  fitToggle: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  fitToggleText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  carouselHint: {
+    marginTop: 8,
+    fontSize: 11,
+    color: fg(0.45),
+    textAlign: 'center',
   },
   carouselDot: {
     width: 6,

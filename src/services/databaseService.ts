@@ -1117,22 +1117,72 @@ export async function updateCurrentUserMetadata(
 // PORTFOLIO
 // ─────────────────────────────────────────────────────────
 
-/** Fetch one provider's portfolio items (client work gallery), newest first */
+const PORTFOLIO_WORK_LIMIT = 30;
+/** Venue shots are an "about the business" detail, not a gallery to browse —
+ *  a handful is the whole point of them, so they get their own small budget. */
+const PORTFOLIO_VENUE_LIMIT = 12;
+
+const PORTFOLIO_ITEM_COLUMNS =
+  "id, provider_id, service_id, image_url, caption, category, tags, price, aspect_ratio, is_featured, created_at, vibe_tags, occasion_tags, trend_names, hair_type_shown, skin_tone_shown";
+
+/**
+ * One provider's photos, already separated into the work gallery and the
+ * venue/workspace shots, newest first.
+ *
+ * The venue exclusion is done in SQL, NOT by fetching one list and dividing it
+ * afterwards. Every caller was already splitting the result — but the row cap
+ * was applied to the combined list, so a provider's venue photos silently ate
+ * their work gallery's budget: eight shots of the room meant eight fewer
+ * pieces of actual work reaching the profile, their own editor, and Becca's
+ * count.
+ *
+ * `includeVenue` is opt-in and costs the only second query, because just two
+ * of the four callers ever display venue shots (the client profile's
+ * Additional Information, and the InfoReg address step that manages them).
+ * The other two read `work` alone and stay on a single query — fewer round
+ * trips than before this split, not more.
+ *
+ * The work query mirrors getPortfolioItems' exclusion: a NULL category is a
+ * legacy work photo (it predates the venue uploader), and in SQL
+ * `category <> 'venue'` is NULL rather than true for those, so a bare .neq()
+ * would drop them.
+ */
 export async function getProviderPortfolio(
   providerId: string,
-): Promise<DbPortfolioItem[]> {
-  const { data, error } = await supabase
+  options?: { includeVenue?: boolean },
+): Promise<{ work: DbPortfolioItem[]; venue: DbPortfolioItem[] }> {
+  const workQuery = supabase
     .from("portfolio_items")
-    .select(
-      "id, provider_id, service_id, image_url, caption, category, tags, price, aspect_ratio, is_featured, created_at, vibe_tags, occasion_tags, trend_names, hair_type_shown, skin_tone_shown",
-    )
+    .select(PORTFOLIO_ITEM_COLUMNS)
     .eq("provider_id", providerId)
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
     .order("is_featured", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(PORTFOLIO_WORK_LIMIT);
 
-  if (error) throw error;
-  return (data ?? []) as DbPortfolioItem[];
+  if (!options?.includeVenue) {
+    const { data, error } = await workQuery;
+    if (error) throw error;
+    return { work: (data ?? []) as DbPortfolioItem[], venue: [] };
+  }
+
+  const [workResult, venueResult] = await Promise.all([
+    workQuery,
+    supabase
+      .from("portfolio_items")
+      .select(PORTFOLIO_ITEM_COLUMNS)
+      .eq("provider_id", providerId)
+      .eq("category", VENUE_PORTFOLIO_CATEGORY)
+      .order("created_at", { ascending: false })
+      .limit(PORTFOLIO_VENUE_LIMIT),
+  ]);
+
+  if (workResult.error) throw workResult.error;
+  if (venueResult.error) throw venueResult.error;
+  return {
+    work: (workResult.data ?? []) as DbPortfolioItem[],
+    venue: (venueResult.data ?? []) as DbPortfolioItem[],
+  };
 }
 
 /**
@@ -1342,7 +1392,7 @@ export async function getDiscoverServices(
     .select(
       `
       id, provider_id, name, description, price,
-      service_images!inner ( url, sort_order, aspect_ratio ),
+      service_images!inner ( url, sort_order, aspect_ratio, fit ),
       provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
     `,
     )
@@ -8515,6 +8565,27 @@ export async function removeStorageObjects(bucket: string, paths: string[]): Pro
   if (error) throw error;
 }
 
+/**
+ * Object paths directly under one user's folder in `bucket`, e.g.
+ * `<userId>/photo.jpg`. Deliberately NOT recursive: Supabase's list() returns
+ * only immediate children, and sub-folders come back as pseudo-entries with a
+ * null id. Those are filtered out rather than followed, so a caller deleting
+ * what this returns can never walk into a nested legacy folder it didn't mean
+ * to touch.
+ */
+export async function listUserStorageObjectPaths(
+  bucket: string,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase.storage.from(bucket).list(userId, {
+    limit: 1000,
+  });
+  if (error) throw error;
+  return (data ?? [])
+    .filter(entry => entry.id !== null)
+    .map(entry => `${userId}/${entry.name}`);
+}
+
 export async function getProviderLogoUrlByUserId(userId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from("providers")
@@ -8631,7 +8702,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
         service_type,
         hair_types_suitable,
         audience,
-        service_images ( url, sort_order ),
+        service_images ( url, sort_order, fit ),
         service_add_ons ( name, price )
       `)
       .eq("provider_id", providerId)

@@ -341,16 +341,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
   const [services, setServices] = useState<DbService[]>([]);
-  const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
-  // getProviderPortfolio returns the provider's venue/workspace shots in the
-  // same list as their work. They aren't portfolio photos to a client — they
-  // render inside Additional Information on the profile and never appear in
-  // Explore — and they're added and removed in Business Profile's "Address
-  // photos" grid, not here, so this screen's PORTFOLIO card counts and shows
-  // the work half only. Counting them here read as photos a client would
-  // browse, and the rail offered a delete for a photo this screen never
-  // explained.
-  const workPhotos = useMemo(() => splitPortfolioByKind(portfolio).work, [portfolio]);
+  // Work photos only — venue/workspace shots aren't portfolio photos to a
+  // client (they render inside Additional Information on the profile and never
+  // appear in Explore) and they're added and removed in Business Profile's
+  // "Address photos" grid, not here. getProviderPortfolio now excludes them in
+  // SQL unless asked for, so this screen never fetches what it can't show.
+  const [workPhotos, setWorkPhotos] = useState<DbPortfolioItem[]>([]);
   const [reviews, setReviews] = useState<
     { id: string; name: string; rating: number; comment: string; date: string }[]
   >([]);
@@ -424,7 +420,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               const catalogue = await getMyServiceCatalogue(profile.id);
               setServices(catalogue.services);
 
-              getProviderPortfolio(profile.id).then(setPortfolio).catch(() => {});
+              getProviderPortfolio(profile.id)
+                .then(({ work }) => setWorkPhotos(work))
+                .catch(() => {});
 
               getMyBookmarkCount()
                 .then(setBookmarkCount)
@@ -739,7 +737,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
           const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
           const item = await addPortfolioItem(providerId, publicUrl, ratio);
-          setPortfolio(prev => [item, ...prev]);
+          setWorkPhotos(prev => [item, ...prev]);
         } catch (e) {
           logger.error('[MyServices] portfolio upload failed:', e);
           Alert.alert(
@@ -759,11 +757,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          setPortfolio(prev => prev.filter(p => p.id !== item.id));
+          setWorkPhotos(prev => prev.filter(p => p.id !== item.id));
           try {
             await deletePortfolioItem(item.id);
           } catch (e) {
-            setPortfolio(prev => [item, ...prev]);
+            setWorkPhotos(prev => [item, ...prev]);
             logger.error('[MyServices] portfolio delete failed:', e);
             Alert.alert(
               'Could not remove',

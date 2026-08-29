@@ -1,3 +1,5 @@
+import type { ServiceImageDraft } from '../../services/providerRegistrationService';
+
 export type ProviderServiceType = 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
 
 // '' = not stated, read as "everyone" by the app — mirrors the live
@@ -24,7 +26,7 @@ export interface ProviderServiceDraft {
   bufferBeforeMins: number | null;
   bufferAfterMins: number | null;
   description: string;
-  images: string[];
+  images: ServiceImageDraft[];
   addOns: { id: number; name: string; price: number }[];
   tags: string[];
   techniqueTags: string[];

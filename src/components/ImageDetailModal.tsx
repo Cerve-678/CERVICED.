@@ -270,6 +270,9 @@ interface CarouselController {
 const ImageCarousel: React.FC<{
   images: PortfolioItem['image'][];
   height: number;
+  /** Framing for the photo at `index` — the provider's own per-photo choice
+   *  where there is one, otherwise the caller's mixed-ratio fallback. */
+  fitFor: (index: number) => 'cover' | 'contain';
   backgroundColor: string;
   itemKey: string;
   initialIndex: number;
@@ -278,6 +281,7 @@ const ImageCarousel: React.FC<{
 }> = ({
   images,
   height,
+  fitFor,
   backgroundColor,
   itemKey,
   initialIndex,
@@ -342,14 +346,14 @@ const ImageCarousel: React.FC<{
         initialNumToRender={1}
         windowSize={3}
         maxToRenderPerBatch={2}
-        renderItem={({ item: source }) => (
+        renderItem={({ item: source, index }) => (
         // source is PortfolioItem['image'] (RN's broad ImageSourcePropType)
         // but always constructed as { uri: string } — see PortfolioCard.tsx
         // for why this narrowing is needed for expo-image's stricter type.
         <Image
           source={{ uri: (source as { uri: string }).uri }}
           style={{ width: SCREEN_WIDTH, height, backgroundColor }}
-          contentFit="cover"
+          contentFit={fitFor(index)}
           transition={0}
         />
         )}
@@ -391,17 +395,53 @@ function ModalBody({
   handleBookNow,
 }: ModalBodyProps) {
   const insets = useSafeAreaInsets();
-  // pageSheet already keeps content off the very top edge, so only the
-  // photo's own aspect ratio governs its height here — capped so a very
-  // tall/narrow photo doesn't push the card off-screen. The cap is
-  // generous (0.85 of the screen, not 0.6) specifically so "cover" rarely
-  // has anything to crop: the box tracks the photo's real proportions up
-  // until this point, so the image fills it exactly rather than being
-  // zoomed/cropped to fit a much shorter box.
-  const imageHeight = Math.min(
-    SCREEN_HEIGHT * 0.85,
-    SCREEN_WIDTH / item.aspectRatio,
+  // The carousel gets ONE height for the whole photo set, taken from the
+  // set's median ratio — not from `item.aspectRatio`, which is only the
+  // ratio of the photo that happened to be tapped. Explore fans a service
+  // into one card per photo (see mapDbServiceToCards), so sizing off the
+  // tapped card meant the same service opened at a different height
+  // depending on which photo you came in through, and every other photo in
+  // the set was then cover-cropped to fit it. The median is stable whichever
+  // card is the entry point, and it's the ratio that leaves the set as a
+  // whole least distorted.
+  //
+  // A single-photo item (every portfolio and provider card) has a
+  // one-element set, so its median IS its own ratio and nothing about those
+  // changes.
+  const setRatios =
+    item.imageAspectRatios && item.imageAspectRatios.length > 0
+      ? item.imageAspectRatios.filter((r) => Number.isFinite(r) && r > 0)
+      : [item.aspectRatio];
+  const boxRatio = useMemo(() => {
+    const sorted = [...setRatios].sort((a, b) => a - b);
+    if (sorted.length === 0) return item.aspectRatio;
+    const mid = Math.floor(sorted.length / 2);
+    // Even count: average the middle pair rather than picking arbitrarily,
+    // so a two-photo set sits between its two shapes instead of snapping to
+    // the taller one.
+    return sorted.length % 2 === 1
+      ? (sorted[mid] as number)
+      : (((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setRatios.join(','), item.aspectRatio]);
+  // Capped so a very tall/narrow photo doesn't push the card off-screen. The
+  // cap is generous (0.85 of the screen, not 0.6) so the box tracks real
+  // proportions almost always.
+  const imageHeight = Math.min(SCREEN_HEIGHT * 0.85, SCREEN_WIDTH / boxRatio);
+  // With one box for a mixed-ratio set, "cover" would crop whichever photos
+  // don't match the median — the exact thing this is fixing — so those sets
+  // letterbox against the surface colour instead. A set whose photos all
+  // share a shape (and every single-photo item) still fills the box edge to
+  // edge, because there "contain" and "cover" resolve identically.
+  const setHasMixedRatios = setRatios.some(
+    (r) => Math.abs(r - boxRatio) > 0.01,
   );
+  // Per photo, the provider's stored choice wins outright — that control
+  // exists precisely so the app stops deciding this for them. Only where
+  // there's no choice to honour (a portfolio photo, or a service saved before
+  // the column existed) does the mixed-ratio fallback above apply.
+  const fitFor = (index: number): 'cover' | 'contain' =>
+    item.imageFits?.[index] ?? (setHasMixedRatios ? 'contain' : 'cover');
   // How much of the photo's bottom the card visually rests on at open —
   // the card is an absolutely-positioned layer painted in front of the
   // image (see the image/ScrollView stacking below), so it now scrolls up
@@ -595,6 +635,7 @@ function ModalBody({
         <ImageCarousel
           images={images}
           height={imageHeight}
+          fitFor={fitFor}
           backgroundColor={P.surface}
           itemKey={item.id}
           initialIndex={initialImageIndex}

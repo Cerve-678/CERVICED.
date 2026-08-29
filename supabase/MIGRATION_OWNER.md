@@ -27,6 +27,24 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Applied 2026-08-29 (service photo framing)
+
+`20260829011733_service_image_fit.sql` — adds `service_images.fit`
+('cover' | 'contain', NOT NULL DEFAULT 'cover', CHECK-constrained) and
+reproduces `replace_provider_services()` so the catalogue rewrite carries the
+new column instead of resetting every provider's framing on their next save.
+
+Verified live, body included, not just the column: `fit` exists with 81/81 rows
+on 'cover' and 0 nulls, the CHECK constraint is present, and the live function
+source contains `fit`. The function was reproduced from `pg_get_functiondef()`
+output — note the live definition already carried `audience`, which the tracked
+`supabase/replace_provider_services.sql` does not, so that file is stale and
+was NOT used as the base.
+
+**The file is named for the version `apply_migration` assigned itself
+(`20260829011733`), not the timestamp it was written with** — renamed after
+applying, per the standing gotcha.
+
 ### Applied 2026-08-28 (client loyalty points — earning side)
 
 | Recorded version | Name | Verified live |
