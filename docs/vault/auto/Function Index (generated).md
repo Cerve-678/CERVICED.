@@ -5,7 +5,7 @@
 
 #generated
 
-**1992 functions** across **256 files**.
+**1994 functions** across **257 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -54,7 +54,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (6)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · loadUserProfile · login · logout · reactivateAccount · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
@@ -167,7 +167,7 @@
 - `PointsScreen.tsx` — load · PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
-- `ProviderProfileScreen.tsx` — adaptiveAccentColor · additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · formatDate · goodToKnowText · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleGetInTouch · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openImageViewer · openOffersPanel · ProviderProfileScreen · ProviderProfileSkeleton · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · sectionPalette · selectedServicesFlat · selectedTotal · showRightNotification · showSuccessMessageWithAnimation · slideStyle · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
+- `ProviderProfileScreen.tsx` — adaptiveAccentColor · additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · dotWindow · formatDate · goodToKnowText · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleGetInTouch · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openImageViewer · openOffersPanel · ProviderProfileScreen · ProviderProfileSkeleton · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · sectionPalette · selectedServicesFlat · selectedTotal · showRightNotification · showSuccessMessageWithAnimation · slideStyle · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · minPickerDate · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen
 - `SearchScreen.tsx` — activeFilterChips · clearFilter · filteredProviders · formatPriceRange · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · mapDbToCardData · providersWithAvailability · providersWithDistance · providersWithPriceRange · renderHeader · resetFilters · run · SearchScreen · specialtiesFor · updateCityFilter · updateFilter
 - `SubscriptionScreen.tsx` — SubscriptionScreen
@@ -250,7 +250,8 @@
 ### `src/types/` (1)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 
-### `src/utils/` (20)
+### `src/utils/` (21)
+- `accountHats.ts` — **accountHats** · **resolveRestoredMode**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
