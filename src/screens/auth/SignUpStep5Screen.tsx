@@ -264,6 +264,28 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       return;
     }
 
+    // Last line of defence before creating a brand-new auth user. Every
+    // legitimate route for a signed-in account is an in-place upgrade and has
+    // already returned above (fromClientSwitch / fromProviderSwitch). Reaching
+    // here while signed in means some entry point dropped the switch flag, and
+    // the cold-signup path is actively harmful from inside a session: with the
+    // account's own email Supabase refuses it ("account exists") five screens
+    // deep, and with any other email it succeeds — creating a second, unlinked
+    // auth user, then navigating to EmailVerification, which is only registered
+    // on the logged-out stack (see RootNavigation). That leaves an unverifiable
+    // orphan account and a navigation dead end. Refuse rather than half-do it.
+    if (user) {
+      logger.error('[signup] cold-signup path reached while signed in — no switch flag set; refusing to create a second account');
+      Alert.alert(
+        'You\'re already signed in',
+        'This account can hold both a client and a provider profile on the same login. ' +
+        'Add the one you\'re missing from your profile screen — no second account needed.',
+        [{ text: 'OK', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] }) }]
+      );
+      setIsLoading(false);
+      return;
+    }
+
     const personalEmail = data.email.trim();
     // DOB is collected for both account types now (client: Step 3, provider:
     // Step 2) — this used to be gated to accountType === 'user' only, which
