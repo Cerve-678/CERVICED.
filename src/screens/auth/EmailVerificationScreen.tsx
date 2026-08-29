@@ -90,12 +90,19 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         phone: meta['phone'] ?? '',
         dob: dob || null,
         role: meta['role'] ?? 'user',
-        // Set the hat explicitly — the column defaults to false, so a fresh
-        // client signup that leaves it out reads as having no client profile
-        // and loses the client tab. A provider signing up starts without one
-        // until they add it (addClientProfile), which is the point of the
-        // column: it is no longer inferred from whether `dob` happens to be set.
-        has_client_profile: (meta['role'] ?? 'user') !== 'provider',
+        // Set the hat ON for a client signup — the column defaults to false, so
+        // leaving it out entirely would read as having no client profile and
+        // lose the client tab. A provider signing up starts without one until
+        // they add it (addClientProfile), which is the point of the column: it
+        // is no longer inferred from whether `dob` happens to be set.
+        //
+        // Omitted rather than written as `false` for a provider, because this
+        // is an UPSERT and an upsert only updates the columns it names. Writing
+        // false would mean any re-run of this screen against an existing row —
+        // a repeated verification, a retry — silently strips a client hat the
+        // account had already added. Omitting it lets the column DEFAULT false
+        // apply on insert while leaving an existing value untouched.
+        ...((meta['role'] ?? 'user') !== 'provider' ? { has_client_profile: true } : {}),
         login_method: 'email',
         service_interests:     meta['service_interests']     ?? [],
         business_name:         meta['business_name']         ?? null,
