@@ -61,7 +61,7 @@ import type {
   DbProviderAvailabilityWindow,
   DbProviderAvailabilityOverride,
 } from '../../types/database';
-import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes } from '../../utils/dateUtils';
+import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes, overridesFromDate } from '../../utils/dateUtils';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import {
@@ -98,14 +98,6 @@ const DAY_FULL     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday
 
 function formatDateString(date: Date): string {
   return dateToYMD(date);
-}
-
-/** Far enough back to cover every booking the day list can show, without
- *  pulling a provider's whole history of one-off closures on every focus. */
-function overridesFromDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 14);
-  return dateToYMD(d);
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -1031,11 +1023,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     return undefined;
   }, [route.params?.jumpToDate, navigation]);
 
-  // Fetch bookings
-  const loadBookings = useCallback(async (showLoad = false) => {
+  // Fetch bookings. `providerId`, when the caller already has it (the
+  // combined focus effect below fetches the profile once for both this and
+  // the availability bundle), skips getProviderBookings' own internal
+  // profile lookup rather than repeating it.
+  const loadBookings = useCallback(async (showLoad = false, providerId?: string) => {
     if (showLoad) setLoading(true);
     try {
-      const rows = await getProviderBookings();
+      const rows = await getProviderBookings(90, providerId);
       setBookings(rows.map(mapDbBookingToConfirmed));
     } catch (err) {
       logger.error('[ProviderHome] bookings load failed:', err);
@@ -1063,22 +1058,33 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       .catch(err => logger.error('[ProviderHome] service duration lookup failed:', err));
     return () => { cancelled = true; };
   }, [bookings]);
-  useFocusEffect(useCallback(() => {
-    const showInitialLoad = !hasLoadedBookingsRef.current;
-    hasLoadedBookingsRef.current = true;
-    void loadBookings(showInitialLoad);
-  }, [loadBookings]));
-
   // Keep the header bell's unread badge in sync (provider-role notifications only)
   useFocusEffect(useCallback(() => {
     getUnreadNotificationCount('provider').then(setUnreadCount).catch((err) => logger.error('[ProviderHome] unread count load failed:', err));
   }, []));
 
-  // Reload availability/blocked dates whenever screen is focused (e.g. after editing in ProviderScheduleScreen)
+  // Bookings + availability/blocked-dates, reloaded together on every focus
+  // (e.g. after editing in ProviderScheduleScreen) from ONE profile fetch —
+  // these used to each call getMyProviderProfile() independently, a
+  // duplicate round trip on every visit to the screen providers live in.
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     getMyProviderProfile().then(profile => {
-      if (!profile || cancelled) return;
+      if (cancelled) return;
+      // Flipped only once we're actually about to load, not before the
+      // profile fetch even resolves — otherwise a profile fetch that comes
+      // back null/fails on the first focus would permanently mark the
+      // initial load as "done" without it ever having run, silently losing
+      // the loading spinner on every retry after.
+      const showInitialLoad = !hasLoadedBookingsRef.current;
+      hasLoadedBookingsRef.current = true;
+      // Bookings still load even if the profile fetch failed — falls back to
+      // getProviderBookings' own internal profile lookup rather than staying
+      // decoupled from availability the way it was pre-merge, but not
+      // silently skipping bookings entirely just because availability can't
+      // load this focus.
+      void loadBookings(showInitialLoad, profile?.id);
+      if (!profile) return;
       return Promise.all([
         getProviderAvailability(profile.id),
         getProviderBlockedDates(profile.id),
@@ -1138,9 +1144,18 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           }
         }).catch((err) => logger.error('[ProviderHome] go-live celebration flag read failed:', err));
       });
-    }).catch((err) => logger.error('[ProviderHome] provider profile load failed:', err));
+    }).catch((err) => {
+      logger.error('[ProviderHome] provider profile load failed:', err);
+      if (cancelled) return;
+      // Profile fetch itself rejected (not just resolved null) — still
+      // attempt bookings via its own internal fallback rather than leaving
+      // this focus with neither bookings nor availability loaded.
+      const showInitialLoad = !hasLoadedBookingsRef.current;
+      hasLoadedBookingsRef.current = true;
+      void loadBookings(showInitialLoad);
+    });
     return () => { cancelled = true; };
-  }, []));
+  }, [loadBookings]));
 
   useEffect(() => {
     let cancelled = false;

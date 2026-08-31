@@ -494,36 +494,39 @@ export default function HomeScreen() {
       });
     }
 
-    getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
-    getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
-    getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))).catch(() => {});
-
-    // Per-service audience refinement for the Male/Kids sections — see the
-    // state declarations above. Widens qualification beyond providers whose
-    // whole business is registered as service_category MALE/KIDS.
-    //
-    // Two separate fetches on purpose: getProviderIdsByServiceAudience
-    // doesn't require a photo, so a provider whose new "Men's Cut" has no
-    // photo YET still makes their provider tile qualify. getDiscoverServices
-    // does require one (it's the same photo feed Explore uses) — that one
-    // only decides whether an actual service CARD can render, which
-    // legitimately needs a photo to show.
-    getProviderIdsByServiceAudience('men').then(ids => {
-      setMaleServiceProviderIds(new Set(ids));
-    }).catch(() => {});
-    getProviderIdsByServiceAudience('kids').then(ids => {
-      setKidsServiceProviderIds(new Set(ids));
-    }).catch(() => {});
-    // Photo rail fetch skipped while AUDIENCE_SERVICE_PHOTOS_ENABLED is off,
-    // see FUTURE_LOGIC.md — the provider-tile widening above is unaffected.
-    if (AUDIENCE_SERVICE_PHOTOS_ENABLED) {
-      getDiscoverServices(undefined, 15, 'men').then(data => {
-        setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
-      }).catch(() => {});
-      getDiscoverServices(undefined, 15, 'kids').then(data => {
-        setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
-      }).catch(() => {});
-    }
+    // These provider rails are independent of each other and of the
+    // location/promotions fetches above — batched into one Promise.allSettled
+    // so their fire-and-forget requests are issued and (silently) degrade
+    // together, instead of six separate top-level promises each carrying its
+    // own individual .catch(() => {}). Behaviour is unchanged: they already
+    // ran concurrently before this, this just coordinates them.
+    void Promise.allSettled([
+      getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
+      getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
+      getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
+      // Per-service audience refinement for the Male/Kids sections — see the
+      // state declarations above. Widens qualification beyond providers whose
+      // whole business is registered as service_category MALE/KIDS.
+      //
+      // Two separate fetches on purpose: getProviderIdsByServiceAudience
+      // doesn't require a photo, so a provider whose new "Men's Cut" has no
+      // photo YET still makes their provider tile qualify. getDiscoverServices
+      // does require one (it's the same photo feed Explore uses) — that one
+      // only decides whether an actual service CARD can render, which
+      // legitimately needs a photo to show.
+      getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
+      getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
+      // Photo rail fetch skipped while AUDIENCE_SERVICE_PHOTOS_ENABLED is off,
+      // see FUTURE_LOGIC.md — the provider-tile widening above is unaffected.
+      ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
+        getDiscoverServices(undefined, 15, 'men').then(data =>
+          setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+        ),
+        getDiscoverServices(undefined, 15, 'kids').then(data =>
+          setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+        ),
+      ] : []),
+    ]);
     return () => { locationRunCancelled = true; };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself

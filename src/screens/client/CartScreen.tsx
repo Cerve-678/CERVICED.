@@ -2126,17 +2126,28 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     );
   }, [items, itemsByProvider]);
 
+  // Keyed on the sorted, deduped provider-name SET rather than `items`
+  // itself — editing one item's time/notes/add-ons/deposit choice produces a
+  // new `items` array reference without changing which providers are in the
+  // cart, and used to retrigger this fetch anyway.
+  const providerNamesKey = useMemo(
+    () => JSON.stringify(
+      [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))].sort(),
+    ),
+    [items],
+  );
+
   // Fetch checkout-facing provider metadata in one bounded request whenever
   // the providers represented in the cart change.
   useEffect(() => {
-    if (items.length === 0) {
+    const names: string[] = JSON.parse(providerNamesKey);
+    if (names.length === 0) {
       setProviderDepositPolicies({});
       setMobileProviderNames([]);
       setCheckoutMetadataError(false);
       setResolvedProviderNames(new Set());
       return;
     }
-    const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
     let cancelled = false;
     getProviderCheckoutMetadata(names)
       .then(({ depositPolicies, mobileProviderNames }) => {
@@ -2163,7 +2174,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         setCheckoutMetadataError(true);
       });
     return () => { cancelled = true; };
-  }, [items]);
+  }, [providerNamesKey]);
 
   // ── Promo codes ────────────────────────────────────────────────────────────
   // No manual entry in the cart — a code only lands here carried over via

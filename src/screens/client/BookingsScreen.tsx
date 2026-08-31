@@ -234,6 +234,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     allTodayBookingsCompleted,
     providerRespondToReschedule,
     reloadBookings,
+    reloadBookingsIfStale,
   } = useBooking();
 
   // Past Bookings only shows the last 30 days of history — older rows stay
@@ -804,12 +805,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ==================== EFFECTS ====================
 
-  // Detect initial load failure from BookingContext
+  // Detect initial load failure from BookingContext. This screen is a Stack
+  // screen in four separate tab stacks, so it's a fresh mount on nearly
+  // every visit — reloadBookingsIfStale skips the full AsyncStorage+network
+  // reload when the context already loaded within the last 15s (its own
+  // mount effect + realtime subscription already keep it current), instead
+  // of repeating that round trip on every navigation into this screen.
   useEffect(() => {
-    reloadBookings().catch(() => {
+    reloadBookingsIfStale().catch(() => {
       setBookingsError('Failed to load bookings. Pull down to retry.');
     });
-  }, [reloadBookings]);
+  }, [reloadBookingsIfStale]);
 
   useEffect(() => {
     if (currentBooking?.coordinates && mapRef.current) {
@@ -925,6 +931,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         const correctTab: 'all' | 'past' = isInPast ? 'past' : 'all';
         logger.log('Auto-detected tab:', correctTab);
         setActiveFilters(new Set([correctTab]));
+        // History keeps its own category filter, which the tab switch above
+        // doesn't touch — leave it set and a booking outside that category
+        // never appears in the list to scroll to or highlight.
+        if (isInPast) setPastCategoryFilter(null);
 
         setSelectedBooking(booking);
 
@@ -937,13 +947,23 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           }, 3000);
         }
 
-        // Move past the list header once the history view is active. The
-        // outer FlatList owns scrolling, so this keeps notification-driven
-        // navigation on the same virtualized surface as manual browsing.
+        // Scroll the booking itself into view rather than a fixed distance
+        // past the list header — an upcoming booking sits inside its
+        // service-category row, a past one is a row of its own. Rows below the
+        // render window aren't mounted yet, so onScrollToIndexFailed owns the
+        // offset fallback.
         setTimeout(() => {
-          if (mainScrollRef.current) {
-            mainScrollRef.current.scrollToOffset({ offset: 200, animated: true });
-            logger.log('Scrolled to bookings section');
+          const index = virtualizedListRowsRef.current.findIndex(row =>
+            row.kind === 'past-booking'
+              ? row.booking.id === bookingId
+              : row.kind === 'category' && row.bookings.some(b => b.id === bookingId)
+          );
+          if (index >= 0) {
+            mainScrollRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.25 });
+            logger.log('Scrolled to booking row', { bookingId, index });
+          } else {
+            mainScrollRef.current?.scrollToOffset({ offset: 200, animated: true });
+            logger.warn('Booking row not in the list yet, scrolled past the header instead', { bookingId });
           }
         }, 400);
 
@@ -1127,6 +1147,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
     return rows;
   }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries]);
+
+  // The notification-driven scroll above fires on a timer, after the filter
+  // switch has re-rendered this list, so it needs the rows as they are at that
+  // moment rather than the ones its effect closed over.
+  const virtualizedListRowsRef = useRef<BookingsListRow[]>(virtualizedListRows);
+  useEffect(() => {
+    virtualizedListRowsRef.current = virtualizedListRows;
+  }, [virtualizedListRows]);
 
   // ✅ Check if booking has been rated or tipped
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);

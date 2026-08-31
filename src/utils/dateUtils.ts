@@ -183,6 +183,15 @@ export function dateToYMD(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Cutoff for fetching a provider's availability overrides: far enough back
+ *  to cover every booking a day list can show, without pulling their whole
+ *  history of one-off closures on every fetch. */
+export function overridesFromDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  return dateToYMD(d);
+}
+
 /** "Today" / "Tomorrow" / "Yesterday" / null (caller falls back to a date format) for a given date. */
 export function relativeDayLabel(input: string | Date): string | null {
   const date = toLocalDate(input);

@@ -38,7 +38,7 @@ import type {
 } from '../../types/database';
 import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
-import { formatTime12, formatShortDate, dateToYMD } from '../../utils/dateUtils';
+import { formatTime12, formatShortDate, dateToYMD, overridesFromDate } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
 import { isDarkColor } from '../../constants/providerThemes';
 
@@ -160,7 +160,10 @@ export default function AddBookingScreen() {
         const [blocked, windows, overrides] = await Promise.all([
           getProviderBlockedDates(profile.id),
           getProviderAvailabilityWindows(profile.id),
-          getProviderAvailabilityOverrides(profile.id),
+          // Overrides only from a fortnight back — same cutoff ProviderHomeScreen
+          // uses, so this modal doesn't pull a provider's whole history of
+          // one-off closures (unbounded before this) on every open.
+          getProviderAvailabilityOverrides(profile.id, overridesFromDate()),
         ]);
         setBlockedDates(blocked);
         setAvailabilityWindows(windows);
