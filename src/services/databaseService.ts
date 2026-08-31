@@ -6842,6 +6842,63 @@ export async function getUserProfileById(
   return data as DbUser;
 }
 
+/**
+ * Which coach-mark walkthroughs this account has already been shown, as
+ * {tour_key: version}. Empty object for an account that has seen none.
+ *
+ * Account-scoped on purpose: the device-local flag this replaced could not
+ * survive a reinstall or follow the account to a second phone, which is why
+ * walkthroughs appeared to replay on every sign-in.
+ */
+export async function getSeenTours(
+  userId: string,
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("seen_tours")
+    .eq("id", userId)
+    .single();
+  if (error) throw error;
+  return ((data as { seen_tours: Record<string, number> | null } | null)
+    ?.seen_tours ?? {}) as Record<string, number>;
+}
+
+/**
+ * Record that this account has been shown `tourKey` up to `version`.
+ *
+ * Goes through the RPC rather than an UPDATE so the write merges one key into
+ * the map instead of rewriting it — two tours can finish moments apart on
+ * adjacent tabs, and a read-modify-write would lose one. The RPC also refuses
+ * to move a version backwards, so a stale app build cannot un-see a newer
+ * walkthrough for someone who has already been shown it.
+ */
+export async function markTourSeen(
+  tourKey: string,
+  version: number,
+): Promise<void> {
+  const { error } = await supabase.rpc("mark_tour_seen", {
+    p_key: tourKey,
+    p_version: version,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Wipe this account's walkthrough record so every tour is owed again.
+ *
+ * Dev-only (DevSettings > Replay Walkthroughs). It has to clear the ACCOUNT's
+ * record, not just the device cache: with users.seen_tours as the source of
+ * truth, clearing the cache alone leaves the server still saying "seen" and
+ * the replay silently does nothing.
+ */
+export async function clearSeenTours(userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({ seen_tours: {} })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
 /** Fetch name, phone, and dob for a user — for the account-info edit screen */
 export async function getUserBasicInfo(userId: string): Promise<{
   name: string | null;

@@ -52,6 +52,12 @@ export interface CoachMarkStep {
   radius?: number;
   /** Ionicons glyph shown in the caption card's header tile. */
   icon?: keyof typeof Ionicons.glyphMap;
+  /** The tour version this step first shipped in; absent means it was in the
+   *  original tour (1). Someone who has already been walked through version N
+   *  is shown only the steps above N — that is how a walkthrough for a NEW
+   *  feature reaches existing users without replaying the whole thing. See
+   *  src/utils/coachMarkTours.ts. */
+  sinceVersion?: number;
 }
 
 interface CoachMarkTourProps {

@@ -20,6 +20,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { useBooking } from '../../contexts/BookingContext';
 import { STORAGE_KEYS, TOUR_SEEN_PREFIXES } from '../../utils/storageKeys';
+import { clearSeenTours } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -181,9 +182,13 @@ export default function DevSettingsScreen({ navigation }: any) {
       if (tourKeys.length > 0) {
         await AsyncStorage.multiRemove(tourKeys);
       }
+      // The device cache is no longer the source of truth — users.seen_tours
+      // is. Clearing only the cache leaves the account record still saying
+      // "seen", and the replay does nothing at all.
+      if (user?.id) await clearSeenTours(user.id);
       Alert.alert(
         'Walkthroughs Re-armed',
-        `Cleared ${tourKeys.length} flag(s). Reload now to see them — the client tour runs on Home, and the Explore tour runs the first time you open Explore once its feed has loaded.`,
+        `Cleared ${tourKeys.length} device flag(s) and this account's walkthrough record. Reload now to see them — the client tour runs on Home, and the Explore tour runs the first time you open Explore once its feed has loaded.`,
         [
           { text: 'Later', style: 'cancel' },
           { text: 'Reload', onPress: () => DevSettings.reload() },

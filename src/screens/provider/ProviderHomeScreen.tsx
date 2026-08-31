@@ -32,7 +32,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { storage } from '../../utils/storage';
-import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import {
   getProviderBookings,
@@ -828,22 +829,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // (tab bar, view-mode toggle, FAB, bell) is header chrome that renders
   // immediately — so waiting on setupStatus would only mean a provider whose
   // setup fetch fails never sees the tour at all.
-  useEffect(() => {
-    if (tourCheckedRef.current || !user?.id) return;
-    tourCheckedRef.current = true;
-    const seenKey = tourSeenKey(TOUR_SEEN_PREFIXES.PROVIDER_HOME, user.id);
-    storage.getItem<boolean>(seenKey).then(seen => {
-      if (seen) return;
-      // Give the header controls and FAB time to finish their entrance
-      // layout before the tour measures where they actually landed.
-      setTimeout(() => setShowTour(true), 500);
-    }).catch((err) => logger.error('[ProviderHome] tour-seen flag read failed:', err));
-  }, [user?.id]);
-
   const finishTour = useCallback(() => {
     setShowTour(false);
-    if (user?.id) storage.setItem(tourSeenKey(TOUR_SEEN_PREFIXES.PROVIDER_HOME, user.id), true).catch((err) => logger.error('[ProviderHome] tour-seen flag write failed:', err));
-  }, [user?.id]);
+  }, []);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
     // Mirrors IslandPillTabBar's own layout constants (that component lives
@@ -896,6 +884,35 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       },
     ];
   }, []);
+
+  // Which step keys this account still has coming; null until resolved.
+  const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (tourCheckedRef.current || !user?.id) return;
+    tourCheckedRef.current = true;
+    const userId = user.id;
+    void (async () => {
+      const decision = await resolveTourForUser(TOUR_KEYS.PROVIDER_HOME, tourSteps, userId);
+      if (!decision.show) return;
+      setTourStepKeys(decision.steps.map(step => step.key));
+      // Recorded on SHOW, not on finish — see tourService. This is also the
+      // tour a client sees the first time they put on the provider hat: the
+      // account has no provider_home record until this fires, whatever their
+      // client-side tours say.
+      void recordTourSeen(TOUR_KEYS.PROVIDER_HOME, userId, decision.stampVersion);
+      // Give the header controls and FAB time to finish their entrance
+      // layout before the tour measures where they actually landed.
+      setTimeout(() => setShowTour(true), 500);
+    })();
+  }, [user?.id, tourSteps]);
+
+  // Only the steps this account is actually owed; filtered from tourSteps so
+  // the live element refs inside each step stay the ones this render measures.
+  const visibleTourSteps = useMemo(
+    () => (tourStepKeys ? tourSteps.filter(step => tourStepKeys.includes(step.key)) : []),
+    [tourSteps, tourStepKeys],
+  );
 
   // Add-action sheet
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -1674,7 +1691,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         <Ionicons name="add" size={26} color={P.ice} />
       </TouchableOpacity>
 
-      <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
+      <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
 
       {/* ── Go-live celebration ──────────────────────────────────── */}
       <Modal visible={showGoLiveCelebration} transparent animationType="fade" onRequestClose={() => setShowGoLiveCelebration(false)}>
