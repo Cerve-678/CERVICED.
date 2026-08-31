@@ -45,7 +45,7 @@ Curated: [[Availability & Slots]] · **154 files**
 - `src/services/databaseService.ts` _(262)_
 - `src/components/ModernBeautyCalendar.tsx` _(192)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
-- `src/screens/client/SearchScreen.tsx` _(106)_
+- `src/screens/client/SearchScreen.tsx` _(107)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(85)_
 - `src/screens/provider/InfoRegScreen.tsx` _(85)_
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **146 files**
 - … +116 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **69 files**
+Curated: [[Provider Onboarding & Go-Live]] · **70 files**
 - `src/services/databaseService.ts` _(61)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(46)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(44)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **69 files**
 - `src/services/becca/aiRuntime.ts` _(3)_
 - `supabase/add_providers_availability_rpc.sql` _(3)_
 - `supabase/availability_v2.sql` _(3)_
-- … +39 more
+- … +40 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**

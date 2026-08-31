@@ -39,6 +39,11 @@ import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { logger } from '../../utils/logger';
+import {
+  resolveProviderPriceRange,
+  priceRangeMatchesBucket,
+  priceSortKey,
+} from '../../utils/providerPriceMatch';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -169,25 +174,12 @@ const CATEGORY_CODE_MAP: Record<string, string> = {
 const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics', 'Other']
   .map(c => ({ key: c, label: c }));
 
-// Single source of truth for price_tier → both the price range shown on a
-// card AND the £ min/max the Price filter compares against. These used to
-// be two independent, disconnected values (the displayed range was picked
-// by the provider's position in the result list, not its actual tier), so
-// filtering by "£100+" could return a card visibly labelled "£25–£50" —
-// this keeps them in sync.
-//
-// The Price filter compares this min/max RANGE against the chosen bucket's
-// range (do the two overlap at all), not a single approx point against the
-// bucket — a point comparison silently drops a tier whose own range spans
-// the bucket boundary (e.g. "mid" covers £35–£65, but its old approx of £50
-// alone would never match someone filtering for "£60–£100" even though mid
-// legitimately reaches into it).
-const PRICE_TIER_INFO: Record<'budget' | 'mid' | 'premium' | 'luxury', { label: string; min: number; max: number }> = {
-  budget:  { label: '£15–£35',  min: 15,  max: 35 },
-  mid:     { label: '£35–£65',  min: 35,  max: 65 },
-  premium: { label: '£65–£100', min: 65,  max: 100 },
-  luxury:  { label: '£100+',    min: 100, max: 9999 },
-};
+// Price matching lives in src/utils/providerPriceMatch.ts, alongside the
+// tier fallback it needs — the card's displayed range and the Price filter's
+// comparison have to agree, and they only do if they read the same resolver.
+// They previously did not: the card printed real service prices while the
+// filter tested providers.price_tier, which is NULL for every provider in
+// production, so every price bucket matched nobody.
 const KM_TO_MILES = 0.621371;
 
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
@@ -650,17 +642,24 @@ export default function SearchScreen({ navigation, route }: Props) {
   // is queried by. Replaces the old hardcoded "Price on request" fallback
   // with real data (or nothing, while unresolved/absent) on the card.
   const [priceRangeByProviderId, setPriceRangeByProviderId] = useState<Map<string, { min: number; max: number }>>(new Map());
+  // Tracked, not inferred from an empty map: "no provider here has priced
+  // services" and "the fetch hasn't come back" are different answers, and the
+  // Price filter has to hold its verdict for the second one only.
+  const [priceRangeLoading, setPriceRangeLoading] = useState(false);
 
   React.useEffect(() => {
     const ids = providerData.map(p => p.providerId);
     if (ids.length === 0) {
       setPriceRangeByProviderId(new Map());
+      setPriceRangeLoading(false);
       return;
     }
     let cancelled = false;
+    setPriceRangeLoading(true);
     getProviderPriceRanges(ids)
       .then(map => { if (!cancelled) setPriceRangeByProviderId(map); })
-      .catch(() => { if (!cancelled) setPriceRangeByProviderId(new Map()); });
+      .catch(() => { if (!cancelled) setPriceRangeByProviderId(new Map()); })
+      .finally(() => { if (!cancelled) setPriceRangeLoading(false); });
     return () => { cancelled = true; };
   }, [providerData]);
 
@@ -727,14 +726,15 @@ export default function SearchScreen({ navigation, route }: Props) {
       list = list.filter(p => p.rating >= activeFilters.rating!);
     }
     if (activeFilters.priceRange) {
-      const { min, max } = activeFilters.priceRange;
-      list = list.filter(p => {
-        if (!p.priceTier) return false;
-        const tier = PRICE_TIER_INFO[p.priceTier];
-        // Range overlap, not a single approx point — see PRICE_TIER_INFO's
-        // comment for why a point comparison silently dropped valid matches.
-        return tier.min <= max && tier.max >= min;
-      });
+      // Same "don't answer until the batched lookup has" rule Available Now
+      // follows below. Real prices arrive after the cards do, and judging a
+      // provider before theirs land rejects every one of them — the client
+      // would watch a full grid blink to "No providers found" and back.
+      if (priceRangeLoading) return [];
+      const bucket = activeFilters.priceRange;
+      list = list.filter(p =>
+        priceRangeMatchesBucket(resolveProviderPriceRange(p.priceRange, p.priceTier), bucket),
+      );
     }
     if (activeFilters.availableOnly) {
       // Don't claim a provider is bookable until the batched availability
@@ -777,15 +777,26 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.sortBy === 'rating') {
       list.sort((a, b) => b.rating - a.rating);
     } else if (activeFilters.sortBy === 'price-low' || activeFilters.sortBy === 'price-high') {
-      const tierRank: Record<string, number> = { budget: 0, mid: 1, premium: 2, luxury: 3 };
-      const dir = activeFilters.sortBy === 'price-low' ? 1 : -1;
-      list.sort((a, b) => dir * ((tierRank[a.priceTier ?? ''] ?? 1) - (tierRank[b.priceTier ?? ''] ?? 1)));
+      const direction = activeFilters.sortBy;
+      // Providers with no resolvable price are partitioned out rather than
+      // given a sentinel key: any number would rank them as either the
+      // cheapest or the dearest thing on screen, and both are a claim the
+      // app can't make. They keep their relative order at the end.
+      const keyed: { p: ProviderCardData; key: number }[] = [];
+      const unpriced: ProviderCardData[] = [];
+      for (const p of list) {
+        const key = priceSortKey(resolveProviderPriceRange(p.priceRange, p.priceTier), direction);
+        if (key == null) unpriced.push(p);
+        else keyed.push({ p, key });
+      }
+      keyed.sort((a, b) => (direction === 'price-low' ? a.key - b.key : b.key - a.key));
+      list = [...keyed.map(k => k.p), ...unpriced];
     } else if (activeFilters.sortBy === 'distance') {
       list.sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity));
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, hairTypeMatchIds, audienceMatchIds]);
+  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
@@ -1354,7 +1365,9 @@ export default function SearchScreen({ navigation, route }: Props) {
         }
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            {providersLoading || (activeFilters.availableOnly && availabilityLoading) ? (
+            {providersLoading
+              || (activeFilters.availableOnly && availabilityLoading)
+              || (!!activeFilters.priceRange && priceRangeLoading) ? (
               <>
                 <ActivityIndicator size="large" color={P.accent} />
                 <Text style={[styles.emptyTitle, { color: P.text }]}>Checking providers…</Text>
@@ -1363,7 +1376,23 @@ export default function SearchScreen({ navigation, route }: Props) {
               <>
                 <TabIcon name="magnifying-glass" size={44} color={P.border} />
                 <Text style={[styles.emptyTitle, { color: P.text }]}>{providersError ? 'Couldn’t load providers' : 'No providers found'}</Text>
-                <Text style={[styles.emptySub, { color: P.sub }]}>{providersError ?? 'Try adjusting your filters or search'}</Text>
+                {/* Name what actually emptied the grid. "Try adjusting your
+                    filters" was the same sentence whether one filter was on or
+                    six, and whether the search itself had matched nothing —
+                    so it never told the client which of those to change. */}
+                <Text style={[styles.emptySub, { color: P.sub }]}>
+                  {providersError
+                    ?? (activeFilterChips.length > 0
+                      ? `No one matches ${activeFilterChips.map(c => c.label).join(' · ')}`
+                      : 'Try a different search term or category')}
+                </Text>
+                {!providersError && activeFilterChips.length > 0 && (
+                  <TouchableOpacity onPress={resetFilters} activeOpacity={0.7} style={styles.emptyClearBtn}>
+                    <Text style={[styles.emptyClearText, { color: P.accent }]}>
+                      Clear {activeFilterChips.length === 1 ? 'this filter' : 'all filters'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
@@ -1731,6 +1760,8 @@ const styles = StyleSheet.create({
   },
 
   // Empty state
+  emptyClearBtn: { marginTop: 14, paddingVertical: 8, paddingHorizontal: 18 },
+  emptyClearText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: 64,
