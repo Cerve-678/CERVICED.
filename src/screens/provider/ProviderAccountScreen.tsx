@@ -491,8 +491,10 @@ export default function ProviderAccountScreen({ navigation }: any) {
           <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.modalTitle, { color: P.text }]}>Create Client Account</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
-              Would you like to use your existing details (name, email, phone)?{'\n\n'}
-              Your client profile will be completely separate from your provider business.
+              We'll add a client profile to your current account — same login, same
+              details.{'\n\n'}
+              What you browse and book as a client stays completely separate from your
+              provider business.
             </Text>
 
             <TouchableOpacity
@@ -512,19 +514,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>Yes, use my details</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modalBtnOutline, { borderColor: P.border }]}
-              onPress={() => {
-                setShowClientModal(false);
-                resetData();
-                navigation.navigate('SignUpStep1');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.modalBtnOutlineText, { color: P.text }]}>Create new account</Text>
+              <Text style={styles.modalBtnText}>Set up my client profile</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowClientModal(false)} activeOpacity={0.6}>
@@ -880,8 +870,6 @@ const styles = StyleSheet.create({
   modalBody: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
   modalBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center' },
   modalBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  modalBtnOutline: { borderRadius: 100, paddingVertical: 14, alignItems: 'center', borderWidth: 1 },
-  modalBtnOutlineText: { fontSize: 15, fontWeight: '600' },
   modalCancel: { paddingVertical: 10, alignItems: 'center' },
   modalCancelText: { fontSize: 14, fontWeight: '500' },
 });

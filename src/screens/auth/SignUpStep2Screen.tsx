@@ -99,28 +99,44 @@ export default function SignUpStep2Screen({ navigation }: Props) {
       const becomingProvider = user.accountType !== 'provider';
       const becomingClient  = user.accountType === 'provider' && !user.hasClientProfile;
 
-      if (becomingProvider || becomingClient) {
+      // Already holds both hats: there is nothing left to create on this email,
+      // and falling through would run the cold-signup path against an address
+      // Supabase already knows — which surfaced as a dead-end "an account with
+      // this email already exists" at the very last step, five screens later,
+      // with no mention of the fact that both hats were already set up.
+      if (!becomingProvider && !becomingClient) {
         Alert.alert(
-          'Already have an account',
-          `${email.trim()} is linked to your existing ${user.accountType === 'provider' ? 'provider' : 'client'} account.\n\nWould you like to use it to ${becomingProvider ? 'become a provider' : 'set up your client profile'} instead?`,
+          'You already have both',
+          `${email.trim()} already has a client account and a provider account. ` +
+          'Switch between them any time from your profile — there\'s nothing to set up here.',
           [
-            {
-              text: `Yes, use ${user.name?.split(' ')[0] || 'my'} details`,
-              onPress: () => {
-                resetData();
-                if (becomingProvider) {
-                  updateData({ accountType: 'provider', fromProviderSwitch: true, name: user.name, email: user.email, phone: user.phone });
-                } else {
-                  updateData({ accountType: 'user', fromClientSwitch: true, name: user.name, email: user.email, phone: user.phone });
-                }
-                navigation.navigate('SignUpStep3');
-              },
-            },
+            { text: 'Got it', onPress: () => navigation.goBack() },
             { text: 'Use a different email', style: 'cancel' },
           ]
         );
         return;
       }
+
+      Alert.alert(
+        'Already have an account',
+        `${email.trim()} is linked to your existing ${user.accountType === 'provider' ? 'provider' : 'client'} account.\n\nWould you like to use it to ${becomingProvider ? 'become a provider' : 'set up your client profile'} instead?`,
+        [
+          {
+            text: `Yes, use ${user.name?.split(' ')[0] || 'my'} details`,
+            onPress: () => {
+              resetData();
+              if (becomingProvider) {
+                updateData({ accountType: 'provider', fromProviderSwitch: true, name: user.name, email: user.email, phone: user.phone });
+              } else {
+                updateData({ accountType: 'user', fromClientSwitch: true, name: user.name, email: user.email, phone: user.phone });
+              }
+              navigation.navigate('SignUpStep3');
+            },
+          },
+          { text: 'Use a different email', style: 'cancel' },
+        ]
+      );
+      return;
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
