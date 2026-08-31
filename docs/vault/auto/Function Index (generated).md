@@ -5,7 +5,7 @@
 
 #generated
 
-**1995 functions** across **257 files**.
+**1996 functions** across **258 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -250,7 +250,7 @@
 ### `src/types/` (1)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 
-### `src/utils/` (21)
+### `src/utils/` (22)
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
@@ -269,6 +269,7 @@
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery**
 - `shuffle.ts` — **shuffle**
+- `slotsRowText.ts` — **resolveSlotsRow**
 - `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**
 - `userFacingError.ts` — **toUserMessage** · **toUserMessageAllowingDbGuard**
 - `validation.ts` — **getPasswordStrength**

@@ -85,6 +85,7 @@ import {
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { resolveSlotsRow } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
@@ -4676,27 +4677,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     bell wouldn't be true. The bell/notify-on-release-day
                     logic is unchanged — it was never tied to this text. */}
                 {(() => {
-                  // Headline only. The detail is a "Next free ..." line, and
-                  // this pill is about when a provider's diary opens, not
-                  // which individual slot is soonest — the date/time picker
-                  // is where that belongs. Appended here it also gave the
-                  // fallback two claims in one pill, the same doubling the
-                  // release-day text below deliberately avoids.
-                  const pillText =
-                    availability && availability.state !== "unpublished"
-                      ? availability.headline
-                      : "";
-                  // A provider who publishes slots on a fixed day of the
-                  // month says THAT and nothing else. Today's open/closed
-                  // headline is the wrong answer for someone waiting on next
-                  // month's diary to drop, and pairing the two ("New slots
-                  // drop on the 20th · Open today until 6pm") reads as two
-                  // competing claims about when you can book. The release
-                  // day replaces the availability line, it doesn't lead it.
-                  const rowText =
-                    provider.scheduleReleaseDay != null
-                      ? `New slots drop on the ${ordinalSuffix(provider.scheduleReleaseDay)}`
-                      : pillText;
+                  // Headline only — the "Next free ..." detail belongs to the
+                  // date/time picker, not to a pill about when a diary opens.
+                  // resolveSlotsRow owns both which of the two sources wins
+                  // and whether the answer is available yet; see its comment
+                  // for why a provider with a release day never waits on the
+                  // availability fetch.
+                  const row = resolveSlotsRow({
+                    scheduleReleaseDay: provider.scheduleReleaseDay,
+                    availability,
+                    availabilityLoading,
+                  });
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every
@@ -4704,7 +4695,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   // used to sit inside this block's early return and vanished
                   // whenever there was no availability headline to print.
                   const showInstagram = !!provider.instagram;
-                  if (availabilityLoading) return null;
+                  if (row.kind === 'waiting') return null;
                   return (
                   // Instagram sits OUTSIDE the pill, as its own round button
                   // beside it. Inside, it read as part of the availability
@@ -4728,7 +4719,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         style={styles.slotsCardHighlight}
                       />
                       <Text style={[styles.slotsText, { color: OP.sub }]}>
-                        {rowText || "Availability on request"}
+                        {row.text}
                       </Text>
                       <TouchableOpacity
                         style={styles.bellButtonInline}
