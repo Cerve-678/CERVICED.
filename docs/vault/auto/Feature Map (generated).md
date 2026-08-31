@@ -279,9 +279,9 @@ Curated: [[Booking Flow]] · **149 files**
 
 ## Auth
 Curated: [[Contexts]] · **159 files**
-- `src/services/databaseService.ts` _(220)_
+- `src/services/databaseService.ts` _(221)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(134)_
+- `src/contexts/AuthContext.tsx` _(136)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_
@@ -301,11 +301,11 @@ Curated: [[Contexts]] · **159 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(15)_
 - `src/stores/useAppStore.ts` _(15)_
+- `supabase/delete_account.sql` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
 - `src/screens/client/CartScreen.tsx` _(13)_
 - `supabase/booking_flow_fixes.sql` _(12)_
-- `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
 - `src/services/becca/capabilities/client.ts` _(11)_
 - `src/utils/validation.ts` _(11)_

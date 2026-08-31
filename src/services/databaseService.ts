@@ -7063,19 +7063,9 @@ export async function upgradeUserToProvider(
       );
   }
 
-  // Keep auth metadata's `role` in step with users.role. It's only a mirror —
-  // users.role stays the source of truth — but AuthContext falls back to
-  // metadata when the profile fetch fails, and a stale 'user' there would
-  // restore a provider into the client hat. Best-effort: the row write above is
-  // what actually matters, so a metadata failure must not fail the upgrade.
-  const { error: metaError } = await supabase.auth.updateUser({
-    data: { role: "provider" },
-  });
-  if (metaError)
-    logger.warn(
-      "[upgradeUserToProvider] auth metadata role sync failed:",
-      metaError.message,
-    );
+  // Keep auth metadata's `role` in step with users.role — see
+  // syncAuthRoleMetadata for why the mirror exists and why it's best-effort.
+  await syncAuthRoleMetadata("provider");
 }
 
 /** Persist the client beauty/health/preference profile for an account being upgraded to dual-role */
@@ -8572,6 +8562,27 @@ export async function insertProviderRegistrationRow(
 export async function promoteUserToProvider(userId: string): Promise<void> {
   const { error } = await supabase.from("users").update({ role: "provider" }).eq("id", userId);
   if (error) throw error;
+  await syncAuthRoleMetadata("provider");
+}
+
+/**
+ * Mirrors `users.role` into auth metadata. `users.role` stays the source of
+ * truth; this copy exists only because AuthContext falls back to session
+ * metadata when the profile fetch fails, and a stale value there restores the
+ * wrong hat — a provider into the client tree, or a hat the account no longer
+ * holds back into existence.
+ *
+ * Every writer of `users.role` must call this. It used to live inline in
+ * upgradeUserToProvider only, which is why promoteUserToProvider — the second
+ * writer, on the InfoReg save path — left accounts with role 'provider' and
+ * metadata 'user'.
+ *
+ * Best-effort by design: the row write is what actually matters, so a metadata
+ * failure must never fail the operation that called it. Logged, never swallowed.
+ */
+export async function syncAuthRoleMetadata(role: "user" | "provider"): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ data: { role } });
+  if (error) logger.warn("[syncAuthRoleMetadata] role mirror sync failed:", error.message);
 }
 
 export async function replaceProviderServiceCatalog(

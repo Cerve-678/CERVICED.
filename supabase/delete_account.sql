@@ -124,17 +124,21 @@ BEGIN
   DELETE FROM public.provider_conversations WHERE user_id = v_uid; -- cascades messages
   DELETE FROM public.notifications          WHERE user_id = v_uid;
 
+  -- has_client_profile is the client hat itself, not a side effect of some
+  -- other field — clearing dob alone would leave the hat set (added live by
+  -- migration 20260823110027; this file was not updated at the time).
   UPDATE public.users SET
-    dob               = NULL,
-    hair_type         = NULL,
-    skin_type         = NULL,
-    allergies         = '{}',
-    skin_concerns     = '{}',
-    style_vibe        = NULL,
-    medical_notes     = NULL,
-    treatment_history = '{}',
-    service_interests = '{}',
-    saved_portfolio   = '[]'::jsonb
+    dob                = NULL,
+    has_client_profile = false,
+    hair_type          = NULL,
+    skin_type          = NULL,
+    allergies          = '{}',
+    skin_concerns      = '{}',
+    style_vibe         = NULL,
+    medical_notes      = NULL,
+    treatment_history  = '{}',
+    service_interests  = '{}',
+    saved_portfolio    = '[]'::jsonb
   WHERE id = v_uid;
 
   RETURN jsonb_build_object('ok', true, 'full_account_deleted', false);
@@ -166,7 +170,14 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'no provider profile');
   END IF;
 
-  SELECT (dob IS NOT NULL) INTO v_has_client FROM public.users WHERE id = v_uid;
+  -- The column that owns the client hat (migration 20260823105742). This read
+  -- was `(dob IS NOT NULL)` — the inference that column replaced — until
+  -- 20260829120000_delete_provider_profile_reads_client_hat_column.sql.
+  -- Never re-derive the client hat from dob: a provider who upgraded from a
+  -- client account was never asked for one, and a provider who gave one at
+  -- signup Step 2 may never have added a client profile at all.
+  SELECT COALESCE(has_client_profile, false) INTO v_has_client
+    FROM public.users WHERE id = v_uid;
 
   SELECT COUNT(*) INTO v_upcoming
     FROM public.bookings
@@ -224,6 +235,14 @@ BEGIN
     business_name  = NULL,
     business_email = NULL
   WHERE id = v_uid;
+
+  -- auth metadata carries a `role` mirror that AuthContext falls back to when
+  -- the profile fetch fails. Nothing reset it here until 20260829120000, so an
+  -- account that dropped its provider hat kept advertising one indefinitely.
+  UPDATE auth.users
+     SET raw_user_meta_data =
+           jsonb_set(COALESCE(raw_user_meta_data, '{}'::jsonb), '{role}', '"user"')
+   WHERE id = v_uid;
 
   RETURN jsonb_build_object('ok', true, 'full_account_deleted', false);
 END;
