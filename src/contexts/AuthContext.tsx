@@ -22,8 +22,12 @@ import {
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
+import { accountHats, resolveRestoredMode } from '../utils/accountHats';
+import type { AccountType } from '../utils/accountHats';
 
-export type AccountType = 'user' | 'provider';
+// Defined alongside the hat-ownership rules in src/utils/accountHats.ts and
+// re-exported here, which is where the rest of the app already imports it from.
+export type { AccountType } from '../utils/accountHats';
 
 export interface UserData {
   id: string;
@@ -143,21 +147,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeModeRef = useRef(activeMode);
   useEffect(() => { activeModeRef.current = activeMode; }, [activeMode]);
 
-  // Restore the persisted hat, but never into a hat this account doesn't hold.
-  // The saved mode is a device-local preference; `role` is the server's
-  // statement of which hats exist. If they disagree the server wins — otherwise
-  // deleting the provider hat on one device leaves another device booted into
-  // an empty provider tree with no obvious way back (the switch control only
-  // renders for accounts that actually have the other hat).
-  const resolveRestoredMode = useCallback(
-    (savedMode: string | null, role: AccountType): 'provider' | 'client' => {
-      const canBeProvider = role === 'provider';
-      const saved = savedMode === 'provider' || savedMode === 'client' ? savedMode : null;
-      if (saved === 'provider' && !canBeProvider) return 'client';
-      return saved ?? (canBeProvider ? 'provider' : 'client');
-    },
-    []
-  );
   const [isSwitching, setIsSwitching] = useState(false);
   const [switchingTo, setSwitchingTo] = useState<'provider' | 'client'>('client');
   const [pendingReactivation, setPendingReactivation] = useState<string | null>(null);
@@ -288,7 +277,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
-        setActiveMode(resolveRestoredMode(savedMode, role));
+        // null, not false: see resolveRestoredMode. This branch has no profile
+        // row to read the client hat from, so it must not assert its absence.
+        setActiveMode(resolveRestoredMode(savedMode, role, null));
         setUser({
           id: session.user.id,
           name: meta?.['name'] ?? session.user.email?.split('@')[0] ?? '',
@@ -360,7 +351,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clientArea: profile.client_area ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
-        const restoredMode = resolveRestoredMode(savedMode, role);
+        const restoredMode = resolveRestoredMode(savedMode, role, userData.hasClientProfile ?? false);
         setActiveMode(restoredMode);
         // Persist the corrected hat so the stale value can't win a later restore
         // (e.g. if the next launch hits the metadata-fallback path instead).
@@ -407,6 +398,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             accountType: 'user',
             loginMethod: 'email',
           });
+          // accountType is 'user' here, so a stale stored 'provider' must not
+          // survive into this branch — it was the only loadUserProfile path
+          // that set a user without settling activeMode at all.
+          setActiveMode('client');
           setIsLoggedIn(true);
         }
       }
@@ -432,7 +427,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [resolveRestoredMode]);
+  }, []);
 
   loadUserProfileRef.current = loadUserProfile;
 
@@ -449,8 +444,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Falls back to whichever hat the account actually holds rather than a
   // silent no-op, so a rejected switch still lands somewhere real.
   const applyMode = useCallback(async (mode: 'provider' | 'client') => {
-    const ownsProvider = user?.accountType === 'provider';
-    const ownsClient = user?.accountType !== 'provider' || !!user?.hasClientProfile;
+    const { ownsProvider, ownsClient } = accountHats(user?.accountType, user?.hasClientProfile);
     const allowed = mode === 'provider' ? ownsProvider : ownsClient;
     const resolved = allowed ? mode : (ownsProvider ? 'provider' : 'client');
     if (!allowed) {
@@ -473,8 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchMode = useCallback(async () => {
     const next = activeMode === 'provider' ? 'client' : 'provider';
-    const ownsProvider = user?.accountType === 'provider';
-    const ownsClient = user?.accountType !== 'provider' || !!user?.hasClientProfile;
+    const { ownsProvider, ownsClient } = accountHats(user?.accountType, user?.hasClientProfile);
     const allowed = next === 'provider' ? ownsProvider : ownsClient;
     if (!allowed) {
       logger.warn(`[AuthContext] switchMode() to '${next}' rejected — account does not hold that hat`);
