@@ -551,7 +551,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           "confirm" step since the day is the only thing being chosen. */}
       {releaseDayPickerVisible && (
         Platform.OS === 'ios' ? (
-          <Modal transparent animationType="fade" visible={releaseDayPickerVisible}>
+          <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={releaseDayPickerVisible}>
             <View style={st.pickerModalWrap}>
               <TouchableOpacity
                 style={st.pickerDismiss}

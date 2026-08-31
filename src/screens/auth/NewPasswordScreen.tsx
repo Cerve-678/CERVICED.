@@ -22,6 +22,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { validatePassword } from '../../utils/validation';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 type Props = StackScreenProps<RootStackParamList, 'NewPassword'>;
 
@@ -66,7 +67,7 @@ export default function NewPasswordScreen({ navigation }: Props) {
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView>
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
 
             <View style={[styles.iconCircle, { backgroundColor: t.surface }]}>
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    height: 52,
+    minHeight: 52,
     borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',

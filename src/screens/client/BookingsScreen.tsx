@@ -9,7 +9,7 @@ import {
   Alert,
   Linking,
   Platform,
-  Dimensions,
+  useWindowDimensions,
   Modal,
   Pressable,
   FlatList,
@@ -44,6 +44,7 @@ import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 // ==================== TYPES ====================
 
@@ -56,7 +57,6 @@ type BookingsListRow =
 
 // ==================== CONSTANTS ====================
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -215,7 +215,13 @@ const WaitlistCard = React.memo(function WaitlistCard({
 const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   useFont();
   const { theme, isDarkMode, palette: P } = useTheme();
-  const styles = useMemo(() => createStyles(theme, isDarkMode, P), [theme, isDarkMode, P]);
+  // Measured per render, not captured at module load, so the full-screen modal
+  // backdrops still cover the window after a rotation or in split-screen.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const styles = useMemo(
+    () => createStyles(theme, isDarkMode, P, screenWidth, screenHeight),
+    [theme, isDarkMode, P, screenWidth, screenHeight],
+  );
   const { user } = useAuth();
   const { addToCart } = useCart();
 
@@ -1722,7 +1728,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     </TouchableOpacity>
                   </View>
                 )}
-                <Modal visible={pastFilterOpen} transparent animationType="fade" onRequestClose={() => setPastFilterOpen(false)}>
+                <Modal visible={pastFilterOpen} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setPastFilterOpen(false)}>
                   <Pressable style={styles.pastFilterScrim} onPress={() => setPastFilterOpen(false)}>
                     {pastFilterAnchor && (
                       <Pressable
@@ -1818,7 +1824,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         />
 
         {/* ─── Contact Sheet ─── */}
-        <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
+        <Modal visible={contactSheetVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={csSt.overlay} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); }}>
             <Pressable style={[csSt.sheet, { backgroundColor: P.card }]} onPress={e => e.stopPropagation()}>
               <View style={[csSt.handle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
@@ -1894,7 +1900,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             Again" on any booking with add-ons was a silent dead end.
             Centered popup card (not a slide-up sheet) to match the rest of
             the booking-detail confirmation dialogs, no emoji icons. ─── */}
-        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
+        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
               <Text style={[popSt.sheetTitle, { color: P.text }]}>Include Add-Ons?</Text>
@@ -1924,7 +1930,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             thanks, etc). This state existed and was set all over the file but
             nothing ever rendered it, so those confirmations were silently
             invisible. ─── */}
-        <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent
+        <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent
           onRequestClose={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
@@ -1945,7 +1951,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             invite_next_waitlist_entry() (waitlist_holds.sql). Fetched
             directly by id (see the route-params effect above) since it's
             deliberately excluded from the normal bookings lists. ─── */}
-        <Modal visible={!!waitlistHold} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setWaitlistHold(null)}>
+        <Modal visible={!!waitlistHold} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setWaitlistHold(null)}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⏳</Text>
@@ -1989,7 +1995,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             showRatingModal/rating/reviewText but nothing rendered a modal, so
             tapping Rate did nothing visible. handleRatingSubmit already wired
             up a real submitReview() call; only the UI was missing. ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 {!hasRated ? (
@@ -2037,7 +2043,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* ─── Tip Modal — same dead-state issue as Rating above. handleTipSubmit
             now actually persists via setBookingTip() instead of only flipping
             local state. ─── */}
-        <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
+        <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a Tip</Text>
@@ -2083,7 +2089,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 }
 // ==================== STYLES ====================
 
-const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSheet.create({
+const createStyles = (
+  theme: Theme,
+  isDarkMode: boolean,
+  P: AppTheme,
+  screenWidth: number,
+  screenHeight: number,
+) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -3950,7 +3962,7 @@ intakeFormTodoBadgeText: {
 // Layout only — colors are theme-dependent and applied at the call site via
 // isDarkMode-branched overrides, same pattern as popSt below.
 const csSt = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
   handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20 },
   title:       { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 4 },

@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   FlatList,
   NativeSyntheticEvent,
@@ -29,7 +29,6 @@ import TabIcon from './TabIcon';
 import Icon from './IconLibrary';
 import { fonts, spacing } from '../constants/PlatformDimensions';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface ImageDetailModalProps {
   visible: boolean;
@@ -270,6 +269,9 @@ interface CarouselController {
 const ImageCarousel: React.FC<{
   images: PortfolioItem['image'][];
   height: number;
+  /** Framing for the photo at `index` — the provider's own per-photo choice
+   *  where there is one, otherwise the caller's mixed-ratio fallback. */
+  fitFor: (index: number) => 'cover' | 'contain';
   backgroundColor: string;
   itemKey: string;
   initialIndex: number;
@@ -278,6 +280,7 @@ const ImageCarousel: React.FC<{
 }> = ({
   images,
   height,
+  fitFor,
   backgroundColor,
   itemKey,
   initialIndex,
@@ -286,19 +289,23 @@ const ImageCarousel: React.FC<{
 }) => {
   const listRef = useRef<FlatList<PortfolioItem['image']>>(null);
   const activeIndexRef = useRef(initialIndex);
+  // Page width is measured per render, not captured at module load: every
+  // offset below is a multiple of it, so a stale value lands the carousel
+  // between pages after a rotation or in split-screen.
+  const { width: screenWidth } = useWindowDimensions();
 
   useEffect(() => {
     activeIndexRef.current = initialIndex;
     onIndexChange(initialIndex);
     listRef.current?.scrollToOffset({
-      offset: initialIndex * SCREEN_WIDTH,
+      offset: initialIndex * screenWidth,
       animated: false,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemKey]);
+  }, [itemKey, screenWidth]);
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
     activeIndexRef.current = index;
     onIndexChange(index);
   };
@@ -325,10 +332,10 @@ const ImageCarousel: React.FC<{
         scrollEventThrottle={16}
         onMomentumScrollEnd={onMomentumScrollEnd}
         keyExtractor={(_, i) => `${itemKey}-${i}`}
-        style={{ width: SCREEN_WIDTH, height }}
+        style={{ width: screenWidth, height }}
         getItemLayout={(_, i) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * i,
+          length: screenWidth,
+          offset: screenWidth * i,
           index: i,
         })}
       // Opens on whichever photo was actually tapped (see initialImageIndex
@@ -342,14 +349,14 @@ const ImageCarousel: React.FC<{
         initialNumToRender={1}
         windowSize={3}
         maxToRenderPerBatch={2}
-        renderItem={({ item: source }) => (
+        renderItem={({ item: source, index }) => (
         // source is PortfolioItem['image'] (RN's broad ImageSourcePropType)
         // but always constructed as { uri: string } — see PortfolioCard.tsx
         // for why this narrowing is needed for expo-image's stricter type.
         <Image
           source={{ uri: (source as { uri: string }).uri }}
-          style={{ width: SCREEN_WIDTH, height, backgroundColor }}
-          contentFit="cover"
+          style={{ width: screenWidth, height, backgroundColor }}
+          contentFit={fitFor(index)}
           transition={0}
         />
         )}
@@ -391,17 +398,56 @@ function ModalBody({
   handleBookNow,
 }: ModalBodyProps) {
   const insets = useSafeAreaInsets();
-  // pageSheet already keeps content off the very top edge, so only the
-  // photo's own aspect ratio governs its height here — capped so a very
-  // tall/narrow photo doesn't push the card off-screen. The cap is
-  // generous (0.85 of the screen, not 0.6) specifically so "cover" rarely
-  // has anything to crop: the box tracks the photo's real proportions up
-  // until this point, so the image fills it exactly rather than being
-  // zoomed/cropped to fit a much shorter box.
-  const imageHeight = Math.min(
-    SCREEN_HEIGHT * 0.85,
-    SCREEN_WIDTH / item.aspectRatio,
+  // Measured per render, not captured at module load: the carousel's page
+  // offsets and the photo box's height are both derived from it.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  // The carousel gets ONE height for the whole photo set, taken from the
+  // set's median ratio — not from `item.aspectRatio`, which is only the
+  // ratio of the photo that happened to be tapped. Explore fans a service
+  // into one card per photo (see mapDbServiceToCards), so sizing off the
+  // tapped card meant the same service opened at a different height
+  // depending on which photo you came in through, and every other photo in
+  // the set was then cover-cropped to fit it. The median is stable whichever
+  // card is the entry point, and it's the ratio that leaves the set as a
+  // whole least distorted.
+  //
+  // A single-photo item (every portfolio and provider card) has a
+  // one-element set, so its median IS its own ratio and nothing about those
+  // changes.
+  const setRatios =
+    item.imageAspectRatios && item.imageAspectRatios.length > 0
+      ? item.imageAspectRatios.filter((r) => Number.isFinite(r) && r > 0)
+      : [item.aspectRatio];
+  const boxRatio = useMemo(() => {
+    const sorted = [...setRatios].sort((a, b) => a - b);
+    if (sorted.length === 0) return item.aspectRatio;
+    const mid = Math.floor(sorted.length / 2);
+    // Even count: average the middle pair rather than picking arbitrarily,
+    // so a two-photo set sits between its two shapes instead of snapping to
+    // the taller one.
+    return sorted.length % 2 === 1
+      ? (sorted[mid] as number)
+      : (((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setRatios.join(','), item.aspectRatio]);
+  // Capped so a very tall/narrow photo doesn't push the card off-screen. The
+  // cap is generous (0.85 of the screen, not 0.6) so the box tracks real
+  // proportions almost always.
+  const imageHeight = Math.min(screenHeight * 0.85, screenWidth / boxRatio);
+  // With one box for a mixed-ratio set, "cover" would crop whichever photos
+  // don't match the median — the exact thing this is fixing — so those sets
+  // letterbox against the surface colour instead. A set whose photos all
+  // share a shape (and every single-photo item) still fills the box edge to
+  // edge, because there "contain" and "cover" resolve identically.
+  const setHasMixedRatios = setRatios.some(
+    (r) => Math.abs(r - boxRatio) > 0.01,
   );
+  // Per photo, the provider's stored choice wins outright — that control
+  // exists precisely so the app stops deciding this for them. Only where
+  // there's no choice to honour (a portfolio photo, or a service saved before
+  // the column existed) does the mixed-ratio fallback above apply.
+  const fitFor = (index: number): 'cover' | 'contain' =>
+    item.imageFits?.[index] ?? (setHasMixedRatios ? 'contain' : 'cover');
   // How much of the photo's bottom the card visually rests on at open —
   // the card is an absolutely-positioned layer painted in front of the
   // image (see the image/ScrollView stacking below), so it now scrolls up
@@ -470,10 +516,10 @@ function ModalBody({
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
           cancelPendingCarouselFrame();
-          panStartOffsetRef.current = activeImageIndexRef.current * SCREEN_WIDTH;
+          panStartOffsetRef.current = activeImageIndexRef.current * screenWidth;
         },
         onPanResponderMove: (_, gesture) => {
-          const maxOffset = (images.length - 1) * SCREEN_WIDTH;
+          const maxOffset = (images.length - 1) * screenWidth;
           const offset = Math.max(
             0,
             Math.min(maxOffset, panStartOffsetRef.current - gesture.dx),
@@ -486,29 +532,29 @@ function ModalBody({
           // A light, unmistakably horizontal flick or a short drag commits
           // one page. Anything smaller settles back to the page it began on.
           const isDeliberateSwipe =
-            Math.abs(gesture.dx) >= SCREEN_WIDTH * 0.09 ||
+            Math.abs(gesture.dx) >= screenWidth * 0.09 ||
             Math.abs(gesture.vx) >= 0.18;
-          const startIndex = Math.round(panStartOffsetRef.current / SCREEN_WIDTH);
+          const startIndex = Math.round(panStartOffsetRef.current / screenWidth);
           const isTap = Math.abs(gesture.dx) < 8 && Math.abs(gesture.dy) < 8;
           const rawIndex = isTap
-            ? startIndex + (gesture.x0 < SCREEN_WIDTH / 2 ? -1 : 1)
+            ? startIndex + (gesture.x0 < screenWidth / 2 ? -1 : 1)
             : isDeliberateSwipe
               ? startIndex + (gesture.dx < 0 ? 1 : -1)
               : startIndex;
           const nextIndex = Math.max(0, Math.min(maxIndex, rawIndex));
           activeImageIndexRef.current = nextIndex;
           setActiveImageIndex(nextIndex);
-          carouselRef.current?.scrollToOffset(nextIndex * SCREEN_WIDTH, true);
+          carouselRef.current?.scrollToOffset(nextIndex * screenWidth, true);
         },
         onPanResponderTerminate: () => {
           cancelPendingCarouselFrame();
           carouselRef.current?.scrollToOffset(
-            activeImageIndexRef.current * SCREEN_WIDTH,
+            activeImageIndexRef.current * screenWidth,
             true,
           );
         },
       }),
-    [cancelPendingCarouselFrame, images.length, trackCarouselOffset],
+    [cancelPendingCarouselFrame, images.length, trackCarouselOffset, screenWidth],
   );
 
   return (
@@ -595,6 +641,7 @@ function ModalBody({
         <ImageCarousel
           images={images}
           height={imageHeight}
+          fitFor={fitFor}
           backgroundColor={P.surface}
           itemKey={item.id}
           initialIndex={initialImageIndex}

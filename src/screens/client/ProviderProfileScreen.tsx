@@ -14,7 +14,7 @@ import {
   StyleSheet,
   StatusBar,
   FlatList,
-  Dimensions,
+  useWindowDimensions,
   Alert,
   Animated,
   Share,
@@ -107,8 +107,9 @@ type ProviderProfileScreenProps = StackScreenProps<
 // services row and is safe to pass on for per-service buffer/duration lookups.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-const SIDE_PANEL_W = screenWidth * 0.85;
+/** The offers panel covers most, not all, of the width — derived from the live
+ *  window rather than a value frozen at module load. */
+const sidePanelWidth = (screenWidth: number) => screenWidth * 0.85;
 
 // Hero → content transition: the logo/name/rating/slots float directly over the photo;
 // the content sheet starts right after them, rising over the photo with a rounded lip.
@@ -128,6 +129,9 @@ const TEAM_SIZE_LABELS: Record<string, string> = {
 };
 type ServiceData = ProviderProfileService;
 
+// Most dots the 60px pill ever shows, however many images the service has.
+const MAX_PILL_DOTS = 3;
+
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
 const MultiImagePill: React.FC<{
   images: any[];
@@ -137,6 +141,22 @@ const MultiImagePill: React.FC<{
 }> = React.memo(({ images, onPress, imageStyle, containerStyle }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const w = imageStyle.width ?? 60;
+
+  // The pill is only 60px wide, so a dot per image turns into an unreadable
+  // smear the moment a service has more than a handful of photos. Show a
+  // three-dot window that slides with the active image instead — it still
+  // says "there's more this way" without pretending to be a countable index.
+  const dotWindow = useMemo(() => {
+    const total = images.length;
+    if (total <= MAX_PILL_DOTS) {
+      return Array.from({ length: total }, (_, i) => i);
+    }
+    const start = Math.min(
+      Math.max(activeIdx - 1, 0),
+      total - MAX_PILL_DOTS,
+    );
+    return Array.from({ length: MAX_PILL_DOTS }, (_, i) => start + i);
+  }, [images.length, activeIdx]);
 
   return (
     <View style={{ alignItems: "center", marginRight: 15 }}>
@@ -166,7 +186,7 @@ const MultiImagePill: React.FC<{
       </View>
       {images.length > 1 && (
         <View style={{ flexDirection: "row", gap: 3, marginTop: 5 }}>
-          {images.map((_, i) => (
+          {dotWindow.map((i) => (
             <View
               key={i}
               style={{
@@ -505,6 +525,7 @@ interface NotificationAlertProps {
 
 const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
   ({ isVisible, message, onHide, slideAnimation, isNotificationsEnabled }) => {
+    const { width: screenWidth } = useWindowDimensions();
     const slideStyle = useMemo(
       () => ({
         transform: [
@@ -516,7 +537,7 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
           },
         ],
       }),
-      [slideAnimation],
+      [slideAnimation, screenWidth],
     );
 
     // Dynamic colors based on notification state
@@ -539,7 +560,7 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
     if (!isVisible) return null;
 
     return (
-      <Animated.View style={[styles.notificationAlert, slideStyle]}>
+      <Animated.View style={[styles.notificationAlert, { maxWidth: screenWidth - 24 }, slideStyle]}>
         <BlurView intensity={20} tint="light" style={styles.notificationBlur}>
           <LinearGradient
             colors={notificationColors.gradient as [string, string]}
@@ -592,6 +613,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
     themeTokens,
     onBookOffer,
   }) => {
+    const { width: screenWidth } = useWindowDimensions();
     const OP = themeTokens;
 
     const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -624,7 +646,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
         <Animated.View
           style={[
             styles.sidePanelContainer,
-            { backgroundColor: OP.bg, transform: [{ translateX: slideAnim }] },
+            { width: sidePanelWidth(screenWidth), backgroundColor: OP.bg, transform: [{ translateX: slideAnim }] },
           ]}
         >
           <SafeAreaView style={{ flex: 1 }}>
@@ -1308,6 +1330,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   route,
 }) => {
   const { theme } = useTheme();
+  // Measured per render, not captured at module load: the offers panel rests
+  // one panel-width offscreen and the full-screen image modal pages by width.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const providerId = route.params?.providerId ?? "";
   const {
@@ -1496,7 +1521,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   ).current;
   const offersTabSlide = useRef<Animated.Value>(new Animated.Value(80)).current;
   const offersPanelSlide = useRef<Animated.Value>(
-    new Animated.Value(SIDE_PANEL_W),
+    new Animated.Value(sidePanelWidth(screenWidth)),
   ).current;
 
   // Prefer DB-stored accent_color, fall back to gradient-derived, then app default
@@ -1756,7 +1781,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   const closeOffersPanel = useCallback(() => {
     Animated.spring(offersPanelSlide, {
-      toValue: SIDE_PANEL_W,
+      toValue: sidePanelWidth(screenWidth),
       useNativeDriver: true,
       tension: 80,
       friction: 12,
@@ -3868,7 +3893,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           visible={contactSheetVisible}
           animationType="fade"
           transparent
-          statusBarTranslucent
+          statusBarTranslucent navigationBarTranslucent
           onRequestClose={() => setContactSheetVisible(false)}
         >
           <Pressable
@@ -3980,7 +4005,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             above). Never both, or we're back to two stacked native Modals. */}
         <Modal
           visible={serviceImageModal.visible && !showAllServicesModal}
-          transparent
+          transparent statusBarTranslucent navigationBarTranslucent
           animationType="fade"
           onRequestClose={closeImageViewer}
         >
@@ -4058,7 +4083,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* Waitlist Join Modal — centered popup */}
         <Modal
           visible={waitlistModal.visible}
-          transparent
+          transparent statusBarTranslucent navigationBarTranslucent
           animationType="fade"
           onRequestClose={closeWaitlistModal}
         >
@@ -4401,7 +4426,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* Waitlist Leave Confirmation Modal */}
         <Modal
           visible={leaveConfirmEntry !== null}
-          transparent
+          transparent statusBarTranslucent navigationBarTranslucent
           animationType="fade"
           onRequestClose={() => setLeaveConfirmEntry(null)}
         >
@@ -4794,7 +4819,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             {/* The content sheet rises over the hero photo with its own large
                 top corners (see contentSheet.borderTopLeftRadius/Right) —
                 rises directly off the hero photo like a floating card. */}
-            <View style={[styles.contentSheet, { backgroundColor: OP.bg }]}>
+            <View style={[styles.contentSheet, { minHeight: screenHeight, backgroundColor: OP.bg }]}>
               {/* About / Policy tabbed card */}
               <View style={styles.aboutCardShadowWrap}>
                 <BlurView
@@ -5111,7 +5136,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   contentSheet: {
-    minHeight: screenHeight, // always reach the bottom of the screen — never lets the hero photo show through below short content
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 130, // clears the bottom nav pill while keeping the pink backdrop continuous
@@ -5375,7 +5399,6 @@ const styles = StyleSheet.create({
     // Was 70% of the screen, which wasn't enough room for a real provider name
     // in either the enabled or the disabled message — the tail of the sentence
     // ran under the toast's clipped (overflow: hidden) edge.
-    maxWidth: screenWidth - 24,
     minWidth: 200,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -6351,7 +6374,6 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    width: SIDE_PANEL_W,
     zIndex: 301,
     shadowColor: "#000",
     shadowOffset: { width: -4, height: 0 },

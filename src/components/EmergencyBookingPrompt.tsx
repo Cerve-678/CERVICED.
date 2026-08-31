@@ -88,7 +88,7 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onCancel}>
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={[styles.card, { backgroundColor }]}>
           <ScrollView bounces={false} contentContainerStyle={styles.cardBody}>

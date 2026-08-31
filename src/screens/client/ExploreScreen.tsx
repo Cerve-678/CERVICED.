@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Animated,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -28,7 +28,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 
 // Discover components
-import { MasonryGrid, MasonryGridHandle } from '../../components/MasonryGrid';
+import { MasonryGrid, MasonryGridHandle, masonryColumnsForWidth } from '../../components/MasonryGrid';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import { ImageDetailModal } from '../../components/ImageDetailModal';
 
@@ -51,7 +51,6 @@ import { storage } from '../../utils/storage';
 import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
 import { logger } from '../../utils/logger';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Mixes portfolio photos with provider and service ("bookable") cards for a
 // Pinterest-style feed, instead of stacking every source back-to-back or
@@ -146,21 +145,33 @@ function SkeletonMasonryGrid() {
   }, [shimmer]);
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
   const base = P.surface;
-  const colWidth = (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
-  const leftHeights = [200, 140, 180, 120, 160];
-  const rightHeights = [160, 210, 130, 175, 150];
+  const { width: screenWidth } = useWindowDimensions();
+  // Mirrors the real grid's column count so the skeleton doesn't reflow into a
+  // different shape the moment real data lands.
+  const columns = masonryColumnsForWidth(screenWidth);
+  const colWidth =
+    (screenWidth - spacing.lg * 2 - spacing.sm * (columns - 1)) / columns;
+  // Staggered per column so the placeholder reads as masonry rather than a
+  // plain grid, and long enough to cover the widest column count.
+  const columnHeights = [
+    [200, 140, 180, 120, 160],
+    [160, 210, 130, 175, 150],
+    [185, 125, 205, 145, 170],
+    [140, 195, 155, 210, 130],
+    [210, 150, 175, 135, 190],
+  ];
   return (
     <View style={{ flexDirection: 'row', paddingHorizontal: spacing.lg, gap: spacing.sm, marginTop: 12 }}>
-      <View style={{ flex: 1, gap: spacing.sm }}>
-        {leftHeights.map((h, i) => (
-          <Animated.View key={i} style={{ width: colWidth, height: h, borderRadius: 12, backgroundColor: base, opacity }} />
-        ))}
-      </View>
-      <View style={{ flex: 1, gap: spacing.sm }}>
-        {rightHeights.map((h, i) => (
-          <Animated.View key={i} style={{ width: colWidth, height: h, borderRadius: 12, backgroundColor: base, opacity }} />
-        ))}
-      </View>
+      {Array.from({ length: columns }, (_, col) => (
+        <View key={col} style={{ flex: 1, gap: spacing.sm }}>
+          {columnHeights[col % columnHeights.length]!.map((h, i) => (
+            <Animated.View
+              key={i}
+              style={{ width: colWidth, height: h, borderRadius: 12, backgroundColor: base, opacity }}
+            />
+          ))}
+        </View>
+      ))}
     </View>
   );
 }
@@ -218,6 +229,9 @@ SubTabBar.displayName = 'SubTabBar';
 const ExploreScreen = memo(() => {
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const { isDarkMode, palette: P } = useTheme();
+  // Measured per render, not captured at module load: the masonry column
+  // width is half the screen, so a stale width mis-sizes every card.
+  const { width: screenWidth } = useWindowDimensions();
   const setExploreFocused = useExploreFocusStore(s => s.setExploreFocused);
 
   // Tell the floating tab bar it should apply its scroll-hide/opacity
@@ -388,11 +402,23 @@ const ExploreScreen = memo(() => {
   const mapDbServiceToCards = useCallback((s: DiscoverServiceWithProvider): PortfolioItem[] => {
     const images = [...s.service_images].sort((a, b) => a.sort_order - b.sort_order);
     const imageSources = images.map(img => ({ uri: img.url }));
+    // Same order as imageSources — the detail modal sizes its carousel from
+    // the whole set rather than from whichever photo was tapped. Same 0.8
+    // fallback as the per-card ratio below, so a legacy null never lands as
+    // NaN in the median.
+    const imageAspectRatios = images.map(img => img.aspect_ratio ?? 0.8);
+    // Same order again. 'cover' is the column default, so a provider who has
+    // never touched the control still gets exactly today's behaviour.
+    const imageFits = images.map(img =>
+      img.fit === 'contain' ? ('contain' as const) : ('cover' as const),
+    );
     const p = s.provider;
     return images.map((img, idx) => ({
       id: `service-${s.id}__${idx}`,
       image: { uri: img.url },
       images: imageSources,
+      imageAspectRatios,
+      imageFits,
       caption: s.description ?? '',
       serviceName: s.name,
       category: p.service_category as unknown as ServiceCategory,
@@ -570,9 +596,12 @@ const ExploreScreen = memo(() => {
   }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
 
   // Column width for masonry
+  // Must match MasonryGrid's own column maths exactly — it lays the cards out,
+  // this sizes what goes inside them.
   const columnWidth = useMemo(() => {
-    return (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
-  }, []);
+    const columns = masonryColumnsForWidth(screenWidth);
+    return (screenWidth - spacing.lg * 2 - spacing.sm * (columns - 1)) / columns;
+  }, [screenWidth]);
 
   // Measure the true dimensions of every photo in both feeds. Only portfolio
   // cards carry a real aspect_ratio from the DB; service/provider/unclaimed
@@ -912,7 +941,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    // Sits directly under SafeAreaView's top edge, and the spacing scale is
+    // tighter on Android (sm is 4 there against 7 on iOS), so the tabs read as
+    // jammed against the status bar at sm. One step up on both platforms.
+    paddingTop: spacing.xl,
     paddingBottom: spacing.sm,
     gap: spacing.lg,
   },

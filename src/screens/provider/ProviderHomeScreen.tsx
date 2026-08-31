@@ -17,11 +17,11 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Dimensions,
+  useWindowDimensions,
   Easing,
   PanResponder,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -34,6 +34,8 @@ import { ProviderHomeScreenProps } from '../../navigation/types';
 import { storage } from '../../utils/storage';
 import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { FLOATING_TAB_BAR_CLEARANCE, tabBarSpotlightRect } from '../../components/IslandPillTabBar';
+import { tabBarOccupiedHeight } from '../../utils/tabBarGeometry';
 import {
   getProviderBookings,
   getMyProviderProfile,
@@ -50,6 +52,7 @@ import {
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../utils/scheduleIssues';
+import { resolveTimelineRange } from '../../utils/dayTimelineRange';
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
 import type {
@@ -69,8 +72,6 @@ import {
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
-const { width: SW, height: SH } = Dimensions.get('window');
-const ADD_SHEET_OFFSCREEN_Y = SH;
 
 const CP = { card: '#252220', border: 'rgba(126,102,103,0.18)' }; // static StyleSheet fallback
 
@@ -429,12 +430,15 @@ const bc = StyleSheet.create({
 
 // ─── Timeline view ───────────────────────────────────────────────────────────
 
-const TL_START_HOUR = 7;  // 7 AM
-const TL_END_HOUR   = 21; // 9 PM
-const TL_HOURS      = TL_END_HOUR - TL_START_HOUR;
+// The timeline's hour range is resolved per day (see resolveTimelineRange) —
+// it was fixed at 7am–9pm, which silently cut the top off any provider who
+// starts earlier: a 3am booking was clamped to the top of the grid and drawn
+// against the 7am line, so it looked like a 7am appointment.
 const HOUR_H        = 64; // px per hour
-const TIMELINE_H    = TL_HOURS * HOUR_H;
 const TIME_COL_W    = 48;
+// Headroom above the first hour line, so its label isn't clipped by the top of
+// the scroll view (and doesn't read as tucked under the date strip above it).
+const TL_TOP_INSET  = 14;
 
 function parseDurationToMinutes(dur: string): number {
   if (!dur) return 60;
@@ -470,8 +474,30 @@ interface DayTimelineProps {
 }
 
 function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, onRefresh, availability, isBlocked }: DayTimelineProps) {
+  // Measured per render, not captured at module load: booking blocks are laid
+  // out as a fraction of the width left beside the time column.
+  const { width: screenWidth } = useWindowDimensions();
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const { startHour: TL_START_HOUR, endHour: TL_END_HOUR } = useMemo(
+    () => resolveTimelineRange(
+      availability && !availability.is_closed
+        ? {
+            openMins:  parseTimeToMinutes(availability.open_time),
+            closeMins: parseTimeToMinutes(availability.close_time),
+          }
+        : null,
+      bookings.map(b => ({
+        startMins:    parseTimeToMinutes(b.bookingTime),
+        durationMins: parseDurationToMinutes(b.duration),
+      })),
+    ),
+    [availability, bookings],
+  );
+  const TL_HOURS   = TL_END_HOUR - TL_START_HOUR;
+  const TIMELINE_H = TL_HOURS * HOUR_H;
+
   const nowTop = ((nowMinutes - TL_START_HOUR * 60) / 60) * HOUR_H;
   const showNowLine = nowMinutes >= TL_START_HOUR * 60 && nowMinutes <= TL_END_HOUR * 60;
 
@@ -510,12 +536,16 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
   const maxCols = Math.max(1, ...positioned.map(p => p.col + 1));
   positioned.forEach(p => { p.cols = maxCols; });
 
-  const bookingAreaW = SW - TIME_COL_W - 32;
+  const bookingAreaW = screenWidth - TIME_COL_W - 32;
 
+  // The first hour label is drawn at `top: -8` so it sits centred on its own
+  // line. With no inset that puts it above the scroll content, where it
+  // collided with the date strip directly above — the top of the timeline read
+  // as hidden behind the dates.
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ height: TIMELINE_H + 80, paddingBottom: 100 }}
+      contentContainerStyle={{ height: TIMELINE_H + 80 + TL_TOP_INSET, paddingTop: TL_TOP_INSET, paddingBottom: FLOATING_TAB_BAR_CLEARANCE + 24 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
     >
       <View style={{ flex: 1, flexDirection: 'row', marginHorizontal: 16 }}>
@@ -523,7 +553,10 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
         <View style={{ width: TIME_COL_W }}>
           {Array.from({ length: TL_HOURS + 1 }, (_, i) => {
             const h = TL_START_HOUR + i;
-            const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+            // h can be 24 when the range runs to the end of the day — that
+            // last line is midnight, not noon.
+            const hh = h % 24;
+            const label = hh === 0 ? '12am' : hh < 12 ? `${hh}am` : hh === 12 ? '12pm' : `${hh - 12}pm`;
             return (
               <View key={h} style={{ position: 'absolute', top: i * HOUR_H - 8, width: TIME_COL_W, alignItems: 'flex-end', paddingRight: 10 }}>
                 <Text style={{ fontSize: 11, fontWeight: '500', color: P.sub }}>{label}</Text>
@@ -738,6 +771,13 @@ type ListRow =
 
 export default function ProviderHomeScreen({ navigation, route }: Props) {
   const { isDarkMode: dark, palette: P } = useTheme();
+  // Measured per render, not captured at module load: the add-sheet's
+  // offscreen resting position is a full screen height, and the month grid
+  // divides the width into seven cells.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const cellSize = Math.floor((screenWidth - 48) / 7);
+  const circleSize = Math.min(cellSize - 6, 32);
 
   const todayStr = TODAY_STR;
 
@@ -846,28 +886,18 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [user?.id]);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
-    // Mirrors IslandPillTabBar's own layout constants (that component lives
-    // outside this screen's tree, so there's no ref to measure — its
-    // position is fixed and computed the same way it computes its own).
-    const TAB_MARGIN = 32;
-    const TAB_H = 50;
-    const TAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 30 : 20;
-    const { height: screenH } = Dimensions.get('window');
+    // Asked of the tab bar itself rather than re-declared here — the bar lives
+    // outside this screen's tree so there's no ref to measure, and its shape
+    // differs by platform.
+    const tabRect = tabBarSpotlightRect(screenWidth, screenHeight, insets.bottom);
 
     return [
       {
         key: 'tabs',
         title: 'Your home base',
         body: 'Swipe or tap to move between Home, My Services, Profile, and Becca — your AI assistant.',
-        target: {
-          rect: {
-            x: TAB_MARGIN,
-            y: screenH - TAB_BOTTOM_OFFSET - TAB_H,
-            width: SW - TAB_MARGIN * 2,
-            height: TAB_H,
-          },
-        },
-        radius: TAB_H / 2,
+        target: { rect: tabRect },
+        radius: Platform.OS === 'android' ? 0 : tabRect.height / 2,
         icon: 'apps',
       },
       {
@@ -895,17 +925,17 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         icon: 'notifications',
       },
     ];
-  }, []);
+  }, [screenWidth, screenHeight, insets.bottom]);
 
   // Add-action sheet
   const [showAddSheet, setShowAddSheet] = useState(false);
   // Use the viewport height, rather than the sheet's approximate height, so
   // dismissal always carries the entire sheet off-screen before unmounting.
-  const sheetY     = useRef(new Animated.Value(ADD_SHEET_OFFSCREEN_Y)).current;
+  const sheetY     = useRef(new Animated.Value(screenHeight)).current;
   const backdropOp = useRef(new Animated.Value(0)).current;
 
   const openSheet = useCallback(() => {
-    sheetY.setValue(ADD_SHEET_OFFSCREEN_Y);
+    sheetY.setValue(screenHeight);
     backdropOp.setValue(0);
     setShowAddSheet(true);
     Animated.parallel([
@@ -916,10 +946,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
   const closeSheet = useCallback(() => {
     Animated.parallel([
-      Animated.timing(sheetY,     { toValue: ADD_SHEET_OFFSCREEN_Y, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(sheetY,     { toValue: screenHeight, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(backdropOp, { toValue: 0,        duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }),
     ]).start(() => { setShowAddSheet(false); });
-  }, [sheetY, backdropOp]);
+  }, [sheetY, backdropOp, screenHeight]);
 
   // Offset so the sheet doesn't jump when capture fires at dy > 8
   const panStartDy = useRef(0);
@@ -935,15 +965,15 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     onPanResponderMove: (_, g) => {
       const dy = Math.max(0, g.dy - panStartDy.current);
       sheetY.setValue(dy);
-      backdropOp.setValue(Math.max(0, 1 - dy / ADD_SHEET_OFFSCREEN_Y));
+      backdropOp.setValue(Math.max(0, 1 - dy / screenHeight));
     },
     onPanResponderRelease: (_, g) => {
       const dy = g.dy - panStartDy.current;
       if (dy > 80 || g.vy > 0.4) {
-        const remainingDistance = Math.max(0, ADD_SHEET_OFFSCREEN_Y - Math.max(0, dy));
-        const exitDuration = Math.max(280, Math.min(480, (remainingDistance / ADD_SHEET_OFFSCREEN_Y) * 480));
+        const remainingDistance = Math.max(0, screenHeight - Math.max(0, dy));
+        const exitDuration = Math.max(280, Math.min(480, (remainingDistance / screenHeight) * 480));
         Animated.parallel([
-          Animated.timing(sheetY,     { toValue: ADD_SHEET_OFFSCREEN_Y, duration: exitDuration, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.timing(sheetY,     { toValue: screenHeight, duration: exitDuration, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
           Animated.timing(backdropOp, { toValue: 0, duration: exitDuration, easing: Easing.out(Easing.quad), useNativeDriver: true }),
         ]).start(() => { setShowAddSheet(false); });
       } else {
@@ -1486,7 +1516,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             {/* Day letter headers */}
             <View style={s.dayHeaderRow}>
               {['S','M','T','W','T','F','S'].map((d, i) => (
-                <View key={i} style={s.dayHeaderCell}>
+                <View key={i} style={[s.dayHeaderCell, { width: cellSize }]}>
                   <Text style={[s.dayHeaderTxt, { color: P.sub }]}>{d}</Text>
                 </View>
               ))}
@@ -1495,19 +1525,20 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             {/* Grid */}
             <View style={s.calGrid}>
               {monthCells.map((cell, i) => {
-                if (!cell) return <View key={`e${i}`} style={s.calCell} />;
+                if (!cell) return <View key={`e${i}`} style={[s.calCell, { width: cellSize, height: cellSize }]} />;
                 const count   = countByDate[cell.dateString] ?? 0;
                 const isToday = cell.dateString === todayStr;
                 const isSel   = cell.dateString === selectedDate;
                 return (
                   <TouchableOpacity
                     key={cell.dateString}
-                    style={s.calCell}
+                    style={[s.calCell, { width: cellSize, height: cellSize }]}
                     onPress={() => { handleDateTap(cell.dateString); toggleMonth(); }}
                     activeOpacity={0.6}
                   >
                     <View style={[
                       s.calCircle,
+                      { width: circleSize, height: circleSize, borderRadius: circleSize / 2 },
                       isSel && [s.calCircleSel, { backgroundColor: P.accent }],
                       isToday && !isSel && [s.calCircleToday, { backgroundColor: P.text }],
                     ]}>
@@ -1601,7 +1632,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         {/* ── Booking list / Timeline ─────────────────────────────── */}
         <Animated.View style={[s.listWrap, { opacity: listOpacity, transform: [{ translateY: listSlide }] }]}>
           {loading ? (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 16, paddingBottom: 80 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 16, paddingBottom: FLOATING_TAB_BAR_CLEARANCE + 24 }}>
               <SectionBanner dateStr={todayStr} P={P} />
               {[1,2,3].map(k => <SkeletonCard key={k} />)}
             </ScrollView>
@@ -1627,7 +1658,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 `empty-${i}`
               }
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 100, paddingTop: 4 }}
+              contentContainerStyle={{ paddingBottom: FLOATING_TAB_BAR_CLEARANCE + 24, paddingTop: 4 }}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />
               }
@@ -1668,7 +1699,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       <TouchableOpacity
         ref={fabRef}
         activeOpacity={0.85}
-        style={[s.fab, { backgroundColor: P.accent }]}
+        style={[
+          s.fab,
+          { backgroundColor: P.accent },
+          // Sits above whatever the tab bar actually occupies, measured. The
+          // old flat 86 on Android was less than the bar's own height plus a
+          // three-button navigation inset, so the FAB sat behind it.
+          Platform.OS === 'android' && {
+            bottom: tabBarOccupiedHeight(true, insets.bottom) + 16,
+          },
+        ]}
         onPress={openSheet}
       >
         <Ionicons name="add" size={26} color={P.ice} />
@@ -1677,7 +1717,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
 
       {/* ── Go-live celebration ──────────────────────────────────── */}
-      <Modal visible={showGoLiveCelebration} transparent animationType="fade" onRequestClose={() => setShowGoLiveCelebration(false)}>
+      <Modal visible={showGoLiveCelebration} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowGoLiveCelebration(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <Animated.View
             style={{
@@ -1712,7 +1752,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       {/* ── Add-action sheet ─────────────────────────────────────── */}
       <Modal
         visible={showAddSheet}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="none"
         onRequestClose={closeSheet}
       >
@@ -1770,8 +1810,6 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const CELL_SIZE = Math.floor((SW - 48) / 7);
-const CIRCLE_SZ = Math.min(CELL_SIZE - 6, 32);
 
 const s = StyleSheet.create({
   root:    { flex: 1 },
@@ -1794,11 +1832,11 @@ const s = StyleSheet.create({
   monthArrow:    { padding: 6 },
   monthNavLabel: { fontSize: 17, fontWeight: '600' },
   dayHeaderRow:  { flexDirection: 'row', marginBottom: 8 },
-  dayHeaderCell: { width: CELL_SIZE, alignItems: 'center' },
+  dayHeaderCell: { alignItems: 'center' },
   dayHeaderTxt:  { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
   calGrid:       { flexDirection: 'row', flexWrap: 'wrap' },
-  calCell:       { width: CELL_SIZE, height: CELL_SIZE, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-  calCircle:     { width: CIRCLE_SZ, height: CIRCLE_SZ, borderRadius: CIRCLE_SZ / 2, alignItems: 'center', justifyContent: 'center' },
+  calCell:       { alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  calCircle:     { alignItems: 'center', justifyContent: 'center' },
   calCircleSel:  {},
   calCircleToday:{},
   calNum:        { fontSize: 14, fontWeight: '500' },

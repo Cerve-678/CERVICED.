@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   Easing,
   Pressable,
   Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Svg, { Defs, Mask, Rect as SvgRect } from 'react-native-svg';
@@ -16,10 +16,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { isTargetOnScreen } from '../utils/coachMarkTargets';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const PAD = 8; // breathing room between the real element and the spotlight edge
 const CARD_GAP = 16;
-const CARD_W = Math.min(SCREEN_W - 36, 344);
 const BEAK = 12; // width/height of the square that's rotated 45° into a pointer
 const HALO = 12; // how far the pulsing ring travels beyond the spotlight edge
 
@@ -81,6 +79,11 @@ const measureStep = (step: CoachMarkStep): Promise<Rect | null> => {
  */
 export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, onFinish }) => {
   const { palette: P } = useTheme();
+  // Measured per render, not captured at module load: the spotlight mask and
+  // card placement are absolute coordinates, so a stale screen size puts them
+  // in the wrong place after a rotation or in split-screen.
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  const cardW = Math.min(screenW - 36, 344);
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const hasPositioned = useRef(false);
@@ -140,7 +143,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
     const step = steps[index]!;
     const r = await measureStep(step);
     if (!mountedRef.current) return;
-    if (!r || !isTargetOnScreen(r, { width: SCREEN_W, height: SCREEN_H })) { goToStep(index + dir, dir); return; }
+    if (!r || !isTargetOnScreen(r, { width: screenW, height: screenH })) { goToStep(index + dir, dir); return; }
 
     setStepIndex(index);
     setRect(r);
@@ -173,7 +176,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
       Animated.sequence([Animated.delay(150), reveal]).start();
       Animated.timing(haloGate, { toValue: 1, duration: 300, delay: 400, useNativeDriver: false }).start();
     }
-  }, [steps, onFinish, cardOpacity, cardLift, cutX, cutY, cutW, cutH, haloGate]);
+  }, [steps, onFinish, cardOpacity, cardLift, cutX, cutY, cutW, cutH, haloGate, screenW, screenH]);
 
   useEffect(() => {
     if (!visible) {
@@ -208,33 +211,33 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
   };
   const skip = () => { tap(); onFinish(); };
 
-  const spaceBelow = SCREEN_H - (rect.y + rect.height);
+  const spaceBelow = screenH - (rect.y + rect.height);
   const spaceAbove = rect.y;
   const placeBelow = spaceBelow >= 200 || spaceBelow >= spaceAbove;
-  const cardTop = placeBelow ? Math.min(rect.y + rect.height + PAD + CARD_GAP, SCREEN_H - 240) : undefined;
-  const cardBottom = !placeBelow ? SCREEN_H - rect.y + PAD + CARD_GAP : undefined;
-  const cardLeft = Math.max(18, Math.min(SCREEN_W - CARD_W - 18, rect.x + rect.width / 2 - CARD_W / 2));
+  const cardTop = placeBelow ? Math.min(rect.y + rect.height + PAD + CARD_GAP, screenH - 240) : undefined;
+  const cardBottom = !placeBelow ? screenH - rect.y + PAD + CARD_GAP : undefined;
+  const cardLeft = Math.max(18, Math.min(screenW - cardW - 18, rect.x + rect.width / 2 - cardW / 2));
   // The beak tracks the spotlight's centre, but stays clear of the card's
   // rounded corners so it never pokes out of a curve.
   const beakLeft = Math.max(
     20,
-    Math.min(CARD_W - 20 - BEAK, rect.x + rect.width / 2 - cardLeft - BEAK / 2)
+    Math.min(cardW - 20 - BEAK, rect.x + rect.width / 2 - cardLeft - BEAK / 2)
   );
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={skip}>
+    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={skip}>
       <View style={StyleSheet.absoluteFill}>
         {/* Tapping the dimmed area advances, so the whole screen is the
             "next" button — the footer controls stay for Back/Skip. */}
         <Pressable style={StyleSheet.absoluteFill} onPress={advance}>
-          <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
+          <Svg width={screenW} height={screenH} style={StyleSheet.absoluteFill}>
             <Defs>
-              <Mask id="coachmark-mask" maskUnits="userSpaceOnUse" x={0} y={0} width={SCREEN_W} height={SCREEN_H}>
-                <SvgRect x={0} y={0} width={SCREEN_W} height={SCREEN_H} fill="#fff" />
+              <Mask id="coachmark-mask" maskUnits="userSpaceOnUse" x={0} y={0} width={screenW} height={screenH}>
+                <SvgRect x={0} y={0} width={screenW} height={screenH} fill="#fff" />
                 <AnimatedSvgRect x={cutX} y={cutY} width={cutW} height={cutH} rx={radius} fill="#000" />
               </Mask>
             </Defs>
-            <SvgRect x={0} y={0} width={SCREEN_W} height={SCREEN_H} fill={SCRIM} mask="url(#coachmark-mask)" />
+            <SvgRect x={0} y={0} width={screenW} height={screenH} fill={SCRIM} mask="url(#coachmark-mask)" />
             <AnimatedSvgRect
               x={cutX} y={cutY} width={cutW} height={cutH} rx={radius}
               stroke={ON_SCRIM} strokeWidth={2} fill="none"
@@ -265,7 +268,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
             styles.cardWrap,
             {
               left: cardLeft,
-              width: CARD_W,
+              width: cardW,
               top: cardTop,
               bottom: cardBottom,
               opacity: cardOpacity,

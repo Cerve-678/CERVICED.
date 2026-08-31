@@ -48,7 +48,7 @@ export function ReleaseDayPicker({
   styles,
 }: ReleaseDayPickerProps) {
   return (
-    <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
+    <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
       <View style={styles.releasePickerOverlay}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <View style={[styles.releasePickerSheet, { backgroundColor: cardColor, borderColor }]}>

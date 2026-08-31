@@ -39,6 +39,7 @@ import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { logger } from '../../utils/logger';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -1075,7 +1076,7 @@ export default function SearchScreen({ navigation, route }: Props) {
           groups in one scrollable sheet rather than a panel per pill. ── */}
       <Modal
         visible={filterModalVisible}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="slide"
         onRequestClose={() => setFilterModalVisible(false)}
       >
@@ -1462,6 +1463,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
+    // Keeps the sheet clear of the system navigation bar.
+    paddingBottom: BOTTOM_SAFE_GAP,
   },
   filterModalSheet: {
     maxHeight: '75%',
@@ -1536,7 +1539,7 @@ const styles = StyleSheet.create({
   },
   filterModalDone: {
     marginTop: 14,
-    height: 46,
+    minHeight: 46,
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',

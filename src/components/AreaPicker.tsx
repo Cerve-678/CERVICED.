@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { CITY_AREA_NAMES, getCityAreaData } from '../data/cityAreas';
+import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
@@ -185,7 +186,7 @@ export default function AreaPicker({
         <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
       </TouchableOpacity>
 
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+      <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
           <Pressable style={styles.backdrop} onPress={close} />
           <View style={styles.sheet}>
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   fieldText: { flex: 1, color: '#1C1C1E', fontSize: 15, lineHeight: 20 },
   placeholder: { color: '#8B8B95' },
-  modalRoot: { flex: 1, justifyContent: 'flex-end' },
+  modalRoot: { flex: 1, justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.38)' },
   sheet: { maxHeight: '82%', minHeight: 430, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#D1D1D6', marginTop: 10, marginBottom: 16 },

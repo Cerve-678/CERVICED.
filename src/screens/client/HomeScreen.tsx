@@ -8,10 +8,9 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   LayoutAnimation,
   Platform,
-  UIManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,14 +43,10 @@ import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import type { PortfolioItem, ServiceCategory } from '../../types/providers';
-
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
@@ -182,6 +177,10 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { palette: P } = useTheme();
+  // Measured per render, not read once inside the memo: the coach-mark tour
+  // spotlights the floating tab bar by absolute coordinates, so a stale screen
+  // size puts the highlight in the wrong place.
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const { bookings } = useBooking();
   const { user } = useAuth();
   const { bookmarkedIds, loadBookmarks } = useBookmarkStore();
@@ -219,28 +218,18 @@ export default function HomeScreen() {
   }, [user?.id]);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
-    // Mirrors IslandPillTabBar's own layout constants (that component lives
-    // outside this screen's tree, so there's no ref to measure — its
-    // position is fixed and computed the same way it computes its own).
-    const TAB_MARGIN = 32;
-    const TAB_H = 50;
-    const TAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 30 : 20;
-    const { width: screenW, height: screenH } = Dimensions.get('window');
+    // Asked of the tab bar itself rather than re-declared here — the bar lives
+    // outside this screen's tree so there's no ref to measure, and its shape
+    // differs by platform.
+    const tabRect = tabBarSpotlightRect(screenW, screenH, insets.bottom);
 
     return [
       {
         key: 'tabs',
         title: 'Your home base',
         body: 'Swipe or tap to move between Becca, Explore, Home, Cart, and Profile.',
-        target: {
-          rect: {
-            x: TAB_MARGIN,
-            y: screenH - TAB_BOTTOM_OFFSET - TAB_H,
-            width: screenW - TAB_MARGIN * 2,
-            height: TAB_H,
-          },
-        },
-        radius: TAB_H / 2,
+        target: { rect: tabRect },
+        radius: Platform.OS === 'android' ? 0 : tabRect.height / 2,
         icon: 'apps',
       },
       {
@@ -268,7 +257,7 @@ export default function HomeScreen() {
         icon: 'calendar',
       },
     ];
-  }, []);
+  }, [screenW, screenH, insets.bottom]);
 
 
   // Live providers from Supabase; starts empty until data loads

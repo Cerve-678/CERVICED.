@@ -24,6 +24,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { MyServiceDraft } from '../../services/databaseService';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -131,7 +132,7 @@ export default function ServiceEditorSheet({
   }, [value, onSave]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.dismissArea} activeOpacity={1} onPress={onClose} />
         <KeyboardAvoidingView
@@ -232,6 +233,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
+    // Keeps the sheet clear of the system navigation bar.
+    paddingBottom: BOTTOM_SAFE_GAP,
   },
   dismissArea: {
     flex: 1,

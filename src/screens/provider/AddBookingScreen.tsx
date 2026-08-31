@@ -909,7 +909,7 @@ export default function AddBookingScreen() {
 
           {datePickerVisible && (
             Platform.OS === 'ios' ? (
-              <Modal transparent animationType="fade" visible={datePickerVisible}>
+              <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={datePickerVisible}>
                 <View style={s.pickerModalWrap}>
                   <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setDatePickerVisible(false)} />
                   <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
@@ -931,7 +931,7 @@ export default function AddBookingScreen() {
 
           {timePickerVisible && (
             Platform.OS === 'ios' ? (
-              <Modal transparent animationType="fade" visible={timePickerVisible}>
+              <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={timePickerVisible}>
                 <View style={s.pickerModalWrap}>
                   <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setTimePickerVisible(false)} />
                   <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>

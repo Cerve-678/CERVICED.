@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { UK_CITIES } from '../constants/ukCities';
 import { getCityAreaData, type CityAreaData } from '../data/cityAreas';
+import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string;
@@ -121,7 +122,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
         <Ionicons name="chevron-down" size={16} color={t.sub} />
       </TouchableOpacity>
 
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+      <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
           <Pressable style={styles.backdrop} onPress={close} />
           <View style={[styles.sheet, { backgroundColor: t.card }]}>
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13,
   },
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
-  modalRoot: { flex: 1, justifyContent: 'flex-end' },
+  modalRoot: { flex: 1, justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: { maxHeight: '75%', minHeight: 420, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },

@@ -283,7 +283,7 @@ export default function OffersScreen({ navigation }: Props) {
           rather than an anchored popover (a native headerRight button's
           on-screen position isn't something React Navigation exposes to
           measure against, so a centered sheet is the robust option here). */}
-      <Modal visible={sortModalVisible} transparent animationType="fade" onRequestClose={() => setSortModalVisible(false)}>
+      <Modal visible={sortModalVisible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setSortModalVisible(false)}>
         <TouchableOpacity
           style={styles.sortBackdrop}
           activeOpacity={1}

@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   backText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700' },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 22, marginBottom: 8 },
   subtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, marginBottom: 20 },
-  input: { height: 50, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, fontSize: 15, fontFamily: 'Jura-VariableFont_wght' },
+  input: { minHeight: 50, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, fontSize: 15, fontFamily: 'Jura-VariableFont_wght' },
   codeInput: { textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: '700' },
   resultRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, padding: 12, marginBottom: 10, gap: 12 },
   resultLogo: { width: 44, height: 44, borderRadius: 10 },
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   noticeBox: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 20 },
   noticeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19 },
   aboutText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, marginBottom: 24 },
-  primaryBtn: { height: 50, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  primaryBtn: { minHeight: 50, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 1, color: '#FFFFFF' },
   resendText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', textAlign: 'center' },
 });
