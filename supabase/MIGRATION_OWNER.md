@@ -22,12 +22,22 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  session on branch fix/hat-truth-server-side
-SINCE:  2026-08-29
-SCOPE:  delete_provider_profile() — read has_client_profile instead of the
-        replaced `dob IS NOT NULL` inference, and reset the auth metadata
-        role mirror when the provider hat is dropped.
+OWNER:  (none)
+SINCE:  --
+SCOPE:  --
 ```
+
+### Applied 2026-08-31 (delete_provider_profile reads the client-hat column)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260831144811 | `delete_provider_profile_reads_client_hat_column` | `pg_get_functiondef` confirms the live body now reads `COALESCE(has_client_profile, false)` — the only remaining occurrence of "dob" in it is the comment recording what the read used to be. `SECURITY DEFINER` and `SET search_path TO 'public'` both survived the `CREATE OR REPLACE`. The `auth.users` role-mirror reset is present in the body, and the one-off mirror repair ran: the metadata-vs-`users.role` drift count is now 0 (was 1). Authored as `20260829120000`; `apply_migration` stamped `20260831144811`, and the file has been renamed to match. |
+
+Written 2026-08-29 but not applied then (the authoring session's permission
+classifier refused `apply_migration`); applied 2026-08-31. Because it sat
+unapplied for two days it fell **below** the frontier in the meantime — a
+reminder that the renumber-on-apply rule exists precisely for this gap, not
+just for two sessions racing.
 
 ### Applied 2026-08-28 (client loyalty points — earning side)
 
