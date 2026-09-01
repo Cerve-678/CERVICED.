@@ -98,7 +98,11 @@ const toastSt = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 10,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   inner: {
     flexDirection: 'row',

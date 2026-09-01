@@ -36,6 +36,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../../utils/dateUtils';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -786,7 +787,13 @@ const s = StyleSheet.create({
   safe:        { flex: 1 },
   keyboardView:{ flex: 1 },
   list:        { flex: 1 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  // + FLOATING_TAB_BAR_CLEARANCE — a plain safe-area bottom edge only
+  // reserves the system nav bar's own inset, not the floating pill tab bar
+  // that sits above it, so without this the last row ends up hidden behind
+  // the pill (worse on Android, where the pill sits directly on the nav bar
+  // inset with no extra float). Matches the same pattern used on
+  // ProviderAccountScreen/UserProfileScreen/ProfileInfoScreen.
+  listContent: { paddingHorizontal: 16, paddingBottom: 24 + FLOATING_TAB_BAR_CLEARANCE },
 
   // Day rows
   dayRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },

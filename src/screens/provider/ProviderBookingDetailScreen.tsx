@@ -2957,7 +2957,13 @@ function ActionButton({
       style={[
         styles.actionBtn,
         ghost
-          ? { backgroundColor: color + '14', borderWidth: 1.5, borderColor: color + '55' }
+          // actionBtn's elevation/shadow is meant for the solid variant's
+          // opaque fill. Left on here, Android still casts the shadow from
+          // the button's full rounded-rect silhouette, and with this near-
+          // transparent (~8% alpha) fill it shows straight through as a dark
+          // band hugging the inside edge — a thick "shadow ring" instead of
+          // a normal outline chip. Zero it out for ghost buttons only.
+          ? { backgroundColor: color + '14', borderWidth: 1.5, borderColor: color + '55', elevation: 0, shadowOpacity: 0 }
           : { backgroundColor: color },
       ]}
       onPress={onPress}
@@ -3033,7 +3039,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.28,
         shadowRadius: 20,
       },
-      android: { elevation: 14 },
+      // elevation: 0 — overflow:'hidden' + borderRadius + a non-zero
+      // elevation clips Android's shadow to the rounded outline instead of
+      // letting it fade outward, showing as a dark ring.
+      android: { elevation: 0 },
     }),
   },
   supportDropdownBlur: {
@@ -3069,7 +3078,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.22,
         shadowRadius: 18,
       },
-      android: { elevation: 14 },
+      // elevation: 0 — overflow:'hidden' + borderRadius + a non-zero
+      // elevation clips Android's shadow to the rounded outline instead of
+      // letting it fade outward, showing as a dark ring.
+      android: { elevation: 0 },
     }),
   },
   helpDropdownContent: {
