@@ -8403,13 +8403,14 @@ export async function claimUnclaimedProviderProfile(
   return data;
 }
 
-export type AccountEmailKind = 'client_welcome' | 'provider_welcome';
+export type AccountEmailKind = 'client_welcome' | 'provider_welcome' | 'password_changed';
 
 /**
- * Sends the signed-in user their welcome email. The caller names only WHICH
- * welcome it is — the template, the recipient and the name on it are all
- * resolved server-side, so nothing about our outgoing mail is decided on the
- * device. See supabase/functions/send-account-email/index.ts.
+ * Sends the signed-in user an account email (a welcome, or a password-changed
+ * notice). The caller names only WHICH one it is — the template, the
+ * recipient and the name on it are all resolved server-side, so nothing about
+ * our outgoing mail is decided on the device. See
+ * supabase/functions/send-account-email/index.ts.
  *
  * There is deliberately no generic "send this html to this address" function
  * any more: that was an open relay on the cerviced.co sending domain.

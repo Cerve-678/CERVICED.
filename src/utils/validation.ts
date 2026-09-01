@@ -6,7 +6,9 @@ export const validateEmail = (v: string): boolean =>
 export const validatePassword = (v: string): string | null => {
   if (v.length < 8) return 'Must be at least 8 characters';
   if (!/[A-Z]/.test(v)) return 'Must include an uppercase letter';
+  if (!/[a-z]/.test(v)) return 'Must include a lowercase letter';
   if (!/[0-9]/.test(v)) return 'Must include a number';
+  if (!/[^A-Za-z0-9]/.test(v)) return 'Must include a special character';
   return null;
 };
 
@@ -44,12 +46,15 @@ export interface PasswordRule {
 export const PASSWORD_RULES: PasswordRule[] = [
   { key: 'length', label: 'At least 8 characters', test: v => v.length >= 8 },
   { key: 'uppercase', label: 'One uppercase letter', test: v => /[A-Z]/.test(v) },
+  { key: 'lowercase', label: 'One lowercase letter', test: v => /[a-z]/.test(v) },
   { key: 'number', label: 'One number', test: v => /[0-9]/.test(v) },
+  { key: 'special', label: 'One special character', test: v => /[^A-Za-z0-9]/.test(v) },
 ];
 
 export const getPasswordStrength = (password: string) => {
-  const strong = password.length >= 8 && /[A-Z]/.test(password) && /[0-9]/.test(password);
-  const medium = password.length >= 8;
+  const metCount = PASSWORD_RULES.filter(rule => rule.test(password)).length;
+  const strong = metCount === PASSWORD_RULES.length;
+  const medium = !strong && password.length >= 8 && metCount >= 3;
   const width = strong ? '100%' : medium ? '66%' : password.length >= 4 ? '33%' : '10%';
   const color = strong ? '#34C759' : medium ? '#FF9500' : '#FF3B30';
   const label = strong ? 'Strong' : medium ? 'Medium' : 'Weak';
