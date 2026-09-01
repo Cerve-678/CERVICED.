@@ -26,6 +26,7 @@ import AreaPicker from '../../components/AreaPicker';
 import { updateUserDob } from '../../services/databaseService';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
 // Must be at least 16 to have an account (see validateDob in utils/validation.ts) —
 // encoded as the picker's maximumDate so the UI can't select an invalid date at all.
@@ -128,7 +129,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
       <StatusBar barStyle={theme.statusBar} translucent />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
+          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >

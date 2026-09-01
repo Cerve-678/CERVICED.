@@ -21,8 +21,7 @@ tags: [screen, provider]
 - [[AboutScreen\|About]]
 - [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
-- `SignUpStep2` _(navigator / dynamic)_
-- `SignUpStep1` _(navigator / dynamic)_
+- `SignUpStep3` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
