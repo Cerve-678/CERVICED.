@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **149 files**
 
 ## Auth
 Curated: [[Contexts]] · **160 files**
-- `src/services/databaseService.ts` _(221)_
+- `src/services/databaseService.ts` _(223)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(134)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
@@ -294,11 +294,12 @@ Curated: [[Contexts]] · **160 files**
 - `src/navigation/RootNavigation.tsx` _(36)_
 - `supabase/phase1_schema.sql` _(32)_
 - `src/services/beccaStorageService.ts` _(30)_
+- `src/screens/shared/ChangePasswordScreen.tsx` _(29)_
 - `src/services/biometricService.ts` _(29)_
 - `src/screens/auth/EmailVerificationScreen.tsx` _(23)_
-- `src/screens/shared/ChangePasswordScreen.tsx` _(21)_
 - `supabase/becca_chat_tables.sql` _(21)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
+- `src/utils/userFacingError.ts` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(15)_
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
@@ -308,7 +309,6 @@ Curated: [[Contexts]] · **160 files**
 - `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
 - `src/services/becca/capabilities/client.ts` _(11)_
-- `src/utils/validation.ts` _(11)_
 - … +130 more
 
 ## Becca / AI
