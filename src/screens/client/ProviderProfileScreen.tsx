@@ -85,6 +85,7 @@ import {
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { resolveSlotsRow } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
@@ -2379,9 +2380,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         borderBottomWidth: 0,
         elevation: 0,
         shadowOpacity: 0,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        overflow: "hidden",
+        // Rounded corners are iOS-only here — react-native-screens' Android
+        // header implementation uses clipToOutline for overflow:'hidden' +
+        // borderRadius, and that same outline appears to also govern the
+        // native header's touch-dispatch region for headerRight/headerLeft,
+        // which is what was making the bookmark/share buttons unresponsive
+        // on Android despite rendering fine. iOS's UINavigationBar has no
+        // such coupling, so it keeps the rounding.
+        ...(Platform.OS === "ios"
+          ? {
+              borderBottomLeftRadius: 30,
+              borderBottomRightRadius: 30,
+              overflow: "hidden" as const,
+            }
+          : null),
       },
     });
   }, [
@@ -4701,27 +4713,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     bell wouldn't be true. The bell/notify-on-release-day
                     logic is unchanged — it was never tied to this text. */}
                 {(() => {
-                  // Headline only. The detail is a "Next free ..." line, and
-                  // this pill is about when a provider's diary opens, not
-                  // which individual slot is soonest — the date/time picker
-                  // is where that belongs. Appended here it also gave the
-                  // fallback two claims in one pill, the same doubling the
-                  // release-day text below deliberately avoids.
-                  const pillText =
-                    availability && availability.state !== "unpublished"
-                      ? availability.headline
-                      : "";
-                  // A provider who publishes slots on a fixed day of the
-                  // month says THAT and nothing else. Today's open/closed
-                  // headline is the wrong answer for someone waiting on next
-                  // month's diary to drop, and pairing the two ("New slots
-                  // drop on the 20th · Open today until 6pm") reads as two
-                  // competing claims about when you can book. The release
-                  // day replaces the availability line, it doesn't lead it.
-                  const rowText =
-                    provider.scheduleReleaseDay != null
-                      ? `New slots drop on the ${ordinalSuffix(provider.scheduleReleaseDay)}`
-                      : pillText;
+                  // Headline only — the "Next free ..." detail belongs to the
+                  // date/time picker, not to a pill about when a diary opens.
+                  // resolveSlotsRow owns both which of the two sources wins
+                  // and whether the answer is available yet; see its comment
+                  // for why a provider with a release day never waits on the
+                  // availability fetch.
+                  const row = resolveSlotsRow({
+                    scheduleReleaseDay: provider.scheduleReleaseDay,
+                    availability,
+                    availabilityLoading,
+                  });
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every
@@ -4729,7 +4731,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   // used to sit inside this block's early return and vanished
                   // whenever there was no availability headline to print.
                   const showInstagram = !!provider.instagram;
-                  if (availabilityLoading) return null;
+                  if (row.kind === 'waiting') return null;
                   return (
                   // Instagram sits OUTSIDE the pill, as its own round button
                   // beside it. Inside, it read as part of the availability
@@ -4753,7 +4755,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         style={styles.slotsCardHighlight}
                       />
                       <Text style={[styles.slotsText, { color: OP.sub }]}>
-                        {rowText || "Availability on request"}
+                        {row.text}
                       </Text>
                       <TouchableOpacity
                         style={styles.bellButtonInline}
@@ -5365,7 +5367,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
-    elevation: 5,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   serviceTagBlur: {
     paddingHorizontal: 20,
@@ -5404,7 +5410,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 10,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   notificationBlur: {
     paddingHorizontal: 16, // Reduced padding
@@ -5611,7 +5621,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 14,
-    elevation: 3,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
     marginBottom: 12,
   },
   serviceCardBlur: {
@@ -5795,7 +5809,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
-    elevation: 4,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   quickBookButtonText: {
     fontFamily: "BakbakOne-Regular",
@@ -5965,7 +5983,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 14,
-    elevation: 3,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   contactRow: {
     flexDirection: "row",
@@ -6085,6 +6107,11 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingBottom: 40,
   },
+  // elevation: 0 (Android only) — doubly at risk: a translucent
+  // backgroundColor lets Android's elevation shadow bleed straight through
+  // as a dark ring, AND overflow:'hidden' + borderRadius clips whatever
+  // shadow remains to the rounded outline instead of letting it fade
+  // outward. iOS keeps its shadow via shadow* above.
   modalReviewCard: {
     padding: 18,
     borderRadius: 20,
@@ -6094,7 +6121,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 0,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
@@ -6170,7 +6197,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
-    elevation: 15,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   successBlur: {
     paddingHorizontal: 22,
@@ -6342,7 +6373,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
-    elevation: 10,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   selectionBarText: {
     fontSize: 14,

@@ -47,8 +47,8 @@ import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider
 
 // Stores
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
-import { storage } from '../../utils/storage';
-import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
 
 
@@ -702,27 +702,9 @@ const ExploreScreen = memo(() => {
   // The one card the tour spotlights — see pickTourCardId for the rule.
   const tourCardId = useMemo(() => pickTourCardId(portfolioItems), [portfolioItems]);
 
-  useEffect(() => {
-    // Wait for a real feed: the grid's affordances are the whole point of
-    // this tour, so there's nothing to spotlight until cards exist.
-    if (tourCheckedRef.current || !user?.id || portfolioLoading || !tourCardId) return;
-    tourCheckedRef.current = true;
-    const seenKey = tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_EXPLORE, user.id);
-    storage.getItem<boolean>(seenKey).then(seen => {
-      if (seen) return;
-      // Let the cards finish their staggered entrance (PortfolioCard fades
-      // in with an index-based delay) before measuring where they landed.
-      setTimeout(() => setShowTour(true), 700);
-    }).catch((err) => logger.error('[Explore] tour-seen flag read failed:', err));
-  }, [user?.id, portfolioLoading, tourCardId]);
-
   const finishTour = useCallback(() => {
     setShowTour(false);
-    if (user?.id) {
-      storage.setItem(tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_EXPLORE, user.id), true)
-        .catch((err) => logger.error('[Explore] tour-seen flag write failed:', err));
-    }
-  }, [user?.id]);
+  }, []);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => [
     {
@@ -758,6 +740,34 @@ const ExploreScreen = memo(() => {
       icon: 'bookmark',
     },
   ], []);
+
+  // Which step keys this account still has coming; null until resolved.
+  const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    // Wait for a real feed: the grid's affordances are the whole point of
+    // this tour, so there's nothing to spotlight until cards exist.
+    if (tourCheckedRef.current || !user?.id || portfolioLoading || !tourCardId) return;
+    tourCheckedRef.current = true;
+    const userId = user.id;
+    void (async () => {
+      const decision = await resolveTourForUser(TOUR_KEYS.CLIENT_EXPLORE, tourSteps, userId);
+      if (!decision.show) return;
+      setTourStepKeys(decision.steps.map(step => step.key));
+      // Recorded on SHOW, not on finish — see tourService.
+      void recordTourSeen(TOUR_KEYS.CLIENT_EXPLORE, userId, decision.stampVersion);
+      // Let the cards finish their staggered entrance (PortfolioCard fades
+      // in with an index-based delay) before measuring where they landed.
+      setTimeout(() => setShowTour(true), 700);
+    })();
+  }, [user?.id, portfolioLoading, tourCardId, tourSteps]);
+
+  // Only the steps this account is actually owed; filtered from tourSteps so
+  // the live element refs inside each step stay the ones this render measures.
+  const visibleTourSteps = useMemo(
+    () => (tourStepKeys ? tourSteps.filter(step => tourStepKeys.includes(step.key)) : []),
+    [tourSteps, tourStepKeys],
+  );
 
   // imageHeight is passed in rather than recomputed inside the card: the
   // packer's reserved slot and the card's rendered box must be the exact
@@ -913,7 +923,7 @@ const ExploreScreen = memo(() => {
 
       {/* First-visit walkthrough of the grid's own affordances. Rendered
           outside SafeAreaView so its scrim covers the full window. */}
-      <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
+      <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
     </ThemedBackground>
   );
 });

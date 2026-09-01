@@ -5,7 +5,7 @@
 
 #generated
 
-**122 edges** across **41 screens**. Node-graph version: [[Screen Flow (generated)]].
+**123 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -58,6 +58,7 @@ graph LR
   HomeScreen --> OffersScreen
   HomeScreen --> ProviderProfileScreen
   HomeScreen --> SearchScreen
+  InfoRegScreen --> ProviderIntakeFormScreen
   LoginScreen --> ForgotPassword
   LoginScreen --> SignUpStep1
   MessagesScreen --> ProviderChatScreen
@@ -165,6 +166,7 @@ graph LR
 - `provider/BusinessDetailsScreen` → `provider/AboutYouScreen`, `provider/BusinessInfoScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/SchedulingScreen`, `provider/ServicesPricingScreen`
 - `provider/BusinessInfoScreen` → `provider/ProviderCommunicationsScreen`
 - `provider/BusinessProfileScreen` → `provider/BrandingScreen`, `provider/BusinessDetailsScreen`, `provider/InfoRegScreen`, `provider/ProviderAutomationsScreen`, `provider/ProviderCommunicationsScreen`
+- `provider/InfoRegScreen` → `provider/ProviderIntakeFormScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
 - `provider/ProviderAccountScreen` → `provider/BusinessProfileScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `SignUpStep3`
 - `provider/ProviderAnalyticsScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderBookingHistoryScreen`

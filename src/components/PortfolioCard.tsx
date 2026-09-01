@@ -210,13 +210,24 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 2,
   },
+  // elevation: 0 (Android only — the shadow* props above are iOS-only and
+  // stay as-is). overflow:'hidden' + borderRadius + a non-zero elevation on
+  // the same Android view is its own well-known RN bug independent of fill
+  // opacity: Android clips the shadow to the same rounded outline it uses
+  // for content clipping, so instead of a soft shadow fading outward it
+  // collapses into a thin dark ring right at the rounded edge — most
+  // visible against the flat #F0F0F0 loading placeholder before the photo
+  // paints over it and hides it. Same family of bug as the ghost
+  // ActionButton and the Bookings map's appointment cards, different
+  // trigger (clipped-outline shadow vs. shadow bleeding through a
+  // translucent fill).
   card: {
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
-    elevation: 3,
+    elevation: 0,
   },
   image: {
     backgroundColor: '#F0F0F0',

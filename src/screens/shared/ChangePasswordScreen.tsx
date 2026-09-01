@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -14,19 +13,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { updateCurrentPassword } from '../../services/databaseService';
+import { updateCurrentPassword, invokeSendAccountEmail } from '../../services/databaseService';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { validatePassword } from '../../utils/validation';
+import { logger } from '../../utils/logger';
+import { useAppDialog } from '../../components/AppDialog';
+import { toUserMessage, SAME_PASSWORD_MESSAGE } from '../../utils/userFacingError';
 
 export default function ChangePasswordScreen({ navigation }: any) {
   const { isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [showNext, setShowNext] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showConfirmField, setShowConfirmField] = useState(false);
 
   const rowStyle = [
     styles.inputRow,
@@ -39,33 +42,42 @@ export default function ChangePasswordScreen({ navigation }: any) {
 
   const handleSave = async () => {
     if (!next.trim() || !confirm.trim()) {
-      Alert.alert('Missing fields', 'Please fill in all fields.');
+      showAlert('Missing fields', 'Please fill in all fields.', 'center');
       return;
     }
     if (next !== confirm) {
-      Alert.alert('Mismatch', 'New passwords do not match.');
+      showAlert('Mismatch', 'New passwords do not match.', 'center');
       return;
     }
     const passwordError = validatePassword(next);
     if (passwordError) {
-      Alert.alert('Weak password', passwordError);
+      showAlert('Weak password', passwordError, 'center');
       return;
     }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       await updateCurrentPassword(next);
-    } catch {
-      Alert.alert('Error', 'Couldn\'t update your password. Please try again.');
+    } catch (e) {
+      const message = toUserMessage(e, "Couldn't update your password. Please try again.", 'ChangePasswordScreen.updateCurrentPassword');
+      // Rejecting a no-op (new password same as the current one) isn't really
+      // a failure, so "Error" reads wrong as the title for it specifically.
+      const title = message === SAME_PASSWORD_MESSAGE ? 'Please try again' : 'Error';
+      showAlert(title, message, 'center');
       return;
     } finally {
       setLoading(false);
     }
     {
+      // Non-blocking, logged rather than swallowed — a failed notification
+      // shouldn't stop the user from seeing their password actually changed.
+      invokeSendAccountEmail('password_changed').catch((e) => {
+        logger.error('[email] password-changed email failed to send:', e);
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert('Done', 'Your password has been updated.', [
+      showConfirm('Done', 'Your password has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      ], 'center');
     }
   };
 
@@ -123,15 +135,15 @@ export default function ChangePasswordScreen({ navigation }: any) {
                 onChangeText={setConfirm}
                 placeholder="Re-enter new password"
                 placeholderTextColor={P.sub}
-                secureTextEntry={!showConfirm}
+                secureTextEntry={!showConfirmField}
                 autoCapitalize="none"
               />
               <TouchableOpacity
                 style={styles.eyeBtn}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowConfirm(v => !v); }}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowConfirmField(v => !v); }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.eyeText, { color: P.sub }]}>{showConfirm ? 'Hide' : 'Show'}</Text>
+                <Text style={[styles.eyeText, { color: P.sub }]}>{showConfirmField ? 'Hide' : 'Show'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -149,6 +161,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardDismissView>
+      <DialogHost />
     </ThemedBackground>
   );
 }

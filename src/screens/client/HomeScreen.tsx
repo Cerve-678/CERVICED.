@@ -36,7 +36,8 @@ import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
@@ -200,23 +201,6 @@ export default function HomeScreen() {
   const bellIconRef = useRef<View>(null);
   const bookingsChipRef = useRef<View>(null);
 
-  useEffect(() => {
-    if (tourCheckedRef.current || !user?.id) return;
-    tourCheckedRef.current = true;
-    const seenKey = tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_HOME, user.id);
-    storage.getItem<boolean>(seenKey).then(seen => {
-      if (seen) return;
-      // Give the header/category section time to finish their entrance
-      // layout before the tour measures where they actually landed.
-      setTimeout(() => setShowTour(true), 500);
-    }).catch(() => {});
-  }, [user?.id]);
-
-  const finishTour = useCallback(() => {
-    setShowTour(false);
-    if (user?.id) storage.setItem(tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_HOME, user.id), true).catch(() => {});
-  }, [user?.id]);
-
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
     // Asked of the tab bar itself rather than re-declared here — the bar lives
     // outside this screen's tree so there's no ref to measure, and its shape
@@ -258,6 +242,40 @@ export default function HomeScreen() {
       },
     ];
   }, [screenW, screenH, insets.bottom]);
+
+  // Which step keys this account still has coming; null until resolved.
+  const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (tourCheckedRef.current || !user?.id) return;
+    tourCheckedRef.current = true;
+    const userId = user.id;
+    void (async () => {
+      const decision = await resolveTourForUser(TOUR_KEYS.CLIENT_HOME, tourSteps, userId);
+      if (!decision.show) return;
+      setTourStepKeys(decision.steps.map(step => step.key));
+      // Recorded on SHOW, not on finish. The old flag was written only when
+      // the tour reached its last step or was skipped, so a tab switch or a
+      // kill part-way through recorded nothing and it came back every launch.
+      void recordTourSeen(TOUR_KEYS.CLIENT_HOME, userId, decision.stampVersion);
+      // Give the header/category section time to finish their entrance
+      // layout before the tour measures where they actually landed.
+      setTimeout(() => setShowTour(true), 500);
+    })();
+  }, [user?.id, tourSteps]);
+
+  const finishTour = useCallback(() => {
+    setShowTour(false);
+  }, []);
+
+  // Only the steps this account is actually owed. Filtered from tourSteps
+  // rather than stored, so the live element refs inside each step stay the
+  // ones this render is measuring.
+  const visibleTourSteps = useMemo(
+    () => (tourStepKeys ? tourSteps.filter(step => tourStepKeys.includes(step.key)) : []),
+    [tourSteps, tourStepKeys],
+  );
+
 
 
   // Live providers from Supabase; starts empty until data loads
@@ -1873,7 +1891,7 @@ export default function HomeScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
+      <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
     </View>
   );
 }

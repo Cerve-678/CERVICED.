@@ -141,6 +141,12 @@ export interface DbUser {
   // London". Stamped onto bookings.client_area at checkout, where — unlike
   // client_address — a mobile provider may read it before accepting.
   client_area: string | null;
+  // Coach-mark walkthroughs this ACCOUNT has been shown, as {tour_key: version}
+  // (migration 20260831124409). Written only by the mark_tour_seen RPC, which
+  // merges one key at a time and never lets a version move backwards — read it
+  // through seenVersionFor() in src/utils/coachMarkTours.ts rather than
+  // indexing it raw, since an older build may have left a malformed entry.
+  seen_tours: Record<string, number>;
   role: UserRole;
   login_method: string | null;
   business_name: string | null;

@@ -151,6 +151,29 @@ export function providerWelcomeEmail(params: { name: string; businessName?: stri
   };
 }
 
+export function passwordChangedEmail(params: { name: string }) {
+  const firstName = params.name.split(' ')[0] || 'there';
+  return {
+    subject: 'Your CERVICED password was changed',
+    html: emailWrapper(`
+      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">Password changed</h1>
+      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Hi ${firstName}</p>
+
+      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
+        This confirms the password on your CERVICED account was just changed. You can use your new password to sign in from now on.
+      </p>
+
+      <div style="border-left:3px solid #DA70D6;padding-left:16px;margin-bottom:8px;">
+        <p style="color:#666;font-size:13px;line-height:1.7;">
+          If you made this change, no further action is needed. If you didn't, someone else may have access to your account — contact support@cerviced.co right away.
+        </p>
+      </div>
+
+      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
+    `),
+  };
+}
+
 export function bookingConfirmationEmail(params: {
   clientName: string;
   providerName: string;

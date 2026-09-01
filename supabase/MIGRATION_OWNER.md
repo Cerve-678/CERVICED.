@@ -27,6 +27,42 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Applied 2026-08-31 (account-scoped walkthrough versions)
+
+`20260831124409_account_scoped_tour_versions.sql` — adds `users.seen_tours`
+(JSONB NOT NULL DEFAULT '{}') and `mark_tour_seen(TEXT, INT)`. Purely
+additive: a new column and a new function, redefining nothing, so it could
+not have reverted concurrent work in either order.
+
+Lock was `(none)` when taken and released on the same pass. **The claim was
+made in a worktree**, so the other session working in the main checkout could
+not have seen it — acceptable here only because the migration redefines
+nothing; do not treat that as precedent for one that does.
+
+Verified live: column is `jsonb`, `NOT NULL`, default `'{}'::jsonb`, 7/7 rows
+non-null. Function is `SECURITY DEFINER` with `search_path=public, pg_temp`,
+granted to `authenticated`/`service_role` only — **not `anon`** (2026-08-20
+hardening pass).
+
+**Verified functionally, not just structurally**, in a `DO` block ending in
+`RAISE EXCEPTION` so the whole thing aborted rather than relying on the caller
+to roll back. Four properties, all of which a structural check would have
+missed:
+
+| Property | Result |
+|---|---|
+| A second tour MERGES into the map rather than replacing it | all three keys present |
+| A version never moves backwards | wrote 3, then a "stale build" wrote 1 -> stayed `3` |
+| A malformed pre-existing entry does not raise | `"garbage"` -> replaced with `2` |
+| Nothing persisted | `seen_tours <> '{}'` count back to 0 afterwards |
+
+The merge and the GREATEST both matter in production: Home and Explore are
+adjacent tabs whose tours can be shown moments apart, and a read-modify-write
+of the whole object from the client would lose one of them.
+
+**Renamed from its authored `20260831120000`** to the version
+`apply_migration` stamped itself (`20260831124409`), per the standing gotcha.
+
 ### Applied 2026-08-31 (fold hair-type matching into get_providers_availability)
 
 | Recorded version | Name | Verified live |

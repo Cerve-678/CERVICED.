@@ -26,13 +26,21 @@ export const STORAGE_KEYS = {
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
 
 /**
- * Per-user "has already seen this coach-mark tour" flags.
+ * Per-user "which version of this coach-mark tour has been shown" cache.
  *
  * These are PREFIXES, not whole keys — each one is suffixed with the user id
  * so two accounts on the same device each get their own first run. Build one
  * with tourSeenKey() rather than re-writing the template literal, and note
  * that DevSettings' "Replay Walkthroughs" purges by exactly these prefixes:
  * a tour whose key isn't listed here silently can't be replayed.
+ *
+ * The stored value is a VERSION NUMBER now, not `true`. The account's own
+ * record in users.seen_tours is the source of truth — this is only a local
+ * cache, so a returning user doesn't have to wait on a network round-trip
+ * before the first screen can decide whether to spotlight anything. Builds
+ * before 2026-08-31 wrote a boolean `true` here; that is read as version 1
+ * (see src/services/tourService.ts) so upgrading doesn't replay a tour
+ * someone has already sat through.
  */
 export const TOUR_SEEN_PREFIXES = {
   /** HomeScreen — the client's first-run tour */
