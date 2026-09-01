@@ -5775,6 +5775,10 @@ const makeStyles = (isDark: boolean) => {
   },
   // Bright, well-defined text-box card — was a near-invisible 0.2-alpha
   // white fill that washed out against the modal's own light background.
+  // elevation: 0 (Android only, both below) — overflow:'hidden' +
+  // borderRadius + a non-zero elevation clips Android's shadow to the
+  // rounded outline instead of letting it fade outward, showing as a dark
+  // ring. iOS keeps its shadow via shadow* above.
   inputBlur: {
     borderRadius: 14,
     overflow: 'hidden',
@@ -5785,7 +5789,7 @@ const makeStyles = (isDark: boolean) => {
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 1,
+    elevation: 0,
   },
   inputBlurMultiline: {
     borderRadius: 14,
@@ -5797,7 +5801,7 @@ const makeStyles = (isDark: boolean) => {
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 1,
+    elevation: 0,
   },
   // Reverts the main provider profile form's fields back to their original
   // translucent look (only the Add Service modal's boxes got the brighter
@@ -6022,6 +6026,11 @@ const makeStyles = (isDark: boolean) => {
   },
   // Matches the section cards: same radius scale, same accent-tinted border,
   // same rose tint-shadow, so a service card reads as the same material.
+  // elevation: 0 (Android only) — doubly at risk: surf(0.1) is a
+  // translucent fill that lets Android's elevation shadow bleed straight
+  // through as a dark ring, AND overflow:'hidden' + borderRadius clips
+  // whatever shadow remains to the rounded outline instead of letting it
+  // fade outward. iOS keeps its shadow via shadow* above.
   serviceItemCard: {
     borderRadius: RADIUS.card,
     overflow: 'hidden',
@@ -6032,7 +6041,7 @@ const makeStyles = (isDark: boolean) => {
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: isDark ? 0.18 : 0.12,
     shadowRadius: 8,
-    elevation: 1,
+    elevation: 0,
   },
   serviceCardBlur: {
     flex: 1,
@@ -6567,7 +6576,11 @@ const makeStyles = (isDark: boolean) => {
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
-    elevation: 15,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   smallModalTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -7032,7 +7045,11 @@ const makeStyles = (isDark: boolean) => {
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 14,
-    elevation: 3,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   previewCardHighlight: {
     position: 'absolute',
@@ -7102,7 +7119,11 @@ const makeStyles = (isDark: boolean) => {
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 14,
-    elevation: 3,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   previewServiceItemRow: {
     flexDirection: 'row',
@@ -7259,7 +7280,11 @@ const makeStyles = (isDark: boolean) => {
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 8,
-    elevation: 3,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   // Venue strip — same tile size as the client profile's Venue block in
   // ProviderAdditionalInfoSection (150x105), not a masonry tile.

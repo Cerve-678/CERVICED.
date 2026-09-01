@@ -2355,9 +2355,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         borderBottomWidth: 0,
         elevation: 0,
         shadowOpacity: 0,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        overflow: "hidden",
+        // Rounded corners are iOS-only here — react-native-screens' Android
+        // header implementation uses clipToOutline for overflow:'hidden' +
+        // borderRadius, and that same outline appears to also govern the
+        // native header's touch-dispatch region for headerRight/headerLeft,
+        // which is what was making the bookmark/share buttons unresponsive
+        // on Android despite rendering fine. iOS's UINavigationBar has no
+        // such coupling, so it keeps the rounding.
+        ...(Platform.OS === "ios"
+          ? {
+              borderBottomLeftRadius: 30,
+              borderBottomRightRadius: 30,
+              overflow: "hidden" as const,
+            }
+          : null),
       },
     });
   }, [
@@ -5332,7 +5343,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
-    elevation: 5,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   serviceTagBlur: {
     paddingHorizontal: 20,
@@ -5372,7 +5387,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 10,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   notificationBlur: {
     paddingHorizontal: 16, // Reduced padding
@@ -5579,7 +5598,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 14,
-    elevation: 3,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
     marginBottom: 12,
   },
   serviceCardBlur: {
@@ -5763,7 +5786,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
-    elevation: 4,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   quickBookButtonText: {
     fontFamily: "BakbakOne-Regular",
@@ -5933,7 +5960,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 14,
-    elevation: 3,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   contactRow: {
     flexDirection: "row",
@@ -6053,6 +6084,11 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingBottom: 40,
   },
+  // elevation: 0 (Android only) — doubly at risk: a translucent
+  // backgroundColor lets Android's elevation shadow bleed straight through
+  // as a dark ring, AND overflow:'hidden' + borderRadius clips whatever
+  // shadow remains to the rounded outline instead of letting it fade
+  // outward. iOS keeps its shadow via shadow* above.
   modalReviewCard: {
     padding: 18,
     borderRadius: 20,
@@ -6062,7 +6098,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 0,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
@@ -6138,7 +6174,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
-    elevation: 15,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   successBlur: {
     paddingHorizontal: 22,
@@ -6310,7 +6350,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
-    elevation: 10,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   selectionBarText: {
     fontSize: 14,

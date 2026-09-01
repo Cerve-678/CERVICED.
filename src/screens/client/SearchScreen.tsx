@@ -1659,7 +1659,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 2,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
   },
   cardBody: {
     flexDirection: 'column',
