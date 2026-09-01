@@ -27,6 +27,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
 
@@ -90,12 +91,19 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         phone: meta['phone'] ?? '',
         dob: dob || null,
         role: meta['role'] ?? 'user',
-        // Set the hat explicitly — the column defaults to false, so a fresh
-        // client signup that leaves it out reads as having no client profile
-        // and loses the client tab. A provider signing up starts without one
-        // until they add it (addClientProfile), which is the point of the
-        // column: it is no longer inferred from whether `dob` happens to be set.
-        has_client_profile: (meta['role'] ?? 'user') !== 'provider',
+        // Set the hat ON for a client signup — the column defaults to false, so
+        // leaving it out entirely would read as having no client profile and
+        // lose the client tab. A provider signing up starts without one until
+        // they add it (addClientProfile), which is the point of the column: it
+        // is no longer inferred from whether `dob` happens to be set.
+        //
+        // Omitted rather than written as `false` for a provider, because this
+        // is an UPSERT and an upsert only updates the columns it names. Writing
+        // false would mean any re-run of this screen against an existing row —
+        // a repeated verification, a retry — silently strips a client hat the
+        // account had already added. Omitting it lets the column DEFAULT false
+        // apply on insert while leaving an existing value untouched.
+        ...((meta['role'] ?? 'user') !== 'provider' ? { has_client_profile: true } : {}),
         login_method: 'email',
         service_interests:     meta['service_interests']     ?? [],
         business_name:         meta['business_name']         ?? null,
@@ -212,7 +220,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView>
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
 
             <View style={[styles.iconCircle, { backgroundColor: t.surface }]}>
@@ -342,7 +350,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    height: 52,
+    minHeight: 52,
     borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
@@ -356,7 +364,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     width: '100%',
-    height: 52,
+    minHeight: 52,
     borderRadius: 100,
     borderWidth: 1,
     alignItems: 'center',

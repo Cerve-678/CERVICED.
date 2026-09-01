@@ -515,7 +515,7 @@ export default function ProviderScheduleScreen() {
             {/* Native time picker (iOS inline / Android modal) */}
             {pickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={pickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={pickerVisible}>
                   <View style={s.pickerModalWrap}>
                     {/* Tap-to-dismiss overlay — sibling of sheet, never its parent */}
                     <TouchableOpacity
@@ -599,7 +599,7 @@ export default function ProviderScheduleScreen() {
             {/* Date picker for block */}
             {blockPickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={blockPickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={blockPickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity
                       style={s.pickerDismiss}
@@ -700,7 +700,7 @@ export default function ProviderScheduleScreen() {
             {/* Date picker for override date */}
             {overrideDatePickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={overrideDatePickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={overrideDatePickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideDatePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
@@ -723,7 +723,7 @@ export default function ProviderScheduleScreen() {
             {/* Time picker for override open/close */}
             {overrideTimePickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={overrideTimePickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={overrideTimePickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideTimePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>

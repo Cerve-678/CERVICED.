@@ -20,6 +20,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 type Props = StackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
@@ -53,7 +54,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView>
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
 
             {/* Icon placeholder */}
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    height: 52,
+    minHeight: 52,
     borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',

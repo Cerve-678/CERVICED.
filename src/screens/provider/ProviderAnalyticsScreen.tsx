@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
+  useWindowDimensions,
   Easing,
   RefreshControl,
   ScrollView,
@@ -25,7 +25,6 @@ import { formatShortDate } from '../../utils/dateUtils';
 
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
-const { width: W } = Dimensions.get('window');
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 //
@@ -372,8 +371,9 @@ function StatTile({
   theme: any;
   animate?: boolean;
 }) {
+  const { width: screenWidth } = useWindowDimensions();
   return (
-    <DeckCard dark={dark} tint={color} style={tile.panel}>
+    <DeckCard dark={dark} tint={color} style={[tile.panel, { width: tileWidth(screenWidth) }]}>
       <View style={tile.inner}>
         <View style={[tile.icon, { backgroundColor: color + '22' }]}>
           <Ionicons name={icon as any} size={14} color={color} />
@@ -394,10 +394,12 @@ function StatTile({
   );
 }
 
-const TILE_W = (W - 40 - 20) / 3; // body pad 20×2, two gaps of 10
+/** Widths are derived from the live window width rather than a value frozen at
+ *  module load, so they stay right after a rotation or in split-screen. */
+const tileWidth = (screenWidth: number) => (screenWidth - 40 - 20) / 3; // body pad 20×2, two gaps of 10
 
 const tile = StyleSheet.create({
-  panel: { width: TILE_W },
+  panel: {},
   inner: { padding: 12, gap: 3 },
   icon:  { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
   value: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
@@ -682,7 +684,7 @@ const ring = StyleSheet.create({
 
 // ── Rating analytics ──────────────────────────────────────────────────────────
 
-const RATING_CHART_W = W - 80; // body pad 20×2 + card pad 20×2
+const ratingChartWidth = (screenWidth: number) => screenWidth - 80; // body pad 20×2 + card pad 20×2
 const RATING_CHART_H = 88;
 const RATING_MONTHS  = 6;
 
@@ -731,6 +733,8 @@ function RatingAnalytics({
   dark: boolean;
   theme: any;
 }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const ratingChartW = ratingChartWidth(screenWidth);
   const bookingServiceMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const b of bookings) map.set(b.id, b.service_name_snapshot);
@@ -784,7 +788,7 @@ function RatingAnalytics({
 
   // build trend path — skip months with no data
   const pts = monthlyRatings.map((m, j) => ({
-    x: j === 0 ? 0 : (j / (RATING_MONTHS - 1)) * RATING_CHART_W,
+    x: j === 0 ? 0 : (j / (RATING_MONTHS - 1)) * ratingChartW,
     y: m.avg !== null
       ? RATING_CHART_H - ((m.avg - 1) / 4) * (RATING_CHART_H - 10)
       : null,
@@ -855,14 +859,14 @@ function RatingAnalytics({
         {validPts >= 2 && (
           <View style={rta.trendBlock}>
             <Text style={[rta.subheading, { color: theme.text }]}>Rating Trend</Text>
-            <Svg width={RATING_CHART_W} height={RATING_CHART_H + 4} style={{ marginTop: 10 }}>
+            <Svg width={ratingChartW} height={RATING_CHART_H + 4} style={{ marginTop: 10 }}>
               {/* dashed reference lines at 3★ and 4★ */}
               {[3, 4].map(v => {
                 const y = RATING_CHART_H - ((v - 1) / 4) * (RATING_CHART_H - 10);
                 return (
                   <SvgLine
                     key={v}
-                    x1={0} y1={y} x2={RATING_CHART_W} y2={y}
+                    x1={0} y1={y} x2={ratingChartW} y2={y}
                     stroke={dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}
                     strokeWidth={1}
                     strokeDasharray="4 4"
@@ -870,7 +874,7 @@ function RatingAnalytics({
                 );
               })}
               <SvgLine
-                x1={0} y1={RATING_CHART_H} x2={RATING_CHART_W} y2={RATING_CHART_H}
+                x1={0} y1={RATING_CHART_H} x2={ratingChartW} y2={RATING_CHART_H}
                 stroke={dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)'}
                 strokeWidth={1}
               />
@@ -986,8 +990,10 @@ const rta = StyleSheet.create({
 
 // ── Service quadrant line charts ──────────────────────────────────────────────
 
-const QUAD_W        = Math.floor((W - 92) / 2) - 1; // two cols inside card (padding 20) + gap 12; -1px guards against flexWrap rounding forcing a 3rd row
-const QUAD_CHART_W  = QUAD_W - 24;   // 12px padding each side of quadrant
+// two cols inside card (padding 20) + gap 12; -1px guards against flexWrap
+// rounding forcing a 3rd row
+const quadWidth      = (screenWidth: number) => Math.floor((screenWidth - 92) / 2) - 1;
+const quadChartWidth = (screenWidth: number) => quadWidth(screenWidth) - 24; // 12px padding each side of quadrant
 const QUAD_CHART_H  = 72;
 const QUAD_COLORS   = [CHART.blue, CHART.teal, CHART.green, CHART.amber, CHART.pink, CHART.plum];
 
@@ -1000,6 +1006,9 @@ function ServiceQuadrantCharts({
   dark: boolean;
   theme: any;
 }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const quadW = quadWidth(screenWidth);
+  const quadChartW = quadChartWidth(screenWidth);
   const months = useMemo(
     () =>
       Array.from({ length: 6 }, (_, i) => {
@@ -1054,7 +1063,7 @@ function ServiceQuadrantCharts({
             const color   = QUAD_COLORS[i % QUAD_COLORS.length]!;
             const maxVal  = Math.max(...svc.monthly.map(m => m.count), 1);
             const pts     = svc.monthly.map((m, j) => ({
-              x: j === 0 ? 0 : (j / (svc.monthly.length - 1)) * QUAD_CHART_W,
+              x: j === 0 ? 0 : (j / (svc.monthly.length - 1)) * quadChartW,
               y: QUAD_CHART_H - (m.count / maxVal) * (QUAD_CHART_H - 6),
             }));
             const linePath = pts.map((p, j) => `${j === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
@@ -1062,7 +1071,7 @@ function ServiceQuadrantCharts({
             const total    = svc.monthly.reduce((s, m) => s + m.count, 0);
 
             return (
-              <Reveal key={svc.name} index={i} style={{ width: QUAD_W }}>
+              <Reveal key={svc.name} index={i} style={{ width: quadW }}>
                 <View
                   style={[
                     quad.quadrant,
@@ -1079,9 +1088,9 @@ function ServiceQuadrantCharts({
                     {total}
                     <Text style={[quad.totalSuffix, { color: theme.secondaryText }]}> bkgs</Text>
                   </Text>
-                  <Svg width={QUAD_CHART_W} height={QUAD_CHART_H + 2} style={quad.chart}>
+                  <Svg width={quadChartW} height={QUAD_CHART_H + 2} style={quad.chart}>
                     <SvgLine
-                      x1={0} y1={QUAD_CHART_H} x2={QUAD_CHART_W} y2={QUAD_CHART_H}
+                      x1={0} y1={QUAD_CHART_H} x2={quadChartW} y2={QUAD_CHART_H}
                       stroke={dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}
                       strokeWidth={1}
                     />
@@ -1122,7 +1131,7 @@ const quad = StyleSheet.create({
   titleRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heading:     { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
   grid:        { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  quadrant:    { width: QUAD_W, padding: 12, borderRadius: 16, borderWidth: 1, gap: 2 },
+  quadrant:    { padding: 12, borderRadius: 16, borderWidth: 1, gap: 2 },
   svcName:     { fontSize: 11, fontWeight: '700', lineHeight: 15 },
   totalCount:  { fontSize: 20, fontWeight: '800', letterSpacing: -0.5, marginTop: 2 },
   totalSuffix: { fontSize: 10, fontWeight: '500' },
@@ -1220,6 +1229,7 @@ const rangeSel = StyleSheet.create({
 
 export default function ProviderAnalyticsScreen({ navigation }: any) {
   const { theme, isDarkMode: dark } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const accent = accentColor(dark);
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   const [reviews, setReviews]           = useState<ReviewWithUser[]>([]);
@@ -1406,7 +1416,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                 },
                 { label: 'Cancelled',  value: kpi.cancelled,                                                                                           icon: 'close-circle',   color: CHART.plum },
               ].map((t, i) => (
-                <Reveal key={t.label} index={i + 1} style={{ width: TILE_W }}>
+                <Reveal key={t.label} index={i + 1} style={{ width: tileWidth(screenWidth) }}>
                   <StatTile
                     label={t.label}
                     value={t.value}

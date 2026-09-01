@@ -38,7 +38,7 @@ import type {
 } from '../../types/database';
 import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
-import { formatTime12, formatShortDate, dateToYMD } from '../../utils/dateUtils';
+import { formatTime12, formatShortDate, dateToYMD, overridesFromDate } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
 import { isDarkColor } from '../../constants/providerThemes';
 
@@ -160,7 +160,10 @@ export default function AddBookingScreen() {
         const [blocked, windows, overrides] = await Promise.all([
           getProviderBlockedDates(profile.id),
           getProviderAvailabilityWindows(profile.id),
-          getProviderAvailabilityOverrides(profile.id),
+          // Overrides only from a fortnight back — same cutoff ProviderHomeScreen
+          // uses, so this modal doesn't pull a provider's whole history of
+          // one-off closures (unbounded before this) on every open.
+          getProviderAvailabilityOverrides(profile.id, overridesFromDate()),
         ]);
         setBlockedDates(blocked);
         setAvailabilityWindows(windows);
@@ -909,7 +912,7 @@ export default function AddBookingScreen() {
 
           {datePickerVisible && (
             Platform.OS === 'ios' ? (
-              <Modal transparent animationType="fade" visible={datePickerVisible}>
+              <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={datePickerVisible}>
                 <View style={s.pickerModalWrap}>
                   <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setDatePickerVisible(false)} />
                   <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
@@ -931,7 +934,7 @@ export default function AddBookingScreen() {
 
           {timePickerVisible && (
             Platform.OS === 'ios' ? (
-              <Modal transparent animationType="fade" visible={timePickerVisible}>
+              <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={timePickerVisible}>
                 <View style={s.pickerModalWrap}>
                   <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setTimePickerVisible(false)} />
                   <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>

@@ -161,7 +161,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
         <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
       </TouchableOpacity>
 
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
+      <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setVisible(false)}>
         <View style={styles.modalRoot}>
           <Pressable style={styles.backdrop} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setVisible(false); }} />
           <KeyboardAvoidingView

@@ -52,6 +52,7 @@ import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 // Keep real payments opt-in until Stripe is explicitly switched on for a
 // release. Expo Go can never use this native module.
@@ -425,7 +426,7 @@ const handlePayment = useCallback(async () => {
     };
 
     return (
-      <Modal visible={isVisible} animationType="fade" transparent={true}>
+      <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
             <SafeAreaView style={styles.paymentModalContent}>
@@ -732,7 +733,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme, isDarkMode]);
 
     return (
-      <Modal visible={isVisible} animationType="fade" transparent={true}>
+      <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
             <SafeAreaView style={styles.paymentModalContent}>
@@ -2125,17 +2126,28 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     );
   }, [items, itemsByProvider]);
 
+  // Keyed on the sorted, deduped provider-name SET rather than `items`
+  // itself — editing one item's time/notes/add-ons/deposit choice produces a
+  // new `items` array reference without changing which providers are in the
+  // cart, and used to retrigger this fetch anyway.
+  const providerNamesKey = useMemo(
+    () => JSON.stringify(
+      [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))].sort(),
+    ),
+    [items],
+  );
+
   // Fetch checkout-facing provider metadata in one bounded request whenever
   // the providers represented in the cart change.
   useEffect(() => {
-    if (items.length === 0) {
+    const names: string[] = JSON.parse(providerNamesKey);
+    if (names.length === 0) {
       setProviderDepositPolicies({});
       setMobileProviderNames([]);
       setCheckoutMetadataError(false);
       setResolvedProviderNames(new Set());
       return;
     }
-    const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
     let cancelled = false;
     getProviderCheckoutMetadata(names)
       .then(({ depositPolicies, mobileProviderNames }) => {
@@ -2162,7 +2174,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         setCheckoutMetadataError(true);
       });
     return () => { cancelled = true; };
-  }, [items]);
+  }, [providerNamesKey]);
 
   // ── Promo codes ────────────────────────────────────────────────────────────
   // No manual entry in the cart — a code only lands here carried over via
@@ -3474,7 +3486,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
           <Modal
             visible={showReviewModal}
             animationType="fade"
-            transparent={true}
+            transparent statusBarTranslucent navigationBarTranslucent={true}
             onRequestClose={() => setShowReviewModal(false)}
           >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -3680,7 +3692,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             key={useFullScreenSummary ? 'summary-fullscreen' : 'summary-card'}
             visible={showBookingSummaryModal}
             animationType={useFullScreenSummary ? 'slide' : 'fade'}
-            transparent={!useFullScreenSummary}
+            transparent statusBarTranslucent navigationBarTranslucent={!useFullScreenSummary}
             {...(useFullScreenSummary ? { presentationStyle: 'fullScreen' as const } : {})}
             onRequestClose={backFromSummary}
           >
@@ -4031,7 +4043,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
           {/* Liquid Glass Payment Success Modal - ADDED CONTINUE SHOPPING BUTTON */}
           {showPaymentSuccessModal && (
-            <Modal visible={true} animationType="fade" transparent={true}>
+            <Modal visible={true} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
               <View style={styles.modalOverlayNoBlur}>
                 <View style={[styles.liquidGlassSuccessModalNoBlur, { backgroundColor: P.card }]}>
                   <View style={styles.liquidGlassSuccessContent}>
@@ -4085,7 +4097,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
           <Modal
             visible={pickerItems !== null}
             animationType="fade"
-            transparent
+            transparent statusBarTranslucent navigationBarTranslucent
             onRequestClose={() => setPickerItems(null)}
           >
             <TouchableOpacity
@@ -4204,7 +4216,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
           <Modal
             visible={groupRescheduleItems !== null}
             animationType="slide"
-            transparent
+            transparent statusBarTranslucent navigationBarTranslucent
             onRequestClose={() => setGroupRescheduleItems(null)}
           >
             <View style={styles.groupSheetOverlay}>
@@ -4775,6 +4787,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    // Keeps the sheet clear of the system navigation bar.
+    paddingBottom: BOTTOM_SAFE_GAP,
   },
   groupSheet: {
     maxHeight: '88%',
@@ -5156,6 +5170,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
+    // Keeps the sheet clear of the system navigation bar.
+    paddingBottom: BOTTOM_SAFE_GAP,
   },
   paymentModal: {
     flex: 1,

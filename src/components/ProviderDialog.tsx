@@ -143,7 +143,7 @@ function ConfirmDialog({ title, message, buttons, visible, onDismiss }: ConfirmS
   }, [anim, visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
+    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="none" onRequestClose={onDismiss}>
       <TouchableOpacity style={dlgSt.backdrop} activeOpacity={1} onPress={onDismiss} />
       <Animated.View
         style={[

@@ -132,7 +132,7 @@ export default function RootNavigation() {
 
   return (
     <>
-    <Modal visible={isSwitching} transparent animationType="fade" statusBarTranslucent>
+    <Modal visible={isSwitching} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent>
       <View style={[styles.switchOverlay, { backgroundColor: isDarkMode ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.5)' }]}>
         <View style={[styles.switchCard, { backgroundColor: switchingDestinationTheme.surfaceRaised, borderColor: switchingDestinationTheme.accent + '40' }]}>
           <ActivityIndicator size="large" color={switchingDestinationTheme.accent} />

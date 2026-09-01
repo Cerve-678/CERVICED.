@@ -5,45 +5,82 @@ import {
   TouchableOpacity,
   PanResponder,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../contexts/ThemeContext';
 import { useExploreFocusStore } from '../stores/useExploreFocusStore';
 import { explorePillVisible } from '../utils/exploreTabBarScroll';
+import {
+  TAB_BAR_PILL_HEIGHT,
+  TAB_BAR_SIDE_MARGIN,
+  TAB_BAR_IOS_BOTTOM_OFFSET,
+  tabBarContentHeight,
+  tabBarIndicatorFrame,
+  tabBarClearance,
+  tabBarRect,
+  type TabBarRect,
+} from '../utils/tabBarGeometry';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const H = 50;
-const MARGIN = 32;
-const PILL_WIDTH = SCREEN_WIDTH - MARGIN * 2;
+// Two shapes, one component. iOS keeps the floating pill; Android uses the
+// edge-anchored bar it expects, sized around the system navigation inset so it
+// can't sit under the back/home/recents buttons. The measurements themselves
+// live in utils/tabBarGeometry so the coach-mark tours that spotlight this bar
+// read them from the same place rather than re-declaring them.
+const IS_ANDROID = Platform.OS === 'android';
+
+// iOS gets the real blur material; Android gets a plain view (see the render).
+const Surface: React.ComponentType<any> = IS_ANDROID ? View : BlurView;
+
+const H = TAB_BAR_PILL_HEIGHT;
+const MARGIN = TAB_BAR_SIDE_MARGIN;
 const INSET = 5;
-const BOTTOM_OFFSET = Platform.OS === 'ios' ? 30 : 20;
-// How far the pill travels (and fades) as Explore's grid scrolls down before
-// it's fully offscreen — clamped so it only ever tracks scroll in one
-// direction's worth of distance, not the full scroll position.
-const HIDE_DISTANCE = H + BOTTOM_OFFSET + 24;
+const CONTENT_H = tabBarContentHeight(IS_ANDROID);
 
 // This floats above every screen (it's the Tab.Navigator's `tabBar`, rendered
 // as an overlay for every nested stack screen, not just the tab roots) — so a
 // screen's own fixed-position footer (send button, submit button) needs at
-// least this much bottom clearance or the pill visually covers it and blocks
-// taps. Exported so those screens don't have to guess the pill's footprint.
-export const FLOATING_TAB_BAR_CLEARANCE = BOTTOM_OFFSET + H + 10;
+// least this much bottom clearance or the bar visually covers it and blocks
+// taps. Exported so those screens don't have to guess its footprint.
+export const FLOATING_TAB_BAR_CLEARANCE = tabBarClearance(IS_ANDROID);
+
+/**
+ * Where the tab bar actually sits on screen, for the coach-mark tours that
+ * spotlight it. The bar lives outside those screens' trees (it's the
+ * Tab.Navigator's `tabBar`), so there is no ref to measure.
+ */
+export function tabBarSpotlightRect(
+  screenWidth: number,
+  screenHeight: number,
+  bottomInset: number,
+): TabBarRect {
+  return tabBarRect(IS_ANDROID, screenWidth, screenHeight, bottomInset);
+}
 
 export default function IslandPillTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { isDarkMode } = useTheme();
+  const insets = useSafeAreaInsets();
+  // The gap between the bar and the bottom of the screen. On Android that is
+  // the system navigation bar's own inset — hardcoding it (it used to be a
+  // flat 20) put the bar underneath the back/home/recents buttons on any
+  // device using three-button navigation.
+  const bottomOffset = IS_ANDROID ? insets.bottom : TAB_BAR_IOS_BOTTOM_OFFSET;
   const isExploreFocused = useExploreFocusStore(s => s.isExploreFocused);
 
   // explorePillVisible is a binary 0/1 driven by scroll *direction* (see
   // exploreTabBarScroll.ts) and animated with a spring, so the pill snaps
   // shown/hidden in one motion instead of continuously tracking every pixel
   // of scroll offset the way the old diffClamp-of-raw-scroll version did.
+  // How far the bar travels (and fades) as Explore's grid scrolls down before
+  // it's fully offscreen — far enough to clear its own height and inset.
+  const hideDistance = CONTENT_H + bottomOffset + 24;
   const hideTranslateY = explorePillVisible.interpolate({
     inputRange: [0, 1],
-    outputRange: [HIDE_DISTANCE + 20, 0],
+    outputRange: [hideDistance + 20, 0],
   });
   const hideOpacity = explorePillVisible;
 
@@ -68,15 +105,24 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
   }, [forceHidden, forceHideProgress]);
   const forceHideTranslateY = forceHideProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, HIDE_DISTANCE + 20],
+    outputRange: [0, hideDistance + 20],
   });
   const forceHideOpacity = forceHideProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 0],
   });
 
+  // Measured per render, not captured at module load: a frozen width is
+  // wrong after rotation, in split-screen, and on a foldable unfolding.
+  const { width: screenWidth } = useWindowDimensions();
+  // Android spans the full width edge to edge; iOS floats inset from both sides.
+  const barWidth = IS_ANDROID ? screenWidth : screenWidth - MARGIN * 2;
+
   const tabCount = state.routes.length;
-  const tabWidth = PILL_WIDTH / tabCount;
+  const tabWidth = barWidth / tabCount;
+  // Sized and positioned against the bar's CONTENT height, so the highlight
+  // lines up with the icons instead of drifting into the navigation inset.
+  const indicatorFrame = tabBarIndicatorFrame(IS_ANDROID, tabWidth);
 
   // Refs keep pan responder callbacks fresh
   const tabWidthRef     = useRef(tabWidth);
@@ -172,18 +218,39 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
   const blurTint      = isDarkMode
     ? ('systemUltraThinMaterialDark' as const)
     : ('systemUltraThinMaterialLight' as const);
-  const pillBorder    = isDarkMode
-    ? 'rgba(126,102,103,0.35)'
-    : 'rgba(255,255,255,0.85)';
+  // The iOS pill floats, so its border is a highlight around a translucent
+  // surface. The Android bar is a docked edge — its border's job is to
+  // separate the bar from the content scrolling underneath it, so it's a
+  // contrast line rather than a highlight, and a full 1dp: a hairline on a
+  // 3x-density Android screen is a third of a pixel and effectively invisible.
+  const pillBorder = IS_ANDROID
+    ? (isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)')
+    : isDarkMode
+      ? 'rgba(126,102,103,0.35)'
+      : 'rgba(255,255,255,0.85)';
   // Explore's photo grid is busy/colourful enough that the pill's usual
   // resting opacity reads as too heavy over it — lighten both the blur and
   // the backing tint specifically there, independent of the scroll-driven
   // hide/show below. Still needs *some* tint + blur even lightened, though —
   // fully transparent with a weak blur left the icons with nothing behind
   // them to read against on light mode, disappearing into bright grid photos.
-  const pillBg = isExploreFocused
-    ? (isDarkMode ? 'rgba(26,24,21,0.55)' : 'rgba(255,255,255,0.4)')
-    : (isDarkMode ? 'rgba(26,24,21,0.92)' : 'transparent');
+  //
+  // Android doesn't take that treatment. expo-blur is only an approximation
+  // there, so a mostly-transparent surface never resolves into readable
+  // frosted glass the way it does on iOS — it just looks unfinished, with the
+  // grid showing through the icons. The docked bar is painted as a near-solid
+  // surface instead and leans on its top border and elevation for separation,
+  // which is also what a native Android bottom bar does. It still lightens
+  // slightly over Explore, just nowhere near to transparency.
+  const androidBg = isExploreFocused
+    ? (isDarkMode ? 'rgba(26,24,21,0.94)' : 'rgba(255,255,255,0.94)')
+    : (isDarkMode ? 'rgba(26,24,21,0.98)' : 'rgba(255,255,255,0.97)');
+  const pillBg = IS_ANDROID
+    ? androidBg
+    : isExploreFocused
+      ? (isDarkMode ? 'rgba(26,24,21,0.55)' : 'rgba(255,255,255,0.4)')
+      : (isDarkMode ? 'rgba(26,24,21,0.92)' : 'transparent');
+  // iOS only — Android renders a plain View, so nothing reads these.
   const blurIntensity = isExploreFocused
     ? (isDarkMode ? 22 : 18)
     : (isDarkMode ? 40 : 22);
@@ -209,17 +276,35 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
       ]}
       pointerEvents={forceHidden ? 'none' : 'box-none'}
     >
-      <View {...panResponder.panHandlers} style={styles.gestureWrapper}>
-        <BlurView
-          intensity={blurIntensity}
-          tint={blurTint}
-          style={[styles.pill, { borderColor: pillBorder, backgroundColor: pillBg }]}
+      <View
+        {...panResponder.panHandlers}
+        style={IS_ANDROID ? styles.gestureWrapperBar : styles.gestureWrapperPill}
+      >
+        {/* The bar floats over Explore's scrolling photo grid, so whatever
+            backs it is recomposited every frame. On iOS the blur is the
+            material and earns that. On Android the surface is painted at 97%
+            opacity (expo-blur only approximates the effect there, so a
+            translucent bar never resolved into readable glass) — the blur is
+            invisible underneath it and costs a full-width composite per frame,
+            which is a real part of why Explore scrolled roughly. Plain View
+            there. */}
+        <Surface
+          {...(IS_ANDROID ? {} : { intensity: blurIntensity, tint: blurTint })}
+          style={[
+            IS_ANDROID ? styles.bar : styles.pill,
+            { width: barWidth, borderColor: pillBorder, backgroundColor: pillBg },
+            // The bar owns the system navigation inset as padding, so its
+            // buttons stay above the nav bar while its surface still runs to
+            // the bottom edge of the screen.
+            IS_ANDROID && { height: CONTENT_H + bottomOffset, paddingBottom: bottomOffset },
+          ]}
         >
           {/* Sliding indicator */}
           <Animated.View
             style={[
               styles.indicator,
-              { width: tabWidth - INSET * 2, backgroundColor: indicatorBg },
+              indicatorFrame,
+              { backgroundColor: indicatorBg },
               { transform: [{ translateX: indicatorX }] },
             ]}
           />
@@ -245,20 +330,20 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
               </TouchableOpacity>
             );
           })}
-        </BlurView>
+        </Surface>
       </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: BOTTOM_OFFSET,
-    left: MARGIN,
-    right: MARGIN,
-  },
-  gestureWrapper: {
+  // Android sits flush against the bottom edge and spans the full width; the
+  // nav-bar inset is handled as padding inside the bar itself, not as a gap
+  // underneath it, so the surface reaches the edge the way a system bar does.
+  container: IS_ANDROID
+    ? { position: 'absolute', bottom: 0, left: 0, right: 0 }
+    : { position: 'absolute', bottom: TAB_BAR_IOS_BOTTOM_OFFSET, left: MARGIN, right: MARGIN },
+  gestureWrapperPill: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -266,8 +351,17 @@ const styles = StyleSheet.create({
     elevation: 10,
     borderRadius: H / 2,
   },
+  gestureWrapperBar: {
+    // Shadow points upward — the bar's only free edge is its top. Paired with
+    // the border rather than replacing it: Android elevation alone renders as
+    // a soft halo that reads as vague against a busy photo grid.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 12,
+  },
   pill: {
-    width: PILL_WIDTH,
     height: H,
     borderRadius: H / 2,
     overflow: 'hidden',
@@ -275,17 +369,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
   },
+  bar: {
+    // Height and bottom padding come from the live inset at render time.
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+  },
   indicator: {
+    // top/height/width/borderRadius come from tabBarIndicatorFrame.
     position: 'absolute',
     left: INSET,
-    height: H - INSET * 2,
-    borderRadius: (H - INSET * 2) / 2,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    // The bar's content height, NOT '100%' — on Android the bar's box includes
+    // the navigation inset as padding, and stretching the buttons over it
+    // pushed their icons down off-centre.
+    height: CONTENT_H,
     zIndex: 1,
   },
 });

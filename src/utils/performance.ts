@@ -1,10 +1,11 @@
 import { Dimensions } from 'react-native';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export const PerformanceUtils = {
   // Optimize image sizes based on screen
   getOptimalImageSize: (originalWidth: number, originalHeight: number) => {
+    // Read at call time, not module load: a value captured at import never
+    // updates on rotation, split-screen, or a foldable unfolding.
+    const { width: screenWidth } = Dimensions.get('window');
     const maxWidth = screenWidth * 0.8;
     const ratio = originalHeight / originalWidth;
     

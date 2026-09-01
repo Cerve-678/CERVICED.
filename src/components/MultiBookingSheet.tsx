@@ -58,6 +58,7 @@ import * as Haptics from 'expo-haptics';
 import type { BookingSheetService } from './BookingSheet';
 import { StepProgress } from './BookingSheet';
 import { AddOnPickerModal } from './AddOnPickerModal';
+import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
 
 /** Mirrors the single-service sheet's three shared steps. Add-ons are no
  *  longer a step here at all — they're decided per-service at selection
@@ -642,7 +643,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const showFullPaymentOption = !depositPolicy?.depositOnly;
 
   return (
-    <Modal visible={isVisible} animationType="slide" transparent={true} onRequestClose={onClose}>
+    <Modal visible={isVisible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent={true} onRequestClose={onClose}>
       <KeyboardDismissView style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
           <SafeAreaView style={styles.container}>
@@ -1238,7 +1239,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       <Modal
         visible={showProviderTerms}
         animationType="slide"
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         onRequestClose={() => setShowProviderTerms(false)}
       >
         <View style={styles.termsOverlay}>
@@ -1276,7 +1277,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       <Modal
         visible={showEmergencyPolicy}
         animationType="slide"
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         onRequestClose={() => setShowEmergencyPolicy(false)}
       >
         <View style={styles.termsOverlay}>
@@ -1312,7 +1313,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
@@ -1360,7 +1361,7 @@ const styles = StyleSheet.create({
   providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
-  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

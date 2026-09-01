@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
+import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
 
 interface LocationModalProps {
   visible: boolean;
@@ -83,7 +84,7 @@ export default function LocationModal({
       transparent
       animationType="slide"
       onRequestClose={onClose}
-      statusBarTranslucent
+      statusBarTranslucent navigationBarTranslucent
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable
@@ -144,6 +145,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
+    // Keeps the sheet clear of the system navigation bar.
+    paddingBottom: BOTTOM_SAFE_GAP,
   },
   sheet: {
     maxHeight: '75%',
@@ -201,7 +204,7 @@ const styles = StyleSheet.create({
   // box and got clipped.
   applyButton: {
     marginTop: 14,
-    height: 46,
+    minHeight: 46,
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',

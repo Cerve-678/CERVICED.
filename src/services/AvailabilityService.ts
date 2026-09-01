@@ -54,8 +54,14 @@ export interface TimeSlot {
    *  day's whole shape rather than only what's left of it. Only ever set
    *  when getAvailableSlots was called with `includeUnbookable` — every
    *  other caller still receives bookable times only, so nothing that books
-   *  has to learn to skip these. */
-  unbookable?: 'past' | 'notice' | undefined;
+   *  has to learn to skip these.
+   *
+   *  'tight' is deliberately separate from `isBooked`: the time itself is
+   *  free, but this service can't fit between the bookings around it (its
+   *  length, or the cleanup buffers either side, run into one). Collapsing
+   *  the two made the picker cross out a time nobody had taken, which reads
+   *  as "another client has this" rather than "their day is too tight". */
+  unbookable?: 'past' | 'notice' | 'tight' | undefined;
 }
 
 /** A provider's emergency-request opt-ins, as stored on their row.
@@ -359,6 +365,25 @@ const doTimesOverlap = (
 ): boolean => {
   return start1 < end2 && start2 < end1;
 };
+
+/**
+ * Is this start time itself inside someone else's appointment?
+ *
+ * Deliberately narrower than "overlaps a busy span". A 2pm slot for a
+ * 90-minute service runs into a 3pm appointment, but 2pm is not taken — the
+ * service simply doesn't fit before it. The picker crosses out taken times,
+ * and a strike-through is a claim that another client has that time, so only
+ * this test may set it. Everything else that clashes is 'tight': greyed, but
+ * not attributed to anyone.
+ *
+ * Spans arrive already padded with each booking's own buffers, so a start
+ * that lands inside another booking's cleanup gap counts as taken. That is
+ * the right way round: the provider is genuinely occupied then.
+ */
+export const isStartTaken = (
+  busySpans: readonly { start: number; end: number }[],
+  startMins: number,
+): boolean => busySpans.some(span => span.start <= startMins && startMins < span.end);
 
 // Parse "HH:MM" or "HH:MM:SS" 24-hour time to minutes
 const parse24HTimeToMinutes = (timeStr: string): number => {
@@ -977,13 +1002,19 @@ export const AvailabilityService = {
 
       if (candidates.size === 0) {
         if (!includeUnbookable) return [];
-        // No bookable candidate on this day — either the provider doesn't
-        // normally work it, or the service is longer than the day's window.
-        // But a manual squeeze-in (provider_create_manual_booking bypasses the
-        // working-hours check) or an out-of-hours request can still have put a
-        // booking here. Surface those as taken slots so the day reads as
-        // booked-out — tappable, "Fully booked" — rather than as one the
-        // provider never works, which is what an empty result signals.
+        // A day the provider does not work at all stays empty, even when a
+        // booking sits on it. A manual squeeze-in
+        // (provider_create_manual_booking bypasses the working-hours check)
+        // or an accepted out-of-hours request can put one on a day that was
+        // never offered — surfacing it here would make the picker say "Fully
+        // booked", blaming other clients for hours the provider never opened.
+        // "They don't work this day" is the honest answer, and the one the
+        // provider's own schedule is telling us.
+        if (windows.length === 0) return [];
+        // The day IS worked, but this service doesn't fit what's left of it
+        // (longer than the window). Surface whatever is booked so the day
+        // reads as having activity on it rather than as one the provider
+        // never works, which is what an empty result signals.
         const taken = await fetchBusySpans(providerId, date, date);
         return taken
           .slice()
@@ -1016,12 +1047,31 @@ export const AvailabilityService = {
           // real booking as plain lateness — the exact bug that made a fully
           // booked day's earlier times quietly stop showing as booked once
           // the day moved on.
+          //
+          // But "overlaps a booking" is not the same claim as "someone has
+          // this time". A 2pm slot for a 90-minute service clashes with a 3pm
+          // appointment; 2pm itself is still free, the service just doesn't
+          // fit before it. Only a slot whose own start falls inside a busy
+          // span is genuinely taken — the rest are 'tight', shown greyed but
+          // never crossed out, because a strike-through tells the client
+          // another client claimed the time.
           if (conflict) {
+            if (isStartTaken(busySpans, startMins)) {
+              return [{
+                time: formatMinutesTo12h(startMins),
+                isBooked: true,
+                isByRequest: reasons.length > 0,
+                requestReasons: reasons.length > 0 ? reasons : undefined,
+              }];
+            }
+            // Free in itself, unbookable in practice. Callers that only want
+            // offerable times get nothing, exactly as before — they already
+            // filtered these out on `isBooked`.
+            if (!includeUnbookable) return [];
             return [{
               time: formatMinutesTo12h(startMins),
-              isBooked: true,
-              isByRequest: reasons.length > 0,
-              requestReasons: reasons.length > 0 ? reasons : undefined,
+              isBooked: false,
+              unbookable: 'tight',
             }];
           }
 
@@ -1264,20 +1314,35 @@ export const AvailabilityService = {
       }
     }
 
+    // Slot availability is the only per-item network round trip left in this
+    // loop. Running the whole batch concurrently, instead of one booking at a
+    // time, turns an N-item cart's checkout check from N sequential round
+    // trips into one wave of N — the difference is most visible on a
+    // multi-service, same-provider booking.
+    const nonStaleBookings = bookings.filter(b => !staleItemIds.has(b.cartItemId));
+    const slotChecks = await Promise.all(
+      nonStaleBookings.map(booking =>
+        this.isSlotAvailable(
+          booking.providerName,
+          booking.date,
+          booking.time,
+          booking.duration,
+          booking.serviceId,
+          booking.isEmergencyRequest ?? false,
+        ),
+      ),
+    );
+    const slotConflictByCartItemId = new Map(
+      nonStaleBookings.map((booking, i) => [booking.cartItemId, slotChecks[i]!]),
+    );
+
     for (const booking of bookings) {
       // Already reported as unbookable — a slot check on a service that no
       // longer exists would only add a second, less useful reason.
       if (staleItemIds.has(booking.cartItemId)) continue;
 
       // Check against existing bookings in storage
-      const existingConflict = await this.isSlotAvailable(
-        booking.providerName,
-        booking.date,
-        booking.time,
-        booking.duration,
-        booking.serviceId,
-        booking.isEmergencyRequest ?? false,
-      );
+      const existingConflict = slotConflictByCartItemId.get(booking.cartItemId)!;
 
       if (existingConflict.hasConflict) {
         conflicts.push({

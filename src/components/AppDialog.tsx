@@ -203,7 +203,7 @@ function ConfirmDialog({
   );
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
+    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="none" onRequestClose={onDismiss}>
       <TouchableOpacity style={dlgSt.backdrop} activeOpacity={1} onPress={onDismiss} />
       {/* The sheet anchors itself to the bottom edge, so it needs no wrapper.
           A centred box has nothing to anchor to and has to be centred by a

@@ -196,7 +196,7 @@ function SendSheet({
   };
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Animated.View style={[ss.overlay, { opacity: fadeAnim }]} pointerEvents={visible ? 'auto' : 'none'}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <KeyboardDismissView style={ss.keyboardAvoiding} dismissOnTap>
@@ -541,7 +541,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       <Modal
         visible={!!previewing}
         animationType="fade"
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         onRequestClose={() => setPreviewing(null)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
