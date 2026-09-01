@@ -27,6 +27,17 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Applied 2026-08-31 (fold hair-type matching into get_providers_availability)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260831230536 | `get_providers_availability_hair_match` | `get_providers_availability(text[], text)` live with the new `hair_match` output column and `p_hair_type` param (default NULL, backward compatible). Verified functionally in a rolled-back transaction: `'4c'` against a provider temporarily given `hair_types_catered = {'4c','curly'}` returned `hair_match=true`, `'straight'` against the same provider returned `false`, and every live provider (all with empty `hair_types_catered` today — see `hair-type-filter-has-no-writer.md`) returns `true` regardless of the requested type, matching `matchesHairType()`'s empty-means-all rule. |
+| 20260831230612 | `revoke_public_get_providers_availability` | Fixes a regression the DROP+CREATE above introduced: Postgres grants a newly created function EXECUTE to `PUBLIC` by default, which `anon` inherits from — silently re-opening a function the 2026-08-20 hardening pass had locked to `authenticated`+`service_role` only. Caught immediately by re-checking `has_function_privilege` for `anon` after the first migration (it came back `true`); this migration revokes `PUBLIC` explicitly. Re-verified after: `anon` → false, `authenticated`/`service_role`/`postgres` → true, matching the pre-change grant set exactly. |
+
+**Lesson for next time a table-function's output columns change:** `DROP FUNCTION` + `CREATE FUNCTION` (required whenever `CREATE OR REPLACE` can't add an output column) does not carry forward the dropped function's grants — it resets to Postgres's default (`PUBLIC` gets EXECUTE). `CREATE OR REPLACE` preserves grants; a DROP+CREATE pair must re-grant explicitly AND `REVOKE ... FROM PUBLIC` in the same pass, not just re-grant the roles that used to have it.
+
+Also updated app-side: `getProvidersAvailability()` (`src/services/databaseService.ts`) now takes an optional `hairType` param and returns `hairMatch` per provider; `getProviderHairTypeMatches()` (the separate `providers`-table lookup it replaced) was deleted, its only caller (`SearchScreen.tsx`) merged into the same effect that already fetches availability per search-result-set change.
+
 ### Applied 2026-08-28 (client loyalty points — earning side)
 
 | Recorded version | Name | Verified live |

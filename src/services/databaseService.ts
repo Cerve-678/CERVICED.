@@ -38,7 +38,6 @@ import {
 } from "../types/booking";
 import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
-import { matchesHairType } from "../utils/hairTypeMatch";
 import { resolveDepositMode } from "../utils/depositPolicy";
 
 export interface AuthSessionSummary {
@@ -550,49 +549,11 @@ export async function getProviderPriceRanges(
 }
 
 /**
- * Provider ids catering to the given hair type, read from the provider-level
- * providers.hair_types_catered in a single `.in()` query.
- *
- * Deliberately the BROAD level: this answers "does this provider cater to 4C
- * hair at all", which is what the Search filter needs. The narrower
- * services.hair_types_suitable is the per-service refinement, surfaced once a
- * client opens a provider and picks a service — it is not consulted here, so
- * a provider isn't filtered out of search by one unlabelled service.
- *
- * An empty/null hair_types_catered means "caters to all" and matches every
- * requested type, so a provider who hasn't filled it in is never wrongly
- * excluded. That also means the filter only genuinely narrows once providers
- * populate the field (see ServicesPricingScreen, where it's edited).
- */
-export async function getProviderHairTypeMatches(
-  providerIds: string[],
-  hairType: string,
-): Promise<Set<string>> {
-  const matches = new Set<string>();
-  if (providerIds.length === 0) return matches;
-
-  const { data, error } = await supabase
-    .from("providers")
-    .select("id, hair_types_catered")
-    .eq("has_gone_live", true)
-    .eq("is_active", true)
-    .in("id", providerIds);
-  if (error) throw error;
-
-  for (const row of data ?? []) {
-    if (matchesHairType(row.hair_types_catered, hairType)) {
-      matches.add(row.id);
-    }
-  }
-  return matches;
-}
-
-/**
  * Of the given provider ids, which have at least one active service tagged
  * services.audience === `audience`. Scoped to `providerIds` (the candidate
  * set Search already server-searched/paginated to) rather than a global
- * lookup, mirroring getProviderHairTypeMatches's shape — except this is a
- * per-SERVICE tag, not a provider-level column, so it queries `services`
+ * lookup, mirroring the hair-type filter's broad-match shape — except this is
+ * a per-SERVICE tag, not a provider-level column, so it queries `services`
  * with a providers!inner gate instead of `providers` directly.
  */
 export async function getProviderAudienceMatches(
@@ -618,14 +579,99 @@ export async function getProviderAudienceMatches(
   return matches;
 }
 
+export interface ProviderServiceFacets {
+  /** £min–£max across the provider's active services. Absent when they have
+   *  none priced. */
+  priceRanges: Map<string, { min: number; max: number }>;
+  /** The distinct `services.audience` tags each provider actually offers.
+   *  Absent/empty means nothing tagged — the same providers `.eq('audience',
+   *  …)` would simply not have returned. */
+  audiences: Map<string, Set<string>>;
+}
+
+/**
+ * Price range AND audience tags for a set of providers, in ONE query.
+ *
+ * getProviderPriceRanges and getProviderAudienceMatches ask the same table,
+ * over the same provider ids, behind the same has_gone_live/is_active gate —
+ * they differ only in which column they read. Search ran both, so a search
+ * with the audience filter on paid two round trips for one table scan. Callers
+ * that need both should use this; the two single-purpose functions remain for
+ * callers that genuinely need only one.
+ *
+ * Returning the audience SET rather than a pre-filtered match set is
+ * deliberate: it lets a caller re-answer "does this provider serve men?" for a
+ * different audience without going back to the network, which is what makes
+ * toggling that filter free rather than another round trip.
+ */
+export async function getProviderServiceFacets(
+  providerIds: string[],
+): Promise<ProviderServiceFacets> {
+  const priceRanges = new Map<string, { min: number; max: number }>();
+  const audiences = new Map<string, Set<string>>();
+  if (providerIds.length === 0) return { priceRanges, audiences };
+
+  // Same provider-visibility gate as the two functions this replaces — see
+  // getProviderPriceRanges for why it lives here rather than being left to
+  // each caller to remember.
+  const { data, error } = await supabase
+    .from("services")
+    .select(
+      "provider_id, price, price_max, audience, providers!inner(has_gone_live, is_active)",
+    )
+    .eq("is_active", true)
+    .eq("providers.has_gone_live", true)
+    .eq("providers.is_active", true)
+    .in("provider_id", providerIds);
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    const providerId = row.provider_id as string;
+
+    // A service with no price at all contributes an audience tag but must not
+    // drag the range down to 0 — price is NOT NULL in practice, but a null
+    // here would otherwise read as "free".
+    if (row.price != null) {
+      const high = row.price_max ?? row.price;
+      const existing = priceRanges.get(providerId);
+      if (!existing) {
+        priceRanges.set(providerId, { min: row.price, max: high });
+      } else {
+        existing.min = Math.min(existing.min, row.price);
+        existing.max = Math.max(existing.max, high);
+      }
+    }
+
+    if (row.audience) {
+      const set = audiences.get(providerId) ?? new Set<string>();
+      set.add(row.audience as string);
+      audiences.set(providerId, set);
+    }
+  }
+  return { priceRanges, audiences };
+}
+
 /** Coarse near-term availability status for a provider, as surfaced on
  *  search/browse cards. NOT a booking gate — the real slot simulation in
  *  AvailabilityService owns anything that actually reserves time. */
 export type ProviderAvailabilityStatus = "available" | "limited" | "none";
 
+export interface ProviderAvailabilityInfo {
+  status: ProviderAvailabilityStatus;
+  /**
+   * Whether the provider's providers.hair_types_catered matches the
+   * requested hair type, per the same empty-means-all rule as
+   * matchesHairType() (src/utils/hairTypeMatch.ts) — reproduced server-side
+   * in the get_providers_availability() RPC itself now. `true` for every
+   * provider when no hairType was passed to getProvidersAvailability.
+   */
+  hairMatch: boolean;
+}
+
 /**
- * Batched near-term availability for a set of providers, keyed by slug, in a
- * single query via the get_providers_availability() SECURITY DEFINER RPC.
+ * Batched near-term availability (and, optionally, hair-type match) for a
+ * set of providers, keyed by slug, in a single query via the
+ * get_providers_availability() SECURITY DEFINER RPC.
  *
  * The search grid needs one at-a-glance status per card; computing it the
  * per-provider way (AvailabilityService.getAvailabilitySummary, 5+ queries
@@ -633,26 +679,36 @@ export type ProviderAvailabilityStatus = "available" | "limited" | "none";
  * rolls the whole set into one query and is has_gone_live/is_active gated
  * server-side, returning only a coarse status string (no booking details).
  *
+ * hairType folds in what used to be a separate provider-table lookup
+ * (getProviderHairTypeMatches, removed) — same rows, same visibility gate,
+ * this RPC already scans them. The trade-off: toggling the hair-type filter
+ * alone (result set unchanged) now re-runs this heavier availability
+ * computation instead of a cheap table read, in exchange for the common case
+ * (a new search) never paying for both round trips separately.
+ *
  * A slug missing from the returned map = not publicly listed (gated out) or
  * no schedule at all; callers should treat an absent entry as unknown and
  * degrade gracefully rather than as "no availability".
  */
 export async function getProvidersAvailability(
   slugs: string[],
-): Promise<Map<string, ProviderAvailabilityStatus>> {
-  const result = new Map<string, ProviderAvailabilityStatus>();
+  hairType?: string,
+): Promise<Map<string, ProviderAvailabilityInfo>> {
+  const result = new Map<string, ProviderAvailabilityInfo>();
   if (slugs.length === 0) return result;
 
   const { data, error } = await supabase.rpc("get_providers_availability", {
     p_slugs: slugs,
+    p_hair_type: hairType ?? null,
   });
   if (error) throw new Error(error.message);
 
   for (const row of (data ?? []) as {
     slug: string;
     status: ProviderAvailabilityStatus;
+    hair_match: boolean;
   }[]) {
-    result.set(row.slug, row.status);
+    result.set(row.slug, { status: row.status, hairMatch: row.hair_match });
   }
   return result;
 }
@@ -1419,9 +1475,10 @@ export async function getDiscoverServices(
  * !inner-joins service_images for its photo feed): a provider whose new
  * "Men's Cut" has no photo yet must still qualify for HomeScreen's Male/Kids
  * sections — the photo requirement should only gate whether a service CARD
- * can render for it, not whether the provider appears at all. Mirrors
- * getProviderHairTypeMatches's broad/narrow split (provider-level match here,
- * per-service refinement elsewhere), just scoped to services.audience.
+ * can render for it, not whether the provider appears at all. Mirrors the
+ * hair-type filter's broad/narrow split (provider-level match in
+ * getProvidersAvailability's hairType param, per-service refinement
+ * elsewhere), just scoped to services.audience.
  */
 export async function getProviderIdsByServiceAudience(
   audience: "women" | "men" | "kids" | "everyone",

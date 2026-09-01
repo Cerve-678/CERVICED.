@@ -29,7 +29,7 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges, getProviderHairTypeMatches, getProviderAudienceMatches, prefetchProviderBySlug } from '../../services/databaseService';
+import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
@@ -46,8 +46,8 @@ interface ProviderCardData {
   id: string;
   // The real providers.id (uuid) — id above is the slug (used for
   // navigation/keys). Needed separately to batch-fetch this provider's
-  // actual service price range via getProviderPriceRanges(), which is
-  // keyed by provider id, not slug.
+  // actual service price range and audience tags via
+  // getProviderServiceFacets(), which is keyed by provider id, not slug.
   providerId: string;
   name: string;
   service: string;
@@ -105,13 +105,15 @@ interface FilterOptions {
   // CityMultiSelect is the shared picker (also used by signup's "Where You
   // Work") so this stays a multi-select, not the single-city pill it used to be.
   city?: string[];
-  // Matches against the provider-level providers.hair_types_catered via a
-  // batched lookup (getProviderHairTypeMatches). Deliberately the broad
+  // Matches against the provider-level providers.hair_types_catered, folded
+  // into the same batched getProvidersAvailability() RPC call as the
+  // availability badges (see that effect below). Deliberately the broad
   // "does this provider cater to X at all" level — services.hair_types_
   // suitable is the per-service refinement shown once a service is picked.
   hairType?: string;
-  // Matches against the per-service services.audience column via a batched
-  // lookup (getProviderAudienceMatches) — a provider qualifies if ANY of
+  // Matches against the per-service services.audience column, derived from the
+  // tags getProviderServiceFacets already fetched for the result set (no round
+  // trip of its own) — a provider qualifies if ANY of
   // their active services is tagged for this audience, same "provider
   // qualifies via any matching service" rule HomeScreen's Male/Kids sections
   // use. 'everyone' is deliberately not offered as a filter value here — it
@@ -605,23 +607,35 @@ export default function SearchScreen({ navigation, route }: Props) {
     });
   }, [providerData, userCoords]);
 
-  // Real availability status per provider slug, resolved via ONE batched RPC
-  // call for the whole current result set rather than per-card — see
-  // getProvidersAvailability's doc comment. Keyed separately from
+  // Real availability status per provider slug, AND (when the hair-type
+  // filter is active) whether each provider matches it, resolved via ONE
+  // batched RPC call for the whole current result set rather than per-card —
+  // see getProvidersAvailability's doc comment. Keyed separately from
   // providerData (not folded into mapDbToCardData) because it resolves
   // asynchronously, after the list itself has already rendered.
+  //
+  // Folding hair-type matching into this call (instead of the separate
+  // provider-table lookup it used to be) means a new search never pays two
+  // round trips for the same providers rows — the trade-off is that toggling
+  // the hair-type filter alone now re-runs this heavier availability
+  // computation rather than a cheap table read, since the effect must depend
+  // on activeFilters.hairType too.
   const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityStatus>>(new Map());
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [hairTypeMatchIds, setHairTypeMatchIds] = useState<Set<string> | null>(null);
 
   React.useEffect(() => {
+    const hairType = activeFilters.hairType;
     const slugs = providerData.map(p => p.id);
     if (slugs.length === 0) {
       setAvailabilityBySlug(new Map());
       setAvailabilityLoading(false);
+      setHairTypeMatchIds(hairType ? new Set() : null);
       return;
     }
     let cancelled = false;
     setAvailabilityLoading(true);
+    const slugToProviderId = new Map(providerData.map(p => [p.id, p.providerId]));
     // Deliberately NOT cleared to an empty map here — a category change or
     // pull-to-refresh used to wipe every badge the instant this effect
     // re-ran, so already-settled cards visibly lost their badge and then
@@ -629,12 +643,29 @@ export default function SearchScreen({ navigation, route }: Props) {
     // entries for providers no longer in the result set are simply never
     // looked up again (providersWithAvailability only reads by the current
     // provider's own slug), so leaving them is harmless.
-    getProvidersAvailability(slugs)
-      .then(map => { if (!cancelled) setAvailabilityBySlug(map); })
-      .catch(() => { if (!cancelled) setAvailabilityBySlug(new Map()); })
+    getProvidersAvailability(slugs, hairType)
+      .then(map => {
+        if (cancelled) return;
+        const statusBySlug = new Map<string, ProviderAvailabilityStatus>();
+        const matchIds = hairType ? new Set<string>() : null;
+        for (const [slug, info] of map) {
+          statusBySlug.set(slug, info.status);
+          if (matchIds && info.hairMatch) {
+            const providerId = slugToProviderId.get(slug);
+            if (providerId) matchIds.add(providerId);
+          }
+        }
+        setAvailabilityBySlug(statusBySlug);
+        setHairTypeMatchIds(matchIds);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAvailabilityBySlug(new Map());
+        setHairTypeMatchIds(hairType ? new Set() : null);
+      })
       .finally(() => { if (!cancelled) setAvailabilityLoading(false); });
     return () => { cancelled = true; };
-  }, [providerData]);
+  }, [providerData, activeFilters.hairType]);
 
   const providersWithAvailability = useMemo(() => {
     if (availabilityBySlug.size === 0) return providersWithDistance;
@@ -644,24 +675,45 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithDistance, availabilityBySlug]);
 
-  // Real £min–£max per provider (from their active services), resolved via
-  // ONE batched query for the whole current result set — see
-  // getProviderPriceRanges' doc comment. Keyed by providerId (the real
-  // providers.id, not slug) since that's what the underlying services table
-  // is queried by. Replaces the old hardcoded "Price on request" fallback
-  // with real data (or nothing, while unresolved/absent) on the card.
+  // Real £min–£max per provider (from their active services) AND the audience
+  // tags they offer, resolved via ONE batched query for the whole current
+  // result set — see getProviderServiceFacets' doc comment. Both come off the
+  // same services scan; fetching them separately meant a search with the
+  // audience filter on paid two round trips for one table read. Keyed by
+  // providerId (the real providers.id, not slug) since that's what the
+  // underlying services table is queried by. Replaces the old hardcoded
+  // "Price on request" fallback with real data (or nothing, while
+  // unresolved/absent) on the card.
   const [priceRangeByProviderId, setPriceRangeByProviderId] = useState<Map<string, { min: number; max: number }>>(new Map());
+  const [audiencesByProviderId, setAudiencesByProviderId] = useState<Map<string, Set<string>>>(new Map());
+  // Whether the facets query has answered for the CURRENT result set. Keeps
+  // the audience filter's "don't claim a match until the lookup has answered"
+  // rule meaningful now that the match set is derived rather than fetched —
+  // without it an in-flight query is indistinguishable from "nobody matches".
+  const [facetsLoaded, setFacetsLoaded] = useState(false);
 
   React.useEffect(() => {
     const ids = providerData.map(p => p.providerId);
     if (ids.length === 0) {
       setPriceRangeByProviderId(new Map());
+      setAudiencesByProviderId(new Map());
+      setFacetsLoaded(true);
       return;
     }
     let cancelled = false;
-    getProviderPriceRanges(ids)
-      .then(map => { if (!cancelled) setPriceRangeByProviderId(map); })
-      .catch(() => { if (!cancelled) setPriceRangeByProviderId(new Map()); });
+    setFacetsLoaded(false);
+    getProviderServiceFacets(ids)
+      .then(facets => {
+        if (cancelled) return;
+        setPriceRangeByProviderId(facets.priceRanges);
+        setAudiencesByProviderId(facets.audiences);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPriceRangeByProviderId(new Map());
+        setAudiencesByProviderId(new Map());
+      })
+      .finally(() => { if (!cancelled) setFacetsLoaded(true); });
     return () => { cancelled = true; };
   }, [providerData]);
 
@@ -673,49 +725,22 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
 
-  // Hair-type matches — only fetched while the filter is actually active
-  // (unlike price range, which every card shows), since most searches never
-  // need it.
-  const [hairTypeMatchIds, setHairTypeMatchIds] = useState<Set<string> | null>(null);
-
-  React.useEffect(() => {
-    const hairType = activeFilters.hairType;
-    if (!hairType) {
-      setHairTypeMatchIds(null);
-      return;
-    }
-    const ids = providerData.map(p => p.providerId);
-    if (ids.length === 0) {
-      setHairTypeMatchIds(new Set());
-      return;
-    }
-    let cancelled = false;
-    getProviderHairTypeMatches(ids, hairType)
-      .then(set => { if (!cancelled) setHairTypeMatchIds(set); })
-      .catch(() => { if (!cancelled) setHairTypeMatchIds(new Set()); });
-    return () => { cancelled = true; };
-  }, [providerData, activeFilters.hairType]);
-
-  // Audience matches — same "only fetch while active" rule as hair type.
-  const [audienceMatchIds, setAudienceMatchIds] = useState<Set<string> | null>(null);
-
-  React.useEffect(() => {
+  // Audience matches, derived from the tags already fetched above rather than
+  // re-queried. Toggling this filter used to cost a round trip each time even
+  // though the answer was a re-read of the same services rows; now it is a
+  // pure narrowing of data the screen already holds. null = filter off, which
+  // the filter step below treats as "don't narrow" (distinct from an empty
+  // set, which means "nobody matches").
+  const audienceMatchIds = useMemo(() => {
     const audience = activeFilters.audience;
-    if (!audience) {
-      setAudienceMatchIds(null);
-      return;
+    if (!audience) return null;
+    if (!facetsLoaded) return null;
+    const matches = new Set<string>();
+    for (const [providerId, tags] of audiencesByProviderId) {
+      if (tags.has(audience)) matches.add(providerId);
     }
-    const ids = providerData.map(p => p.providerId);
-    if (ids.length === 0) {
-      setAudienceMatchIds(new Set());
-      return;
-    }
-    let cancelled = false;
-    getProviderAudienceMatches(ids, audience)
-      .then(set => { if (!cancelled) setAudienceMatchIds(set); })
-      .catch(() => { if (!cancelled) setAudienceMatchIds(new Set()); });
-    return () => { cancelled = true; };
-  }, [providerData, activeFilters.audience]);
+    return matches;
+  }, [audiencesByProviderId, facetsLoaded, activeFilters.audience]);
 
   // ── Client-side filter/sort on top of the server-searched set — category
   // and text query are already applied server-side (see the debounced effect
@@ -762,6 +787,8 @@ export default function SearchScreen({ navigation, route }: Props) {
       list = list.filter(p => hairTypeMatchIds.has(p.providerId));
     }
     if (activeFilters.audience) {
+      // null here means the facets query hasn't answered for this result set
+      // yet — same rule as hairType above, don't claim matches prematurely.
       if (!audienceMatchIds) return [];
       list = list.filter(p => audienceMatchIds.has(p.providerId));
     }
