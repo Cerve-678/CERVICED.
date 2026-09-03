@@ -44,7 +44,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { CommonActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
-import { logger } from '../../utils/logger';
+import { logger, reportError } from '../../utils/logger';
+import { toUserMessage } from '../../utils/userFacingError';
 
 interface Notification {
   id: string;
@@ -146,6 +147,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const [showMessagePopup, setShowMessagePopup] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Mark-read and delete update the list optimistically so the UI stays snappy.
+  // That's only honest if a failed write puts the row back — otherwise the
+  // screen shows a read/deleted state the server never accepted, and the row
+  // reappears unexplained on the next load.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   // Unread count for the hat the user is NOT currently in, so an empty list can
   // say where the missing notifications actually are. Only meaningful for
@@ -164,6 +170,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // unmount cancels them, and bail out of any callback that outlived the screen.
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const isMountedRef = useRef(true);
+
+  // Mirror of `notifications` for the optimistic handlers below. They need the
+  // pre-change row — its read flag, its position in the list — to roll back to,
+  // and capturing that inside a setState updater would make the updater impure
+  // (it runs twice under StrictMode).
+  const notificationsRef = useRef<Notification[]>([]);
+  useEffect(() => { notificationsRef.current = notifications; }, [notifications]);
 
   // Only one row's delete bubble should be open at a time (iOS Mail
   // behaviour) — closing whichever row is currently open when another one
@@ -315,39 +328,103 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     }
   }, [notifications, selectedFilter]);
 
-  // ✅ Mark single notification as read
+  // ✅ Mark single notification as read — optimistic, rolled back on failure
   const markAsRead = useCallback(async (notificationId: string) => {
+    const before = notificationsRef.current.find(n => n.id === notificationId);
+    if (!before || before.read) return;
+
+    setNotifications(prev =>
+      prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+    );
+
     try {
-      // Optimistic local update
-      setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
-      );
-      // Sync to Supabase (silent fail)
-      markNotificationRead(notificationId).catch(() => {});
+      await markNotificationRead(notificationId);
     } catch (error) {
-      logger.error('Failed to mark as read:', error);
+      if (!isMountedRef.current) {
+        reportError(error, '[NotificationsScreen] mark read failed');
+        return;
+      }
+      // Put the unread state back rather than leaving the row looking read
+      // when the server still has it unread — the badge count would disagree
+      // with the list on the next load.
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, read: false } : n)
+      );
+      setActionError(
+        toUserMessage(
+          error,
+          "We couldn't mark that as read.",
+          '[NotificationsScreen] mark read failed',
+        ),
+      );
     }
   }, []);
 
   // ✅ Mark all as read
   const markAllAsRead = useCallback(async () => {
+    // Only the rows we actually flipped get rolled back, so anything that
+    // arrives over realtime mid-request isn't clobbered by a stale snapshot.
+    const flippedIds = notificationsRef.current.filter(n => !n.read).map(n => n.id);
+    if (flippedIds.length === 0) return;
+
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
     try {
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      // Sync to Supabase (silent fail)
-      markAllNotificationsRead().catch(() => {});
+      await markAllNotificationsRead();
     } catch (error) {
-      logger.error('Failed to mark all as read:', error);
+      if (!isMountedRef.current) {
+        reportError(error, '[NotificationsScreen] mark all read failed');
+        return;
+      }
+      const flipped = new Set(flippedIds);
+      setNotifications(prev =>
+        prev.map(n => flipped.has(n.id) ? { ...n, read: false } : n)
+      );
+      setActionError(
+        toUserMessage(
+          error,
+          "We couldn't mark everything as read.",
+          '[NotificationsScreen] mark all read failed',
+        ),
+      );
     }
   }, []);
 
   // ✅ Delete notification (no confirmation for swipe)
+  //
+  // dbDeleteNotification goes through the delete_own_notification RPC, not a
+  // raw .delete() — notifications has no client-side DELETE policy, so a plain
+  // delete would match zero rows and resolve successfully, and this handler
+  // would never learn the row is still there. The RPC is what makes a failure
+  // here reportable at all.
   const deleteNotification = useCallback(async (notificationId: string) => {
+    const index = notificationsRef.current.findIndex(n => n.id === notificationId);
+    const removed = notificationsRef.current[index];
+    if (index === -1 || !removed) return;
+
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+
     try {
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      // Delete from Supabase (silent fail)
-      dbDeleteNotification(notificationId).catch(() => {});
+      await dbDeleteNotification(notificationId);
     } catch (error) {
-      logger.error('Failed to delete notification:', error);
+      if (!isMountedRef.current) {
+        reportError(error, '[NotificationsScreen] delete failed');
+        return;
+      }
+      // Restore at its original position so the list doesn't reshuffle.
+      setNotifications(prev => {
+        if (prev.some(n => n.id === notificationId)) return prev;
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, removed);
+        return next;
+      });
+      setActionError(
+        toUserMessage(
+          error,
+          "We couldn't delete that notification.",
+          '[NotificationsScreen] delete failed',
+        ),
+      );
     }
   }, []);
 
@@ -918,6 +995,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
             <Text style={styles.errorBannerText}>{loadError}</Text>
             <TouchableOpacity onPress={loadNotifications}>
               <Text style={styles.errorRetryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* A mark-read/delete that didn't take. The row has already been put
+            back by the handler, so this explains why it reappeared. */}
+        {actionError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{actionError}</Text>
+            <TouchableOpacity onPress={() => setActionError(null)}>
+              <Text style={styles.errorRetryText}>Dismiss</Text>
             </TouchableOpacity>
           </View>
         )}

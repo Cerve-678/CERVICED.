@@ -6563,29 +6563,40 @@ const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
   weeklySummary: false,
 };
 
-/** Load the user's notification preferences from Supabase */
+/** Load the user's notification preferences from Supabase.
+ *
+ *  Throws rather than falling back to DEFAULT_NOTIF_PREFS on failure. These
+ *  preferences are live-gated in the send-push-notification edge function, so
+ *  presenting the defaults as if they were the user's own saved choices means
+ *  a screen can show "Offers & Promotions: off" to someone who is still being
+ *  sent them. "We could not read your settings" and "these are your settings"
+ *  are different answers and the caller has to be able to tell them apart. */
 export async function getNotificationPreferences(): Promise<NotificationPreferences> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return DEFAULT_NOTIF_PREFS;
+  if (!user) throw new Error("Not signed in");
   const { data, error } = await supabase
     .from("users")
     .select("notification_preferences")
     .eq("id", user.id)
     .single();
-  if (error) return DEFAULT_NOTIF_PREFS;
+  if (error) throw error;
   return { ...DEFAULT_NOTIF_PREFS, ...(data?.notification_preferences ?? {}) };
 }
 
-/** Persist the user's notification preferences to Supabase */
+/** Persist the user's notification preferences to Supabase.
+ *
+ *  Throws when there is no session — returning silently would report success
+ *  for a write that never happened, and the caller would tell the user their
+ *  preferences were saved. */
 export async function saveNotificationPreferences(
   prefs: NotificationPreferences,
 ): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) throw new Error("Not signed in");
   const { error } = await supabase
     .from("users")
     .update({ notification_preferences: prefs })

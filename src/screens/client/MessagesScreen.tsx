@@ -21,6 +21,7 @@ import {
   UserConversationWithProvider,
 } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { toUserMessage } from '../../utils/userFacingError';
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '';
@@ -46,11 +47,25 @@ export default function MessagesScreen({ navigation }: any) {
   const [conversations, setConversations] = useState<UserConversationWithProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // A failed fetch used to be swallowed, which rendered exactly like "you have
+  // no conversations yet" (or silently left the last-loaded list on screen).
+  // Keep whatever we already had — it's still the most recent thing we know —
+  // but say plainly that it might not be current, and offer a retry.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchConversations = useCallback(async () => {
     try {
       setConversations(await getUserConversations());
-    } catch { /* offline — keep whatever we have */ }
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(
+        toUserMessage(
+          err,
+          "We couldn't load your messages just now.",
+          '[MessagesScreen] load conversations failed',
+        ),
+      );
+    }
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -151,13 +166,42 @@ export default function MessagesScreen({ navigation }: any) {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={OP.accent} />
         }
+        ListHeaderComponent={
+          // Only shown alongside rows — with an empty list the error takes over
+          // the empty state instead, so "no messages" can never stand in for
+          // "we couldn't check".
+          loadError && conversations.length > 0 ? (
+            <View style={[styles.errorBanner, { backgroundColor: OP.card, borderColor: OP.border }]}>
+              <Text style={[styles.errorBannerText, { color: OP.text }]}>
+                {loadError} This list may be out of date.
+              </Text>
+              <TouchableOpacity onPress={onRefresh} activeOpacity={0.7}>
+                <Text style={[styles.errorRetry, { color: OP.accentText }]}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: OP.accentText }]}>No messages yet</Text>
-            <Text style={[styles.emptyBody, { color: OP.sub }]}>
-              Start a conversation from any provider's profile with "Get In Touch"
-            </Text>
-          </View>
+          loadError ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>Couldn't load messages</Text>
+              <Text style={[styles.emptyBody, { color: OP.sub }]}>{loadError}</Text>
+              <TouchableOpacity
+                onPress={onRefresh}
+                activeOpacity={0.7}
+                style={[styles.retryBtn, { borderColor: OP.border, backgroundColor: OP.card }]}
+              >
+                <Text style={[styles.retryBtnText, { color: OP.accentText }]}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>No messages yet</Text>
+              <Text style={[styles.emptyBody, { color: OP.sub }]}>
+                Start a conversation from any provider's profile with "Get In Touch"
+              </Text>
+            </View>
+          )
         }
       />
     </ThemedBackground>
@@ -202,4 +246,25 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18, marginBottom: 8 },
   emptyBody: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  errorBannerText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, flex: 1, lineHeight: 17 },
+  errorRetry: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  retryBtn: {
+    marginTop: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+  },
+  retryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
 });

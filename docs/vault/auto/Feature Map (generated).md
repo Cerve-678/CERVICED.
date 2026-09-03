@@ -130,8 +130,8 @@ Curated: [[Booking Flow]] · **240 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(119)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(118)_
 - `supabase/booking_flow_fixes.sql` _(116)_
+- `src/screens/provider/ProviderInboxScreen.tsx` _(113)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
-- `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/booking.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(97)_
@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **240 files**
 ## Notifications
 Curated: [[Notifications]] · **147 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(253)_
+- `src/screens/shared/NotificationsScreen.tsx` _(279)_
 - `src/services/databaseService.ts` _(154)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(100)_
@@ -171,8 +171,8 @@ Curated: [[Notifications]] · **147 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(26)_
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
+- `src/screens/client/NotificationsSettingsScreen.tsx` _(23)_
 - `supabase/notifications_full_matrix.sql` _(23)_
-- `src/types/database.ts` _(21)_
 - … +117 more
 
 ## Provider onboarding
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **149 files**
 
 ## Auth
 Curated: [[Contexts]] · **160 files**
-- `src/services/databaseService.ts` _(224)_
+- `src/services/databaseService.ts` _(225)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(134)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_

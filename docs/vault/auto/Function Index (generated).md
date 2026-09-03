@@ -5,7 +5,7 @@
 
 #generated
 
-**2036 functions** across **263 files**.
+**2040 functions** across **263 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -161,7 +161,7 @@
 - `ExploreScreen.tsx` — columnWidth · dedupeByImageUri · filters · filterTabs · finishTour · getItemHeight · handleBookNow · handleCloseDetail · handleImagePress · handleOpenSearch · handleRefreshDiscover · handleViewProfile · hasFeedImage · interleaveDiscoverFeed · load · loadDiscoverFeed · mapDbPortfolioItem · mapDbProviderToCard · mapDbServiceToCards · mapDbUnclaimedProviderToCard · measuredUris · renderPortfolioCard · SkeletonMasonryGrid · tourCardId · visibleTourSteps
 - `HomeScreen.tsx` — allCategorizedProviders · currentOffers · finishTour · handleBackPress · handleSelectRegion · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · kidsSectionRelevant · loadUnreadCount · maleProvidersDisplay · maleSectionRelevant · navigateToAudienceService · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · previouslyBookedProviders · ProviderRail · recommendedProvidersList · renderKidsSection · renderMaleSection · resetFilters · RoundProviderRail · serviceProviders · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData · visibleTourSteps
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo
-- `NotificationsSettingsScreen.tsx` — NotificationsSettingsScreen · toggle · ToggleRow
+- `NotificationsSettingsScreen.tsx` — load · NotificationsSettingsScreen · persist · retrySave · toggle · ToggleRow
 - `OffersScreen.tsx` — allOffers · expDate · filteredOffers · goToProvider · handleRefresh · load · mapPromotion · OffersScreen
 - `PaymentMethodsScreen.tsx` — PaymentMethodsScreen
 - `PointsScreen.tsx` — load · PointsScreen
@@ -193,7 +193,7 @@
 - `ProviderCommunicationsScreen.tsx` — addTemplate · flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod · updateTemplate
 - `ProviderConversationScreen.tsx` — ProviderConversationScreen · renderMessage · sendMessage
 - `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getMonthDays · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · SkeletonCard · statusCfg · SummaryRow · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · windowsByDate
-- `ProviderInboxScreen.tsx` — ConversationRow · fetchBookings · fetchConversations · filtered · flatItems · fmtDate · fmtTime · handleConfirmBooking · handleDeclineBooking · handleMarkConversationRead · handleSendReply · InboxRow · initials · onRefresh · pendingIds · ProviderInboxScreen · renderRightActions · runConfirmAction · SectionHeader · SkeletonRow · timeAgo · timeAgoISO · unreadConversations
+- `ProviderInboxScreen.tsx` — ConversationRow · fetchBookings · fetchConversations · filtered · flatItems · fmtDate · fmtTime · handleConfirmBooking · handleDeclineBooking · handleMarkConversationRead · handleSendReply · InboxRow · initials · loadInbox · onRefresh · pendingIds · ProviderInboxScreen · renderRightActions · runConfirmAction · SectionHeader · SkeletonRow · timeAgo · timeAgoISO · unreadConversations
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleEmail · handleSave · handleSMS · PackCard · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · detectTemplate · getRelevantTemplates · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
 - `ProviderMyProfileScreen.tsx` — cardHighlightColors · catalogue · closeEditor · DashCard · DashEmpty · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handlePress · handleRemovePhoto · handleSaveService · handleSelectTab · handleToggleActive · handleToggleSteps · hasPolicyInfo · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ServiceTile · serviceType · setup
