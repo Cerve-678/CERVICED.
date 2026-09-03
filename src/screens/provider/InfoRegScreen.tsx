@@ -232,12 +232,26 @@ const DEFAULT_POLICIES: ProviderPolicies = {
 // Add-on interface
 interface AddOnData {
   id: number;
+  // The real service_add_ons.id, when this add-on already exists in the DB —
+  // null for one created in this editing session. Threaded through to the
+  // save payload so replace_provider_services can update the row in place
+  // instead of deleting and recreating it under a new id, which used to
+  // silently break any cart or booking that had selected this exact add-on
+  // (service_add_ons.id has no stable identity across a save otherwise).
+  dbId: string | null;
   name: string;
   price: number;
 }
 
 interface ServiceData {
   id: number;
+  // The real services.id, when this service already exists in the DB — null
+  // for one created in this editing session. See AddOnData.dbId for why: a
+  // provider re-saving ANY service used to regenerate every service's id,
+  // which orphaned every client cart item and booking pointing at the old
+  // one (bookings.service_id is ON DELETE SET NULL — 96% of live bookings
+  // had already lost this link before this field existed).
+  dbId: string | null;
   name: string;
   price: number;
   duration: string;
@@ -1181,7 +1195,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       return;
     }
     setError(null);
-    setAddOns([...addOns, { id: Date.now(), name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
+    setAddOns([...addOns, { id: Date.now(), dbId: null, name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
     setNewAddOnName('');
     setNewAddOnPrice('');
     Keyboard.dismiss();
@@ -1218,6 +1232,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setError(null);
     onSave({
       id: service?.id || Date.now(),
+      dbId: service?.dbId ?? null,
       name: name.trim(),
       price: parseFloat(price) || 0,
       duration: duration.trim(),

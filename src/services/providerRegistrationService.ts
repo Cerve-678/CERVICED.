@@ -33,12 +33,22 @@ import {
 
 export interface AddOnData {
   id: number;
+  // The real service_add_ons.id when this add-on already exists in the DB —
+  // null for one created in this editing session. See ServiceData.dbId.
+  dbId: string | null;
   name: string;
   price: number;
 }
 
 export interface ServiceData {
   id: number;
+  // The real services.id when this service already exists in the DB — null
+  // for one created in this editing session. Threaded through to
+  // replace_provider_services so it can update the row in place instead of
+  // deleting and recreating it under a new id, which used to silently break
+  // any cart item or booking pointing at the old one (bookings.service_id is
+  // ON DELETE SET NULL — 96% of live bookings had already lost this link).
+  dbId: string | null;
   name: string;
   price: number;
   duration: string;
@@ -617,6 +627,7 @@ export async function saveProviderToSupabase(
       }
 
       servicesPayload.push({
+        id: svc.dbId ?? null,
         category_name: categoryName,
         category_description: data.categoryDescriptions?.[categoryName] || null,
         name: svc.name,
@@ -640,7 +651,7 @@ export async function saveProviderToSupabase(
         hair_types_suitable: svc.hairTypesSuitable?.length ? svc.hairTypesSuitable : null,
         audience: svc.audience || null,
         images,
-        add_ons: svc.addOns.map((a) => ({ name: a.name, price: a.price })),
+        add_ons: svc.addOns.map((a) => ({ id: a.dbId ?? null, name: a.name, price: a.price })),
       });
     }
   }
@@ -708,12 +719,14 @@ export async function loadProviderFromSupabase(
 
     const addOns = (svc.service_add_ons || []).map((ao: any, idx: number) => ({
       id: idx + 1,
+      dbId: ao.id ?? null,
       name: ao.name,
       price: Number(ao.price),
     }));
 
     (categories[svc.category_name] as ServiceData[]).push({
       id: localId++,
+      dbId: svc.id ?? null,
       name: svc.name,
       price: Number(svc.price),
       duration: minutesToDuration(svc.duration_minutes),

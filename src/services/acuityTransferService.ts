@@ -41,6 +41,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
   for (const [catName, services] of Object.entries(extracted.categories ?? {})) {
     categories[catName] = services.map((svc) => ({
       id: serviceId++,
+      dbId: null,
       name: svc.name || 'Unnamed Service',
       price: Number(svc.price) || 0,
       duration: svc.duration || '1 hr',

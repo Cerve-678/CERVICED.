@@ -1,0 +1,29 @@
+-- services.is_pregnancy_safe currently defaults to TRUE (set by
+-- 20260817084930_fix_pregnancy_safe_default.sql, back when "no screen
+-- anywhere lets a provider set this field" was true). That premise no longer
+-- holds: InfoRegScreen.tsx has had a real "Pregnancy Safe" Switch since, and
+-- providers are actively using it (live data: 27 services explicitly marked
+-- NOT safe, 14 marked safe, as of 2026-09-01).
+--
+-- A TRUE default for health-adjacent safety data is a fail-open default: any
+-- row inserted without explicitly setting the column reads as "confirmed
+-- safe during pregnancy" when it is really just unconfigured. Flip it back
+-- to FALSE (fail closed / "unconfirmed" reads as "not safe" until a provider
+-- explicitly says otherwise) to match patch_test_required's already-correct
+-- conservative default.
+--
+-- Deliberately NOT a data backfill: existing TRUE rows may be genuine
+-- provider confirmations made through the Switch since 08-17, and existing
+-- FALSE rows are real safety data. Only the default for future unconfigured
+-- inserts changes. See supabase/MIGRATION_OWNER.md for the companion fix:
+-- deleting "20260817110000_fix_pregnancy_safe_default 2.sql", a never-applied
+-- iCloud-fork duplicate whose body (`UPDATE services SET is_pregnancy_safe =
+-- true WHERE is_pregnancy_safe = false`) would have blindly reverted every
+-- one of those real FALSE flags back to TRUE had it ever been replayed.
+--
+-- Applied live 2026-09-02, recorded as this version (renamed from its
+-- authored 20260901120000, per the apply_migration rename convention).
+-- Verified: information_schema.columns.column_default for
+-- services.is_pregnancy_safe now reads 'false'.
+
+ALTER TABLE public.services ALTER COLUMN is_pregnancy_safe SET DEFAULT false;
