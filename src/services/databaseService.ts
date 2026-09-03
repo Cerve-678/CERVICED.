@@ -29,6 +29,7 @@ import type {
   DbProviderAvailabilityWindow,
   DbProviderAvailabilityOverride,
   BusinessType,
+  ServiceCategory,
 } from "../types/database";
 import type { AddressReleasePolicy } from "../features/business-details/options";
 import { logger } from "../utils/logger";
@@ -354,7 +355,8 @@ export type ClientPointsReason =
   | "booking_completed"
   | "review_left"
   | "first_booking"
-  | "birthday_bonus";
+  | "birthday_bonus"
+  | "profile_completed";
 
 export interface ClientPointsLedgerEntry {
   id: string;
@@ -924,6 +926,7 @@ export async function getProviderBySlug(
         accent_color,
         background_image_url,
         profile_theme,
+        brand_font,
         phone,
         email,
         instagram,
@@ -5211,10 +5214,6 @@ export interface LibraryForm {
   serviceNames: string[]; // provider's service names this form covers
   autoSend: boolean; // auto-send when matching service is booked
   requiresSignature: boolean;
-  /** This form IS the provider's own Terms & Conditions — the one clients can
-   *  read from the booking sheet before booking. At most one per provider
-   *  (enforced by a partial unique index, not just here). */
-  isTerms: boolean;
   sentCount: number;
   createdAt: string;
 }
@@ -5226,28 +5225,91 @@ export async function getProviderFormLibrary(): Promise<LibraryForm[]> {
   // returning one on a failed query made the two indistinguishable. Becca's
   // pv.infopacks reads this and would tell a provider "you haven't set up any
   // forms yet" when the query had actually errored.
+  //
+  // The is_terms row is deliberately excluded: it's the provider's own Terms &
+  // Conditions, edited as prose in InfoReg, and listing it here would offer a
+  // second editor for one document — the two could then disagree, and saving
+  // from the builder is what used to collide with the one-per-provider index.
   const { data, error } = await supabase
     .from("provider_form_library")
     .select("*")
     .eq("provider_id", provider.id)
+    .eq("is_terms", false)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapLibraryForm);
 }
 
-/** Narrow readiness check used by the provider profile preview. */
-export async function hasMyProviderTermsForm(): Promise<boolean> {
+/** The provider's own client-facing Terms & Conditions, as the prose they
+ *  typed. Stored as the single `policy` question of their is_terms row in
+ *  provider_form_library — exactly the shape get_provider_terms reads — so
+ *  this is a different editing surface onto the same record a client sees,
+ *  not a second copy of it. Empty string when they haven't written any. */
+export async function getMyProviderTermsText(): Promise<string> {
   const provider = await getMyProviderProfile();
-  if (!provider) return false;
+  if (!provider) return "";
   const { data, error } = await supabase
+    .from("provider_form_library")
+    .select("questions")
+    .eq("provider_id", provider.id)
+    .eq("is_terms", true)
+    .maybeSingle();
+  if (error) throw error;
+  const questions = (data?.questions ?? []) as IntakeFormQuestion[];
+  // Same rule as get_provider_terms: every policy question in order, so a row
+  // written by the old builder (which allowed more than one) still reads back
+  // whole rather than losing everything after the first.
+  return questions
+    .filter(q => q.type === "policy" && (q.body ?? "").trim() !== "")
+    .map(q => (q.body ?? "").trim())
+    .join("\n\n");
+}
+
+/** Write the provider's terms prose, creating their is_terms row the first
+ *  time. Never inserts a second one — that row is unique per provider, and an
+ *  insert on top of an existing one is the 409 the builder used to produce. */
+export async function saveMyProviderTermsText(body: string): Promise<void> {
+  const provider = await getMyProviderProfile();
+  if (!provider) throw new Error("No provider profile");
+  const questions: IntakeFormQuestion[] = [
+    { id: "terms", type: "policy", label: "Terms & Conditions", body: body.trim(), required: true },
+  ];
+
+  const { data: existing, error: readErr } = await supabase
     .from("provider_form_library")
     .select("id")
     .eq("provider_id", provider.id)
     .eq("is_terms", true)
-    .limit(1)
     .maybeSingle();
+  if (readErr) throw readErr;
+
+  if (existing) {
+    // Cleared terms keep the row with an empty body rather than deleting it:
+    // get_provider_terms already returns a NULL body for that, so the booking
+    // sheet stops gating on terms with no delete policy needed.
+    const { error } = await supabase
+      .from("provider_form_library")
+      .update({ questions, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (error) throw error;
+    return;
+  }
+
+  // Nothing written and nothing to write — don't create an empty row.
+  if (body.trim() === "") return;
+
+  const { error } = await supabase
+    .from("provider_form_library")
+    .insert({
+      provider_id: provider.id,
+      title: "Terms & Conditions",
+      questions,
+      service_names: [],
+      auto_send: false,
+      requires_signature: false,
+      is_terms: true,
+    });
   if (error) throw error;
-  return data !== null;
 }
 
 /** A provider's own Terms & Conditions, as a client sees them before booking.
@@ -5279,7 +5341,6 @@ export async function saveFormToLibrary(params: {
   serviceNames: string[];
   autoSend: boolean;
   requiresSignature: boolean;
-  isTerms?: boolean;
 }): Promise<LibraryForm> {
   const provider = await getMyProviderProfile();
   if (!provider) throw new Error("No provider profile");
@@ -5292,7 +5353,10 @@ export async function saveFormToLibrary(params: {
       service_names: params.serviceNames,
       auto_send: params.autoSend,
       requires_signature: params.requiresSignature,
-      is_terms: params.isTerms ?? false,
+      // Never the provider's own Terms & Conditions — that row is owned by
+      // saveMyProviderTermsText, and inserting a second one is rejected by the
+      // one-per-provider partial unique index.
+      is_terms: false,
     })
     .select()
     .single();
@@ -5308,7 +5372,6 @@ export async function updateLibraryForm(
     serviceNames: string[];
     autoSend: boolean;
     requiresSignature: boolean;
-    isTerms: boolean;
   }>,
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
@@ -5319,7 +5382,6 @@ export async function updateLibraryForm(
   if (params.autoSend !== undefined) patch["auto_send"] = params.autoSend;
   if (params.requiresSignature !== undefined)
     patch["requires_signature"] = params.requiresSignature;
-  if (params.isTerms !== undefined) patch["is_terms"] = params.isTerms;
   patch["updated_at"] = new Date().toISOString();
   const { error } = await supabase
     .from("provider_form_library")
@@ -5427,7 +5489,6 @@ function mapLibraryForm(d: any): LibraryForm {
     serviceNames: d.service_names ?? [],
     autoSend: d.auto_send ?? false,
     requiresSignature: d.requires_signature ?? false,
-    isTerms: d.is_terms ?? false,
     sentCount: d.sent_count ?? 0,
     createdAt: d.created_at,
   };
@@ -5668,12 +5729,15 @@ export interface ProviderReschedulePolicy {
 
 /** Parse the provider's booking_policies reschedule settings.
  *  Values come from registration: rescheduleNotice 'same_day'|'24h'|'48h'|'72h',
- *  maxReschedules '1'|'2'|'unlimited'. Missing policy = 1 reschedule, 24h notice
- *  (matches the app's historical defaults). */
+ *  maxReschedules '1'|'2'|'unlimited'. Mirrors request_reschedule_own_booking()'s
+ *  SQL exactly (as of 2026-09-03) — missing policy means unrestricted (no
+ *  notice required, unlimited reschedules), not a 24h/1 default the provider
+ *  never chose. This must stay in lockstep with that RPC or the client sees
+ *  a notice window the server no longer enforces. */
 function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
   const fallback: ProviderReschedulePolicy = {
-    maxReschedules: 1,
-    rescheduleNoticeHours: 24,
+    maxReschedules: null,
+    rescheduleNoticeHours: 0,
   };
   const bp = (data as any)?.booking_policies as {
     rescheduleNotice?: string;
@@ -5682,16 +5746,16 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
   if (!bp) return fallback;
 
   const max =
-    bp.maxReschedules === "unlimited"
+    !bp.maxReschedules || bp.maxReschedules === "unlimited"
       ? null
-      : parseInt(bp.maxReschedules ?? "1", 10) || 1;
+      : parseInt(bp.maxReschedules, 10) || null;
   const noticeMap: Record<string, number> = {
     same_day: 0,
     "24h": 24,
     "48h": 48,
     "72h": 72,
   };
-  const notice = noticeMap[bp.rescheduleNotice ?? "24h"] ?? 24;
+  const notice = bp.rescheduleNotice ? (noticeMap[bp.rescheduleNotice] ?? 0) : 0;
   return { maxReschedules: max, rescheduleNoticeHours: notice };
 }
 
@@ -6563,29 +6627,40 @@ const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
   weeklySummary: false,
 };
 
-/** Load the user's notification preferences from Supabase */
+/** Load the user's notification preferences from Supabase.
+ *
+ *  Throws rather than falling back to DEFAULT_NOTIF_PREFS on failure. These
+ *  preferences are live-gated in the send-push-notification edge function, so
+ *  presenting the defaults as if they were the user's own saved choices means
+ *  a screen can show "Offers & Promotions: off" to someone who is still being
+ *  sent them. "We could not read your settings" and "these are your settings"
+ *  are different answers and the caller has to be able to tell them apart. */
 export async function getNotificationPreferences(): Promise<NotificationPreferences> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return DEFAULT_NOTIF_PREFS;
+  if (!user) throw new Error("Not signed in");
   const { data, error } = await supabase
     .from("users")
     .select("notification_preferences")
     .eq("id", user.id)
     .single();
-  if (error) return DEFAULT_NOTIF_PREFS;
+  if (error) throw error;
   return { ...DEFAULT_NOTIF_PREFS, ...(data?.notification_preferences ?? {}) };
 }
 
-/** Persist the user's notification preferences to Supabase */
+/** Persist the user's notification preferences to Supabase.
+ *
+ *  Throws when there is no session — returning silently would report success
+ *  for a write that never happened, and the caller would tell the user their
+ *  preferences were saved. */
 export async function saveNotificationPreferences(
   prefs: NotificationPreferences,
 ): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) throw new Error("Not signed in");
   const { error } = await supabase
     .from("users")
     .update({ notification_preferences: prefs })
@@ -6830,10 +6905,15 @@ export async function getProviderCheckoutMetadata(
         depositOnly: mode === "deposit_required",
       };
     } else {
+      // No deposit policy saved at all — the provider never opened Payments,
+      // so there is nothing for the app to be quoting. Treat as full-price
+      // only rather than fabricating a 20% figure the provider didn't choose
+      // (see resolveDepositMode's contract: null means "not configured", not
+      // "defaults to 20%").
       depositPolicies[provider.display_name] = {
         depositType: "percentage",
-        depositAmount: 20,
-        depositAvailable: true,
+        depositAmount: 0,
+        depositAvailable: false,
         depositOnly: false,
       };
     }
@@ -6841,7 +6921,7 @@ export async function getProviderCheckoutMetadata(
   return { depositPolicies, mobileProviderNames };
 }
 
-/** Fetch deposit policies for multiple providers by display name (batch). Falls back to 20% default if no policy set. */
+/** Fetch deposit policies for multiple providers by display name (batch). No deposit is offered when the provider hasn't configured one. */
 export async function getProviderDepositPoliciesByDisplayNames(
   displayNames: string[],
 ): Promise<Record<string, ProviderDepositPolicy>> {
@@ -6854,10 +6934,14 @@ export async function getProviderDepositPoliciesByDisplayNames(
 
   if (error || !data) return {};
 
+  // No deposit policy saved at all — the provider never opened Payments, so
+  // there's nothing for the app to be quoting. Full price only rather than
+  // fabricating a 20% figure the provider didn't choose (resolveDepositMode's
+  // null means "not configured", not "defaults to 20%").
   const defaultPolicy: ProviderDepositPolicy = {
     depositType: "percentage",
-    depositAmount: 20,
-    depositAvailable: true,
+    depositAmount: 0,
+    depositAvailable: false,
     depositOnly: false,
   };
   const result: Record<string, ProviderDepositPolicy> = {};
@@ -7073,6 +7157,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   website: string | null;
   service_interests: string[] | null;
   service_locations: string[] | null;
+  location_text: string | null;
   team_size: string | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
@@ -7085,7 +7170,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     .from("users")
     .select(
       "name, phone, business_name, business_email, business_phone, business_type, instagram, website, " +
-        "service_interests, service_locations, team_size, accessibility_notes, languages_spoken, specialties, " +
+        "service_interests, service_locations, location_text, team_size, accessibility_notes, languages_spoken, specialties, " +
         "price_range, preferred_contact_methods, preferred_payment_methods",
     )
     .eq("id", userId)
@@ -7105,6 +7190,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     website: string | null;
     service_interests: string[] | null;
     service_locations: string[] | null;
+    location_text: string | null;
     team_size: string | null;
     accessibility_notes: string | null;
     languages_spoken: string[] | null;
@@ -7491,10 +7577,11 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
   accent_color: string | null;
   background_image_url: string | null;
   profile_theme: string | null;
+  brand_font: string | null;
 } | null> {
   const { data, error } = await supabase
     .from("providers")
-    .select("id, gradient, accent_color, background_image_url, profile_theme")
+    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font")
     .eq("user_id", userId)
     .single();
   if (error) return null;
@@ -7504,6 +7591,7 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
     accent_color: string | null;
     background_image_url: string | null;
     profile_theme: string | null;
+    brand_font: string | null;
   };
 }
 
@@ -7620,7 +7708,7 @@ export async function getProviderBasicById(
 // PROVIDERS — additional writes
 // ─────────────────────────────────────────────────────────
 
-/** Persist provider branding choices (gradient, accent colour, background, theme key) */
+/** Persist provider branding choices (gradient, accent colour, background, theme key, name font) */
 export async function updateProviderBranding(
   providerId: string,
   data: {
@@ -7628,6 +7716,7 @@ export async function updateProviderBranding(
     accent_color: string;
     background_image_url: string | null;
     profile_theme: string;
+    brand_font: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase
@@ -7715,6 +7804,16 @@ export async function updateProviderContactDetails(
     business_type?: BusinessType | null;
     address_release_policy?: AddressReleasePolicy | null;
     years_experience?: number | null;
+    // Editable from BusinessInfoScreen, locked in InfoReg post-first-save —
+    // same pattern as business_type above. custom_service_type only means
+    // anything alongside service_category === 'OTHER'; write it as null
+    // otherwise rather than leaving a stale value from a previous OTHER
+    // answer.
+    // A provider only ever self-selects one of these seven; MALE/KIDS are
+    // audience-widening values set separately (see homeSections.ts) and are
+    // deliberately excluded from Exclude<> here rather than the wider union.
+    service_category?: Exclude<ServiceCategory, "MALE" | "KIDS">;
+    custom_service_type?: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase
@@ -7979,7 +8078,11 @@ export async function getServiceSafetyFlags(
   for (const row of data ?? []) {
     map.set(row.id, {
       patchTestRequired: !!row.patch_test_required,
-      isPregnancySafe: row.is_pregnancy_safe !== false,
+      // Fail closed: only an explicit TRUE counts as confirmed safe. NULL/
+      // undefined (an unconfigured service, or the DB column's own default)
+      // must not read as "safe" for health-adjacent data — see
+      // supabase/migrations/20260901120000_pregnancy_safe_default_false.sql.
+      isPregnancySafe: row.is_pregnancy_safe === true,
     });
   }
   return map;
@@ -8834,7 +8937,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
         hair_types_suitable,
         audience,
         service_images ( url, sort_order, fit ),
-        service_add_ons ( name, price )
+        service_add_ons ( id, name, price )
       `)
       .eq("provider_id", providerId)
       .eq("is_active", true)

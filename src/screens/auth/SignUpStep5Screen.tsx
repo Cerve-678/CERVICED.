@@ -288,6 +288,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
             service_interests: isProvider ? data.serviceInterests : selectedInterests,
             service_locations: isProvider ? data.serviceLocations : selectedLocations,
+            location: isProvider ? (data.location || null) : null,
             maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
             gender: selectedGender || null, has_kids: hasKids,
             price_range: isProvider ? (data.priceRange || null) : null,
