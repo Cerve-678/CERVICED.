@@ -5,7 +5,7 @@
 
 #generated
 
-**2034 functions** across **263 files**.
+**2035 functions** across **263 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -194,7 +194,7 @@
 - `ProviderConversationScreen.tsx` — ProviderConversationScreen · renderMessage · sendMessage
 - `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getMonthDays · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · SkeletonCard · statusCfg · SummaryRow · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · windowsByDate
 - `ProviderInboxScreen.tsx` — ConversationRow · fetchBookings · fetchConversations · filtered · flatItems · fmtDate · fmtTime · handleConfirmBooking · handleDeclineBooking · handleMarkConversationRead · handleSendReply · InboxRow · initials · onRefresh · pendingIds · ProviderInboxScreen · renderRightActions · runConfirmAction · SectionHeader · SkeletonRow · timeAgo · timeAgoISO · unreadConversations
-- `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleOpenSend · handlePickBookingForSend · handleSave · PackCard · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
+- `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleOpenSend · handlePickBookingForSend · handleSave · PackCard · performDelete · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · detectTemplate · getRelevantTemplates · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
 - `ProviderMyProfileScreen.tsx` — cardHighlightColors · catalogue · closeEditor · DashCard · DashEmpty · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handlePress · handleRemovePhoto · handleSaveService · handleSelectTab · handleToggleActive · handleToggleSteps · hasPolicyInfo · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ServiceTile · serviceType · setup
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage

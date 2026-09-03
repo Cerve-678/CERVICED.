@@ -262,7 +262,7 @@ const ss = StyleSheet.create({
 export default function ProviderInfoPackScreen({ navigation }: Props) {
   const { isDarkMode: dark } = useTheme();
   const { user } = useAuth();
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useProviderDialog();
   const P = dark ? DARK_P : LIGHT_P;
 
   const [view,       setView]       = useState<'list' | 'create'>('list');
@@ -347,7 +347,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [title, selectedServices, content, user?.id, resetForm, showToast]);
 
-  const handleDelete = useCallback(async (id: string) => {
+  const performDelete = useCallback(async (id: string) => {
     try {
       await deleteInfoPack(id);
       setPacks(prev => prev.filter(p => p.id !== id));
@@ -357,6 +357,17 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       showToast('Could not delete this pack. Please try again.', 'error');
     }
   }, [showToast]);
+
+  const handleDelete = useCallback((pack: InfoPack) => {
+    showConfirm(
+      'Delete this pack?',
+      `"${pack.title}" will be permanently deleted. This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => { void performDelete(pack.id); } },
+      ],
+    );
+  }, [performDelete, showConfirm]);
 
   const handleOpenSend = useCallback(async (pack: InfoPack) => {
     setSending(pack);
@@ -462,7 +473,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                 pack={item} dark={dark} P={P} index={index}
                 onPress={() => setPreviewing(item)}
                 onSend={() => handleOpenSend(item)}
-                onDelete={() => handleDelete(item.id)}
+                onDelete={() => handleDelete(item)}
               />
             )}
             ListEmptyComponent={
