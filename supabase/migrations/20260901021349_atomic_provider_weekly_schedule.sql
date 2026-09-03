@@ -1,20 +1,25 @@
--- !! DELIBERATELY NOT APPLIED -- parked 2026-08-26.
+-- APPLIED 2026-09-01 (recorded version 20260901021349, renamed from its
+-- authored 20260826110000 per the standing gotcha).
 --
--- This defines replace_provider_weekly_schedule(). It was never applied live,
--- but the app had ALREADY been changed to call it, so every provider attempt to
--- save their weekly hours failed with "function not found" -- and since a
--- weekly schedule is one of the three go-live gates, that silently blocked new
--- providers from ever publishing.
+-- This defines replace_provider_weekly_schedule(). Parked on 2026-08-26
+-- pending the provider terms & policy work — that work has since shipped
+-- (T&Cs are a form of their own, not a providers column; policy editing
+-- moved to Business Profile's PoliciesScreen), so this was applied and
+-- saveProviderWeeklySchedule in src/services/databaseService.ts now calls
+-- the RPC instead of doing the two writes non-atomically.
 --
--- The app-side dependency was removed on 2026-08-26 (see
--- saveProviderWeeklySchedule in src/services/databaseService.ts, which now does
--- the same two writes non-atomically). Nothing calls this function, so the file
--- is inert until the provider terms & policy work ships and it is applied
--- deliberately alongside it. Its signature is unchanged, so restoring the RPC
--- call is a one-line revert at that point.
---
--- Do NOT apply it on its own to "tidy up the drift": the whole point of parking
--- it is that it belongs with that piece of work. Tracked in PRE-LAUNCH-TODO.md.
+-- AS-WRITTEN BELOW, THIS BODY IS BROKEN: the windows self-overlap check uses
+-- `jsonb_to_recordset(...) WITH ORDINALITY AS a(col defs)`, which is not
+-- valid Postgres syntax outside ROWS FROM(...) and throws
+-- "WITH ORDINALITY cannot be used with a column definition list" on every
+-- single call, for any input. Caught by functional verification immediately
+-- after applying, before the app was wired to call it. Fixed by
+-- 20260901170907_fix_replace_provider_weekly_schedule_ordinality_syntax.sql,
+-- applied straight after — kept as a separate file rather than edited in
+-- place here, matching how this repo already handles a defect found only
+-- after applying (see the 2026-08-31 hair-type-match entry in
+-- supabase/MIGRATION_OWNER.md for the same two-file pattern). Read this file
+-- for history only; the live function is the fix file's body.
 
 CREATE OR REPLACE FUNCTION public.replace_provider_weekly_schedule(
   p_provider_id uuid,

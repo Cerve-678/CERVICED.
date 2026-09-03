@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **85 files**
+Curated: [[Address Release]] · **84 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(161)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,12 +37,12 @@ Curated: [[Address Release]] · **85 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
 - `src/features/providers/goLiveStatus.ts` _(15)_
-- … +55 more
+- … +54 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **156 files**
 - `src/services/AvailabilityService.ts` _(330)_
-- `src/services/databaseService.ts` _(269)_
+- `src/services/databaseService.ts` _(268)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `src/screens/client/SearchScreen.tsx` _(111)_
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **147 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **70 files**
-- `src/services/databaseService.ts` _(63)_
+- `src/services/databaseService.ts` _(62)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(46)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(29)_

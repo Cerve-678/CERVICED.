@@ -27,6 +27,21 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Applied 2026-09-01 (atomic provider weekly schedule)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260901021349 | `atomic_provider_weekly_schedule` | Renamed from its authored `20260826110000`. Applied now that the provider terms & policy work it was parked for has shipped (T&Cs are their own form, not a `providers` column; policy editing moved to Business Profile's PoliciesScreen). |
+| 20260901170907 | `fix_replace_provider_weekly_schedule_ordinality_syntax` | Fixes a defect **in the parked file itself**, not caught until after applying: the windows self-overlap check used `jsonb_to_recordset(...) WITH ORDINALITY AS a(col defs)`, which is not valid Postgres syntax outside `ROWS FROM(...)` — it threw on every single call, for any input, so the function was completely non-functional as originally written. |
+
+**Verified functionally, not just structurally**, in a rolled-back transaction against a real provider row, both before and after the fix. Before the fix: any call raised `WITH ORDINALITY cannot be used with a column definition list`, full stop — never wired to app code, so nothing live had called it yet. After the fix, in one `ROLLBACK`ed transaction: a valid 7-day/6-window payload wrote all 7 day rows and 6 window rows in a single call (Monday `open_time=09:00`, Sunday `is_closed=true`); a payload with two overlapping windows on the same day raised `invalid weekly schedule`; a payload with fewer than 7 days raised `weekly schedule must contain each day exactly once`. Nothing was left behind (transaction rolled back).
+
+`SECURITY INVOKER` is correct here (unlike most functions in this file, which are `SECURITY DEFINER`): `provider_availability`/`provider_availability_windows` both carry an owner-only RLS `ALL` policy keyed on `provider_id IN (SELECT id FROM providers WHERE user_id = auth.uid())`, confirmed live via `pg_policies` before applying — so a caller passing someone else's `p_provider_id` just writes zero rows under RLS, not someone else's schedule. Grants confirmed live: `authenticated`/`service_role` only, not `anon`, not `PUBLIC` (this was `CREATE OR REPLACE` on a brand-new function name, not a `DROP FUNCTION`+`CREATE FUNCTION` pair, so the PUBLIC-grant regression documented in the 2026-08-31 hair-type entry below does not apply here — confirmed anyway).
+
+App-side: `saveProviderWeeklySchedule()` (`src/services/databaseService.ts`) now calls the RPC in one round trip instead of two separate writes (`provider_availability` upsert, then `replaceProviderAvailabilityWindows`'s delete+insert). `npx tsc --noEmit` and `npm test` (493/493) both clean.
+
+**Kept as two files, matching the 2026-08-31 hair-type-match precedent**, rather than editing the first file's body in place — the first version really was applied live (briefly, unreachable by app code) with the broken body, so the second file is the accurate record of what changed and why, not a rewrite of history.
+
 ### Applied 2026-08-31 (account-scoped walkthrough versions)
 
 `20260831124409_account_scoped_tour_versions.sql` — adds `users.seen_tours`
@@ -154,7 +169,8 @@ Written but **not applied**, in the order they must run:
 | Version | File | Notes |
 |---|---|---|
 | 20260827160000 | `cancel_window_closing_warning` | **Written 2026-08-27 by the session doing reschedule/legal work; NOT applied — the lock above is held.** New `process_cancel_window_closing_warnings()` + cron `cancel-window-closing-warnings` + the `cancel_window_closing` notification type. Numbered above the 20260827120519 frontier and above the two cart-hold files so it runs last. Touches nothing the lock holder touches (no cart-hold functions, no booking triggers). Its one shared surface is `notifications_type_check`, which it **appends to** rather than recreating from a literal list — so it is safe in either order against `20260827140000_no_show_disputes`, which also adds a type. App-side wiring (`database.ts`, `NotificationsScreen`, `notificationTapHandler`) is already committed, so the type union is ahead of the constraint until this runs. **STEP 2 BELONGS TO WHOEVER APPLIES IT:** the file adds `cancel_notice_hours(INT, JSONB)` as the single definition of the cancellation-notice mapping and calls it, but `cancel_own_booking()` still carries its own inline copy. Rewrite it to call the helper in the same pass — with `pg_get_functiondef()` output in hand so `LANGUAGE`/`SECURITY DEFINER`/`SET search_path` survive the reproduction. It was left undone because the MCP connection was down when the file was written, and reproducing a live function from memory is exactly what stripped `SET search_path` off three functions earlier the same day. |
-| 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
+
+`atomic_provider_weekly_schedule` was applied 2026-09-01 — see above, no longer queued.
 
 The queue is otherwise **empty as of 2026-08-27** — see below.
 
@@ -394,7 +410,7 @@ that differ are all explained:
 | File | Why it isn't applied |
 |---|---|
 | `20260810180952_restore_legacy_booking_writes_pending_stripe` | **SUPERSEDED — never apply.** Adds a blanket `authenticated` INSERT policy on `bookings`, letting a client forge price/status/snapshot fields. Confirmed absent live. |
-| `20260826110000_atomic_provider_weekly_schedule` | Deliberately parked (see Queue above). |
+| ~~`20260826110000_atomic_provider_weekly_schedule`~~ | **RESOLVED 2026-09-01 — applied**, renamed to `20260901021349_atomic_provider_weekly_schedule.sql`. Was: deliberately parked pending the provider terms & policy work (see "Applied 2026-09-01 (atomic provider weekly schedule)" above for the fix this needed before app code could actually use it). |
 | `20260817110000_fix_pregnancy_safe_default 2.sql` | **iCloud fork, never apply.** Its `ALTER ... SET DEFAULT true` is already live; what remains is a blanket `UPDATE services SET is_pregnancy_safe = true WHERE false`. Its stated premise — "no screen lets a provider set this field" — is now FALSE (`InfoRegScreen.tsx` has a Switch). 20 services are flagged not-safe and they are Lip Filler, Anti-Wrinkle, Cheek Filler, Dermaplaning: real safety data, not default noise. Running it would tell pregnant clients filler and botox are safe. |
 | `20260817110500_waitlist_lapse_and_exhaustion_notifications 2.sql` | **iCloud fork, content already live** (verified: `invite_next_waitlist_entry` returns boolean, lapse + exhaustion notifications both present). Re-running would revert `expire_waitlist_holds()` to its pre-15-minute body, undoing 20260827120519. Needs a ledger row and fork resolution, not execution. |
 

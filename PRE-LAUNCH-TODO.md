@@ -759,33 +759,26 @@ anywhere in the app (§1b above). It is a product/legal call — see
 
 ---
 
-## 15. `replace_provider_weekly_schedule` is parked, not missing (2026-08-26)
+## 15. `replace_provider_weekly_schedule` — RESOLVED 2026-09-01
 
-`supabase/migrations/20260823065212_atomic_provider_weekly_schedule.sql` is
-**deliberately unapplied**. It defines `replace_provider_weekly_schedule()`,
-which makes the two halves of a weekly-schedule save (legacy day rows + v2
-working windows) one transaction.
+Was: `supabase/migrations/20260826110000_atomic_provider_weekly_schedule.sql`
+was deliberately parked pending the provider terms & policy work, so
+`saveProviderWeeklySchedule()` did the two writes non-atomically (a batched
+day-row upsert, then `replaceProviderAvailabilityWindows`'s delete+insert)
+instead of one transaction — recoverable but not atomic; a failure between the
+two writes could leave day rows and windows briefly out of step until a retry.
 
-It was never applied live, but `databaseService.ts` had already been changed to
-call it — so **every provider attempt to save their hours failed with "function
-not found"**, and since a weekly schedule is one of the three go-live gates,
-that silently blocked new providers from publishing at all.
-
-Fixed 2026-08-26 by removing the app-side dependency: `saveProviderWeeklySchedule()`
-does the two writes directly again (one batched upsert for the seven day rows,
-then `replaceProviderAvailabilityWindows`). Provider scheduling works.
-
-**The tradeoff that is now live:** those two writes are not atomic. A failure
-between them leaves day rows and windows out of step. It is recoverable rather
-than silent — both throw, the screen keeps its `dirty` flags and asks the
-provider to retry, and a retry re-sends the whole schedule over whichever half
-landed. Windows are written second so a partial failure can never publish a
-provider against a schedule that isn't there.
-
-**To close this out:** apply the migration as part of the provider terms &
-policy work and restore the RPC call — the signature is unchanged, so it is a
-one-line revert. Do not apply it on its own to "tidy up the drift"; the file
-carries a header saying the same.
+Applied 2026-09-01 (renamed to `20260901021349_atomic_provider_weekly_schedule.sql`)
+now that the thing it was waiting on has shipped — T&Cs are their own form, not
+a `providers` column, and policy editing moved to Business Profile's
+PoliciesScreen. A syntax bug in the parked file's own overlap-check (invalid
+`WITH ORDINALITY` usage, threw on every call) was caught by functional
+verification immediately after applying and fixed by a follow-up migration,
+`20260901170907_fix_replace_provider_weekly_schedule_ordinality_syntax.sql`,
+before anything was wired to call it. `saveProviderWeeklySchedule()` now calls
+the RPC in one round trip. See `supabase/MIGRATION_OWNER.md`'s "Applied
+2026-09-01 (atomic provider weekly schedule)" entry for full verification
+detail. `npx tsc --noEmit` and `npm test` (493/493) both clean.
 
 ---
 
@@ -987,3 +980,253 @@ refactored sweep, *then* rewire `cancel_own_booking()` to call it. Do it with
 **Blocked on the migration lock** — held by the client-area session as of
 2026-08-27, and that is live work, not an abandoned claim. Do not apply
 around it; see `supabase/MIGRATION_OWNER.md`.
+
+---
+
+## 20. Images — RESOLVED 2026-08-29 except one blocked SQL statement
+
+Audit of every image save path against the live DB (not just a code read). The
+headline: **the upload code is correct; two accounts are running a build that
+predates the fix**, and separately the Explore carousel sizes itself from the
+wrong thing.
+
+Portfolio came out clean and is clean by construction — all 64 rows resolve to a
+real storage object, all carry `category` and `aspect_ratio`, and the path
+`${userId}/${Date.now()}-${random}.${ext}` is unique per upload so it can never
+overwrite an existing object. Nothing to do there. Everything below is service
+images, promotions, or display.
+
+### 20a. A stale app build is writing overwrite-prone paths — this is the "photos don't update" bug
+
+Commit `641c7ed` (2026-08-20) fixed two things at once in
+`providerRegistrationService.ts:600`: it added a `-${Date.now()}` suffix to the
+storage path, and it started measuring `aspect_ratio`. Split by path shape, the
+live data was perfectly clean:
+
+| Uploaded by | Rows | Missing `aspect_ratio` |
+|---|---|---|
+| current code (versioned path) | 9 | 0 |
+| old code (unversioned path) | 66 | 60 |
+
+The old path was `${userId}/${category}-${sortOrder}-${i}.jpg` with
+`upsert: true` — **keyed by the service's position in its category, not by its
+id.** Replace a photo, reorder services, or delete one, and the next save writes
+different bytes to the same path. The public URL never changes, so expo-image's
+disk cache and the CDN both keep serving the old picture. Live proof:
+`Special_Occasion-0-1.jpg` was created at 00:09 and overwritten at 00:35 on
+2026-08-29 — same URL, new image.
+
+Accounts `dc8ec1c3…` (FacebyJen) and `5486ebe3…` were still writing unversioned
+paths at 00:30 on 2026-08-29, while `84fb0a00…` (this repo's dev build) wrote
+versioned ones. **No code change is needed — rebuild/republish on those
+devices.** When a provider reports photos not updating, check their build date
+before touching the uploader.
+
+### 20b. HEIC is uploaded as `.jpg` and served as `image/jpeg` — Android and web can't render it
+
+`uploadToStorage` (`providerRegistrationService.ts:190`) derives the content type
+from *the filename the caller invented*, and the service-image caller hardcodes
+`.jpg` regardless of what the asset actually is. Two confirmed files are HEIC
+bytes served as `content-type: image/jpeg` — one service image
+(`dc8ec1c3…/Bridal_Makeup-0-1.jpg`, 5712×4284) and one portfolio object
+(`84fb0a00…/1787080727575-rk6zuz.heic`).
+
+`expo-image-picker` with `allowsMultipleSelection: true` does not reliably
+transcode to JPEG even with `quality` set. **iOS renders HEIC anyway, which is
+exactly why this hides** — it will look fine in every test done on an iPhone.
+
+Two ways to fix, and it needs a decision:
+- Sniff the real magic bytes and set the correct content type. Cheap, honest,
+  but leaves HEIC that Android still can't decode.
+- Transcode to JPEG at pick time via `expo-image-manipulator`. Correct, adds a
+  dependency and a step. **Recommended.**
+
+### 20c. Three promotion images are 0-byte files — needs one SQL statement run by hand
+
+From the pre-2026-08-23 `fetch(uri).blob()` uploader, which returns an empty blob
+for `file://` URIs in React Native (fixed in `4178948`; no zero-byte object
+exists in any other bucket, ever). The three `promotions.image_url` rows still
+point at empty files, so those cards render blank.
+
+Safe to null — `ProviderPromotionsScreen.tsx:230` already falls back to a
+pricetag-icon banner, and all three promos are expired:
+
+```sql
+update promotions set image_url = null
+where image_url in (
+  'https://ztrfpfvvejzaysrelmfm.supabase.co/storage/v1/object/public/promotion-images/1780917486933.jpg',
+  'https://ztrfpfvvejzaysrelmfm.supabase.co/storage/v1/object/public/promotion-images/1783765468009.jpg',
+  'https://ztrfpfvvejzaysrelmfm.supabase.co/storage/v1/object/public/promotion-images/1783907503923.png'
+);
+```
+
+### 20d. The Explore carousel takes its height from whichever image you tapped
+
+`ImageDetailModal.tsx:401` computes one height for the whole carousel:
+
+```ts
+const imageHeight = Math.min(SCREEN_HEIGHT * 0.85, SCREEN_WIDTH / item.aspectRatio);
+```
+
+`item.aspectRatio` is the **tapped** image's ratio, but that height is then
+handed to `ImageCarousel` for *every* image in the set, each rendered
+`contentFit="cover"` (`ImageDetailModal.tsx:351`). So a landscape sibling gets
+centre-cropped into a tall portrait box, and tapping a *different* photo of the
+same service opens the same set at a different height. The data model is the
+root of it: `ExploreScreen.tsx:392` emits one feed card per image, each carrying
+the full `images` array but a single `aspectRatio` — one ratio for N photos.
+
+**This was latent until 2026-08-29 and the backfill below made it visible.**
+While every service image had `aspect_ratio = NULL` they all fell back to the
+same `0.8` (`ExploreScreen.tsx:403`), so every box was identical and nothing
+appeared to crop. Real ratios now range 0.46–1.33, so the mismatch shows.
+
+Options, cheapest first:
+- `contentFit="contain"` with the existing box. No cropping, letterboxes instead.
+  One-line change, ugliest result on mixed sets.
+- Derive one height per *service set* (median, or the least-extreme ratio) rather
+  than from the tapped image, so the box is at least stable across entry points.
+- Animate the box height on swipe so each photo gets its true shape.
+  Best-looking, most work, and it moves the card below on every swipe.
+
+Worth deciding alongside 20e, since a provider-chosen framing would settle it.
+
+### 20e. Let providers choose framing and order when adding service images
+
+Requested 2026-08-29. Two halves:
+
+- **Framing / crop.** Right now the app decides how a photo is cropped and the
+  provider can't see or influence it — which is what makes 20d feel arbitrary.
+  A per-image crop or a per-service "fill vs fit" choice would make the
+  presentation intentional. Needs `expo-image-manipulator` (same dependency
+  20b wants) and somewhere to persist the choice — `service_images` would need a
+  column, or the crop gets baked into the stored file.
+- **Reordering.** `service_images.sort_order` already exists and
+  `profileMapper.ts:26` already sorts by it, so the data side is done. The gap is
+  UI only: `ServiceImageCarousel.tsx` offers add and remove but no reorder, and
+  the editor holds images as a plain `string[]` whose order is just the order
+  they were picked. First photo is the one that leads the card, so this matters
+  more than it sounds.
+
+### 20f. Service images are never cleaned up
+
+66 of 141 `service-images` objects and 19 of 24 `provider-logos` have no DB row
+pointing at them — roughly 25MB of dead bytes. Logos are cleaned on replace
+(`providerRegistrationService.ts:552`) and portfolio on delete; service images
+have no cleanup path at all. Not user-visible, just cost, and it will grow with
+every re-save.
+
+### Status after the fix pass (2026-08-29)
+
+All of the above is now closed in code except **20c**, which needs you to run
+one SQL statement — the `set image_url = null` write was refused twice by the
+auto-mode classifier and was deliberately not routed around via
+`apply_migration`.
+
+- **20a** — no code fix exists or is needed; the two accounts must be rebuilt.
+  The service-image path has been keyed with `Date.now()` since 2026-08-20, and
+  the orphan cleanup added below now removes what a re-save leaves behind.
+- **20b** — fixed twice over. `uploadToStorage` now sniffs the real magic bytes
+  (JPEG/PNG/GIF/WEBP/HEIC/AVIF) and sets Content-Type and the stored extension
+  from the file itself rather than from the name the caller invented; and every
+  newly-picked service photo is re-rendered to JPEG by the cropper, so HEIC no
+  longer reaches storage at all. The two existing mislabelled objects are
+  still HEIC-in-a-.jpg and will stay that way until re-uploaded.
+- **20d** — fixed. `ImageDetailModal` now sizes the carousel from the whole
+  set's **median** ratio instead of the tapped photo's, so the same service
+  opens at the same height whichever card you enter through, and each photo is
+  framed by the provider's own stored `fit`.
+- **20e** — built, both halves. Drag-to-reorder (press and hold, matching the
+  category strip's 220ms), a Cover badge on the leading photo, a per-photo
+  Fill/Fit toggle backed by the new `service_images.fit` column, and a crop
+  step (`ServiceImageCropper`) offering Original / 4:5 / 1:1 with a draggable
+  frame.
+- **20f** — fixed. `saveProviderToSupabase` now deletes service-image objects
+  the save orphaned, after the catalogue replace has committed and
+  best-effort, so a storage failure can't fail a save that already succeeded.
+  The ~25MB already orphaned is cleared the next time each provider saves.
+
+### 20g. Venue photos shared the work gallery's row cap (2026-08-29)
+
+Raised after the fix pass. Venue/workspace shots were already routed away from
+the work gallery everywhere they're *rendered* — Explore excludes them, the
+client profile puts them under Additional Information, the provider's own
+screens and Becca's photo count call `splitPortfolioByKind`, and the InfoReg
+uploader's hint says so in as many words.
+
+But `getProviderPortfolio` fetched both kinds as one list capped at 30 rows and
+left every caller to split it **afterwards**. So venue shots ate the work
+gallery's budget: eight photos of the room meant eight fewer pieces of real
+work reaching the client profile, the provider's own editor, and Becca's count
+— silently, and worse the more venue photos a provider added.
+
+Fixed by moving the split into SQL. `getProviderPortfolio` now returns
+`{ work, venue }`, with the venue exclusion (the is-null OR neq form, so legacy
+NULL-category rows still read as work) and a 30-row cap on the work query, and
+a separate 12-row cap on venue. `includeVenue` is opt-in and costs the only
+second query — just two of the four callers display venue shots at all, so
+ProviderMyProfileScreen and Becca now issue **fewer** queries than before, not
+more. The count guard in `venuePortfolioSeparation.test.ts` was updated from
+three exclusion sites to four.
+
+Nothing needed migrating: there are zero venue rows live.
+
+If the intent was stronger — venue photos out of `portfolio_items` and the
+`portfolio` storage bucket entirely, into their own table — that is still open
+and is a bigger change. Zero live rows makes it cheap to do whenever.
+
+### 20h. Reorder drags: categories fixed, services added (2026-08-29)
+
+**Category drag — the slot maths was wrong, not the gesture.**
+`applyDragPosition` picked the drop slot by walking `categoryOrderRef.current`,
+the *live* order — which that same function rewrites on every swap — while
+comparing against x positions frozen in `dragBaselineRef` at grant time. From
+the first swap onwards the loop scanned a list whose baseline x values no
+longer ascended with it, so the early `break` fired against whichever pill sat
+at that index and the target jumped around. Fixed by freezing the order too
+(`dragOrderBaselineRef`) and walking that, which keeps the x values monotonic —
+the assumption the `break` depends on — and makes the result a pure function of
+finger position rather than of the path taken.
+
+**Services now reorder by drag**, via a new `useVerticalDragReorder` hook
+rather than a third bespoke implementation. Array index is already written as
+`sort_order` on save, so no schema change.
+
+**The scroll fight is real and specific to vertical drags.** A vertical drag
+inside the page's vertical ScrollView *is* the same gesture as a scroll, so the
+native recognizer wins whenever it's left enabled — refusing termination once
+armed is necessary but not sufficient on iOS. The main ScrollView's
+`scrollEnabled` gate (already there for `draggingCategory`) now also covers
+`serviceDrag.draggingKey`. The image strip never hit this: a horizontal drag
+inside a horizontal strip isn't competing with the page's vertical scroll.
+
+**Why the grab areas differ.** Service cards and image thumbnails are grabbed
+anywhere on the item, like a normal sortable list. Category pills keep a
+dedicated handle because the pill already owns both a tap (select) and a
+long-press (the Edit/Move/Delete Alert) — and that menu fires at ~500ms, in the
+middle of a drag that armed at 220ms, so holding the pill would pop an Alert
+over the gesture. The handle's touch target was enlarged instead.
+
+**Not verified in a running app.** `tsc` is clean and the suite passes (61
+suites / 367 tests, including new coverage for the legacy image-shape cache
+path), but the crop frame and the cropper's HEIC→JPEG transcode have not been
+exercised on a device.
+
+The drag was reported broken on first attempt and rewritten: the PanResponder
+had been spread onto the ScrollView, where it never wins — the ScrollView's own
+responder claims the gesture on first movement and the handlers are never
+asked. Each thumbnail now owns a responder that claims on touch-down, grants
+termination back to the ScrollView while unarmed (that's what a scroll flick
+is), and refuses once the 220ms hold has armed. Still unverified on a device;
+if it's still wrong, the next move is `react-native-gesture-handler` (already a
+dependency) rather than another PanResponder attempt — and `expo-image-manipulator` is
+a **native** module, so it needs a new dev build before any of the crop path
+runs at all. That rebuild is the same one 20a already required.
+
+### Done in this pass
+
+`aspect_ratio` was backfilled on all 60 null `service_images` rows by fetching
+each image and reading its header — 0 nulls remain across all five providers,
+ratios 0.46–1.33. That fixes the first-paint sizing in Explore (previously every
+one of those rendered at a hardcoded 0.8 and reflowed once measured) and is what
+surfaced 20d.

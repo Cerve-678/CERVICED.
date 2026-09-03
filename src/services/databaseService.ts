@@ -4781,26 +4781,23 @@ export async function replaceProviderAvailabilityWindows(
   invalidateAvailabilityProviderCore(providerId);
 }
 
-/** Replace both legacy day rows and v2 working windows.
+/** Replace both legacy day rows and v2 working windows, atomically, via the
+ *  `replace_provider_weekly_schedule()` RPC.
  *
- *  NOT atomic, deliberately. This used to call `replace_provider_weekly_schedule()`,
- *  an RPC that does both in one transaction — but that function was never
- *  applied to the live database, so every call failed with "function not found"
- *  and NO provider could save their hours at all. Since a weekly schedule is
- *  one of the three go-live gates, that also silently blocked new providers
- *  from ever publishing.
- *
- *  The RPC's migration (`20260823065212_atomic_provider_weekly_schedule.sql`)
- *  is deliberately parked pending the provider terms & policy work rather than
- *  applied piecemeal, so this goes back to the two writes the app already owns.
- *  Restore the RPC call when that migration ships — the signature is unchanged.
- *
- *  The tradeoff: a failure between the two writes leaves day rows and windows
- *  out of step. Recoverable rather than silent — both writes throw, the screen
- *  keeps its `dirty` flags and tells the provider to retry, and a retry re-sends
- *  the complete schedule, overwriting whichever half landed.
- *
- *  Days go in ONE upsert rather than a loop over seven — see the no-N+1 rule. */
+ *  This used to do the same two writes as separate non-atomic calls: the
+ *  RPC's migration (`20260826110000_atomic_provider_weekly_schedule.sql`,
+ *  applied 2026-09-01 as `20260901021349` once it never having been applied
+ *  had already forced app code to fall back once before) was deliberately
+ *  parked pending the provider terms & policy work, which has since shipped
+ *  (T&Cs are their own form, not a `providers` column; policy editing moved
+ *  to Business Profile's PoliciesScreen). A failure between two separate
+ *  writes was recoverable — both writes threw, the screen kept its `dirty`
+ *  flags and told the provider to retry — but could still leave day rows and
+ *  windows briefly out of step until that retry landed. One transaction
+ *  removes the window entirely: either the whole schedule replaces, or none
+ *  of it does. See `20260901170907_fix_replace_provider_weekly_schedule_ordinality_syntax.sql`
+ *  for a syntax bug caught in the RPC body itself, by functional
+ *  verification, immediately after applying and before this was wired in. */
 export async function saveProviderWeeklySchedule(
   providerId: string,
   days: {
@@ -4811,20 +4808,16 @@ export async function saveProviderWeeklySchedule(
   }[],
   windows: { day_of_week: number; start_time: string; end_time: string }[],
 ): Promise<void> {
-  if (days.length > 0) {
-    const { error } = await supabase.from("provider_availability").upsert(
-      days.map((d) => ({ provider_id: providerId, ...d })),
-      { onConflict: "provider_id,day_of_week" },
-    );
-    if (error) throw error;
-  }
-  // Windows second: the day rows are what check_and_set_provider_live() reads,
-  // so if the second write fails the provider is at worst still gated the same
-  // way they were before, never published against a schedule that isn't there.
-  // replaceProviderAvailabilityWindows invalidates the picker's cached copy
-  // of these hours on both its exits, so this provider won't be shown the
-  // previous week for the rest of the TTL.
-  await replaceProviderAvailabilityWindows(providerId, windows);
+  const { error } = await supabase.rpc("replace_provider_weekly_schedule", {
+    p_provider_id: providerId,
+    p_days: days,
+    p_windows: windows,
+  });
+  if (error) throw error;
+  // Invalidates the picker's cached copy of these hours, matching what
+  // replaceProviderAvailabilityWindows already does on both its exits — this
+  // provider won't be shown the previous week for the rest of the TTL.
+  invalidateAvailabilityProviderCore(providerId);
 }
 
 export async function getProviderAvailabilityOverrides(

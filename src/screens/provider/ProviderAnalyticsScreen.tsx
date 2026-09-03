@@ -22,6 +22,8 @@ import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { formatShortDate } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
+import { useProviderDialog } from '../../components/ProviderDialog';
 
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
@@ -1231,6 +1233,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   const { theme, isDarkMode: dark } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const accent = accentColor(dark);
+  const { showToast, DialogHost } = useProviderDialog();
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   const [reviews, setReviews]           = useState<ReviewWithUser[]>([]);
   const [followerCount, setFollowerCount] = useState(0);
@@ -1243,8 +1246,11 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
       // window. Fetch lifetime history only when the provider explicitly
       // selects All; long-tenured accounts should not pay that cost on entry.
       setBookings(await getProviderBookings(range === 'all' ? Infinity : 210));
-    } catch {}
-  }, [range]);
+    } catch (error) {
+      logger.error('[ProviderAnalytics] failed to load bookings:', error);
+      showToast('Could not load your booking data. Please try again.', 'error');
+    }
+  }, [range, showToast]);
 
   const fetchSupportingMetrics = useCallback(async () => {
     try {
@@ -1254,8 +1260,11 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
       ]);
       setReviews(r);
       setFollowerCount(fc);
-    } catch {}
-  }, []);
+    } catch (error) {
+      logger.error('[ProviderAnalytics] failed to load reviews/followers:', error);
+      showToast('Could not load your reviews and followers. Please try again.', 'error');
+    }
+  }, [showToast]);
 
   useFocusEffect(useCallback(() => {
     void fetchBookingsForRange();
@@ -1316,6 +1325,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   const momSign  = kpi.momDelta >= 0 ? '+' : '';
 
   return (
+    <>
     <ThemedBackground style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
@@ -1466,6 +1476,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
         </ScrollView>
       </SafeAreaView>
     </ThemedBackground>
+    <DialogHost />
+    </>
   );
 }
 
