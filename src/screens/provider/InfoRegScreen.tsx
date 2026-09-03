@@ -856,7 +856,7 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
       </View>
       {showOtherInput && (
         <View style={[styles.addAddOnRow, { marginTop: 8 }]}>
-          <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1 }]}>
+          <View style={[styles.inputBlur, { flex: 1 }]}>
             <TextInput
               style={styles.textInput}
               value={otherValue}
@@ -867,7 +867,7 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               returnKeyType="done"
               autoFocus
             />
-          </BlurView>
+          </View>
           <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); submitOther(); }}>
             <Text style={styles.addAddOnButtonText}>+</Text>
           </TouchableOpacity>
@@ -964,7 +964,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.templateSheet}>
+        <View style={styles.templateSheet}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
@@ -1055,7 +1055,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
               </View>
             )}
           </SafeAreaView>
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -1870,7 +1870,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.templateSheet}>
+        <View style={styles.templateSheet}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
@@ -1890,7 +1890,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
               <Text style={styles.templateGroupLabel}>Category Name</Text>
               <Text style={styles.inputHint}>Type your own, or tap a suggestion below.</Text>
               <View style={styles.addAddOnRow}>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1 }]}>
+                <View style={[styles.inputBlur, { flex: 1 }]}>
                   <TextInput
                     style={styles.textInput}
                     value={categoryName}
@@ -1900,7 +1900,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                     onSubmitEditing={() => addCategory(categoryName, categoryDescription)}
                     returnKeyType="done"
                   />
-                </BlurView>
+                </View>
                 <TouchableOpacity style={[styles.addAddOnButton, { backgroundColor: accentColor }]} onPress={() => { tapMedium(); addCategory(categoryName, categoryDescription); }}>
                   <Text style={styles.addAddOnButtonText}>+</Text>
                 </TouchableOpacity>
@@ -1908,7 +1908,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
 
               <Text style={[styles.templateGroupLabel, { marginTop: 18 }]}>Description</Text>
               <Text style={styles.inputHint}>Shown to clients under this category — what it includes and why they should book.</Text>
-              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.inputBlurMultiline, { marginTop: 8 }]}>
+              <View style={[styles.inputBlur, styles.inputBlurMultiline, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={categoryDescription}
@@ -1919,7 +1919,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
-              </BlurView>
+              </View>
 
               {showSubcategories ? (
                 <View style={styles.categoryTypeGrid}>
@@ -1961,7 +1961,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
               )}
             </ScrollView>
           </SafeAreaView>
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -2014,7 +2014,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={40} tint={chrome.blurTint} style={styles.transferModal}>
+        <View style={styles.transferModal}>
           <LinearGradient
             colors={[chrome.surf(0.9), chrome.surf(0.7)]}
             style={styles.transferGradient}
@@ -2024,7 +2024,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
             Paste your Acuity Scheduling link and we'll automatically import your services, prices, and business info.
           </Text>
 
-          <BlurView intensity={15} tint={chrome.blurTint} style={styles.inputBlur}>
+          <View style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
               value={acuityUrl}
@@ -2036,7 +2036,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
               keyboardType="url"
               editable={!isLoading}
             />
-          </BlurView>
+          </View>
 
           {errorMsg ? (
             <Text style={styles.transferError}>{errorMsg}</Text>
@@ -2063,7 +2063,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
               <Text style={styles.skipButtonText}>Start Fresh Instead</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -2106,10 +2106,10 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.smallModal}>
+        <View style={styles.smallModal}>
           <Text style={styles.smallModalTitle}>Edit Category</Text>
           <Text style={styles.inputLabel}>Name</Text>
-          <BlurView intensity={15} tint={chrome.blurTint} style={styles.inputBlur}>
+          <View style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
               value={newName}
@@ -2118,9 +2118,9 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               placeholderTextColor={chrome.fg(0.4)}
               autoFocus
             />
-          </BlurView>
+          </View>
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Description (shown to clients)</Text>
-          <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.inputBlurMultiline]}>
+          <View style={[styles.inputBlur, styles.inputBlurMultiline]}>
             <TextInput
               style={[styles.textInput, styles.textInputMultiline]}
               value={description}
@@ -2131,7 +2131,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               numberOfLines={3}
               textAlignVertical="top"
             />
-          </BlurView>
+          </View>
           <View style={styles.smallModalButtons}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => { tapLight(); onClose(); }}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -2140,7 +2140,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </KeyboardDismissView>
     </Modal>
   );
@@ -2571,6 +2571,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     <Text style={[styles.previewContactAction, { color: PP.text }]}>Visit ›</Text>
                   </View>
                 ) : null}
+                {providerData.tiktok ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>TikTok</Text>
+                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.tiktok} ›</Text>
+                  </View>
+                ) : null}
                 {providerData.externalBookingUrl ? (
                   <View style={styles.previewContactRow}>
                     <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Booking Link</Text>
@@ -2815,6 +2821,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     email: '',
     instagram: '',
     website: '',
+    tiktok: '',
     whatsapp: '',
     preferredContactMethods: ['in_app'],
     externalBookingUrl: '',
@@ -2947,6 +2954,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   email: prev.email || prefill.business_email || '',
                   instagram: prev.instagram || prefill.instagram || '',
                   website: prev.website || prefill.website || '',
+                  tiktok: prev.tiktok || prefill.tiktok || '',
                   businessType: prev.businessType || prefilledBusinessType || '',
                   teamSize: prev.teamSize || prefilledTeamSize || '',
                   location: prev.location || prefill.location_text || '',
@@ -3603,6 +3611,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             { label: 'Email', value: filled(providerData.email) },
             { label: 'Instagram', value: filled(providerData.instagram) },
             { label: 'Website', value: filled(providerData.website) },
+            { label: 'TikTok', value: filled(providerData.tiktok) },
           ],
         },
         {
@@ -4322,7 +4331,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </Text>
                   </>
                 ) : (
-                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                  <View style={[styles.inputBlur, styles.profileInputBox]}>
                     <TextInput
                       style={styles.textInput}
                       value={providerData.providerName}
@@ -4333,7 +4342,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       placeholderTextColor={chrome.fg(0.4)}
                       onFocus={() => handleInputFocus('businessName', 'identity')}
                     />
-                  </BlurView>
+                  </View>
                 )}
               </View>
 
@@ -4392,7 +4401,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     style={styles.customServiceInput}
                     ref={registerField('customService')}
                   >
-                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                    <View style={[styles.inputBlur, styles.profileInputBox]}>
                       <TextInput
                         style={styles.textInput}
                         value={providerData.customServiceType}
@@ -4404,7 +4413,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         autoFocus
                         onFocus={() => handleInputFocus('customService', 'identity')}
                       />
-                    </BlurView>
+                    </View>
                   </View>
                 )}
               </View>
@@ -4480,7 +4489,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('about')}
               >
                 <Text style={styles.inputLabel}>Description</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox]}>
+                <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
                   <TextInput
                     style={[styles.textInput, styles.textInputMultiline]}
                     value={providerData.aboutText}
@@ -4494,7 +4503,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     textAlignVertical="top"
                     onFocus={() => handleInputFocus('about', 'about')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4635,7 +4644,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('phone')}
               >
                 <Text style={styles.inputLabel}>Phone Number</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.phone}
@@ -4645,7 +4654,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     keyboardType="phone-pad"
                     onFocus={() => handleInputFocus('phone', 'contact')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               {/* Same providers.whatsapp_number the Communications screen edits —
@@ -4659,7 +4668,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('whatsapp')}
               >
                 <Text style={styles.inputLabel}>WhatsApp Number</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.whatsapp}
@@ -4669,7 +4678,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     keyboardType="phone-pad"
                     onFocus={() => handleInputFocus('whatsapp', 'contact')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4677,7 +4686,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('contactEmail')}
               >
                 <Text style={styles.inputLabel}>Public Enquiry Email</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.email}
@@ -4689,7 +4698,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('contactEmail', 'contact')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4697,7 +4706,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('instagram')}
               >
                 <Text style={styles.inputLabel}>Instagram Handle</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.instagram}
@@ -4710,7 +4719,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('instagram', 'contact')}
                   />
-                </BlurView>
+                </View>
+              </View>
+
+              <View
+                style={styles.inputGroup}
+                ref={registerField('tiktok')}
+              >
+                <Text style={styles.inputLabel}>TikTok Handle</Text>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.tiktok}
+                    onChangeText={(text) =>
+                      setProviderData({ ...providerData, tiktok: text.replace(/^@/, '') })
+                    }
+                    placeholder="yourbusiness"
+                    placeholderTextColor={chrome.fg(0.4)}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onFocus={() => handleInputFocus('tiktok', 'contact')}
+                  />
+                </View>
               </View>
 
               <View
@@ -4718,7 +4748,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('website')}
               >
                 <Text style={styles.inputLabel}>Website</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.website}
@@ -4730,7 +4760,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('website', 'contact')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4738,7 +4768,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('externalBookingUrl')}
               >
                 <Text style={styles.inputLabel}>External Booking Link (optional)</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.externalBookingUrl}
@@ -4750,7 +4780,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('externalBookingUrl', 'contact')}
                   />
-                </BlurView>
+                </View>
                 <Text style={styles.inputHint}>
                   Already booking through Fresha, Treatwell, Acuity, or similar? Paste the link and clients will book directly there — Cerviced's in-app booking is skipped for your profile.
                 </Text>
@@ -4834,13 +4864,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
 
                 {categoryNames.length === 0 ? (
-                  <BlurView intensity={50} tint={chrome.blurTint} style={styles.emptyServicesCard}>
+                  <View style={styles.emptyServicesCard}>
                     <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
                     <Text style={styles.emptyServicesText}>
                       Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
                       (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
                     </Text>
-                  </BlurView>
+                  </View>
                 ) : (
                   <>
                     <Text style={styles.categoryHint}>
@@ -4984,21 +5014,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 );
                               }}
                             >
-                              <BlurView
-                                intensity={isDragging ? 40 : isSel ? 16 : 10}
-                                tint={chrome.blurTint}
+                              <View
                                 style={[
                                   styles.categoryTabBlur,
                                   isSel && styles.selectedCategoryTabBlur,
-                                  // The blur/tint look here depends on what's actually
-                                  // rendered behind the pill. Inline, that's the busy
-                                  // strip of neighboring pills; but once dragging pulls
-                                  // it out to float above wherever it started, its
-                                  // neighbors have already slid away underneath it, so
-                                  // the same translucent background reads as washed-out
-                                  // instead of frosted glass. Bumping its own opacity
-                                  // while dragging keeps it looking like a normal, solid
-                                  // pill regardless of what's now behind it.
                                   isDragging && styles.draggingCategoryTabBlur,
                                 ]}
                               >
@@ -5021,7 +5040,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 16, bottom: 16, left: 12, right: 14 }}>
                                   <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
                                 </View>
-                              </BlurView>
+                              </View>
                             </TouchableOpacity>
                             </Animated.View>
                           </ReAnimated.View>
@@ -5059,7 +5078,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               : {})}
                             style={[styles.serviceItemCard, serviceDrag.getItemStyle(serviceKey)]}
                           >
-                            <BlurView intensity={50} tint={chrome.blurTint} style={styles.serviceCardBlur}>
+                            <View style={styles.serviceCardBlur}>
                               <LinearGradient
                                 colors={[chrome.surf(0.3), 'transparent']}
                                 start={{ x: 0, y: 0 }}
@@ -5150,7 +5169,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   )}
                                 </View>
                               </View>
-                            </BlurView>
+                            </View>
                           </Animated.View>
                           );
                         })}
@@ -5164,11 +5183,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           }}
                           activeOpacity={0.85}
                         >
-                          <BlurView intensity={30} tint={chrome.blurTint} style={styles.addServiceBlur}>
+                          <View style={styles.addServiceBlur}>
                             <Text style={[styles.addServiceText, { color: adaptiveAccentColor }]}>
                               + Add Service to {selectedCategory}
                             </Text>
-                          </BlurView>
+                          </View>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -5440,7 +5459,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.addressHint}>
                 Shown to clients on every booking (optional) — parking, buzzer codes, what to bring, how to find you.
               </Text>
-              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+              <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={policies.bookingInstructions}
@@ -5451,7 +5470,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
-              </BlurView>
+              </View>
 
               {/* The provider's OWN client-facing Terms & Conditions — the
                   prose a client must agree to before adding this provider to
@@ -5471,7 +5490,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.addressHint}>
                 Clients read and agree to these before they can add you to their basket (optional).
               </Text>
-              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+              <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={ownTerms}
@@ -5482,7 +5501,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   numberOfLines={8}
                   textAlignVertical="top"
                 />
-              </BlurView>
+              </View>
 
               {/* PREFERRED PAYMENT TYPE, WHO YOU WORK WITH and LANGUAGES SPOKEN
                   moved out of registration to Business Details — payment/
@@ -5665,33 +5684,35 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 // where they already are: they colour the provider's own BRANDED surfaces
 // (brand identity card, setup guide, preview). This sheet covers the editor
 // chrome around them, which follows the app's light/dark mode instead.
-// Foreground ramp — replaces the old rgba(0,0,0,α) text tiers. In light mode
-// these resolve to exactly the same near-black tones as before; in dark mode
-// they become the palette's light text at the equivalent emphasis.
+// Foreground ramp — used to read as a continuous rgba(0,0,0,α) text-emphasis
+// scale (dozens of distinct alpha steps for primary/secondary/hint text). In
+// light mode it now resolves to DESIGN_SYSTEM.md's flat two-tier L palette
+// instead: α≥0.6 (the calls that read as primary/emphasized text) collapses
+// to `text` (#000000), everything lower (secondary/hint/icon-tint calls)
+// collapses to `sub` (#7E6667). This is a real simplification of the old
+// scale, not a 1:1 recolor — the app's real screens only ever use these two
+// flat text tones, never a continuous ramp. Dark mode is untouched (dead
+// code in this file — InfoReg never renders dark, see useScreenStyles below).
 const fgFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#F0ECE7', alpha) : `rgba(0,0,0,${alpha})`;
-// Surface ramp — replaces the old rgba(255,255,255,α) frosted fills, which read
-// as bright glass over a light background but as glare over a dark one.
-//
-// The light-mode base is a warm off-white (#FDFBF8), not pure #FFFFFF: against
-// the app's warm cream backdrop a pure-white card reads as a cold rectangle
-// pasted on top rather than a surface belonging to the same palette. Dark mode
-// is unchanged — its ramp is a white overlay at low alpha, which is already a
-// tint of the backdrop rather than an opaque fill.
-// The dark multiplier was 0.34, which kept fills honest but left inputs and
-// pills reading flat — barely separated from the backdrop. 0.52 lifts them to
-// a legible surface while staying a *tint* of the backdrop rather than an
-// opaque panel, so they still belong to the palette instead of sitting on it.
-// Light mode keeps the warm off-white base for the same reason: brighter, but
-// never pure white.
+  isDark ? withAlpha('#F0ECE7', alpha) : (alpha >= 0.6 ? '#000000' : '#7E6667');
+// Surface ramp — used to read as a continuous rgba(253,251,248,α) frosted-fill
+// scale. In light mode it now resolves to DESIGN_SYSTEM.md's flat opaque
+// fills: α≥0.7 (near-solid calls, meant to read as a raised card/input) maps
+// to `card` (#FFFFFF); everything lower (subtle/recessed fills) maps to
+// `surface` (#EDE8E2) — the two alpha bands the original scale actually
+// clustered into, with a clean gap between them. Dark mode is untouched
+// (dead code in this file).
 const surfFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#FFFFFF', alpha * 0.52) : withAlpha('#FDFBF8', alpha);
+  isDark ? withAlpha('#FFFFFF', alpha * 0.52) : (alpha >= 0.7 ? '#FFFFFF' : '#EDE8E2');
 
-/** Hairline edge for input/pill surfaces. A raised fill alone still reads soft;
- *  a defined border is what makes it look crisp rather than just lighter. Warm
- *  in light mode to match the cream backdrop, a white tint in dark mode. */
-const edgeFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#FFFFFF', alpha) : withAlpha('#8A7361', alpha);
+/** Hairline edge for input/pill surfaces. Used to be a continuous
+ *  rgba(138,115,97,α) ramp (always called in the 0.13–0.16 band in this
+ *  file); now resolves in light mode to DESIGN_SYSTEM.md's flat `border`
+ *  token (rgba(126,102,103,0.14)) — the alpha argument no longer varies the
+ *  result, since the palette only defines the one border tone. Dark mode is
+ *  untouched (dead code in this file). */
+const edgeFor = (isDark: boolean) => (_alpha: number) =>
+  isDark ? withAlpha('#FFFFFF', _alpha) : 'rgba(126,102,103,0.14)';
 
 /** The rose tint-shadow used across the provider surfaces (confirmed in
  *  ProviderMyProfileScreen). A flat black shadow greys the warm palette;
@@ -5723,7 +5744,10 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   // accent (the chrome accent) rather than the provider's — the provider's
   // accent stays for the things that are genuinely theirs (primary actions,
   // section chips), and the surrounding furniture stays neutral-warm.
-  const accentBorder = withAlpha(P.accent, isDark ? 0.22 : 0.16);
+  // Used to be a variable-alpha accent tint; light mode now resolves to
+  // DESIGN_SYSTEM.md's flat `border` token, since the palette doesn't define
+  // a separate accent-tinted border tone.
+  const accentBorder = isDark ? withAlpha(P.accent, 0.22) : 'rgba(126,102,103,0.14)';
   return StyleSheet.create({
   loading: {
     flex: 1,
@@ -6509,10 +6533,15 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   // provider's own state, so it takes the provider accent rather than another
   // near-identical surface tint (which read as barely-selected before).
   selectedCategoryTab: {
-    borderColor: withAlpha(P.accent, isDark ? 0.45 : 0.35),
+    // Flat accent border in light mode (was a variable-alpha tint) — the
+    // palette doesn't define a separate lighter accent-border tone, and a
+    // solid accent border reads fine as a selection indicator on its own.
+    borderColor: isDark ? withAlpha(P.accent, 0.45) : P.accent,
   },
   selectedCategoryTabBlur: {
-    backgroundColor: withAlpha(P.accent, isDark ? 0.20 : 0.12),
+    // DESIGN_SYSTEM.md's `iconBg` token (rgba(92,64,51,0.12)) IS this exact
+    // accent-at-12%-opacity wash, so light mode maps onto it directly.
+    backgroundColor: isDark ? withAlpha(P.accent, 0.20) : 'rgba(92,64,51,0.12)',
   },
   selectedCategoryTabText: {
     color: P.text,
@@ -8287,7 +8316,6 @@ const lightChrome = {
   surf: surfFor(false),
   text: lightTheme.text,
   onAccent: lightTheme.onAccent,
-  blurTint: 'light' as const,
 };
 
 /** Colours for inline props that a StyleSheet can't carry — always the light
