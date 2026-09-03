@@ -63,6 +63,7 @@ import {
   getMyTopServices,
   getMyServiceCatalogue,
   getProviderPortfolio,
+  getMyProviderTermsText,
   getProviderReviews,
   setMyServiceActive,
   updateMyService,
@@ -121,10 +122,20 @@ const RING_CIRC = 2 * Math.PI * RING_RADIUS;
  *  with this screen underneath rather than bouncing to another tab's root and
  *  leaving its back button with nothing to return to. */
 const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackParamList> = {
+  profile: 'EditProfile',
   schedule: 'ProviderSchedule',
   services: 'EditProfile',
   address: 'EditProfile',
-  logo: 'Branding',
+  policies: 'Policies',
+  payment: 'Payments',
+  logo: 'EditProfile',
+  // Terms live inside EditProfile (InfoReg)'s own "Your Terms &
+  // Conditions" card. Portfolio is handled as a special case in
+  // handleGoLiveStep below (it's edited inline on this screen, not a
+  // separate destination) — this entry only exists to satisfy the
+  // Record's exhaustiveness and is never actually navigated to.
+  terms: 'EditProfile',
+  portfolio: 'ProviderServicesMain',
 };
 
 /** Attention colours. Only the two "something's outstanding" tones are fixed:
@@ -353,6 +364,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // "Address photos" grid, not here. getProviderPortfolio now excludes them in
   // SQL unless asked for, so this screen never fetches what it can't show.
   const [workPhotos, setWorkPhotos] = useState<DbPortfolioItem[]>([]);
+  // Profile-Health-only, not part of the shared go-live fetch (Home never
+  // renders these, and workPhotos is already fetched here for the grid
+  // below — reusing it avoids a duplicate portfolio_items query).
+  const [termsSet, setTermsSet] = useState(false);
   const [reviews, setReviews] = useState<
     { id: string; name: string; rating: number; comment: string; date: string }[]
   >([]);
@@ -429,6 +444,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               getProviderPortfolio(profile.id)
                 .then(({ work }) => setWorkPhotos(work))
                 .catch(() => {});
+
+              getMyProviderTermsText()
+                .then(text => setTermsSet(text.trim().length > 0))
+                .catch(err => {
+                  logger.error('[MyServices] terms status load failed:', err);
+                });
 
               getMyBookmarkCount()
                 .then(setBookmarkCount)
@@ -535,12 +556,23 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     );
   }, [providerData]);
 
-  /** What the ring reads. All four steps count, the optional logo included:
-   *  it isn't a blocker, but a live provider without one genuinely hasn't
-   *  finished. Whether clients can actually book is the headline's job, taken
-   *  straight from has_gone_live — never re-derived from this number. */
+  /** goLive plus the two Profile-Health-only fields it never fetches itself
+   *  (see GoLiveStatus's portfolioSet/termsSet doc comment) — merged here
+   *  rather than inside fetchGoLiveStatus so that fetch stays free of a
+   *  portfolio_items query ProviderHomeScreen would never use, reusing the
+   *  workPhotos this screen already loads for its own grid instead. */
+  const goLiveWithHealth = useMemo<GoLiveStatus | null>(
+    () => goLive ? { ...goLive, portfolioSet: workPhotos.length > 0, termsSet } : null,
+    [goLive, workPhotos, termsSet],
+  );
+
+  /** What the ring reads — every step counts, portfolio/T&Cs and the
+   *  optional logo included: none of them block go-live, but a live
+   *  provider missing one genuinely hasn't finished setting up. Whether
+   *  clients can actually book is the headline's job, taken straight from
+   *  has_gone_live — never re-derived from this number. */
   const setup = useMemo(() => {
-    const steps = goLive ? buildGoLiveSteps(goLive) : [];
+    const steps = goLiveWithHealth ? buildGoLiveSteps(goLiveWithHealth) : [];
     const total = steps.length;
     const done = steps.filter(step => step.done).length;
     const ratio = total === 0 ? 0 : done / total;
@@ -554,7 +586,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           ? 'Setup'
           : 'Almost';
     return { done, total, ratio, percent: Math.round(ratio * 100), word };
-  }, [goLive]);
+  }, [goLive, goLiveWithHealth]);
 
   const showSteps = stepsOpen ?? !(goLive?.isLive ?? false);
   const topService = topServices?.[0] ?? null;
@@ -635,14 +667,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       },
     ],
     [handleSelectTab, navigation],
-  );
-
-  const handleGoLiveStep = useCallback(
-    (key: GoLiveStepKey) => {
-      Haptics.selectionAsync().catch(() => {});
-      navigation.navigate(GO_LIVE_STEP_SCREENS[key]);
-    },
-    [navigation],
   );
 
   // ── Service editing ─────────────────────────────────────────────────────
@@ -755,6 +779,18 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     );
     setPhotoUploading(false);
   }, [user?.id, providerId]);
+
+  // Portfolio is a special case: it's edited inline on this screen (the
+  // grid below), not a separate destination, so tapping that step opens the
+  // picker directly instead of navigating anywhere.
+  const handleGoLiveStep = useCallback(
+    (key: GoLiveStepKey) => {
+      Haptics.selectionAsync().catch(() => {});
+      if (key === 'portfolio') { void handleAddPhotos(); return; }
+      navigation.navigate(GO_LIVE_STEP_SCREENS[key]);
+    },
+    [navigation, handleAddPhotos],
+  );
 
   const handleRemovePhoto = useCallback((item: DbPortfolioItem) => {
     Alert.alert('Remove photo?', 'Clients will no longer see it on your profile.', [
@@ -890,9 +926,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     );
   }
 
-  const headline = goLive ? buildGoLiveHeadline(goLive) : null;
+  const headline = goLiveWithHealth ? buildGoLiveHeadline(goLiveWithHealth) : null;
+  // 'liveWithExtras' reads the same as 'live' here — it's encouragement, not
+  // a warning, since the provider is already bookable either way.
   const toneColor =
-    headline && headline.tone !== 'live' ? TONE_COLOR[headline.tone] : accentColor;
+    headline && (headline.tone === 'blocked' || headline.tone === 'stalled')
+      ? TONE_COLOR[headline.tone]
+      : accentColor;
 
   /* The go-live card. It leads the dashboard while anything is still
      outstanding and drops to the bottom once the profile is finished —
@@ -904,7 +944,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           "am I bookable", the ring answers "how far off", and the
           steps stay one tap away rather than always occupying the
           top of the screen for a provider who's already live. */}
-      {headline && goLive ? (
+      {headline && goLiveWithHealth ? (
         <View style={styles.dashCardShadow}>
           <BlurView
             intensity={cardBlurIntensity}
@@ -959,7 +999,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 <Text style={[styles.statusTitle, { color: PP.text }]}>{headline.title}</Text>
                 <Text style={[styles.statusDetail, { color: PP.sub }]} numberOfLines={4}>
                   {headline.detail ??
-                    (goLive.isLive
+                    (goLiveWithHealth.isLive
                       ? 'Clients can find you in search and book your services.'
                       : 'Finish the steps below and your profile publishes itself.')}
                 </Text>
@@ -998,7 +1038,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     ]}
                   />
                 </View>
-                {buildGoLiveSteps(goLive).map(step => (
+                {buildGoLiveSteps(goLiveWithHealth).map(step => (
                   <TouchableOpacity
                     key={step.key}
                     onPress={() => handleGoLiveStep(step.key)}
@@ -1022,6 +1062,19 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     >
                       {step.label}
                     </Text>
+                    {/* Only the six blocking steps count toward the
+                        headline's "N steps left" — this tag is what makes
+                        that number traceable back to the list instead of
+                        looking arbitrary next to profile/portfolio/terms,
+                        which are real setup but never gate go-live. Drops
+                        once done — a completed step isn't an outstanding
+                        go-live requirement any more, and the strikethrough
+                        already marks it finished. */}
+                    {step.blocking && !step.done && (
+                      <View style={[styles.requiredTag, { borderColor: withAlpha(toneColor, 0.4) }]}>
+                        <Text style={[styles.requiredTagText, { color: toneColor }]}>REQUIRED</Text>
+                      </View>
+                    )}
                     {step.done ? null : (
                       <Ionicons name="chevron-forward" size={14} color={PP.sub} />
                     )}
@@ -2121,6 +2174,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 13,
+  },
+  requiredTag: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  requiredTagText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 9,
+    letterSpacing: 0.6,
   },
   statusBody: {
     flexDirection: 'row',

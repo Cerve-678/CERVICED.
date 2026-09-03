@@ -931,6 +931,7 @@ export async function getProviderBySlug(
         email,
         instagram,
         website,
+        tiktok,
         preferred_contact_methods,
         whatsapp_number,
         external_booking_url,
@@ -7155,6 +7156,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   business_type: string | null;
   instagram: string | null;
   website: string | null;
+  tiktok: string | null;
   service_interests: string[] | null;
   service_locations: string[] | null;
   location_text: string | null;
@@ -7169,7 +7171,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   const { data, error } = await supabase
     .from("users")
     .select(
-      "name, phone, business_name, business_email, business_phone, business_type, instagram, website, " +
+      "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
         "service_interests, service_locations, location_text, team_size, accessibility_notes, languages_spoken, specialties, " +
         "price_range, preferred_contact_methods, preferred_payment_methods",
     )
@@ -7188,6 +7190,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     business_type: string | null;
     instagram: string | null;
     website: string | null;
+    tiktok: string | null;
     service_interests: string[] | null;
     service_locations: string[] | null;
     location_text: string | null;

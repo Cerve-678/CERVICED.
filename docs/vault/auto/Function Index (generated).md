@@ -5,7 +5,7 @@
 
 #generated
 
-**2078 functions** across **269 files**.
+**2076 functions** across **269 files**.
 
 ### `src/components/` (39)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -184,7 +184,7 @@
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
-- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · applyDragPosition · armDrag · categoryNames · clearDragHoldTimer · dotWindow · edgeFor · EditCategoryModal · editTheme · fgFor · filled · getCategoryDragResponder · goToSection · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleCropperDone · handleDeleteCategory · handleDeleteService · handleInputFocus · handlePagerScrollEnd · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderCategory · handleReorderImages · handleSave · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleToggleImageFit · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · itself · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · of · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · sectionSummaries · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · startCategoryAutoScroll · stopCategoryAutoScroll · submitOther · surfFor · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · tick · toggleTag · TransferDataModal · useChrome · useScreenStyles
+- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · applyDragPosition · categoryNames · chrome · chromeTheme · dotWindow · edgeForTheme · EditCategoryModal · editTheme · fgForTheme · filled · getCategoryDragResponder · goToSection · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleCropperDone · handleDeleteCategory · handleDeleteService · handleInputFocus · handlePagerScrollEnd · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderImages · handleSave · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleToggleImageFit · handleTransferData · handleTransferPress · handleWaypointButtonLayout · InfoRegScreen · isDuplicate · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · resolveChromeTheme · retryLoadProvider · sectionSummaries · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · styles · submitOther · surfForTheme · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · toggleTag · TransferDataModal · useChrome · useScreenStyles
 - `PaymentsScreen.tsx` — flash · handleSave · PaymentsScreen
 - `PoliciesScreen.tsx` — flash · handlePickPolicyImage · handleRemovePolicyImage · handleSave · Pills · PoliciesScreen · setPolicy
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen

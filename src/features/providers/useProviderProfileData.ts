@@ -178,9 +178,12 @@ export function useProviderProfileData(
             logger.warn("Failed to load provider promotions:", error);
           });
 
-        void getProviderPortfolio(data.id)
-          .then((rows) => {
-            if (!cancelled) setPortfolio(rows);
+        // includeVenue: the profile renders venue shots under Additional
+        // Information, so this is one of the two callers that genuinely needs
+        // both halves.
+        void getProviderPortfolio(data.id, { includeVenue: true })
+          .then(({ work, venue }) => {
+            if (!cancelled) setPortfolio([...work, ...venue]);
           })
           .catch((error: unknown) => {
             logger.warn("Failed to load provider portfolio:", error);

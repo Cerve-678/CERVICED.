@@ -373,7 +373,7 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
   address: 'EditProfile',
   policies: 'Policies',
   payment: 'Payments',
-  logo: 'Branding',
+  logo: 'EditProfile',
   // Never rendered here — Home's checklist filters on `blocking`, and
   // portfolio/terms are never present on the status this screen builds
   // (see GoLiveStatus's portfolioSet/termsSet doc comment) — kept only to

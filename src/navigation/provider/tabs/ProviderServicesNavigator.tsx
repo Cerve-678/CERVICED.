@@ -9,6 +9,7 @@ import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackSc
 import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
 import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
+import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
@@ -94,6 +95,12 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="Policies"
         component={PoliciesScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderServicesStack.Screen
+        name="Payments"
+        component={PaymentsScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

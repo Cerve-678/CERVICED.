@@ -270,6 +270,28 @@ export default function ProviderScheduleScreen() {
 
   async function handleSaveHours() {
     if (!providerId) return;
+    // Closing every day un-publishes the provider server-side
+    // (check_and_set_provider_live re-derives has_gone_live both ways as of
+    // 2026-09-03 — no open day means not bookable, whatever the other two
+    // gates say) — warn before committing rather than letting it happen
+    // silently, since the go-live checklist card is the only place that
+    // would otherwise surface it, and only on the next Home visit.
+    if (!days.some(d => d.isOpen)) {
+      showConfirm(
+        'This will pause your account',
+        "With no open days, clients won't be able to find or book you — your profile goes offline until you reopen at least one day.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save anyway', style: 'destructive', onPress: () => { void commitSaveHours(); } },
+        ],
+      );
+      return;
+    }
+    await commitSaveHours();
+  }
+
+  async function commitSaveHours() {
+    if (!providerId) return;
     // Write EVERY day, not just the ones the provider touched. The rows the
     // provider never toggled still render as open Mon-Fri 9-6 (makeDefault())
     // — that's what they see and believe they're saving — but a day with no

@@ -19,6 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProviderDialog } from '../../components/ProviderDialog';
+import { toUserMessage } from '../../utils/userFacingError';
 import {
   getProviderBookings,
   getProviderConversations,
@@ -477,6 +478,11 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const [refreshing,    setRefreshing]    = useState(false);
   const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter ?? 'all');
 
+  // Both fetches used to log and swallow, so a failed load rendered as the
+  // "All clear" empty state — the single most misleading thing an inbox can
+  // say to a provider who actually has pending bookings waiting on them.
+  const [loadError,     setLoadError]     = useState<string | null>(null);
+
   const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
   const [replyText,    setReplyText]    = useState('');
   const [replySending, setReplySending] = useState(false);
@@ -489,34 +495,55 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   }, [route?.params?.initialFilter]);
 
   const fetchBookings = useCallback(async () => {
-    try { setBookings(await getProviderBookings()); } catch (err) {
-      logger.error('[ProviderInbox] load bookings failed:', err);
-    }
+    setBookings(await getProviderBookings());
   }, []);
 
   const fetchConversations = useCallback(async () => {
-    try { setConversations(await getProviderConversations()); } catch (err) {
-      logger.error('[ProviderInbox] load conversations failed:', err);
-    }
+    setConversations(await getProviderConversations());
   }, []);
+
+  // One banner for the pair: either half failing means what's on screen is
+  // incomplete, and the provider needs to know that before trusting it.
+  const loadInbox = useCallback(async () => {
+    const [bookingsResult, conversationsResult] = await Promise.allSettled([
+      fetchBookings(),
+      fetchConversations(),
+    ]);
+    const failure =
+      bookingsResult.status === 'rejected' ? bookingsResult.reason
+      : conversationsResult.status === 'rejected' ? conversationsResult.reason
+      : null;
+    setLoadError(
+      failure
+        ? toUserMessage(
+            failure,
+            "We couldn't refresh your inbox just now.",
+            '[ProviderInbox] load failed',
+          )
+        : null,
+    );
+  }, [fetchBookings, fetchConversations]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
-    void Promise.all([fetchBookings(), fetchConversations()]).finally(() => {
+    void loadInbox().finally(() => {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [fetchBookings, fetchConversations]));
+  }, [loadInbox]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchBookings(), fetchConversations()]);
+    await loadInbox();
     setRefreshing(false);
-  }, [fetchBookings, fetchConversations]);
+  }, [loadInbox]);
 
   const runConfirmAction = useCallback((fn: () => Promise<void>) => {
     Promise.resolve(fn())
-      .then(() => fetchBookings())
+      // loadInbox absorbs its own failures into the banner, so a refresh
+      // problem after a successful action can't be reported as the action
+      // itself having failed.
+      .then(() => loadInbox())
       .catch((err: any) => {
         logger.error('[ProviderInbox] booking action failed:', err);
         // Group RPCs (provider_update_group_booking_status /
@@ -531,7 +558,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             : 'Could not complete this action. Check your connection and try again.';
         Alert.alert('Action failed', message);
       });
-  }, [fetchBookings]);
+  }, [loadInbox]);
 
   const handleConfirmBooking = useCallback((booking: BookingWithAddOns) => {
     const isGroup = !!booking.group_booking_id;
@@ -575,12 +602,12 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
 
   const handleMarkConversationRead = useCallback((conversation: ProviderConversationWithClient) => {
     markConversationReadByProvider(conversation.id)
-      .then(() => fetchConversations())
+      .then(() => loadInbox())
       .catch((err) => {
         logger.error('[ProviderInbox] mark-read failed:', err);
         Alert.alert('Could not mark as read', 'Check your connection and try again.');
       });
-  }, [fetchConversations]);
+  }, [loadInbox]);
 
   const handleSendReply = useCallback(async () => {
     const text = replyText.trim();
@@ -595,13 +622,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       setReplyText('');
       setReplyTarget(null);
       Keyboard.dismiss();
-      fetchConversations();
+      void loadInbox();
     } catch (err) {
       logger.error('[ProviderInbox] quick reply failed:', err);
       showToast('Message not sent. Check your connection and try again.', 'error');
     }
     setReplySending(false);
-  }, [replyText, replyTarget, user?.id, replySending, fetchConversations, showToast]);
+  }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast]);
 
   const unreadConversations = useMemo(
     () => [...conversations]
@@ -800,16 +827,47 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 />
               );
             }}
-            ListEmptyComponent={
-              <View style={s.empty}>
-                <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
-                  <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'mail-open-outline'} size={36} color={P.sub} />
+            ListHeaderComponent={
+              // With rows on screen the banner sits above them; with none, the
+              // empty state below takes over, so "All clear" is never shown
+              // for an inbox we simply failed to read.
+              loadError && flatItems.length > 0 ? (
+                <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
+                  <Text style={[s.errorBannerText, { color: P.text }]}>
+                    {loadError} This list may be out of date.
+                  </Text>
+                  <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={[s.errorRetry, { color: P.accent }]}>Retry</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={[s.emptyTitle, { color: P.text }]}>All clear</Text>
-                <Text style={[s.emptySub, { color: P.sub }]}>
-                  {filter === 'messages' ? 'No conversations yet' : 'No bookings in this category'}
-                </Text>
-              </View>
+              ) : null
+            }
+            ListEmptyComponent={
+              loadError ? (
+                <View style={s.empty}>
+                  <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
+                    <Ionicons name="cloud-offline-outline" size={36} color={P.sub} />
+                  </View>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>Couldn't load your inbox</Text>
+                  <Text style={[s.emptySub, { color: P.sub }]}>{loadError}</Text>
+                  <TouchableOpacity
+                    onPress={onRefresh}
+                    style={[s.retryBtn, { borderColor: P.border }]}
+                  >
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>Try again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={s.empty}>
+                  <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
+                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'mail-open-outline'} size={36} color={P.sub} />
+                  </View>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>All clear</Text>
+                  <Text style={[s.emptySub, { color: P.sub }]}>
+                    {filter === 'messages' ? 'No conversations yet' : 'No bookings in this category'}
+                  </Text>
+                </View>
+              )
             }
           />
         )}
@@ -891,7 +949,27 @@ const s = StyleSheet.create({
   empty:      { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyIcon:  { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
-  emptySub:   { fontSize: 14 },
+  emptySub:   { fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
+
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  errorBannerText: { fontSize: 12, flex: 1, lineHeight: 17 },
+  errorRetry: { fontSize: 13, fontWeight: '700' },
+  retryBtn: {
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '700' },
 });
 
 // ─── Modal styles ───────────────────────────────────────────────────────────────

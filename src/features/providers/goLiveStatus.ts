@@ -21,9 +21,13 @@
  *    supabase/MIGRATION_OWNER.md, "go-live now requires policies + payment"
  *    / "go-live now also requires a logo"). Never add anything here that
  *    the server doesn't also gate on, or the checklist starts lying again.
- *  - RECOMMENDED (`profile` only, now) is real setup worth finishing but
- *    that the server does not require to publish — writing an About/intro
- *    text doesn't affect whether clients can find or book this provider.
+ *  - RECOMMENDED (`profile`, plus `portfolio`/`terms` for callers that
+ *    supply them) is real setup worth finishing but that the server does
+ *    not require to publish — writing an About/intro text, adding
+ *    portfolio photos, or writing Terms & Conditions doesn't affect
+ *    whether clients can find or book this provider (T&Cs blocks Add to
+ *    Cart client-side, a different gate entirely — see
+ *    provider-terms-are-a-form-not-a-column in auto-memory).
  * Copy must never claim a recommended step blocks visibility — every
  * blocking step (not just schedule/services/address any more) gets "until
  * these are completed" language now. See buildGoLiveHeadline.
@@ -64,11 +68,18 @@ export interface GoLiveStatus {
    *  whether clients can actually find this provider — never re-derive it
    *  from the steps below. */
   isLive: boolean;
+  /** Recommended, Profile-Health-only. Optional and left `undefined` by
+   *  ProviderHomeScreen's fetch (it never renders them — its checklist
+   *  filters on `blocking`, which these never are — so there's no reason to
+   *  make its per-focus fetch do the extra reads). buildGoLiveSteps only
+   *  emits a step for these when the field is actually present. */
+  portfolioSet?: boolean;
+  termsSet?: boolean;
 }
 
 export type GoLiveStepKey =
   | 'profile' | 'schedule' | 'services' | 'address'
-  | 'policies' | 'payment' | 'logo';
+  | 'policies' | 'payment' | 'logo' | 'portfolio' | 'terms';
 
 export interface GoLiveStep {
   key: GoLiveStepKey;
@@ -86,7 +97,7 @@ export interface GoLiveStep {
 }
 
 export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
-  return [
+  const steps: GoLiveStep[] = [
     {
       key: 'profile',
       // Was "Complete your profile" — genuinely misleading, since
@@ -143,6 +154,28 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       blocking: true,
     },
   ];
+  // Recommended, Profile-Health-only — see the `portfolioSet`/`termsSet`
+  // doc comment on GoLiveStatus for why these are conditional rather than
+  // always present.
+  if (status.portfolioSet !== undefined) {
+    steps.push({
+      key: 'portfolio',
+      label: 'Add portfolio photos',
+      done: status.portfolioSet,
+      required: true,
+      blocking: false,
+    });
+  }
+  if (status.termsSet !== undefined) {
+    steps.push({
+      key: 'terms',
+      label: 'Set your Terms & Conditions',
+      done: status.termsSet,
+      required: true,
+      blocking: false,
+    });
+  }
+  return steps;
 }
 
 export type GoLiveTone =

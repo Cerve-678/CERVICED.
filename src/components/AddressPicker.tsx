@@ -60,6 +60,30 @@ function formatAddress(result: Location.LocationGeocodedAddress): string {
 
 export const __formatAddressForTest = formatAddress;
 
+// Same loose shape geocodeAndValidateUkAddress checks on save (see
+// providerRegistrationService.ts) — kept in sync deliberately rather than
+// imported, since that module also pulls in expo-location's native geocoder
+// and this component only needs the regex.
+const UK_POSTCODE_PATTERN = /[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}/;
+
+/**
+ * Some Android Geocoder backends drop `postalCode` on reverse-geocode even
+ * for a match whose forward-geocode input clearly had one — the result comes
+ * back correct in every other field, just missing the postcode, so
+ * formatAddress silently produces a label without it. The provider then picks
+ * what looks like a complete address and saveProfile rejects it for "no valid
+ * UK postcode", with no way to add one back since this screen only offers
+ * picking a search result, not free-typing the final value. Recover it from
+ * the provider's own typed search text instead of losing it.
+ */
+function ensurePostcode(label: string, typedQuery: string): string {
+  if (!label || UK_POSTCODE_PATTERN.test(label)) return label;
+  const match = typedQuery.match(UK_POSTCODE_PATTERN);
+  return match ? `${label}, ${match[0].toUpperCase()}` : label;
+}
+
+export const __ensurePostcodeForTest = ensurePostcode;
+
 /**
  * Native address search backed by Expo's geocoder. It deliberately saves the
  * selected, formatted street address rather than the provider's public area.
@@ -93,7 +117,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
       );
       const formatted = reverseMatches
         .map(([address], index) => {
-          const label = address ? formatAddress(address) : '';
+          const label = address ? ensurePostcode(formatAddress(address), trimmed) : '';
           const match = matches[index];
           return label && match
             ? { address: label, coordinates: { latitude: match.latitude, longitude: match.longitude }, key: label }

@@ -35,7 +35,7 @@ describe("ProviderProfileScreen data architecture", () => {
     );
 
     expect(sections).toContain("React.memo(function ProviderPortfolioSection");
-    expect(sections).toContain("const INLINE_PORTFOLIO_LIMIT = 8");
+    expect(sections).toContain("const INLINE_PORTFOLIO_LIMIT = 20");
     expect(sections).toContain("items.slice(0, INLINE_PORTFOLIO_LIMIT)");
     expect(sections).toContain("initialNumToRender={6}");
     expect(sections).toContain("maxToRenderPerBatch={6}");

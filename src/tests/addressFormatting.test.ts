@@ -1,4 +1,4 @@
-import { __formatAddressForTest as formatAddress } from '../components/AddressPicker';
+import { __formatAddressForTest as formatAddress, __ensurePostcodeForTest as ensurePostcode } from '../components/AddressPicker';
 
 type Geo = Parameters<typeof formatAddress>[0];
 const geo = (parts: Partial<Geo>): Geo => ({
@@ -45,5 +45,25 @@ describe('formatAddress', () => {
   it('still drops empty components rather than leaving stray commas', () => {
     expect(formatAddress(geo({ name: '5 High Street', city: 'Manchester', country: 'UK' })))
       .toBe('5 High Street, Manchester, UK');
+  });
+});
+
+// Some Android Geocoder backends omit postalCode on reverse-geocode even when
+// the forward-geocoded search text plainly had one — the provider then can't
+// save at all, since AddressPicker only offers picking a search result.
+describe('ensurePostcode', () => {
+  it('recovers a postcode the reverse-geocode result dropped', () => {
+    expect(ensurePostcode('42 Oak Street, London', '42 Oak Street, London, N1 2AB'))
+      .toBe('42 Oak Street, London, N1 2AB');
+  });
+
+  it('leaves a label alone when it already has a postcode', () => {
+    expect(ensurePostcode('42 Oak Street, London, N1 2AB', '42 Oak Street, London, N1 2AB'))
+      .toBe('42 Oak Street, London, N1 2AB');
+  });
+
+  it('leaves a label alone when the typed text has no postcode to recover', () => {
+    expect(ensurePostcode('42 Oak Street, London', '42 Oak Street, London'))
+      .toBe('42 Oak Street, London');
   });
 });

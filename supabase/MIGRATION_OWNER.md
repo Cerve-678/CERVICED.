@@ -27,6 +27,16 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Applied 2026-09-03 (add providers.tiktok)
+
+`20260903135249_add_provider_tiktok.sql` — purely additive
+(`ALTER TABLE ... ADD COLUMN IF NOT EXISTS tiktok TEXT`), no function/
+policy/view touched. `users.tiktok` is collected at signup but had no
+equivalent column on `providers` and no UI anywhere to view/edit it —
+wired through InfoReg the same way `instagram`/`website` already work
+(prefill from signup, preview card, section summary, form field, save on
+both create and update paths in `providerRegistrationService.ts`).
+
 ### Applied 2026-09-03 (go-live now also requires a logo)
 
 Immediate follow-up to the policies+payment change above, same session: the

@@ -14,6 +14,8 @@ import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleSc
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
+import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
+import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
 import { ProviderHomeStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 
@@ -79,6 +81,21 @@ export default function ProviderHomeNavigator() {
       <ProviderHomeStack.Screen
         name="Branding"
         component={BrandingScreen}
+        options={{ headerShown: false }}
+      />
+
+      {/* Reached from the go-live checklist card's Policies/Payment rows —
+          registered here for the same push-not-jump reason as EditProfile/
+          Branding above. */}
+      <ProviderHomeStack.Screen
+        name="Policies"
+        component={PoliciesScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="Payments"
+        component={PaymentsScreen}
         options={{ headerShown: false }}
       />
 

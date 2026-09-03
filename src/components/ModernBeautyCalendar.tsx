@@ -1,8 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutAnimation, Modal, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { AvailabilityService } from '../services/AvailabilityService';
-import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
+import { AvailabilityService, takesEmergencyRequests } from '../services/AvailabilityService';
+import type {
+  EmergencyReason,
+  EmergencyRequestPolicy,
+  TimeSlot as AvailabilitySlot,
+} from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
 import { formatLongDateNoYear } from '../utils/dateUtils';
 import { RequestTimePanel } from './RequestTimePanel';
@@ -163,6 +167,30 @@ export const dayDataFrom = (times: TimeSlot[], isFullyBooked = false): DayData =
           : times.length > 0 ? 'over' : 'closed',
     times,
   };
+};
+
+/**
+ * Is this day genuinely booked out — i.e. may the picker say "Fully booked"?
+ *
+ * Measured over ORDINARY slots only. By-request times must not answer it in
+ * either direction: they'd mask a genuinely booked-out day at an opted-in
+ * provider (there is always a free 4am), and — the bug this guards — their
+ * absence must not make a day the provider simply DOESN'T WORK look booked.
+ * An out-of-hours opt-in fills such a day end to end with by-request slots, so
+ * one accepted out-of-hours booking on it used to be the only thing left after
+ * filtering, and the day was announced as "Fully booked" with the time crossed
+ * out. Nobody had taken that day; the provider never opened it.
+ *
+ * A 'tight' time DOES count towards fullness even though nobody took it: it's
+ * unreachable because of the bookings around it, so a day of taken times and
+ * the gaps they leave really is booked out for this service. At least one slot
+ * has to be genuinely taken, or the claim has no other client behind it at all.
+ */
+export const isDayFullyBooked = (grid: readonly AvailabilitySlot[]): boolean => {
+  const ordinary = grid.filter(slot => !slot.isByRequest);
+  return ordinary.length > 0
+    && ordinary.every(slot => slot.isBooked || slot.unbookable === 'tight')
+    && ordinary.some(slot => slot.isBooked);
 };
 
 export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
@@ -377,20 +405,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           // day that's over still shows its shape.
           true,
         );
-        // Fullness is measured over ORDINARY slots only. By-request times
-        // must not answer it in either direction: they'd mask a genuinely
-        // booked-out day at an opted-in provider (there is always a free 4am),
-        // and their absence must not make a day the provider simply doesn't
-        // work look "booked", which would blame other clients for it.
-        // A 'tight' time counts towards fullness even though nobody took it:
-        // it's unreachable BECAUSE of the bookings around it, so a day of
-        // taken times and the gaps they leave really is booked out for this
-        // service. At least one has to be genuinely taken, or the claim has
-        // no other client behind it at all.
-        const ordinary = grid.filter(slot => !slot.isByRequest);
-        const isFullyBooked = ordinary.length > 0
-          && ordinary.every(slot => slot.isBooked || slot.unbookable === 'tight')
-          && ordinary.some(slot => slot.isBooked);
+        const isFullyBooked = isDayFullyBooked(grid);
 
         // Everything the day contains, each carrying whether it can be taken.
         // A by-request time this caller isn't allowed to offer is dropped
@@ -937,8 +952,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // no way to tell "everything's taken" from "they don't work today" —
         // which decides whether waiting for this provider is worth it.
         const who = providerLabel ?? 'the provider';
-        const takesRequests = emergencyPolicy.outsideHours || emergencyPolicy.blockedDates
-          || emergencyPolicy.shortNotice || emergencyPolicy.beyondWindow;
+        const takesRequests = takesEmergencyRequests(emergencyPolicy);
         const canRequest = allowRequests && takesRequests;
 
         // Right-aligned and quiet: an ordinary booking is the main path and

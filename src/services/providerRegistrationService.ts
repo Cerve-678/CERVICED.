@@ -7,6 +7,10 @@ import * as Location from 'expo-location';
 // renders nothing.
 import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
+import { lightTheme } from '../constants/theme';
+import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
+import { normalizeServiceImages } from '../utils/serviceImageDraft';
+export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import {
   getProviderBookingPolicies,
   getProviderLogoUrlByUserId,
@@ -17,6 +21,7 @@ import {
   promoteUserToProvider,
   providerSlugExists,
   removeStorageObjects,
+  listUserStorageObjectPaths,
   replaceProviderServiceCatalog,
   saveProviderBookingPolicies,
   setMyProviderFullAddress,
@@ -33,12 +38,22 @@ import {
 
 export interface AddOnData {
   id: number;
+  // The real service_add_ons.id when this add-on already exists in the DB —
+  // null for one created in this editing session. See ServiceData.dbId.
+  dbId: string | null;
   name: string;
   price: number;
 }
 
 export interface ServiceData {
   id: number;
+  // The real services.id when this service already exists in the DB — null
+  // for one created in this editing session. Threaded through to
+  // replace_provider_services so it can update the row in place instead of
+  // deleting and recreating it under a new id, which used to silently break
+  // any cart item or booking pointing at the old one (bookings.service_id is
+  // ON DELETE SET NULL — 96% of live bookings had already lost this link).
+  dbId: string | null;
   name: string;
   price: number;
   duration: string;
@@ -46,7 +61,7 @@ export interface ServiceData {
   bufferBeforeMins: number | null;
   bufferAfterMins: number | null;
   description: string;
-  images: string[];
+  images: ServiceImageDraft[];
   addOns: AddOnData[];
   tags: string[];
   techniqueTags: string[];
@@ -102,6 +117,7 @@ export interface ProviderRegistrationData {
   email: string;
   instagram: string;
   website: string;
+  tiktok: string;
   // Set via the separate Communications settings screen, not this form —
   // but the client-facing Contact card gates which rows show by these, so a
   // faithful preview of that card needs them too.
@@ -182,14 +198,56 @@ function isLocalUri(uri: string): boolean {
   );
 }
 
+/**
+ * What a file actually IS, read from its own first bytes.
+ *
+ * The extension is not evidence. Callers invent the storage path — the
+ * service-image uploader hardcodes `.jpg` for every photo regardless of the
+ * asset — and this function used to derive Content-Type from that invented
+ * name, so a HEIC picked straight out of the photo library was stored as
+ * `.jpg` and served as `image/jpeg`. iOS decodes it anyway, which is exactly
+ * why it went unnoticed; Android and web can't, and show a broken image.
+ *
+ * Returns null for bytes we don't recognise, which the caller treats as
+ * "trust nothing and fall back", rather than guessing JPEG.
+ */
+function sniffImageType(
+  bytes: Uint8Array,
+): { mime: string; ext: string } | null {
+  const at = (i: number): number => bytes[i] ?? -1;
+  const ascii = (start: number, length: number): string =>
+    String.fromCharCode(...Array.from(bytes.slice(start, start + length)));
+
+  if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff)
+    return { mime: 'image/jpeg', ext: 'jpg' };
+  if (at(0) === 0x89 && ascii(1, 3) === 'PNG')
+    return { mime: 'image/png', ext: 'png' };
+  if (ascii(0, 3) === 'GIF') return { mime: 'image/gif', ext: 'gif' };
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP')
+    return { mime: 'image/webp', ext: 'webp' };
+  // ISO-BMFF container: the brand at offset 8 says whether it's HEIC/HEIF or
+  // AVIF. Labelling these honestly doesn't make Android able to DECODE them —
+  // that needs transcoding to JPEG at pick time — but a correct Content-Type
+  // means the failure is visible and diagnosable instead of silent.
+  if (ascii(4, 4) === 'ftyp') {
+    const brand = ascii(8, 4);
+    if (brand === 'avif' || brand === 'avis')
+      return { mime: 'image/avif', ext: 'avif' };
+    if (
+      ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1'].includes(
+        brand,
+      )
+    )
+      return { mime: 'image/heic', ext: 'heic' };
+  }
+  return null;
+}
+
 export async function uploadToStorage(
   bucket: string,
   storagePath: string,
   localUri: string
 ): Promise<string> {
-  const ext = localUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
-  const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
-
   // Use expo-file-system to read the local file reliably on both iOS and Android.
   // fetch(localUri) can fail with "Network request failed" for file:// URIs in RN.
   const base64 = await FileSystem.readAsStringAsync(localUri, {
@@ -203,11 +261,26 @@ export async function uploadToStorage(
     bytes[i] = binaryStr.charCodeAt(i);
   }
 
+  // Content type comes from the bytes, never from the name. Only if the bytes
+  // are unrecognisable do we fall back to reading the local URI's extension.
+  const sniffed = sniffImageType(bytes);
+  const uriExt =
+    localUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+  const contentType =
+    sniffed?.mime ?? (uriExt === 'png' ? 'image/png' : 'image/jpeg');
+
+  // Correct the stored object's extension to match what it really is, so the
+  // name stops contradicting the bytes. Only the final extension is touched —
+  // the caller still owns the whole path, including its uniqueness.
+  const resolvedPath = sniffed
+    ? storagePath.replace(/\.[^./]+$/, `.${sniffed.ext}`)
+    : storagePath;
+
   try {
-    return await uploadPublicStorageObject(bucket, storagePath, bytes, contentType);
+    return await uploadPublicStorageObject(bucket, resolvedPath, bytes, contentType);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown storage error';
-    throw new Error(`Upload failed (${bucket}/${storagePath}): ${message}`);
+    throw new Error(`Upload failed (${bucket}/${resolvedPath}): ${message}`);
   }
 }
 
@@ -458,6 +531,7 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        tiktok: data.tiktok || null,
         // Shared with ProviderCommunicationsScreen, which writes the same
         // column. loadProviderFromSupabase has always read it back into
         // `whatsapp`, but this payload never wrote it — so a number typed in
@@ -511,6 +585,7 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        tiktok: data.tiktok || null,
         // Shared with ProviderCommunicationsScreen, which writes the same
         // column. loadProviderFromSupabase has always read it back into
         // `whatsapp`, but this payload never wrote it — so a number typed in
@@ -588,9 +663,11 @@ export async function saveProviderToSupabase(
         url: string;
         sort_order: number;
         aspect_ratio: number | null;
+        fit: ServiceImageFit;
       }[] = [];
       for (let i = 0; i < svc.images.length; i++) {
-        const imgUri = svc.images[i];
+        const image = svc.images[i];
+        const imgUri = image?.uri;
         if (!imgUri) continue;
         let imgUrl = imgUri;
         if (isLocalUri(imgUri)) {
@@ -613,10 +690,16 @@ export async function saveProviderToSupabase(
         // default, so "unknown" stays distinguishable from a real square.
         const aspect_ratio =
           (await measureAspectRatio(imgUri)) ?? (await measureAspectRatio(imgUrl));
-        images.push({ url: imgUrl, sort_order: i, aspect_ratio });
+        images.push({
+          url: imgUrl,
+          sort_order: i,
+          aspect_ratio,
+          fit: image?.fit === 'contain' ? 'contain' : 'cover',
+        });
       }
 
       servicesPayload.push({
+        id: svc.dbId ?? null,
         category_name: categoryName,
         category_description: data.categoryDescriptions?.[categoryName] || null,
         name: svc.name,
@@ -640,7 +723,7 @@ export async function saveProviderToSupabase(
         hair_types_suitable: svc.hairTypesSuitable?.length ? svc.hairTypesSuitable : null,
         audience: svc.audience || null,
         images,
-        add_ons: svc.addOns.map((a) => ({ name: a.name, price: a.price })),
+        add_ons: svc.addOns.map((a) => ({ id: a.dbId ?? null, name: a.name, price: a.price })),
       });
     }
   }
@@ -650,6 +733,33 @@ export async function saveProviderToSupabase(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown database error';
     throw new Error(`Saving services failed: ${message}`);
+  }
+
+  // 5b. Drop service-image objects this save orphaned. replace_provider_services
+  // rewrites the whole catalogue, so any photo the provider removed — or that
+  // moved to a new versioned path when it was replaced — is now referenced by
+  // nothing, and until now nothing ever deleted it. The logo has done this
+  // since it started versioning its path (step 1) and portfolio cleans up on
+  // delete; service images were the one uploader with no cleanup at all.
+  //
+  // Runs only AFTER the catalogue replace has committed, so a failed save can
+  // never delete photos its rolled-back services still point at. Best-effort:
+  // a storage error here must not fail a save that already succeeded.
+  try {
+    const keptPaths = new Set(
+      servicesPayload
+        .flatMap(svc => (svc['images'] as { url: string }[]) ?? [])
+        .map(img => img.url.split(`/service-images/`)[1])
+        .filter((path): path is string => Boolean(path))
+        .map(path => decodeURIComponent(path)),
+    );
+    const existing = await listUserStorageObjectPaths('service-images', userId);
+    const orphaned = existing.filter(path => !keptPaths.has(path));
+    if (orphaned.length > 0) {
+      await removeStorageObjects('service-images', orphaned);
+    }
+  } catch (error) {
+    logger.error('[providerRegistration] service-image cleanup failed:', error);
   }
 
   // 6. Refresh AsyncStorage cache with resolved URLs
@@ -669,8 +779,21 @@ export async function loadProviderFromSupabase(
     provider = await getProviderRegistrationRecord(userId);
   } catch (error) {
     logger.warn('loadProviderFromSupabase error:', error);
-    return getCachedProviderData(userId);
+    const cached = await getCachedProviderData(userId);
+    if (cached) return cached;
+    // A transient failure here is NOT the same thing as "no provider row
+    // exists" — returning null in both cases is indistinguishable to every
+    // caller, which is exactly what let an existing, published provider's
+    // locked Business Name/Service Type fields render as editable (and, if
+    // touched, silently overwrite service_category on save) after a
+    // one-off network blip during load. Callers must treat this as a
+    // failure to retry, never as "confirmed new signup".
+    throw error;
   }
+  // The query itself succeeded and genuinely found no row — this really is
+  // either a brand-new signup or an offline draft that never reached the
+  // server, so falling back to a local cache (an unsynced draft) is safe
+  // here in a way it isn't in the catch block above.
   if (!provider) return getCachedProviderData(userId);
 
   // Street address, the services list, and the AsyncStorage fallback each
@@ -702,18 +825,23 @@ export async function loadProviderFromSupabase(
       categoryDescriptions[svc.category_name] = svc.category_description;
     }
 
-    const images = [...(svc.service_images || [])]
+    const images: ServiceImageDraft[] = [...(svc.service_images || [])]
       .sort((a: any, b: any) => a.sort_order - b.sort_order)
-      .map((img: any) => img.url);
+      .map((img: any) => ({
+        uri: img.url,
+        fit: img.fit === 'contain' ? 'contain' : 'cover',
+      }));
 
     const addOns = (svc.service_add_ons || []).map((ao: any, idx: number) => ({
       id: idx + 1,
+      dbId: ao.id ?? null,
       name: ao.name,
       price: Number(ao.price),
     }));
 
     (categories[svc.category_name] as ServiceData[]).push({
       id: localId++,
+      dbId: svc.id ?? null,
       name: svc.name,
       price: Number(svc.price),
       duration: minutesToDuration(svc.duration_minutes),
@@ -747,7 +875,9 @@ export async function loadProviderFromSupabase(
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
     hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
-    accentColor: provider.accent_color || '#7B1FA2',
+    // Was '#7B1FA2' (a hardcoded purple) for any provider who'd never set
+    // one — falls back to the app's own accent instead.
+    accentColor: provider.accent_color || lightTheme.accent,
     profileTheme: provider.profile_theme || 'app',
     logo: provider.logo_url || null,
     categories,
@@ -756,6 +886,7 @@ export async function loadProviderFromSupabase(
     email: provider.email || '',
     instagram: provider.instagram || cached?.instagram || '',
     website: provider.website || cached?.website || '',
+    tiktok: provider.tiktok || cached?.tiktok || '',
     externalBookingUrl: provider.external_booking_url || '',
     yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
     businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
@@ -820,7 +951,25 @@ export async function loadProviderPolicies(userId: string): Promise<Record<strin
 export async function getCachedProviderData(userId: string): Promise<ProviderRegistrationData | null> {
   try {
     const stored = await AsyncStorage.getItem(`@provider_reg_data_${userId}`);
-    if (stored) return JSON.parse(stored) as ProviderRegistrationData;
+    if (stored) {
+      const parsed = JSON.parse(stored) as ProviderRegistrationData;
+      // The cache is whatever shape the build that last saved it wrote. A
+      // build predating service_images.fit stored `images` as a bare
+      // string[], and this is the offline path, so it has to cope with both
+      // rather than handing undefined uris to the editor.
+      return {
+        ...parsed,
+        categories: Object.fromEntries(
+          Object.entries(parsed.categories ?? {}).map(([category, services]) => [
+            category,
+            (services ?? []).map(svc => ({
+              ...svc,
+              images: normalizeServiceImages(svc.images),
+            })),
+          ]),
+        ),
+      };
+    }
   } catch (e) {
     logger.warn('getCachedProviderData error:', e);
   }

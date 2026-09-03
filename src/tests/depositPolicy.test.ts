@@ -29,9 +29,9 @@ describe('resolveDepositMode', () => {
   });
 
   it('returns null when the provider never answered, distinct from full_only', () => {
-    // The client mapper keys its historical 20%-both-options fallback off
-    // this null — collapsing it to 'full_only' would silently remove the
-    // deposit option from every provider who has not opened Payments.
+    // The client mapper keys "no deposit offered" (full price only) off this
+    // null — every caller of resolveDepositMode must treat it that way rather
+    // than fabricating a deposit the provider never chose.
     expect(resolveDepositMode(null)).toBeNull();
     expect(resolveDepositMode(undefined)).toBeNull();
     expect(resolveDepositMode({})).toBeNull();
@@ -40,11 +40,11 @@ describe('resolveDepositMode', () => {
 });
 
 describe('resolveEditorDepositMode', () => {
-  it('starts an unconfigured provider on the mode matching what clients already see', () => {
-    // Opening Payments and pressing Save must not change the booking sheet
-    // for a provider who never set a deposit policy.
-    expect(resolveEditorDepositMode(null)).toBe('client_choice');
-    expect(resolveEditorDepositMode({})).toBe('client_choice');
+  it('starts an unconfigured provider on full-price-only, matching what clients are actually quoted', () => {
+    // Opening Payments and pressing Save must not silently switch on a
+    // deposit for a provider who never set a deposit policy.
+    expect(resolveEditorDepositMode(null)).toBe('full_only');
+    expect(resolveEditorDepositMode({})).toBe('full_only');
   });
 
   it('otherwise agrees with resolveDepositMode', () => {

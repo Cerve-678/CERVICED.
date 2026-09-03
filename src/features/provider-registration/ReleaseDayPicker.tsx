@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { ordinalSuffix } from '../../utils/dateUtils';
 
@@ -47,11 +48,13 @@ export function ReleaseDayPicker({
   onClear,
   styles,
 }: ReleaseDayPickerProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
       <View style={styles.releasePickerOverlay}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.releasePickerSheet, { backgroundColor: cardColor, borderColor }]}>
+        <View style={[styles.releasePickerSheet, { backgroundColor: cardColor, borderColor, paddingBottom: Math.max(insets.bottom + 16, 34) }]}>
           <View style={styles.releasePickerHeader}>
             <View>
               <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING NOTIFICATIONS</Text>

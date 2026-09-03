@@ -41,6 +41,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
   for (const [catName, services] of Object.entries(extracted.categories ?? {})) {
     categories[catName] = services.map((svc) => ({
       id: serviceId++,
+      dbId: null,
       name: svc.name || 'Unnamed Service',
       price: Number(svc.price) || 0,
       duration: svc.duration || '1 hr',
@@ -86,6 +87,8 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     email: extracted.email || '',
     instagram: extracted.instagram || '',
     website: extracted.website || '',
+    // Acuity has nothing equivalent to import — same as whatsapp below.
+    tiktok: '',
     whatsapp: '',
     preferredContactMethods: ['in_app'],
     externalBookingUrl: '',

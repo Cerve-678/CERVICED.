@@ -1,4 +1,5 @@
-import { dayDataFrom, type TimeSlot } from '../components/ModernBeautyCalendar';
+import { dayDataFrom, isDayFullyBooked, type TimeSlot } from '../components/ModernBeautyCalendar';
+import type { TimeSlot as AvailabilitySlot } from '../services/AvailabilityService';
 
 const open = (time: string): TimeSlot => ({ time, reasons: [] });
 const blocked = (time: string, why: 'booked' | 'past' | 'notice'): TimeSlot =>
@@ -91,5 +92,69 @@ describe('day status vs. why the day emptied', () => {
     for (const why of ['booked', 'past', 'notice'] as const) {
       expect(dayDataFrom([blocked('9:00 AM', why)]).times).toHaveLength(1);
     }
+  });
+});
+
+// ── "Fully booked" is a claim about OTHER CLIENTS ────────────────────────────
+// A day the provider never opened can hold a booking — an accepted
+// out-of-hours request, or a manual squeeze-in. Announcing that day as
+// "Fully booked" blames clients for hours the provider never offered, and
+// sends this one to a waitlist that cannot help them.
+describe('isDayFullyBooked', () => {
+  const ordinary = (over: Partial<AvailabilitySlot> = {}): AvailabilitySlot =>
+    ({ time: '9:00 AM', isBooked: false, ...over });
+  const byRequest = (over: Partial<AvailabilitySlot> = {}): AvailabilitySlot =>
+    ({ time: '4:00 AM', isBooked: false, isByRequest: true, requestReasons: ['outside_hours'], ...over });
+
+  it('is true when every ordinary time was taken', () => {
+    expect(isDayFullyBooked([ordinary({ isBooked: true }), ordinary({ isBooked: true })])).toBe(true);
+  });
+
+  it('counts a time squeezed out by the bookings around it', () => {
+    // Taken at 3pm, and 2:30 can't fit before it — the day really is booked
+    // out for this service, even though nobody holds 2:30.
+    expect(isDayFullyBooked([
+      ordinary({ isBooked: true }),
+      ordinary({ unbookable: 'tight' }),
+    ])).toBe(true);
+  });
+
+  it('is false when nothing was actually taken', () => {
+    // Tight gaps with no booking behind them can't happen, but if they did,
+    // there is no other client to attribute the day to.
+    expect(isDayFullyBooked([ordinary({ unbookable: 'tight' })])).toBe(false);
+    expect(isDayFullyBooked([ordinary({ unbookable: 'past' })])).toBe(false);
+  });
+
+  it('is false when a time simply expired rather than being taken', () => {
+    expect(isDayFullyBooked([
+      ordinary({ isBooked: true }),
+      ordinary({ unbookable: 'past' }),
+    ])).toBe(false);
+  });
+
+  it('is false when a free ordinary time is still on offer', () => {
+    expect(isDayFullyBooked([ordinary({ isBooked: true }), ordinary()])).toBe(false);
+  });
+
+  // The regression: a provider closed on Sundays but opted into out-of-hours
+  // requests. getAvailableSlots fills the whole day with by-request slots, and
+  // one accepted 00:30 booking marks a few of them taken. There is not a
+  // single ordinary slot on the day, because the provider does not work it.
+  it('is false for a day whose whole grid is by-request, booking or not', () => {
+    const closedDayWithAnOutOfHoursBooking = [
+      byRequest({ time: '12:30 AM', isBooked: true }),
+      byRequest({ time: '1:00 AM', isBooked: true }),
+      byRequest({ time: '2:00 AM' }),
+      byRequest({ time: '9:00 AM' }),
+    ];
+    expect(isDayFullyBooked(closedDayWithAnOutOfHoursBooking)).toBe(false);
+
+    // ...and end to end: the picker drops by-request times it can't offer, so
+    // the day comes through as 'closed' — "they don't work this day" — rather
+    // than as a booked-out one with times crossed out.
+    const offerable = closedDayWithAnOutOfHoursBooking.filter(s => !s.isByRequest);
+    expect(dayDataFrom([], isDayFullyBooked(closedDayWithAnOutOfHoursBooking)).status).toBe('closed');
+    expect(offerable).toHaveLength(0);
   });
 });

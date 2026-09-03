@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CITY_AREA_NAMES, getCityAreaData } from '../data/cityAreas';
-import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
@@ -59,6 +59,7 @@ export default function AreaPicker({
   disabled,
   subtitle = DEFAULT_SUBTITLE,
 }: AreaPickerProps) {
+  const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>('city');
   const [city, setCity] = useState<string | null>(null);
@@ -189,7 +190,7 @@ export default function AreaPicker({
       <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
           <Pressable style={styles.backdrop} onPress={close} />
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.handle} />
 
             <View style={styles.header}>
@@ -324,17 +325,12 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   fieldText: { flex: 1, color: '#1C1C1E', fontSize: 15, lineHeight: 20 },
   placeholder: { color: '#8B8B95' },
-  // paddingBottom used to live on modalRoot, which also squeezes backdrop's
-  // absoluteFillObject (an absolutely-positioned child's bottom:0 sits at the
-  // parent's PADDING edge, not its border edge) — leaving a gap the size of
-  // BOTTOM_SAFE_GAP at the very bottom where the dim backdrop never painted,
-  // so the real screen behind the modal showed through. Moved onto sheet
-  // alone (as a margin, since sheet is a normal-flow child) so only the sheet
-  // itself is pushed up clear of the nav bar/home indicator, while backdrop
-  // still covers the full modal window edge-to-edge.
+  // The sheet stays flush with the window; its live safe-area padding keeps
+  // the final row above the home indicator/navigation bar without exposing a
+  // square lower edge beneath this top-rounded bottom sheet.
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.38)' },
-  sheet: { maxHeight: '82%', minHeight: 430, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, marginBottom: BOTTOM_SAFE_GAP },
+  sheet: { maxHeight: '82%', minHeight: 430, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#D1D1D6', marginTop: 10, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   headingWrap: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },

@@ -11,7 +11,7 @@
  * before (see preferred_contact_methods) — always map at the render boundary.
  */
 
-import type { BusinessType } from '../../types/database';
+import type { BusinessType, ServiceCategory } from '../../types/database';
 
 export const SPECIALTIES_MAP: Record<string, string[]> = {
   HAIR:       ['Natural & textured', 'Afro hair', 'Colour & balayage', 'Extensions & weaves', 'Locs & braids', 'Bridal & occasion', "Men's cuts", "Children's hair", 'Relaxers & perms', 'Blow-dries & styling'],
@@ -22,6 +22,24 @@ export const SPECIALTIES_MAP: Record<string, string[]> = {
   AESTHETICS: ['Facials', 'Microneedling', 'Chemical peels', 'LED therapy', 'Dermaplaning', 'Injectables', 'Body treatments'],
   OTHER:      ['Massage', 'Body waxing', 'Spray tanning', 'Body sculpting', 'Holistic therapies'],
 };
+
+// ServiceCategory itself is declared once, alongside the DB enum it mirrors,
+// in types/database.ts (it also has 'MALE' and 'KIDS' — audience-widening
+// values a provider never self-selects, set separately from this picker; see
+// homeSections.ts). Re-exported here so the screens that pull their service-
+// type options from this module need no second import.
+export type { ServiceCategory };
+
+// The provider's declared specialty at signup (providers.service_category) —
+// the subset of ServiceCategory a provider actually picks. Same seven values
+// as SPECIALTIES_MAP's keys above, kept as an explicit list rather than
+// Object.keys(SPECIALTIES_MAP) so this can't silently reorder if that map's
+// keys ever do for an unrelated reason. Locked in InfoRegScreen once a
+// profile exists — BusinessInfoScreen is the only place it can be changed
+// afterwards — because subcategory suggestions, tag pools and templates are
+// all scoped off this choice.
+export const SERVICE_CATEGORY_OPTS: readonly Exclude<ServiceCategory, 'MALE' | 'KIDS'>[] =
+  ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 
 export const CLIENTELE_OPTS     = ['Women', 'Men', 'Children', 'Seniors', 'Bridal & wedding parties', 'All welcome'];
 export const AVAILABILITY_OPTS  = ['Weekday mornings', 'Weekday afternoons', 'Weekday evenings', 'Saturdays', 'Sundays', 'Same-day bookings'];
