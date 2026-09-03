@@ -72,7 +72,6 @@ import {
 import type { DbPortfolioItem, DbService } from '../../types/database';
 import type { ProviderServicesStackParamList } from '../../navigation/types';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../../constants/providerThemes';
-import { resolveProviderFontFamily } from '../../constants/providerFonts';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
@@ -1128,11 +1127,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               <View style={styles.identityText}>
                 <View style={styles.nameRow}>
                   <Text
-                    style={[
-                      styles.displayName,
-                      { color: heroText, fontFamily: resolveProviderFontFamily(providerData.brandFont) },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
+                    style={[styles.displayName, { color: heroText }, heroIsDark && styles.heroTextShadow]}
                     numberOfLines={2}
                   >
                     {providerData.providerName || 'Your Business Name'}
