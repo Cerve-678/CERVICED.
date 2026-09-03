@@ -374,6 +374,12 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
   policies: 'Policies',
   payment: 'Payments',
   logo: 'Branding',
+  // Never rendered here — Home's checklist filters on `blocking`, and
+  // portfolio/terms are never present on the status this screen builds
+  // (see GoLiveStatus's portfolioSet/termsSet doc comment) — kept only to
+  // satisfy the Record's exhaustiveness.
+  portfolio: 'EditProfile',
+  terms: 'EditProfile',
 };
 
 const ISSUE_COLOR = '#FF9500';
@@ -1501,17 +1507,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         )}
 
         {/* ── Go-live setup checklist ──────────────────────────── */}
-        {/* Visible until every REQUIRED step (schedule/services/address, plus
-            the recommended-but-non-gating profile/policies/payment) is done —
-            not just the three that block has_gone_live. buildGoLiveHeadline
-            still separates the two tiers for copy: only schedule/services/
-            address may claim "clients can't find/book you"; a provider who
-            is already live because those three are done just gets a
-            softer "a few things left to finish" nudge for the rest. Logo
-            stays outside this test entirely — purely optional, never shown
-            as an outstanding requirement. */}
+        {/* Home only ever shows the steps the server itself gates
+            has_gone_live on (schedule/services/address/policies/payment/logo)
+            — the "main live checklist" the user asked for. `profile` (the
+            business introduction) is real setup too, but it doesn't block
+            visibility, so it belongs to profile completion on the My
+            Profile/Services tab (that screen's own status ring), not here.
+            Filtering on `blocking` rather than `required` is what keeps it
+            out — `required` is true for `profile` as well. */}
         {setupStatus && !setupDismissed &&
-         buildGoLiveSteps(setupStatus).some(step => step.required && !step.done) && (() => {
+         buildGoLiveSteps(setupStatus).some(step => step.blocking && !step.done) && (() => {
           const headline = buildGoLiveHeadline(setupStatus);
           return (
           <View
@@ -1553,8 +1558,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 toward Profile Health's ring on the Services tab) — as of
                 2026-09-03 it's a real go-live requirement server-side too
                 (check_and_set_provider_live), so it belongs in this "must
-                finish" checklist like everything else that blocks. */}
-            {buildGoLiveSteps(setupStatus).map(step => (
+                finish" checklist like everything else that blocks. `profile`
+                (business introduction) goes the other way — it never blocks,
+                so it's filtered out here and left to the Profile Health ring
+                instead. */}
+            {buildGoLiveSteps(setupStatus).filter(step => step.blocking).map(step => (
               <TouchableOpacity
                 key={step.key}
                 onPress={() => navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never)}

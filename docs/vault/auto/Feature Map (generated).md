@@ -34,8 +34,8 @@ Curated: [[Address Release]] · **84 files**
 - `src/features/providers/goLiveStatus.ts` _(20)_
 - `src/services/addressLookupService.ts` _(20)_
 - `src/screens/client/BookingsScreen.tsx` _(19)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(17)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(16)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
 - … +54 more
 
@@ -178,9 +178,9 @@ Curated: [[Notifications]] · **147 files**
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **77 files**
 - `src/services/databaseService.ts` _(63)_
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(56)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(53)_
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(44)_
-- `src/features/providers/goLiveStatus.ts` _(32)_
+- `src/features/providers/goLiveStatus.ts` _(35)_
 - `src/screens/provider/InfoRegScreen.tsx` _(32)_
 - `src/contexts/RegistrationContext.tsx` _(28)_
 - `src/services/providerRegistrationService.ts` _(27)_
@@ -346,7 +346,7 @@ Curated: [[Services]] · **41 files**
 - … +11 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **65 files**
+Curated: [[Payments]] · **66 files**
 - `src/screens/client/CartScreen.tsx` _(342)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/services/databaseService.ts` _(67)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **65 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(3)_
 - `src/types/database.ts` _(3)_
 - `src/utils/policyDisplay.ts` _(3)_
-- … +35 more
+- … +36 more
