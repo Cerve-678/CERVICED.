@@ -67,6 +67,8 @@ import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import {
   buildGoLiveSteps,
+  buildGoLiveHeadline,
+  deriveRecommendedGoLiveFields,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
@@ -365,9 +367,12 @@ function SummaryRow({ label, value, italic, P }: { label: string; value: string;
  *  registered on this navigator so the tap pushes rather than bouncing to
  *  another tab's root. */
 const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
+  profile: 'EditProfile',
   schedule: 'ProviderSchedule',
   services: 'EditProfile',
   address: 'EditProfile',
+  policies: 'Policies',
+  payment: 'Payments',
   logo: 'Branding',
 };
 
@@ -823,6 +828,12 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // through fetchGoLiveStatus() would double those queries on every focus.
   const [setupStatus, setSetupStatus] = useState<GoLiveStatus | null>(null);
   const [setupDismissed, setSetupDismissed] = useState(false);
+  // Distinct from setupStatus === null "not fetched yet": this is "fetched,
+  // and there is no providers row at all" — a brand-new signup who hasn't
+  // completed InfoReg once. Without this, the go-live card below (gated on
+  // setupStatus being non-null) silently renders nothing for a first-time
+  // provider, with no prompt telling them setup exists at all.
+  const [hasNoProviderProfile, setHasNoProviderProfile] = useState(false);
 
   // Fires the go-live celebration exactly once, on a genuine false->true
   // transition of has_gone_live — not on every app open, and not
@@ -1101,6 +1112,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // silently skipping bookings entirely just because availability can't
       // load this focus.
       void loadBookings(showInitialLoad, profile?.id);
+      setHasNoProviderProfile(!profile);
       if (!profile) return;
       return Promise.all([
         getProviderAvailability(profile.id),
@@ -1136,6 +1148,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           // required just to save a profile, so accepting it made this
           // trivially true for almost everyone.
           addressSet: goLiveAddress,
+          ...deriveRecommendedGoLiveFields(profile),
           brandingSet: !!profile.logo_url,
           isLive: !!profile.has_gone_live,
         });
@@ -1454,15 +1467,53 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           </View>
         </View>
 
+        {/* ── No provider profile yet (brand-new signup) ───────── */}
+        {/* A freshly-signed-up provider has no `providers` row until they
+            submit InfoReg once, so setupStatus can never be built for them —
+            without this, the checklist below just renders nothing and they
+            see no prompt that setup exists at all. */}
+        {hasNoProviderProfile && !setupStatus && !setupDismissed && (
+          <View
+            style={{
+              marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
+              backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>
+              Set up your business to start getting booked
+            </Text>
+            <Text style={{ fontSize: 12, color: P.sub, marginTop: 4 }}>
+              Add your services, schedule, and address so clients can find and book you.
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditProfile' as never)}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                marginTop: 10, paddingVertical: 10, borderRadius: 10,
+                backgroundColor: P.accent,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Get started</Text>
+              <Ionicons name="chevron-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ── Go-live setup checklist ──────────────────────────── */}
-        {/* Visible until the provider is genuinely live. The condition is the
-            three server-gated steps AND the database's own has_gone_live —
-            not our reconstruction alone, so a provider whose steps all look
-            complete but who still isn't published keeps a card on screen
-            rather than being left with no explanation. The logo is
-            deliberately absent from this test: it's recommended, not gating. */}
+        {/* Visible until every REQUIRED step (schedule/services/address, plus
+            the recommended-but-non-gating profile/policies/payment) is done —
+            not just the three that block has_gone_live. buildGoLiveHeadline
+            still separates the two tiers for copy: only schedule/services/
+            address may claim "clients can't find/book you"; a provider who
+            is already live because those three are done just gets a
+            softer "a few things left to finish" nudge for the rest. Logo
+            stays outside this test entirely — purely optional, never shown
+            as an outstanding requirement. */}
         {setupStatus && !setupDismissed &&
-         !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && setupStatus.isLive) && (
+         buildGoLiveSteps(setupStatus).some(step => step.required && !step.done) && (() => {
+          const headline = buildGoLiveHeadline(setupStatus);
+          return (
           <View
             style={{
               marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
@@ -1471,9 +1522,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>
-                {setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet
-                  ? 'Almost live'
-                  : 'Finish setting up to go live'}
+                {headline.title}
               </Text>
               {/* Only dismissible once bookable (schedule set) — the schedule is the hard blocker */}
               {setupStatus.scheduleSet && (
@@ -1482,20 +1531,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               )}
             </View>
-            {!setupStatus.scheduleSet && (
-              <Text style={{ fontSize: 12, color: '#FF9500', marginTop: 4 }}>
-                Clients can't see any time slots or book you until your schedule is set.
-              </Text>
-            )}
-            {/* Every gated step is done but the database still hasn't published
-                them. In practice that means the saved address never geocoded,
-                since that's the one requirement a provider can satisfy on
-                screen without satisfying it in the data. Say so plainly
-                instead of showing a checklist with nothing left to tick. */}
-            {setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && !setupStatus.isLive && (
-              <Text style={{ fontSize: 12, color: '#FF9500', marginTop: 4 }}>
-                Everything's filled in, but we couldn't confirm your address on the map yet.
-                Re-save it in Business Details and we'll publish you.
+            {/* 'blocked'/'stalled' are warnings (something a client-facing gap
+                depends on); 'live'/'liveWithExtras' are informational — the
+                provider is already bookable, this is just encouragement. */}
+            {headline.detail && (
+              <Text style={{
+                fontSize: 12,
+                color: headline.tone === 'blocked' || headline.tone === 'stalled' ? '#FF9500' : P.sub,
+                marginTop: 4,
+              }}>
+                {headline.detail}
               </Text>
             )}
             {/* Labels and done-ness are the shared definition; only where each
@@ -1503,7 +1548,12 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 to the Profile tab — the cross-tab jump landed these at the
                 Profile stack's root, so their back/save button dispatched a
                 GO_BACK no navigator could handle; pushing leaves
-                ProviderHomeMain underneath to return to. */}
+                ProviderHomeMain underneath to return to.
+                Logo used to be excluded here (purely cosmetic, only counted
+                toward Profile Health's ring on the Services tab) — as of
+                2026-09-03 it's a real go-live requirement server-side too
+                (check_and_set_provider_live), so it belongs in this "must
+                finish" checklist like everything else that blocks. */}
             {buildGoLiveSteps(setupStatus).map(step => (
               <TouchableOpacity
                 key={step.key}
@@ -1528,7 +1578,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             ))}
           </View>
-        )}
+          );
+        })()}
 
         {/* ── Month calendar (collapsible) ─────────────────────── */}
         {showMonth && (

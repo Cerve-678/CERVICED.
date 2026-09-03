@@ -1,6 +1,6 @@
 /**
  * Go-live status — the single source of truth for "can clients find this
- * provider yet, and if not, what's left to do".
+ * provider yet, and what's worth finishing before they do".
  *
  * This exists because the answer used to be written twice. ProviderHomeScreen
  * had the real one (schedule + at least one service + a *geocoded* address,
@@ -10,9 +10,23 @@
  * neither agreeing with the database — so a provider could be told they were
  * 5/7 "ready for clients" while the server still refused to publish them.
  *
- * The gate is THREE things, not four: check_and_set_provider_live() never
- * looks at logo_url, so `brandingSet` is reported as a recommendation and
- * never counted as a blocker. See auto-memory go-live-gate-is-three-things.
+ * As of 2026-09-03 the steps are two tiers, not one flat list:
+ *  - BLOCKING (`schedule`, `services`, `address`, `policies`, `payment`,
+ *    `logo`) mirror check_and_set_provider_live() exactly — until all six
+ *    are true (and the DB's own `has_gone_live` agrees) clients genuinely
+ *    cannot find or book this provider. `policies`/`payment`/`logo` moved
+ *    into this tier the same day, at the user's explicit direction — they
+ *    used to be recommended-only, falling back to sensible defaults, but
+ *    the server itself was changed to require them too (see
+ *    supabase/MIGRATION_OWNER.md, "go-live now requires policies + payment"
+ *    / "go-live now also requires a logo"). Never add anything here that
+ *    the server doesn't also gate on, or the checklist starts lying again.
+ *  - RECOMMENDED (`profile` only, now) is real setup worth finishing but
+ *    that the server does not require to publish — writing an About/intro
+ *    text doesn't affect whether clients can find or book this provider.
+ * Copy must never claim a recommended step blocks visibility — every
+ * blocking step (not just schedule/services/address any more) gets "until
+ * these are completed" language now. See buildGoLiveHeadline.
  *
  * The steps deliberately carry a `key` rather than a navigation target: the
  * two screens live on different stacks and each has to push within its own
@@ -26,16 +40,25 @@ import {
   getProviderAvailability,
   hasMyProviderGoLiveAddress,
 } from '../../services/databaseService';
+import { resolveDepositMode } from '../../utils/depositPolicy';
 import type { DbProvider } from '../../types/database';
 
 export interface GoLiveStatus {
+  /** Blocking — mirrors check_and_set_provider_live() exactly. */
   scheduleSet: boolean;
   servicesSet: boolean;
   /** A saved address that actually geocoded. A street address with no
    *  latitude/longitude does NOT satisfy the server, so it must not tick
    *  here either. */
   addressSet: boolean;
-  /** Recommended only — never gates go-live. */
+  /** Recommended — the server never gates go-live on this one. Don't imply
+   *  otherwise in copy. */
+  profileCompleteSet: boolean;
+  /** Blocking as of 2026-09-03 — the server now requires both before
+   *  has_gone_live can be true. */
+  policiesSet: boolean;
+  paymentSet: boolean;
+  /** Blocking as of 2026-09-03 — same change, same day. */
   brandingSet: boolean;
   /** providers.has_gone_live, straight from the database. The authority on
    *  whether clients can actually find this provider — never re-derive it
@@ -43,51 +66,93 @@ export interface GoLiveStatus {
   isLive: boolean;
 }
 
-export type GoLiveStepKey = 'schedule' | 'services' | 'address' | 'logo';
+export type GoLiveStepKey =
+  | 'profile' | 'schedule' | 'services' | 'address'
+  | 'policies' | 'payment' | 'logo';
 
 export interface GoLiveStep {
   key: GoLiveStepKey;
   label: string;
   done: boolean;
-  /** False for the logo, which is a recommendation rather than a blocker. */
+  /** True for every step — `profile` is `required: true` in the "the
+   *  checklist won't consider itself finished without this" sense, not in
+   *  the "clients can't book you" sense — use `blocking`, not `required`,
+   *  to tell those apart. */
   required: boolean;
+  /** True for every step except `profile` — the six the server itself
+   *  gates has_gone_live on, as of 2026-09-03. Copy may only claim "clients
+   *  can't find/book you" for steps where this is true. */
+  blocking: boolean;
 }
 
 export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
   return [
     {
+      key: 'profile',
+      // Was "Complete your profile" — genuinely misleading, since
+      // profileCompleteSet only checks the About/intro text (see
+      // deriveRecommendedGoLiveFields below), not anything else about the
+      // profile. A provider who'd just saved that one field read this as the
+      // WHOLE profile being done while services/address/schedule were still
+      // outstanding.
+      label: 'Write your business introduction',
+      done: status.profileCompleteSet,
+      required: true,
+      blocking: false,
+    },
+    {
       key: 'schedule',
       label: 'Set your weekly schedule',
       done: status.scheduleSet,
       required: true,
+      blocking: true,
     },
     {
       key: 'services',
       label: 'Add at least one service',
       done: status.servicesSet,
       required: true,
+      blocking: true,
     },
     {
       key: 'address',
       label: 'Add your business address',
       done: status.addressSet,
       required: true,
+      blocking: true,
+    },
+    {
+      key: 'policies',
+      label: 'Set your booking policies',
+      done: status.policiesSet,
+      required: true,
+      blocking: true,
+    },
+    {
+      key: 'payment',
+      label: 'Set your deposit & payment options',
+      done: status.paymentSet,
+      required: true,
+      blocking: true,
     },
     {
       key: 'logo',
-      label: 'Add your logo (optional)',
+      label: 'Add your logo',
       done: status.brandingSet,
-      required: false,
+      required: true,
+      blocking: true,
     },
   ];
 }
 
 export type GoLiveTone =
-  /** Published — clients can find and book them. */
+  /** Published and fully set up — nothing recommended is outstanding either. */
   | 'live'
-  /** Real steps still outstanding. */
+  /** Published, but a recommended (non-blocking) step is still outstanding. */
+  | 'liveWithExtras'
+  /** A blocking step still outstanding. */
   | 'blocked'
-  /** Every gated step is ticked but the database still hasn't published
+  /** Every blocking step is ticked but the database still hasn't published
    *  them. In practice that always means the address never geocoded. */
   | 'stalled';
 
@@ -100,36 +165,73 @@ export interface GoLiveHeadline {
 }
 
 export function buildGoLiveHeadline(status: GoLiveStatus): GoLiveHeadline {
+  const steps = buildGoLiveSteps(status);
+  const blockingOutstanding = steps.filter(step => step.blocking && !step.done);
+  // Required-but-not-blocking: profile only, as of 2026-09-03. The server
+  // doesn't gate on this one, so copy must never claim it affects
+  // visibility.
+  const recommendedOutstanding = steps.filter(
+    step => step.required && !step.blocking && !step.done,
+  );
+
   if (status.isLive) {
+    if (recommendedOutstanding.length === 0) {
+      return { tone: 'live', title: 'Live — clients can find you', detail: null };
+    }
     return {
-      tone: 'live',
-      title: 'Live — clients can find you',
-      detail: null,
+      tone: 'liveWithExtras',
+      title: 'Live — a few things left to finish',
+      detail: `Clients can already find and book you. ${recommendedOutstanding.length} more recommended step${recommendedOutstanding.length === 1 ? '' : 's'} below.`,
     };
   }
 
-  const outstanding = buildGoLiveSteps(status).filter(
-    step => step.required && !step.done,
-  );
-
-  if (outstanding.length === 0) {
+  if (blockingOutstanding.length === 0) {
     return {
       tone: 'stalled',
       title: 'Almost live',
+      // Used to name the address specifically ("couldn't confirm your
+      // address on the map") — accurate back when address was the only
+      // step prone to this client/server drift. Now six steps are blocking,
+      // any of them could be the one that hasn't re-synced yet, so the copy
+      // stays generic rather than pointing at a field that usually isn't
+      // the actual cause any more.
       detail:
-        "Everything's filled in, but we couldn't confirm your address on the map yet. " +
-        "Re-save it in Business Details and we'll publish you.",
+        "Everything looks filled in, but we haven't confirmed it with the server yet. " +
+        "Try re-saving in Business Details and we'll publish you.",
     };
   }
 
   return {
     tone: 'blocked',
-    title: `Not live yet — ${outstanding.length} step${outstanding.length === 1 ? '' : 's'} left`,
+    title: `Not live yet — ${blockingOutstanding.length} step${blockingOutstanding.length === 1 ? '' : 's'} left`,
     // The schedule is the hard blocker and the least obvious one, so it gets
     // said out loud rather than left to a tick box.
     detail: status.scheduleSet
-      ? null
+      ? "You won't appear to clients or be bookable until these are completed."
       : "Clients can't see any time slots or book you until your schedule is set.",
+  };
+}
+
+/** Three fields derived straight off a provider row — no extra reads
+ *  needed, so every caller that already has the row (fetchGoLiveStatus,
+ *  ProviderHomeScreen's own focus fetch) can compute these for free instead
+ *  of duplicating the definitions. Despite the name, only
+ *  `profileCompleteSet` is actually recommended (non-blocking) any more —
+ *  `policiesSet`/`paymentSet` moved to the blocking tier 2026-09-03; kept
+ *  here regardless since they're still cheap to derive from the same row. */
+export function deriveRecommendedGoLiveFields(profile: DbProvider): {
+  profileCompleteSet: boolean;
+  policiesSet: boolean;
+  paymentSet: boolean;
+} {
+  return {
+    profileCompleteSet: !!profile.about_text?.trim(),
+    // Presence of a saved cancellation-notice key is what distinguishes
+    // "provider opened Policies and saved" from "never touched" — the RPCs
+    // that read booking_policies fall back to a default either way, but the
+    // checklist should only tick once the provider has actually chosen.
+    policiesSet: profile.booking_policies?.cancelNotice != null,
+    paymentSet: resolveDepositMode(profile.booking_policies) !== null,
   };
 }
 
@@ -170,6 +272,7 @@ export async function fetchGoLiveStatus(
     scheduleSet: availability.some(day => !day.is_closed),
     servicesSet: serviceCount > 0,
     addressSet,
+    ...deriveRecommendedGoLiveFields(profile),
     brandingSet: !!profile.logo_url,
     isLive: !!profile.has_gone_live,
   };
