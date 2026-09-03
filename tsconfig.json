@@ -17,11 +17,6 @@
     ],
     "moduleResolution": "bundler",
     "baseUrl": ".",
-    "paths": {
-      "expo-file-system/legacy": [
-        "src/types/expo-file-system-legacy"
-      ]
-    },
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,

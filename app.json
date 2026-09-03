@@ -83,7 +83,9 @@
         }
       ],
       "expo-splash-screen",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-image",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {
