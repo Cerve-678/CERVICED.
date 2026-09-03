@@ -324,9 +324,17 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   fieldText: { flex: 1, color: '#1C1C1E', fontSize: 15, lineHeight: 20 },
   placeholder: { color: '#8B8B95' },
-  modalRoot: { flex: 1, justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  // paddingBottom used to live on modalRoot, which also squeezes backdrop's
+  // absoluteFillObject (an absolutely-positioned child's bottom:0 sits at the
+  // parent's PADDING edge, not its border edge) — leaving a gap the size of
+  // BOTTOM_SAFE_GAP at the very bottom where the dim backdrop never painted,
+  // so the real screen behind the modal showed through. Moved onto sheet
+  // alone (as a margin, since sheet is a normal-flow child) so only the sheet
+  // itself is pushed up clear of the nav bar/home indicator, while backdrop
+  // still covers the full modal window edge-to-edge.
+  modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.38)' },
-  sheet: { maxHeight: '82%', minHeight: 430, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20 },
+  sheet: { maxHeight: '82%', minHeight: 430, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, marginBottom: BOTTOM_SAFE_GAP },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#D1D1D6', marginTop: 10, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   headingWrap: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },

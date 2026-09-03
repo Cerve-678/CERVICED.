@@ -287,9 +287,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13,
   },
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
-  modalRoot: { flex: 1, justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  // See AreaPicker.tsx for why paddingBottom lives on sheet (as a margin,
+  // since sheet is a normal-flow child) rather than modalRoot: modalRoot's
+  // own padding was squeezing backdrop's absoluteFillObject too, leaving a
+  // BOTTOM_SAFE_GAP-sized strip at the bottom where the real screen behind
+  // the modal showed through instead of the dim backdrop.
+  modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { maxHeight: '75%', minHeight: 420, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
+  sheet: { maxHeight: '75%', minHeight: 420, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, marginBottom: BOTTOM_SAFE_GAP },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 0.5 },
