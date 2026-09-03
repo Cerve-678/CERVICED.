@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
-  highlight: { ...StyleSheet.absoluteFillObject },
+  highlight: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   cardTitle: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   bodyText: { fontFamily: "Jura-VariableFont_wght", fontSize: 12, lineHeight: 18, marginTop: 7 },
   review: { marginBottom: 15, paddingBottom: 15, borderBottomWidth: StyleSheet.hairlineWidth },

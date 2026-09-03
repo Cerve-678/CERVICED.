@@ -108,7 +108,7 @@ function AppContent() {
 function StatusBarBlur() {
   return (
     <>
-      <StatusBar translucent backgroundColor="transparent" style="dark" />
+      <StatusBar style="dark" />
       <BlurView intensity={20} tint="light" style={styles.statusBarBlur} />
     </>
   );

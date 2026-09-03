@@ -253,7 +253,7 @@ function SendSheet({
 }
 
 const ss = StyleSheet.create({
-  overlay:  { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)', zIndex: 10 },
+  overlay:  { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)', zIndex: 10 },
   sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingBottom: 36, paddingTop: 12, maxHeight: '70%' },
   handle:   { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   title:    { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4 },

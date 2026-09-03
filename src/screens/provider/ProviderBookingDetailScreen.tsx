@@ -2582,7 +2582,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       >
         <View style={{ flex: 1 }}>
           <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setShowHelpDropdown(false)}
           />
@@ -3705,7 +3705,7 @@ const styles = StyleSheet.create({
 
   // More options sheet
   moreSheetOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   moreSheet: {
@@ -3754,11 +3754,11 @@ const styles = StyleSheet.create({
 
   // Confirm/decline dialog
   dialogOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   dialogPositioner: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,

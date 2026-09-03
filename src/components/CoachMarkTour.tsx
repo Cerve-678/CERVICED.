@@ -98,7 +98,10 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
   // already skipped as unmeasurable.
   const historyRef = useRef<number[]>([]);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardLift = useRef(new Animated.Value(10)).current;

@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   // the final row above the home indicator/navigation bar without exposing a
   // square lower edge beneath this top-rounded bottom sheet.
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.38)' },
+  backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.38)' },
   sheet: { maxHeight: '82%', minHeight: 430, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#D1D1D6', marginTop: 10, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },

@@ -29,6 +29,15 @@ module.exports = [
       // Keep this visible during cleanup without blocking a release for the
       // existing memoized leaf components.
       'react/display-name': 'warn',
+      // SDK 56's preset enables React Compiler advisory rules. The app does
+      // not use the compiler yet, so retain the pre-upgrade lint contract and
+      // migrate these legacy patterns separately from the SDK upgrade.
+      'react-hooks/immutability': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/use-memo': 'off',
     },
   },
 ];

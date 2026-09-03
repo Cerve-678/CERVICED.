@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
   // BOTTOM_SAFE_GAP-sized strip at the bottom where the real screen behind
   // the modal showed through instead of the dim backdrop.
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: { maxHeight: '75%', minHeight: 420, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, marginBottom: BOTTOM_SAFE_GAP },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

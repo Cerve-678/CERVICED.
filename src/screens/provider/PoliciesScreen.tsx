@@ -477,7 +477,7 @@ const imgSt = StyleSheet.create({
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   thumbWrap: { position: 'relative', width: 84, height: 84 },
   thumb:     { width: 84, height: 84, borderRadius: 14 },
-  uploading: { ...StyleSheet.absoluteFillObject, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
+  uploading: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   removeBtn: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' },
   removeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   addTile:   { width: 84, height: 84, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },

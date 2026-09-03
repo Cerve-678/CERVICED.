@@ -4094,7 +4094,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   tapping a photo in here shouldn't kick you back out to find
                   the service again just to see it. */}
               {serviceImageModal.visible && (
-                <View style={StyleSheet.absoluteFillObject}>
+                <View style={StyleSheet.absoluteFill}>
                   {renderImageViewerOverlay()}
                 </View>
               )}
