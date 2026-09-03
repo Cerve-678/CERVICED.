@@ -47,13 +47,14 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // Auth
 import { useAuth } from '../../contexts/AuthContext';
+import { useProviderDialog } from '../../components/ProviderDialog';
 
 // Supabase registration service
 import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject, hasMyProviderTermsForm } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem } from '../../types/database';
 
@@ -88,6 +89,7 @@ import {
   businessTypeLabel,
   isAddressReleaseAllowed,
   reconcileAddressReleasePolicy,
+  SERVICE_CATEGORY_OPTS,
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
@@ -120,10 +122,9 @@ const tapWarn   = () => { Haptics.notificationAsync(Haptics.NotificationFeedback
 // sheet rises over it with a rounded lip. Keep this in sync with that screen.
 const PREVIEW_SHEET_LIP_RADIUS = 36;
 
-// Service categories (removed BARBER and SKINCARE)
-const SERVICE_CATEGORIES = [
-  'HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'
-];
+// SERVICE_CATEGORY_OPTS (imported above) replaces what used to be a second,
+// separately-maintained copy of these seven strings in this file.
+const SERVICE_CATEGORIES: readonly string[] = SERVICE_CATEGORY_OPTS;
 
 // businessTypeLabel() from the canonical table replaces what used to be a
 // fourth copy of these four strings in this file.
@@ -148,10 +149,23 @@ const EDITOR_SECTIONS = [
 
 type EditorSectionKey = (typeof EDITOR_SECTIONS)[number]['key'];
 
-/** The section the scrollspy falls back to before/above any measurement — the
- *  top of the document. Named rather than read as EDITOR_SECTIONS[0] so it's
- *  statically known to exist under noUncheckedIndexedAccess. */
-const FIRST_EDITOR_SECTION: EditorSectionKey = 'identity';
+// Maps a missing-required roll-up label (sectionSummaries' own row.label) to
+// the registerField() key of its actual input, for the roll-up's tap-to-jump.
+// Only 'Business name' and "Where you're based" have a registered field to
+// scroll to today — 'Business type' and 'Full address' aren't wrapped in
+// registerField, so tapping those chips still pages to the right section
+// (Address Confirmation) but can't scroll further to the specific field.
+const MISSING_FIELD_KEY: Partial<Record<string, string>> = {
+  'Business name': 'businessName',
+  "Where you're based": 'location',
+};
+
+// Stable empty references for the pre-save-attempt display state (see
+// hasAttemptedSave) — plain `[]`/`new Set()` literals inline would be a new
+// reference every render, forcing every consumer to re-render for nothing.
+const EMPTY_STRING_ARRAY: string[] = [];
+const EMPTY_STRING_SET = new Set<string>();
+const EMPTY_MISSING_ENTRIES: { label: string; section: EditorSectionKey }[] = [];
 
 /** The app's semantic warn colour — same amber used for pending/attention
  *  states elsewhere (e.g. ProviderBookingDetailScreen's STATUS_COLORS).
@@ -232,12 +246,26 @@ const DEFAULT_POLICIES: ProviderPolicies = {
 // Add-on interface
 interface AddOnData {
   id: number;
+  // The real service_add_ons.id, when this add-on already exists in the DB —
+  // null for one created in this editing session. Threaded through to the
+  // save payload so replace_provider_services can update the row in place
+  // instead of deleting and recreating it under a new id, which used to
+  // silently break any cart or booking that had selected this exact add-on
+  // (service_add_ons.id has no stable identity across a save otherwise).
+  dbId: string | null;
   name: string;
   price: number;
 }
 
 interface ServiceData {
   id: number;
+  // The real services.id, when this service already exists in the DB — null
+  // for one created in this editing session. See AddOnData.dbId for why: a
+  // provider re-saving ANY service used to regenerate every service's id,
+  // which orphaned every client cart item and booking pointing at the old
+  // one (bookings.service_id is ON DELETE SET NULL — 96% of live bookings
+  // had already lost this link before this field existed).
+  dbId: string | null;
   name: string;
   price: number;
   duration: string;
@@ -860,11 +888,31 @@ interface ServiceTemplatePickerProps {
   onPick: (template: ServiceTemplate | null) => void;
   onClose: () => void;
 }
+// Most dots the picker ever shows, however many templates/variants a
+// category has (Aesthetics alone runs to 24 templates) — a dot per card
+// would be an unreadable smear well before then. A sliding window that
+// centers on the active card still says "there's more this way" without
+// pretending to be a countable index. Mirrors the same tradeoff already
+// made for MultiImagePill in ProviderProfileScreen.tsx.
+const MAX_TEMPLATE_DOTS = 6;
+
+type TemplatePage =
+  | { type: 'scratch' }
+  | { type: 'template'; template: ServiceTemplate }
+  | { type: 'variant'; group: SubcategoryVariantGroup; option: string };
+
+const pageKey = (page: TemplatePage, index: number): string => {
+  if (page.type === 'scratch') return 'scratch';
+  if (page.type === 'template') return `template-${page.template.name}-${index}`;
+  return `variant-${page.group.label}-${page.option}`;
+};
+
 const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   visible, categoryName, fallbackKind, accentColor, onPick, onClose,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
+  const { width: screenWidth } = useWindowDimensions();
   const kind = inferCategoryKind(categoryName, fallbackKind);
   const allTemplates = SERVICE_TEMPLATES_BY_CATEGORY[kind] ?? SERVICE_TEMPLATES_BY_CATEGORY.OTHER;
   const meta = CATEGORY_META[kind];
@@ -878,6 +926,41 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
     ? allTemplates.filter(t => t.generic || scope.templates!.includes(t.name))
     : allTemplates;
   const groupLabel = scope?.templates ? categoryName.trim().toLowerCase() : meta.label.toLowerCase();
+
+  // Each page is exactly one screen width so native pagingEnabled snapping
+  // lands cleanly — the modalContent's old 20px horizontal padding becomes
+  // inner padding on each page (styles.templatePageBase) instead of
+  // padding on the scroll container, which would otherwise throw off the
+  // snap points.
+  const cardWidth = screenWidth;
+  const scrollRef = useRef<ScrollView>(null);
+  const [activeTemplateIdx, setActiveTemplateIdx] = useState(0);
+  const handleTemplateScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setActiveTemplateIdx(Math.round(e.nativeEvent.contentOffset.x / cardWidth));
+  }, [cardWidth]);
+
+  // One flat sequence — scratch card, then templates, then every size/area
+  // variant option — so the whole picker is a single horizontal carousel
+  // instead of a scratch card plus a separately-scrolled list per variant
+  // group.
+  const pages = useMemo<TemplatePage[]>(() => [
+    { type: 'scratch' },
+    ...templates.map(t => ({ type: 'template' as const, template: t })),
+    ...(scope?.variantGroups?.flatMap(group =>
+      group.options.map(option => ({ type: 'variant' as const, group, option }))
+    ) ?? []),
+  ], [templates, scope]);
+
+  const dotWindow = useMemo(() => {
+    const total = pages.length;
+    if (total <= MAX_TEMPLATE_DOTS) return Array.from({ length: total }, (_, i) => i);
+    const start = Math.min(
+      Math.max(activeTemplateIdx - Math.floor(MAX_TEMPLATE_DOTS / 2), 0),
+      total - MAX_TEMPLATE_DOTS,
+    );
+    return Array.from({ length: MAX_TEMPLATE_DOTS }, (_, i) => start + i);
+  }, [pages.length, activeTemplateIdx]);
+
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
@@ -893,56 +976,84 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              <TouchableOpacity style={[styles.templateScratchCard, { borderColor: accentColor }]} onPress={() => { tapSelect(); onPick(null); }} activeOpacity={0.85}>
-                <Ionicons name="create-outline" size={20} color={accentColor} style={styles.templateScratchIcon} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.templateScratchTitle}>Start from scratch</Text>
-                  <Text style={styles.templateScratchSub}>Blank service — fill in your own details</Text>
-                </View>
-              </TouchableOpacity>
-
-              {templates.length > 0 && (
-                <Text style={styles.templateGroupLabel}>Popular {groupLabel} services</Text>
-              )}
-              {templates.map((t, i) => (
-                <TouchableOpacity key={`${t.name}-${i}`} style={styles.templateCard} onPress={() => { tapSelect(); onPick(t); }} activeOpacity={0.85}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.templateName}>{t.name}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="time-outline" size={12} color={chrome.fg(0.5)} />
-                      <Text style={styles.templateDuration}>{t.duration}</Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.templateAdd, { color: accentColor }]}>Use →</Text>
-                </TouchableOpacity>
-              ))}
-
-              {/* Size / area variants — shown as the same long template-card
-                  row as the popular services above, underneath them. */}
-              {scope?.variantGroups?.map(group => (
-                <View key={group.label}>
-                  <Text style={styles.templateGroupLabel}>{categoryName.trim()} — {group.label}</Text>
-                  {group.options.map(opt => (
-                    <TouchableOpacity
-                      key={opt}
-                      style={styles.templateCard}
-                      onPress={() => { tapSelect(); onPick(buildVariantTemplate(categoryName.trim(), group, opt, scope)); }}
-                      activeOpacity={0.85}
-                    >
+            {templates.length > 0 && (
+              <Text style={[styles.templateGroupLabel, styles.templateCarouselLabel]}>
+                Popular {groupLabel} services
+              </Text>
+            )}
+            <ScrollView
+              ref={scrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={handleTemplateScrollEnd}
+              scrollEventThrottle={16}
+              style={styles.templateCarousel}
+            >
+              {pages.map((page, i) => (
+                <View key={pageKey(page, i)} style={[styles.templatePageBase, { width: cardWidth }]}>
+                  {page.type === 'scratch' && (
+                    <TouchableOpacity style={[styles.templateScratchCard, { borderColor: accentColor }]} onPress={() => { tapSelect(); onPick(null); }} activeOpacity={0.85}>
+                      <Ionicons name="create-outline" size={20} color={accentColor} style={styles.templateScratchIcon} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.templateName}>{categoryName.trim()} ({opt})</Text>
+                        <Text style={styles.templateScratchTitle}>Start from scratch</Text>
+                        <Text style={styles.templateScratchSub}>Blank service — fill in your own details</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  {page.type === 'template' && (
+                    <TouchableOpacity style={styles.templateCard} onPress={() => { tapSelect(); onPick(page.template); }} activeOpacity={0.85}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.templateName}>{page.template.name}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <Ionicons name="time-outline" size={12} color={chrome.fg(0.5)} />
-                          <Text style={styles.templateDuration}>{group.duration ?? '30 min'}</Text>
+                          <Text style={styles.templateDuration}>{page.template.duration}</Text>
                         </View>
                       </View>
                       <Text style={[styles.templateAdd, { color: accentColor }]}>Use →</Text>
                     </TouchableOpacity>
-                  ))}
+                  )}
+                  {page.type === 'variant' && (
+                    <TouchableOpacity
+                      style={styles.templateCard}
+                      onPress={() => { tapSelect(); onPick(buildVariantTemplate(categoryName.trim(), page.group, page.option, scope)); }}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.templateVariantBadge}>
+                        <Text style={styles.templateVariantBadgeText}>{page.group.label}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.templateName}>{categoryName.trim()} ({page.option})</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="time-outline" size={12} color={chrome.fg(0.5)} />
+                          <Text style={styles.templateDuration}>{page.group.duration ?? '30 min'}</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.templateAdd, { color: accentColor }]}>Use →</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
             </ScrollView>
+            {pages.length > 1 && (
+              <View style={styles.templateDots}>
+                {dotWindow.map(i => (
+                  <TouchableOpacity
+                    key={i}
+                    hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                    onPress={() => { tapLight(); scrollRef.current?.scrollTo({ x: i * cardWidth, animated: true }); }}
+                    activeOpacity={0.5}
+                  >
+                    <View
+                      style={[
+                        styles.templateDot,
+                        activeTemplateIdx === i && [styles.templateDotActive, { backgroundColor: accentColor }],
+                      ]}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </SafeAreaView>
         </BlurView>
       </View>
@@ -996,6 +1107,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
+  // The sheet's own footer needs the LIVE inset, not just modalOverlay's
+  // static BOTTOM_SAFE_GAP snapshot — that snapshot reads 0 whenever
+  // initialWindowMetrics isn't ready yet at startup, which left the Save
+  // button sitting flush against the bottom edge on affected launches.
+  const insets = useSafeAreaInsets();
   // Text boxes and modal background stay tinted with the provider's own
   // accent colour (matching their chosen brand aesthetic) instead of a
   // generic white/grey — just blended much closer to white so they stay
@@ -1181,7 +1297,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       return;
     }
     setError(null);
-    setAddOns([...addOns, { id: Date.now(), name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
+    setAddOns([...addOns, { id: Date.now(), dbId: null, name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
     setNewAddOnName('');
     setNewAddOnPrice('');
     Keyboard.dismiss();
@@ -1218,6 +1334,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setError(null);
     onSave({
       id: service?.id || Date.now(),
+      dbId: service?.dbId ?? null,
       name: name.trim(),
       price: parseFloat(price) || 0,
       duration: duration.trim(),
@@ -1301,8 +1418,12 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
             <View style={styles.serviceSheetHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.serviceSheetEyebrow}>{categoryName.toUpperCase()}</Text>
-                <Text style={styles.serviceSheetTitle}>
-                  {isEditing ? 'Edit service' : 'New service'}
+                {/* Shows the service's own (live) name once there is one, so
+                    a provider working through several services in a row can
+                    tell them apart at a glance — falls back to the generic
+                    label before anything's typed. */}
+                <Text style={styles.serviceSheetTitle} numberOfLines={1}>
+                  {name.trim() || (isEditing ? 'Edit service' : 'New service')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1672,7 +1793,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               </View>
             </ScrollView>
 
-            <View style={styles.serviceSheetFooter}>
+            <View style={[styles.serviceSheetFooter, { paddingBottom: Math.max(insets.bottom, 12) }]}>
               {error ? <Text style={styles.serviceSheetError}>{error}</Text> : null}
               <TouchableOpacity
                 style={[styles.serviceSheetSave, { backgroundColor: accentColor }]}
@@ -2536,10 +2657,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const statusBarStyle = 'dark-content' as const;
   const styles = useScreenStyles();
   const chrome = useChrome();
+  const { width: screenWidth } = useWindowDimensions();
   // Header/inline icons can't read a StyleSheet colour, so they take the same
   // palette token the sheet above is built from.
   const chromeText = lightTheme.text;
   const { user } = useAuth();
+  // Themed (not native Alert) specifically for the "this will pause your
+  // account" warning on deleting the last service — everything else on this
+  // screen still uses Alert.alert, left as-is.
+  const { showConfirm, DialogHost } = useProviderDialog();
 
   // Read from the ROOT provider (App.tsx), deliberately not the nested
   // <SafeAreaProvider> this screen renders further down: this hook call sits
@@ -2585,27 +2711,49 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     };
   }, [isFocused, navigation]);
 
-  // Refresh the "Your Terms & Conditions" card label whenever this screen
-  // regains focus — the provider may have just come back from writing them in
-  // the ProviderIntakeForm builder. Failure leaves it null (card shows the
-  // neutral label), never throws.
+  // Load the provider's own Terms & Conditions once. Deliberately NOT keyed on
+  // focus: this is an editable field now, not a status label, so refetching on
+  // every return to the screen would throw away whatever they had typed and
+  // not yet saved. A failure leaves ownTermsLoaded false, which makes the save
+  // skip the terms write rather than blanking them.
   useEffect(() => {
-    if (!isFocused) return;
     let cancelled = false;
-    hasMyProviderTermsForm()
-      .then(has => { if (!cancelled) setHasOwnTerms(has); })
+    getMyProviderTermsText()
+      .then(text => {
+        if (cancelled) return;
+        setOwnTerms(text);
+        setOwnTermsLoaded(true);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [isFocused]);
+  }, []);
 
-  // Ref for main scrollview to enable auto-scroll to focused inputs
-  const mainScrollViewRef = useRef<ScrollView>(null);
+  // Ref for the horizontal pager that moves between the 5 sections — replaces
+  // the single vertical ScrollView this screen used to have.
+  const pagerRef = useRef<ScrollView>(null);
+
+  // Each section now has its own independent vertical scroll space, so a
+  // single shared ref no longer makes sense — these are ref maps keyed by
+  // EditorSectionKey (the same key EDITOR_SECTIONS is already indexed by)
+  // instead of 5 separate useRef calls, so the mapping stays symmetric with
+  // the data-driven section list.
+  const sectionScrollRefs = useRef<Partial<Record<EditorSectionKey, ScrollView | null>>>({});
+  const sectionContentRefs = useRef<Partial<Record<EditorSectionKey, View | null>>>({});
+  const registerSectionScroll = useCallback(
+    (key: EditorSectionKey) => (node: ScrollView | null) => { sectionScrollRefs.current[key] = node; },
+    [],
+  );
+  const registerSectionContent = useCallback(
+    (key: EditorSectionKey) => (node: View | null) => { sectionContentRefs.current[key] = node; },
+    [],
+  );
 
   // ── Auto-scroll to the focused field ──────────────────────────────────
   // Each registered field keeps a handle to its own wrapper View, and the
   // position is MEASURED at focus time via measureLayout against the
-  // ScrollView's inner content node. That yields the field's true offset
-  // within the scroll content regardless of how deeply it's nested.
+  // owning section's own scroll content node. That yields the field's true
+  // offset within that section's content regardless of how deeply it's
+  // nested.
   //
   // This deliberately replaces the previous scheme, which stored a local
   // `e.nativeEvent.layout.y` from onLayout plus a per-field hardcoded fudge
@@ -2617,7 +2765,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // than erroring. Measuring removes the guesswork entirely: there is no
   // magic number left to keep in sync when the layout changes.
   const fieldNodes = useRef<Record<string, View | null>>({});
-  const scrollContentRef = useRef<View>(null);
 
   const registerField = useCallback(
     (name: string) => (node: View | null) => { fieldNodes.current[name] = node; },
@@ -2628,10 +2775,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // very top of the viewport.
   const FOCUS_SCROLL_MARGIN = 120;
 
-  const handleInputFocus = useCallback((inputName: string) => {
+  const handleInputFocus = useCallback((inputName: string, sectionKey: EditorSectionKey) => {
     const node = fieldNodes.current[inputName];
-    const content = scrollContentRef.current;
-    const scroller = mainScrollViewRef.current;
+    const content = sectionContentRefs.current[sectionKey];
+    const scroller = sectionScrollRefs.current[sectionKey];
     if (!node || !content || !scroller) return;
     // Deferred a beat so the measurement happens after the keyboard-driven
     // layout settles, same reason the previous implementation waited.
@@ -2691,11 +2838,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   });
 
   const [isEditMode, setIsEditMode] = useState(false);
-  // Which section the reader is currently inside, for the scrollspy rail only.
-  // Purely presentational: nothing gates on it, nothing renders conditionally
-  // on it, and it never affects what's reachable. Every section is always
-  // mounted, so unsaved edits can't be lost by scrolling.
-  const [activeSpySection, setActiveSpySection] = useState<EditorSectionKey>(FIRST_EDITOR_SECTION);
+  // Which section-page is active — drives the pill row and is the only
+  // thing goToSection/handlePagerScrollEnd write to. Every section is always
+  // mounted (all 5 pages exist in the pager at once), so unsaved edits can't
+  // be lost by swiping.
+  const [activePage, setActivePage] = useState(0);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
   // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
@@ -2783,15 +2930,26 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
                 const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
                 const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
+                // providerService defaults to 'HAIR' (not '') so the usual
+                // `prev.x || fallback` idiom can't tell "still the untouched
+                // default" from "provider genuinely picked Hair" — 'HAIR' is
+                // both. Since this whole prefill only ever runs once, before
+                // a first-time provider has had a chance to touch the
+                // category picker, treating 'HAIR' as "not yet chosen" here
+                // is safe in practice, same tradeoff every other field in
+                // this block already accepts for the brief async window.
+                const prefilledService = SERVICE_CATEGORIES.find(c => c === prefill.service_interests?.[0]);
                 setProviderData(prev => ({
                   ...prev,
                   providerName: prev.providerName || prefill.business_name || prefill.name || '',
+                  providerService: prev.providerService === 'HAIR' ? (prefilledService || prev.providerService) : prev.providerService,
                   phone: prev.phone || prefill.business_phone || prefill.phone || '',
                   email: prev.email || prefill.business_email || '',
                   instagram: prev.instagram || prefill.instagram || '',
                   website: prev.website || prefill.website || '',
                   businessType: prev.businessType || prefilledBusinessType || '',
                   teamSize: prev.teamSize || prefilledTeamSize || '',
+                  location: prev.location || prefill.location_text || '',
                   accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
                   languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
                   priceRange: prev.priceRange || prefilledPriceRange || '',
@@ -2980,17 +3138,30 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Modal states
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Required-field flags (inline red labels, footer roll-up) stay hidden
+  // until the provider actually tries to save — a blank, never-touched
+  // profile shouldn't read as already broken. The static "required" asterisk
+  // markers are unaffected; only the "you're missing this" highlighted state
+  // is gated on this. Flips true the moment Save & Publish is tapped (start
+  // of handleSubmit), regardless of which check ends up failing.
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
   // Only required on first publish — an already-live provider has already
   // accepted once (providers.terms_accepted_at), so re-showing this on every
   // edit-save would be re-consent theatre, not a real gate.
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
-  // Whether this provider has written their OWN client-facing Terms &
-  // Conditions (a booking_intake_forms row, is_terms) — separate from the
-  // CERVICED platform terms `termsAccepted` above. Just toggles the card's
-  // "Set up" vs "Update" label; null until known. Editing happens on the
-  // ProviderIntakeForm builder, opened from the card near the end of the doc.
-  const [hasOwnTerms, setHasOwnTerms] = useState<boolean | null>(null);
+  // The provider's OWN client-facing Terms & Conditions — separate from the
+  // CERVICED platform terms `termsAccepted` above. Typed here as prose; it is
+  // stored as the policy body of their is_terms provider_form_library row,
+  // which is exactly what get_provider_terms serves to the booking sheet. It
+  // used to be authored in the ProviderIntakeForm builder, which turned a
+  // plain document into a questionnaire — that builder now only handles forms
+  // sent to clients, including any ADDITIONAL terms alongside these.
+  const [ownTerms, setOwnTerms] = useState('');
+  // Guards the save exactly the way policiesLoaded guards booking_policies:
+  // until the existing terms have actually come back, writing '' would wipe
+  // whatever the provider already had.
+  const [ownTermsLoaded, setOwnTermsLoaded] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -3236,30 +3407,50 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Delete service
   const handleDeleteService = useCallback((categoryName: string, serviceId: number) => {
+    const remove = () => {
+      setProviderData(prev => ({
+        ...prev,
+        categories: {
+          ...prev.categories,
+          [categoryName]: prev.categories[categoryName]?.filter(s => s.id !== serviceId) || [],
+        },
+      }));
+    };
+
+    const totalServices = Object.values(providerData.categories).reduce(
+      (total, services) => total + services.length, 0,
+    );
+    // This is a local draft edit — the real services row isn't deleted until
+    // the whole catalogue is saved (replace_provider_services_upsert_by_id),
+    // which is what actually un-publishes the provider (services previously
+    // had only an AFTER INSERT trigger; deleting the last row now re-checks
+    // has_gone_live too, as of 2026-09-03). Warn here anyway since Save is
+    // one tap away and easy to not connect back to this deletion.
+    if (totalServices <= 1) {
+      showConfirm(
+        'This will pause your account',
+        "Deleting your last service removes you from client search until you add another — you won't be bookable with an empty catalogue. This takes effect once you save.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete anyway', style: 'destructive', onPress: remove },
+        ],
+      );
+      return;
+    }
+
     Alert.alert(
       'Delete Service',
       'Are you sure you want to delete this service?',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setProviderData(prev => ({
-              ...prev,
-              categories: {
-                ...prev.categories,
-                [categoryName]: prev.categories[categoryName]?.filter(s => s.id !== serviceId) || [],
-              },
-            }));
-          },
-        },
+        { text: 'Delete', style: 'destructive', onPress: remove },
       ]
     );
-  }, []);
+  }, [providerData.categories, showConfirm]);
 
   // Submit registration
   const handleSubmit = useCallback(async () => {
+    setHasAttemptedSave(true);
     if (!providerData.providerName.trim()) {
       Alert.alert('Missing Information', 'Please enter your business name.');
       return;
@@ -3297,6 +3488,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       if (policiesLoaded) {
         await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
       }
+      // Same guard, same reason: only write the terms back once we know what
+      // was already there, so a failed load can't blank a provider's existing
+      // ones on their next ordinary save.
+      if (ownTermsLoaded) {
+        await saveMyProviderTermsText(ownTerms);
+      }
       Alert.alert(
         'Profile Saved!',
         'Your provider profile has been saved successfully.',
@@ -3310,42 +3507,36 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, policiesLoaded, navigation, isEditMode, termsAccepted]);
+  }, [providerData, user, policies, policiesLoaded, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted]);
 
-  // ── Scrollspy ─────────────────────────────────────────────────────────
-  // Each section's real top offset within the scroll content, keyed by section.
-  // Written by onSectionLayout below, which measures against the ScrollView's
-  // content — not a local `layout.y` — so these are true page positions.
-  const sectionOffsets = useRef<Partial<Record<EditorSectionKey, number>>>({});
+  // ── Pager position ────────────────────────────────────────────────────
+  // Which section-page is currently active — both the pill row's live
+  // indicator and the single source of truth goToSection jumps against.
+  // Replaces the old vertical scrollspy (a passive reading-position
+  // indicator over one continuous scroll) now that each section is its own
+  // horizontally-paged, independently-scrolling screen.
+  const handlePagerScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+    setActivePage(prev => (prev === idx ? prev : idx));
+  }, [screenWidth]);
 
-  const onSectionLayout = useCallback((key: EditorSectionKey, y: number) => {
-    sectionOffsets.current[key] = y;
-  }, []);
-
-  // Position indicator only. Picks the last section whose top has passed the
-  // reading line (a third of the way down the viewport), which is what "the
-  // section I'm currently reading" means to a reader. Deliberately does not
-  // scroll, gate, or navigate anything.
-  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const y = e.nativeEvent.contentOffset.y;
-    const readingLine = y + e.nativeEvent.layoutMeasurement.height / 3;
-    let current: EditorSectionKey = FIRST_EDITOR_SECTION;
-    for (const s of EDITOR_SECTIONS) {
-      const top = sectionOffsets.current[s.key];
-      if (top !== undefined && top <= readingLine) current = s.key;
-    }
-    setActiveSpySection(prev => (prev === current ? prev : current));
-  }, []);
-
-  // Explicit "Next" affordance at the end of each section — additive to the
-  // scrollspy above (which stays a passive, non-navigating indicator).
-  // Jumps by measured offset rather than a fixed distance so it lands exactly
-  // on the next section's heading regardless of how tall the current one is.
+  // Jumps to a section by index — used by the pill row, and by the "Next"
+  // affordance at the top of each section.
   const goToSection = useCallback((key: EditorSectionKey) => {
-    const y = sectionOffsets.current[key];
-    if (y === undefined) return;
-    mainScrollViewRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
-  }, []);
+    const idx = EDITOR_SECTIONS.findIndex(s => s.key === key);
+    if (idx < 0) return;
+    pagerRef.current?.scrollTo({ x: idx * screenWidth, animated: true });
+  }, [screenWidth]);
+
+  // Roll-up chip tap: page to the missing field's section, then — if it has
+  // a registered field to measure (see MISSING_FIELD_KEY) — scroll to it too,
+  // once the page transition has had time to settle.
+  const jumpToMissingField = useCallback((entry: { label: string; section: EditorSectionKey }) => {
+    goToSection(entry.section);
+    const fieldKey = MISSING_FIELD_KEY[entry.label];
+    if (!fieldKey) return;
+    setTimeout(() => handleInputFocus(fieldKey, entry.section), 450);
+  }, [goToSection, handleInputFocus]);
 
   // Get adaptive accent color - now uses user-selected accent color
   const adaptiveAccentColor = useMemo(() => {
@@ -3421,6 +3612,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             {
               label: 'Services',
               value: serviceCount > 0 ? `${serviceCount} across ${categoryNames.length} categor${categoryNames.length === 1 ? 'y' : 'ies'}` : '',
+              // Already required to go live (schedule + service + address —
+              // see goLiveStatus.ts) — this just brings InfoReg's own
+              // required-field flagging in line with that instead of only
+              // checking business name/type/address/location.
+              required: true,
             },
           ],
         },
@@ -3446,10 +3642,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   );
 
   // Only genuinely-required, genuinely-empty fields — this is what the roll-up
-  // above Publish warns about and what Publish would otherwise fail on.
-  const missingRequired = useMemo(
-    () => sectionSummaries.flatMap(g => g.rows.filter(r => r.required && !r.value).map(r => r.label)),
+  // above Publish warns about and what Publish would otherwise fail on. Each
+  // entry keeps its owning section (straight from sectionSummaries' own
+  // grouping, not a separately-maintained label→section map that could drift)
+  // so the roll-up below can page to the right section before scrolling to
+  // the field itself.
+  const missingRequiredEntries = useMemo(
+    () => sectionSummaries.flatMap(g =>
+      g.rows.filter(r => r.required && !r.value).map(r => ({ label: r.label, section: g.section }))
+    ),
     [sectionSummaries],
+  );
+  const missingRequired = useMemo(
+    () => missingRequiredEntries.map(e => e.label),
+    [missingRequiredEntries],
   );
 
   // Set membership of the above, so an individual field can flag itself inline
@@ -3457,6 +3663,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // what Publish actually enforces. Keys are the row labels in
   // sectionSummaries — the same strings the roll-up prints.
   const missingRequiredSet = useMemo(() => new Set(missingRequired), [missingRequired]);
+
+  // Display-only gating on hasAttemptedSave (see its declaration) — every
+  // render site below reads these, never the raw missingRequired* above, so
+  // the "still needed" highlighting can't show before a save was tried while
+  // the underlying computation itself stays always-accurate.
+  const visibleMissingRequired = hasAttemptedSave ? missingRequired : EMPTY_STRING_ARRAY;
+  const visibleMissingRequiredEntries = hasAttemptedSave ? missingRequiredEntries : EMPTY_MISSING_ENTRIES;
+  const visibleMissingRequiredSet = hasAttemptedSave ? missingRequiredSet : EMPTY_STRING_SET;
 
   // Keep the draggable order in sync with the real data — but never while a
   // drag is in progress, or the live reflow would get stomped mid-gesture.
@@ -3964,65 +4178,71 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </View>
           )}
 
-          {/* The document and its scrollspy rail share a positioning context so
-              the rail can pin itself over the scroll without scrolling with it. */}
+          {/* Each EDITOR_SECTIONS entry is now its own full-width,
+              independently vertically-scrolling page inside one
+              horizontally-paged pager — replacing the old single continuous
+              vertical document the pill row below used to just spy on. */}
           <View style={styles.docApp}>
-            {/* ── Scrollspy rail ── Reading-position indicator ONLY. Not
-                touchable, not a stepper, not a gate: it reports where you are
-                and never constrains where you can go. */}
-            <View style={styles.docScrollspy} pointerEvents="none">
-              {EDITOR_SECTIONS.map(s => (
-                <View
+            {/* ── Pill row ── Both the live page indicator (the filled pill
+                tracks activePage) and a jump control: tapping any pill pages
+                straight to that section via goToSection, same as the "Next"
+                button at the top of each section below. */}
+            <View style={styles.docPillRow}>
+              {EDITOR_SECTIONS.map((s, i) => (
+                <TouchableOpacity
                   key={s.key}
-                  style={[
-                    styles.docSpySeg,
-                    s.key === activeSpySection && { backgroundColor: adaptiveAccentColor },
-                  ]}
-                />
+                  onPress={() => { tapSelect(); goToSection(s.key); }}
+                  hitSlop={{ top: 10, bottom: 10 }}
+                  style={{ flex: 1 }}
+                  activeOpacity={0.5}
+                >
+                  <View
+                    style={[
+                      styles.docPill,
+                      i === activePage && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                    ]}
+                  />
+                </TouchableOpacity>
               ))}
             </View>
 
             <ScrollView
-              ref={mainScrollViewRef}
+              ref={pagerRef}
+              horizontal
+              pagingEnabled
               style={styles.content}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
-              automaticallyAdjustKeyboardInsets={true}
-              onScroll={handleScroll}
-              scrollEventThrottle={64}
-              // The category-pill drag handle refuses to give up its responder to
-              // the horizontal strip it lives in, but this outer vertical
-              // ScrollView is a separate native scroll recognizer one level up —
-              // without gating it too, it kept fighting the drag for ownership of
-              // the touch (the whole page would scroll instead of, or as well as,
-              // the pill dragging), and would occasionally win outright and cut
-              // the drag gesture short, which is also why reordering could look
-              // like the other pills weren't reacting to the drag at all.
-              //
-              // The service-card drag needs this even more than the pills do:
-              // that one is VERTICAL inside this vertical scroller, so the two
-              // gestures are the same gesture and the native recognizer wins
-              // every time it's left enabled. (The image strip never hit this —
-              // a horizontal drag inside a horizontal strip isn't competing
-              // with the page's vertical scroll at all.) Refusing termination
-              // once armed is necessary but not sufficient on iOS, where a pan
-              // already in flight isn't always stopped by this flag alone.
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={handlePagerScrollEnd}
+              scrollEventThrottle={16}
+              // The Services page (04) below has its own category-pill and
+              // service-card drag gestures that need the vertical scroll
+              // *they* live in disabled while armed — see that page's own
+              // ScrollView for the full explanation. This outer pager needs
+              // the exact same gate: a drag in progress on the active page is
+              // still a touch this horizontal ScrollView's native recognizer
+              // could steal as a page-swipe if left enabled, same failure
+              // mode as the single-ScrollView version of this screen had,
+              // just one level up now that paging and section-scrolling are
+              // separate ScrollViews on separate axes.
               scrollEnabled={!draggingCategory && !serviceDrag.draggingKey}
             >
-            {/* The measurement origin for every field's auto-scroll position.
-                measureLayout against this node yields true content offsets —
-                see handleInputFocus. */}
-            <View ref={scrollContentRef} collapsable={false}>
-            {/* ── 01 · Identity ── First section of the continuous
-                document. Oversized numeral + typographic break carries the
-                structure; there is no hub, no card border, and nothing to tap
-                into. Required-field warnings now live inline at the offending
-                field, with a roll-up next to Publish. */}
+            {/* ── 01 · Identity ── First page of the pager. Oversized
+                numeral + typographic break carries the section's own
+                structure; the pill row above is the only navigation chrome
+                around it. Required-field warnings live inline at the
+                offending field, with a roll-up next to Publish. */}
+            <View style={{ width: screenWidth }}>
+              <ScrollView
+                ref={registerSectionScroll('identity')}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets={true}
+              >
+              <View ref={registerSectionContent('identity')} collapsable={false}>
             <View
               style={styles.docSection}
-              onLayout={(e) => onSectionLayout('identity', e.nativeEvent.layout.y)}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>01</Text>
               <Text style={styles.docHeading}>Identity</Text>
@@ -4041,7 +4261,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 activeOpacity={0.55}
               >
                 <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · About & Portfolio</Text>
-                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+                <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
             {/* Plain circular avatar picker — no card chrome around it. The
@@ -4088,7 +4308,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('businessName')}
               >
-                <RequiredLabel required missing={missingRequiredSet.has('Business name')} styles={styles}>Business Name</RequiredLabel>
+                <RequiredLabel required missing={visibleMissingRequiredSet.has('Business name')} styles={styles}>Business Name</RequiredLabel>
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
@@ -4111,16 +4331,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       }
                       placeholder="Enter your business name"
                       placeholderTextColor={chrome.fg(0.4)}
-                      onFocus={() => handleInputFocus('businessName')}
+                      onFocus={() => handleInputFocus('businessName', 'identity')}
                     />
                   </BlurView>
                 )}
               </View>
 
               {/* Service Category — free to pick at sign-up, but locked once the
-                  profile exists: everything else (subcategory suggestions, tag
-                  pools, templates) is scoped off this choice, so changing it
-                  later would silently orphan existing categories/services. */}
+                  profile exists: subcategory suggestions, tag pools and
+                  templates are all scoped off this choice, plus Search/Explore
+                  category and Becca routing key off it live. Business Profile
+                  → Business Details → Business Info is the only place it can
+                  be changed afterwards — same locked-here/editable-there
+                  pattern as Business Type below. */}
               <View style={styles.inputGroup}>
                 <RequiredLabel required styles={styles}>Service Type</RequiredLabel>
                 {isEditMode ? (
@@ -4131,7 +4354,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         {providerData.providerService}
                       </Text>
                     </View>
-                    <Text style={styles.inputHint}>Set at sign-up — contact support to change your service type.</Text>
+                    <Text style={styles.inputHint}>Not editable here — change it in Business Profile → Business Details → Business Info.</Text>
                   </>
                 ) : (
                   <ScrollView
@@ -4179,7 +4402,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         placeholder="What service do you provide?"
                         placeholderTextColor={chrome.fg(0.4)}
                         autoFocus
-                        onFocus={() => handleInputFocus('customService')}
+                        onFocus={() => handleInputFocus('customService', 'identity')}
                       />
                     </BlurView>
                   </View>
@@ -4191,7 +4414,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('location')}
               >
-                <RequiredLabel required missing={missingRequiredSet.has("Where you're based")} styles={styles}>Where you're based</RequiredLabel>
+                <RequiredLabel required missing={visibleMissingRequiredSet.has("Where you're based")} styles={styles}>Where you're based</RequiredLabel>
                 {/* providerData.location → geocoded and saved as location_text:
                     the single place the business is based. Drives the Distance
                     filter/sort, free-text search matching, and the location
@@ -4217,11 +4440,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
 
             </View>
+              </View>
+              </ScrollView>
+            </View>
 
             {/* ── 02 · About & Portfolio ── */}
+            <View style={{ width: screenWidth }}>
+              <ScrollView
+                ref={registerSectionScroll('about')}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets={true}
+              >
+              <View ref={registerSectionContent('about')} collapsable={false}>
             <View
               style={styles.docSection}
-              onLayout={(e) => onSectionLayout('about', e.nativeEvent.layout.y)}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>02</Text>
               <Text style={styles.docHeading}>About & Portfolio</Text>
@@ -4236,7 +4471,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 activeOpacity={0.55}
               >
                 <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Contact</Text>
-                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+                <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
             {/* About Section */}
@@ -4257,7 +4492,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     multiline
                     numberOfLines={6}
                     textAlignVertical="top"
-                    onFocus={() => handleInputFocus('about')}
+                    onFocus={() => handleInputFocus('about', 'about')}
                   />
                 </BlurView>
               </View>
@@ -4348,11 +4583,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
 
             </View>
+              </View>
+              </ScrollView>
+            </View>
 
             {/* ── 03 · Contact ── */}
+            <View style={{ width: screenWidth }}>
+              <ScrollView
+                ref={registerSectionScroll('contact')}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets={true}
+              >
+              <View ref={registerSectionContent('contact')} collapsable={false}>
             <View
               style={styles.docSection}
-              onLayout={(e) => onSectionLayout('contact', e.nativeEvent.layout.y)}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>03</Text>
               <Text style={styles.docHeading}>Contact</Text>
@@ -4367,7 +4614,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 activeOpacity={0.55}
               >
                 <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Services</Text>
-                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+                <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
             {/* Contact Information — the PUBLIC audience. Anything filled in
@@ -4396,7 +4643,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     placeholder="+44 7XXX XXXXXX"
                     placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="phone-pad"
-                    onFocus={() => handleInputFocus('phone')}
+                    onFocus={() => handleInputFocus('phone', 'contact')}
                   />
                 </BlurView>
               </View>
@@ -4420,7 +4667,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     placeholder="+44 7XXX XXXXXX"
                     placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="phone-pad"
-                    onFocus={() => handleInputFocus('whatsapp')}
+                    onFocus={() => handleInputFocus('whatsapp', 'contact')}
                   />
                 </BlurView>
               </View>
@@ -4440,7 +4687,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    onFocus={() => handleInputFocus('contactEmail')}
+                    onFocus={() => handleInputFocus('contactEmail', 'contact')}
                   />
                 </BlurView>
               </View>
@@ -4461,7 +4708,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     placeholderTextColor={chrome.fg(0.4)}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    onFocus={() => handleInputFocus('instagram')}
+                    onFocus={() => handleInputFocus('instagram', 'contact')}
                   />
                 </BlurView>
               </View>
@@ -4481,7 +4728,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     keyboardType="url"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    onFocus={() => handleInputFocus('website')}
+                    onFocus={() => handleInputFocus('website', 'contact')}
                   />
                 </BlurView>
               </View>
@@ -4501,7 +4748,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     keyboardType="url"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    onFocus={() => handleInputFocus('externalBookingUrl')}
+                    onFocus={() => handleInputFocus('externalBookingUrl', 'contact')}
                   />
                 </BlurView>
                 <Text style={styles.inputHint}>
@@ -4517,11 +4764,43 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   value is never lost by editing/saving here. */}
 
             </View>
+              </View>
+              </ScrollView>
+            </View>
 
             {/* ── 04 · Services ── */}
+            <View style={{ width: screenWidth }}>
+              <ScrollView
+                ref={registerSectionScroll('services')}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets={true}
+                // The category-pill drag handle refuses to give up its
+                // responder to the horizontal strip it lives in, but this
+                // page's own vertical ScrollView is a separate native scroll
+                // recognizer one level up — without gating it too, it kept
+                // fighting the drag for ownership of the touch (the whole
+                // page would scroll instead of, or as well as, the pill
+                // dragging), and would occasionally win outright and cut the
+                // drag gesture short, which is also why reordering could look
+                // like the other pills weren't reacting to the drag at all.
+                //
+                // The service-card drag needs this even more than the pills
+                // do: that one is VERTICAL inside this vertical scroller, so
+                // the two gestures are the same gesture and the native
+                // recognizer wins every time it's left enabled. (The image
+                // strip never hit this — a horizontal drag inside a
+                // horizontal strip isn't competing with the page's vertical
+                // scroll at all.) Refusing termination once armed is
+                // necessary but not sufficient on iOS, where a pan already in
+                // flight isn't always stopped by this flag alone.
+                scrollEnabled={!draggingCategory && !serviceDrag.draggingKey}
+              >
+              <View ref={registerSectionContent('services')} collapsable={false}>
             <View
               style={styles.docSection}
-              onLayout={(e) => onSectionLayout('services', e.nativeEvent.layout.y)}
             >
               <Text style={[styles.docNum, styles.docNumLead, { color: adaptiveAccentColor }]}>04</Text>
               <Text style={styles.docHeading}>Services</Text>
@@ -4536,7 +4815,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 activeOpacity={0.55}
               >
                 <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Address Confirmation</Text>
-                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+                <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
             {/* Services Section — extra top gap because this is the one
@@ -4675,7 +4954,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 isSel && styles.selectedCategoryTab,
                               ]}
                               activeOpacity={0.8}
-                              onPress={() => { tapSelect(); setSelectedCategory(item); }}
+                              // Tapping the already-selected tab is otherwise
+                              // a no-op re-select, so it's repurposed to open
+                              // the edit modal directly instead — an
+                              // unselected tab still just selects on tap,
+                              // unchanged. Long-press below no longer offers
+                              // Edit for the same reason: a plain tap already
+                              // gets you there once selected.
+                              onPress={() => {
+                                tapSelect();
+                                if (isSel) {
+                                  setEditingCategory(item);
+                                  setShowEditCategoryModal(true);
+                                } else {
+                                  setSelectedCategory(item);
+                                }
+                              }}
                               onLongPress={() => {
                                 tapMedium();
                                 Alert.alert(
@@ -4683,7 +4977,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   'What would you like to do?',
                                   [
                                     { text: 'Cancel', style: 'cancel' },
-                                    { text: 'Edit (name & description)', onPress: () => { setEditingCategory(item); setShowEditCategoryModal(true); } },
                                     ...(index > 0 ? [{ text: '← Move left', onPress: () => handleReorderCategory(item, -1) }] : []),
                                     ...(index < categoryOrder.length - 1 ? [{ text: 'Move right →', onPress: () => handleReorderCategory(item, 1) }] : []),
                                     { text: 'Delete', style: 'destructive' as const, onPress: () => handleDeleteCategory(item) },
@@ -4884,12 +5177,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
 
             </View>
+              </View>
+              </ScrollView>
+            </View>
 
             {/* ── 05 · Policies ── Full-bleed: no card wrapper, the
                 typographic break is the only separator. */}
+            <View style={{ width: screenWidth }}>
+              <ScrollView
+                ref={registerSectionScroll('policies')}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets={true}
+              >
+              <View ref={registerSectionContent('policies')} collapsable={false}>
             <View
               style={[styles.docSection, styles.docSectionLast]}
-              onLayout={(e) => onSectionLayout('policies', e.nativeEvent.layout.y)}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>05</Text>
               <Text style={styles.docHeading}>Address Confirmation</Text>
@@ -4910,7 +5215,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <Text style={styles.policyLabel}>
                   TYPE <Text style={styles.requiredStar}>*</Text>
                 </Text>
-                {missingRequiredSet.has('Business type') && (
+                {visibleMissingRequiredSet.has('Business type') && (
                   <Text style={styles.docFieldFlag}>Required</Text>
                 )}
               </View>
@@ -4966,7 +5271,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <Text style={styles.policyLabel}>
                   FULL ADDRESS <Text style={styles.requiredStar}>*</Text>
                 </Text>
-                {missingRequiredSet.has('Full address') && (
+                {visibleMissingRequiredSet.has('Full address') && (
                   <Text style={styles.docFieldFlag}>Required</Text>
                 )}
               </View>
@@ -5148,35 +5453,36 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 />
               </BlurView>
 
-              {/* The provider's OWN client-facing Terms & Conditions — a
-                  booking_intake_forms row (is_terms), authored in the
-                  ProviderIntakeForm builder, that a client must agree to
-                  before adding this provider to their basket. Distinct from
-                  the CERVICED platform terms checkbox at the end of this
-                  document. Optional: a booking proceeds fine without one. This
-                  card is the only entry point (it used to live on Business
-                  Info). */}
+              {/* The provider's OWN client-facing Terms & Conditions — the
+                  prose a client must agree to before adding this provider to
+                  their basket. Distinct from the CERVICED platform terms
+                  checkbox at the end of this document. Optional: a booking
+                  proceeds fine without any.
+
+                  Written here as plain text. It used to send the provider off
+                  to the ProviderIntakeForm builder, which made a document a
+                  client only ever reads into a questionnaire with questions
+                  and a signature toggle. That builder is still the right place
+                  for forms sent TO clients — including any additional terms
+                  the provider wants beside these — it just no longer owns this
+                  one. Storage is unchanged: this is the policy body of their
+                  is_terms row, exactly what get_provider_terms serves. */}
               <Text style={[styles.policyLabel, { marginTop: 18 }]}>YOUR TERMS &amp; CONDITIONS</Text>
               <Text style={styles.addressHint}>
-                Clients read and agree to these before they can add you to their basket (optional). Written as a form on the next screen.
+                Clients read and agree to these before they can add you to their basket (optional).
               </Text>
-              <TouchableOpacity
-                style={[styles.releaseDayBtn, { alignSelf: 'stretch', justifyContent: 'space-between' }]}
-                // This screen is typed against ProfileStackParamList (its
-                // original client home) but actually renders inside the three
-                // provider stacks as `EditProfile`, each of which registers
-                // ProviderIntakeForm. The prop type can't see that, hence the
-                // cast — same reason the navigators mount it as ComponentType<any>.
-                onPress={() => { tapSelect(); (navigation as any).navigate('ProviderIntakeForm', { openTerms: true }); }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.releaseDayBtnText}>
-                  {hasOwnTerms ? 'Update your Terms & Conditions'
-                    : hasOwnTerms === false ? 'Set up your Terms & Conditions'
-                    : 'Your Terms & Conditions'}
-                </Text>
-                <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
-              </TouchableOpacity>
+              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+                <TextInput
+                  style={[styles.textInput, styles.textInputMultiline]}
+                  value={ownTerms}
+                  onChangeText={setOwnTerms}
+                  placeholder={'e.g. A 50% deposit secures your appointment and is non-refundable.\n\nPlease arrive with clean, dry hair.'}
+                  placeholderTextColor={chrome.fg(0.4)}
+                  multiline
+                  numberOfLines={8}
+                  textAlignVertical="top"
+                />
+              </BlurView>
 
               {/* PREFERRED PAYMENT TYPE, WHO YOU WORK WITH and LANGUAGES SPOKEN
                   moved out of registration to Business Details — payment/
@@ -5252,6 +5558,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
             </View>
 
+              </View>
+              </ScrollView>
             </View>
           </ScrollView>
 
@@ -5263,15 +5571,32 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               inline), so the reader sees what blocks publishing at the moment
               they reach the button. */}
           <View style={[styles.pinnedBar, { paddingBottom: pinnedBarBottomPad }]}>
-            {missingRequired.length > 0 && (
-              <View style={styles.publishWarningRow}>
-                <Ionicons name="alert-circle-outline" size={15} color={REVIEW_WARN_COLOR} />
-                <Text style={styles.publishWarningText} numberOfLines={2}>
-                  {missingRequired.length === 1
-                    ? `${missingRequired[0]} is still needed before you can publish.`
-                    : `${missingRequired.join(', ')} are still needed before you can publish.`}
-                </Text>
-              </View>
+            {visibleMissingRequired.length > 0 && (
+              <>
+                <View style={styles.publishWarningRow}>
+                  <Ionicons name="alert-circle-outline" size={15} color={REVIEW_WARN_COLOR} />
+                  <Text style={styles.publishWarningText} numberOfLines={1}>
+                    {visibleMissingRequired.length === 1
+                      ? 'Still needed before you can publish — tap to jump there:'
+                      : `${visibleMissingRequired.length} things still needed before you can publish — tap to jump:`}
+                  </Text>
+                </View>
+                {/* Each chip pages straight to the offending field's section
+                    (see jumpToMissingField) instead of the old plain sentence,
+                    which had no way to be tapped per-item. */}
+                <View style={styles.missingFieldChips}>
+                  {visibleMissingRequiredEntries.map(entry => (
+                    <TouchableOpacity
+                      key={entry.label}
+                      style={styles.missingFieldChip}
+                      onPress={() => { tapSelect(); jumpToMissingField(entry); }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.missingFieldChipText}>{entry.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
             )}
             <TouchableOpacity
               style={[
@@ -5317,6 +5642,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           <Modal visible={showTermsModal} animationType="slide" transparent={false} onRequestClose={() => setShowTermsModal(false)}>
             <TermsScreen navigation={{ goBack: () => setShowTermsModal(false) }} />
           </Modal>
+
+          <DialogHost />
         </SafeAreaView>
       </View>
     </SafeAreaProvider>
@@ -5554,25 +5881,30 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   // there is deliberately no border/blur/shadow on a section itself.
   docApp: {
     flex: 1,
-    position: 'relative',
   },
-  // Reading-position rail. Pinned over the scroll (never scrolls with it) and
-  // pointerEvents="none" at the call site — it is an indicator, not a control.
-  docScrollspy: {
-    position: 'absolute',
-    right: 6,
-    top: 24,
-    bottom: 24,
-    width: 3,
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    zIndex: 5,
+  // Page-position row — both the live indicator (which pill is filled) and a
+  // tap target (goToSection) for jumping straight to a section. Replaces the
+  // old absolute-positioned, non-touchable vertical scrollspy rail now that
+  // sections are horizontally-paged screens rather than one continuous
+  // scroll — a horizontal row of 5 reads as a top nav strip, not an overlay.
+  docPillRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 16,
   },
-  docSpySeg: {
+  // Height 4 at fg(0.12) read as functionally invisible in practice — bumped
+  // to a real bar with a visible border so the row reads as navigation chrome
+  // even before any pill is active, not just a hairline.
+  docPill: {
     flex: 1,
-    marginVertical: 2,
-    borderRadius: 2,
-    backgroundColor: fg(0.12),
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: fg(0.1),
+    borderWidth: 1,
+    borderColor: fg(0.22),
   },
   // Full-bleed section: a hairline rule and generous space do the separating.
   docSection: {
@@ -5704,6 +6036,26 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '700',
     fontSize: 11,
     lineHeight: 15,
+    color: REVIEW_WARN_COLOR,
+  },
+  missingFieldChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  missingFieldChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,149,0,0.35)',
+    backgroundColor: 'rgba(255,149,0,0.1)',
+  },
+  missingFieldChipText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 11,
     color: REVIEW_WARN_COLOR,
   },
   // ── Pinned bottom bar ─────────────────────────────────────────────────
@@ -6448,6 +6800,54 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   templateAdd: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
+  },
+  templateCarouselLabel: {
+    marginTop: 20,
+    marginBottom: 0,
+    paddingHorizontal: 20,
+  },
+  templateCarousel: {
+    flex: 1,
+  },
+  // Each page is one full screen width (so native pagingEnabled snapping
+  // lands cleanly); this padding is what used to be modalContent's
+  // horizontal inset, moved inside the page instead of the scroll
+  // container.
+  templatePageBase: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+  templateVariantBadge: {
+    position: 'absolute',
+    top: -8,
+    left: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: fg(0.14),
+    backgroundColor: surf(0.75),
+  },
+  templateVariantBadgeText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
+    color: fg(0.7),
+  },
+  templateDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    paddingBottom: 12,
+  },
+  templateDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: fg(0.2),
+  },
+  templateDotActive: {
+    width: 16,
   },
 
   // Category type picker cards
