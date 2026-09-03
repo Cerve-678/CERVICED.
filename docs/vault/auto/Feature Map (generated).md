@@ -305,10 +305,10 @@ Curated: [[Contexts]] · **160 files**
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
 - `src/screens/client/CartScreen.tsx` _(13)_
+- `src/screens/provider/InfoRegScreen.tsx` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
-- `src/services/becca/capabilities/client.ts` _(11)_
 - … +130 more
 
 ## Becca / AI
@@ -346,7 +346,7 @@ Curated: [[Services]] · **39 files**
 - … +9 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **63 files**
+Curated: [[Payments]] · **65 files**
 - `src/screens/client/CartScreen.tsx` _(342)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/services/databaseService.ts` _(67)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **63 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(3)_
 - `src/types/database.ts` _(3)_
 - `src/utils/policyDisplay.ts` _(3)_
-- … +33 more
+- … +35 more

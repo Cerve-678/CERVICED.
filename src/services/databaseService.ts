@@ -8849,7 +8849,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
         hair_types_suitable,
         audience,
         service_images ( url, sort_order, fit ),
-        service_add_ons ( name, price )
+        service_add_ons ( id, name, price )
       `)
       .eq("provider_id", providerId)
       .eq("is_active", true)
