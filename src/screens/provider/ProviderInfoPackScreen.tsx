@@ -171,9 +171,16 @@ function SendSheet({
 }) {
   const slideAnim = useRef(new Animated.Value(500)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
+  // `pack` goes null the instant `visible` does (both come from the same
+  // parent state), so reading `pack` directly for the render guard/title
+  // would unmount this on the very same tick — before the close animation
+  // below ever gets a frame. Keep the last pack around until that animation
+  // actually finishes.
+  const [renderPack, setRenderPack] = useState(pack);
 
   useEffect(() => {
     if (visible) {
+      setRenderPack(pack);
       Animated.parallel([
         Animated.timing(fadeAnim,  { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.spring(slideAnim, { toValue: 0, tension: 80, friction: 14, useNativeDriver: true }),
@@ -182,11 +189,12 @@ function SendSheet({
       Animated.parallel([
         Animated.timing(fadeAnim,  { toValue: 0, duration: 180, useNativeDriver: true }),
         Animated.timing(slideAnim, { toValue: 500, duration: 200, useNativeDriver: true }),
-      ]).start();
+      ]).start(() => setRenderPack(null));
     }
-  }, [fadeAnim, slideAnim, visible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
-  if (!visible && !pack) return null;
+  if (!visible && !renderPack) return null;
 
   // Rendered inside a native Modal — a screen-local absolute overlay can never
   // outrank the floating pill tab bar, which mounts at the navigator level,
@@ -199,7 +207,7 @@ function SendSheet({
         <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
           <View style={[ss.handle, { backgroundColor: P.border }]} />
           <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
-          {pack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{pack.title}</Text>}
+          {renderPack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{renderPack.title}</Text>}
           {loading ? (
             <View style={{ paddingVertical: 30, alignItems: 'center' }}>
               <ActivityIndicator color={P.accent} />
