@@ -164,6 +164,11 @@ export interface ProviderRegistrationData {
   // backdrop instead of the gradient when set, so any faithful preview of
   // that hero needs it too.
   backgroundImage: string | null;
+  // Business-name font set via Branding & Style (providers.brand_font) —
+  // not editable from this form, same as backgroundImage above, but the
+  // client-facing hero applies it to the display name so a faithful
+  // preview needs it too.
+  brandFont: string | null;
   isVerified: boolean;
   // Denormalised average (providers.rating) — same value clients see.
   rating: number;
@@ -904,6 +909,7 @@ export async function loadProviderFromSupabase(
     // NULL round-trips as null — see the field's note on ProviderRegistrationData.
     addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
     backgroundImage: provider.background_image_url ?? null,
+    brandFont: provider.brand_font ?? null,
     isVerified: provider.is_verified ?? false,
     rating: Number(provider.rating) || 0,
     whatsapp: provider.whatsapp_number ?? '',

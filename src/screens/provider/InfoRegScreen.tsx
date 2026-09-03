@@ -2860,6 +2860,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     fullAddressCoordinates: null,
     addressReleasePolicy: 'on_confirmation',
     backgroundImage: null,
+    brandFont: null,
     isVerified: false,
     rating: 0,
     bookingPolicies: null,
