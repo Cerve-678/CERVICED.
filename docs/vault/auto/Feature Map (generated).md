@@ -181,7 +181,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **70 files**
 - `src/screens/provider/ProviderHomeScreen.tsx` _(46)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(29)_
-- `src/contexts/RegistrationContext.tsx` _(27)_
+- `src/contexts/RegistrationContext.tsx` _(28)_
 - `src/services/providerRegistrationService.ts` _(26)_
 - `src/features/providers/goLiveStatus.ts` _(23)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
