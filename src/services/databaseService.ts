@@ -7979,7 +7979,11 @@ export async function getServiceSafetyFlags(
   for (const row of data ?? []) {
     map.set(row.id, {
       patchTestRequired: !!row.patch_test_required,
-      isPregnancySafe: row.is_pregnancy_safe !== false,
+      // Fail closed: only an explicit TRUE counts as confirmed safe. NULL/
+      // undefined (an unconfigured service, or the DB column's own default)
+      // must not read as "safe" for health-adjacent data — see
+      // supabase/migrations/20260902141600_pregnancy_safe_default_false.sql.
+      isPregnancySafe: row.is_pregnancy_safe === true,
     });
   }
   return map;
