@@ -633,3 +633,37 @@ export async function getAvailableSlots(
 
   return slots;
 }
+
+// ─────────────────────────────────────────────────────────
+// CANCELLATION POLICY
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Fetch the cancellation_notice_hours for a provider by display name.
+ * Returns 24 if the column is absent or the provider is not found,
+ * so the caller can always treat the result as a safe default.
+ */
+export async function getProviderCancellationPolicy(providerDisplayName: string): Promise<number> {
+  const { data } = await supabase
+    .from('providers')
+    .select('cancellation_notice_hours')
+    .ilike('display_name', providerDisplayName)
+    .eq('is_active', true)
+    .maybeSingle();
+  return (data as any)?.cancellation_notice_hours ?? 24;
+}
+
+/**
+ * Persist the provider's cancellation notice hours to the providers table.
+ * Called from ProviderAutomationsScreen alongside the user_metadata save.
+ */
+export async function updateProviderCancellationPolicy(
+  providerId: string,
+  hours: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update({ cancellation_notice_hours: hours })
+    .eq('id', providerId);
+  if (error) throw error;
+}

@@ -31,7 +31,7 @@ import { useFont } from '../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus } from '../contexts/BookingContext';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking } from '../services/databaseService';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getProviderCancellationPolicy } from '../services/databaseService';
 import AppBackground from '../components/AppBackground';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 import { HomeScreenProps } from '../navigation/types';
@@ -524,6 +524,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellationPolicy, setCancellationPolicy] = useState<number>(24);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [providerResponseMessage, setProviderResponseMessage] = useState<string>('');
@@ -649,6 +650,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleBookingPress = useCallback((booking: ConfirmedBooking) => {
     setSelectedBooking(booking);
     setModalVisible(true);
+    if (booking.status === BookingStatus.UPCOMING) {
+      getProviderCancellationPolicy(booking.providerName)
+        .then(hours => setCancellationPolicy(hours))
+        .catch(() => setCancellationPolicy(24));
+    } else {
+      setCancellationPolicy(24);
+    }
   }, []);
 
   // ✅ REMOVED: Duplicate reschedule logic - now using canReschedule from BookingContext
@@ -786,6 +794,29 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleCancelBooking = useCallback(async () => {
     if (!selectedBooking) return;
+
+    // Enforce cancellation notice policy
+    if (cancellationPolicy > 0) {
+      const timeParts = selectedBooking.bookingTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (timeParts) {
+        let apptHours = parseInt(timeParts[1], 10);
+        const apptMinutes = parseInt(timeParts[2], 10);
+        const meridiem = timeParts[3].toUpperCase();
+        if (meridiem === 'PM' && apptHours !== 12) apptHours += 12;
+        if (meridiem === 'AM' && apptHours === 12) apptHours = 0;
+        const apptDatetime = new Date(
+          `${selectedBooking.bookingDate}T${String(apptHours).padStart(2, '0')}:${String(apptMinutes).padStart(2, '0')}:00`
+        );
+        const hoursUntilAppt = (apptDatetime.getTime() - Date.now()) / (1000 * 60 * 60);
+        if (hoursUntilAppt >= 0 && hoursUntilAppt < cancellationPolicy) {
+          Alert.alert(
+            'Cancellation Policy',
+            `This provider requires ${cancellationPolicy} hours notice to cancel. Your appointment is in ${Math.floor(hoursUntilAppt)} hours.`
+          );
+          return;
+        }
+      }
+    }
 
     setIsLoading(true);
     try {
@@ -2037,6 +2068,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           onRequestClose={() => {
             setModalVisible(false);
             setShowReceipt(false);
+            setCancellationPolicy(24);
             // ✅ FIX: Re-enable scrolling when closing modal via back button
             setTimeout(() => {
               mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -2052,6 +2084,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               onPress={() => {
                 setModalVisible(false);
                 setShowReceipt(false);
+                setCancellationPolicy(24);
                 Keyboard.dismiss();
                 // ✅ FIX: Re-enable scrolling when closing modal via backdrop
                 setTimeout(() => {
@@ -2548,6 +2581,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                               {/* ACTIONS - UPCOMING */}
                               {selectedBooking.status === BookingStatus.UPCOMING && !selectedBooking.isPendingReschedule && (
                                 <View style={styles.modalActionsSection}>
+                                  {cancellationPolicy > 0 && (
+                                    <Text style={{ fontSize: 11, color: isDarkMode ? 'rgba(255,255,255,0.45)' : '#888', textAlign: 'center', marginBottom: 8, fontStyle: 'italic' }}>
+                                      {`Cancellation policy: ${cancellationPolicy}h notice required`}
+                                    </Text>
+                                  )}
                                   <View style={styles.modalActionsRow}>
                                     <TouchableOpacity
                                       style={styles.modalCancelButton}
@@ -2754,6 +2792,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                             onPress={() => {
                               setModalVisible(false);
                               setShowReceipt(false);
+                              setCancellationPolicy(24);
                               // ✅ FIX: Re-enable scrolling when closing modal
                               setTimeout(() => {
                                 mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
