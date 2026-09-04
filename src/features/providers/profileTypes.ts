@@ -48,10 +48,14 @@ export interface ProviderProfileData {
   accentColor: string | null;
   backgroundImage: string | null;
   profileTheme: string;
+  /** Key into PROVIDER_FONTS (src/constants/providerFonts.ts) for the business
+   *  name's display font. Null = default (Prata-Regular). */
+  brandFont: string | null;
   phone: string;
   email: string;
   instagram: string;
   website: string;
+  tiktok: string;
   externalBookingUrl: string | null;
   yearsExperience: string;
   specialties: string[];

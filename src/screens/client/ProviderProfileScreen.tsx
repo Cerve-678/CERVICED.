@@ -56,6 +56,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
+import { resolveProviderFontFamily } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
@@ -2310,6 +2311,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         url: provider.website,
       });
     }
+    if (provider.tiktok) {
+      options.push({
+        key: "tiktok",
+        icon: "logo-tiktok",
+        label: "TikTok",
+        detail: `@${provider.tiktok}`,
+        url: `https://tiktok.com/@${provider.tiktok}`,
+      });
+    }
     return options;
   }, [provider]);
 
@@ -2331,7 +2341,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       headerTitle:
         isScrolledRef.current && provider ? provider.displayName : "",
       headerTitleStyle: {
-        fontFamily: SERIF,
+        fontFamily: resolveProviderFontFamily(provider?.brandFont),
         fontSize: 17,
         color: OP.text,
       },
@@ -4621,7 +4631,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text
                     style={[
                       styles.providerDisplayName,
-                      { color: heroText },
+                      { color: heroText, fontFamily: resolveProviderFontFamily(provider.brandFont) },
                       heroIsDark && styles.heroTextShadow,
                     ]}
                   >

@@ -99,7 +99,11 @@ const NO_EMERGENCY_REQUESTS: EmergencyRequestPolicy = {
   afterMins: null,
 };
 
-const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequestPolicy => ({
+/** Read the four opt-ins (and the request window) off a providers row.
+ *  Exported so a caller that already HAS the row — the provider's own screens
+ *  fetch their whole profile — can answer "do they take requests?" without a
+ *  second query, and without re-deriving which columns mean what. */
+export const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequestPolicy => ({
   outsideHours: row?.['allow_out_of_hours_requests'] === true,
   blockedDates: row?.['allow_blocked_date_requests'] === true,
   shortNotice:  row?.['allow_short_notice_requests'] === true,
@@ -109,6 +113,17 @@ const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequ
   beforeMins: toWindowMins(row?.['request_window_before_mins']),
   afterMins:  toWindowMins(row?.['request_window_after_mins']),
 });
+
+/** Has this provider opted into being asked for a time their own rules
+ *  exclude, in ANY of the four ways? The single definition of "they take
+ *  requests" — the booking picker's request link, and the provider's own
+ *  Additional Terms editor, both read it, so the two can't drift into
+ *  disagreeing about whether the feature applies to a given provider.
+ *
+ *  The request WINDOW (beforeMins/afterMins) is deliberately not part of it:
+ *  those bound where a request may land, not whether any are accepted. */
+export const takesEmergencyRequests = (policy: EmergencyRequestPolicy): boolean =>
+  policy.outsideHours || policy.blockedDates || policy.shortNotice || policy.beyondWindow;
 
 /** A request-window bound in minutes, or null for "any time". Anything
  *  unparseable is null rather than 0: guessing a ceiling of zero would

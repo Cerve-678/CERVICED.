@@ -14,6 +14,13 @@ if (__DEV__) {
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
+import { Lobster_400Regular } from '@expo-google-fonts/lobster';
+import { DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
+import { Bungee_400Regular } from '@expo-google-fonts/bungee';
+import { Righteous_400Regular } from '@expo-google-fonts/righteous';
+import { Sniglet_800ExtraBold } from '@expo-google-fonts/sniglet';
+import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2';
+import { VarelaRound_400Regular } from '@expo-google-fonts/varela-round';
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { FontProvider } from './src/contexts/FontContext';
@@ -112,6 +119,18 @@ export default Sentry.wrap(function App() {
   const [fontsLoaded, fontError] = useFonts({
     'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
+    // Was never registered here despite being used via fontFamily elsewhere
+    // (ProviderProfileScreen's SERIF, InfoRegScreen) — relied on a system
+    // fallback until now.
+    'Prata-Regular': require('./assets/fonts/Prata-Regular.ttf'),
+    // Provider Branding screen's business-name font picker.
+    Lobster_400Regular,
+    DancingScript_700Bold,
+    Bungee_400Regular,
+    Righteous_400Regular,
+    Sniglet_800ExtraBold,
+    Baloo2_700Bold,
+    VarelaRound_400Regular,
   });
 
   const onLayoutRootView = useCallback(async () => {

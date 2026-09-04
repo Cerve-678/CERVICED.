@@ -945,7 +945,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           // Clear highlight after animation completes
           setTimeout(() => {
             setHighlightedBookingId(null);
-          }, 3000);
+          }, 4500);
         }
 
         // Scroll the booking itself into view rather than a fixed distance
@@ -968,7 +968,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           }
         }, 400);
 
-        // Small delay to ensure view is switched, then navigate to the detail/reschedule screen
+        // Wait for the scroll above to land before opening anything over this
+        // screen — the rating modal, the detail push and the reschedule screen
+        // all used to cover the highlighted row before it had travelled there.
+        // An upcoming card is onscreen already and never noticed; a past row is
+        // below the fold, so it was hidden every time. No path is exempt: a
+        // review request is always for a past booking, which is the case that
+        // most needs the scroll.
         setTimeout(async () => {
           if (shouldOpenReschedule) {
             // Sync active reschedule request from Supabase before navigating
@@ -994,7 +1000,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             logger.log('Navigating to BookingDetail screen');
             navigation.navigate('BookingDetail', { bookingId: booking.id });
           }
-        }, 500);
+        }, 1100);
 
         // Clear params after handling
         navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);

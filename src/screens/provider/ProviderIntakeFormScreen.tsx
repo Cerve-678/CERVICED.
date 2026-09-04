@@ -35,6 +35,9 @@ import type { BookingWithAddOns } from '../../types/database';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { useProviderDialog } from '../../components/ProviderDialog';
 import { buildPolicyDisplayRows, PolicyDisplayRow } from '../../utils/policyDisplay';
+import { logger } from '../../utils/logger';
+import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
+import { readEmergencyPolicy, takesEmergencyRequests } from '../../services/AvailabilityService';
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
 
@@ -100,11 +103,16 @@ function buildPolicyTemplate(policyRows: PolicyDisplayRow[]): Template | null {
  *  a slot in the keyword-scored consultation grid; every provider is offered
  *  it regardless of what they do.
  */
+// Not the provider's main Terms & Conditions — those are prose typed straight
+// into their profile document (InfoReg) and served by get_provider_terms. This
+// builds an ordinary library form for the terms that govern an out-of-hours /
+// emergency appointment, so its entry point is gated on
+// EMERGENCY_BOOKINGS_ENABLED like the rest of that feature.
 const TERMS_TEMPLATE: Template = {
   id: 'terms-and-conditions',
   kind: 'terms',
-  label: 'Terms & Conditions',
-  subtitle: 'Your own terms, shown to clients when they book',
+  label: 'Additional Terms',
+  subtitle: 'Extra terms for one service, client, or out-of-hours booking',
   keywords: [],
   questions: [
     {
@@ -319,9 +327,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     clientUserId: string;
     serviceName: string;
     formId: string;
-    openTerms: boolean;
   }>;
-  const { bookingId, clientUserId, formId: existingFormId, openTerms } = params;
+  const { bookingId, clientUserId, formId: existingFormId } = params;
   const serviceName = params.serviceName ?? '';
   const hasBookingContext = !!bookingId && !!clientUserId;
   const { isDarkMode } = useTheme();
@@ -336,6 +343,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
   // ── Picker state ──────────────────────────────────────────────────────────
   const [libraryForms, setLibraryForms]         = useState<LibraryForm[]>([]);
+  // Has this provider opted into being asked for times their own rules exclude?
+  // Gates the Additional Terms section below: those terms govern an
+  // out-of-hours appointment, so a provider who doesn't take those requests has
+  // nothing for them to apply to. Read off the profile row they already fetch —
+  // no second query — via the same predicate the client's booking picker uses.
+  const [takesRequests, setTakesRequests]       = useState(false);
   const [relevantTemplates, setRelevantTemplates] = useState<Template[]>(TEMPLATES);
   const [providerServiceNames, setProviderServiceNames] = useState<string[]>([]);
   // Built fresh from the provider's live booking_policies on every screen
@@ -348,7 +361,6 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const [title, setTitle]                   = useState(`${serviceName} – Consultation Form`);
   const [questions, setQuestions]           = useState<IntakeFormQuestion[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [isTerms, setIsTerms] = useState(false);
   // Every service linked, not merely "as many as exist" — a provider with no
   // services at all shouldn't read as fully selected (the picker is hidden in
   // that case anyway, but the label would be wrong if it ever weren't).
@@ -412,9 +424,6 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setSelectedServices([]);
     setAutoSend(false);
     setRequiresSignature(false);
-    // Carried through the save so get_provider_terms can find this one row
-    // among a library that also holds medical-history and patch-test forms.
-    setIsTerms(tpl.kind === 'terms');
     setMode('builder');
   }, []);
 
@@ -426,7 +435,6 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setSelectedServices(form.serviceNames);
     setAutoSend(form.autoSend);
     setRequiresSignature(form.requiresSignature);
-    setIsTerms(form.isTerms);
     setMode('builder');
   }, []);
 
@@ -442,6 +450,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         ]);
 
         setLibraryForms(forms);
+        setTakesRequests(takesEmergencyRequests(
+          readEmergencyPolicy(profile as unknown as Record<string, unknown> | null),
+        ));
         const svcNames = services.map(s => s.name);
         setProviderServiceNames(svcNames);
         setRelevantTemplates(getRelevantTemplates(profile?.service_category ?? '', svcNames));
@@ -455,13 +466,6 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           setQuestions(existing.questions);
           setRequiresSignature(existing.requiresSignature);
           setMode('readonly');
-        } else if (openTerms) {
-          // Straight into writing/editing the terms. Reuses the same two
-          // paths the Forms card does — the saved form if there is one, the
-          // empty template if not — rather than duplicating that choice.
-          const saved = forms.find(f => f.isTerms);
-          if (saved) openBuilderFromLibrary(saved);
-          else openBuilderFromTemplate(TERMS_TEMPLATE);
         } else {
           setPickerTab(forms.length > 0 ? 'myForms' : 'templates');
           setMode('picker');
@@ -471,7 +475,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       }
     }
     init();
-  }, [bookingId, existingFormId, openTerms, openBuilderFromLibrary, openBuilderFromTemplate]);
+  }, [bookingId, existingFormId, openBuilderFromLibrary, openBuilderFromTemplate]);
 
 
   const toggleService = useCallback((name: string) => {
@@ -537,9 +541,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           serviceNames: selectedServices,
           autoSend,
           requiresSignature,
-          isTerms,
         });
-        saved = { id: editingId, providerId: '', title, questions, serviceNames: selectedServices, autoSend, requiresSignature, isTerms, sentCount: 0, createdAt: '' };
+        saved = { id: editingId, providerId: '', title, questions, serviceNames: selectedServices, autoSend, requiresSignature, sentCount: 0, createdAt: '' };
       } else {
         saved = await saveFormToLibrary({
           title: title.trim() || 'Consultation Form',
@@ -547,7 +550,6 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           serviceNames: selectedServices,
           autoSend,
           requiresSignature,
-          isTerms,
         });
       }
       // Refresh library
@@ -555,13 +557,14 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       setLibraryForms(updated);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       return saved;
-    } catch {
+    } catch (error) {
+      logger.error('Could not save library form', error);
       showToast('Could not save the form. Please try again.', 'error');
       return null;
     } finally {
       setSaving(false);
     }
-  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, isTerms, showToast]);
+  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, showToast]);
 
   // ── Send to client ────────────────────────────────────────────────────────
   // Opened from a booking: bookingId/clientUserId are already known — send
@@ -787,36 +790,44 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                     ))}
                   </View>
 
-                  {/* The provider's own T&Cs. Its own section, like the
-                      policy one below and for the same reason: every provider
-                      needs it regardless of what they do, so it isn't scored
-                      against service keywords like the grid above.
-                      Distinct from Policy Agreement — that's a generated
-                      summary of structured booking_policies (cancellation
-                      window, deposit, no-show); this is prose the provider
-                      writes, and it's the one form clients can read from the
-                      booking sheet before they book. */}
-                  <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>YOUR TERMS</Text>
-                  <View style={styles.templateGrid}>
-                    <TouchableOpacity
-                      style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
-                      onPress={() => {
-                        const existing = libraryForms.find(f => f.isTerms);
-                        if (existing) openBuilderFromLibrary(existing);
-                        else openBuilderFromTemplate(TERMS_TEMPLATE);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.templateCardLabel, { color: P.text }]}>{TERMS_TEMPLATE.label}</Text>
-                      <Text style={[styles.templateCardSub, { color: P.sub }]}>{TERMS_TEMPLATE.subtitle}</Text>
-                      <View style={styles.templateCardFoot}>
-                        <Text style={[styles.templateCardCount, { color: P.sub }]}>
-                          {libraryForms.some(f => f.isTerms) ? 'Written — tap to edit' : 'Not written yet'}
-                        </Text>
-                        <Ionicons name="arrow-forward" size={13} color={P.sub} />
+                  {/* ADDITIONAL terms — the extra terms that apply to an
+                      out-of-hours / emergency appointment specifically, so it
+                      is shown only when such an appointment can actually
+                      happen — BOTH gates, for two different reasons:
+                      EMERGENCY_BOOKINGS_ENABLED, alongside every other piece
+                      of that feature (the by-request slots, RequestTimePanel,
+                      SchedulingScreen's opt-in card, the Emergency Booking
+                      Policy editor); and this provider's own opt-in, since a
+                      provider who accepts none of the four request kinds will
+                      never take an out-of-hours booking for these to govern.
+                      Either way it would be a control with nothing behind it.
+
+                      NOT the provider's main Terms & Conditions: those are
+                      prose in their profile document (InfoReg) and are what a
+                      client agrees to before adding them to a basket. This
+                      builds an ordinary library form. Distinct again from
+                      Policy Agreement, a generated summary of structured
+                      booking_policies. Any of these a provider already wrote
+                      stays in My Forms — only this entry point is hidden. */}
+                  {EMERGENCY_BOOKINGS_ENABLED && takesRequests && (
+                    <>
+                      <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>ADDITIONAL TERMS</Text>
+                      <View style={styles.templateGrid}>
+                        <TouchableOpacity
+                          style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
+                          onPress={() => openBuilderFromTemplate(TERMS_TEMPLATE)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.templateCardLabel, { color: P.text }]}>{TERMS_TEMPLATE.label}</Text>
+                          <Text style={[styles.templateCardSub, { color: P.sub }]}>{TERMS_TEMPLATE.subtitle}</Text>
+                          <View style={styles.templateCardFoot}>
+                            <Text style={[styles.templateCardCount, { color: P.sub }]}>Start a new one</Text>
+                            <Ionicons name="arrow-forward" size={13} color={P.sub} />
+                          </View>
+                        </TouchableOpacity>
                       </View>
-                    </TouchableOpacity>
-                  </View>
+                    </>
+                  )}
 
                   {/* Every provider has a policy (or can set one in Public
                       Profile), so this isn't scored/filtered by service
@@ -1141,7 +1152,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       <Modal
         visible={!!pickingBookingFor}
         animationType="fade"
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         onRequestClose={() => setPickingBookingFor(null)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>

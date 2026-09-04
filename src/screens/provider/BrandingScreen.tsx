@@ -25,6 +25,8 @@ import {
   parseThemeKey,
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
+import ProviderFontPicker from '../../components/ProviderFontPicker';
+import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily } from '../../constants/providerFonts';
 import { uploadToStorage } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -75,6 +77,7 @@ export default function BrandingScreen({ navigation }: any) {
   const [sheetColor, setSheetColor]           = useState(SHEET_BG);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
+  const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
 
   useEffect(() => {
     (async () => {
@@ -89,6 +92,7 @@ export default function BrandingScreen({ navigation }: any) {
           }
           if (data.accent_color) setAccentColor(data.accent_color);
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
+          if (data.brand_font) setBrandFont(data.brand_font);
           const { base, sheet } = parseThemeKey(data.profile_theme);
           setSheetColor(sheet);
           const custom = decodeCustomTheme(base);
@@ -162,6 +166,7 @@ export default function BrandingScreen({ navigation }: any) {
         accent_color: resolvedAccent,
         background_image_url: backgroundImage,
         profile_theme: encodeThemeKey(baseKey, sheetColor),
+        brand_font: brandFont,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -171,7 +176,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, navigation]);
+  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, brandFont, navigation]);
 
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {
@@ -240,7 +245,7 @@ export default function BrandingScreen({ navigation }: any) {
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
                 <Text style={styles.previewAccentLabel}>ACCENT</Text>
               </View>
-              <Text style={styles.previewName}>Your Profile</Text>
+              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont) }]}>Your Profile</Text>
               <Text style={styles.previewSub}>Background preview</Text>
             </View>
           </View>
@@ -259,6 +264,23 @@ export default function BrandingScreen({ navigation }: any) {
               subColor={P.sub}
               borderColor={P.border}
               sepColor={P.sep}
+            />
+          </View>
+
+          {/* Business name font */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Choose how your business name is styled on your public profile.
+            </Text>
+            <ProviderFontPicker
+              value={brandFont}
+              onChange={setBrandFont}
+              accentColor={accentColor}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+              cardColor={P.surface}
             />
           </View>
 

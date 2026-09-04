@@ -216,6 +216,11 @@ export type ProviderHomeStackParamList = {
   // fresh stack, so their back/save button fired an unhandled GO_BACK.
   EditProfile: { transferProviderId?: string } | undefined;
   Branding: undefined;
+  // Reachable from the go-live checklist card's "Set your booking policies" /
+  // "Set your deposit & payment options" rows — registered here for the same
+  // push-not-jump reason as EditProfile/Branding above.
+  Policies: undefined;
+  Payments: undefined;
   BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; groupSiblings?: any[] };
   ProviderIntakeForm:
     | {
@@ -224,11 +229,6 @@ export type ProviderHomeStackParamList = {
         serviceName: string;
         formId?: string;
       }
-    // Straight into the Terms & Conditions builder, skipping the library —
-    // the entry points for terms (Business Info, the profile-health
-    // checklist) name the document, so landing on a list of every form and
-    // asking the provider to find it again is a step backwards.
-    | { openTerms: true }
     | undefined;
   Notifications: undefined;
   ProviderInbox:
@@ -249,11 +249,9 @@ export type ProviderHomeStackParamList = {
 export type ProviderServicesStackParamList = {
   ProviderServicesMain: undefined;
   EditProfile: { transferProviderId?: string } | undefined;
-  // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
-  // builder opens with the profile editor beneath it instead of at a bare tab
-  // root — same reasoning as Policies below. Only the openTerms shape is
-  // reachable from this stack.
-  ProviderIntakeForm: { openTerms: true } | undefined;
+  // Registered so the form builder can open with the profile editor beneath
+  // it rather than at a bare tab root — same reasoning as Policies below.
+  ProviderIntakeForm: undefined;
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
@@ -273,6 +271,9 @@ export type ProviderServicesStackParamList = {
   // same reason ProviderSchedule is registered here rather than jumped to on
   // the Account tab.
   Policies: undefined;
+  // Pushed from the go-live checklist's "Set your deposit & payment options"
+  // row, same reasoning.
+  Payments: undefined;
   Branding: undefined;
   // Pushed from the dashboard's saved-by-clients tile, same reasoning.
   Analytics: undefined;
@@ -300,8 +301,6 @@ export type ProviderAccountStackParamList = {
         serviceName: string;
         formId?: string;
       }
-    // See the ProviderAccount stack's copy of this route.
-    | { openTerms: true }
     | undefined;
   ProviderInbox:
     | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }

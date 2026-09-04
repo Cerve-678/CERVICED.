@@ -193,10 +193,12 @@ export interface DbProvider {
   accent_color: string | null;
   background_image_url: string | null;
   profile_theme: string | null; // preset key from src/constants/providerThemes.ts ('app', 'blush', …)
+  brand_font: string | null; // preset key from src/constants/providerFonts.ts — see PROVIDER_FONTS for the current list; null = default (Prata-Regular)
   phone: string | null;
   email: string | null;
   instagram: string | null;
   website: string | null;
+  tiktok: string | null;
   preferred_contact_methods: string[] | null;
   whatsapp_number: string | null;
   // When set, client-facing "Book" CTAs open this URL (Fresha, Treatwell,
@@ -445,6 +447,13 @@ export interface DbServiceImage {
    * guessed ratio is what makes a landscape photo render in a portrait box.
    */
   aspect_ratio: number | null;
+  /**
+   * How the provider chose to have this photo framed: 'cover' fills the
+   * display box and may crop, 'contain' fits the whole photo and letterboxes.
+   * NOT NULL with a 'cover' default, so every legacy row reads as today's
+   * behaviour — see supabase/migrations/20260829011733_service_image_fit.sql.
+   */
+  fit: "cover" | "contain";
 }
 
 export interface DbServiceAddOn {
@@ -810,10 +819,12 @@ export type ProviderWithServices = Pick<
   | "accent_color"
   | "background_image_url"
   | "profile_theme"
+  | "brand_font"
   | "phone"
   | "email"
   | "instagram"
   | "website"
+  | "tiktok"
   | "preferred_contact_methods"
   | "whatsapp_number"
   | "external_booking_url"
@@ -916,7 +927,7 @@ export interface DiscoverServiceWithProvider {
   name: string;
   description: string | null;
   price: number;
-  service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio">[];
+  service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio" | "fit">[];
   provider: Pick<
     DbProvider,
     | "id"

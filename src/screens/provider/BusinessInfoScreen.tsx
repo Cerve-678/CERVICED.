@@ -2,10 +2,17 @@
  * Business Info — the "who you are and how to reach you" half of what used
  * to be the single 671-line Business Details screen.
  *
- * Scope: business name, business type, social/web links, the two emails, and
- * the external booking link. Deliberately excludes anything about how you
- * practise (that's ServicesPricingScreen) or trust/access claims
- * (AboutYouScreen).
+ * Scope: business name, service type, business type, social/web links, the
+ * two emails, and the external booking link. Deliberately excludes anything
+ * about how you practise (that's ServicesPricingScreen) or trust/access
+ * claims (AboutYouScreen).
+ *
+ * Service type and business type are both asked once at sign-up and then
+ * rendered locked (not editable) in InfoRegScreen, pointing here — this is
+ * the only place either can be changed afterwards. Changing service type
+ * re-categorises the whole live profile (Search/Explore category, Becca
+ * routing, promo matching); it doesn't touch existing services or categories
+ * themselves, which stay exactly as named.
  *
  * The business name is editable here and nowhere else — InfoRegScreen asks
  * for it at sign-up and then renders it locked, pointing here. Changing it
@@ -30,18 +37,24 @@ import {
   updateProviderContactDetails,
 } from '../../services/databaseService';
 import {
-  Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
+  Card, ChipGroup, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
   ADDRESS_RELEASE_OPTS,
   BUSINESS_TYPE_OPTS,
   isAddressReleaseAllowed,
   reconcileAddressReleasePolicy,
+  SERVICE_CATEGORY_OPTS,
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
 import { formatLongDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
+
+// The subset of ServiceCategory this screen's picker actually offers — same
+// exclusion as SERVICE_CATEGORY_OPTS itself (MALE/KIDS are audience-widening
+// values set elsewhere, never provider-self-selected here).
+type SelectableServiceCategory = (typeof SERVICE_CATEGORY_OPTS)[number];
 
 export default function BusinessInfoScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -59,6 +72,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [savedName, setSavedName]         = useState('');
   const [nameChangedAt, setNameChangedAt] = useState<string | null>(null);
   const [businessType, setBusinessType]   = useState<BusinessType | null>(null);
+  const [serviceCategory, setServiceCategory] = useState<SelectableServiceCategory | null>(null);
+  const [customServiceType, setCustomServiceType] = useState('');
   const [addressReleasePolicy, setAddressReleasePolicy] = useState<AddressReleasePolicy | null>(null);
   const [businessEmail, setBusinessEmail] = useState('');
   const [bookingEmail, setBookingEmail]   = useState('');
@@ -97,6 +112,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
             (providerData as { display_name_changed_at?: string | null }).display_name_changed_at ?? null,
           );
           setBusinessType((providerData.business_type as BusinessType | null) ?? null);
+          setServiceCategory((providerData.service_category as SelectableServiceCategory | null) ?? null);
+          setCustomServiceType(providerData.custom_service_type ?? '');
           setAddressReleasePolicy((providerData.address_release_policy as AddressReleasePolicy | null) ?? null);
           // Prefilled, not left blank pointing at another screen: if the
           // provider never set a separate enquiry address, their business
@@ -138,6 +155,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
     if (!businessName.trim()) { flash('Enter your business name', 'error'); return; }
     if (!isValidEmail(businessEmail)) { flash('Enter a valid business email', 'error'); return; }
     if (!isValidEmail(bookingEmail))  { flash('Enter a valid public enquiry email', 'error'); return; }
+    if (serviceCategory === 'OTHER' && !customServiceType.trim()) {
+      flash('Tell clients what service you provide', 'error');
+      return;
+    }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -167,6 +188,12 @@ export default function BusinessInfoScreen({ navigation }: any) {
             ? {
                 business_type: businessType,
                 address_release_policy: reconcileAddressReleasePolicy(businessType, addressReleasePolicy),
+              }
+            : {}),
+          ...(serviceCategory
+            ? {
+                service_category: serviceCategory,
+                custom_service_type: serviceCategory === 'OTHER' ? (customServiceType.trim() || null) : null,
               }
             : {}),
           email: bookingEmail.trim() || null,
@@ -248,6 +275,25 @@ export default function BusinessInfoScreen({ navigation }: any) {
               <Field label="Business Email" value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Your business address. Cerviced uses this to reach you, and it prefills the enquiry email below." />
               <Field label="Public Enquiry Email" value={bookingEmail} onChange={setBookingEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Shown on your profile under Get In Touch. Prefilled from your business email — change it only if you'd rather enquiries went elsewhere." />
               <Field label="Years of Experience" value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 5" keyboardType="phone-pad" />
+            </Card>
+
+            <Card
+              title="Service Type"
+              sub="Your main specialty. Decides which category clients find you under in Search and Explore, and which service suggestions you're offered when adding a service."
+            >
+              <ChipGroup
+                options={[...SERVICE_CATEGORY_OPTS]}
+                selected={serviceCategory ? [serviceCategory] : []}
+                onToggle={v => setServiceCategory(v as SelectableServiceCategory)}
+              />
+              {serviceCategory === 'OTHER' && (
+                <Field
+                  label="What service do you provide?"
+                  value={customServiceType}
+                  onChange={setCustomServiceType}
+                  placeholder="e.g. Tattoo artist"
+                />
+              )}
             </Card>
 
             <Card

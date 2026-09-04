@@ -23,11 +23,17 @@ import {
 import { timeAgo } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 
-const EARN_WAYS = [
-  { icon: 'event-available', label: 'Complete a Booking', points: '+50 pts', desc: 'Every completed appointment', live: true },
-  { icon: 'star', label: 'Leave a Review', points: '+20 pts', desc: 'After each booking', live: true },
-  { icon: 'emoji-events', label: 'First Booking', points: '+200 pts', desc: 'One-time welcome bonus', live: true },
-  { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'On your birthday', live: true },
+// Split the way the ledger actually behaves: the first group can pay out
+// again and again, the second pays once per account and never returns.
+const EARN_WAYS_REPEATABLE = [
+  { icon: 'event-available', label: 'Complete a Booking', points: '+2 pts', desc: 'Every appointment after your first', live: true },
+  { icon: 'star', label: 'Leave a Review', points: '+4 pts', desc: 'After each booking', live: true },
+  { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'A booking dated on your birthday', live: true },
+];
+
+const EARN_WAYS_ONE_OFF = [
+  { icon: 'emoji-events', label: 'First Booking', points: '+100 pts', desc: 'Welcome bonus on your very first appointment', live: true },
+  { icon: 'person', label: 'Complete Your Profile', points: '+30 pts', desc: 'Add a profile photo', live: true },
   { icon: 'person-add', label: 'Refer a Friend', points: '', desc: 'Coming soon', live: false },
 ];
 
@@ -42,6 +48,7 @@ const REASON_LABEL: Record<ClientPointsReason, string> = {
   review_left: 'Left a review',
   first_booking: 'First booking bonus',
   birthday_bonus: 'Birthday bonus',
+  profile_completed: 'Completed your profile',
 };
 
 export default function PointsScreen({ navigation }: any) {
@@ -122,8 +129,25 @@ export default function PointsScreen({ navigation }: any) {
         </View>
 
         {/* How to earn */}
-        <Text style={[styles.section, { color: P.accentText }]}>HOW TO EARN</Text>
-        {EARN_WAYS.map(way => (
+        <Text style={[styles.section, { color: P.accentText }]}>EARN EVERY TIME</Text>
+        {EARN_WAYS_REPEATABLE.map(way => (
+          <View
+            key={way.label}
+            style={[styles.row, { backgroundColor: P.card, borderColor: P.border, opacity: way.live ? 1 : 0.55 }]}
+          >
+            <View style={[styles.iconWrap, { backgroundColor: P.iconBg }]}>
+              <Icon name={way.icon} size={20} color={P.accentText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: P.text }]}>{way.label}</Text>
+              <Text style={[styles.rowDesc, { color: P.sub }]}>{way.desc}</Text>
+            </View>
+            {way.live && <Text style={[styles.pts, { color: P.accentText }]}>{way.points}</Text>}
+          </View>
+        ))}
+
+        <Text style={[styles.section, { color: P.accentText, marginTop: 24 }]}>EARN ONCE</Text>
+        {EARN_WAYS_ONE_OFF.map(way => (
           <View
             key={way.label}
             style={[styles.row, { backgroundColor: P.card, borderColor: P.border, opacity: way.live ? 1 : 0.55 }]}

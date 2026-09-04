@@ -20,7 +20,7 @@ import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./useProviderProfileData";
 
-const INLINE_PORTFOLIO_LIMIT = 8;
+const INLINE_PORTFOLIO_LIMIT = 20;
 const COLUMN_GAP = 12;
 
 interface SectionPalette {
@@ -354,11 +354,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
     <View style={styles.portfolioSection}>
       <View style={styles.portfolioHeading}>
         <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
-        {items.length > INLINE_PORTFOLIO_LIMIT ? (
-          <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
-            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
-          </TouchableOpacity>
-        ) : null}
+        <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
+          <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.columns}>
         {columns.map((column, columnIndex) => (

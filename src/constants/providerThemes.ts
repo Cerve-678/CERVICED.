@@ -28,6 +28,7 @@ export const SHEET_OPTIONS: { key: string; name: string; color: string }[] = [
   { key: 'ivory',    name: 'Ivory',     color: '#FBF6EC' },
   { key: 'mist',     name: 'Mist',      color: '#EEF1F4' },
   { key: 'sagemist', name: 'Sage Mist', color: '#EEF3EC' },
+  { key: 'butter',   name: 'Butter',    color: '#F5E8B8' },
 ];
 
 export interface ProviderThemeTokens {
@@ -159,12 +160,14 @@ export function buildMonochromeTheme(mainColor: string, sheet: string = SHEET_BG
 // still covers pink for anyone who wants it.)
 
 const PRESET_DEFS: { key: string; name: string; description: string; backdrop: string; card: string; accent: string; suggestedSheet: string }[] = [
-  { key: 'app',        name: 'App',         description: 'Matches the CERVICED app look',        backdrop: '#B695A0', card: '#FFFFFF', accent: '#5A363B', suggestedSheet: 'beige' },
+  { key: 'app',        name: 'App',         description: 'Matches the CERVICED app look',        backdrop: '#B695A0', card: '#FFFFFF', accent: '#4A2C1E', suggestedSheet: 'beige' },
   { key: 'blush',      name: 'Blush',       description: 'Soft pink cards and backdrop',         backdrop: '#F2D4DE', card: '#FDF5F7', accent: '#E9799F', suggestedSheet: 'blush' },
   { key: 'grey',       name: 'Grey',        description: 'Clean neutral grey',                   backdrop: '#D6D6DA', card: '#F7F7F8', accent: '#5F6068', suggestedSheet: 'mist' },
   // Charcoal keeps its dark hero but uses the shared neutral card like every
   // other theme, so About/Services/Reviews read the same clean off-white.
   { key: 'charcoal',   name: 'Charcoal',    description: 'Near-black hero over clean neutral cards', backdrop: '#26262B', card: NEUTRAL_CARD, accent: '#4A4A52', suggestedSheet: 'mist' },
+  { key: 'butter',     name: 'Butter Yellow', description: 'Rich brown backdrop, butter-yellow content area, brown accent', backdrop: '#6B4A2F', card: NEUTRAL_CARD, accent: '#6B4A2F', suggestedSheet: 'butter' },
+  { key: 'pinkolive',  name: 'Pink & Olive', description: 'Soft pink backdrop with an olive accent', backdrop: '#F9D1D9', card: '#FDF6F7', accent: '#838F58', suggestedSheet: 'blush' },
 ];
 
 // Monochrome sets — ONE main colour drives the backdrop and accent; the
@@ -181,13 +184,17 @@ const MONOCHROME_DEFS: { key: string; name: string; description: string; main: s
 // straight on. Each gradient blends two adjacent desaturated shades so the
 // backdrop reads as one refined, hard-to-name colour story. The card stays
 // the shared neutral; only the hero and accent carry the tone.
-const GRADIENT_DEFS: { key: string; name: string; description: string; from: string; to: string; suggestedSheet: string }[] = [
+const GRADIENT_DEFS: { key: string; name: string; description: string; from: string; to: string; accent?: string; suggestedSheet: string }[] = [
   { key: 'clay',      name: 'Clay',       description: 'Muted terracotta into warm greyed sand',    from: '#9E6B57', to: '#CBAF98', suggestedSheet: 'beige' },
   { key: 'thyme',     name: 'Thyme',      description: 'Greyed sage into soft olive',               from: '#6C7A63', to: '#A8AE8E', suggestedSheet: 'beige' },
   { key: 'harbour',   name: 'Harbour',    description: 'Dusty slate-blue into muted teal-grey',     from: '#4F6672', to: '#8FA6A8', suggestedSheet: 'beige' },
   { key: 'garnet',    name: 'Garnet',     description: 'Deep muted red into soft brick-rose',       from: '#8E3A34', to: '#C07E6E', suggestedSheet: 'beige' },
   { key: 'fig',       name: 'Fig',        description: 'Dusty aubergine into greyed mauve',         from: '#5B4457', to: '#9B8090', suggestedSheet: 'beige' },
   { key: 'fern',      name: 'Fern',       description: 'Deep forest green into muted moss',         from: '#3E5541', to: '#8AA07E', suggestedSheet: 'beige' },
+  // Accent is hand-picked rather than derived from `from` — a darkened grey
+  // would read as just another grey, so this uses a dusty rose-mauve that
+  // bridges both ends of the gradient instead.
+  { key: 'greypink',  name: 'Grey & Pink', description: 'Cool grey fading into soft pink',          from: '#B9B9C0', to: '#F3D3DE', accent: '#9C6B7A', suggestedSheet: 'blush' },
 ];
 
 export const PROVIDER_THEMES: ProviderThemePreset[] = [
@@ -210,9 +217,10 @@ export const PROVIDER_THEMES: ProviderThemePreset[] = [
     name: d.name,
     description: d.description,
     // Card stays the shared neutral (NEUTRAL_CARD) regardless of the theme —
-    // only the backdrop gradient and accent carry the colour. Accent is the
-    // richer "from" end, deepened slightly for contrast on the pale card.
-    tokens: buildThemeTokens(d.from, NEUTRAL_CARD, blend(d.from, '#000000', 0.12), SHEET_BG, [d.from, d.to]),
+    // only the backdrop gradient and accent carry the colour. Accent defaults
+    // to the richer "from" end, deepened slightly for contrast on the pale
+    // card, unless a def hand-picks its own (see 'greypink').
+    tokens: buildThemeTokens(d.from, NEUTRAL_CARD, d.accent ?? blend(d.from, '#000000', 0.12), SHEET_BG, [d.from, d.to]),
     suggestedSheet: d.suggestedSheet,
   })),
 ];

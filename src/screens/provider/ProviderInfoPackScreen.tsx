@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Linking,
   Platform,
   FlatList,
   Animated,
@@ -23,13 +22,18 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ProviderAccountStackParamList } from '../../navigation/types';
 import { useProviderDialog } from '../../components/ProviderDialog';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { logger } from '../../utils/logger';
+import { formatShortDate } from '../../utils/dateUtils';
 import {
   getMyProviderServices,
   getProviderInfoPacksByUserId,
   createInfoPack,
   deleteInfoPack,
+  getProviderBookings,
+  attachInfoPackToBooking,
   ProviderInfoPackRow,
 } from '../../services/databaseService';
+import type { BookingWithAddOns } from '../../types/database';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
@@ -148,21 +152,35 @@ const pc = StyleSheet.create({
 });
 
 // ─── Send sheet ───────────────────────────────────────────────────────────────
+//
+// Sends by attaching the pack to a real booking via attachInfoPackToBooking()
+// — the same booking_info_packs row + in-app/push notification the auto-attach
+// DB trigger creates, and the same RPC ProviderBookingDetailScreen's own
+// "Send Info Pack" picker already calls from the booking side. This used to
+// just open the device's mailto:/sms: composer with the pack's text pasted
+// in — the app had no way to know whether that ever actually reached anyone,
+// unlike a form's "Send to client", which is a real in-app record. Picking a
+// booking here does the same thing forms do.
 
 function SendSheet({
-  pack, visible, dark, P, onClose,
+  pack, visible, dark, P, bookings, loading, sendingBookingId, onPickBooking, onClose,
 }: {
-  pack: InfoPack | null; visible: boolean; dark: boolean;
-  P: typeof LIGHT_P; onClose: () => void;
+  pack: InfoPack | null; visible: boolean; dark: boolean; P: typeof LIGHT_P;
+  bookings: BookingWithAddOns[]; loading: boolean; sendingBookingId: string | null;
+  onPickBooking: (booking: BookingWithAddOns) => void; onClose: () => void;
 }) {
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const phoneInputRef = useRef<TextInput>(null);
   const slideAnim = useRef(new Animated.Value(500)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
+  // `pack` goes null the instant `visible` does (both come from the same
+  // parent state), so reading `pack` directly for the render guard/title
+  // would unmount this on the very same tick — before the close animation
+  // below ever gets a frame. Keep the last pack around until that animation
+  // actually finishes.
+  const [renderPack, setRenderPack] = useState(pack);
 
   useEffect(() => {
     if (visible) {
+      setRenderPack(pack);
       Animated.parallel([
         Animated.timing(fadeAnim,  { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.spring(slideAnim, { toValue: 0, tension: 80, friction: 14, useNativeDriver: true }),
@@ -171,80 +189,64 @@ function SendSheet({
       Animated.parallel([
         Animated.timing(fadeAnim,  { toValue: 0, duration: 180, useNativeDriver: true }),
         Animated.timing(slideAnim, { toValue: 500, duration: 200, useNativeDriver: true }),
-      ]).start(() => { setEmail(''); setPhone(''); });
+      ]).start(() => setRenderPack(null));
     }
-  }, [fadeAnim, slideAnim, visible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
-  if (!visible && !pack) return null;
+  if (!visible && !renderPack) return null;
 
   // Rendered inside a native Modal — a screen-local absolute overlay can never
   // outrank the floating pill tab bar, which mounts at the navigator level,
   // above individual screens. Modal renders in its own top-level layer instead.
 
-  const handleEmail = () => {
-    if (!pack || !email.trim()) return;
-    const sub2   = encodeURIComponent(`Info Pack: ${pack.title}`);
-    const body   = encodeURIComponent(`Hi,\n\n${pack.title}\n\n${pack.content}\n\nThank you for your booking.`);
-    Linking.openURL(`mailto:${email.trim()}?subject=${sub2}&body=${body}`);
-  };
-
-  const handleSMS = () => {
-    if (!pack || !phone.trim()) return;
-    const body = encodeURIComponent(`${pack.title}\n\n${pack.content}`);
-    const url  = Platform.OS === 'ios' ? `sms:${phone.trim()}&body=${body}` : `sms:${phone.trim()}?body=${body}`;
-    Linking.openURL(url);
-  };
-
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Animated.View style={[ss.overlay, { opacity: fadeAnim }]} pointerEvents={visible ? 'auto' : 'none'}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-        <KeyboardDismissView style={ss.keyboardAvoiding} dismissOnTap>
-          <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
-            <View style={[ss.handle, { backgroundColor: P.border }]} />
-            <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
-            {pack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{pack.title}</Text>}
-            <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
-              <Ionicons name="mail-outline" size={16} color={P.sub} />
-              <TextInput
-                style={[ss.input, { color: P.text }]}
-                placeholder="Client email"
-                placeholderTextColor={P.sub}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="next"
-                onSubmitEditing={() => phoneInputRef.current?.focus()}
-              />
+        <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
+          <View style={[ss.handle, { backgroundColor: P.border }]} />
+          <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
+          {renderPack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{renderPack.title}</Text>}
+          {loading ? (
+            <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+              <ActivityIndicator color={P.accent} />
             </View>
-            <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
-              <Ionicons name="call-outline" size={16} color={P.sub} />
-              <TextInput
-                ref={phoneInputRef}
-                style={[ss.input, { color: P.text }]}
-                placeholder="Client phone"
-                placeholderTextColor={P.sub}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-              />
-            </View>
-            <View style={ss.btnRow}>
-              <TouchableOpacity style={[ss.btn, { backgroundColor: P.iconBg }]} activeOpacity={0.78} onPress={handleEmail}>
-                <Ionicons name="mail-outline" size={16} color={P.accent} />
-                <Text style={[ss.btnText, { color: P.accent }]}>Send via Email</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[ss.btn, { backgroundColor: dark ? 'rgba(48,209,88,0.15)' : 'rgba(48,209,88,0.10)' }]} activeOpacity={0.78} onPress={handleSMS}>
-                <Ionicons name="chatbubble-outline" size={16} color="#30D158" />
-                <Text style={[ss.btnText, { color: '#30D158' }]}>Send via SMS</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </KeyboardDismissView>
+          ) : bookings.length === 0 ? (
+            <Text style={[ss.emptyText, { color: P.sub }]}>
+              No upcoming bookings to send this to yet.
+            </Text>
+          ) : (
+            <ScrollView style={ss.bookingList} showsVerticalScrollIndicator={false}>
+              {bookings.map(b => {
+                const isSending = sendingBookingId === b.id;
+                return (
+                  <TouchableOpacity
+                    key={b.id}
+                    style={[ss.bookingRow, { borderColor: P.border, opacity: sendingBookingId && !isSending ? 0.5 : 1 }]}
+                    activeOpacity={0.7}
+                    disabled={!!sendingBookingId}
+                    onPress={() => onPickBooking(b)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[ss.bookingClient, { color: P.text }]} numberOfLines={1}>
+                        {b.customer_name || 'Client'}
+                      </Text>
+                      <Text style={[ss.bookingMeta, { color: P.sub }]} numberOfLines={1}>
+                        {b.service_name_snapshot} · {formatShortDate(b.booking_date)}
+                      </Text>
+                    </View>
+                    {isSending ? (
+                      <ActivityIndicator size="small" color={P.accent} />
+                    ) : (
+                      <Ionicons name="send-outline" size={16} color={P.accent} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </Animated.View>
       </Animated.View>
     </Modal>
   );
@@ -252,16 +254,15 @@ function SendSheet({
 
 const ss = StyleSheet.create({
   overlay:  { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)', zIndex: 10 },
-  keyboardAvoiding: { flex: 1, justifyContent: 'flex-end' },
-  sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingBottom: 36, paddingTop: 12 },
+  sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingBottom: 36, paddingTop: 12, maxHeight: '70%' },
   handle:   { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   title:    { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4 },
-  packName: { fontSize: 13, marginBottom: 20 },
-  inputWrap:{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 },
-  input:    { flex: 1, fontSize: 14 },
-  btnRow:   { flexDirection: 'row', gap: 10, marginTop: 8 },
-  btn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12 },
-  btnText:  { fontSize: 14, fontWeight: '700' },
+  packName: { fontSize: 13, marginBottom: 16 },
+  emptyText:{ fontSize: 13, lineHeight: 19, textAlign: 'center', paddingVertical: 30 },
+  bookingList: { flexGrow: 0 },
+  bookingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
+  bookingClient: { fontSize: 14, fontWeight: '700' },
+  bookingMeta:   { fontSize: 12, marginTop: 2 },
 });
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
@@ -269,7 +270,7 @@ const ss = StyleSheet.create({
 export default function ProviderInfoPackScreen({ navigation }: Props) {
   const { isDarkMode: dark } = useTheme();
   const { user } = useAuth();
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useProviderDialog();
   const P = dark ? DARK_P : LIGHT_P;
 
   const [view,       setView]       = useState<'list' | 'create'>('list');
@@ -277,6 +278,9 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const [content,    setContent]    = useState('');
   const [packs,      setPacks]      = useState<InfoPack[]>([]);
   const [sending,    setSending]    = useState<InfoPack | null>(null);
+  const [sendBookings, setSendBookings]   = useState<BookingWithAddOns[]>([]);
+  const [loadingSendBookings, setLoadingSendBookings] = useState(false);
+  const [sendingBookingId, setSendingBookingId] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<InfoPack | null>(null);
   const [isLoading,  setIsLoading]  = useState(true);
   const [myServices, setMyServices] = useState<string[]>([]);
@@ -351,11 +355,58 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [title, selectedServices, content, user?.id, resetForm, showToast]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    setPacks(prev => prev.filter(p => p.id !== id));
-    deleteInfoPack(id).catch(() => {});
-    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+  const performDelete = useCallback(async (id: string) => {
+    try {
+      await deleteInfoPack(id);
+      setPacks(prev => prev.filter(p => p.id !== id));
+      if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      logger.error('[InfoPacks] delete failed:', error);
+      showToast('Could not delete this pack. Please try again.', 'error');
+    }
+  }, [showToast]);
+
+  const handleDelete = useCallback((pack: InfoPack) => {
+    showConfirm(
+      'Delete this pack?',
+      `"${pack.title}" will be permanently deleted. This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => { void performDelete(pack.id); } },
+      ],
+    );
+  }, [performDelete, showConfirm]);
+
+  const handleOpenSend = useCallback(async (pack: InfoPack) => {
+    setSending(pack);
+    setLoadingSendBookings(true);
+    try {
+      const all = await getProviderBookings();
+      setSendBookings(all.filter(b => b.status === 'pending' || b.status === 'confirmed'));
+    } catch (error) {
+      logger.error('[InfoPacks] failed to load bookings to send to:', error);
+      showToast('Could not load your bookings. Please try again.', 'error');
+      setSendBookings([]);
+    } finally {
+      setLoadingSendBookings(false);
+    }
+  }, [showToast]);
+
+  const handlePickBookingForSend = useCallback(async (booking: BookingWithAddOns) => {
+    if (!sending) return;
+    setSendingBookingId(booking.id);
+    try {
+      await attachInfoPackToBooking(booking.id, sending.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      showToast(`Sent to ${booking.customer_name || 'client'}.`, 'success');
+      setSending(null);
+    } catch (error) {
+      logger.error('[InfoPacks] send failed:', error);
+      showToast('Could not send this pack. Please try again.', 'error');
+    } finally {
+      setSendingBookingId(null);
+    }
+  }, [sending, showToast]);
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -429,8 +480,8 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               <PackCard
                 pack={item} dark={dark} P={P} index={index}
                 onPress={() => setPreviewing(item)}
-                onSend={() => setSending(item)}
-                onDelete={() => handleDelete(item.id)}
+                onSend={() => handleOpenSend(item)}
+                onDelete={() => handleDelete(item)}
               />
             )}
             ListEmptyComponent={
@@ -533,7 +584,9 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
       <SendSheet
         pack={sending} visible={!!sending} dark={dark} P={P}
-        onClose={() => setSending(null)}
+        bookings={sendBookings} loading={loadingSendBookings} sendingBookingId={sendingBookingId}
+        onPickBooking={handlePickBookingForSend}
+        onClose={() => { if (!sendingBookingId) setSending(null); }}
       />
 
       {/* Full-content preview — tapping a card only ever showed the 2-line

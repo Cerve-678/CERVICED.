@@ -1,3 +1,5 @@
+import type { ServiceImageDraft } from '../../services/providerRegistrationService';
+
 export type ProviderServiceType = 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
 
 // '' = not stated, read as "everyone" by the app — mirrors the live
@@ -18,14 +20,19 @@ export interface ServiceTemplateSeed {
 
 export interface ProviderServiceDraft {
   id: number;
+  // The real services.id when this service already exists in the DB — null
+  // for one created in this editing session. See InfoRegScreen's ServiceData
+  // for why this must be threaded through to the save payload rather than
+  // left for replace_provider_services to regenerate.
+  dbId: string | null;
   name: string;
   price: number;
   duration: string;
   bufferBeforeMins: number | null;
   bufferAfterMins: number | null;
   description: string;
-  images: string[];
-  addOns: { id: number; name: string; price: number }[];
+  images: ServiceImageDraft[];
+  addOns: { id: number; dbId: string | null; name: string; price: number }[];
   tags: string[];
   techniqueTags: string[];
   outcomeTags: string[];
@@ -57,6 +64,7 @@ function nextDraftId(): number {
 export function createServiceDraft(template?: ServiceTemplateSeed | null): ProviderServiceDraft {
   return {
     id: nextDraftId(),
+    dbId: null,
     name: template?.name ?? '',
     price: 0,
     duration: template?.duration ?? '',

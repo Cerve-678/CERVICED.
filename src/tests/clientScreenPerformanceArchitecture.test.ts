@@ -81,6 +81,21 @@ describe('client screen performance contracts', () => {
     expect(providerListSection).not.toContain('.select("*")');
   });
 
+  // Price range and audience tags come off the same services scan, behind the
+  // same provider-visibility gate — asking for them separately made a search
+  // with the audience filter on pay two round trips for one table read, and
+  // made toggling that filter cost another. Both are now one fetch, with the
+  // match set derived in memory.
+  it('reads Search price ranges and audience tags in one services query', () => {
+    const source = readScreen('SearchScreen');
+
+    expect(source).toContain('getProviderServiceFacets(ids)');
+    expect(source).not.toContain('getProviderAudienceMatches(');
+    expect(source).not.toContain('getProviderPriceRanges(');
+    // Derived, not fetched: no effect may re-query when the filter flips.
+    expect(source).not.toContain('}, [providerData, activeFilters.audience]);');
+  });
+
   it('virtualizes Home provider rails instead of mounting every image card', () => {
     const source = readScreen('HomeScreen');
 

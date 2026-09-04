@@ -6,13 +6,16 @@
  * provider UI could only produce two of them. `booking_policies` stored a
  * boolean pair (`depositRequired` + `depositOnly`) that PoliciesScreen wrote
  * in lockstep, so "deposit optional" — both buttons in the booking sheet —
- * was a state the client could render but no provider could ever choose. It
- * only ever appeared for providers with no saved policy at all, via a
- * fabricated 20% default.
+ * was a state the client could render but no provider could ever choose.
  *
  * `depositMode` replaces that pair. The pair is still written alongside it
  * (see PaymentsScreen) and still read here as a fallback, because rows saved
  * before the change only have the booleans.
+ *
+ * Until 2026-09-03, a provider with no saved deposit setting at all was
+ * quoted to clients as a fabricated 20%-both-options deposit they never
+ * chose. Every caller of `resolveDepositMode` now treats `null` as "no
+ * deposit offered" (full price only) instead of inventing one.
  */
 
 export type DepositMode = 'full_only' | 'client_choice' | 'deposit_required';
@@ -49,9 +52,10 @@ export function resolveDepositMode(policies: StoredDepositPolicy | null | undefi
 }
 
 /** The provider-editor counterpart: what the radio group should start on.
- *  Unconfigured falls back to 'client_choice' rather than null, matching the
- *  20%-both-options default the client mapper already applies to those rows —
- *  so opening Payments and pressing Save doesn't change what clients see. */
+ *  Unconfigured falls back to 'full_only' rather than null, matching what
+ *  clients are actually quoted for those rows — so opening Payments and
+ *  pressing Save doesn't silently switch on a deposit the provider never
+ *  chose. */
 export function resolveEditorDepositMode(policies: StoredDepositPolicy | null | undefined): DepositMode {
-  return resolveDepositMode(policies) ?? 'client_choice';
+  return resolveDepositMode(policies) ?? 'full_only';
 }
