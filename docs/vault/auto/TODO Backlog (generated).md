@@ -8,4 +8,4 @@
 **1 items.**
 
 ## TODO (1)
-- `src/screens/provider/InfoRegScreen.tsx:467` — revisit with a proper pass on current per-treatment guidance — see the
+- `src/screens/provider/InfoRegScreen.tsx:465` — revisit with a proper pass on current per-treatment guidance — see the

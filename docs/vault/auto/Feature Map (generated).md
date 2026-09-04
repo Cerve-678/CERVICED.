@@ -180,7 +180,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **70 files**
 - `src/services/databaseService.ts` _(63)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(46)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(44)_
-- `src/screens/provider/InfoRegScreen.tsx` _(29)_
+- `src/screens/provider/InfoRegScreen.tsx` _(30)_
 - `src/contexts/RegistrationContext.tsx` _(27)_
 - `src/services/providerRegistrationService.ts` _(26)_
 - `src/features/providers/goLiveStatus.ts` _(23)_

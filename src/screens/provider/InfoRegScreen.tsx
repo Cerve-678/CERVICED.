@@ -37,11 +37,9 @@ import TermsScreen from '../shared/TermsScreen';
 import { Ionicons } from '@expo/vector-icons';
 
 // Theme imports — this screen always renders in light mode (see
-// useScreenStyles/useChrome below, and makeStyles/lightStyles further down),
-// so useTheme() is never called here. darkTheme stays imported because
-// makeStyles(isDark) still takes the flag generically; it's just never
-// invoked with `true` in this file anymore.
-import { lightTheme, darkTheme } from '../../constants/theme';
+// useInfoRegStyles further down), so useTheme() is never called here and
+// darkTheme is never imported.
+import { lightTheme } from '../../constants/theme';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
@@ -794,7 +792,6 @@ interface TagSelectWithOtherProps {
   styles: any;
 }
 const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, selected, onToggle, onAddOther, accentColor = '#9C27B0', styles }) => {
-  const chrome = useChrome();
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [otherValue, setOtherValue] = useState('');
 
@@ -828,18 +825,18 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
       </View>
       {showOtherInput && (
         <View style={[styles.addAddOnRow, { marginTop: 8 }]}>
-          <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1 }]}>
+          <View style={[styles.inputBlur, { flex: 1 }]}>
             <TextInput
               style={styles.textInput}
               value={otherValue}
               onChangeText={setOtherValue}
               placeholder="Type your own..."
-              placeholderTextColor={chrome.fg(0.4)}
+              placeholderTextColor={'rgba(0,0,0,0.4)'}
               onSubmitEditing={submitOther}
               returnKeyType="done"
               autoFocus
             />
-          </BlurView>
+          </View>
           <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); submitOther(); }}>
             <Text style={styles.addAddOnButtonText}>+</Text>
           </TouchableOpacity>
@@ -863,8 +860,7 @@ interface ServiceTemplatePickerProps {
 const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   visible, categoryName, fallbackKind, accentColor, onPick, onClose,
 }) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
+  const styles = useInfoRegStyles();
   const kind = inferCategoryKind(categoryName, fallbackKind);
   const allTemplates = SERVICE_TEMPLATES_BY_CATEGORY[kind] ?? SERVICE_TEMPLATES_BY_CATEGORY.OTHER;
   const meta = CATEGORY_META[kind];
@@ -881,7 +877,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.templateSheet}>
+        <View style={styles.templateSheet}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
@@ -910,7 +906,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.templateName}>{t.name}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="time-outline" size={12} color={chrome.fg(0.5)} />
+                      <Ionicons name="time-outline" size={12} color={'rgba(0,0,0,0.5)'} />
                       <Text style={styles.templateDuration}>{t.duration}</Text>
                     </View>
                   </View>
@@ -933,7 +929,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                       <View style={{ flex: 1 }}>
                         <Text style={styles.templateName}>{categoryName.trim()} ({opt})</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Ionicons name="time-outline" size={12} color={chrome.fg(0.5)} />
+                          <Ionicons name="time-outline" size={12} color={'rgba(0,0,0,0.5)'} />
                           <Text style={styles.templateDuration}>{group.duration ?? '30 min'}</Text>
                         </View>
                       </View>
@@ -944,7 +940,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
               ))}
             </ScrollView>
           </SafeAreaView>
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -994,17 +990,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   fallbackKind,
   accentColor = '#AF9197',
 }) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
+  const styles = useInfoRegStyles();
   // Text boxes and modal background stay tinted with the provider's own
   // accent colour (matching their chosen brand aesthetic) instead of a
   // generic white/grey — just blended much closer to white so they stay
   // bright and legible rather than being noticeably tinted.
   const inputTint = blend(accentColor, '#FFFFFF', 0.96);
   // The sheet's fields are a plain tinted box with an accent-derived hairline
-  // edge, matching the quick editor on the My Services dashboard — the blur +
-  // drop shadow the rest of registration uses made every field read as a
-  // second raised surface stacked on the sheet.
+  // edge, matching the quick editor on the My Services dashboard — the
+  // solid-fill + drop shadow the rest of registration's inputBlur uses made
+  // every field read as a second raised surface stacked on the sheet.
   const fieldBox = { backgroundColor: inputTint, borderColor: blend(accentColor, '#FFFFFF', 0.7) };
   const modalTintTop = blend(accentColor, '#FFFFFF', 0.93);
   const modalTintBottom = blend(accentColor, '#FFFFFF', 0.82);
@@ -1335,10 +1330,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   onDone={handleCropperDone}
                   onCancel={() => setPendingCropUris([])}
                   palette={{
-                    bg: chrome.surf(0.98),
-                    card: chrome.surf(0.35),
-                    text: chrome.fg(0.92),
-                    sub: chrome.fg(0.55),
+                    bg: withAlpha('#FDFBF8', 0.98),
+                    card: withAlpha('#FDFBF8', 0.35),
+                    text: 'rgba(0,0,0,0.92)',
+                    sub: 'rgba(0,0,0,0.55)',
                     accent: accentColor,
                   }}
                 />
@@ -1348,7 +1343,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* Service Name */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
                 <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Service Name</RequiredLabel>
-                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
+                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={'rgba(0,0,0,0.4)'} onFocus={() => handleInputFocus('name')} />
               </View>
 
               {/* Price and duration share one row — they're the pair a provider
@@ -1361,7 +1356,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.serviceSheetPairRow}>
                   <View style={styles.serviceSheetPairItem}>
                     <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Price (£)</RequiredLabel>
-                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('price')} />
+                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor={'rgba(0,0,0,0.4)'} keyboardType="decimal-pad" onFocus={() => handleInputFocus('price')} />
                   </View>
                   <View style={styles.serviceSheetPairItem}>
                     <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Duration</RequiredLabel>
@@ -1372,7 +1367,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       accessibilityRole="button"
                       accessibilityLabel={duration ? `Duration, ${duration}` : 'Choose how long this service takes'}
                     >
-                      <Text style={[styles.serviceSheetSelectText, !duration && { color: chrome.fg(0.4) }]} numberOfLines={1}>
+                      <Text style={[styles.serviceSheetSelectText, !duration && { color: 'rgba(0,0,0,0.4)' }]} numberOfLines={1}>
                         {duration || 'Tap to choose'}
                       </Text>
                       <Ionicons name={durationOpen ? 'chevron-up' : 'chevron-down'} size={16} color={accentColor} />
@@ -1387,7 +1382,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* Description */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.serviceSheetLabel}>Description</Text>
-                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
+                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={'rgba(0,0,0,0.4)'} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
               </View>
 
               {/* Buffer time before/after — overrides the account-wide default
@@ -1531,7 +1526,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
+                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={'rgba(0,0,0,0.4)'} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
@@ -1570,7 +1565,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Patch Test Required</Text>
                       <Text style={styles.toggleHint}>Client must be patch tested before this treatment</Text>
                     </View>
-                    <Switch value={patchTestRequired} onValueChange={v => { tapSelect(); setPatchTestRequired(v); }} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={patchTestRequired} onValueChange={v => { tapSelect(); setPatchTestRequired(v); }} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.toggleRow}>
@@ -1578,12 +1573,12 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
                       <Text style={styles.toggleHint}>This treatment is safe during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['minAge'] = e.nativeEvent.layout.y; }}>
                     <Text style={styles.serviceSheetLabel}>Minimum Age</Text>
-                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor={chrome.fg(0.4)} keyboardType="number-pad" onFocus={() => handleInputFocus('minAge')} />
+                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor={'rgba(0,0,0,0.4)'} keyboardType="number-pad" onFocus={() => handleInputFocus('minAge')} />
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['contraindicationInput'] = e.nativeEvent.layout.y; }}>
@@ -1599,7 +1594,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       </View>
                     )}
                     <View style={styles.addAddOnRow}>
-                      <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
+                      <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor={'rgba(0,0,0,0.4)'} onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
                       <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddContraindication(); }}>
                         <Text style={styles.addAddOnButtonText}>+</Text>
                       </TouchableOpacity>
@@ -1630,7 +1625,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
                       <Text style={styles.toggleHint}>This service is safe during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
                 </View>
               )}
@@ -1639,7 +1634,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['aftercareNotes'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Aftercare Notes (Optional)</Text>
-                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={3} onFocus={() => handleInputFocus('aftercareNotes')} />
+                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor={'rgba(0,0,0,0.4)'} multiline numberOfLines={3} onFocus={() => handleInputFocus('aftercareNotes')} />
               </View>
 
               {/* ── Add-Ons ──────────────────────────────────────────── */}
@@ -1663,8 +1658,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, styles.addOnNameInput, fieldBox]} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('newAddOnName')} />
-                  <TextInput style={[styles.serviceSheetInput, styles.addOnPriceInput, fieldBox]} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('newAddOnPrice')} />
+                  <TextInput style={[styles.serviceSheetInput, styles.addOnNameInput, fieldBox]} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor={'rgba(0,0,0,0.4)'} onFocus={() => handleInputFocus('newAddOnName')} />
+                  <TextInput style={[styles.serviceSheetInput, styles.addOnPriceInput, fieldBox]} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={'rgba(0,0,0,0.4)'} keyboardType="decimal-pad" onFocus={() => handleInputFocus('newAddOnPrice')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddAddOn(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
@@ -1705,8 +1700,7 @@ interface AddCategoryModalProps {
 }
 
 const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, onAdd, existing, businessKind, accentColor = '#AF9197' }) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
+  const styles = useInfoRegStyles();
   const [categoryName, setCategoryName] = useState('');
   const [categoryDescription, setCategoryDescription] = useState('');
 
@@ -1749,7 +1743,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.templateSheet}>
+        <View style={styles.templateSheet}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
@@ -1769,17 +1763,17 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
               <Text style={styles.templateGroupLabel}>Category Name</Text>
               <Text style={styles.inputHint}>Type your own, or tap a suggestion below.</Text>
               <View style={styles.addAddOnRow}>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1 }]}>
+                <View style={[styles.inputBlur, { flex: 1 }]}>
                   <TextInput
                     style={styles.textInput}
                     value={categoryName}
                     onChangeText={setCategoryName}
                     placeholder={CATEGORY_NAME_EXAMPLE_BY_CATEGORY[myKind]}
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     onSubmitEditing={() => addCategory(categoryName, categoryDescription)}
                     returnKeyType="done"
                   />
-                </BlurView>
+                </View>
                 <TouchableOpacity style={[styles.addAddOnButton, { backgroundColor: accentColor }]} onPress={() => { tapMedium(); addCategory(categoryName, categoryDescription); }}>
                   <Text style={styles.addAddOnButtonText}>+</Text>
                 </TouchableOpacity>
@@ -1787,18 +1781,18 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
 
               <Text style={[styles.templateGroupLabel, { marginTop: 18 }]}>Description</Text>
               <Text style={styles.inputHint}>Shown to clients under this category — what it includes and why they should book.</Text>
-              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.inputBlurMultiline, { marginTop: 8 }]}>
+              <View style={[styles.inputBlur, styles.inputBlurMultiline, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={categoryDescription}
                   onChangeText={setCategoryDescription}
                   placeholder="e.g. Cuts, colour and treatments tailored to your hair type."
-                  placeholderTextColor={chrome.fg(0.4)}
+                  placeholderTextColor={'rgba(0,0,0,0.4)'}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
-              </BlurView>
+              </View>
 
               {showSubcategories ? (
                 <View style={styles.categoryTypeGrid}>
@@ -1840,7 +1834,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
               )}
             </ScrollView>
           </SafeAreaView>
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -1860,8 +1854,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   onTransfer,
   onSkip,
 }) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
+  const styles = useInfoRegStyles();
   const [acuityUrl, setAcuityUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -1893,9 +1886,9 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={40} tint={chrome.blurTint} style={styles.transferModal}>
+        <View style={styles.transferModal}>
           <LinearGradient
-            colors={[chrome.surf(0.9), chrome.surf(0.7)]}
+            colors={[withAlpha('#FDFBF8', 0.9), withAlpha('#FDFBF8', 0.7)]}
             style={styles.transferGradient}
           />
           <Text style={styles.transferTitle}>Import from Acuity</Text>
@@ -1903,19 +1896,19 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
             Paste your Acuity Scheduling link and we'll automatically import your services, prices, and business info.
           </Text>
 
-          <BlurView intensity={15} tint={chrome.blurTint} style={styles.inputBlur}>
+          <View style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
               value={acuityUrl}
               onChangeText={(text) => { setAcuityUrl(text); setErrorMsg(''); }}
               placeholder="https://acuityscheduling.com/schedule.php?owner=…"
-              placeholderTextColor={chrome.fg(0.4)}
+              placeholderTextColor={'rgba(0,0,0,0.4)'}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
               editable={!isLoading}
             />
-          </BlurView>
+          </View>
 
           {errorMsg ? (
             <Text style={styles.transferError}>{errorMsg}</Text>
@@ -1942,7 +1935,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
               <Text style={styles.skipButtonText}>Start Fresh Instead</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -1964,8 +1957,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   categoryName,
   categoryDescription,
 }) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
+  const styles = useInfoRegStyles();
   const [newName, setNewName] = useState(categoryName);
   const [description, setDescription] = useState(categoryDescription);
 
@@ -1985,32 +1977,32 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.smallModal}>
+        <View style={styles.smallModal}>
           <Text style={styles.smallModalTitle}>Edit Category</Text>
           <Text style={styles.inputLabel}>Name</Text>
-          <BlurView intensity={15} tint={chrome.blurTint} style={styles.inputBlur}>
+          <View style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
               value={newName}
               onChangeText={setNewName}
               placeholder="Category name"
-              placeholderTextColor={chrome.fg(0.4)}
+              placeholderTextColor={'rgba(0,0,0,0.4)'}
               autoFocus
             />
-          </BlurView>
+          </View>
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Description (shown to clients)</Text>
-          <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.inputBlurMultiline]}>
+          <View style={[styles.inputBlur, styles.inputBlurMultiline]}>
             <TextInput
               style={[styles.textInput, styles.textInputMultiline]}
               value={description}
               onChangeText={setDescription}
               placeholder="What's included in this category, and why clients should book it..."
-              placeholderTextColor={chrome.fg(0.4)}
+              placeholderTextColor={'rgba(0,0,0,0.4)'}
               multiline
               numberOfLines={3}
               textAlignVertical="top"
             />
-          </BlurView>
+          </View>
           <View style={styles.smallModalButtons}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => { tapLight(); onClose(); }}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -2019,7 +2011,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </KeyboardDismissView>
     </Modal>
   );
@@ -2051,8 +2043,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   portfolio,
   venuePhotos,
 }) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
+  const styles = useInfoRegStyles();
   const insets = useSafeAreaInsets();
   const { width: previewScreenWidth } = useWindowDimensions();
   // SafeAreaView top inset is unreliable inside an RN Modal, so pad the header
@@ -2177,7 +2168,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   </View>
                 )}
                 <LinearGradient
-                  colors={[chrome.surf(0.3), 'transparent']}
+                  colors={[withAlpha('#FDFBF8', 0.3), 'transparent']}
                   style={styles.previewLogoGloss}
                 />
               </View>
@@ -2529,13 +2520,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 // Main Component
 const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // This screen always renders in light mode regardless of the app's dark
-  // mode setting (see useScreenStyles/useChrome above) — nothing in this file
-  // reads useTheme().isDarkMode or branches on the device/app appearance.
+  // mode setting (see useInfoRegStyles below) — nothing in this file reads
+  // useTheme().isDarkMode or branches on the device/app appearance.
   // statusBarStyle mirrors what useTheme()'s legacy `theme.statusBar` would
   // be in light mode.
   const statusBarStyle = 'dark-content' as const;
-  const styles = useScreenStyles();
-  const chrome = useChrome();
+  const styles = useInfoRegStyles();
   // Header/inline icons can't read a StyleSheet colour, so they take the same
   // palette token the sheet above is built from.
   const chromeText = lightTheme.text;
@@ -3830,9 +3820,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       {/* Plain light-painted View instead of <ThemedBackground> — that
           component reads the app's shared ThemeContext directly, so it would
           still paint dark whenever the app itself is in dark mode. This
-          screen ignores dark mode entirely (see useScreenStyles/useChrome
-          above), so its root background is pinned to the same light bg
-          value ThemedBackground would use in light mode. */}
+          screen ignores dark mode entirely (see useInfoRegStyles below), so
+          its root background is pinned to the same light bg value
+          ThemedBackground would use in light mode. */}
       <View style={{ flex: 1, backgroundColor: lightTheme.bg }}>
         {/* Only paint the provider's custom gradient — same gate the hero
             preview uses (line ~1768). Without it this rendered unconditionally,
@@ -4075,7 +4065,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       square's corner, so it hugs the edge instead of floating
                       off it — offset = r - (r/√2) - badgeR, rounded. */}
                   <View style={styles.logoEditBadge}>
-                    <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                    <Ionicons name="camera" size={14} color={lightTheme.onAccent} />
                   </View>
                 </TouchableOpacity>
                 <Text style={styles.logoCaption}>
@@ -4092,7 +4082,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                      <Ionicons name="lock-closed" size={11} color={'rgba(0,0,0,0.5)'} />
                       <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
                         {providerData.providerName}
                       </Text>
@@ -4102,7 +4092,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </Text>
                   </>
                 ) : (
-                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                  <View style={[styles.inputBlur, styles.profileInputBox]}>
                     <TextInput
                       style={styles.textInput}
                       value={providerData.providerName}
@@ -4110,10 +4100,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         setProviderData({ ...providerData, providerName: text })
                       }
                       placeholder="Enter your business name"
-                      placeholderTextColor={chrome.fg(0.4)}
+                      placeholderTextColor={'rgba(0,0,0,0.4)'}
                       onFocus={() => handleInputFocus('businessName')}
                     />
-                  </BlurView>
+                  </View>
                 )}
               </View>
 
@@ -4126,7 +4116,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                      <Ionicons name="lock-closed" size={11} color={'rgba(0,0,0,0.5)'} />
                       <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
                         {providerData.providerService}
                       </Text>
@@ -4169,7 +4159,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     style={styles.customServiceInput}
                     ref={registerField('customService')}
                   >
-                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                    <View style={[styles.inputBlur, styles.profileInputBox]}>
                       <TextInput
                         style={styles.textInput}
                         value={providerData.customServiceType}
@@ -4177,11 +4167,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           setProviderData({ ...providerData, customServiceType: text })
                         }
                         placeholder="What service do you provide?"
-                        placeholderTextColor={chrome.fg(0.4)}
+                        placeholderTextColor={'rgba(0,0,0,0.4)'}
                         autoFocus
                         onFocus={() => handleInputFocus('customService')}
                       />
-                    </BlurView>
+                    </View>
                   </View>
                 )}
               </View>
@@ -4245,7 +4235,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('about')}
               >
                 <Text style={styles.inputLabel}>Description</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox]}>
+                <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
                   <TextInput
                     style={[styles.textInput, styles.textInputMultiline]}
                     value={providerData.aboutText}
@@ -4253,13 +4243,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       setProviderData({ ...providerData, aboutText: text })
                     }
                     placeholder="Tell clients about your services, policies, deposit requirements..."
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     multiline
                     numberOfLines={6}
                     textAlignVertical="top"
                     onFocus={() => handleInputFocus('about')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4297,7 +4287,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ? `Day ${providerData.scheduleReleaseDay} of every month`
                       : 'Choose a day'}
                   </Text>
-                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
+                  <Ionicons name="chevron-forward" size={14} color={'rgba(0,0,0,0.5)'} />
                 </TouchableOpacity>
               </View>
 
@@ -4388,17 +4378,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('phone')}
               >
                 <Text style={styles.inputLabel}>Phone Number</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.phone}
                     onChangeText={(text) => setProviderData({ ...providerData, phone: text })}
                     placeholder="+44 7XXX XXXXXX"
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     keyboardType="phone-pad"
                     onFocus={() => handleInputFocus('phone')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               {/* Same providers.whatsapp_number the Communications screen edits —
@@ -4412,17 +4402,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('whatsapp')}
               >
                 <Text style={styles.inputLabel}>WhatsApp Number</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.whatsapp}
                     onChangeText={(text) => setProviderData({ ...providerData, whatsapp: text })}
                     placeholder="+44 7XXX XXXXXX"
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     keyboardType="phone-pad"
                     onFocus={() => handleInputFocus('whatsapp')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4430,19 +4420,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('contactEmail')}
               >
                 <Text style={styles.inputLabel}>Public Enquiry Email</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.email}
                     onChangeText={(text) => setProviderData({ ...providerData, email: text })}
                     placeholder="bookings@yourbusiness.com"
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('contactEmail')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4450,7 +4440,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('instagram')}
               >
                 <Text style={styles.inputLabel}>Instagram Handle</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.instagram}
@@ -4458,12 +4448,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       setProviderData({ ...providerData, instagram: text.replace(/^@/, '') })
                     }
                     placeholder="yourbusiness"
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     autoCapitalize="none"
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('instagram')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4471,19 +4461,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('website')}
               >
                 <Text style={styles.inputLabel}>Website</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.website}
                     onChangeText={(text) => setProviderData({ ...providerData, website: text })}
                     placeholder="https://yourbusiness.com"
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     keyboardType="url"
                     autoCapitalize="none"
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('website')}
                   />
-                </BlurView>
+                </View>
               </View>
 
               <View
@@ -4491,19 +4481,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('externalBookingUrl')}
               >
                 <Text style={styles.inputLabel}>External Booking Link (optional)</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.externalBookingUrl}
                     onChangeText={(text) => setProviderData({ ...providerData, externalBookingUrl: text })}
                     placeholder="e.g. your Fresha or Acuity booking page"
-                    placeholderTextColor={chrome.fg(0.4)}
+                    placeholderTextColor={'rgba(0,0,0,0.4)'}
                     keyboardType="url"
                     autoCapitalize="none"
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('externalBookingUrl')}
                   />
-                </BlurView>
+                </View>
                 <Text style={styles.inputHint}>
                   Already booking through Fresha, Treatwell, Acuity, or similar? Paste the link and clients will book directly there — Cerviced's in-app booking is skipped for your profile.
                 </Text>
@@ -4555,13 +4545,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
 
                 {categoryNames.length === 0 ? (
-                  <BlurView intensity={50} tint={chrome.blurTint} style={styles.emptyServicesCard}>
-                    <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
+                  <View style={styles.emptyServicesCard}>
+                    <Ionicons name="folder-open-outline" size={36} color={'rgba(0,0,0,0.35)'} style={styles.emptyServicesEmoji} />
                     <Text style={styles.emptyServicesText}>
                       Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
                       (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
                     </Text>
-                  </BlurView>
+                  </View>
                 ) : (
                   <>
                     <Text style={styles.categoryHint}>
@@ -4691,24 +4681,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 );
                               }}
                             >
-                              <BlurView
-                                intensity={isDragging ? 40 : isSel ? 16 : 10}
-                                tint={chrome.blurTint}
-                                style={[
+                              <View style={[
                                   styles.categoryTabBlur,
                                   isSel && styles.selectedCategoryTabBlur,
-                                  // The blur/tint look here depends on what's actually
-                                  // rendered behind the pill. Inline, that's the busy
-                                  // strip of neighboring pills; but once dragging pulls
-                                  // it out to float above wherever it started, its
-                                  // neighbors have already slid away underneath it, so
-                                  // the same translucent background reads as washed-out
-                                  // instead of frosted glass. Bumping its own opacity
-                                  // while dragging keeps it looking like a normal, solid
-                                  // pill regardless of what's now behind it.
+                                  // Once dragging pulls the pill out to float above
+                                  // wherever it started, its neighbors have already
+                                  // slid away underneath it — switching to the
+                                  // brighter card fill (instead of the quieter
+                                  // inactive-pill surface tone) keeps it reading as a
+                                  // solid, lifted pill regardless of what's now behind
+                                  // it, since there's no blur here to do that for free.
                                   isDragging && styles.draggingCategoryTabBlur,
-                                ]}
-                              >
+                                ]}>
                                 <Text
                                   style={[
                                     styles.categoryTabText,
@@ -4726,9 +4710,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                     the gesture. The handle stays; its touch target is
                                     generous so it doesn't have to be aimed for. */}
                                 <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 16, bottom: 16, left: 12, right: 14 }}>
-                                  <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
+                                  <Ionicons name="reorder-three-outline" size={20} color={'rgba(0,0,0,0.4)'} />
                                 </View>
-                              </BlurView>
+                              </View>
                             </TouchableOpacity>
                             </Animated.View>
                           </ReAnimated.View>
@@ -4766,9 +4750,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               : {})}
                             style={[styles.serviceItemCard, serviceDrag.getItemStyle(serviceKey)]}
                           >
-                            <BlurView intensity={50} tint={chrome.blurTint} style={styles.serviceCardBlur}>
+                            <View style={styles.serviceCardBlur}>
                               <LinearGradient
-                                colors={[chrome.surf(0.3), 'transparent']}
+                                colors={[withAlpha('#FDFBF8', 0.3), 'transparent']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 0, y: 1 }}
                                 style={styles.cardHighlight}
@@ -4797,7 +4781,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                     />
                                   ) : (
                                     <View style={styles.serviceImagePlaceholder}>
-                                      <Ionicons name="camera-outline" size={24} color={chrome.fg(0.3)} />
+                                      <Ionicons name="camera-outline" size={24} color={'rgba(0,0,0,0.3)'} />
                                     </View>
                                   )}
                                   {service.images.length > 1 && (
@@ -4852,12 +4836,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                       the page are never mistaken for a drag. */}
                                   {serviceDrag.orderedKeys.length > 1 && (
                                     <View style={styles.serviceDragHandle} pointerEvents="none">
-                                      <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
+                                      <Ionicons name="reorder-three-outline" size={20} color={'rgba(0,0,0,0.4)'} />
                                     </View>
                                   )}
                                 </View>
                               </View>
-                            </BlurView>
+                            </View>
                           </Animated.View>
                           );
                         })}
@@ -4871,11 +4855,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           }}
                           activeOpacity={0.85}
                         >
-                          <BlurView intensity={30} tint={chrome.blurTint} style={styles.addServiceBlur}>
+                          <View style={styles.addServiceBlur}>
                             <Text style={[styles.addServiceText, { color: adaptiveAccentColor }]}>
                               + Add Service to {selectedCategory}
                             </Text>
-                          </BlurView>
+                          </View>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -5135,18 +5119,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.addressHint}>
                 Shown to clients on every booking (optional) — parking, buzzer codes, what to bring, how to find you.
               </Text>
-              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+              <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={policies.bookingInstructions}
                   onChangeText={(text) => setPolicies(prev => ({ ...prev, bookingInstructions: text }))}
                   placeholder="e.g. Please arrive 10 minutes early. Free parking on the street outside."
-                  placeholderTextColor={chrome.fg(0.4)}
+                  placeholderTextColor={'rgba(0,0,0,0.4)'}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
-              </BlurView>
+              </View>
 
               {/* The provider's OWN client-facing Terms & Conditions — a
                   booking_intake_forms row (is_terms), authored in the
@@ -5175,7 +5159,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     : hasOwnTerms === false ? 'Set up your Terms & Conditions'
                     : 'Your Terms & Conditions'}
                 </Text>
-                <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
+                <Ionicons name="chevron-forward" size={14} color={'rgba(0,0,0,0.5)'} />
               </TouchableOpacity>
 
               {/* PREFERRED PAYMENT TYPE, WHO YOU WORK WITH and LANGUAGES SPOKEN
@@ -5284,11 +5268,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color={chrome.onAccent} />
+                <ActivityIndicator size="small" color={lightTheme.onAccent} />
               ) : (
                 <>
-                  <Ionicons name="checkmark" size={18} color={chrome.onAccent} />
-                  <Text style={[styles.pinnedBarButtonText, { color: chrome.onAccent }]}>
+                  <Ionicons name="checkmark" size={18} color={lightTheme.onAccent} />
+                  <Text style={[styles.pinnedBarButtonText, { color: lightTheme.onAccent }]}>
                     Save &amp; Publish
                   </Text>
                 </>
@@ -5323,48 +5307,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   );
 };
 
-// ── Theme-aware styles ───────────────────────────────────────────────────────
-// This screen's chrome (header, section titles, field labels, frosted cards)
-// used to hardcode #000 text on translucent-white fills, which rendered as
-// black-on-near-black once ThemedBackground switched to the dark palette.
+// ── Styles ────────────────────────────────────────────────────────────────
+// This screen deliberately always renders in light mode — the registration/
+// business-details flow reads as a single document meant to look the same
+// regardless of device theme (see the note further down where the screen
+// root is painted). The style sheet below used to be built from a translucent
+// "chrome" ramp (fg()/surf()/edge() alpha functions layered over BlurView
+// frosted-glass panels) shared across all 13 sub-components in this file;
+// that's been replaced with flat, opaque colours straight from the app's
+// real light palette (`lightTheme`, matching DESIGN_SYSTEM.md's `L` object),
+// so every component still calls `styles.x` unchanged but every fill is now
+// a solid colour instead of a translucent one meant to sit over blur.
 //
-// Rather than thread the provider theme through all 13 sub-components in this
-// file (they share this one `styles` object), the sheet is built per mode from
-// the app's provider-hat palette — the same tokens ThemedBackground itself
-// paints with — so every component keeps calling `styles.x` unchanged. Only
-// colour values branch; every layout value below is exactly as it was.
-//
-// The per-provider `resolveProviderTheme()` tokens (editTheme/editCardBg) stay
-// where they already are: they colour the provider's own BRANDED surfaces
-// (brand identity card, setup guide, preview). This sheet covers the editor
-// chrome around them, which follows the app's light/dark mode instead.
-// Foreground ramp — replaces the old rgba(0,0,0,α) text tiers. In light mode
-// these resolve to exactly the same near-black tones as before; in dark mode
-// they become the palette's light text at the equivalent emphasis.
-const fgFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#F0ECE7', alpha) : `rgba(0,0,0,${alpha})`;
-// Surface ramp — replaces the old rgba(255,255,255,α) frosted fills, which read
-// as bright glass over a light background but as glare over a dark one.
-//
-// The light-mode base is a warm off-white (#FDFBF8), not pure #FFFFFF: against
-// the app's warm cream backdrop a pure-white card reads as a cold rectangle
-// pasted on top rather than a surface belonging to the same palette. Dark mode
-// is unchanged — its ramp is a white overlay at low alpha, which is already a
-// tint of the backdrop rather than an opaque fill.
-// The dark multiplier was 0.34, which kept fills honest but left inputs and
-// pills reading flat — barely separated from the backdrop. 0.52 lifts them to
-// a legible surface while staying a *tint* of the backdrop rather than an
-// opaque panel, so they still belong to the palette instead of sitting on it.
-// Light mode keeps the warm off-white base for the same reason: brighter, but
-// never pure white.
-const surfFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#FFFFFF', alpha * 0.52) : withAlpha('#FDFBF8', alpha);
-
-/** Hairline edge for input/pill surfaces. A raised fill alone still reads soft;
- *  a defined border is what makes it look crisp rather than just lighter. Warm
- *  in light mode to match the cream backdrop, a white tint in dark mode. */
-const edgeFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#FFFFFF', alpha) : withAlpha('#8A7361', alpha);
+// The per-provider `resolveProviderTheme()` tokens (PP in PreviewModal) stay
+// where they already are: they colour the provider's own BRANDED surfaces,
+// deliberately mirroring the live client-facing ProviderProfileScreen (which
+// still uses real BlurView) for preview accuracy — see PreviewModal above.
 
 /** The rose tint-shadow used across the provider surfaces (confirmed in
  *  ProviderMyProfileScreen). A flat black shadow greys the warm palette;
@@ -5386,17 +5344,14 @@ const LOGO_BADGE_OFFSET = Math.round(
   LOGO_SIZE / 2 - LOGO_SIZE / 2 / Math.SQRT2 - LOGO_BADGE_SIZE / 2,
 );
 
-const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) => {
-  const P = isDark ? darkTheme : lightTheme;
-  const fg = fgFor(isDark);
-  const surf = surfFor(isDark);
-  const edge = edgeFor(isDark);
+const makeStyles = (screenWidth: number, screenHeight: number) => {
+  const P = lightTheme;
   // Accent-tinted chrome for the cohesive button/card family. The provider's
   // own accent varies per profile, so these are derived from the app palette's
   // accent (the chrome accent) rather than the provider's — the provider's
   // accent stays for the things that are genuinely theirs (primary actions,
   // section chips), and the surrounding furniture stays neutral-warm.
-  const accentBorder = withAlpha(P.accent, isDark ? 0.22 : 0.16);
+  const accentBorder = withAlpha(P.accent, 0.16);
   return StyleSheet.create({
   loading: {
     flex: 1,
@@ -5432,7 +5387,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: surf(0.45),
+    backgroundColor: P.surface,
     borderRadius: RADIUS.headerButton,
     borderWidth: 1,
     borderColor: accentBorder,
@@ -5451,7 +5406,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: surf(0.45),
+    backgroundColor: P.surface,
     borderRadius: RADIUS.headerButton,
     borderWidth: 1,
     borderColor: accentBorder,
@@ -5507,13 +5462,13 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     height: LOGO_SIZE,
     borderRadius: LOGO_SIZE / 2,
     borderWidth: 3,
-    borderColor: surf(0.8),
+    borderColor: P.card,
   },
   logoPlaceholder: {
     width: LOGO_SIZE,
     height: LOGO_SIZE,
     borderRadius: LOGO_SIZE / 2,
-    backgroundColor: surf(0.3),
+    backgroundColor: P.surface,
     borderWidth: 2,
     borderColor: accentBorder,
     borderStyle: 'dashed',
@@ -5534,17 +5489,17 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     alignItems: 'center',
     // Ring in the page background so the badge reads as lifted off the circle.
     borderWidth: 2,
-    borderColor: isDark ? P.card : P.bg,
+    borderColor: P.bg,
     shadowColor: CARD_SHADOW_COLOR,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: isDark ? 0.3 : 0.2,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
   },
   logoCaption: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     marginTop: 10,
   },
 
@@ -5572,14 +5527,14 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     flex: 1,
     marginVertical: 2,
     borderRadius: 2,
-    backgroundColor: fg(0.12),
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   // Full-bleed section: a hairline rule and generous space do the separating.
   docSection: {
     marginBottom: 40,
     paddingBottom: 32,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: fg(0.12),
+    borderBottomColor: 'rgba(0,0,0,0.12)',
   },
   docSectionLast: {
     marginBottom: 0,
@@ -5622,7 +5577,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '700',
     fontSize: 13,
     lineHeight: 18,
-    color: fg(0.85),
+    color: 'rgba(0,0,0,0.85)',
     marginBottom: 20,
   },
   // Additive jump-to-next affordance at the foot of each section — the
@@ -5642,7 +5597,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: RADIUS.footerButton,
-    backgroundColor: surf(isDark ? 0.4 : 0.6),
+    backgroundColor: P.card,
     borderWidth: 1,
     borderColor: accentBorder,
   },
@@ -5658,13 +5613,13 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     marginTop: 30,
     paddingTop: 22,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: fg(0.12),
+    borderTopColor: 'rgba(0,0,0,0.12)',
   },
   docEndMark: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     letterSpacing: 1,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     marginBottom: 12,
   },
   // ── Inline required-field flag ────────────────────────────────────────
@@ -5715,7 +5670,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingTop: 12,
     paddingBottom: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: fg(0.12),
+    borderTopColor: 'rgba(0,0,0,0.12)',
     // Matches the screen background (ThemedBackground paints palette.bg) so
     // the pinned bar reads as part of the page rather than a separate white
     // slab. Was isDark ? P.card : '#FDFBF8' — an off-white that didn't
@@ -5732,7 +5687,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     borderRadius: RADIUS.footerButton,
     shadowColor: CARD_SHADOW_COLOR,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: isDark ? 0.30 : 0.22,
+    shadowOpacity: 0.22,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -5763,7 +5718,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontSize: 11,
     fontWeight: '600',
     lineHeight: 16,
-    color: fg(0.66),
+    color: 'rgba(0,0,0,0.66)',
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 8,
@@ -5773,9 +5728,9 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   // reads as its own distinct, important checkpoint before Publish.
   termsBox: {
     borderRadius: 12,
-    backgroundColor: surf(isDark ? 0.3 : 0.96),
+    backgroundColor: P.card,
     borderWidth: 1,
-    borderColor: edge(isDark ? 0.15 : 0.13),
+    borderColor: withAlpha('#8A7361', 0.13),
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginTop: 18,
@@ -5790,7 +5745,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     height: 20,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: fg(0.3),
+    borderColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -5875,13 +5830,13 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: fg(0.25),
+    borderColor: 'rgba(0,0,0,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   portfolioAddPlus: {
     fontSize: 22,
-    color: fg(0.7),
+    color: 'rgba(0,0,0,0.7)',
     fontWeight: '300',
     lineHeight: 24,
   },
@@ -5889,7 +5844,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 9,
-    color: fg(0.72),
+    color: 'rgba(0,0,0,0.72)',
     marginTop: 2,
   },
 
@@ -5899,7 +5854,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 19,
-    color: fg(0.7),
+    color: 'rgba(0,0,0,0.7)',
     marginBottom: 18,
   },
   sectionTitleNoCard: {
@@ -5921,14 +5876,14 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontSize: 12,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: fg(0.78),
+    color: 'rgba(0,0,0,0.78)',
     marginBottom: 7,
   },
   inputHint: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '700',
-    color: fg(0.86),
+    color: 'rgba(0,0,0,0.86)',
     marginTop: 6,
   },
   // Bright, well-defined text-box card — was a near-invisible 0.2-alpha
@@ -5942,7 +5897,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     overflow: 'hidden',
     backgroundColor: P.surfaceRaised,
     borderWidth: 1.5,
-    borderColor: fg(0.08),
+    borderColor: 'rgba(0,0,0,0.08)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -5954,34 +5909,25 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     overflow: 'hidden',
     backgroundColor: P.surfaceRaised,
     borderWidth: 1.5,
-    borderColor: fg(0.08),
+    borderColor: 'rgba(0,0,0,0.08)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 0,
   },
-  // Reverts the main provider profile form's fields back to their original
-  // translucent look (only the Add Service modal's boxes got the brighter
-  // card treatment) — merged over inputBlur/inputBlurMultiline to cancel
-  // out the border/shadow/solid-fill additions.
-  //
-  // Quieter still now: a soft tonal fill with no border and no shadow, so the
-  // field sits INSIDE its card instead of reading as a second raised surface
-  // stacked on the first. The card carries the weight; the input just holds
-  // the value.
-  // Fill brightened 0.16 → 0.28 so the fields read clearly against their card
-  // rather than nearly disappearing into it. Deliberately still short of the
-  // full inputBlur treatment: the border/shadow stay off, so this is a
-  // brighter quiet field, not a second raised surface on top of the card.
-  // Brighter fill + a hairline edge instead of the old borderless surf(0.28),
-  // which read flat against the backdrop. Shadow stays off — depth here comes
-  // from the edge, not a drop shadow, so fields stay crisp rather than puffy.
+  // Merged over inputBlur/inputBlurMultiline for the main provider profile
+  // form's fields (only the Add Service modal's boxes get the plain
+  // inputBlur treatment) to cancel out that variant's border/shadow/solid
+  // fill: a quieter, opaque card-tone fill with a hairline edge and no
+  // shadow, so the field sits INSIDE its card instead of reading as a
+  // second raised surface stacked on the first. The card carries the
+  // weight; the input just holds the value.
   profileInputBox: {
     borderRadius: 12,
-    backgroundColor: surf(isDark ? 0.3 : 0.96),
+    backgroundColor: P.card,
     borderWidth: 1,
-    borderColor: edge(isDark ? 0.15 : 0.13),
+    borderColor: withAlpha('#8A7361', 0.13),
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -6007,7 +5953,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     alignItems: 'center',
     justifyContent: 'space-between',
     borderRadius: 12,
-    backgroundColor: surf(0.28),
+    backgroundColor: P.surface,
     paddingHorizontal: 15,
     paddingVertical: 13,
   },
@@ -6023,7 +5969,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontSize: 11,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    color: fg(0.72),
+    color: 'rgba(0,0,0,0.72)',
     marginTop: 14,
   },
 
@@ -6035,19 +5981,19 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: surf(0.2),
+    backgroundColor: P.surface,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: surf(0.3),
+    borderColor: P.surface,
   },
   serviceCategoryChipSelected: {
-    backgroundColor: fg(0.15),
-    borderColor: fg(0.3),
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderColor: 'rgba(0,0,0,0.3)',
   },
   serviceCategoryText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: fg(0.7),
+    color: 'rgba(0,0,0,0.7)',
   },
   serviceCategoryTextSelected: {
     color: P.text,
@@ -6067,7 +6013,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
   },
 
   // Services Section
@@ -6095,7 +6041,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     padding: 25,
     borderRadius: 20,
     alignItems: 'center',
-    backgroundColor: surf(0.15),
+    backgroundColor: P.surface,
   },
   emptyServicesEmoji: {
     fontSize: 30,
@@ -6105,7 +6051,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -6115,7 +6061,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     marginBottom: 10,
   },
   selectedCategoryDescription: {
@@ -6123,7 +6069,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
-    color: fg(0.65),
+    color: 'rgba(0,0,0,0.65)',
     marginBottom: 14,
   },
   categoryTabs: {
@@ -6149,7 +6095,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     gap: 4,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    backgroundColor: surf(0.08),
+    backgroundColor: P.surface,
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -6157,21 +6103,21 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   // provider's own state, so it takes the provider accent rather than another
   // near-identical surface tint (which read as barely-selected before).
   selectedCategoryTab: {
-    borderColor: withAlpha(P.accent, isDark ? 0.45 : 0.35),
+    borderColor: withAlpha(P.accent, 0.35),
   },
   selectedCategoryTabBlur: {
-    backgroundColor: withAlpha(P.accent, isDark ? 0.20 : 0.12),
+    backgroundColor: withAlpha(P.accent, 0.12),
   },
   selectedCategoryTabText: {
     color: P.text,
   },
   draggingCategoryTabBlur: {
-    backgroundColor: surf(0.9),
+    backgroundColor: P.card,
   },
   categoryTabText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: fg(0.7),
+    color: 'rgba(0,0,0,0.7)',
   },
   // Applied to every pill except the one actively being dragged, so it's
   // unambiguous which pill is moving instead of a row of equally-solid pills.
@@ -6190,20 +6136,19 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   },
   // Matches the section cards: same radius scale, same accent-tinted border,
   // same rose tint-shadow, so a service card reads as the same material.
-  // elevation: 0 (Android only) — doubly at risk: surf(0.1) is a
-  // translucent fill that lets Android's elevation shadow bleed straight
-  // through as a dark ring, AND overflow:'hidden' + borderRadius clips
-  // whatever shadow remains to the rounded outline instead of letting it
-  // fade outward. iOS keeps its shadow via shadow* above.
+  // elevation: 0 (Android only) — overflow:'hidden' + borderRadius clips
+  // Android's elevation shadow to the rounded outline instead of letting it
+  // fade outward, showing as a dark ring. iOS keeps its shadow via shadow*
+  // above.
   serviceItemCard: {
     borderRadius: RADIUS.card,
     overflow: 'hidden',
-    backgroundColor: surf(0.1),
+    backgroundColor: P.surface,
     borderWidth: 1,
     borderColor: accentBorder,
     shadowColor: CARD_SHADOW_COLOR,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: isDark ? 0.18 : 0.12,
+    shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 0,
   },
@@ -6230,7 +6175,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   serviceImagePlaceholder: {
     width: 60,
     height: 60,
-    backgroundColor: surf(0.3),
+    backgroundColor: P.surface,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
@@ -6262,7 +6207,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   serviceDescription: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     marginBottom: 6,
   },
   serviceDetails: {
@@ -6273,7 +6218,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   serviceDuration: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: fg(0.68),
+    color: 'rgba(0,0,0,0.68)',
   },
   servicePrice: {
     fontFamily: 'BakbakOne-Regular',
@@ -6287,7 +6232,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: surf(0.4),
+    backgroundColor: P.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -6312,12 +6257,12 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     overflow: 'hidden',
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: fg(0.2),
+    borderColor: 'rgba(0,0,0,0.2)',
   },
   addServiceBlur: {
     paddingVertical: 15,
     alignItems: 'center',
-    backgroundColor: surf(0.1),
+    backgroundColor: P.surface,
   },
   addServiceText: {
     fontFamily: 'BakbakOne-Regular',
@@ -6345,13 +6290,13 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingVertical: 9,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: fg(0.14),
-    backgroundColor: surf(0.45),
+    borderColor: 'rgba(0,0,0,0.14)',
+    backgroundColor: P.surface,
   },
   durationChipText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    color: fg(0.7),
+    color: 'rgba(0,0,0,0.7)',
   },
   durationChipTextActive: {
     color: '#fff',
@@ -6364,18 +6309,18 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
-    // Below templateCard/categoryTypeCard's surf(0.55): a sheet backdrop
-    // brighter than the cards sitting on it (0.75 in dark mode washes out
-    // to a near-white panel over BlurView's tint="dark") inverts the surface
-    // hierarchy — the container should read dimmer than its contents.
-    backgroundColor: surf(0.4),
+    // Deliberately the recessed surface tone, not the card tone
+    // templateCard/categoryTypeCard use — a sheet backdrop brighter than the
+    // cards sitting on it would invert the surface hierarchy, since the
+    // container should read dimmer than its contents.
+    backgroundColor: P.surface,
   },
   sheetHandle: {
     alignSelf: 'center',
     width: 42,
     height: 5,
     borderRadius: 3,
-    backgroundColor: fg(0.18),
+    backgroundColor: 'rgba(0,0,0,0.18)',
     marginTop: 10,
     marginBottom: 2,
   },
@@ -6383,13 +6328,13 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
-    color: fg(0.66),
+    color: 'rgba(0,0,0,0.66)',
     marginTop: 3,
   },
   templateGroupLabel: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     marginTop: 22,
     marginBottom: 4,
   },
@@ -6401,7 +6346,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     borderRadius: 18,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    backgroundColor: surf(0.4),
+    backgroundColor: P.surface,
   },
   templateScratchIcon: {
     fontSize: 22,
@@ -6415,7 +6360,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
-    color: fg(0.5),
+    color: 'rgba(0,0,0,0.5)',
     marginTop: 2,
   },
   templateCard: {
@@ -6424,9 +6369,9 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     padding: 15,
     borderRadius: 16,
     marginTop: 10,
-    backgroundColor: surf(0.55),
+    backgroundColor: P.card,
     borderWidth: 1,
-    borderColor: fg(0.06),
+    borderColor: 'rgba(0,0,0,0.06)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.06,
@@ -6442,7 +6387,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
-    color: fg(0.5),
+    color: 'rgba(0,0,0,0.5)',
     marginTop: 3,
   },
   templateAdd: {
@@ -6466,9 +6411,9 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingHorizontal: 8,
     borderRadius: 18,
     alignItems: 'center',
-    backgroundColor: surf(0.55),
+    backgroundColor: P.card,
     borderWidth: 1,
-    borderColor: fg(0.06),
+    borderColor: 'rgba(0,0,0,0.06)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.06,
@@ -6487,7 +6432,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 10,
-    color: fg(0.5),
+    color: 'rgba(0,0,0,0.5)',
     textAlign: 'center',
     marginTop: 3,
     lineHeight: 13,
@@ -6512,7 +6457,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: fg(0.1),
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   modalTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -6523,7 +6468,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: fg(0.15),
+    backgroundColor: 'rgba(0,0,0,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -6562,7 +6507,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   },
   gradientOptionSelected: {
     borderColor: P.text,
-    backgroundColor: surf(0.3),
+    backgroundColor: P.surface,
   },
   gradientPreview: {
     width: '100%',
@@ -6594,7 +6539,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: fg(0.25),
+    backgroundColor: 'rgba(0,0,0,0.25)',
     marginTop: 10,
     marginBottom: 14,
   },
@@ -6610,7 +6555,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     marginBottom: 3,
   },
   serviceSheetTitle: {
@@ -6620,9 +6565,9 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   },
   // Fields inside the service sheet only. They mirror the quick editor on the
   // My Services dashboard: a small uppercase label over a plain bordered box,
-  // no blur and no drop shadow, so the field sits inside the sheet rather than
-  // reading as a second raised surface on top of it. The screen-wide
-  // inputLabel/inputBlur pair is deliberately left alone — every other step of
+  // no drop shadow, so the field sits inside the sheet rather than reading as
+  // a second raised surface on top of it. The screen-wide inputLabel/
+  // inputBlur pair is deliberately left alone — every other step of
   // registration still uses it.
   serviceSheetLabel: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -6630,7 +6575,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: fg(0.68),
+    color: 'rgba(0,0,0,0.68)',
     marginBottom: 6,
   },
   // Group headings — Photos, Scheduling, How clients find this, Safety &
@@ -6654,7 +6599,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   // form is this long.
   serviceSheetSectionRule: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: fg(0.14),
+    backgroundColor: 'rgba(0,0,0,0.14)',
     marginTop: 12,
     marginBottom: 18,
   },
@@ -6663,7 +6608,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 17,
-    color: fg(0.5),
+    color: 'rgba(0,0,0,0.5)',
     marginBottom: 8,
   },
   serviceSheetInput: {
@@ -6736,7 +6681,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     marginBottom: 'auto',
     padding: 25,
     borderRadius: 30,
-    backgroundColor: surf(0.95),
+    backgroundColor: P.card,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -6788,7 +6733,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
-    color: fg(0.7),
+    color: 'rgba(0,0,0,0.7)',
     textAlign: 'center',
     marginBottom: 25,
     lineHeight: 20,
@@ -6812,9 +6757,9 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingVertical: 14,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: fg(0.2),
+    borderColor: 'rgba(0,0,0,0.2)',
     alignItems: 'center',
-    backgroundColor: surf(0.3),
+    backgroundColor: P.surface,
   },
   skipButtonText: {
     fontFamily: 'BakbakOne-Regular',
@@ -6847,9 +6792,9 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingVertical: 14,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: fg(0.2),
+    borderColor: 'rgba(0,0,0,0.2)',
     alignItems: 'center',
-    backgroundColor: surf(0.2),
+    backgroundColor: P.surface,
   },
   cancelButtonText: {
     fontFamily: 'BakbakOne-Regular',
@@ -6905,20 +6850,20 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     borderRadius: 12,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: fg(0.3),
+    borderColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: surf(0.2),
+    backgroundColor: P.surface,
   },
   addImageIcon: {
     fontSize: 24,
-    color: fg(0.5),
+    color: 'rgba(0,0,0,0.5)',
   },
   addImageText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 10,
-    color: fg(0.5),
+    color: 'rgba(0,0,0,0.5)',
   },
   carouselDots: {
     flexDirection: 'row',
@@ -6962,17 +6907,17 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   carouselHint: {
     marginTop: 8,
     fontSize: 11,
-    color: fg(0.45),
+    color: 'rgba(0,0,0,0.45)',
     textAlign: 'center',
   },
   carouselDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: fg(0.2),
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
   carouselDotActive: {
-    backgroundColor: fg(0.6),
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
 
   // Accent Color Picker Modal
@@ -6987,7 +6932,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -7008,7 +6953,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   },
   accentColorOptionSelected: {
     borderColor: P.text,
-    backgroundColor: surf(0.3),
+    backgroundColor: P.surface,
   },
   accentColorSwatch: {
     width: 50,
@@ -7062,7 +7007,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: surf(0.25),
+    backgroundColor: P.surface,
     borderRadius: 20,
   },
   previewBackText: {
@@ -7089,7 +7034,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingBottom: 40,
   },
   previewHeroTextShadow: {
-    textShadowColor: fg(0.55),
+    textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
   },
@@ -7237,7 +7182,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   previewBellButtonInline: {
     padding: 4,
     borderRadius: 12,
-    backgroundColor: surf(0.3),
+    backgroundColor: P.surface,
     zIndex: 2,
   },
   // Generic frosted card — About / Reviews / Contact
@@ -7543,7 +7488,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
     fontWeight: '600',
-    color: fg(0.55),
+    color: 'rgba(0,0,0,0.55)',
     marginTop: 2,
   },
 
@@ -7557,7 +7502,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: surf(0.3),
+    backgroundColor: P.surface,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 15,
@@ -7632,9 +7577,9 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: surf(0.55),
+    backgroundColor: P.card,
     borderWidth: 1,
-    borderColor: fg(0.06),
+    borderColor: 'rgba(0,0,0,0.06)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -7690,13 +7635,13 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '800',
-    color: fg(0.85),
+    color: 'rgba(0,0,0,0.85)',
   },
   toggleHint: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
-    color: fg(0.6),
+    color: 'rgba(0,0,0,0.6)',
     marginTop: 1,
   },
 
@@ -7706,8 +7651,8 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     alignSelf: 'flex-start',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: fg(0.12),
-    backgroundColor: fg(0.04),
+    borderColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: 'rgba(0,0,0,0.04)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginTop: 10,
@@ -7715,7 +7660,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   releaseDayBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: fg(0.75),
+    color: 'rgba(0,0,0,0.75)',
   },
 
   releasePickerOverlay: {
@@ -7748,7 +7693,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
-    color: fg(0.46),
+    color: 'rgba(0,0,0,0.46)',
     marginBottom: 4,
   },
   releasePickerTitle: {
@@ -7762,14 +7707,14 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: fg(0.06),
+    backgroundColor: 'rgba(0,0,0,0.06)',
   },
   releasePickerSubtext: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     lineHeight: 18,
-    color: fg(0.57),
+    color: 'rgba(0,0,0,0.57)',
     marginTop: 10,
     marginBottom: 18,
   },
@@ -7806,7 +7751,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
   policySectionTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 17,
-    color: fg(0.82),
+    color: 'rgba(0,0,0,0.82)',
     marginBottom: 12,
   },
   // 10px uppercase at 0.42 alpha with 1.3 tracking was the faintest text on the
@@ -7818,7 +7763,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: fg(0.72),
+    color: 'rgba(0,0,0,0.72)',
     marginBottom: 8,
   },
   pillRow: {
@@ -7827,36 +7772,36 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     gap: 7,
     marginBottom: 4,
   },
-  // Unselected pills sit on the surface ramp with a hairline edge rather than a
-  // flat fg() wash — fg() is the *text* ramp, so using it as a fill read muddy.
+  // Unselected pills sit on the opaque card fill with a hairline edge rather
+  // than a flat black-alpha wash, which read muddy as a fill.
   policyPill: {
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: surf(isDark ? 0.16 : 0.9),
+    backgroundColor: P.card,
     borderWidth: 1,
-    borderColor: edge(isDark ? 0.14 : 0.13),
+    borderColor: withAlpha('#8A7361', 0.13),
   },
   policyPillText: {
     fontSize: 13,
     fontWeight: '600',
-    color: fg(0.55),
+    color: 'rgba(0,0,0,0.55)',
   },
   policyNote: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: edge(isDark ? 0.16 : 0.14),
+    borderColor: withAlpha('#8A7361', 0.14),
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
     color: P.text,
-    backgroundColor: surf(isDark ? 0.16 : 0.92),
+    backgroundColor: P.card,
   },
   addressHint: {
     fontSize: 13,
     fontWeight: '600',
-    color: fg(0.72),
+    color: 'rgba(0,0,0,0.72)',
     marginTop: 6,
     marginBottom: 4,
     lineHeight: 18,
@@ -7870,28 +7815,15 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
 // single document meant to look the same regardless of device theme), so
 // there's no dark counterpart to build or look up.
 
-/** The themed style sheet for this screen — always the light sheet, never
- *  read from useTheme().isDarkMode the way the rest of the app's screens do. */
+/** The style sheet for this screen — always the light, flat-opaque sheet
+ *  described above, never read from useTheme().isDarkMode the way the rest
+ *  of the app's screens do. */
 // Styles are rebuilt when the window changes rather than frozen at module
 // load, so the tile grids below still divide the real screen width after a
 // rotation or in split-screen.
-const useScreenStyles = () => {
+const useInfoRegStyles = () => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  return useMemo(() => makeStyles(false, screenWidth, screenHeight), [screenWidth, screenHeight]);
+  return useMemo(() => makeStyles(screenWidth, screenHeight), [screenWidth, screenHeight]);
 };
-
-// Same ramp the sheet above is built from, for the colours that can't live in
-// a StyleSheet: `placeholderTextColor`, `<Ionicons color>`, `trackColor`, etc.
-const lightChrome = {
-  fg: fgFor(false),
-  surf: surfFor(false),
-  text: lightTheme.text,
-  onAccent: lightTheme.onAccent,
-  blurTint: 'light' as const,
-};
-
-/** Colours for inline props that a StyleSheet can't carry — always the light
- *  ramp, for the same reason useScreenStyles() above never reads dark mode. */
-const useChrome = () => lightChrome;
 
 export default InfoRegScreen;

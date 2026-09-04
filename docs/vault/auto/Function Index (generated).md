@@ -5,7 +5,7 @@
 
 #generated
 
-**2036 functions** across **263 files**.
+**2032 functions** across **263 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -180,7 +180,7 @@
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
-- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · applyDragPosition · armDrag · categoryNames · clearDragHoldTimer · edgeFor · EditCategoryModal · editTheme · fgFor · filled · getCategoryDragResponder · goToSection · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleCropperDone · handleDeleteCategory · handleDeleteService · handleInputFocus · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderCategory · handleReorderImages · handleSave · handleSaveService · handleScroll · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleToggleImageFit · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · itself · makeStyles · missingRequired · missingRequiredSet · of · onSectionLayout · pickSuggestion · portfolioColumns · PreviewModal · registerField · sectionSummaries · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · startCategoryAutoScroll · stopCategoryAutoScroll · submitOther · surfFor · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · tick · toggleTag · TransferDataModal · useChrome · useScreenStyles
+- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · applyDragPosition · armDrag · categoryNames · clearDragHoldTimer · EditCategoryModal · editTheme · filled · getCategoryDragResponder · goToSection · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleCropperDone · handleDeleteCategory · handleDeleteService · handleInputFocus · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderCategory · handleReorderImages · handleSave · handleSaveService · handleScroll · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleToggleImageFit · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · itself · makeStyles · missingRequired · missingRequiredSet · of · onSectionLayout · pickSuggestion · portfolioColumns · PreviewModal · registerField · sectionSummaries · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · startCategoryAutoScroll · stopCategoryAutoScroll · submitOther · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · tick · toggleTag · TransferDataModal · useInfoRegStyles
 - `PaymentsScreen.tsx` — flash · handleSave · PaymentsScreen
 - `PoliciesScreen.tsx` — flash · handlePickPolicyImage · handleRemovePolicyImage · handleSave · Pills · PoliciesScreen · setPolicy
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
