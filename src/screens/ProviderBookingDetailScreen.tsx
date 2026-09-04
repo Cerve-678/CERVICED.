@@ -16,6 +16,10 @@ import { useBooking, BookingStatus, ConfirmedBooking } from '../contexts/Booking
 import AppBackground from '../components/AppBackground';
 import { ProviderHomeScreenProps } from '../navigation/types';
 import { supabase } from '../lib/supabase';
+import {
+  insertBookingUserNotification,
+  getProviderFormLibrary,
+} from '../services/databaseService';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -49,6 +53,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   const [fetchedBooking, setFetchedBooking] = useState<ConfirmedBooking | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [autoSettings, setAutoSettings] = useState<{
+    autoReviewRequest: boolean;
+    autoSendIntakeForm: boolean;
+  }>({
+    autoReviewRequest: true,
+    autoSendIntakeForm: false,
+  });
 
   // If booking not in local context, fetch directly from Supabase (provider flow from notification)
   useEffect(() => {
@@ -93,6 +104,19 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       });
   }, [bookingId, contextBooking]);
 
+  // Load the current provider's automation settings from user_metadata on mount.
+  // pa_auto_review_request defaults true (opt-out); pa_auto_send_intake_form defaults false (opt-in).
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const m = user.user_metadata ?? {};
+      setAutoSettings({
+        autoReviewRequest: m['pa_auto_review_request'] ?? true,
+        autoSendIntakeForm: m['pa_auto_send_intake_form'] ?? false,
+      });
+    });
+  }, []);
+
   const booking = contextBooking ?? fetchedBooking;
 
   const handleStatusChange = useCallback(
@@ -108,13 +132,28 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             text: 'Confirm',
             onPress: async () => {
               await updateBookingStatus(booking.id, newStatus);
+
+              // Trigger 1: Auto review request on completion.
+              // Only fires when the provider has pa_auto_review_request enabled (default: true).
+              if (newStatus === BookingStatus.COMPLETED && autoSettings.autoReviewRequest) {
+                insertBookingUserNotification({
+                  booking_id: booking.id,
+                  type: 'review_request',
+                  title: 'How was your experience?',
+                  message: `Your ${booking.serviceName} with ${booking.providerName} is complete. We'd love to hear how it went!`,
+                  priority: 'high',
+                  is_actionable: true,
+                  provider_id: booking.providerId ?? null,
+                }).catch(() => {});
+              }
+
               navigation.goBack();
             },
           },
         ]
       );
     },
-    [booking, updateBookingStatus, navigation]
+    [booking, updateBookingStatus, navigation, autoSettings]
   );
 
   const handleConfirm = useCallback(async () => {
@@ -128,12 +167,43 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           text: 'Confirm',
           onPress: async () => {
             await updateBookingStatus(booking.id, BookingStatus.UPCOMING);
+
+            // Send booking confirmation notification to the client.
+            insertBookingUserNotification({
+              booking_id: booking.id,
+              type: 'booking_confirmed',
+              title: 'Booking Confirmed',
+              message: `Your ${booking.serviceName} with ${booking.providerName} on ${booking.bookingDate} at ${booking.bookingTime} is confirmed.`,
+              priority: 'high',
+              is_actionable: true,
+              provider_id: booking.providerId ?? null,
+            }).catch(() => {});
+
+            // Trigger 2: Auto send intake form on confirmation.
+            // Only fires when the provider has pa_auto_send_intake_form enabled (default: false)
+            // AND they have at least one form in their library.
+            if (autoSettings.autoSendIntakeForm) {
+              getProviderFormLibrary().then(forms => {
+                if (forms.length > 0) {
+                  insertBookingUserNotification({
+                    booking_id: booking.id,
+                    type: 'booking_confirmed',
+                    title: 'Please complete your intake form',
+                    message: `${booking.providerName} needs some information before your appointment. Tap to complete your intake form.`,
+                    priority: 'high',
+                    is_actionable: true,
+                    provider_id: booking.providerId ?? null,
+                  }).catch(() => {});
+                }
+              }).catch(() => {});
+            }
+
             navigation.goBack();
           },
         },
       ]
     );
-  }, [booking, updateBookingStatus, navigation]);
+  }, [booking, updateBookingStatus, navigation, autoSettings]);
 
   const handleDecline = useCallback(async () => {
     if (!booking) return;

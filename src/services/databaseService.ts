@@ -478,6 +478,73 @@ export async function insertProviderNotification(params: {
   });
 }
 
+/** Send a notification to the user who made a booking (provider → client direction) */
+export async function insertBookingUserNotification(params: {
+  booking_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  priority?: 'high' | 'medium' | 'low';
+  is_actionable?: boolean;
+  provider_id?: string | null;
+}): Promise<void> {
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('user_id')
+    .eq('id', params.booking_id)
+    .single();
+  if (!booking?.user_id) return;
+
+  await supabase.from('notifications').insert({
+    user_id: booking.user_id,
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    priority: params.priority ?? 'medium',
+    is_actionable: params.is_actionable ?? false,
+    booking_id: params.booking_id,
+    provider_id: params.provider_id ?? null,
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDER FORM LIBRARY
+// ─────────────────────────────────────────────────────────
+
+export interface LibraryForm {
+  id:                string;
+  providerId:        string;
+  title:             string;
+  questions:         unknown[];
+  serviceNames:      string[];
+  autoSend:          boolean;
+  requiresSignature: boolean;
+  sentCount:         number;
+  createdAt:         string;
+}
+
+/** Fetch the form library for the currently signed-in provider */
+export async function getProviderFormLibrary(): Promise<LibraryForm[]> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return [];
+  const { data } = await supabase
+    .from('provider_form_library')
+    .select('*')
+    .eq('provider_id', provider.id)
+    .order('created_at', { ascending: false });
+  return (data ?? []).map((d: any) => ({
+    id:                d.id,
+    providerId:        d.provider_id,
+    title:             d.title,
+    questions:         d.questions ?? [],
+    serviceNames:      d.service_names ?? [],
+    autoSend:          d.auto_send ?? false,
+    requiresSignature: d.requires_signature ?? false,
+    sentCount:         d.sent_count ?? 0,
+    createdAt:         d.created_at,
+  }));
+}
+
 /** Count unread notifications */
 export async function getUnreadNotificationCount(): Promise<number> {
   const { count, error } = await supabase
