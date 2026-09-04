@@ -3,6 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 // Only for getSize (reading an image's true pixel dimensions) — this service
 // renders nothing.
 import { Image as RNImage } from 'react-native';
@@ -182,17 +183,73 @@ function isLocalUri(uri: string): boolean {
   );
 }
 
+/** Long-edge cap for anything we upload. No screen in this app ever displays
+ *  an image wider than this — even a full-screen detail view on the widest,
+ *  highest-density phone tops out well under it — so this is a byte-size cut
+ *  with no visible quality loss, not a compression tradeoff. Photos straight
+ *  off a modern camera (4032px+ on the long edge) were previously uploaded
+ *  and served at that full resolution to every card and thumbnail in the
+ *  app, which is most of what was driving Storage's Cached Egress usage. */
+const MAX_UPLOAD_DIMENSION = 1600;
+
+function measureImageSize(uri: string): Promise<{ width: number; height: number } | null> {
+  return new Promise(resolve => {
+    try {
+      RNImage.getSize(
+        uri,
+        (w, h) => resolve(w > 0 && h > 0 ? { width: w, height: h } : null),
+        () => resolve(null),
+      );
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Downscales an image to MAX_UPLOAD_DIMENSION on its long edge, only if it's
+ * actually bigger — never upscales a small image. PNG is kept as PNG (a
+ * provider logo can rely on transparency); everything else is saved as JPEG,
+ * which also has the side effect of transcoding an oversized HEIC to
+ * something every platform can decode.
+ *
+ * Never throws: a failed measurement or manipulation must not cost a
+ * provider their upload. Falls back to the original URI on any failure,
+ * matching ServiceImageCropper's same fallback for the same reason.
+ */
+async function downscaleIfOversized(uri: string): Promise<string> {
+  const size = await measureImageSize(uri);
+  if (!size || Math.max(size.width, size.height) <= MAX_UPLOAD_DIMENSION) return uri;
+
+  try {
+    const isPng = /\.png(\?|$)/i.test(uri);
+    const resizeTo =
+      size.width >= size.height
+        ? { width: MAX_UPLOAD_DIMENSION }
+        : { height: MAX_UPLOAD_DIMENSION };
+    const rendered = await ImageManipulator.manipulate(uri).resize(resizeTo).renderAsync();
+    const saved = await rendered.saveAsync(
+      isPng ? { format: SaveFormat.PNG } : { format: SaveFormat.JPEG, compress: 0.85 },
+    );
+    return saved.uri;
+  } catch (error) {
+    logger.error('[uploadToStorage] downscale failed, uploading original size:', error);
+    return uri;
+  }
+}
+
 export async function uploadToStorage(
   bucket: string,
   storagePath: string,
   localUri: string
 ): Promise<string> {
-  const ext = localUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+  const preparedUri = await downscaleIfOversized(localUri);
+  const ext = preparedUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
   const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
 
   // Use expo-file-system to read the local file reliably on both iOS and Android.
   // fetch(localUri) can fail with "Network request failed" for file:// URIs in RN.
-  const base64 = await FileSystem.readAsStringAsync(localUri, {
+  const base64 = await FileSystem.readAsStringAsync(preparedUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
 

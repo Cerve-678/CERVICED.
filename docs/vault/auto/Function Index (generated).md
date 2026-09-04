@@ -5,7 +5,7 @@
 
 #generated
 
-**2036 functions** across **263 files**.
+**2038 functions** across **263 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -225,7 +225,7 @@
 - `ImageLoader.ts` — **useImageLoader**
 - `notificationTapHandler.ts` — **handleNotificationTap** · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
-- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · **uploadToStorage**
+- `providerRegistrationService.ts` — downscaleIfOversized · generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · measureImageSize · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · **uploadToStorage**
 - `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
