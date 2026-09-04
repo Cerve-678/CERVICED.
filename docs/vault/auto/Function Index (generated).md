@@ -5,7 +5,7 @@
 
 #generated
 
-**2007 functions** across **260 files**.
+**2009 functions** across **261 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -251,10 +251,11 @@
 ### `src/types/` (1)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 
-### `src/utils/` (23)
+### `src/utils/` (24)
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
+- `coachMarkTours 2.ts` — **resolveTour** · **seenVersionFor**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `dateUtils.ts` — **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
