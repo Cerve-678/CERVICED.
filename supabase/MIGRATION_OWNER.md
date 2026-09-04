@@ -27,6 +27,26 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Attempted 2026-09-04, not applied (cron.log_run for Disk IO Budget)
+
+Investigated a Disk IO Budget depletion alert. Root cause: `expire-waitlist-holds`
+(jobid 155) runs every minute since `20260827120519_waitlist_hold_fifteen_minutes.sql`
+(deliberate — 15-min hold window needs a 1-min sweep), and pg_cron's own
+`cron.job_run_details` bookkeeping (4 writes per invocation) makes that ~1,440
+runs/day the dominant write-IOPS source against a 28MB, Nano-tier database.
+
+`ALTER DATABASE postgres SET cron.log_run = off` was the proposed fix — it
+**failed live**: `55P02: parameter "cron.log_run" cannot be changed without
+restarting the server`. It's PGC_POSTMASTER in this build, and Supabase's
+Database Settings page has no free-text custom-parameter box (checked
+directly — only curated toggles: connection pooling, SSL, network
+restrictions, connection logging). Not self-service without either a
+Supabase support ticket or a compute-tier change via the Infrastructure page.
+
+Not applied. No schema/data changed. Lock taken and released same session
+with nothing to show for it — recorded so the next session doesn't
+re-diagnose the same alert from scratch.
+
 ### Applied 2026-08-31 (account-scoped walkthrough versions)
 
 `20260831124409_account_scoped_tour_versions.sql` — adds `users.seen_tours`
