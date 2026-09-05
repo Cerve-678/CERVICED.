@@ -8,6 +8,7 @@
 // outreach/invite system, so it does not touch provider_outreach_suppressions.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { claimVerificationCodeEmail } from '../_shared/emailTemplates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
@@ -108,6 +109,8 @@ serve(async (req) => {
       throw new Error(`Could not generate a verification code: ${updateError.message}`);
     }
 
+    const { subject, html } = claimVerificationCodeEmail({ code });
+
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -117,13 +120,8 @@ serve(async (req) => {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: provider.email,
-        subject: `Your CERVICED verification code: ${code}`,
-        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
-          <h2 style="color:#a342c3">Claim your business listing</h2>
-          <p>Enter this code in the CERVICED app to confirm this listing is yours:</p>
-          <p style="font-size:32px;font-weight:700;letter-spacing:6px;margin:24px 0;">${code}</p>
-          <p style="color:#666;font-size:13px;">This code expires in 15 minutes. If you didn't request this, you can ignore this email.</p>
-        </div>`,
+        subject,
+        html,
       }),
     });
 
