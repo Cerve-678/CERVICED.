@@ -69,7 +69,6 @@ import {
   type WaitlistEntry,
   setProviderFollowNotify,
 } from "../../services/databaseService";
-import { splitPortfolioByKind } from "../../features/providers/venuePhotos";
 import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
@@ -1582,11 +1581,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Information at the foot of the profile rather than sitting in the
   // Portfolio grid between finished results — same reasoning as the rest of
   // that card: facts about the business, not samples of the work. Explore
-  // already excludes them from the discovery feed.
-  const { work: workPortfolio, venue: venuePortfolio } = useMemo(
-    () => splitPortfolioByKind(portfolio),
-    [portfolio],
-  );
+  // already excludes them from the discovery feed. The two halves arrive
+  // already separated by getProviderPortfolio's own SQL, each with its own
+  // row cap, so there is nothing left to divide here.
+  const { work: workPortfolio, venue: venuePortfolio } = portfolio;
   const contactDetails = useMemo(() => ({
     location: provider?.location ?? "",
     phone: provider?.phone ?? "",

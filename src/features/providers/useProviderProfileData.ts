@@ -56,7 +56,10 @@ export interface ProviderProfileDataState {
   reviewsLoading: boolean;
   reviewsLoadedAll: boolean;
   promotions: ClientPromotion[];
-  portfolio: DbPortfolioItem[];
+  /** Already split by getProviderPortfolio's own SQL, not divided again
+   *  here — the work gallery and the venue/workspace shots have separate
+   *  row caps and render in two different places on the profile. */
+  portfolio: { work: DbPortfolioItem[]; venue: DbPortfolioItem[] };
   availability: AvailabilitySummary | null;
   availabilityLoading: boolean;
   openingHours: WeeklyOpeningHoursDay[] | null;
@@ -88,7 +91,10 @@ export function useProviderProfileData(
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsLoadedAll, setReviewsLoadedAll] = useState(false);
   const [promotions, setPromotions] = useState<ClientPromotion[]>([]);
-  const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
+  const [portfolio, setPortfolio] = useState<{
+    work: DbPortfolioItem[];
+    venue: DbPortfolioItem[];
+  }>({ work: [], venue: [] });
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(
     null,
   );
@@ -114,7 +120,7 @@ export function useProviderProfileData(
     setReviewsLoading(true);
     setReviewsLoadedAll(false);
     setPromotions([]);
-    setPortfolio([]);
+    setPortfolio({ work: [], venue: [] });
     setAvailability(null);
     setAvailabilityLoading(true);
     setOpeningHours(null);
@@ -178,7 +184,10 @@ export function useProviderProfileData(
             logger.warn("Failed to load provider promotions:", error);
           });
 
-        void getProviderPortfolio(data.id)
+        // includeVenue: the client profile renders venue/workspace shots
+        // inside Additional Information, so it needs both halves — it is one
+        // of the two callers getProviderPortfolio's second query exists for.
+        void getProviderPortfolio(data.id, { includeVenue: true })
           .then((rows) => {
             if (!cancelled) setPortfolio(rows);
           })
