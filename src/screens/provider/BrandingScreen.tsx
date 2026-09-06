@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   previewBg: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   previewContent: {
     padding: 18,

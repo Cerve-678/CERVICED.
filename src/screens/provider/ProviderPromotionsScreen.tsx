@@ -404,7 +404,7 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
       <View style={tpSt.container}>
-        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <View style={[tpSt.sheet, { backgroundColor: C.surface }]}>
         <View style={[tpSt.handle, { backgroundColor: C.border }]} />
         <Text style={[tpSt.heading, { color: C.text }]}>Start with a template</Text>
@@ -506,7 +506,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
       <View style={nmSt.container}>
-        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <View style={[nmSt.sheet, { backgroundColor: C.surface }]}>
         <View style={[nmSt.handle, { backgroundColor: C.border }]} />
         <View style={nmSt.header}>

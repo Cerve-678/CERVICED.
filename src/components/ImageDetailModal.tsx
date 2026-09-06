@@ -1023,7 +1023,7 @@ const styles = StyleSheet.create({
   // This stays above the image visually, but box-none lets taps in its empty
   // top padding fall through to the carousel's native FlatList.
   cardScroll: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   // flexGrow ensures the card's background fills the whole scrollable area
   // even when there's little content, instead of the sheet's white/dark

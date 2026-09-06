@@ -10,17 +10,17 @@ applyFontScaleClamp();
 describe('font scale clamp', () => {
   it('caps how far the OS font setting can enlarge ordinary text', () => {
     const { getByText } = render(<Text>Book now</Text>);
-    expect(getByText('Book now').props.maxFontSizeMultiplier).toBe(MAX_FONT_SCALE);
+    expect(getByText('Book now').props['maxFontSizeMultiplier']).toBe(MAX_FONT_SCALE);
   });
 
   it('caps text inputs too, not just text', () => {
     const { getByPlaceholderText } = render(<TextInput placeholder="Search" />);
-    expect(getByPlaceholderText('Search').props.maxFontSizeMultiplier).toBe(MAX_FONT_SCALE);
+    expect(getByPlaceholderText('Search').props['maxFontSizeMultiplier']).toBe(MAX_FONT_SCALE);
   });
 
   it('lets a call site that sets its own limit win', () => {
     const { getByText } = render(<Text maxFontSizeMultiplier={1}>Fixed</Text>);
-    expect(getByText('Fixed').props.maxFontSizeMultiplier).toBe(1);
+    expect(getByText('Fixed').props['maxFontSizeMultiplier']).toBe(1);
   });
 
   it('still delivers a ref to the wrapped input, so focus() keeps working', () => {
@@ -33,7 +33,7 @@ describe('font scale clamp', () => {
     applyFontScaleClamp();
     applyFontScaleClamp();
     const { getByText } = render(<Text>Still capped</Text>);
-    expect(getByText('Still capped').props.maxFontSizeMultiplier).toBe(MAX_FONT_SCALE);
+    expect(getByText('Still capped').props['maxFontSizeMultiplier']).toBe(MAX_FONT_SCALE);
   });
 
   it('is a ceiling, not a freeze — enlarged system fonts still take effect', () => {

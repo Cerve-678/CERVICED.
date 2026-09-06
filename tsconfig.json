@@ -16,12 +16,10 @@
       "esnext"
     ],
     "moduleResolution": "bundler",
-    "baseUrl": ".",
-    "paths": {
-      "expo-file-system/legacy": [
-        "src/types/expo-file-system-legacy"
-      ]
-    },
+    "types": [
+      "jest",
+      "node"
+    ],
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
