@@ -8534,7 +8534,9 @@ export type AccountEmailKind =
   | 'provider_welcome'
   | 'password_changed'
   | 'provider_hat_added'
-  | 'client_hat_added';
+  | 'client_hat_added'
+  /** The brand email — what CERVICED is and offers. Not tied to an event. */
+  | 'general_welcome';
 
 /**
  * Sends the signed-in user an account email (a welcome, or a password-changed

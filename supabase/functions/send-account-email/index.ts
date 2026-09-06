@@ -24,6 +24,7 @@ import {
   passwordChangedEmail,
   clientHatAddedEmail,
   providerHatAddedEmail,
+  generalWelcomeEmail,
 } from '../_shared/emailTemplates.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
 
@@ -38,6 +39,10 @@ const KINDS = [
   // kinds rather than reusing the welcomes, which greet a stranger.
   'client_hat_added',
   'provider_hat_added',
+  // The brand email: what CERVICED is and what it offers, both hats. Not
+  // hat-specific and not tied to an event on the account, so it is the one
+  // kind here that is safe to send to anybody at any point.
+  'general_welcome',
 ] as const;
 type Kind = typeof KINDS[number];
 
@@ -112,6 +117,8 @@ serve(async (req) => {
       ? passwordChangedEmail({ name: escapeHtml(name) })
       : kind === 'client_hat_added'
       ? clientHatAddedEmail({ name: escapeHtml(name) })
+      : kind === 'general_welcome'
+      ? generalWelcomeEmail({ name: escapeHtml(name) })
       : clientWelcomeEmail({ name: escapeHtml(name) });
 
     const res = await fetch('https://api.resend.com/emails', {
