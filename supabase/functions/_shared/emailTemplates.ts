@@ -8,8 +8,7 @@
 // confirmation. They live here now so the server owns both the wording and
 // the sending.
 //
-// Ported verbatim from the client versions so nothing about the emails
-// people receive changes. Two templates were NOT ported: bookingReminderEmail
+// Two templates were NOT ported from the client versions: bookingReminderEmail
 // and newBookingProviderEmail had zero callers and were deleted rather than
 // carried across.
 //
@@ -17,46 +16,111 @@
 // inside HTML, so it goes through escapeHtml() at the call site in the
 // functions that use these — see send-booking-confirmation.
 
-const BASE_STYLE = `
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Jura:wght@400;600;700&display=swap');
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background-color: #F5E6FA; font-family: 'Jura', Georgia, sans-serif; }
-  </style>
-`;
+// ---------------------------------------------------------------------------
+// Palette
+// ---------------------------------------------------------------------------
+// These are the app's own colours (src/constants/theme.ts, documented in
+// DESIGN_SYSTEM.md), not an email-only invention. The templates used to render
+// a bright orchid gradient (#a342c3 → #DA70D6 on #F5E6FA lilac) with an Impact
+// wordmark — a palette that appears nowhere in the product — so a welcome
+// email looked like a different company to the app it was welcoming you into.
+//
+// There are two palettes because the app has two hats, and an email belongs to
+// the hat it is about: a client email is plum, a provider email is chocolate.
+// Both are the LIGHT-mode values only. Email clients' dark modes range from no
+// support at all to inverting the whole message unasked, so a template that
+// tries to follow the reader's theme reliably renders worse than one that
+// commits to a single ground.
+//
+// rgba() tokens are pre-flattened to hex against the surface they actually sit
+// on — Outlook drops rgba() outright and would leave the element transparent.
 
-function emailWrapper(content: string) {
+interface EmailPalette {
+  bg: string;
+  surface: string;
+  card: string;
+  accent: string;
+  /** Drawn ON TOP of a solid accent fill — never a hardcoded white. */
+  onAccent: string;
+  text: string;
+  sub: string;
+  border: string;
+}
+
+/** Client hat — clientLightTheme. */
+const CLIENT: EmailPalette = {
+  bg:       '#FBF7F8',
+  surface:  '#F3EEF0',
+  card:     '#FFFFFF',
+  accent:   '#4A2340', // plum
+  onAccent: '#FFFFFF',
+  text:     '#000000',
+  sub:      '#8F7789', // rgba(74,35,64,0.62) flattened onto white
+  border:   '#E6E0E4', // rgba(74,35,64,0.14) flattened onto white
+};
+
+/** Provider hat — lightTheme. Also the account-level default. */
+const PROVIDER: EmailPalette = {
+  bg:       '#F5F1EC',
+  surface:  '#EDE8E2',
+  card:     '#FFFFFF',
+  accent:   '#5C4033', // dark chocolate brown
+  onAccent: '#FFFFFF',
+  text:     '#000000',
+  sub:      '#7E6667',
+  border:   '#EDEAEA', // rgba(126,102,103,0.14) flattened onto white
+};
+
+// The app's two fonts (DESIGN_SYSTEM.md: uppercase/display → BakbakOne,
+// sentences → Jura), each with a real fallback stack. Apple Mail honours the
+// webfont link and most CERVICED mail is read on an iPhone; Gmail strips it
+// and lands on the fallback, which is why the stacks matter more than the
+// @import does.
+const DISPLAY = "'Bakbak One', 'Arial Black', Impact, sans-serif";
+const BODY = "'Jura', 'Trebuchet MS', Verdana, sans-serif";
+
+const FONT_LINK =
+  'https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;600;700&display=swap';
+
+// ---------------------------------------------------------------------------
+// Building blocks
+// ---------------------------------------------------------------------------
+// Shared so the templates below stay readable and can't drift apart one inline
+// style at a time — the previous versions were five hand-maintained copies of
+// near-identical style soup.
+
+function emailWrapper(content: string, P: EmailPalette) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  ${BASE_STYLE}
+  <link href="${FONT_LINK}" rel="stylesheet" />
+  <style>
+    @import url('${FONT_LINK}');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background-color: ${P.bg}; font-family: ${BODY}; }
+  </style>
 </head>
-<body style="background:#F5E6FA;padding:40px 16px;font-family:'Jura',Georgia,sans-serif;">
+<body style="background:${P.bg};padding:40px 16px;font-family:${BODY};">
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;">
-    <!-- Header -->
     <tr>
-      <td align="center" style="padding-bottom:32px;">
-        <div style="background:linear-gradient(135deg,#a342c3,#DA70D6);border-radius:20px;padding:28px 40px;display:inline-block;">
-          <div style="color:#fff;font-size:36px;font-weight:900;letter-spacing:4px;font-family:Impact,'Arial Black',sans-serif;">CERVICED</div>
-          <div style="color:rgba(255,255,255,0.85);font-size:13px;letter-spacing:1px;margin-top:4px;font-family:'Jura',Georgia,sans-serif;">Beauty at your fingertips</div>
-        </div>
+      <td align="center" style="padding-bottom:28px;">
+        <div style="font-family:${DISPLAY};font-size:30px;letter-spacing:6px;color:${P.accent};line-height:1.2;">CERVICED</div>
+        <div style="font-family:${BODY};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:${P.sub};margin-top:8px;">Beauty at your fingertips</div>
       </td>
     </tr>
-    <!-- Card -->
     <tr>
       <td>
-        <div style="background:#fff;border-radius:20px;padding:40px 36px;box-shadow:0 4px 24px rgba(163,66,195,0.12);">
+        <div style="background:${P.card};border:1px solid ${P.border};border-radius:16px;padding:36px 32px;">
           ${content}
         </div>
       </td>
     </tr>
-    <!-- Footer -->
     <tr>
       <td align="center" style="padding-top:28px;padding-bottom:8px;">
-        <p style="color:#a342c3;font-size:12px;letter-spacing:1px;">© CERVICED · cerviced.co</p>
-        <p style="color:#999;font-size:11px;margin-top:6px;">You're receiving this because you signed up for CERVICED.</p>
+        <p style="font-family:${BODY};color:${P.sub};font-size:11px;letter-spacing:1.5px;">© CERVICED · cerviced.co</p>
+        <p style="font-family:${BODY};color:${P.sub};font-size:11px;margin-top:6px;">You're receiving this because you have a CERVICED account.</p>
       </td>
     </tr>
   </table>
@@ -64,90 +128,132 @@ function emailWrapper(content: string) {
 </html>`;
 }
 
-export function clientWelcomeEmail(params: { name: string }) {
-  const firstName = params.name.split(' ')[0];
-  return {
-    subject: `Welcome to CERVICED, ${firstName} ✨`,
-    html: emailWrapper(`
-      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">Welcome, ${firstName} ✨</h1>
-      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Your beauty journey starts now</p>
+/** Big display title plus the small caps kicker under it. */
+function heading(P: EmailPalette, title: string, kicker: string) {
+  return `
+      <h1 style="font-family:${DISPLAY};font-size:26px;color:${P.text};letter-spacing:1px;line-height:1.3;margin-bottom:10px;">${title}</h1>
+      <p style="font-family:${BODY};color:${P.accent};font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:24px;">${kicker}</p>`;
+}
 
-      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
-        You're now part of CERVICED — the home of top beauty professionals near you. Book hair, nails, lashes, brows, MUA, and more, all in one place.
-      </p>
+function paragraph(P: EmailPalette, html: string) {
+  return `
+      <p style="font-family:${BODY};color:${P.text};font-size:15px;line-height:1.7;margin-bottom:24px;">${html}</p>`;
+}
 
-      <div style="background:#F5E6FA;border-radius:14px;padding:20px 24px;margin-bottom:28px;">
-        <p style="color:#a342c3;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px;">What you can do</p>
-        <table cellpadding="0" cellspacing="0" width="100%">
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">✦</span><span style="color:#333;font-size:14px;">Discover verified beauty providers</span></td></tr>
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">✦</span><span style="color:#333;font-size:14px;">Browse portfolios & real work</span></td></tr>
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">✦</span><span style="color:#333;font-size:14px;">Book & manage appointments</span></td></tr>
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">✦</span><span style="color:#333;font-size:14px;">Save your favourite providers</span></td></tr>
+/** Tinted panel with a caps label over a bulleted list. */
+function bulletPanel(P: EmailPalette, label: string, items: string[]) {
+  const rows = items
+    .map(
+      (item) => `
+          <tr><td style="padding:6px 0;">
+            <span style="color:${P.accent};font-size:15px;padding-right:10px;">✦</span>
+            <span style="font-family:${BODY};color:${P.text};font-size:14px;">${item}</span>
+          </td></tr>`,
+    )
+    .join('');
+  return `
+      <div style="background:${P.surface};border-radius:14px;padding:20px 24px;margin-bottom:28px;">
+        <p style="font-family:${DISPLAY};color:${P.accent};font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">${label}</p>
+        <table cellpadding="0" cellspacing="0" width="100%">${rows}
         </table>
-      </div>
+      </div>`;
+}
 
+/** Tinted panel with a caps label over a numbered list. */
+function stepPanel(P: EmailPalette, label: string, items: string[]) {
+  const rows = items
+    .map(
+      (item, i) => `
+          <tr><td style="padding:6px 0;">
+            <span style="background:${P.accent};color:${P.onAccent};font-family:${DISPLAY};font-size:10px;letter-spacing:1px;padding:3px 9px;border-radius:100px;margin-right:10px;">${i + 1}</span>
+            <span style="font-family:${BODY};color:${P.text};font-size:14px;">${item}</span>
+          </td></tr>`,
+    )
+    .join('');
+  return `
+      <div style="background:${P.surface};border-radius:14px;padding:20px 24px;margin-bottom:28px;">
+        <p style="font-family:${DISPLAY};color:${P.accent};font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">${label}</p>
+        <table cellpadding="0" cellspacing="0" width="100%">${rows}
+        </table>
+      </div>`;
+}
+
+/** Quiet aside marked with an accent rule down its left edge. */
+function note(P: EmailPalette, html: string, marginBottom = 28) {
+  return `
+      <div style="border-left:3px solid ${P.accent};padding-left:16px;margin-bottom:${marginBottom}px;">
+        <p style="font-family:${BODY};color:${P.sub};font-size:13px;line-height:1.7;">${html}</p>
+      </div>`;
+}
+
+function button(P: EmailPalette, href: string, label: string) {
+  return `
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td align="center">
-            <a href="cerviced://home" style="display:inline-block;background:linear-gradient(135deg,#a342c3,#DA70D6);color:#fff;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;padding:14px 40px;border-radius:50px;">Open CERVICED</a>
+            <a href="${href}" style="display:inline-block;background:${P.accent};color:${P.onAccent};font-family:${DISPLAY};font-size:14px;letter-spacing:2px;text-transform:uppercase;text-decoration:none;padding:15px 40px;border-radius:100px;">${label}</a>
           </td>
         </tr>
-      </table>
+      </table>`;
+}
 
-      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
-    `),
+function appHint(P: EmailPalette) {
+  return `
+      <p style="font-family:${BODY};color:${P.sub};font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>`;
+}
+
+// ---------------------------------------------------------------------------
+// Templates
+// ---------------------------------------------------------------------------
+
+export function clientWelcomeEmail(params: { name: string }) {
+  const firstName = params.name.split(' ')[0] || 'there';
+  return {
+    subject: `Welcome to CERVICED, ${firstName} ✨`,
+    html: emailWrapper(
+      heading(CLIENT, `Welcome, ${firstName} ✨`, 'Your beauty journey starts now') +
+        paragraph(
+          CLIENT,
+          "You're now part of CERVICED — the home of top beauty professionals near you. Book hair, nails, lashes, brows, MUA, and more, all in one place.",
+        ) +
+        bulletPanel(CLIENT, 'What you can do', [
+          'Discover verified beauty providers',
+          'Browse portfolios &amp; real work',
+          'Book &amp; manage appointments',
+          'Save your favourite providers',
+        ]) +
+        button(CLIENT, 'cerviced://home', 'Open CERVICED') +
+        appHint(CLIENT),
+      CLIENT,
+    ),
   };
 }
 
 export function providerWelcomeEmail(params: { name: string; businessName?: string }) {
-  const firstName = params.name.split(' ')[0];
+  const firstName = params.name.split(' ')[0] || 'there';
   const display = params.businessName || firstName;
   return {
     subject: `Welcome to CERVICED, ${display} — your profile is ready 🎉`,
-    html: emailWrapper(`
-      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">You're live on CERVICED 🎉</h1>
-      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Welcome to the platform, ${display}</p>
-
-      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
-        Your provider account is set up and ready. Clients across the platform can now discover your work. Here's how to get the most out of CERVICED from day one.
-      </p>
-
-      <div style="background:#F5E6FA;border-radius:14px;padding:20px 24px;margin-bottom:28px;">
-        <p style="color:#a342c3;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px;">Get started</p>
-        <table cellpadding="0" cellspacing="0" width="100%">
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">1</span>
-            <span style="color:#333;font-size:14px;">Complete your profile & add a photo</span>
-          </td></tr>
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">2</span>
-            <span style="color:#333;font-size:14px;">Upload your portfolio work</span>
-          </td></tr>
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">3</span>
-            <span style="color:#333;font-size:14px;">Add your services & pricing</span>
-          </td></tr>
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">4</span>
-            <span style="color:#333;font-size:14px;">Set your availability</span>
-          </td></tr>
-        </table>
-      </div>
-
-      <div style="border-left:3px solid #DA70D6;padding-left:16px;margin-bottom:28px;">
-        <p style="color:#666;font-size:13px;line-height:1.7;">Providers with complete profiles and portfolio photos get significantly more bookings. Take 5 minutes to set yours up now.</p>
-      </div>
-
-      <table width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          <td align="center">
-            <a href="cerviced://provider/profile" style="display:inline-block;background:linear-gradient(135deg,#a342c3,#DA70D6);color:#fff;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;padding:14px 40px;border-radius:50px;">Set Up My Profile</a>
-          </td>
-        </tr>
-      </table>
-
-      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
-    `),
+    html: emailWrapper(
+      heading(PROVIDER, "You're live on CERVICED 🎉", `Welcome to the platform, ${display}`) +
+        paragraph(
+          PROVIDER,
+          "Your provider account is set up and ready. Clients across the platform can now discover your work. Here's how to get the most out of CERVICED from day one.",
+        ) +
+        stepPanel(PROVIDER, 'Get started', [
+          'Complete your profile &amp; add a photo',
+          'Upload your portfolio work',
+          'Add your services &amp; pricing',
+          'Set your availability',
+        ]) +
+        note(
+          PROVIDER,
+          'Providers with complete profiles and portfolio photos get significantly more bookings. Take 5 minutes to set yours up now.',
+        ) +
+        button(PROVIDER, 'cerviced://provider/profile', 'Set Up My Profile') +
+        appHint(PROVIDER),
+      PROVIDER,
+    ),
   };
 }
 
@@ -159,39 +265,27 @@ export function providerWelcomeEmail(params: { name: string; businessName?: stri
 export function clientHatAddedEmail(params: { name: string }) {
   const firstName = params.name.split(' ')[0] || 'there';
   return {
-    subject: `Your client side is ready, ${firstName} \u2728`,
-    html: emailWrapper(`
-      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">You can book now too \u2728</h1>
-      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Client mode is on your account</p>
-
-      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
-        Hi ${firstName} \u2014 you've added a client profile to your CERVICED account. Same login, same business, one more thing you can do with it: book other beauty professionals for yourself.
-      </p>
-
-      <div style="background:#F5E6FA;border-radius:14px;padding:20px 24px;margin-bottom:28px;">
-        <p style="color:#a342c3;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px;">What's new for you</p>
-        <table cellpadding="0" cellspacing="0" width="100%">
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Discover verified beauty providers</span></td></tr>
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Browse portfolios &amp; real work</span></td></tr>
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Book &amp; manage your own appointments</span></td></tr>
-          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Save your favourite providers</span></td></tr>
-        </table>
-      </div>
-
-      <div style="border-left:3px solid #DA70D6;padding-left:16px;margin-bottom:28px;">
-        <p style="color:#666;font-size:13px;line-height:1.7;">Your provider profile, services and bookings are untouched. Switch between the two any time from your account screen \u2014 nothing you do as a client is visible to your own clients.</p>
-      </div>
-
-      <table width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          <td align="center">
-            <a href="cerviced://home" style="display:inline-block;background:linear-gradient(135deg,#a342c3,#DA70D6);color:#fff;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;padding:14px 40px;border-radius:50px;">Start Browsing</a>
-          </td>
-        </tr>
-      </table>
-
-      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
-    `),
+    subject: `Your client side is ready, ${firstName} ✨`,
+    html: emailWrapper(
+      heading(CLIENT, 'You can book now too ✨', 'Client mode is on your account') +
+        paragraph(
+          CLIENT,
+          `Hi ${firstName} — you've added a client profile to your CERVICED account. Same login, same business, one more thing you can do with it: book other beauty professionals for yourself.`,
+        ) +
+        bulletPanel(CLIENT, "What's new for you", [
+          'Discover verified beauty providers',
+          'Browse portfolios &amp; real work',
+          'Book &amp; manage your own appointments',
+          'Save your favourite providers',
+        ]) +
+        note(
+          CLIENT,
+          'Your provider profile, services and bookings are untouched. Switch between the two any time from your account screen — nothing you do as a client is visible to your own clients.',
+        ) +
+        button(CLIENT, 'cerviced://home', 'Start Browsing') +
+        appHint(CLIENT),
+      CLIENT,
+    ),
   };
 }
 
@@ -199,74 +293,50 @@ export function providerHatAddedEmail(params: { name: string; businessName?: str
   const firstName = params.name.split(' ')[0] || 'there';
   const display = params.businessName || firstName;
   return {
-    subject: `Your provider profile is set up, ${display} \uD83C\uDF89`,
-    html: emailWrapper(`
-      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">You're a provider now \uD83C\uDF89</h1>
-      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Provider mode is on your account</p>
-
-      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
-        Hi ${firstName} \u2014 you've added a provider profile to your CERVICED account. Here's what to do next so clients can find and book you.
-      </p>
-
-      <div style="background:#F5E6FA;border-radius:14px;padding:20px 24px;margin-bottom:28px;">
-        <p style="color:#a342c3;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px;">Get started</p>
-        <table cellpadding="0" cellspacing="0" width="100%">
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">1</span>
-            <span style="color:#333;font-size:14px;">Complete your profile &amp; add a photo</span>
-          </td></tr>
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">2</span>
-            <span style="color:#333;font-size:14px;">Upload your portfolio work</span>
-          </td></tr>
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">3</span>
-            <span style="color:#333;font-size:14px;">Add your services &amp; pricing</span>
-          </td></tr>
-          <tr><td style="padding:6px 0;">
-            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">4</span>
-            <span style="color:#333;font-size:14px;">Set your availability</span>
-          </td></tr>
-        </table>
-      </div>
-
-      <div style="border-left:3px solid #DA70D6;padding-left:16px;margin-bottom:28px;">
-        <p style="color:#666;font-size:13px;line-height:1.7;">Your bookings and saved providers as a client are untouched. Switch between the two any time from your account screen.</p>
-      </div>
-
-      <table width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          <td align="center">
-            <a href="cerviced://provider/profile" style="display:inline-block;background:linear-gradient(135deg,#a342c3,#DA70D6);color:#fff;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;padding:14px 40px;border-radius:50px;">Set Up My Profile</a>
-          </td>
-        </tr>
-      </table>
-
-      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
-    `),
+    subject: `Your provider profile is set up, ${display} 🎉`,
+    html: emailWrapper(
+      heading(PROVIDER, "You're a provider now 🎉", 'Provider mode is on your account') +
+        paragraph(
+          PROVIDER,
+          `Hi ${firstName} — you've added a provider profile to your CERVICED account. Here's what to do next so clients can find and book you.`,
+        ) +
+        stepPanel(PROVIDER, 'Get started', [
+          'Complete your profile &amp; add a photo',
+          'Upload your portfolio work',
+          'Add your services &amp; pricing',
+          'Set your availability',
+        ]) +
+        note(
+          PROVIDER,
+          'Your bookings and saved providers as a client are untouched. Switch between the two any time from your account screen.',
+        ) +
+        button(PROVIDER, 'cerviced://provider/profile', 'Set Up My Profile') +
+        appHint(PROVIDER),
+      PROVIDER,
+    ),
   };
 }
 
+// Account-level rather than hat-specific — it can reach either hat, so it uses
+// the app's base theme (the provider/shared palette) rather than picking one.
 export function passwordChangedEmail(params: { name: string }) {
   const firstName = params.name.split(' ')[0] || 'there';
   return {
     subject: 'Your CERVICED password was changed',
-    html: emailWrapper(`
-      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">Password changed</h1>
-      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Hi ${firstName}</p>
-
-      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
-        This confirms the password on your CERVICED account was just changed. You can use your new password to sign in from now on.
-      </p>
-
-      <div style="border-left:3px solid #DA70D6;padding-left:16px;margin-bottom:8px;">
-        <p style="color:#666;font-size:13px;line-height:1.7;">
-          If you made this change, no further action is needed. If you didn't, someone else may have access to your account — contact support@cerviced.co right away.
-        </p>
-      </div>
-
-      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
-    `),
+    html: emailWrapper(
+      heading(PROVIDER, 'Password changed', `Hi ${firstName}`) +
+        paragraph(
+          PROVIDER,
+          'This confirms the password on your CERVICED account was just changed. You can use your new password to sign in from now on.',
+        ) +
+        note(
+          PROVIDER,
+          "If you made this change, no further action is needed. If you didn't, someone else may have access to your account — contact support@cerviced.co right away.",
+          8,
+        ) +
+        appHint(PROVIDER),
+      PROVIDER,
+    ),
   };
 }
 
@@ -278,23 +348,24 @@ export function bookingConfirmationEmail(params: {
   time: string;
   location: string;
 }) {
+  const P = CLIENT;
+  const row = (label: string, value: string) => `
+          <tr>
+            <td style="padding:10px 0;border-bottom:1px solid ${P.border};font-family:${DISPLAY};color:${P.accent};font-size:11px;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;vertical-align:top;">${label}</td>
+            <td style="padding:10px 0 10px 16px;border-bottom:1px solid ${P.border};font-family:${BODY};color:${P.text};font-size:14px;text-align:right;">${value}</td>
+          </tr>`;
   return {
-    subject: `Booking Confirmed – ${params.service} with ${params.providerName}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:500px;margin:0 auto;color:#1a1a1a">
-        <h2 style="color:#a342c3">Booking Confirmed ✓</h2>
-        <p>Hi ${params.clientName},</p>
-        <p>Your booking is confirmed. Here are the details:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:8px 0;font-weight:600">Service</td><td>${params.service}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Provider</td><td>${params.providerName}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Date</td><td>${params.date}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Time</td><td>${params.time}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Location</td><td>${params.location}</td></tr>
-        </table>
-        <p style="color:#666;font-size:14px">Need to cancel or reschedule? Open the CERVICED app.</p>
-        <p style="color:#a342c3;font-weight:600">CERVICED</p>
-      </div>
-    `,
+    subject: `Booking confirmed — ${params.service} with ${params.providerName}`,
+    html: emailWrapper(
+      heading(P, 'Booking confirmed ✓', `Hi ${params.clientName}`) +
+        paragraph(P, 'Your booking is confirmed. Here are the details:') +
+        `
+      <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:28px;">${row('Service', params.service)}${row('Provider', params.providerName)}${row('Date', params.date)}${row('Time', params.time)}${row('Location', params.location)}
+      </table>` +
+        note(P, 'Need to cancel or reschedule? Open the CERVICED app — your provider is notified either way.') +
+        button(P, 'cerviced://home', 'View Booking') +
+        appHint(P),
+      P,
+    ),
   };
 }
