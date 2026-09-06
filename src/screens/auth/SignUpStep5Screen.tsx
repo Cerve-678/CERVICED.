@@ -221,9 +221,11 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           has_kids: hasKids,
         });
         // Non-blocking, logged rather than swallowed. Server-side resolves
-        // the recipient and wording; this only names which welcome it is.
-        invokeSendAccountEmail('client_welcome').catch((e) => {
-          logger.error('[email] welcome email failed to send:', e);
+        // the recipient and wording; this only names which email it is.
+        // NOT 'client_welcome' — this account is already on CERVICED as a
+        // provider, so the new-signup welcome would greet them as a stranger.
+        invokeSendAccountEmail('client_hat_added').catch((e) => {
+          logger.error('[email] client hat email failed to send:', e);
         });
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
@@ -250,9 +252,11 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           referralSource: selectedReferral,
         });
         // Non-blocking, logged rather than swallowed. Server-side resolves
-        // the recipient and wording; this only names which welcome it is.
-        invokeSendAccountEmail('provider_welcome').catch((e) => {
-          logger.error('[email] welcome email failed to send:', e);
+        // the recipient and wording; this only names which email it is.
+        // The mirror of the client case above: an existing client gaining the
+        // provider hat, not a brand-new provider signing up.
+        invokeSendAccountEmail('provider_hat_added').catch((e) => {
+          logger.error('[email] provider hat email failed to send:', e);
         });
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });

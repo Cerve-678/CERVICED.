@@ -127,8 +127,8 @@ Curated: [[Booking Flow]] · **244 files**
 - `supabase/waitlist_holds.sql` _(134)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(122)_
 - `src/screens/shared/NotificationsScreen.tsx` _(119)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(118)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
@@ -211,7 +211,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**
-- `src/screens/client/ProviderProfileScreen.tsx` _(208)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(207)_
 - `src/screens/client/BookingsScreen.tsx` _(84)_
 - `supabase/waitlist_holds.sql` _(75)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(67)_

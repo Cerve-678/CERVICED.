@@ -151,6 +151,102 @@ export function providerWelcomeEmail(params: { name: string; businessName?: stri
   };
 }
 
+// The two templates below are for an account that ALREADY exists on CERVICED
+// taking on its second hat, so neither may say "welcome to CERVICED" — the
+// person has been here for months. clientWelcomeEmail/providerWelcomeEmail
+// stay for genuinely new signups; these are what the switch flows send.
+
+export function clientHatAddedEmail(params: { name: string }) {
+  const firstName = params.name.split(' ')[0] || 'there';
+  return {
+    subject: `Your client side is ready, ${firstName} \u2728`,
+    html: emailWrapper(`
+      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">You can book now too \u2728</h1>
+      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Client mode is on your account</p>
+
+      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
+        Hi ${firstName} \u2014 you've added a client profile to your CERVICED account. Same login, same business, one more thing you can do with it: book other beauty professionals for yourself.
+      </p>
+
+      <div style="background:#F5E6FA;border-radius:14px;padding:20px 24px;margin-bottom:28px;">
+        <p style="color:#a342c3;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px;">What's new for you</p>
+        <table cellpadding="0" cellspacing="0" width="100%">
+          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Discover verified beauty providers</span></td></tr>
+          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Browse portfolios &amp; real work</span></td></tr>
+          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Book &amp; manage your own appointments</span></td></tr>
+          <tr><td style="padding:6px 0;"><span style="color:#a342c3;font-size:16px;margin-right:10px;">\u2726</span><span style="color:#333;font-size:14px;">Save your favourite providers</span></td></tr>
+        </table>
+      </div>
+
+      <div style="border-left:3px solid #DA70D6;padding-left:16px;margin-bottom:28px;">
+        <p style="color:#666;font-size:13px;line-height:1.7;">Your provider profile, services and bookings are untouched. Switch between the two any time from your account screen \u2014 nothing you do as a client is visible to your own clients.</p>
+      </div>
+
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center">
+            <a href="cerviced://home" style="display:inline-block;background:linear-gradient(135deg,#a342c3,#DA70D6);color:#fff;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;padding:14px 40px;border-radius:50px;">Start Browsing</a>
+          </td>
+        </tr>
+      </table>
+
+      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
+    `),
+  };
+}
+
+export function providerHatAddedEmail(params: { name: string; businessName?: string }) {
+  const firstName = params.name.split(' ')[0] || 'there';
+  const display = params.businessName || firstName;
+  return {
+    subject: `Your provider profile is set up, ${display} \uD83C\uDF89`,
+    html: emailWrapper(`
+      <h1 style="font-size:26px;color:#1a1a1a;font-weight:700;letter-spacing:1px;margin-bottom:8px;">You're a provider now \uD83C\uDF89</h1>
+      <p style="color:#DA70D6;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;">Provider mode is on your account</p>
+
+      <p style="color:#444;font-size:15px;line-height:1.7;margin-bottom:24px;">
+        Hi ${firstName} \u2014 you've added a provider profile to your CERVICED account. Here's what to do next so clients can find and book you.
+      </p>
+
+      <div style="background:#F5E6FA;border-radius:14px;padding:20px 24px;margin-bottom:28px;">
+        <p style="color:#a342c3;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px;">Get started</p>
+        <table cellpadding="0" cellspacing="0" width="100%">
+          <tr><td style="padding:6px 0;">
+            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">1</span>
+            <span style="color:#333;font-size:14px;">Complete your profile &amp; add a photo</span>
+          </td></tr>
+          <tr><td style="padding:6px 0;">
+            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">2</span>
+            <span style="color:#333;font-size:14px;">Upload your portfolio work</span>
+          </td></tr>
+          <tr><td style="padding:6px 0;">
+            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">3</span>
+            <span style="color:#333;font-size:14px;">Add your services &amp; pricing</span>
+          </td></tr>
+          <tr><td style="padding:6px 0;">
+            <span style="background:#a342c3;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-right:10px;">4</span>
+            <span style="color:#333;font-size:14px;">Set your availability</span>
+          </td></tr>
+        </table>
+      </div>
+
+      <div style="border-left:3px solid #DA70D6;padding-left:16px;margin-bottom:28px;">
+        <p style="color:#666;font-size:13px;line-height:1.7;">Your bookings and saved providers as a client are untouched. Switch between the two any time from your account screen.</p>
+      </div>
+
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center">
+            <a href="cerviced://provider/profile" style="display:inline-block;background:linear-gradient(135deg,#a342c3,#DA70D6);color:#fff;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;padding:14px 40px;border-radius:50px;">Set Up My Profile</a>
+          </td>
+        </tr>
+      </table>
+
+      <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">Not working? Open the CERVICED app on your phone.</p>
+    `),
+  };
+}
+
 export function passwordChangedEmail(params: { name: string }) {
   const firstName = params.name.split(' ')[0] || 'there';
   return {

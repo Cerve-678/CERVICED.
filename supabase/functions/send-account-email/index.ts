@@ -10,19 +10,35 @@
 // nor what it says.
 //
 // `kind` is the one thing the caller supplies, and it deliberately is not
-// derived from the account's role: a provider adding a client hat gets the
-// CLIENT welcome, and role would give the wrong answer. It only selects
-// between our own templates going to the user's own address, so it carries
-// no authority.
+// derived from the account's role: a provider adding a client hat gets a
+// CLIENT-side email, and role would give the wrong answer. Nor is it derivable
+// here at all — by the time this runs the second hat is already on the account,
+// so the row looks identical to a dual-hat account of long standing and cannot
+// say which hat was just taken on. It only selects between our own templates
+// going to the user's own address, so it carries no authority.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { clientWelcomeEmail, providerWelcomeEmail, passwordChangedEmail } from '../_shared/emailTemplates.ts';
+import {
+  clientWelcomeEmail,
+  providerWelcomeEmail,
+  passwordChangedEmail,
+  clientHatAddedEmail,
+  providerHatAddedEmail,
+} from '../_shared/emailTemplates.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
 
-const KINDS = ['client_welcome', 'provider_welcome', 'password_changed'] as const;
+const KINDS = [
+  'client_welcome',
+  'provider_welcome',
+  'password_changed',
+  // An account that already exists here taking on its second hat. Separate
+  // kinds rather than reusing the welcomes, which greet a stranger.
+  'client_hat_added',
+  'provider_hat_added',
+] as const;
 type Kind = typeof KINDS[number];
 
 const corsHeaders = {
@@ -74,22 +90,28 @@ serve(async (req) => {
     const name = account?.name ?? '';
     const businessName = provider?.display_name ?? account?.business_name ?? undefined;
 
-    // The provider welcome goes to the business address when there is one —
+    // The provider-side emails go to the business address when there is one —
     // that is the address a business actually reads — falling back to the
-    // login address. The client welcome always goes to the login address.
-    const to = kind === 'provider_welcome'
+    // login address. The client-side ones always go to the login address.
+    const to = (kind === 'provider_welcome' || kind === 'provider_hat_added')
       ? (provider?.email || account?.business_email || account?.email || user.email)
       : (account?.email || user.email);
 
     if (!to) return json({ error: 'No address on file for this account.' }, 422);
 
+    const escapedProviderParams = {
+      name: escapeHtml(name),
+      ...(businessName ? { businessName: escapeHtml(businessName) } : {}),
+    };
+
     const { subject, html } = kind === 'provider_welcome'
-      ? providerWelcomeEmail({
-          name: escapeHtml(name),
-          ...(businessName ? { businessName: escapeHtml(businessName) } : {}),
-        })
+      ? providerWelcomeEmail(escapedProviderParams)
+      : kind === 'provider_hat_added'
+      ? providerHatAddedEmail(escapedProviderParams)
       : kind === 'password_changed'
       ? passwordChangedEmail({ name: escapeHtml(name) })
+      : kind === 'client_hat_added'
+      ? clientHatAddedEmail({ name: escapeHtml(name) })
       : clientWelcomeEmail({ name: escapeHtml(name) });
 
     const res = await fetch('https://api.resend.com/emails', {
