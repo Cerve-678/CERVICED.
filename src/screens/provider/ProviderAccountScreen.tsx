@@ -491,8 +491,10 @@ export default function ProviderAccountScreen({ navigation }: any) {
           <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.modalTitle, { color: P.text }]}>Become a Client</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
-              We'll add a client profile to your current account — same login, same details.
-              You can switch between provider and client mode any time.
+              We'll add a client profile to your current account — same login, same
+              details.{'\n\n'}
+              What you browse and book as a client stays completely separate from your
+              provider business.
             </Text>
 
             <TouchableOpacity

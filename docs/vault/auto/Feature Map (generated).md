@@ -278,10 +278,10 @@ Curated: [[Booking Flow]] · **149 files**
 - … +119 more
 
 ## Auth
-Curated: [[Contexts]] · **160 files**
-- `src/services/databaseService.ts` _(224)_
+Curated: [[Contexts]] · **161 files**
+- `src/services/databaseService.ts` _(225)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(134)_
+- `src/contexts/AuthContext.tsx` _(136)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_
@@ -302,14 +302,14 @@ Curated: [[Contexts]] · **160 files**
 - `src/utils/userFacingError.ts` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(15)_
 - `src/stores/useAppStore.ts` _(15)_
+- `supabase/delete_account.sql` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
 - `src/screens/client/CartScreen.tsx` _(13)_
 - `supabase/booking_flow_fixes.sql` _(12)_
-- `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
 - `src/services/becca/capabilities/client.ts` _(11)_
-- … +130 more
+- … +131 more
 
 ## Becca / AI
 Curated: [[Services]] · **39 files**
