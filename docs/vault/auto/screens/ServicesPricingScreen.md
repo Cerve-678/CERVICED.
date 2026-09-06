@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `ServicesPricing`
 
 ## → Navigates to
-- _— none —_
+- [[BusinessInfoScreen\|BusinessInfo]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

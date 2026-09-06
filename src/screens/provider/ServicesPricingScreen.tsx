@@ -36,6 +36,7 @@ import {
 } from '../../features/business-details/BusinessDetailsKit';
 import {
   SPECIALTIES_MAP, CLIENTELE_OPTS, STYLE_OPTS, PRICE_OPTS, TEAM_SIZE_OPTS,
+  SERVICE_TYPE_OPTS,
 } from '../../features/business-details/options';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -146,6 +147,14 @@ export default function ServicesPricingScreen({ navigation }: any) {
   }
 
   const specialtyOptions = SPECIALTIES_MAP[serviceCategory] ?? Object.values(SPECIALTIES_MAP).flat();
+  // Named on screen, because this whole card is scoped by it. The specialty
+  // list below is SPECIALTIES_MAP[serviceCategory] and the hair-types question
+  // only appears for HAIR — so a provider reading this card was being shown a
+  // filtered list with nothing to say what filtered it, and no way to find out
+  // from here. The value is edited in Business Info (one editor, under a
+  // 90-day cooldown); this is a pointer to it, not a second one.
+  const serviceTypeLabel =
+    SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory;
   // Hair types only mean something for hair providers — a nail tech has no
   // use for the question, and asking would put noise in their profile.
   const isHairProvider = serviceCategory === 'HAIR';
@@ -185,11 +194,28 @@ export default function ServicesPricingScreen({ navigation }: any) {
             {toast && <Toast message={toast.message} type={toast.type} />}
 
             <Card title="Your Specialties" sub="Select everything you're trained and experienced in. This drives search results.">
+              {serviceCategory ? (
+                <TouchableOpacity
+                  style={[s.lockedChip, { backgroundColor: C.surface, borderColor: C.border, marginBottom: 12 }]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    navigation.navigate('BusinessInfo');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pricetag-outline" size={12} color={C.sub} />
+                  <Text style={[s.lockedChipText, { color: C.text }]}>{serviceTypeLabel}</Text>
+                  <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>· Change</Text>
+                </TouchableOpacity>
+              ) : null}
               <ChipGroup
                 options={specialtyOptions}
                 selected={specialties}
                 onToggle={v => toggleChip(specialties, setSpecialties, v)}
               />
+              <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>
+                These are the {serviceTypeLabel} specialties. Your service type is set in Business Info — changing it clears this list.
+              </Text>
             </Card>
 
             <Card title="Who You Work With">
