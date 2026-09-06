@@ -38,6 +38,15 @@ export interface PortfolioItem {
   // detail modal needs the whole set to render its own swipeable carousel
   // instead of showing only the single photo that was tapped.
   images?: ImageSourcePropType[];
+  // Same order as `images` (only present when kind === 'service') — lets the
+  // detail modal size its carousel from the whole set's median ratio rather
+  // than only the tapped photo's, so the same service opens at the same
+  // height regardless of which photo card was the entry point.
+  imageAspectRatios?: number[];
+  // Same order as `images` — the provider's own per-photo fill/fit choice
+  // (service_images.fit), so the client-facing carousel can honour it
+  // instead of always cropping to cover.
+  imageFits?: ('cover' | 'contain')[];
   // True only for kind === 'provider' cards backed by an unclaimed/scraped
   // provider row (is_claimed = false) — see getDiscoverUnclaimedProviders.
   // Card UI must show an "Unclaimed" badge and route to the claim flow

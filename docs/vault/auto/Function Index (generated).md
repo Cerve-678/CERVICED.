@@ -5,9 +5,9 @@
 
 #generated
 
-**2036 functions** across **263 files**.
+**2075 functions** across **274 files**.
 
-### `src/components/` (38)
+### `src/components/` (39)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -35,6 +35,7 @@
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showConfirm · showToast · Toast · **useProviderDialog**
+- `ProviderFontPicker 2.tsx` — ProviderFontPicker
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
@@ -47,14 +48,15 @@
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
 
-### `src/constants/` (4)
+### `src/constants/` (5)
 - `PlatformDimensions.ts` — for
+- `providerFonts 2.ts` — **resolveProviderFontFamily**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · valid · **withAlpha**
 - `support.ts` — **supportMailtoUrl**
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (6)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
@@ -87,7 +89,7 @@
 ### `src/features/home/` (1)
 - `SkeletonSection.tsx` — **SkeletonSection**
 
-### `src/features/provider-registration/` (8)
+### `src/features/provider-registration/` (10)
 - `BufferPicker.tsx` — **BufferPicker**
 - `ChipSelect.tsx` — **ChipSelect**
 - `DurationPicker.tsx` — **DurationPicker**
@@ -95,7 +97,9 @@
 - `RequiredLabel.tsx` — **RequiredLabel**
 - `SectionHeader.tsx` — **SectionHeader**
 - `serviceDraft.ts` — **createServiceDraft** · nextDraftId
-- `ServiceImageCarousel.tsx` — handleScroll · **ServiceImageCarousel**
+- `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
+- `ServiceImageCropper.tsx` — finish · handleCancel · handleUse · layout · panResponder · **ServiceImageCropper**
+- `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **useVerticalDragReorder**
 
 ### `src/features/providers/` (7)
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **fetchGoLiveStatus**
@@ -225,7 +229,7 @@
 - `ImageLoader.ts` — **useImageLoader**
 - `notificationTapHandler.ts` — **handleNotificationTap** · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
-- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · **uploadToStorage**
+- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · sniffImageType · **uploadToStorage** · used
 - `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
@@ -245,18 +249,26 @@
 - `provider.ts` — cutoff · inRange
 - `shared.ts` — **askChip** · **chip** · **money** · **navChip** · **providerFromDb** · **resolveProviderDbId**
 
+### `src/tests/` (4)
+- `rescheduleExpiryBeforeCancelWindow.test 2.ts` — latestDefinitionOf
+- `secondaryFetchFailureSurfacing.test 2.ts` — **deleteNotification** · gates · **getNotificationPreferences**
+- `slotTakenVsTight.test 2.ts` — at · span
+- `takesEmergencyRequests.test 2.ts` — row
+
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles
 
 ### `src/types/` (1)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 
-### `src/utils/` (25)
+### `src/utils/` (28)
+- `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `dateUtils.ts` — **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
+- `dayTimelineRange.ts` — **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
 - `distance.ts` — **formatDistance** · **getDistanceKm** · toRadians
 - `exploreTabBarScroll.ts` — animateTo · **resetExplorePillTracking** · **settleExplorePillTracking** · trackScrollDirection
@@ -271,6 +283,7 @@
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery**
+- `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
 - `slotsRowText.ts` — **resolveSlotsRow**
 - `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**
