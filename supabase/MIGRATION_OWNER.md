@@ -27,6 +27,47 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### KNOWN GAP — two untracked migrations, found 2026-09-06, not yet reconciled
+
+`supabase_migrations.schema_migrations` records `20260828192536_client_loyalty_points_expansion`
+and `20260828192643_client_loyalty_points_fix_array_append` (both applied minutes
+after `20260828185349_client_loyalty_points`, same day) — **neither has a file
+anywhere in this repo.** Discovered while applying `20260906174647_loyalty_points_value_changes`.
+
+Reconstructed from the **live** function bodies (`pg_get_functiondef`), not from
+the missing files, so this describes final state, not each migration's actual
+diff: they added a `returning_client` bonus (+30, a client's 2nd+ completed
+booking with the same provider), a `profile_completed` bonus (+30, fires when
+`avatar_url` is first set — `award_points_on_profile_completed()`), an inline
+birthday-on-booking-day bonus inside `award_points_on_booking_completed()`
+(alongside the separate `award_birthday_points()` cron — the two are mutually
+exclusive via the same 300-day-guard check, not a double-award risk, but it is
+two implementations of the same perk), a `provider_id` column on
+`client_points_ledger`, two more partial unique indexes
+(`..._one_profile_completed_per_client`, `..._one_returning_client_per_provider`),
+and `points_earned` push notifications on every award path.
+
+Per this file's own ledger-backfill precedent below, a lost migration body is
+not something to fabricate from guesswork — so no reconstruction file was
+written for either version. `20260906174647_loyalty_points_value_changes.sql`
+was built directly against the verified live bodies instead, and changed only
+the specific booking/review values it needed to. Whoever reconciles this next
+should write one snapshot file capturing the two versions' combined live
+result (labeled as a reconstruction, per the pattern below), not attempt to
+split it back into two historical diffs.
+
+### Applied 2026-09-06 (loyalty points value changes)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260906174647 | `loyalty_points_value_changes` | `award_points_on_booking_completed()` reproduced from live `pg_get_functiondef()` with only the `booking_completed` delta changed 50→2 (confirmed via a re-fetch of the deployed function text — every other branch, including `returning_client`/`first_booking`/inline-birthday/notification, byte-identical to the pre-change body). `award_points_on_review_left()` rewritten to branch on a `public.reviews` count for the client: first review → `first_review` (+10), every later one → `review_left` (+4). Verified functionally in a `DO` block ending in `RAISE EXCEPTION` (rolled back): two reviews inserted for a client with none before produced exactly one `first_review`/10 row then one `review_left`/4 row. `client_points_ledger_reason_check` now allows `first_review` alongside the live (not the stale tracked-file) set; the per-review unique index now covers `review_id` under either reason so a first review keeps the same idempotency guard a later one has. |
+
+Point values not mentioned by this request — `first_booking` (+200),
+`birthday_bonus` (+50), `profile_completed` (+30), `returning_client` (+30) —
+were left untouched. See the "KNOWN GAP" note above this table: reconciling
+this function required first discovering it no longer matched the tracked
+`20260828185349_client_loyalty_points.sql` at all.
+
 ### Applied 2026-08-31 (account-scoped walkthrough versions)
 
 `20260831124409_account_scoped_tour_versions.sql` — adds `users.seen_tours`

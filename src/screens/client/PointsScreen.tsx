@@ -24,8 +24,9 @@ import { timeAgo } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 
 const EARN_WAYS = [
-  { icon: 'event-available', label: 'Complete a Booking', points: '+50 pts', desc: 'Every completed appointment', live: true },
-  { icon: 'star', label: 'Leave a Review', points: '+20 pts', desc: 'After each booking', live: true },
+  { icon: 'event-available', label: 'Complete a Booking', points: '+2 pts', desc: 'Every completed appointment', live: true },
+  { icon: 'star', label: 'Leave a Review', points: '+4 pts', desc: 'After each booking', live: true },
+  { icon: 'auto-awesome', label: 'First Review', points: '+10 pts', desc: 'One-time bonus for your first review', live: true },
   { icon: 'emoji-events', label: 'First Booking', points: '+200 pts', desc: 'One-time welcome bonus', live: true },
   { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'On your birthday', live: true },
   { icon: 'person-add', label: 'Refer a Friend', points: '', desc: 'Coming soon', live: false },
@@ -40,8 +41,11 @@ const REDEEM_WAYS = [
 const REASON_LABEL: Record<ClientPointsReason, string> = {
   booking_completed: 'Completed a booking',
   review_left: 'Left a review',
+  first_review: 'First review bonus',
   first_booking: 'First booking bonus',
   birthday_bonus: 'Birthday bonus',
+  profile_completed: 'Completed your profile',
+  returning_client: 'Booked with them again',
 };
 
 export default function PointsScreen({ navigation }: any) {
@@ -61,7 +65,7 @@ export default function PointsScreen({ navigation }: any) {
           setLoading(true);
           const [balanceResult, historyResult] = await Promise.all([
             getClientPointsBalance(),
-            getClientPointsHistory(),
+            getClientPointsHistory(5),
           ]);
           if (cancelled) return;
           setBalance(balanceResult);
