@@ -127,8 +127,8 @@ Curated: [[Booking Flow]] · **239 files**
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `src/services/AvailabilityService.ts` _(122)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(119)_
 - `src/screens/shared/NotificationsScreen.tsx` _(119)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(118)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
@@ -312,7 +312,7 @@ Curated: [[Contexts]] · **160 files**
 - … +130 more
 
 ## Becca / AI
-Curated: [[Services]] · **39 files**
+Curated: [[Services]] · **40 files**
 - `src/screens/shared/BeccaScreen.tsx` _(92)_
 - `src/services/becca/engine.ts` _(49)_
 - `src/services/becca/capabilities/client.ts` _(48)_
@@ -343,7 +343,7 @@ Curated: [[Services]] · **39 files**
 - `src/types/database.ts` _(3)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(2)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(2)_
-- … +9 more
+- … +10 more
 
 ## Cart & checkout
 Curated: [[Payments]] · **63 files**

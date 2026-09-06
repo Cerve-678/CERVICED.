@@ -41,8 +41,25 @@ export interface ProviderProfileData {
    *  actual release cadence. */
   scheduleReleaseDay: number | null;
   aboutText: string;
+  /** Flattened across every service type — the "all services" view. Kept as
+   *  the shape it has always been so callers that don't care about types
+   *  (promo eligibility, the Show All sheet, Becca) need no change. Two types
+   *  sharing a category name merge here; use categoriesByType when that
+   *  distinction matters. */
   categories: Record<string, ProviderProfileService[]>;
   categoryDescriptions: Record<string, string>;
+  /** The macro service types this provider actually has live services under,
+   *  in the order their set declares. Drives the service-type switch above
+   *  the category tabs. A type the provider declared at sign-up but never
+   *  added a service to is NOT here — clients must never be offered a type
+   *  with nothing bookable in it. Length <= 1 means no switch is shown. */
+  serviceTypes: string[];
+  /** serviceType -> categoryName -> services. The switch picks the outer key,
+   *  the existing category tabs the inner one. Kept separate from
+   *  `categories` because the same category name can legitimately exist under
+   *  two types (a "Tint" under both LASHES and BROWS), which the flat map
+   *  cannot represent. */
+  categoriesByType: Record<string, Record<string, ProviderProfileService[]>>;
   gradient: [string, string, ...string[]];
   hasCustomGradient: boolean;
   accentColor: string | null;

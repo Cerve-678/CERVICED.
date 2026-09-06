@@ -1380,8 +1380,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     };
   }, [isFocused, addedThisVisit, navigation]);
 
+  // The macro service type (LASHES / BROWS / ...) whose menu is on screen.
+  // A provider with one type never sees the switch, so this just stays on it.
+  const [selectedServiceType, setSelectedServiceType] = useState(() =>
+    provider ? provider.serviceTypes[0] ?? "" : "",
+  );
+
   const [selectedCategory, setSelectedCategory] = useState(() =>
-    provider ? Object.keys(provider.categories)[0] || "" : "",
+    provider
+      ? Object.keys(
+          provider.categoriesByType[provider.serviceTypes[0] ?? ""] ??
+            provider.categories,
+        )[0] || ""
+      : "",
   );
 
   // Long service lists (20+ in one category) used to just keep un-collapsing
@@ -1391,14 +1402,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const SERVICES_COLLAPSED_LIMIT = 6;
   const [showAllServicesModal, setShowAllServicesModal] = useState(false);
 
-  // When Supabase data loads and updates provider, reset to first available category
+  // When Supabase data loads and updates provider, reset to the first
+  // available service type, then the first category WITHIN it. Both are kept
+  // rather than reset outright so a re-fetch (a save, a pull-to-refresh)
+  // doesn't yank the client back to the top of the menu they were reading.
   useEffect(() => {
     if (!provider) return;
-    const firstCat = Object.keys(provider.categories)[0] || "";
-    setSelectedCategory((prev) =>
-      prev && provider.categories[prev] ? prev : firstCat,
+    const firstType = provider.serviceTypes[0] ?? "";
+    setSelectedServiceType((prev) =>
+      prev && provider.categoriesByType[prev] ? prev : firstType,
     );
   }, [provider]);
+
+  // Category is scoped to the selected type, so it has to be re-validated
+  // whenever EITHER changes — a category name valid under Lashes may not
+  // exist under Brows, and would otherwise leave the list empty.
+  useEffect(() => {
+    if (!provider) return;
+    const withinType =
+      provider.categoriesByType[selectedServiceType] ?? provider.categories;
+    const firstCat = Object.keys(withinType)[0] || "";
+    setSelectedCategory((prev) => (prev && withinType[prev] ? prev : firstCat));
+  }, [provider, selectedServiceType]);
   // Ref, not state — scrolling must NOT re-render this large screen (that full
   // re-render on the first scroll hung the UI thread). The header reacts to it
   // imperatively via setOptions in handleScroll.
@@ -3196,7 +3221,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     return <ProviderProfileSkeleton />;
   }
 
-  const selectedCategoryServices = provider.categories[selectedCategory] ?? [];
+  // Categories belonging to the type currently selected in the switch. Falls
+  // back to the flat all-types map for a provider whose services predate
+  // service_category entirely.
+  const categoriesForType =
+    provider.categoriesByType[selectedServiceType] ?? provider.categories;
+  const selectedCategoryServices = categoriesForType[selectedCategory] ?? [];
   const visibleServices = selectedCategoryServices.slice(
     0,
     SERVICES_COLLAPSED_LIMIT,
@@ -3262,9 +3292,57 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     onBeforeAction: () => void = () => {},
   ) => (
     <>
+      {/* ── Service-type switch ───────────────────────────────────────────
+          Only when the provider genuinely offers more than one macro type —
+          a single-type provider's menu opens straight onto the category
+          tabs, exactly as it did before this existed.
+
+          Deliberately a plain underline row, NOT a filled pill: the category
+          tabs immediately below are already filled pills, and two filled
+          controls stacked read as one confused level instead of two. Same
+          treatment (and same reasoning) as the History / To Do switch on
+          ProviderBookingHistoryScreen. */}
+      {provider.serviceTypes.length > 1 ? (
+        <View style={[styles.serviceTypeSwitch, { borderBottomColor: OP.border }]}>
+          {provider.serviceTypes.map((serviceType) => {
+            const active = serviceType === selectedServiceType;
+            const count = Object.values(
+              provider.categoriesByType[serviceType] ?? {},
+            ).reduce((total, list) => total + list.length, 0);
+            return (
+              <TouchableOpacity
+                key={serviceType}
+                style={[
+                  styles.serviceTypeTab,
+                  active && { borderBottomColor: adaptiveAccentColor },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setSelectedServiceType(serviceType);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.serviceTypeTabText,
+                    {
+                      color: active ? OP.text : OP.sub,
+                      fontWeight: active ? "700" : "600",
+                    },
+                  ]}
+                >
+                  {serviceType}
+                  {count > 0 ? `  ${count}` : ""}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
+
       {/* Enhanced Category Tabs */}
       <FlatList
-        data={Object.keys(provider.categories)}
+        data={Object.keys(categoriesForType)}
         renderItem={({ item: category }) => (
           <CategoryTabItem
             category={category}
@@ -3281,7 +3359,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             textColor={selectedCategory === category ? "#FFFFFF" : OP.text}
           />
         )}
-        keyExtractor={(item, index) => `cat-${item}-${index}`}
+        keyExtractor={(item) => `cat-${item}`}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.categoryTabs}
@@ -4617,9 +4695,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     ]}
                     numberOfLines={1}
                   >
-                    {(provider.providerService === "OTHER"
-                      ? provider.customServiceType || "SERVICE"
-                      : provider.providerService
+                    {/* Every type they actually have services under, so a
+                        lashes-and-brows business doesn't read as only one.
+                        serviceTypes is already ordered by their declared set
+                        and already excludes types with nothing in them. */}
+                    {(provider.serviceTypes.length
+                      ? provider.serviceTypes
+                          .map((serviceType) =>
+                            serviceType === "OTHER"
+                              ? provider.customServiceType || "SERVICE"
+                              : serviceType,
+                          )
+                          .join(" · ")
+                      : provider.providerService === "OTHER"
+                        ? provider.customServiceType || "SERVICE"
+                        : provider.providerService
                     ).toUpperCase()}
                     {provider.location
                       ? ` · ${provider.location.toUpperCase()}`
@@ -5535,6 +5625,30 @@ const styles = StyleSheet.create({
   selectModeLinkText: {
     fontSize: 13,
     fontWeight: "600",
+  },
+  // Service-type switch — plain underline indicator, mirroring the
+  // History / To Do row on ProviderBookingHistoryScreen: enough to show
+  // selection without a second filled control competing with the category
+  // pills directly beneath it.
+  serviceTypeSwitch: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  serviceTypeTab: {
+    paddingTop: 4,
+    // More space below the label than above, so the 2px indicator doesn't sit
+    // tight against the text — same spacing as the booking-history switch.
+    paddingBottom: 12,
+    marginRight: 24,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  serviceTypeTabText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 15,
+    letterSpacing: -0.1,
   },
   categoryTabs: {
     marginBottom: 20,

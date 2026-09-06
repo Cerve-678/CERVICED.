@@ -22,9 +22,10 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
-SINCE:  --
-SCOPE:  --
+OWNER:  session ad8beea5 (multi service types)
+SINCE:  2026-09-06
+SCOPE:  providers.service_categories + services.service_category
+        (20260906193000_provider_multiple_service_types)
 ```
 
 ### Applied 2026-08-31 (account-scoped walkthrough versions)

@@ -2598,6 +2598,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [providerData, setProviderData] = useState<ProviderRegistrationData>({
     providerName: '',
     providerService: 'HAIR',
+    serviceCategories: ['HAIR'],
+    categoryServiceTypes: {},
     customServiceType: '',
     location: '',
     aboutText: '',
@@ -2728,8 +2730,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
                 const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
                 const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
+                // "Services you offer" on SignUpStep4 is already a
+                // multi-select, and its answer already lands in
+                // users.service_interests — it just never reached the
+                // provider profile, so every provider was made to narrow it
+                // back down to one type here. Carry it through instead.
+                // Filtered to the real vocabulary: service_interests is also
+                // written by the CLIENT signup path, where it holds interests
+                // rather than a business's own service types.
+                const prefilledServiceTypes = (prefill.service_interests ?? []).filter(
+                  (interest): interest is string =>
+                    typeof interest === 'string' && SERVICE_CATEGORIES.includes(interest),
+                );
                 setProviderData(prev => ({
                   ...prev,
+                  ...(prefilledServiceTypes.length
+                    ? {
+                        serviceCategories: prefilledServiceTypes,
+                        // The headline is the first of the set — the same
+                        // relationship the DB trigger enforces server-side.
+                        providerService: prefilledServiceTypes[0] as string,
+                      }
+                    : {}),
                   providerName: prev.providerName || prefill.business_name || prefill.name || '',
                   phone: prev.phone || prefill.business_phone || prefill.phone || '',
                   email: prev.email || prefill.business_email || '',
@@ -2947,6 +2969,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // template pre-filled) one, so the modal title & save copy stay correct.
   const [isEditingService, setIsEditingService] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  // Which of the provider's macro types the menu below is showing. Providers
+  // with one type never see the switch, so this simply stays on it.
+  const [selectedServiceType, setSelectedServiceType] = useState<string>('');
   // Keeps the selected category tab in view — panning back to the start of
   // the strip every time you pick a category (especially one further along
   // the list) was disorienting.
@@ -3072,9 +3097,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       ...prev,
       categories: { ...prev.categories, [name]: [] },
       categoryDescriptions: { ...prev.categoryDescriptions, [name]: description },
+      // Stamped with the type whose tab it was created under, so it lands in
+      // the right place instead of defaulting to the headline type.
+      categoryServiceTypes: {
+        ...prev.categoryServiceTypes,
+        [name]: selectedServiceType || prev.providerService,
+      },
     }));
     setSelectedCategory(name);
-  }, []);
+  }, [selectedServiceType]);
 
 
   // Delete category
@@ -3299,7 +3330,32 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   );
   // Recomputed only when categories actually change, not on every keystroke
   // elsewhere in this screen's single providerData state blob.
-  const categoryNames = useMemo(() => Object.keys(providerData.categories), [providerData.categories]);
+  // Which macro type a category sits under. A category with nothing recorded
+  // belongs to the headline type — what every category meant before a
+  // provider could declare more than one.
+  const typeOfCategory = useCallback(
+    (categoryName: string): string =>
+      providerData.categoryServiceTypes?.[categoryName] || providerData.providerService,
+    [providerData.categoryServiceTypes, providerData.providerService],
+  );
+
+  const serviceTypes = useMemo(
+    () =>
+      providerData.serviceCategories?.length
+        ? providerData.serviceCategories
+        : [providerData.providerService],
+    [providerData.serviceCategories, providerData.providerService],
+  );
+
+  // Only the categories under the type currently selected in the switch —
+  // this is what the pill strip renders and what drag-reorder operates on.
+  const categoryNames = useMemo(
+    () =>
+      Object.keys(providerData.categories).filter(
+        name => typeOfCategory(name) === selectedServiceType,
+      ),
+    [providerData.categories, typeOfCategory, selectedServiceType],
+  );
   const serviceCount = useMemo(
     () => Object.values(providerData.categories).reduce((total, services) => total + services.length, 0),
     [providerData.categories],
@@ -3396,6 +3452,21 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // what Publish actually enforces. Keys are the row labels in
   // sectionSummaries — the same strings the roll-up prints.
   const missingRequiredSet = useMemo(() => new Set(missingRequired), [missingRequired]);
+
+  // Settle on a real service type once the form has loaded, and keep the
+  // selected category inside it — a category name valid under one type may
+  // not exist under another.
+  useEffect(() => {
+    setSelectedServiceType(prev =>
+      prev && serviceTypes.includes(prev) ? prev : serviceTypes[0] ?? '',
+    );
+  }, [serviceTypes]);
+
+  useEffect(() => {
+    setSelectedCategory(prev =>
+      prev && categoryNames.includes(prev) ? prev : categoryNames[0] ?? '',
+    );
+  }, [categoryNames]);
 
   // Keep the draggable order in sync with the real data — but never while a
   // drag is in progress, or the live reflow would get stomped mid-gesture.
@@ -4002,13 +4073,27 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <RequiredLabel required styles={styles}>Service Type</RequiredLabel>
                 {isEditMode ? (
                   <>
-                    <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
-                      <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                        {providerData.providerService}
-                      </Text>
+                    {/* Every type they ticked at sign-up, each locked. One
+                        chip for a single-type provider — identical to how
+                        this has always looked for them. */}
+                    <View style={styles.lockedServiceTypeRow}>
+                      {serviceTypes.map(serviceType => (
+                        <View
+                          key={serviceType}
+                          style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                        >
+                          <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                          <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                            {serviceType}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
-                    <Text style={styles.inputHint}>Set at sign-up — contact support to change your service type.</Text>
+                    <Text style={styles.inputHint}>
+                      {serviceTypes.length > 1
+                        ? 'Set at sign-up — contact support to change your service types.'
+                        : 'Set at sign-up — contact support to change your service type.'}
+                    </Text>
                   </>
                 ) : (
                   <ScrollView
@@ -4431,12 +4516,63 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </TouchableOpacity>
                 </View>
 
+                  {/* Service-type switch — plain underline, the same
+                      treatment as the History / To Do row on
+                      ProviderBookingHistoryScreen, and deliberately not a
+                      filled pill: the category pills directly below are
+                      already filled, and two filled controls stacked read
+                      as one level rather than two. Hidden entirely for a
+                      single-type provider. */}
+                  {serviceTypes.length > 1 ? (
+                    <View style={[styles.serviceTypeSwitch, { borderBottomColor: chrome.fg(0.15) }]}>
+                      {serviceTypes.map(serviceType => {
+                        const active = serviceType === selectedServiceType;
+                        const count = Object.entries(providerData.categories)
+                          .filter(([name]) => typeOfCategory(name) === serviceType)
+                          .reduce((total, [, list]) => total + list.length, 0);
+                        return (
+                          <TouchableOpacity
+                            key={serviceType}
+                            style={[
+                              styles.serviceTypeTab,
+                              active && { borderBottomColor: adaptiveAccentColor },
+                            ]}
+                            onPress={() => { tapSelect(); setSelectedServiceType(serviceType); }}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.serviceTypeTabText,
+                                {
+                                  color: active ? chrome.fg(0.95) : chrome.fg(0.5),
+                                  fontWeight: active ? '700' : '600',
+                                },
+                              ]}
+                            >
+                              {serviceType}
+                              {count > 0 ? `  ${count}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
                 {categoryNames.length === 0 ? (
                   <BlurView intensity={50} tint={chrome.blurTint} style={styles.emptyServicesCard}>
                     <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
                     <Text style={styles.emptyServicesText}>
-                      Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
-                      (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
+                      {serviceTypes.length > 1 ? (
+                        <>
+                          Nothing under <Text style={{ fontWeight: '700' }}>{selectedServiceType}</Text> yet.
+                          Clients won't see it on your profile until you add a service to it.
+                        </>
+                      ) : (
+                        <>
+                          Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
+                          (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
+                        </>
+                      )}
                     </Text>
                   </BlurView>
                 ) : (
@@ -5949,6 +6085,33 @@ const makeStyles = (isDark: boolean) => {
   },
 
   // Category Tabs
+  // Locked service-type chips wrap rather than scroll — a provider with
+  // three or four types should see all of them at once, not have to swipe a
+  // read-only row.
+  lockedServiceTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  // Service-type switch — plain underline indicator, mirroring the
+  // History / To Do row on ProviderBookingHistoryScreen.
+  serviceTypeSwitch: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  serviceTypeTab: {
+    paddingTop: 4,
+    paddingBottom: 12,
+    marginRight: 24,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  serviceTypeTabText: {
+    fontSize: 15,
+    letterSpacing: -0.1,
+  },
   categoryHint: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,

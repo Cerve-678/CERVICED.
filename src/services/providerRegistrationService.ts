@@ -97,6 +97,15 @@ export interface ProviderRegistrationData {
   // as `categories`, but optional per key since older/imported categories
   // may not have one yet.
   categoryDescriptions: Record<string, string>;
+  /** Every macro service type this provider offers, locked from what they
+   *  ticked at sign-up. `providerService` above stays the headline/primary
+   *  and is always the first entry. */
+  serviceCategories: string[];
+  /** categoryName -> which macro service type that category sits under, so
+   *  the Business Profile can group the menu by type. Keyed the same as
+   *  `categories`. A key missing here belongs to the headline type, which is
+   *  what every category meant before types were plural. */
+  categoryServiceTypes: Record<string, string>;
   // Contact info displayed to clients
   phone: string;
   email: string;
@@ -445,6 +454,11 @@ export async function saveProviderToSupabase(
         // providers_display_name_cooldown trigger. Re-sending the name this
         // screen loaded would make any unrelated save race that cooldown.
         service_category: data.providerService,
+        // The DB trigger keeps service_category == service_categories[0], so
+        // these can never desync even if a caller writes only one of them.
+        service_categories: data.serviceCategories?.length
+          ? data.serviceCategories
+          : [data.providerService],
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
         latitude,
@@ -498,6 +512,11 @@ export async function saveProviderToSupabase(
         slug,
         display_name: data.providerName,
         service_category: data.providerService,
+        // The DB trigger keeps service_category == service_categories[0], so
+        // these can never desync even if a caller writes only one of them.
+        service_categories: data.serviceCategories?.length
+          ? data.serviceCategories
+          : [data.providerService],
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
         latitude,
@@ -618,6 +637,10 @@ export async function saveProviderToSupabase(
 
       servicesPayload.push({
         category_name: categoryName,
+        // Falls back to the headline type, which is what every service meant
+        // before a provider could have more than one.
+        service_category:
+          data.categoryServiceTypes?.[categoryName] || data.providerService,
         category_description: data.categoryDescriptions?.[categoryName] || null,
         name: svc.name,
         description: svc.description || null,
@@ -692,6 +715,7 @@ export async function loadProviderFromSupabase(
   // Reconstruct categories
   const categories: Record<string, ServiceData[]> = {};
   const categoryDescriptions: Record<string, string> = {};
+  const categoryServiceTypes: Record<string, string> = {};
   let localId = 1;
 
   for (const svc of (services || [])) {
@@ -700,6 +724,9 @@ export async function loadProviderFromSupabase(
     }
     if (svc.category_description && !categoryDescriptions[svc.category_name]) {
       categoryDescriptions[svc.category_name] = svc.category_description;
+    }
+    if (svc.service_category && !categoryServiceTypes[svc.category_name]) {
+      categoryServiceTypes[svc.category_name] = svc.service_category;
     }
 
     const images = [...(svc.service_images || [])]
@@ -741,6 +768,10 @@ export async function loadProviderFromSupabase(
   return {
     providerName: provider.display_name,
     providerService: provider.service_category,
+    serviceCategories: provider.service_categories?.length
+      ? provider.service_categories
+      : [provider.service_category],
+    categoryServiceTypes,
     customServiceType: provider.custom_service_type || '',
     location: provider.location_text || '',
     aboutText: provider.about_text || '',

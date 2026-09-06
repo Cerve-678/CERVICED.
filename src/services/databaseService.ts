@@ -393,7 +393,7 @@ export async function getClientPointsHistory(limit = 50): Promise<ClientPointsLe
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
+  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -495,7 +495,10 @@ export async function getProviders(
     .limit(limit);
 
   if (category && category !== "ALL") {
-    query = query.eq("service_category", category);
+    // ANY of the provider's declared types, not just the headline one — a
+    // lashes-and-brows business must appear under BROWS too. GIN-indexed
+    // (providers_service_categories_gin), so this stays an index scan.
+    query = query.overlaps("service_categories", [category]);
   }
 
   const { data, error } = await query;
@@ -730,7 +733,7 @@ export async function searchProviders(
           .from("providers")
           .select("id")
           .eq("is_active", true)
-          .eq("service_category", categoryHint)
+          .overlaps("service_categories", [categoryHint])
           .limit(limit)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
   ]);
@@ -756,7 +759,7 @@ export async function searchProviders(
     .limit(limit);
 
   if (category && category !== "ALL") {
-    providerQuery = providerQuery.eq("service_category", category);
+    providerQuery = providerQuery.overlaps("service_categories", [category]);
   }
 
   if (locationTerms.length) {
@@ -860,6 +863,7 @@ export async function getProviderBySlug(
         slug,
         display_name,
         service_category,
+        service_categories,
         custom_service_type,
         location_text,
         about_text,
@@ -898,6 +902,7 @@ export async function getProviderBySlug(
         hair_types_catered,
         services (
           id,
+          service_category,
           category_name,
           category_description,
           name,
@@ -1267,7 +1272,7 @@ export async function getDiscoverProviders(
     .limit(limit);
 
   if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
+    query = query.overlaps("service_categories", [category.toUpperCase()]);
   }
 
   const { data, error } = await query;
@@ -1306,14 +1311,14 @@ export async function getDiscoverUnclaimedProviders(
   let query = supabase
     .from("providers")
     .select(
-      "id, slug, display_name, service_category, location_text, logo_url, about_text, instagram, website",
+      "id, slug, display_name, service_category, service_categories, location_text, logo_url, about_text, instagram, website",
     )
     .eq("is_claimed", false)
     .order("scraped_at", { ascending: false })
     .limit(limit);
 
   if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
+    query = query.overlaps("service_categories", [category.toUpperCase()]);
   }
 
   const { data, error } = await query;
@@ -1352,7 +1357,9 @@ export async function getDiscoverServices(
     .limit(limit);
 
   if (category && category !== "All") {
-    query = query.eq("provider.service_category", category.toUpperCase());
+    query = query.overlaps("provider.service_categories", [
+      category.toUpperCase(),
+    ]);
   }
   if (audience) {
     query = query.eq("audience", audience);
@@ -8666,6 +8673,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
       .from("services")
       .select(`
         id,
+        service_category,
         category_name,
         category_description,
         name,
