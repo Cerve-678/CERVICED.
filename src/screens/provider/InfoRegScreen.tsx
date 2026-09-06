@@ -66,6 +66,7 @@ import {
 // Navigation types
 import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
+import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
@@ -3470,12 +3471,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Keep the draggable order in sync with the real data — but never while a
   // drag is in progress, or the live reflow would get stomped mid-gesture.
+  // Depends on categoryNames itself, NOT on providerData.categories: since
+  // categoryNames became type-scoped it also changes when the service-type
+  // switch moves, and depending on the raw categories object meant the strip
+  // kept rendering the PREVIOUS type's pills after a switch — which a drag
+  // would then write back as the whole menu.
   useEffect(() => {
     if (draggingCategory) return;
     categoryOrderRef.current = categoryNames;
     setCategoryOrder(categoryNames);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerData.categories, draggingCategory]);
+  }, [categoryNames, draggingCategory]);
 
   // Stop the auto-scroll RAF loop if the screen unmounts mid-drag.
   useEffect(() => () => {
@@ -3495,11 +3500,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   }, [selectedCategory]);
 
   const handleSetCategoryOrder = useCallback((order: string[]) => {
-    setProviderData(prev => {
-      const newCategories: Record<string, ServiceData[]> = {};
-      order.forEach(key => { newCategories[key] = prev.categories[key] || []; });
-      return { ...prev, categories: newCategories };
-    });
+    // `order` covers only the service type currently on screen — the pill
+    // strip never shows more than one — so the other types' categories have
+    // to be carried through explicitly. See reorderCategoriesWithinType.
+    setProviderData(prev => ({
+      ...prev,
+      categories: reorderCategoriesWithinType(prev.categories, order),
+    }));
   }, []);
 
   const stopCategoryAutoScroll = useCallback(() => {

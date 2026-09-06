@@ -1414,6 +1414,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     );
   }, [provider]);
 
+  // Counted once per data change rather than on every render — this screen
+  // re-renders on plenty of state unrelated to the menu (select mode,
+  // expanded rows, add-on picks).
+  const serviceCountsByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [serviceType, byCategory] of Object.entries(
+      provider?.categoriesByType ?? {},
+    )) {
+      counts[serviceType] = Object.values(byCategory).reduce(
+        (total, list) => total + list.length,
+        0,
+      );
+    }
+    return counts;
+  }, [provider?.categoriesByType]);
+
   // Category is scoped to the selected type, so it has to be re-validated
   // whenever EITHER changes — a category name valid under Lashes may not
   // exist under Brows, and would otherwise leave the list empty.
@@ -3306,9 +3322,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         <View style={[styles.serviceTypeSwitch, { borderBottomColor: OP.border }]}>
           {provider.serviceTypes.map((serviceType) => {
             const active = serviceType === selectedServiceType;
-            const count = Object.values(
-              provider.categoriesByType[serviceType] ?? {},
-            ).reduce((total, list) => total + list.length, 0);
+            const count = serviceCountsByType[serviceType] ?? 0;
             return (
               <TouchableOpacity
                 key={serviceType}
