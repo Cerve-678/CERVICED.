@@ -1,9 +1,11 @@
 // src/screens/auth/SignUpStep5Screen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   LayoutChangeEvent,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -67,6 +69,21 @@ const SPECIALTY_OPTIONS_BY_CATEGORY: Record<string, string[]> = {
 };
 
 
+// Shown once the second hat is actually on the account, in place of dropping
+// the user straight into a differently-shaped app with no acknowledgement.
+// Only reachable from the two switch flows — a first-time signup has no
+// "second hat" to celebrate and goes to MainTabs directly, as before.
+const HAT_CELEBRATION = {
+  client: {
+    title: "You can book now too!",
+    body: "Your client profile is ready. Browse providers, book appointments and save your favourites \u2014 your business stays exactly as it was.",
+  },
+  provider: {
+    title: "You're a provider now!",
+    body: "Your provider profile is ready. Add your services, portfolio and availability so clients can find and book you.",
+  },
+} as const;
+
 export default function SignUpStep5Screen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
@@ -82,6 +99,38 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const specialtiesY   = useRef(0);
   const [isLoading,  setIsLoading]  = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  // Which hat was just added, or null for "not celebrating". Doubles as the
+  // modal's visibility flag so the two can't disagree.
+  const [celebratedHat, setCelebratedHat] = useState<'client' | 'provider' | null>(null);
+  const celebrationScale   = useRef(new Animated.Value(0.6)).current;
+  const celebrationOpacity = useRef(new Animated.Value(0)).current;
+
+  // Same spring/fade as the provider go-live celebration on ProviderHomeScreen,
+  // so the app has one celebration feel rather than two. Deliberately NOT the
+  // same card colour: that one paints on `surface` (the page tone), where
+  // DESIGN_SYSTEM's Cards convention is `card` — used below.
+  useEffect(() => {
+    if (!celebratedHat) return;
+    celebrationScale.setValue(0.6);
+    celebrationOpacity.setValue(0);
+    Animated.parallel([
+      Animated.spring(celebrationScale, { toValue: 1, tension: 120, friction: 8, useNativeDriver: true }),
+      Animated.timing(celebrationOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [celebratedHat, celebrationScale, celebrationOpacity]);
+
+  // The navigation that used to happen the instant the hat was added. Deferred
+  // to the modal's dismissal, so resetData() can't blank the form out behind a
+  // half-transparent backdrop. Android's back button routes here too — closing
+  // the modal without this would strand the user on a signup step for a hat
+  // they already have.
+  const finishHatSwitch = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setCelebratedHat(null);
+    resetData();
+    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+  };
 
   const isProvider = data.accountType === 'provider';
 
@@ -227,8 +276,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         invokeSendAccountEmail('client_hat_added').catch((e) => {
           logger.error('[email] client hat email failed to send:', e);
         });
-        resetData();
-        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+        // resetData + navigation now happen when the celebration is dismissed.
+        setCelebratedHat('client');
       } catch (e: any) {
         Alert.alert('Oops!', toUserMessage(e, "We couldn't finish setting up your account. Please try again.", 'signup:addClientProfile'));
       } finally {
@@ -258,8 +307,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         invokeSendAccountEmail('provider_hat_added').catch((e) => {
           logger.error('[email] provider hat email failed to send:', e);
         });
-        resetData();
-        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+        // resetData + navigation now happen when the celebration is dismissed.
+        setCelebratedHat('provider');
       } catch (e: any) {
         Alert.alert('Oops!', toUserMessage(e, "We couldn't finish setting up your provider account. Please try again.", 'signup:upgradeToProvider'));
       } finally {
@@ -522,6 +571,44 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           )}
         </View>
       </ScrollView>
+
+      {/* Second-hat celebration. Dismissing it is what completes the switch. */}
+      <Modal
+        visible={celebratedHat !== null}
+        transparent
+        statusBarTranslucent
+        navigationBarTranslucent
+        animationType="fade"
+        onRequestClose={finishHatSwitch}
+      >
+        <View style={styles.celebrateBackdrop}>
+          <Animated.View
+            style={[
+              styles.celebrateCard,
+              {
+                backgroundColor: t.card,
+                opacity: celebrationOpacity,
+                transform: [{ scale: celebrationScale }],
+              },
+            ]}
+          >
+            <Text style={styles.celebrateEmoji}>🎉</Text>
+            <Text style={[styles.celebrateTitle, { color: t.text }]}>
+              {celebratedHat ? HAT_CELEBRATION[celebratedHat].title : ''}
+            </Text>
+            <Text style={[styles.celebrateBody, { color: t.sub }]}>
+              {celebratedHat ? HAT_CELEBRATION[celebratedHat].body : ''}
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={finishHatSwitch}
+              style={[styles.celebrateBtn, { backgroundColor: t.accent }]}
+            >
+              <Text style={[styles.celebrateBtnText, { color: t.onAccent }]}>Let's go</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </ThemedBackground>
   );
 }
@@ -551,6 +638,51 @@ const styles = StyleSheet.create({
   completeBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' },
   skipBtn: { marginTop: 16, paddingVertical: 8 },
   skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  // Second-hat celebration. Typography follows this screen's fonts rather than
+  // the go-live modal's raw fontWeights, so it reads as part of signup.
+  celebrateBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  celebrateCard: {
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+  },
+  celebrateEmoji: { fontSize: 44 },
+  celebrateTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 22,
+    letterSpacing: 1,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  celebrateBody: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  celebrateBtn: {
+    marginTop: 22,
+    borderRadius: 100,
+    paddingVertical: 13,
+    paddingHorizontal: 36,
+  },
+  // Colour comes from t.onAccent at the call site, never a hardcoded white:
+  // by the time this shows, activeMode has already flipped, so a client-hat
+  // celebration in dark mode paints on the PALE blue-grey client accent.
+  celebrateBtnText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 1,
+  },
   kidsToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',

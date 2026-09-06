@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **85 files**
 - … +55 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **161 files**
+Curated: [[Availability & Slots]] · **162 files**
 - `src/services/AvailabilityService.ts` _(330)_
 - `src/services/databaseService.ts` _(269)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **161 files**
 - `src/types/database.ts` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
-- … +131 more
+- … +132 more
 
 ## Payments
 Curated: [[Payments]] · **109 files**
@@ -192,6 +192,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `supabase/dev_reset_provider.sql` _(8)_
 - `src/services/becca/capabilities/client.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
+- `src/screens/auth/SignUpStep5Screen.tsx` _(5)_
 - `src/screens/client/CartScreen.tsx` _(5)_
 - `src/services/acuityTransferService.ts` _(5)_
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
@@ -201,7 +202,6 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `src/screens/auth/SignUpStep2Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep3Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
-- `src/screens/auth/SignUpStep5Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
 - `src/services/becca/aiRuntime.ts` _(3)_

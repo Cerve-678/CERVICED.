@@ -5,7 +5,7 @@
 
 #generated
 
-**2074 functions** across **274 files**.
+**2075 functions** across **274 files**.
 
 ### `src/components/` (39)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -151,7 +151,7 @@
 - `SignUpStep2Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep3Screen · validate
 - `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · pickTeamSize · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
-- `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
+- `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · finishHatSwitch · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
 - `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · WelcomeScreen
 
 ### `src/screens/client/` (21)
