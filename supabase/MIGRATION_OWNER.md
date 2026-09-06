@@ -22,9 +22,10 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
-SINCE:  --
-SCOPE:  --
+OWNER:  session feat/provider-editable-service-type
+SINCE:  2026-09-06
+SCOPE:  providers.service_category_changed_at + the cooldown/cascade triggers
+        (20260906200000_provider_service_category_change_cooldown)
 ```
 
 ### Applied 2026-08-31 (account-scoped walkthrough versions)

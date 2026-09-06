@@ -29,6 +29,7 @@ import type {
   DbProviderAvailabilityWindow,
   DbProviderAvailabilityOverride,
   BusinessType,
+  ServiceCategory,
 } from "../types/database";
 import type { AddressReleasePolicy } from "../features/business-details/options";
 import { logger } from "../utils/logger";
@@ -7602,6 +7603,45 @@ export async function updateProviderContactDetails(
   const { error } = await supabase
     .from("providers")
     .update(patch)
+    .eq("id", providerId);
+  if (error) throw error;
+}
+
+/**
+ * Change a provider's headline service type.
+ *
+ * Deliberately its own function rather than another key on
+ * updateProviderContactDetails: this is the one write on `providers` with a
+ * cascade behind it, and it must not be reachable by accident from a screen
+ * saving unrelated contact fields.
+ *
+ * Three things are enforced by the DB, not here (see
+ * supabase/migrations/20260906200000_provider_service_category_change_cooldown.sql):
+ *   - a 90-day cooldown, which throws with a plain-English message naming the
+ *     date it reopens — surface that message rather than a generic one;
+ *   - custom_service_type cleared unless the new type is OTHER;
+ *   - portfolio photos still carrying the old headline category re-stamped to
+ *     the new one, and provider_specialties dropped (the old set comes from a
+ *     pool the new type doesn't offer, so nothing in the UI could clear it).
+ *
+ * Callers must warn about that cascade BEFORE calling. It is not reversible by
+ * calling again with the old value — the cooldown will refuse, and the
+ * specialties are already gone.
+ */
+export async function updateMyServiceCategory(
+  providerId: string,
+  category: ServiceCategory,
+  customServiceType: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from("providers")
+    .update({
+      service_category: category,
+      // Only meaningful for OTHER; the trigger nulls it for every other
+      // category regardless, so sending it here is belt-and-braces for the
+      // OTHER -> OTHER-with-a-new-label case the trigger doesn't fire on.
+      custom_service_type: category === "OTHER" ? customServiceType : null,
+    })
     .eq("id", providerId);
   if (error) throw error;
 }

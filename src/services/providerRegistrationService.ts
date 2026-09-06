@@ -444,8 +444,15 @@ export async function saveProviderToSupabase(
         // ongoing editor, and it's under a 14-day cooldown enforced by the
         // providers_display_name_cooldown trigger. Re-sending the name this
         // screen loaded would make any unrelated save race that cooldown.
-        service_category: data.providerService,
-        custom_service_type: data.customServiceType || null,
+        //
+        // service_category and custom_service_type are absent for exactly the
+        // same reason, and it bites harder: the type became editable in
+        // Business Info under a 90-day cooldown
+        // (providers_service_category_cooldown). This screen renders it as a
+        // locked chip, so the value it holds is whatever it loaded — writing
+        // that back after the provider changed it elsewhere would revert the
+        // change, and, because reverting IS a change, the trigger would
+        // refuse it and fail this whole unrelated profile save.
         location_text: data.location,
         latitude,
         longitude,

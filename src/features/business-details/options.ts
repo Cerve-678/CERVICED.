@@ -11,7 +11,7 @@
  * before (see preferred_contact_methods) — always map at the render boundary.
  */
 
-import type { BusinessType } from '../../types/database';
+import type { BusinessType, ServiceCategory } from '../../types/database';
 
 export const SPECIALTIES_MAP: Record<string, string[]> = {
   HAIR:       ['Natural & textured', 'Afro hair', 'Colour & balayage', 'Extensions & weaves', 'Locs & braids', 'Bridal & occasion', "Men's cuts", "Children's hair", 'Relaxers & perms', 'Blow-dries & styling'],
@@ -22,6 +22,29 @@ export const SPECIALTIES_MAP: Record<string, string[]> = {
   AESTHETICS: ['Facials', 'Microneedling', 'Chemical peels', 'LED therapy', 'Dermaplaning', 'Injectables', 'Body treatments'],
   OTHER:      ['Massage', 'Body waxing', 'Spray tanning', 'Body sculpting', 'Holistic therapies'],
 };
+
+/**
+ * The provider's headline service type — `providers.service_category`.
+ *
+ * The same seven values InfoRegScreen offers at sign-up, in the same order.
+ * The live CHECK constraint providers_service_category_check also permits
+ * MALE and KIDS, which are deliberately NOT offered here: those describe an
+ * audience, not a trade, and are set per-service (`services.audience`) and
+ * per-promotion rather than as a whole business's type.
+ *
+ * Keys of SPECIALTIES_MAP must stay in step with these values — the specialty
+ * pool on ServicesPricingScreen is looked up by service_category, so a type
+ * with no entry there would show a provider an empty specialty list.
+ */
+export const SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: string }[] = [
+  { value: 'HAIR',       label: 'Hair',       sub: 'Cuts, colour, braids, extensions, styling' },
+  { value: 'NAILS',      label: 'Nails',      sub: 'Manicures, pedicures, extensions, nail art' },
+  { value: 'LASHES',     label: 'Lashes',     sub: 'Extensions, lifts, tints' },
+  { value: 'BROWS',      label: 'Brows',      sub: 'Shaping, lamination, microblading, tinting' },
+  { value: 'MUA',        label: 'Makeup',     sub: 'Bridal, occasion, editorial, SFX' },
+  { value: 'AESTHETICS', label: 'Aesthetics', sub: 'Facials, peels, microneedling, injectables' },
+  { value: 'OTHER',      label: 'Other',      sub: 'Massage, waxing, tanning, holistic therapies' },
+];
 
 export const CLIENTELE_OPTS     = ['Women', 'Men', 'Children', 'Seniors', 'Bridal & wedding parties', 'All welcome'];
 export const AVAILABILITY_OPTS  = ['Weekday mornings', 'Weekday afternoons', 'Weekday evenings', 'Saturdays', 'Sundays', 'Same-day bookings'];
