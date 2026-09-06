@@ -398,9 +398,29 @@ const BRAND = {
   subLight:  '#8F7789',
 };
 
-/** The real mark (assets/CVD.png), hosted so mail clients can fetch it. */
-const BRAND_MARK =
-  'https://ztrfpfvvejzaysrelmfm.supabase.co/storage/v1/object/public/public/brand/cerviced-mark.png';
+// Brand assets live in the `public` bucket rather than being attached or
+// inlined: Gmail strips data: URIs, and an attachment on a marketing email is
+// a spam signal. Hosted URLs are the only thing that reliably renders.
+const BRAND_ASSETS =
+  'https://ztrfpfvvejzaysrelmfm.supabase.co/storage/v1/object/public/public/brand';
+
+/** The real mark — assets/CVD.png, resized to 400px. */
+const BRAND_MARK = `${BRAND_ASSETS}/cerviced-mark.png`;
+
+/**
+ * The brand photography. Tiles are all cropped to 4:5 so the two grid columns
+ * line up; a ragged grid is the tell that images were dropped in untouched.
+ */
+const BRAND_PHOTOS = {
+  hero: `${BRAND_ASSETS}/hero-hair.jpg`,
+  provider: `${BRAND_ASSETS}/cornrows.jpg`,
+  grid: [
+    { url: `${BRAND_ASSETS}/braids.jpg`, label: 'Braids' },
+    { url: `${BRAND_ASSETS}/blonde.jpg`, label: 'Colour' },
+    { url: `${BRAND_ASSETS}/nails.jpg`, label: 'Nails' },
+    { url: `${BRAND_ASSETS}/makeup.jpg`, label: 'Makeup' },
+  ],
+};
 
 const CATEGORIES = ['Hair', 'Nails', 'Lashes', 'Brows', 'Makeup', 'Skin'];
 
@@ -443,25 +463,54 @@ function offerRow(term: string, copy: string, accent: string) {
  */
 export function generalWelcomeEmail(params: {
   name?: string;
-  images?: { hero?: string; provider?: string };
+  images?: { hero?: string; provider?: string; grid?: { url: string; label: string }[] };
 } = {}) {
   const firstName = (params.name ?? '').split(' ')[0];
   const greeting = firstName ? `Welcome, ${firstName}.` : 'Welcome.';
-  const img = params.images ?? {};
+  const img = { ...BRAND_PHOTOS, ...(params.images ?? {}) };
 
   const heroImage = img.hero
     ? `
-        <img src="${img.hero}" alt="" width="456" style="display:block;width:100%;max-width:456px;height:auto;border-radius:14px;margin:32px 0 0;" />`
+        <img src="${img.hero}" alt="" width="456" style="display:block;width:100%;max-width:456px;height:auto;border-radius:14px;margin:34px 0 0;" />`
     : '';
 
   const providerImage = img.provider
     ? `
-          <img src="${img.provider}" alt="" width="404" style="display:block;width:100%;max-width:404px;height:auto;border-radius:12px;margin:0 0 22px;" />`
+          <img src="${img.provider}" alt="" width="404" style="display:block;width:100%;max-width:404px;height:auto;border-radius:12px;margin:0 0 24px;" />`
     : '';
+
+  // Two columns of labelled tiles. The label is real text under each image,
+  // not burnt into it, so a reader whose client blocks images still learns
+  // what CERVICED covers — which is the whole job of this section.
+  const tile = (t: { url: string; label: string }) => `
+              <img src="${t.url}" alt="${t.label}" width="212" style="display:block;width:100%;height:auto;border-radius:12px;" />
+              <p style="font-family:${DISPLAY};color:${BRAND.onInkSub};font-size:11px;letter-spacing:2px;text-transform:uppercase;padding-top:9px;">${t.label}</p>`;
+  const grid = img.grid ?? [];
+  const gridRows: string[] = [];
+  for (let i = 0; i < grid.length; i += 2) {
+    const left = grid[i];
+    const right = grid[i + 1];
+    gridRows.push(`
+            <tr>
+              <td width="50%" valign="top" style="padding:0 6px 18px 0;">${tile(left)}
+              </td>
+              <td width="50%" valign="top" style="padding:0 0 18px 6px;">${right ? tile(right) : ''}
+              </td>
+            </tr>`);
+  }
 
   const chips = CATEGORIES.map(
     (c) => `<td style="padding:5px 4px;"><span style="display:inline-block;border:1px solid ${BRAND.rule};color:${BRAND.onInkSub};font-family:${BODY};font-size:12px;letter-spacing:1.2px;padding:8px 15px;border-radius:100px;white-space:nowrap;">${c}</span></td>`,
   ).join('');
+
+  // The tiles say it better when they load; the chips are the fallback for
+  // when there is no photography configured at all.
+  const whatYoullFind = gridRows.length
+    ? `
+          <table cellpadding="0" cellspacing="0" width="100%">${gridRows.join('')}
+          </table>`
+    : `
+          <table cellpadding="0" cellspacing="0" align="center"><tr>${chips}</tr></table>`;
 
   return {
     subject: 'Welcome to CERVICED — beauty at your fingertips',
@@ -495,10 +544,10 @@ export function generalWelcomeEmail(params: {
           ${brandButton('cerviced://home', 'Explore CERVICED')}${heroImage}
         </td></tr>
 
-        <!-- Categories -->
-        <tr><td align="center" style="padding-bottom:44px;">
-          <p style="font-family:${DISPLAY};color:${BRAND.onInkSub};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:16px;">What you'll find</p>
-          <table cellpadding="0" cellspacing="0" align="center"><tr>${chips}</tr></table>
+        <!-- What you'll find -->
+        <tr><td align="center" style="padding:0 0 34px;">
+          <p style="font-family:${DISPLAY};color:${BRAND.onInkSub};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;padding-bottom:18px;">What you'll find</p>
+          ${whatYoullFind}
         </td></tr>
 
         <!-- Client side -->

@@ -5,9 +5,9 @@
 
 #generated
 
-**2077 functions** across **274 files**.
+**2079 functions** across **276 files**.
 
-### `src/components/` (39)
+### `src/components/` (40)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -36,6 +36,7 @@
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showConfirm · showToast · Toast · **useProviderDialog**
 - `ProviderFontPicker 2.tsx` — ProviderFontPicker
+- `ProviderFontPicker.tsx` — ProviderFontPicker
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
@@ -48,9 +49,10 @@
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
 
-### `src/constants/` (5)
+### `src/constants/` (6)
 - `PlatformDimensions.ts` — for
 - `providerFonts 2.ts` — **resolveProviderFontFamily**
+- `providerFonts.ts` — **resolveProviderFontFamily**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · valid · **withAlpha**
 - `support.ts` — **supportMailtoUrl**
 - `waitlist.ts` — changes
