@@ -36,7 +36,7 @@ MAX_DOB.setFullYear(MAX_DOB.getFullYear() - 16);
 const MIN_DOB = new Date(1900, 0, 1);
 
 export default function ProfileInfoScreen({ navigation, route }: any) {
-  const { user, updateUser, deleteClientProfile } = useAuth();
+  const { user, updateUser, deleteClientProfile, hatState } = useAuth();
   const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -93,10 +93,9 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
 
   const handleDeleteAccount = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-    // A dual-role account still has `accountType === 'provider'` even while
-    // browsing in client mode — this button only ever removes the client
-    // side, so the copy (and what actually happens) differs accordingly.
-    const isDualRole = user?.accountType === 'provider';
+    // This button only ever removes the client side, so the copy (and what
+    // actually happens) differs when the provider hat must remain.
+    const isDualRole = hatState.canSwitch;
     Alert.alert(
       'Delete Account',
       isDualRole

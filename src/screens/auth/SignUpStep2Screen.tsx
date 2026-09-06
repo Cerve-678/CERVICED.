@@ -38,7 +38,7 @@ interface FormErrors {
 export default function SignUpStep2Screen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
-  const { user } = useAuth();
+  const { user, hatState } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [name, setName] = useState(data.name);
@@ -96,13 +96,13 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     }
 
     if (user && email.trim().toLowerCase() === user.email.toLowerCase() && !isClientSwitch) {
-      const becomingProvider = user.accountType !== 'provider';
-      const becomingClient  = user.accountType === 'provider' && !user.hasClientProfile;
+      const becomingProvider = !hatState.owned.provider;
+      const becomingClient = hatState.owned.provider && !hatState.owned.client;
 
       if (becomingProvider || becomingClient) {
         Alert.alert(
           'Already have an account',
-          `${email.trim()} is linked to your existing ${user.accountType === 'provider' ? 'provider' : 'client'} account.\n\nWould you like to use it to ${becomingProvider ? 'become a provider' : 'set up your client profile'} instead?`,
+          `${email.trim()} is linked to your existing ${hatState.owned.provider ? 'provider' : 'client'} account.\n\nWould you like to use it to ${becomingProvider ? 'become a provider' : 'set up your client profile'} instead?`,
           [
             {
               text: `Yes, use ${user.name?.split(' ')[0] || 'my'} details`,

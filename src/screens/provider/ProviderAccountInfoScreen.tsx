@@ -33,7 +33,7 @@ const CP_LIGHT = {
 export default function ProviderAccountInfoScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
-  const { user, updateUser, deleteProviderProfile } = useAuth();
+  const { user, updateUser, deleteProviderProfile, hatState } = useAuth();
 
   const [userId, setUserId]         = useState<string | null>(null);
   const [authEmail, setAuthEmail]   = useState('');
@@ -88,7 +88,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     // This button only ever removes the provider side. If the account also
     // has a client profile, it's kept untouched and the user stays signed in.
-    const isDualRole = !!user?.hasClientProfile;
+    const isDualRole = hatState.canSwitch;
     Alert.alert(
       'Delete Account',
       isDualRole

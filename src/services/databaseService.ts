@@ -354,7 +354,10 @@ export type ClientPointsReason =
   | "booking_completed"
   | "review_left"
   | "first_booking"
-  | "birthday_bonus";
+  | "birthday_bonus"
+  | "first_review"
+  | "profile_completed"
+  | "returning_client";
 
 export interface ClientPointsLedgerEntry {
   id: string;
@@ -8526,7 +8529,12 @@ export async function claimUnclaimedProviderProfile(
   return data;
 }
 
-export type AccountEmailKind = 'client_welcome' | 'provider_welcome' | 'password_changed';
+export type AccountEmailKind =
+  | 'client_welcome'
+  | 'provider_welcome'
+  | 'password_changed'
+  | 'provider_hat_added'
+  | 'client_hat_added';
 
 /**
  * Sends the signed-in user an account email (a welcome, or a password-changed

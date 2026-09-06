@@ -104,7 +104,8 @@ export default function BeccaScreen({
   // activeMode is 'client' and the provider (brown/rose) palette otherwise.
   const { isDarkMode, palette: P } = useTheme();
   const { bookings } = useBooking();
-  const { user, activeMode } = useAuth();
+  const { user, hatState } = useAuth();
+  const activeMode = hatState.active;
   const isProviderMode = activeMode === "provider";
   // The single source of truth for which Becca this is — drives the engine,
   // the persisted session's `hat`, and the screen's identity treatment.

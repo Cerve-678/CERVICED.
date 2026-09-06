@@ -77,7 +77,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   useFont();
   const { bookingId } = route.params;
   const { isDarkMode, palette: C } = useTheme();
-  const { user, activeMode } = useAuth();
+  const { user, hatState } = useAuth();
+  const activeMode = hatState.active;
   const { addToCart } = useCart();
   const {
     todayBookings, upcomingBookings, pastBookings,

@@ -135,7 +135,8 @@ const notifSkeletonStyles = StyleSheet.create({
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { textStyles } = useFont();
-  const { user, activeMode } = useAuth();
+  const { user, hatState } = useAuth();
+  const activeMode = hatState.active;
   const isProvider = activeMode === 'provider';
   const isProviderRef = useRef(false);
   isProviderRef.current = isProvider;
@@ -153,8 +154,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // the plain "all caught up" copy.
   const [otherHatUnread, setOtherHatUnread] = useState(0);
   const hasOtherHat = isProvider
-    ? !!user?.hasClientProfile
-    : user?.accountType === 'provider';
+    ? hatState.owned.client
+    : hatState.owned.provider;
 
   // Every navigation path below is "dismiss this formSheet, then navigate", which
   // means a deferred callback can fire after the sheet is already gone — the user

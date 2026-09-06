@@ -211,7 +211,8 @@ const THEME_STORAGE_KEY = '@cerviced_theme_mode';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemColorScheme = useColorScheme();
-  const { activeMode } = useAuth();
+  const { hatState } = useAuth();
+  const activeMode = hatState.active;
   const [themePreference, setThemePref] = useState<ThemePreference>('auto');
   const [isLoading, setIsLoading] = useState(true);
 

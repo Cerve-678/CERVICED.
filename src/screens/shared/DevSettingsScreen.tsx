@@ -36,7 +36,8 @@ export default function DevSettingsScreen({ navigation }: any) {
   const [storageSize, setStorageSize] = useState<string>('0 KB');
   const { reloadBookings } = useBooking();
   const { isDarkMode, themePreference, setDarkMode, setThemePreference, palette: P } = useTheme();
-  const { user, activeMode, logout } = useAuth();
+  const { user, hatState, logout } = useAuth();
+  const activeMode = hatState.active;
   const insets = useSafeAreaInsets();
   const danger = isDarkMode ? '#E05050' : '#C0392B';
   const warnColor = isDarkMode ? '#E0A030' : '#B8860B';
@@ -720,9 +721,12 @@ export default function DevSettingsScreen({ navigation }: any) {
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: P.sep }]} />
                 <View style={styles.statRow}>
-                  <Text style={[styles.statLabel, { color: P.text }]}>Account / Mode</Text>
+                  <Text style={[styles.statLabel, { color: P.text }]}>Hats / Active</Text>
                   <Text style={[styles.statValue, { color: P.accent }]}>
-                    {(user?.accountType ?? '—')} / {activeMode}
+                    {[
+                      hatState.owned.client ? 'client' : null,
+                      hatState.owned.provider ? 'provider' : null,
+                    ].filter(Boolean).join(' + ') || '—'} / {activeMode}
                   </Text>
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: P.sep }]} />
