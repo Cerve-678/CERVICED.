@@ -7,6 +7,10 @@ import * as Location from 'expo-location';
 // renders nothing.
 import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
+import { lightTheme } from '../constants/theme';
+import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
+import { normalizeServiceImages } from '../utils/serviceImageDraft';
+export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import {
   getProviderBookingPolicies,
   getProviderLogoUrlByUserId,
@@ -14,10 +18,10 @@ import {
   getProviderRegistrationDetails,
   getProviderRegistrationRecord,
   insertProviderRegistrationRow,
-  listUserStorageObjectPaths,
   promoteUserToProvider,
   providerSlugExists,
   removeStorageObjects,
+  listUserStorageObjectPaths,
   replaceProviderServiceCatalog,
   saveProviderBookingPolicies,
   setMyProviderFullAddress,
@@ -29,24 +33,27 @@ import {
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
 } from '../features/business-details/options';
-import {
-  normalizeServiceImages,
-  type ServiceImageDraft,
-  type ServiceImageFit,
-} from '../utils/serviceImageDraft';
-
-export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 
 // ── Shared types (mirror InfoRegScreen / ProviderMyProfileScreen) ───────────
 
 export interface AddOnData {
   id: number;
+  // The real service_add_ons.id when this add-on already exists in the DB —
+  // null for one created in this editing session. See ServiceData.dbId.
+  dbId: string | null;
   name: string;
   price: number;
 }
 
 export interface ServiceData {
   id: number;
+  // The real services.id when this service already exists in the DB — null
+  // for one created in this editing session. Threaded through to
+  // replace_provider_services so it can update the row in place instead of
+  // deleting and recreating it under a new id, which used to silently break
+  // any cart item or booking pointing at the old one (bookings.service_id is
+  // ON DELETE SET NULL — 96% of live bookings had already lost this link).
+  dbId: string | null;
   name: string;
   price: number;
   duration: string;
@@ -110,6 +117,7 @@ export interface ProviderRegistrationData {
   email: string;
   instagram: string;
   website: string;
+  tiktok: string;
   // Set via the separate Communications settings screen, not this form —
   // but the client-facing Contact card gates which rows show by these, so a
   // faithful preview of that card needs them too.
@@ -523,6 +531,7 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        tiktok: data.tiktok || null,
         // Shared with ProviderCommunicationsScreen, which writes the same
         // column. loadProviderFromSupabase has always read it back into
         // `whatsapp`, but this payload never wrote it — so a number typed in
@@ -576,6 +585,7 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        tiktok: data.tiktok || null,
         // Shared with ProviderCommunicationsScreen, which writes the same
         // column. loadProviderFromSupabase has always read it back into
         // `whatsapp`, but this payload never wrote it — so a number typed in
@@ -689,6 +699,7 @@ export async function saveProviderToSupabase(
       }
 
       servicesPayload.push({
+        id: svc.dbId ?? null,
         category_name: categoryName,
         category_description: data.categoryDescriptions?.[categoryName] || null,
         name: svc.name,
@@ -712,7 +723,7 @@ export async function saveProviderToSupabase(
         hair_types_suitable: svc.hairTypesSuitable?.length ? svc.hairTypesSuitable : null,
         audience: svc.audience || null,
         images,
-        add_ons: svc.addOns.map((a) => ({ name: a.name, price: a.price })),
+        add_ons: svc.addOns.map((a) => ({ id: a.dbId ?? null, name: a.name, price: a.price })),
       });
     }
   }
@@ -768,8 +779,21 @@ export async function loadProviderFromSupabase(
     provider = await getProviderRegistrationRecord(userId);
   } catch (error) {
     logger.warn('loadProviderFromSupabase error:', error);
-    return getCachedProviderData(userId);
+    const cached = await getCachedProviderData(userId);
+    if (cached) return cached;
+    // A transient failure here is NOT the same thing as "no provider row
+    // exists" — returning null in both cases is indistinguishable to every
+    // caller, which is exactly what let an existing, published provider's
+    // locked Business Name/Service Type fields render as editable (and, if
+    // touched, silently overwrite service_category on save) after a
+    // one-off network blip during load. Callers must treat this as a
+    // failure to retry, never as "confirmed new signup".
+    throw error;
   }
+  // The query itself succeeded and genuinely found no row — this really is
+  // either a brand-new signup or an offline draft that never reached the
+  // server, so falling back to a local cache (an unsynced draft) is safe
+  // here in a way it isn't in the catch block above.
   if (!provider) return getCachedProviderData(userId);
 
   // Street address, the services list, and the AsyncStorage fallback each
@@ -810,12 +834,14 @@ export async function loadProviderFromSupabase(
 
     const addOns = (svc.service_add_ons || []).map((ao: any, idx: number) => ({
       id: idx + 1,
+      dbId: ao.id ?? null,
       name: ao.name,
       price: Number(ao.price),
     }));
 
     (categories[svc.category_name] as ServiceData[]).push({
       id: localId++,
+      dbId: svc.id ?? null,
       name: svc.name,
       price: Number(svc.price),
       duration: minutesToDuration(svc.duration_minutes),
@@ -849,7 +875,9 @@ export async function loadProviderFromSupabase(
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
     hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
-    accentColor: provider.accent_color || '#7B1FA2',
+    // Was '#7B1FA2' (a hardcoded purple) for any provider who'd never set
+    // one — falls back to the app's own accent instead.
+    accentColor: provider.accent_color || lightTheme.accent,
     profileTheme: provider.profile_theme || 'app',
     logo: provider.logo_url || null,
     categories,
@@ -858,6 +886,7 @@ export async function loadProviderFromSupabase(
     email: provider.email || '',
     instagram: provider.instagram || cached?.instagram || '',
     website: provider.website || cached?.website || '',
+    tiktok: provider.tiktok || cached?.tiktok || '',
     externalBookingUrl: provider.external_booking_url || '',
     yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
     businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
