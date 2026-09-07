@@ -83,6 +83,13 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     logo: null,
     categories,
     categoryDescriptions: {},
+    // Acuity exposes a single business category, so every imported category
+    // lands under it. The provider can't change the set here anyway — it's
+    // locked from sign-up.
+    serviceCategories: [extracted.serviceCategory || 'OTHER'],
+    categoryServiceTypes: Object.fromEntries(
+      Object.keys(categories).map(name => [name, extracted.serviceCategory || 'OTHER']),
+    ),
     phone: extracted.phone || '',
     email: extracted.email || '',
     instagram: extracted.instagram || '',

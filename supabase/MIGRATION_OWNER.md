@@ -22,7 +22,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session 4fe95792 (multi-select service types + drop OTHER)
+SINCE:  2026-09-08
+SCOPE:  providers.service_categories + services.service_category
+        (20260906193000_provider_multiple_service_types, still UNAPPLIED —
+        inherited from session ad8beea5 by merging
+        feat/provider-multiple-service-types into this branch)
 ```
 
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
