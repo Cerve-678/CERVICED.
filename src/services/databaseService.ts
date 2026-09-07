@@ -1660,6 +1660,9 @@ export async function getMyPromotions(): Promise<DbPromotion[]> {
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -1708,6 +1711,9 @@ export async function upsertPromotion(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) throw new Error("No provider profile found");
@@ -1771,6 +1777,9 @@ export async function getMyProviderServices(): Promise<
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -1834,6 +1843,9 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
       .from("providers")
       .select("id")
       .eq("user_id", user.id)
+      .order("is_active", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
     if (providerError) throw providerError;
     if (!provider) return { providerId: null, services: [] };
@@ -1955,6 +1967,9 @@ export async function getMyPromotionManagerCore(): Promise<{
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (providerError) throw providerError;
   if (!provider) return { promotions: [], services: [] };
@@ -2133,6 +2148,9 @@ export async function getProviderClientele(): Promise<
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -2198,6 +2216,9 @@ export async function getClientBookingHistory(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -2243,6 +2264,9 @@ export async function getClientReliabilityStats(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) return { noShowCount: 0, lateCancelCount: 0 };
@@ -2281,6 +2305,9 @@ export async function getClientReliabilityStatsBatch(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) return {};
@@ -2364,6 +2391,9 @@ export async function sendPromotionNotificationsToClients(
     .from("providers")
     .select("id, display_name")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) throw new Error("No provider profile");
@@ -2472,6 +2502,9 @@ export async function sendAnnouncement(
     .from("providers")
     .select("id, display_name")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
 
   if (!provider) throw new Error("No provider profile");
@@ -6549,6 +6582,9 @@ export async function getMyFollowerCount(): Promise<number> {
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (!providerRow) return 0;
   return getProviderFollowerCount(providerRow.id);
@@ -6662,6 +6698,9 @@ export async function getMyBookmarkCount(): Promise<number> {
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (!providerRow) return 0;
   const { count, error } = await supabase
@@ -7580,6 +7619,9 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
     .from("providers")
     .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .single();
   if (error) return null;
   return data as {
@@ -7656,6 +7698,9 @@ export async function getProviderDisplayNameByUserId(
     .from("providers")
     .select("display_name")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   return (data as any)?.display_name ?? null;
 }
@@ -7682,6 +7727,9 @@ export async function getProviderServiceCategoryByUserId(
     .from("providers")
     .select("service_category")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   return (data as any)?.service_category ?? null;
 }
@@ -8859,6 +8907,9 @@ export async function getProviderLogoUrlByUserId(userId: string): Promise<string
     .from("providers")
     .select("logo_url")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data?.logo_url ?? null;
@@ -8872,6 +8923,9 @@ export async function getProviderRegistrationCore(userId: string): Promise<{
     .from("providers")
     .select("id, automation_settings")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data as { id: string; automation_settings: DbProvider["automation_settings"] } | null;
@@ -8924,11 +8978,30 @@ export async function replaceProviderServiceCatalog(
   if (error) throw error;
 }
 
+/**
+ * The provider row a user owns, for the registration/business-profile screens.
+ *
+ * The ordering is load-bearing, not decoration. This used to be a bare
+ * .maybeSingle() on user_id, which does not pick a row when there is more than
+ * one — it errors. Duplicate provider rows exist in this database (see
+ * getProviderProfileForUserId), and loadProviderFromSupabase catches that error
+ * by falling back to the device-local AsyncStorage cache. Two devices therefore
+ * fell back to two independently-written local snapshots and showed two
+ * different logos for the same business, indefinitely and across reloads,
+ * because nothing ever re-read the server successfully.
+ *
+ * Every "which provider row is mine" lookup in this file now orders the same
+ * way — active first, then the oldest (the original) — so they cannot disagree
+ * about which row is the provider's real profile.
+ */
 export async function getProviderRegistrationRecord(userId: string): Promise<DbProvider | null> {
   const { data, error } = await supabase
     .from("providers")
     .select("*")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -8993,6 +9066,9 @@ export async function saveProviderBookingPolicies(
     .from("providers")
     .select("id")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (selectError) throw selectError;
   if (!data) return false;
@@ -9011,6 +9087,9 @@ export async function getProviderBookingPolicies(
     .from("providers")
     .select("booking_policies")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return (data?.booking_policies as Record<string, unknown> | null) ?? null;
