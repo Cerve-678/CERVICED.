@@ -3120,7 +3120,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         if (id) setProviderDbId(id);
         else setPortfolioLoading(false); // no provider row yet — nothing to fetch
       })
-      .catch(() => { setPortfolioLoading(false); });
+      .catch((error: unknown) => {
+        // getProviderIdForUserId throws now (it used to discard the error into
+        // a null), so this catch is live. Log it: a real failure otherwise
+        // looks identical on screen to "no provider row yet" — an empty
+        // Portfolio card with the spinner stopped.
+        logger.warn('[InfoRegScreen] Could not resolve provider id for portfolio:', error);
+        setPortfolioLoading(false);
+      });
   }, [user?.id, isEditMode]);
 
   useEffect(() => {

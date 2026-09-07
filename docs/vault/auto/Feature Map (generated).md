@@ -305,10 +305,10 @@ Curated: [[Contexts]] · **161 files**
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
 - `src/screens/client/CartScreen.tsx` _(13)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
-- `src/screens/provider/InfoRegScreen.tsx` _(11)_
 - … +131 more
 
 ## Becca / AI

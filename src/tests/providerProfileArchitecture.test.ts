@@ -52,7 +52,7 @@ describe("ProviderProfileScreen data architecture", () => {
     // lets the button paint with the rest of the service card.
     expect(source).toContain("useAuth()");
     expect(source).toContain("myProviderId");
-    expect(source).toContain("myProviderIdChecked");
+    expect(source).toContain("myProviderIdStatus");
     expect(source).not.toContain("const canBookProvider = viewerChecked && !isOwnProvider");
 
     const auth = readFileSync(
@@ -60,10 +60,33 @@ describe("ProviderProfileScreen data architecture", () => {
       "utf8",
     );
     expect(auth).toContain("getProviderIdForUserId");
-    // upgradeToProvider creates the provider row mid-session and flips
-    // accountType; without it as a dep a new provider keeps the null they
-    // resolved to at login and gets offered Book on their own profile.
+    // upgradeToProvider and the claim flow both create the provider row
+    // mid-session and flip accountType; without it as a dep a new provider
+    // keeps the null they resolved to at login and gets offered Book on their
+    // own profile.
     expect(auth).toContain("}, [user?.id, user?.accountType]);");
+  });
+
+  it("does not mistake a failed ownership lookup for owning nothing", () => {
+    // Both outcomes leave myProviderId null. Collapsing them into one boolean
+    // meant a single transient failure at login offered the provider a Book
+    // button on their own profile — not for a frame, but on every visit for
+    // the rest of the session, since the lookup is cached and not retried.
+    const auth = readFileSync(
+      join(__dirname, "../contexts/AuthContext.tsx"),
+      "utf8",
+    );
+    expect(auth).toContain("'pending' | 'resolved' | 'failed'");
+    expect(auth).toContain("setMyProviderIdStatus('failed')");
+
+    // The screen trusts the session answer only when it actually resolved,
+    // and falls back to the per-profile check otherwise.
+    expect(source).toContain(
+      'myProviderIdStatus === "resolved" && providerDbId !== null',
+    );
+    expect(source).toContain(
+      "isOwnProvider || (sessionOwnershipKnown && myProviderId === providerDbId)",
+    );
   });
 
   it("still withholds booking controls until ownership is actually known", () => {
@@ -71,7 +94,7 @@ describe("ProviderProfileScreen data architecture", () => {
     // "Book" button on their own profile, not even for one frame. Either
     // ownership check settling is enough to know, but one of them must.
     expect(source).toContain("const canBookProvider = ownershipResolved && !ownsThisProfile;");
-    expect(source).toContain("viewerChecked || (myProviderIdChecked && providerDbId !== null)");
+    expect(source).toContain("const ownershipResolved = viewerChecked || sessionOwnershipKnown;");
     // The per-profile check stays the authority and can still take the
     // controls away if the two ever disagree.
     expect(source).toContain("isOwnProvider ||");

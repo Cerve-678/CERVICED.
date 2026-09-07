@@ -26,6 +26,13 @@ import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } f
 
 export type AccountType = 'user' | 'provider';
 
+/** Whether the once-per-session "which provider profile do I own?" lookup has
+ *  produced an answer. 'failed' is deliberately distinct from a 'resolved'
+ *  null: both leave myProviderId null, but only one of them means the account
+ *  genuinely owns no provider profile. Collapsing the two would tell a provider
+ *  they are not the owner of their own profile. */
+export type OwnedProviderLookupStatus = 'pending' | 'resolved' | 'failed';
+
 export interface UserData {
   id: string;
   name: string;
@@ -83,11 +90,14 @@ interface AuthContextType {
   hatState: AccountHatState;
   /** The provider profile this account owns, or null if it owns none.
    *  Resolved once per session so a screen can answer "is this mine?"
-   *  synchronously on first paint. */
+   *  synchronously on first paint. Only meaningful when the status below is
+   *  'resolved' — on 'failed' it is null because the answer is unknown, which
+   *  is NOT the same as "owns none". */
   myProviderId: string | null;
-  /** False only until the lookup above settles. Treat "not yet checked" as
-   *  "ownership unknown" and withhold anything an owner must never see. */
-  myProviderIdChecked: boolean;
+  /** Whether the lookup above actually produced an answer. Anything other than
+   *  'resolved' means ownership is unknown, and callers must withhold whatever
+   *  an owner is never allowed to see rather than assume non-ownership. */
+  myProviderIdStatus: OwnedProviderLookupStatus;
   switchMode: () => Promise<void>;
   upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
@@ -156,32 +166,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // asking per visit meant the Book button could only appear a round trip
   // after the profile had already painted.
   const [myProviderId, setMyProviderId] = useState<string | null>(null);
-  const [myProviderIdChecked, setMyProviderIdChecked] = useState(false);
+  const [myProviderIdStatus, setMyProviderIdStatus] =
+    useState<OwnedProviderLookupStatus>('pending');
   useEffect(() => {
     // Logged out: nobody owns anything, and there's nothing to look up.
     // Settled immediately so a signed-out browser isn't made to wait.
     if (!user?.id) {
       setMyProviderId(null);
-      setMyProviderIdChecked(true);
+      setMyProviderIdStatus('resolved');
       return;
     }
     let cancelled = false;
-    setMyProviderIdChecked(false);
+    setMyProviderIdStatus('pending');
     void getProviderIdForUserId(user.id)
       .then((id) => {
-        if (!cancelled) setMyProviderId(id);
+        if (cancelled) return;
+        setMyProviderId(id);
+        setMyProviderIdStatus('resolved');
       })
       .catch((error: unknown) => {
-        // Fail closed on the id, open on the gate: an unresolved lookup must
-        // not strand every client on a profile with no way to book, and the
-        // per-profile owner check in useProviderProfileData still runs behind
-        // this as the authority. Server-side self-booking guards remain the
-        // real boundary either way.
+        // 'failed', not a resolved null. This lookup is one of the two things
+        // deciding whether an account is offered a Book button on a profile,
+        // and a null meaning "the query broke" must never be read as a null
+        // meaning "owns no provider profile" — that hands the owner the one
+        // control this gate exists to keep from them. Callers fall back to the
+        // slower per-profile check on this path.
         logger.warn('[AuthContext] Could not resolve owned provider id:', error);
-        if (!cancelled) setMyProviderId(null);
-      })
-      .finally(() => {
-        if (!cancelled) setMyProviderIdChecked(true);
+        if (cancelled) return;
+        setMyProviderId(null);
+        setMyProviderIdStatus('failed');
       });
     return () => {
       cancelled = true;
@@ -745,13 +758,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdChecked,
+    myProviderId, myProviderIdStatus,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdChecked,
+    myProviderId, myProviderIdStatus,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
