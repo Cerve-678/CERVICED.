@@ -129,7 +129,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setCategoryChangedAt(
             (providerData as { service_category_changed_at?: string | null }).service_category_changed_at ?? null,
           );
-          setCooldownLive('service_category_changed_at' in (providerData as Record<string, unknown>));
+          setCooldownLive('service_category_changed_at' in (providerData as unknown as Record<string, unknown>));
           setBusinessType((providerData.business_type as BusinessType | null) ?? null);
           setAddressReleasePolicy((providerData.address_release_policy as AddressReleasePolicy | null) ?? null);
           // Prefilled, not left blank pointing at another screen: if the
