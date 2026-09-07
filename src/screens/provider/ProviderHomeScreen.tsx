@@ -67,6 +67,8 @@ import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import {
   buildGoLiveSteps,
+  buildGoLiveHeadline,
+  deriveRecommendedGoLiveFields,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
@@ -365,10 +367,15 @@ function SummaryRow({ label, value, italic, P }: { label: string; value: string;
  *  registered on this navigator so the tap pushes rather than bouncing to
  *  another tab's root. */
 const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
+  profile: 'EditProfile',
   schedule: 'ProviderSchedule',
   services: 'EditProfile',
   address: 'EditProfile',
+  policies: 'Policies',
+  payment: 'Payments',
   logo: 'Branding',
+  portfolio: 'EditProfile',
+  terms: 'EditProfile',
 };
 
 const ISSUE_COLOR = '#FF9500';
@@ -698,6 +705,318 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
   );
 }
 
+// ─── Week view ────────────────────────────────────────────────────────────
+
+// Deliberately more compact than the day timeline's HOUR_H=64 — seven columns
+// have to share the width a single day timeline gets to itself.
+const WK_HOUR_H     = 56;
+const WK_TIME_COL_W = 44;
+// Headroom above the first hour line, mirroring the day timeline's own
+// TL_TOP_INSET — and the same generous +80 buffer it adds beyond the raw
+// hours height, so the ScrollView's reported content size actually covers
+// the last hour/booking plus the bottom tab-bar clearance instead of
+// truncating the scrollable range short of the real content.
+const WK_TOP_INSET  = 14;
+
+function getMondayOf(dateStr: string): Date {
+  const d   = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.getFullYear(), d.getMonth(), diff);
+}
+
+function getWeekDates(dateStr: string): string[] {
+  const monday = getMondayOf(dateStr);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return formatDateString(d);
+  });
+}
+
+function shiftDateString(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return formatDateString(d);
+}
+
+function weekRangeLabel(weekDates: string[]): string {
+  const [fy, fm, fd] = weekDates[0]!.split('-').map(Number);
+  const [ly, lm, ld] = weekDates[6]!.split('-').map(Number);
+  const fMon = MONTH_NAMES[fm! - 1]!.slice(0, 3);
+  const lMon = MONTH_NAMES[lm! - 1]!.slice(0, 3);
+  if (fy === ly && fm === lm) return `${fMon} ${fd} – ${ld}`;
+  if (fy === ly) return `${fMon} ${fd} – ${lMon} ${ld}`;
+  return `${fMon} ${fd}, ${fy} – ${lMon} ${ld}, ${ly}`;
+}
+
+interface WeekViewProps {
+  weekDates: string[];
+  bookingsByDate: ReadonlyMap<string, ConfirmedBooking[]>;
+  scheduleIssues: ReadonlyMap<string, ScheduleIssue[]>;
+  availability: DbProviderAvailability[];
+  blockedDateStrings: readonly string[];
+  selectedDate: string;
+  onSelectDate: (dateStr: string) => void;
+  onPressBooking: (booking: ConfirmedBooking) => void;
+  P: AppTheme;
+  refreshing: boolean;
+  onRefresh: () => void;
+}
+
+function WeekView({
+  weekDates, bookingsByDate, scheduleIssues, availability, blockedDateStrings,
+  selectedDate, onSelectDate, onPressBooking, P, refreshing, onRefresh,
+}: WeekViewProps) {
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  // Per-day availability, looked up the same way todayAvailability is for the
+  // single-day timeline — by day-of-week against the flat legacy table.
+  const dayAvailability = useMemo(
+    () => weekDates.map(dateStr => {
+      const dow = new Date(dateStr + 'T00:00:00').getDay();
+      return availability.find(a => a.day_of_week === dow) ?? null;
+    }),
+    [weekDates, availability],
+  );
+
+  // One shared hour axis for all seven columns, spanning every working day's
+  // hours and every booking in the week — same pure helper the day timeline
+  // uses, just fed the whole week's spans instead of one day's.
+  const { startHour: WK_START_HOUR, endHour: WK_END_HOUR } = useMemo(() => {
+    let minOpen: number | null = null;
+    let maxClose: number | null = null;
+    for (const a of dayAvailability) {
+      if (a && !a.is_closed) {
+        const open  = parseTimeToMinutes(a.open_time);
+        const close = parseTimeToMinutes(a.close_time);
+        minOpen  = minOpen  === null ? open  : Math.min(minOpen, open);
+        maxClose = maxClose === null ? close : Math.max(maxClose, close);
+      }
+    }
+    const spans = weekDates.flatMap(dateStr =>
+      (bookingsByDate.get(dateStr) ?? []).map(b => ({
+        startMins:    parseTimeToMinutes(b.bookingTime),
+        durationMins: parseDurationToMinutes(b.duration),
+      })),
+    );
+    return resolveTimelineRange(
+      minOpen !== null && maxClose !== null ? { openMins: minOpen, closeMins: maxClose } : null,
+      spans,
+    );
+  }, [dayAvailability, weekDates, bookingsByDate]);
+
+  const WK_HOURS  = WK_END_HOUR - WK_START_HOUR;
+  const WK_HEIGHT = WK_HOURS * WK_HOUR_H;
+  const nowTop = ((nowMinutes - WK_START_HOUR * 60) / 60) * WK_HOUR_H;
+  const showNowLine = nowMinutes >= WK_START_HOUR * 60 && nowMinutes <= WK_END_HOUR * 60;
+  const todayInWeek = weekDates.includes(TODAY_STR);
+
+  const goPrevWeek = useCallback(() => onSelectDate(shiftDateString(selectedDate, -7)), [selectedDate, onSelectDate]);
+  const goNextWeek = useCallback(() => onSelectDate(shiftDateString(selectedDate, 7)), [selectedDate, onSelectDate]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Week navigation — arrows page a week at a time. A swipe gesture on
+          the grid was tried here too, but a PanResponder wrapping the
+          ScrollView made its own vertical scroll feel broken even when
+          gated to horizontal drags, so arrows are the only way to page. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, paddingBottom: 6 }}>
+        <TouchableOpacity onPress={goPrevWeek} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
+          <Ionicons name="chevron-back" size={18} color={P.sub} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: P.sub }}>{weekRangeLabel(weekDates)}</Text>
+        <TouchableOpacity onPress={goNextWeek} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
+          <Ionicons name="chevron-forward" size={18} color={P.sub} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Day headers, aligned with the columns below — same date-circle
+          treatment as the date strip and month grid so "selected" and
+          "today" read the same way in every view. */}
+      <View style={{ flexDirection: 'row', marginHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: P.border }}>
+        <View style={{ width: WK_TIME_COL_W }} />
+        {/* Same spacer + flex:1-wrapper-of-flex:1-columns nesting as the grid
+            below, so the two rows resolve to pixel-identical column widths
+            instead of two separately-computed flex layouts that could drift. */}
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          {weekDates.map(dateStr => {
+            const dt      = new Date(dateStr + 'T00:00:00');
+            const dayName = ['S','M','T','W','T','F','S'][dt.getDay()] ?? '';
+            const isToday = dateStr === TODAY_STR;
+            const isSel   = dateStr === selectedDate;
+            return (
+              <TouchableOpacity
+                key={dateStr}
+                activeOpacity={0.75}
+                onPress={() => onSelectDate(dateStr)}
+                style={{ flex: 1, alignItems: 'flex-start', marginLeft: -8 }}
+              >
+                {/* Reuses the date strip's own tile styles (s.tileDayLetter /
+                    s.dateCircle / s.tileNum) rather than new ones — those
+                    already carry the lineHeight fix that centers the number
+                    inside the circle, which a fresh set of styles here
+                    lacked. */}
+                <Text style={[s.tileDayLetter, { color: isToday && !isSel ? P.accent : P.sub }]}>
+                  {dayName}
+                </Text>
+                <View style={[
+                  s.dateCircle,
+                  { backgroundColor: isSel ? P.accent : isToday ? P.text : 'transparent' },
+                ]}>
+                  <Text style={[
+                    s.tileNum,
+                    { color: isSel ? '#fff' : isToday ? P.bg : P.text, fontWeight: '700' },
+                  ]}>
+                    {dt.getDate()}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ height: WK_HEIGHT + 80 + WK_TOP_INSET, paddingTop: WK_TOP_INSET, paddingBottom: FLOATING_TAB_BAR_CLEARANCE + 24 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
+      >
+        <View style={{ flexDirection: 'row', marginHorizontal: 16 }}>
+          {/* Time labels */}
+          <View style={{ width: WK_TIME_COL_W }}>
+            {Array.from({ length: WK_HOURS + 1 }, (_, i) => {
+              const h  = WK_START_HOUR + i;
+              const hh = h % 24;
+              const label = hh === 0 ? '12am' : hh < 12 ? `${hh}am` : hh === 12 ? '12pm' : `${hh - 12}pm`;
+              return (
+                <View key={h} style={{ position: 'absolute', top: i * WK_HOUR_H - 8, width: WK_TIME_COL_W, alignItems: 'flex-end', paddingRight: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: P.sub }} numberOfLines={1}>{label}</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Day columns */}
+          <View style={{ flex: 1, flexDirection: 'row' }}>
+            {weekDates.map((dateStr, colIdx) => {
+              const dayAvail     = dayAvailability[colIdx] ?? null;
+              const isBlocked    = blockedDateStrings.includes(dateStr);
+              const isToday      = dateStr === TODAY_STR;
+              const dayBookings  = bookingsByDate.get(dateStr) ?? [];
+
+              type Pos = { booking: ConfirmedBooking; top: number; height: number; col: number; cols: number; colorIdx: number };
+              const positioned: Pos[] = dayBookings.map((b, i) => {
+                const startMin = parseTimeToMinutes(b.bookingTime);
+                const dur      = parseDurationToMinutes(b.duration);
+                const top      = Math.max(0, ((startMin - WK_START_HOUR * 60) / 60) * WK_HOUR_H);
+                const height   = Math.max(16, (dur / 60) * WK_HOUR_H);
+                return { booking: b, top, height, col: 0, cols: 1, colorIdx: i % BLOCK_COLORS.length };
+              });
+              // Same simple overlap-column assignment as the day timeline.
+              for (let i = 0; i < positioned.length; i++) {
+                const a = positioned[i]!;
+                let col = 0;
+                const used = new Set<number>();
+                for (let j = 0; j < i; j++) {
+                  const b = positioned[j]!;
+                  const aEnd = a.top + a.height, bEnd = b.top + b.height;
+                  if (a.top < bEnd && aEnd > b.top) used.add(b.col);
+                }
+                while (used.has(col)) col++;
+                a.col = col;
+              }
+              const maxCols = Math.max(1, ...positioned.map(p => p.col + 1));
+              positioned.forEach(p => { p.cols = maxCols; });
+
+              return (
+                <View
+                  key={dateStr}
+                  style={{ flex: 1, position: 'relative', borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: P.sep }}
+                >
+                  {/* Hour lines */}
+                  {Array.from({ length: WK_HOURS + 1 }, (_, i) => (
+                    <View key={i} style={{ position: 'absolute', top: i * WK_HOUR_H, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: P.border }} />
+                  ))}
+
+                  {/* Unavailable-hours overlay */}
+                  {dayAvail && !isBlocked && !dayAvail.is_closed && (() => {
+                    const openMin  = parseTimeToMinutes(dayAvail.open_time);
+                    const closeMin = parseTimeToMinutes(dayAvail.close_time);
+                    const wkStart  = WK_START_HOUR * 60;
+                    const wkEnd    = WK_END_HOUR * 60;
+                    const dimStyle = { position: 'absolute' as const, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.28)' };
+                    const blocks: React.ReactElement[] = [];
+                    if (openMin > wkStart) {
+                      blocks.push(<View key="pre" style={[dimStyle, { top: 0, height: ((openMin - wkStart) / 60) * WK_HOUR_H }]} />);
+                    }
+                    if (closeMin < wkEnd) {
+                      blocks.push(<View key="post" style={[dimStyle, { top: ((closeMin - wkStart) / 60) * WK_HOUR_H, height: ((wkEnd - closeMin) / 60) * WK_HOUR_H }]} />);
+                    }
+                    return blocks;
+                  })()}
+                  {(isBlocked || dayAvail?.is_closed) && (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+                  )}
+
+                  {/* Booking blocks */}
+                  {positioned.map(({ booking, top, height, col, cols, colorIdx }) => {
+                    const color    = BLOCK_COLORS[colorIdx]!;
+                    const past     = isPastBooking(booking.bookingDate, booking.bookingTime);
+                    const issues   = scheduleIssues.get(booking.id) ?? EMPTY_ISSUES;
+                    const topIssue = primaryIssue(issues);
+                    const blockW   = 100 / cols;
+                    const left     = col * blockW;
+                    return (
+                      <TouchableOpacity
+                        key={booking.id}
+                        activeOpacity={0.82}
+                        onPress={() => onPressBooking(booking)}
+                        style={{ position: 'absolute', top, height, left: `${left}%`, width: `${blockW}%`, paddingHorizontal: 1.5 }}
+                      >
+                        <View style={{
+                          flex: 1,
+                          borderRadius: 5,
+                          backgroundColor: color.dark + '55',
+                          borderLeftWidth: 2,
+                          borderLeftColor: topIssue ? ISSUE_COLOR : color.dark,
+                          paddingHorizontal: 3,
+                          paddingVertical: 2,
+                          overflow: 'hidden',
+                          opacity: past ? 0.5 : 1,
+                        }}>
+                          {height > 22 && (
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: color.dark }} numberOfLines={1}>
+                              {booking.bookingTime}
+                            </Text>
+                          )}
+                          {height > 32 && (
+                            <Text style={{ fontSize: 9, fontWeight: '600', color: P.text }} numberOfLines={1}>
+                              {booking.serviceName}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Now line — spans the full grid width, not just today's column,
+              so it reads as "this moment" across the whole week rather than
+              a mark stuck inside one day's box. */}
+          {todayInWeek && showNowLine && (
+            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: 0, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
@@ -780,8 +1099,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // Expansion states per booking
   const [expansionStates, setExpansionStates] = useState<Record<string, ExpansionState>>({});
 
-  // View mode: list or timeline (timeline is default — Apple Calendar style)
-  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('timeline');
+  // View mode: list, timeline, or full week (timeline is default — Apple Calendar style)
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'week'>('timeline');
 
   // Month calendar toggle
   const [showMonth, setShowMonth]   = useState(false);
@@ -823,6 +1142,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // through fetchGoLiveStatus() would double those queries on every focus.
   const [setupStatus, setSetupStatus] = useState<GoLiveStatus | null>(null);
   const [setupDismissed, setSetupDismissed] = useState(false);
+  const [hasNoProviderProfile, setHasNoProviderProfile] = useState(false);
 
   // Fires the go-live celebration exactly once, on a genuine false->true
   // transition of has_gone_live — not on every app open, and not
@@ -882,8 +1202,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       },
       {
         key: 'view-mode',
-        title: 'Two ways to see your day',
-        body: 'Switch between the hour-by-hour timeline and a plain list of what\'s booked.',
+        title: 'Three ways to see your bookings',
+        body: 'Switch between a plain list, the hour-by-hour timeline for one day, and the full week at a glance.',
         target: { ref: viewModeBtnRef },
         radius: 17,
         icon: 'list',
@@ -1101,6 +1421,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // silently skipping bookings entirely just because availability can't
       // load this focus.
       void loadBookings(showInitialLoad, profile?.id);
+      setHasNoProviderProfile(!profile);
       if (!profile) return;
       return Promise.all([
         getProviderAvailability(profile.id),
@@ -1136,6 +1457,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           // required just to save a profile, so accepting it made this
           // trivially true for almost everyone.
           addressSet: goLiveAddress,
+          ...deriveRecommendedGoLiveFields(profile),
           brandingSet: !!profile.logo_url,
           isLive: !!profile.has_gone_live,
         });
@@ -1300,6 +1622,20 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     [bookingsWithServiceDuration, windowsByDate, blockedDateStrings],
   );
 
+  // The seven dates (Monday-start) of the week containing selectedDate, for
+  // the week view — and bookings grouped by date so it doesn't re-filter the
+  // full list seven times per render.
+  const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate]);
+
+  const bookingsByDate = useMemo(() => {
+    const map = new Map<string, ConfirmedBooking[]>();
+    for (const b of bookingsWithServiceDuration) {
+      const arr = map.get(b.bookingDate);
+      if (arr) arr.push(b); else map.set(b.bookingDate, [b]);
+    }
+    return map;
+  }, [bookingsWithServiceDuration]);
+
   // Build list rows: show ALL upcoming bookings grouped by day (from selectedDate onwards)
   // Sourced from bookingsWithServiceDuration (not raw `bookings`) so a legacy
   // NULL-end_time row's recovered duration reaches the card, not just the
@@ -1420,7 +1756,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         <View style={s.header}>
           {/* Month title + chevron dropdown */}
           <TouchableOpacity onPress={toggleMonth} style={s.headerTitle} activeOpacity={0.75}>
-            <Text style={[s.headerTitleText, { color: P.text }]}>{displayMonth}</Text>
+            <Text style={[s.headerTitleText, { color: P.text }]} numberOfLines={1}>{displayMonth}</Text>
             <Ionicons name={showMonth ? 'chevron-up' : 'chevron-down'} size={13} color={P.sub} style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
@@ -1434,10 +1770,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </TouchableOpacity>
             <TouchableOpacity
               ref={viewModeBtnRef}
-              onPress={() => setViewMode(v => v === 'list' ? 'timeline' : 'list')}
-              style={[s.iconBtn, { backgroundColor: viewMode === 'timeline' ? P.accent : P.iconBg }]}
+              onPress={() => setViewMode(v => v === 'list' ? 'timeline' : v === 'timeline' ? 'week' : 'list')}
+              style={[s.iconBtn, { backgroundColor: P.accent }]}
             >
-              <Ionicons name={viewMode === 'timeline' ? 'list-outline' : 'time-outline'} size={17} color={viewMode === 'timeline' ? P.ice : P.sub} />
+              <Ionicons
+                name={viewMode === 'list' ? 'list-outline' : viewMode === 'timeline' ? 'time-outline' : 'calendar-outline'}
+                size={17}
+                color={P.ice}
+              />
             </TouchableOpacity>
             <TouchableOpacity
               ref={bellRef}
@@ -1454,15 +1794,42 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           </View>
         </View>
 
+        {/* A new provider has no providers row until InfoReg is first saved,
+            so give that state its own route into the setup flow. */}
+        {hasNoProviderProfile && !setupStatus && !setupDismissed && (
+          <View
+            style={{
+              marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
+              backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>
+              Set up your business to start getting booked
+            </Text>
+            <Text style={{ fontSize: 12, color: P.sub, marginTop: 4 }}>
+              Add your services, schedule, and address so clients can find and book you.
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditProfile' as never)}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                marginTop: 10, paddingVertical: 10, borderRadius: 10,
+                backgroundColor: P.accent,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Get started</Text>
+              <Ionicons name="chevron-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ── Go-live setup checklist ──────────────────────────── */}
-        {/* Visible until the provider is genuinely live. The condition is the
-            three server-gated steps AND the database's own has_gone_live —
-            not our reconstruction alone, so a provider whose steps all look
-            complete but who still isn't published keeps a card on screen
-            rather than being left with no explanation. The logo is
-            deliberately absent from this test: it's recommended, not gating. */}
+        {/* Home shows only the six steps the server actually gates. */}
         {setupStatus && !setupDismissed &&
-         !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && setupStatus.isLive) && (
+         buildGoLiveSteps(setupStatus).some(step => step.blocking && !step.done) && (() => {
+          const headline = buildGoLiveHeadline(setupStatus);
+          return (
           <View
             style={{
               marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
@@ -1471,9 +1838,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>
-                {setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet
-                  ? 'Almost live'
-                  : 'Finish setting up to go live'}
+                {headline.title}
               </Text>
               {/* Only dismissible once bookable (schedule set) — the schedule is the hard blocker */}
               {setupStatus.scheduleSet && (
@@ -1482,20 +1847,13 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               )}
             </View>
-            {!setupStatus.scheduleSet && (
-              <Text style={{ fontSize: 12, color: '#FF9500', marginTop: 4 }}>
-                Clients can't see any time slots or book you until your schedule is set.
-              </Text>
-            )}
-            {/* Every gated step is done but the database still hasn't published
-                them. In practice that means the saved address never geocoded,
-                since that's the one requirement a provider can satisfy on
-                screen without satisfying it in the data. Say so plainly
-                instead of showing a checklist with nothing left to tick. */}
-            {setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && !setupStatus.isLive && (
-              <Text style={{ fontSize: 12, color: '#FF9500', marginTop: 4 }}>
-                Everything's filled in, but we couldn't confirm your address on the map yet.
-                Re-save it in Business Details and we'll publish you.
+            {headline.detail && (
+              <Text style={{
+                fontSize: 12,
+                color: headline.tone === 'blocked' || headline.tone === 'stalled' ? '#FF9500' : P.sub,
+                marginTop: 4,
+              }}>
+                {headline.detail}
               </Text>
             )}
             {/* Labels and done-ness are the shared definition; only where each
@@ -1504,7 +1862,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 Profile stack's root, so their back/save button dispatched a
                 GO_BACK no navigator could handle; pushing leaves
                 ProviderHomeMain underneath to return to. */}
-            {buildGoLiveSteps(setupStatus).map(step => (
+            {buildGoLiveSteps(setupStatus).filter(step => step.blocking).map(step => (
               <TouchableOpacity
                 key={step.key}
                 onPress={() => navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never)}
@@ -1528,7 +1886,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             ))}
           </View>
-        )}
+          );
+        })()}
 
         {/* ── Month calendar (collapsible) ─────────────────────── */}
         {showMonth && (
@@ -1593,8 +1952,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        {/* ── Date strip — hidden when month calendar is open ──── */}
-        {!showMonth && <View style={[s.stripWrap, { backgroundColor: P.surface, borderBottomColor: P.border }]}>
+        {/* ── Date strip — hidden when month calendar is open, and in week
+             view, which draws its own day-of-week header row already ──── */}
+        {!showMonth && viewMode !== 'week' && <View style={[s.stripWrap, { backgroundColor: P.surface, borderBottomColor: P.border }]}>
           <FlatList
             ref={stripRef}
             data={STRIP_DATES}
@@ -1679,6 +2039,20 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               availability={todayAvailability}
               isBlocked={isSelectedDateBlocked}
               scheduleIssues={scheduleIssues}
+            />
+          ) : viewMode === 'week' ? (
+            <WeekView
+              weekDates={weekDates}
+              bookingsByDate={bookingsByDate}
+              scheduleIssues={scheduleIssues}
+              availability={availability}
+              blockedDateStrings={blockedDateStrings}
+              selectedDate={selectedDate}
+              onSelectDate={handleDateTap}
+              onPressBooking={b => navigation.navigate('BookingDetail', { bookingId: b.id, booking: b })}
+              P={P}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
             />
           ) : (
             <FlatList
