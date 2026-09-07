@@ -273,6 +273,17 @@ export const s = StyleSheet.create({
   cardTitle: { fontFamily: FONT_HEAD, fontSize: 15, color: CP.text, marginBottom: 4, letterSpacing: 0.3 },
   cardSub:   { fontFamily: FONT_BODY, fontWeight: '500', fontSize: 12, color: CP.sub, lineHeight: 17, marginBottom: 16 },
 
+  // A value the provider can read but not edit, shown in place of an input.
+  // Colours are overridden inline by the caller's live palette, as everywhere
+  // else in this sheet — CP is the static fallback, not the theme.
+  lockedChip:     { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, backgroundColor: CP.surface, borderColor: CP.border },
+  lockedChipText: { fontFamily: FONT_BODY, fontWeight: '600', fontSize: 13, color: CP.text, letterSpacing: 0.2 },
+
+  // For a consequence the provider needs to read before saving, not an error
+  // that has already happened — hence the accent tint rather than a red one.
+  warnBox:  { flexDirection: 'row', alignItems: 'flex-start', gap: 9, padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, marginTop: 12 },
+  warnText: { flex: 1, fontFamily: FONT_BODY, fontWeight: '500', fontSize: 12, lineHeight: 17, color: CP.text },
+
   saveBtn:    { backgroundColor: CP.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: CP.ice + '30', marginTop: 6, marginBottom: 8 },
   saveBtnDim: { opacity: 0.6 },
   saveTxt:    { fontFamily: FONT_HEAD, fontSize: 15, color: CP.ice, letterSpacing: 0.5 },

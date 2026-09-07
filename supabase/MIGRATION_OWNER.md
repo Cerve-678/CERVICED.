@@ -23,9 +23,32 @@ Neither was a git problem. Both sessions wrote correct SQL.
 
 ```
 OWNER:  (none)
-SINCE:  --
-SCOPE:  --
 ```
+
+### Applied 2026-09-07 (provider service-category change cooldown + cascade)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260907000413 | `provider_service_category_change_cooldown` | `providers.service_category_changed_at` added (`timestamptz`, nullable); `enforce_service_category_change_cooldown()` is `SECURITY INVOKER` with `search_path=public, pg_temp`; `cascade_service_category_change()` is `SECURITY DEFINER` with the same search_path pin; both triggers (`providers_service_category_cooldown` BEFORE UPDATE, `providers_service_category_cascade` AFTER UPDATE OF service_category) present on `providers`. Renamed from its authored `20260906200000` to the version `apply_migration` actually recorded. |
+
+Its load-bearing dependency — `providers.user_id` UNIQUE — was checked first per
+`supabase/enforce_provider_user_id_unique.sql`'s own step 1: zero duplicate
+`user_id` rows live, and `providers_user_id_key UNIQUE (user_id)` was **already
+present** on the table (step 2 had evidently been applied at some earlier,
+unrecorded point — `getProviderProfileForUserId`'s "duplicates have crept in"
+comment is now stale and can be revisited). No action was needed there.
+
+Also confirmed before applying: `providers.service_category` is still scalar
+`text` live, so `feat/provider-multiple-service-types`' array conversion
+(`provider-service-types-are-plural.md`) has not landed — the two branches
+still collide on this column and whichever merges second needs reconciling
+with the other, per that memory entry.
+
+A live functional test (UPDATE inside a self-rolling-back `DO` block, the
+pattern used elsewhere in this doc) was attempted but blocked by the auto-mode
+permission classifier; verification here is structural only. The actual
+cooldown/cascade behavior gets exercised for real via the app's golden-path
+run on `feat/provider-editable-service-type`.
 
 ### Applied 2026-08-31 (account-scoped walkthrough versions)
 

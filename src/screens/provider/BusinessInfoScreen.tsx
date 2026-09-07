@@ -11,6 +11,15 @@
  * for it at sign-up and then renders it locked, pointing here. Changing it
  * starts a 14-day cooldown enforced by a DB trigger, not by this screen.
  *
+ * The headline service type works the same way and for the same reason, on a
+ * 90-day cooldown. It used to be genuinely unchangeable — InfoReg's locked
+ * chip said "contact support" and no screen offered it — which meant a
+ * provider who mis-picked at sign-up was stuck in the wrong Explore category
+ * forever. It is the more consequential of the two: changing it moves the
+ * provider between category listings, re-stamps their portfolio photos and
+ * drops their specialties, so it asks for an explicit confirmation the name
+ * field doesn't need.
+ *
  * The private full address is deliberately NOT here — InfoRegScreen owns it,
  * as the one screen that both asks for it at first publish and validates it
  * on save. Address release timing is editable in both places on purpose;
@@ -28,20 +37,24 @@ import {
   getUserBusinessInfo,
   updateUserBusinessInfo,
   updateProviderContactDetails,
+  updateMyServiceCategory,
 } from '../../services/databaseService';
+import { useProviderDialog } from '../../components/ProviderDialog';
 import {
   Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
   ADDRESS_RELEASE_OPTS,
   BUSINESS_TYPE_OPTS,
+  SERVICE_TYPE_OPTS,
   isAddressReleaseAllowed,
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
 import { formatLongDate } from '../../utils/dateUtils';
-import { toUserMessage } from '../../utils/userFacingError';
+import type { ServiceCategory } from '../../types/database';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 
 export default function BusinessInfoScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -58,6 +71,17 @@ export default function BusinessInfoScreen({ navigation }: any) {
   // about.
   const [savedName, setSavedName]         = useState('');
   const [nameChangedAt, setNameChangedAt] = useState<string | null>(null);
+  const [serviceCategory, setServiceCategory]           = useState<ServiceCategory | null>(null);
+  const [savedServiceCategory, setSavedServiceCategory] = useState<ServiceCategory | null>(null);
+  const [customServiceType, setCustomServiceType]       = useState('');
+  const [savedCustomServiceType, setSavedCustomServiceType] = useState('');
+  const [categoryChangedAt, setCategoryChangedAt]       = useState<string | null>(null);
+  // Whether providers.service_category_changed_at exists on the row we loaded,
+  // NOT whether it has a value. The cooldown and the cascade both live in
+  // migration 20260907000413; until it's applied the column is absent, an
+  // UPDATE would change the category with no cooldown and no cascade, and this
+  // screen must keep the field locked rather than offer an unguarded change.
+  const [cooldownLive, setCooldownLive] = useState(false);
   const [businessType, setBusinessType]   = useState<BusinessType | null>(null);
   const [addressReleasePolicy, setAddressReleasePolicy] = useState<AddressReleasePolicy | null>(null);
   const [businessEmail, setBusinessEmail] = useState('');
@@ -70,6 +94,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { showConfirm, DialogHost } = useProviderDialog();
 
   useEffect(() => {
     (async () => {
@@ -96,6 +121,15 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setNameChangedAt(
             (providerData as { display_name_changed_at?: string | null }).display_name_changed_at ?? null,
           );
+          const category = (providerData.service_category as ServiceCategory | null) ?? null;
+          setServiceCategory(category);
+          setSavedServiceCategory(category);
+          setCustomServiceType(providerData.custom_service_type ?? '');
+          setSavedCustomServiceType(providerData.custom_service_type ?? '');
+          setCategoryChangedAt(
+            (providerData as { service_category_changed_at?: string | null }).service_category_changed_at ?? null,
+          );
+          setCooldownLive('service_category_changed_at' in (providerData as unknown as Record<string, unknown>));
           setBusinessType((providerData.business_type as BusinessType | null) ?? null);
           setAddressReleasePolicy((providerData.address_release_policy as AddressReleasePolicy | null) ?? null);
           // Prefilled, not left blank pointing at another screen: if the
@@ -130,18 +164,90 @@ export default function BusinessInfoScreen({ navigation }: any) {
     : null;
   const nameLocked = nameUnlocksAt != null && nameUnlocksAt.getTime() > Date.now();
 
+  // Mirrors providers_service_category_cooldown (90 days). Same division of
+  // labour as the name above: this decides what the control looks like, the DB
+  // decides what actually lands.
+  const CATEGORY_COOLDOWN_DAYS = 90;
+  const categoryUnlocksAt = categoryChangedAt
+    ? new Date(new Date(categoryChangedAt).getTime() + CATEGORY_COOLDOWN_DAYS * 86400000)
+    : null;
+  const categoryLocked =
+    !cooldownLive || (categoryUnlocksAt != null && categoryUnlocksAt.getTime() > Date.now());
+  const categoryChanged = serviceCategory != null && serviceCategory !== savedServiceCategory;
+  // Renaming your own OTHER label is not a category change: the trigger never
+  // fires, no cooldown is spent, and it needs no confirmation — but it still
+  // has to be written.
+  const customLabelChanged =
+    serviceCategory === 'OTHER'
+    && !categoryChanged
+    && customServiceType.trim() !== savedCustomServiceType.trim();
+  const savedCategoryLabel =
+    SERVICE_TYPE_OPTS.find(o => o.value === savedServiceCategory)?.label ?? savedServiceCategory ?? '';
+  const pendingCategoryLabel =
+    SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '';
+
   function isValidEmail(email: string) {
     return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
-  async function handleSave() {
+  /**
+   * Changing the service type is the one thing on this screen that isn't
+   * undoable by editing the field again: the 90-day cooldown refuses the way
+   * back, and the specialties are already gone by then. So it gets an explicit
+   * confirmation naming the consequences, rather than riding along silently
+   * with the Save button like every other field here.
+   */
+  function handleSave() {
     if (!businessName.trim()) { flash('Enter your business name', 'error'); return; }
     if (!isValidEmail(businessEmail)) { flash('Enter a valid business email', 'error'); return; }
     if (!isValidEmail(bookingEmail))  { flash('Enter a valid public enquiry email', 'error'); return; }
+    // Only when the picker is actually on screen. A provider whose saved
+    // type is OTHER with no label (possible for older rows) would otherwise be
+    // blocked from saving anything at all on this screen, by a validation
+    // pointing at a field the cooldown is hiding.
+    if (!categoryLocked && serviceCategory === 'OTHER' && !customServiceType.trim()) {
+      flash('Describe the service you offer', 'error'); return;
+    }
 
+    if (categoryChanged) {
+      showConfirm(
+        `Change your service type to ${pendingCategoryLabel}?`,
+        `You won't be able to change it again for ${CATEGORY_COOLDOWN_DAYS} days.\n\n`
+        + `• Clients will find you under ${pendingCategoryLabel} instead of ${savedCategoryLabel} in Explore and Search.\n`
+        + `• Your portfolio photos move across with you.\n`
+        + `• Your specialties are cleared — ${pendingCategoryLabel} offers a different list, so you'll need to pick them again in Services & Pricing.\n\n`
+        + 'Bookings you already have are unaffected.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Change it', style: 'destructive', onPress: () => { void commitSave(); } },
+        ],
+      );
+      return;
+    }
+
+    void commitSave();
+  }
+
+  async function commitSave() {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
+      // Deliberately awaited on its own, ahead of everything else, rather than
+      // joining the Promise.all below. It's the only write here the DB can
+      // refuse on policy grounds (the cooldown), and a refusal that had
+      // already written half the contact fields would leave the provider
+      // reading "you can change it again on <date>" over a form that had
+      // silently saved anyway.
+      if (providerId && serviceCategory && (categoryChanged || customLabelChanged)) {
+        await updateMyServiceCategory(
+          providerId,
+          serviceCategory,
+          serviceCategory === 'OTHER' ? customServiceType.trim() || null : null,
+        );
+        setSavedServiceCategory(serviceCategory);
+        setSavedCustomServiceType(customServiceType.trim());
+      }
+
       const ops: Promise<void>[] = [];
 
       const trimmedName = businessName.trim();
@@ -181,7 +287,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'BusinessInfoScreen.save'), 'error');
+      // AllowingDbGuard, not the plain version: the service-type cooldown
+      // raises a P0001 that names the exact date the provider can change it
+      // again, and that date is the only useful part of the failure.
+      flash(toUserMessageAllowingDbGuard(e, 'Could not save your changes.', 'BusinessInfoScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -248,6 +357,77 @@ export default function BusinessInfoScreen({ navigation }: any) {
               <Field label="Business Email" value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Your business address. Cerviced uses this to reach you, and it prefills the enquiry email below." />
               <Field label="Public Enquiry Email" value={bookingEmail} onChange={setBookingEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Shown on your profile under Get In Touch. Prefilled from your business email — change it only if you'd rather enquiries went elsewhere." />
               <Field label="Years of Experience" value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 5" keyboardType="phone-pad" />
+            </Card>
+
+            {/* Service Type. Sits between the identity card and Business Type
+                because it is identity — what you do — rather than how you
+                practise, which is why it lives here and not on
+                ServicesPricingScreen (the screen it actually governs, via
+                SPECIALTIES_MAP).
+
+                Locked, with no picker at all, when the cooldown migration
+                hasn't been applied: the guard and the cascade are both in the
+                DB, so offering the change without them would move a provider
+                between categories while leaving their portfolio and
+                specialties describing the old one. */}
+            <Card
+              title="Service Type"
+              sub="The headline service your business offers. Clients browse and filter by this in Explore and Search."
+            >
+              {categoryLocked ? (
+                <>
+                  <View style={[s.lockedChip, { backgroundColor: C.surface, borderColor: C.border }]}>
+                    <Ionicons name="lock-closed" size={12} color={C.sub} />
+                    <Text style={[s.lockedChipText, { color: C.text }]}>
+                      {savedCategoryLabel}
+                      {savedServiceCategory === 'OTHER' && savedCustomServiceType
+                        ? ` · ${savedCustomServiceType}`
+                        : ''}
+                    </Text>
+                  </View>
+                  <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
+                    {!cooldownLive
+                      ? 'Set at sign-up. Contact support if you need to change your service type.'
+                      : categoryUnlocksAt
+                        ? `You changed this recently — you can change it again on ${formatLongDate(categoryUnlocksAt)}.`
+                        : ''}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <RadioGroup
+                    options={SERVICE_TYPE_OPTS}
+                    value={serviceCategory ?? ''}
+                    onChange={v => setServiceCategory(v as ServiceCategory)}
+                  />
+                  {serviceCategory === 'OTHER' && (
+                    <Field
+                      label="Describe your service"
+                      value={customServiceType}
+                      onChange={setCustomServiceType}
+                      placeholder="e.g. Massage therapy"
+                      note="Shown on your profile in place of a category name."
+                    />
+                  )}
+                  {categoryChanged ? (
+                    // Shown while deciding, not only in the confirm dialog: a
+                    // provider should be able to read the consequences without
+                    // first committing to a button that sounds final.
+                    <View style={[s.warnBox, { backgroundColor: C.accent + '14', borderColor: C.accent + '40' }]}>
+                      <Ionicons name="alert-circle-outline" size={16} color={C.accent} />
+                      <Text style={[s.warnText, { color: C.text }]}>
+                        Saving this moves you from {savedCategoryLabel} to {pendingCategoryLabel}. Your
+                        portfolio photos move with you, your specialties are cleared, and you won't be
+                        able to change your service type again for {CATEGORY_COOLDOWN_DAYS} days.
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 4, marginBottom: 0 }]}>
+                      Once you change this, you can't change it again for {CATEGORY_COOLDOWN_DAYS} days.
+                    </Text>
+                  )}
+                </>
+              )}
             </Card>
 
             <Card
@@ -336,6 +516,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
             <SaveButton saving={saving} onPress={handleSave} />
           </ScrollView>
         </KeyboardDismissView>
+        {/* Outside the ScrollView so the service-type confirmation isn't
+            clipped by it or scrolled away underneath. */}
+        <DialogHost />
       </SafeAreaView>
     </View>
   );

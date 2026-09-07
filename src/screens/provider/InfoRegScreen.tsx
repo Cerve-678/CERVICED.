@@ -4117,10 +4117,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
-              {/* Service Category — free to pick at sign-up, but locked once the
-                  profile exists: everything else (subcategory suggestions, tag
-                  pools, templates) is scoped off this choice, so changing it
-                  later would silently orphan existing categories/services. */}
+              {/* Service Category — free to pick at sign-up, and locked here
+                  once the profile exists, for the same reason display_name is:
+                  everything else (subcategory suggestions, tag pools,
+                  templates) is scoped off this choice. It is no longer
+                  unchangeable, though — Business Profile → Business Details →
+                  Business Info is its one ongoing editor, under a 90-day
+                  cooldown and an explicit warning about the cascade. Keep this
+                  read-only: saveProviderToSupabase's UPDATE path deliberately
+                  no longer sends the column, so a pick made here would not
+                  save. */}
               <View style={styles.inputGroup}>
                 <RequiredLabel required styles={styles}>Service Type</RequiredLabel>
                 {isEditMode ? (
@@ -4131,7 +4137,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         {providerData.providerService}
                       </Text>
                     </View>
-                    <Text style={styles.inputHint}>Set at sign-up — contact support to change your service type.</Text>
+                    <Text style={styles.inputHint}>
+                      Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 90 days.
+                    </Text>
                   </>
                 ) : (
                   <ScrollView
