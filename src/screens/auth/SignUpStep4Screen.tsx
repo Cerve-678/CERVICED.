@@ -22,7 +22,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
-import { CityMultiSelect } from '../../components/CityMultiSelect';
+import AreaPicker from '../../components/AreaPicker';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep4'>;
@@ -103,7 +103,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   // Provider "About your business"
   const [selectedBusinessType, setSelectedBusinessType] = useState<typeof data.businessType>(data.businessType);
   const [selectedServices, setSelectedServices] = useState<string[]>(data.serviceInterests);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>(data.serviceLocations);
+  const [selectedLocation, setSelectedLocation] = useState<string>(data.location);
   const [selectedPriceRange, setSelectedPriceRange] = useState<typeof data.priceRange>(data.priceRange);
   const [selectedTeamSize, setSelectedTeamSize] = useState<typeof data.teamSize>(data.teamSize);
   const [selectedContactMethods, setSelectedContactMethods] = useState<string[]>(
@@ -222,7 +222,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
       updateData({
         businessType: selectedBusinessType,
         serviceInterests: selectedServices,
-        serviceLocations: selectedLocations,
+        location: selectedLocation,
         priceRange: selectedPriceRange,
         teamSize: selectedTeamSize,
         preferredContactMethods: selectedContactMethods,
@@ -249,7 +249,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
       const firstEmptyY =
         !selectedServices.length      ? servicesY :
         !selectedBusinessType          ? businessTypeY :
-        !selectedLocations.length     ? locationY :
+        !selectedLocation.trim()      ? locationY :
         !selectedPriceRange           ? priceRangeY :
         !selectedTeamSize             ? teamSizeY :
         !selectedContactMethods.length ? contactMethodsY :
@@ -495,15 +495,15 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               onLayout={(e: LayoutChangeEvent) => { locationY.current = e.nativeEvent.layout.y; }}
               style={{ marginBottom: 32 }}
             >
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLocations.length ? '#DC2626' : t.text }]}>
-                WHERE YOU WORK{showErrors && !selectedLocations.length ? '  — required' : ''}
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLocation.trim() ? '#DC2626' : t.text }]}>
+                WHERE YOU WORK{showErrors && !selectedLocation.trim() ? '  — required' : ''}
               </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Which cities do you cover?</Text>
-              <CityMultiSelect
-                selected={selectedLocations}
-                onChange={setSelectedLocations}
-                palette={t}
-                placeholder="Select the cities you cover"
+              <Text style={[styles.sectionSub, { color: t.sub }]}>Where's your business based?</Text>
+              <AreaPicker
+                value={selectedLocation}
+                onChange={setSelectedLocation}
+                accentColor={t.accent}
+                subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
               />
             </View>
 
