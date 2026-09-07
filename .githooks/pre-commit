@@ -1,4 +1,12 @@
 #!/bin/sh
+# Refuse commits containing iCloud forks or known critical-feature reversions.
+# Unlike vault generation below, this is deliberately blocking.
+command -v node >/dev/null 2>&1 || {
+  echo "pre-commit: Node is required for integrity checks" >&2
+  exit 1
+}
+node scripts/check-worktree-integrity.mjs || exit 1
+
 # Auto-refresh the Obsidian vault's generated notes when code changes.
 # Only runs when src/ or supabase/ (or the generator) is part of the commit,
 # and never blocks the commit if something goes wrong.
@@ -6,7 +14,6 @@
 changed=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(src/|supabase/|scripts/gen-vault\.mjs)' || true)
 [ -z "$changed" ] && exit 0
 
-command -v node >/dev/null 2>&1 || exit 0
 node scripts/gen-vault.mjs >/dev/null 2>&1 || exit 0
 
 git add docs/vault/auto 2>/dev/null || true
