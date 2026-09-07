@@ -65,7 +65,7 @@ SettingsOption.displayName = 'SettingsOption';
 // ── Main screen ─────────────────────────────────────────────────────────────
 
 export default function UserProfileScreen({ navigation }: any) {
-  const { isLoggedIn, logout, user, switchMode } = useAuth();
+  const { isLoggedIn, logout, user, switchMode, hatState } = useAuth();
   const { isDarkMode, toggleTheme, theme: t, palette: P } = useTheme();
   const { resetData, updateData } = useRegistration();
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -78,9 +78,9 @@ export default function UserProfileScreen({ navigation }: any) {
   const [providerUnread, setProviderUnread] = useState(0);
 
   useFocusEffect(useCallback(() => {
-    if (user?.accountType !== 'provider') { setProviderUnread(0); return; }
+    if (!hatState.owned.provider) { setProviderUnread(0); return; }
     getUnreadNotificationCount('provider').then(setProviderUnread).catch(() => {});
-  }, [user?.accountType]));
+  }, [hatState.owned.provider]));
 
   // useFocusEffect (not a mount-only useEffect) — this is a persistent tab
   // screen that never unmounts, so a one-time check could get permanently
@@ -242,7 +242,7 @@ export default function UserProfileScreen({ navigation }: any) {
           {/* For Professionals */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: P.sub }]}>For Professionals</Text>
-            {user?.accountType === 'provider' ? (
+            {hatState.owned.provider ? (
               <TouchableOpacity
                 style={[styles.providerBtn, {
                   backgroundColor: P.iconBg,

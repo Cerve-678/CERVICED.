@@ -10,19 +10,40 @@
 // nor what it says.
 //
 // `kind` is the one thing the caller supplies, and it deliberately is not
-// derived from the account's role: a provider adding a client hat gets the
-// CLIENT welcome, and role would give the wrong answer. It only selects
-// between our own templates going to the user's own address, so it carries
-// no authority.
+// derived from the account's role: a provider adding a client hat gets a
+// CLIENT-side email, and role would give the wrong answer. Nor is it derivable
+// here at all — by the time this runs the second hat is already on the account,
+// so the row looks identical to a dual-hat account of long standing and cannot
+// say which hat was just taken on. It only selects between our own templates
+// going to the user's own address, so it carries no authority.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { clientWelcomeEmail, providerWelcomeEmail, passwordChangedEmail } from '../_shared/emailTemplates.ts';
+import {
+  clientWelcomeEmail,
+  providerWelcomeEmail,
+  passwordChangedEmail,
+  clientHatAddedEmail,
+  providerHatAddedEmail,
+  generalWelcomeEmail,
+} from '../_shared/emailTemplates.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
 
-const KINDS = ['client_welcome', 'provider_welcome', 'password_changed'] as const;
+const KINDS = [
+  'client_welcome',
+  'provider_welcome',
+  'password_changed',
+  // An account that already exists here taking on its second hat. Separate
+  // kinds rather than reusing the welcomes, which greet a stranger.
+  'client_hat_added',
+  'provider_hat_added',
+  // The brand email: what CERVICED is and what it offers, both hats. Not
+  // hat-specific and not tied to an event on the account, so it is the one
+  // kind here that is safe to send to anybody at any point.
+  'general_welcome',
+] as const;
 type Kind = typeof KINDS[number];
 
 const corsHeaders = {
@@ -61,12 +82,14 @@ serve(async (req) => {
     const [{ data: account }, { data: provider }] = await Promise.all([
       supabase
         .from('users')
-        .select('name, email, business_name, business_email')
+        .select('name, email, business_name')
         .eq('id', user.id)
         .maybeSingle(),
       supabase
         .from('providers')
-        .select('display_name, email')
+        // display_name only — the provider email is deliberately no longer a
+        // recipient, so fetching it would just be dead weight.
+        .select('display_name')
         .eq('user_id', user.id)
         .maybeSingle(),
     ]);
@@ -74,22 +97,40 @@ serve(async (req) => {
     const name = account?.name ?? '';
     const businessName = provider?.display_name ?? account?.business_name ?? undefined;
 
-    // The provider welcome goes to the business address when there is one —
-    // that is the address a business actually reads — falling back to the
-    // login address. The client welcome always goes to the login address.
-    const to = kind === 'provider_welcome'
-      ? (provider?.email || account?.business_email || account?.email || user.email)
-      : (account?.email || user.email);
+    // EVERY kind goes to the login address, including the provider ones.
+    //
+    // They used to prefer the business address, on the reasoning that it is
+    // the address a business actually reads. In practice a live account had
+    // `nailsbyellie@gamil.com` on file — "gamil", a registered typosquat of
+    // gmail.com with working MX records — so the mail was accepted and
+    // delivered to a third party instead of bouncing, and the provider simply
+    // never received it. Nothing validates business addresses on the way in,
+    // so that failure is silent and repeatable.
+    //
+    // The login address is the one address on the account that has been
+    // verified: it had to receive a code before the account could exist. Until
+    // business addresses are validated at entry, it is the only one we know
+    // the account holder actually reads. Restore business-address routing when
+    // that validation exists, not before.
+    const to = account?.email || user.email;
 
     if (!to) return json({ error: 'No address on file for this account.' }, 422);
 
+    const escapedProviderParams = {
+      name: escapeHtml(name),
+      ...(businessName ? { businessName: escapeHtml(businessName) } : {}),
+    };
+
     const { subject, html } = kind === 'provider_welcome'
-      ? providerWelcomeEmail({
-          name: escapeHtml(name),
-          ...(businessName ? { businessName: escapeHtml(businessName) } : {}),
-        })
+      ? providerWelcomeEmail(escapedProviderParams)
+      : kind === 'provider_hat_added'
+      ? providerHatAddedEmail(escapedProviderParams)
       : kind === 'password_changed'
       ? passwordChangedEmail({ name: escapeHtml(name) })
+      : kind === 'client_hat_added'
+      ? clientHatAddedEmail({ name: escapeHtml(name) })
+      : kind === 'general_welcome'
+      ? generalWelcomeEmail({ name: escapeHtml(name) })
       : clientWelcomeEmail({ name: escapeHtml(name) });
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -107,7 +148,12 @@ serve(async (req) => {
       return json({ error: 'Send failed.' }, 502);
     }
 
-    return json({ sent: true });
+    // Report the address actually used. The caller cannot influence it — it is
+    // resolved above from the JWT's own account — so echoing it back tells the
+    // signed-in user only where their own mail went. Worth returning because
+    // the provider kinds resolve to the business address, and "sent" with no
+    // address hides a wrong one on file.
+    return json({ sent: true, to });
   } catch (error) {
     console.error(`[account-email] unhandled: ${error instanceof Error ? error.message : String(error)}`);
     return json({ error: error instanceof Error ? error.message : String(error) }, 500);

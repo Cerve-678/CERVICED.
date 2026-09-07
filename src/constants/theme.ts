@@ -36,7 +36,7 @@ export const darkTheme = {
   iconBg:       'rgba(175,145,151,0.10)',
 } as const;
 
-// Client-hat palette — only applied when AuthContext.activeMode === 'client'.
+// Client-hat palette — only applied when AuthContext.hatState.active === 'client'.
 // Provider-hat screens keep lightTheme/darkTheme above, untouched.
 //
 // LIGHT MODE: plum (#3F1E36, slightly lifted off black) is the primary accent;

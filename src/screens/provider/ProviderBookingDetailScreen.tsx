@@ -231,7 +231,8 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
 };
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
-  const { user, activeMode } = useAuth();
+  const { user, hatState } = useAuth();
+  const activeMode = hatState.active;
   const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule } = route.params;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -2582,7 +2583,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       >
         <View style={{ flex: 1 }}>
           <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setShowHelpDropdown(false)}
           />
@@ -3705,7 +3706,7 @@ const styles = StyleSheet.create({
 
   // More options sheet
   moreSheetOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   moreSheet: {
@@ -3754,11 +3755,11 @@ const styles = StyleSheet.create({
 
   // Confirm/decline dialog
   dialogOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   dialogPositioner: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,

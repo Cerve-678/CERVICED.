@@ -126,7 +126,7 @@ CarouselCard.displayName = 'CarouselCard';
 // ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderAccountScreen({ navigation }: any) {
-  const { user, logout, switchMode } = useAuth();
+  const { user, logout, switchMode, hatState } = useAuth();
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -142,9 +142,9 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const [clientUnread, setClientUnread] = useState(0);
 
   useFocusEffect(useCallback(() => {
-    if (!user?.hasClientProfile) { setClientUnread(0); return; }
+    if (!hatState.owned.client) { setClientUnread(0); return; }
     getUnreadNotificationCount('client').then(setClientUnread).catch(() => {});
-  }, [user?.hasClientProfile]));
+  }, [hatState.owned.client]));
 
   // useFocusEffect (not a mount-only useEffect) — this is a persistent tab
   // screen that never unmounts, so a one-time check could get permanently
@@ -199,7 +199,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
 
   const handleSwitchToClient = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    if (user?.hasClientProfile) {
+    if (hatState.owned.client) {
       switchMode();
     } else {
       setShowClientModal(true);
@@ -447,10 +447,10 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.providerCardTitle}>
-                    {user?.hasClientProfile ? 'Switch to Client Mode' : 'Create Client Account'}
+                    {hatState.owned.client ? 'Switch to Client Mode' : 'Create Client Account'}
                   </Text>
                   <Text style={styles.providerCardSub}>
-                    {user?.hasClientProfile ? 'Browse Cerviced as a client' : 'Set up your client profile to browse'}
+                    {hatState.owned.client ? 'Browse Cerviced as a client' : 'Set up your client profile to browse'}
                   </Text>
                 </View>
                 {clientUnread > 0 && (

@@ -24,19 +24,49 @@ import { clearSeenTours } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getCurrentUserStoredPushToken, runDevReset } from '../../services/databaseService';
+import {
+  getCurrentUserStoredPushToken,
+  runDevReset,
+  invokeSendAccountEmail,
+  AccountEmailKind,
+} from '../../services/databaseService';
 import {
   registerForPushNotifications,
   unregisterPushToken,
 } from '../../services/pushNotificationService';
 import { logger, getLogBuffer, clearLogBuffer, subscribeToLogBuffer, LogEntry } from '../../utils/logger';
 
+// Every kind send-account-email accepts, so this screen can't quietly fall
+// behind the function. Keyed by AccountEmailKind rather than being an array of
+// them: a Record must name every member of the union, so adding a kind to the
+// function is a compile error here until it is listed. An array annotated
+// `{ kind: AccountEmailKind }[]` would look like the same guarantee and give
+// none — the annotation widens each literal back to the union and a missing
+// row type-checks fine.
+//
+// Object key order is insertion order for non-numeric string keys, so this
+// doubles as the display order.
+const EMAIL_KINDS: Record<AccountEmailKind, { label: string; note: string }> = {
+  general_welcome: { label: 'General welcome', note: 'the brand email' },
+  client_welcome: { label: 'Client welcome', note: 'new signup' },
+  provider_welcome: { label: 'Provider welcome', note: 'new signup' },
+  client_hat_added: { label: 'Client hat added', note: 'second hat' },
+  provider_hat_added: { label: 'Provider hat added', note: 'second hat' },
+  password_changed: { label: 'Password changed', note: 'security notice' },
+};
+
+const EMAIL_KIND_ROWS = Object.entries(EMAIL_KINDS) as [
+  AccountEmailKind,
+  { label: string; note: string },
+][];
+
 export default function DevSettingsScreen({ navigation }: any) {
   const [bookingCount, setBookingCount] = useState<number>(0);
   const [storageSize, setStorageSize] = useState<string>('0 KB');
   const { reloadBookings } = useBooking();
   const { isDarkMode, themePreference, setDarkMode, setThemePreference, palette: P } = useTheme();
-  const { user, activeMode, logout } = useAuth();
+  const { user, hatState, logout } = useAuth();
+  const activeMode = hatState.active;
   const insets = useSafeAreaInsets();
   const danger = isDarkMode ? '#E05050' : '#C0392B';
   const warnColor = isDarkMode ? '#E0A030' : '#B8860B';
@@ -54,6 +84,30 @@ export default function DevSettingsScreen({ navigation }: any) {
   // so the header rides up under the status bar. Pad manually with a fallback.
   const topInset =
     insets.top > 0 ? insets.top : Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 44;
+
+  // --- Transactional email test state ---
+  // The function resolves recipient and wording from the signed-in user, so a
+  // test can only ever reach the tester's own address — there is no field here
+  // to type someone else's in, deliberately.
+  const [emailBusy, setEmailBusy] = useState<string | null>(null);
+
+  const sendTestEmail = async (kind: AccountEmailKind, label: string) => {
+    setEmailBusy(kind);
+    try {
+      const to = await invokeSendAccountEmail(kind);
+      Alert.alert(
+        'Sent',
+        to
+          ? `“${label}” went to ${to}.`
+          : `“${label}” was sent, but this build of the function didn't report the address.`,
+      );
+    } catch (err) {
+      logger.error(`[dev] test email ${kind} failed:`, err);
+      Alert.alert('Failed', String(err));
+    } finally {
+      setEmailBusy(null);
+    }
+  };
 
   // --- Push diagnostics state ---
   const [pushPerm, setPushPerm] = useState<string>('unknown');
@@ -699,6 +753,44 @@ export default function DevSettingsScreen({ navigation }: any) {
 
             {/* Session & Build */}
             <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>TRANSACTIONAL EMAIL</Text>
+              <View style={[styles.statCard, { backgroundColor: P.card, borderColor: P.border }]}>
+                <View style={styles.statRow}>
+                  <Text style={[styles.statLabel, { color: P.text }]}>Sends to</Text>
+                  <Text
+                    style={[styles.statValue, { color: P.sub, maxWidth: '60%' }]}
+                    numberOfLines={1}
+                    selectable
+                  >
+                    {user?.email ?? '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {EMAIL_KIND_ROWS.map(([kind, { label, note }]) => (
+                <TouchableOpacity
+                  key={kind}
+                  style={[
+                    styles.secondaryButton,
+                    {
+                      backgroundColor: P.surface,
+                      borderColor: P.border,
+                      opacity: emailBusy && emailBusy !== kind ? 0.4 : 1,
+                    },
+                  ]}
+                  disabled={emailBusy !== null}
+                  activeOpacity={0.7}
+                  onPress={() => sendTestEmail(kind, label)}
+                >
+                  <Text style={[styles.secondaryButtonText, { color: P.text }]}>
+                    {emailBusy === kind ? 'Sending…' : label}
+                    <Text style={{ color: P.sub }}>{`  ·  ${note}`}</Text>
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: P.sub }]}>SESSION & BUILD</Text>
               <View style={[styles.statCard, { backgroundColor: P.card, borderColor: P.border }]}>
                 <View style={styles.statRow}>
@@ -720,9 +812,12 @@ export default function DevSettingsScreen({ navigation }: any) {
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: P.sep }]} />
                 <View style={styles.statRow}>
-                  <Text style={[styles.statLabel, { color: P.text }]}>Account / Mode</Text>
+                  <Text style={[styles.statLabel, { color: P.text }]}>Hats / Active</Text>
                   <Text style={[styles.statValue, { color: P.accent }]}>
-                    {(user?.accountType ?? '—')} / {activeMode}
+                    {[
+                      hatState.owned.client ? 'client' : null,
+                      hatState.owned.provider ? 'provider' : null,
+                    ].filter(Boolean).join(' + ') || '—'} / {activeMode}
                   </Text>
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: P.sep }]} />

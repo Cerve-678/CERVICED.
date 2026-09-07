@@ -24,8 +24,8 @@ export const BookingListRow = React.memo<BookingCardProps>(
 
       Animated.sequence([
         Animated.timing(highlightAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
-        Animated.delay(1500),
-        Animated.timing(highlightAnim, { toValue: 0, duration: 800, useNativeDriver: false }),
+        Animated.delay(2200),
+        Animated.timing(highlightAnim, { toValue: 0, duration: 1000, useNativeDriver: false }),
       ]).start();
     }, [highlightAnim, isHighlighted]);
 

@@ -2136,7 +2136,7 @@ const styles = StyleSheet.create({
   },
   // Absolute so the readout centres on the ring rather than pushing it.
   ringLabel: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

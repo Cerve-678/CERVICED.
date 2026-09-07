@@ -251,7 +251,7 @@ function SendSheet({
 }
 
 const ss = StyleSheet.create({
-  overlay:  { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)', zIndex: 10 },
+  overlay:  { ...StyleSheet.absoluteFill, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)', zIndex: 10 },
   keyboardAvoiding: { flex: 1, justifyContent: 'flex-end' },
   sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingBottom: 36, paddingTop: 12 },
   handle:   { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },

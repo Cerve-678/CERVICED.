@@ -445,6 +445,9 @@ export interface DbServiceImage {
    * guessed ratio is what makes a landscape photo render in a portrait box.
    */
   aspect_ratio: number | null;
+  /** Whether this photo crops to fill its box or letterboxes to fit whole —
+   *  the provider's choice, not the app's. Column default is 'cover'. */
+  fit: 'cover' | 'contain';
 }
 
 export interface DbServiceAddOn {
@@ -916,7 +919,7 @@ export interface DiscoverServiceWithProvider {
   name: string;
   description: string | null;
   price: number;
-  service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio">[];
+  service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio" | "fit">[];
   provider: Pick<
     DbProvider,
     | "id"

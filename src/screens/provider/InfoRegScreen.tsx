@@ -5855,7 +5855,7 @@ const makeStyles = (isDark: boolean, screenWidth: number, screenHeight: number) 
     borderRadius: 14,
   },
   portfolioThumbUploading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',

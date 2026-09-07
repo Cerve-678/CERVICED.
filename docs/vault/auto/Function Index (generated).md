@@ -5,7 +5,7 @@
 
 #generated
 
-**2039 functions** across **263 files**.
+**2074 functions** across **268 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -54,7 +54,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (6)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
@@ -87,7 +87,7 @@
 ### `src/features/home/` (1)
 - `SkeletonSection.tsx` — **SkeletonSection**
 
-### `src/features/provider-registration/` (8)
+### `src/features/provider-registration/` (10)
 - `BufferPicker.tsx` — **BufferPicker**
 - `ChipSelect.tsx` — **ChipSelect**
 - `DurationPicker.tsx` — **DurationPicker**
@@ -95,7 +95,9 @@
 - `RequiredLabel.tsx` — **RequiredLabel**
 - `SectionHeader.tsx` — **SectionHeader**
 - `serviceDraft.ts` — **createServiceDraft** · nextDraftId
-- `ServiceImageCarousel.tsx` — handleScroll · **ServiceImageCarousel**
+- `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
+- `ServiceImageCropper.tsx` — finish · handleCancel · handleUse · layout · panResponder · **ServiceImageCropper**
+- `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **useVerticalDragReorder**
 
 ### `src/features/providers/` (7)
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **fetchGoLiveStatus**
@@ -147,7 +149,7 @@
 - `SignUpStep2Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep3Screen · validate
 - `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · pickTeamSize · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
-- `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
+- `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · finishHatSwitch · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
 - `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · WelcomeScreen
 
 ### `src/screens/client/` (21)
@@ -207,7 +209,7 @@
 - `BeccaScreen.tsx` — BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · refreshSessions · scheduleNextTick · steps · thinkingStepsFor
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave
-- `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · exportBookings · fullClientReset · fullProviderReset · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · sendTestPush · viewAllStorageKeys · viewBookings
+- `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · didn · exportBookings · fullClientReset · fullProviderReset · is · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
 - `HelpCentreScreen.tsx` — FAQItem · handleContactSupport · HelpCentreScreen · showMoreOptions
 - `InfoScreen.tsx` — ScreenNameHere
 - `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
@@ -225,7 +227,7 @@
 - `ImageLoader.ts` — **useImageLoader**
 - `notificationTapHandler.ts` — **handleNotificationTap** · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
-- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · **uploadToStorage**
+- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · sniffImageType · **uploadToStorage** · used
 - `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
@@ -251,12 +253,14 @@
 ### `src/types/` (1)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 
-### `src/utils/` (25)
+### `src/utils/` (28)
+- `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `dateUtils.ts` — **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
+- `dayTimelineRange.ts` — **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
 - `distance.ts` — **formatDistance** · **getDistanceKm** · toRadians
 - `exploreTabBarScroll.ts` — animateTo · **resetExplorePillTracking** · **settleExplorePillTracking** · trackScrollDirection
@@ -271,6 +275,7 @@
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery**
+- `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
 - `slotsRowText.ts` — **resolveSlotsRow**
 - `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**

@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   },
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
   modalRoot: { flex: 1, justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: { maxHeight: '75%', minHeight: 420, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

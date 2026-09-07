@@ -355,7 +355,10 @@ export type ClientPointsReason =
   | "booking_completed"
   | "review_left"
   | "first_booking"
-  | "birthday_bonus";
+  | "birthday_bonus"
+  | "first_review"
+  | "profile_completed"
+  | "returning_client";
 
 export interface ClientPointsLedgerEntry {
   id: string;
@@ -8566,7 +8569,14 @@ export async function claimUnclaimedProviderProfile(
   return data;
 }
 
-export type AccountEmailKind = 'client_welcome' | 'provider_welcome' | 'password_changed';
+export type AccountEmailKind =
+  | 'client_welcome'
+  | 'provider_welcome'
+  | 'password_changed'
+  | 'provider_hat_added'
+  | 'client_hat_added'
+  /** The brand email — what CERVICED is and offers. Not tied to an event. */
+  | 'general_welcome';
 
 /**
  * Sends the signed-in user an account email (a welcome, or a password-changed
@@ -8578,11 +8588,16 @@ export type AccountEmailKind = 'client_welcome' | 'provider_welcome' | 'password
  * There is deliberately no generic "send this html to this address" function
  * any more: that was an open relay on the cerviced.co sending domain.
  */
-export async function invokeSendAccountEmail(kind: AccountEmailKind): Promise<void> {
-  const { error } = await supabase.functions.invoke('send-account-email', {
+export async function invokeSendAccountEmail(
+  kind: AccountEmailKind,
+): Promise<string | undefined> {
+  const { data, error } = await supabase.functions.invoke('send-account-email', {
     body: { kind },
   });
   if (error) throw error;
+  // The address the server actually sent to — always one of the caller's own.
+  // Undefined against an older deployment that didn't return it yet.
+  return (data as { to?: string } | null)?.to;
 }
 
 export interface SupportRequestInput {

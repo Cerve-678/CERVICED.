@@ -26,7 +26,8 @@ const CATEGORIES = ['Bug / Crash', 'Booking Issue', 'Provider Issue', 'Payment',
 
 export default function ReportProblemScreen({ navigation }: any) {
   const { theme, isDarkMode, palette: P } = useTheme();
-  const { activeMode } = useAuth();
+  const { hatState } = useAuth();
+  const activeMode = hatState.active;
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');

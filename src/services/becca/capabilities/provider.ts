@@ -41,7 +41,6 @@ import {
   formatShortDate,
   formatTime12,
 } from "../../../utils/dateUtils";
-import { splitPortfolioByKind } from "../../../features/providers/venuePhotos";
 import type { Capability, CapabilityResult } from "../types";
 import { navChip, askChip, money } from "./shared";
 
@@ -821,17 +820,18 @@ const services: Capability = {
     }
 
     // Independent reads — run together rather than in sequence.
-    const [rows, allPhotos, specialties] = await Promise.all([
+    const [rows, photos, specialties] = await Promise.all([
       getMyProviderServices(),
       getProviderPortfolio(profile.id),
       getProviderSpecialties(profile.id),
     ]);
-    // Venue/workspace shots come back in the same list but aren't work a
-    // client browses — they sit in Additional Information on the profile and
-    // never reach Explore — so counting them here would both inflate the
-    // number and silence the "no portfolio photos" gap for a provider whose
-    // gallery is genuinely empty.
-    const { work: portfolio } = splitPortfolioByKind(allPhotos);
+    // Work gallery only. Venue/workspace shots aren't work a client browses —
+    // they sit in Additional Information on the profile and never reach
+    // Explore — so counting them here would both inflate the number and
+    // silence the "no portfolio photos" gap for a provider whose gallery is
+    // genuinely empty. getProviderPortfolio excludes them in SQL unless
+    // includeVenue is asked for, which this count deliberately doesn't.
+    const portfolio = photos.work;
     const active = rows.filter((s) => s.is_active);
     const inactive = rows.length - active.length;
 

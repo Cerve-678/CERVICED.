@@ -32,7 +32,8 @@ import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
 const Stack = createStackNavigator<RootStackParamList>();
 
 export default function RootNavigation() {
-  const { isLoggedIn, isLoading, activeMode, isSwitching, switchingTo, pendingReactivation } = useAuth();
+  const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
+  const activeMode = hatState.active;
   const { theme: colors, isDarkMode } = useTheme();
 
   // The switch overlay always uses the DESTINATION hat's real accent (not a

@@ -160,7 +160,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
 
   if (asOverlay) {
     if (!visible) return null;
-    return <View style={StyleSheet.absoluteFillObject}>{content}</View>;
+    return <View style={StyleSheet.absoluteFill}>{content}</View>;
   }
 
   return (

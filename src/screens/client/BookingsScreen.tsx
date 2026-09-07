@@ -942,10 +942,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         // Set highlight state for smart scroll and highlight animation
         if (shouldHighlight) {
           setHighlightedBookingId(bookingId!);
-          // Clear highlight after animation completes
+          // Clear highlight after animation completes (300ms fade-in + 2200ms
+          // hold + 1000ms fade-out in BookingCard/BookingListRow — must be >=
+          // that total or this cuts the fade-out short).
           setTimeout(() => {
             setHighlightedBookingId(null);
-          }, 3000);
+          }, 3600);
         }
 
         // Scroll the booking itself into view rather than a fixed distance

@@ -197,7 +197,7 @@ function ConfirmDialog({ title, message, buttons, visible, onDismiss }: ConfirmS
 
 const dlgSt = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
