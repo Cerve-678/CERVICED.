@@ -49,9 +49,9 @@ import { logger, getLogBuffer, clearLogBuffer, subscribeToLogBuffer, LogEntry } 
 const EMAIL_KINDS: Record<AccountEmailKind, { label: string; note: string }> = {
   general_welcome: { label: 'General welcome', note: 'the brand email' },
   client_welcome: { label: 'Client welcome', note: 'new signup' },
-  provider_welcome: { label: 'Provider welcome', note: 'new signup, business address' },
+  provider_welcome: { label: 'Provider welcome', note: 'new signup' },
   client_hat_added: { label: 'Client hat added', note: 'second hat' },
-  provider_hat_added: { label: 'Provider hat added', note: 'second hat, business address' },
+  provider_hat_added: { label: 'Provider hat added', note: 'second hat' },
   password_changed: { label: 'Password changed', note: 'security notice' },
 };
 

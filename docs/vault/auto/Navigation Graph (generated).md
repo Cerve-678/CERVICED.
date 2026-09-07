@@ -5,7 +5,7 @@
 
 #generated
 
-**123 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
+**123 edges** across **41 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -58,7 +58,6 @@ graph LR
   HomeScreen --> OffersScreen
   HomeScreen --> ProviderProfileScreen
   HomeScreen --> SearchScreen
-  InfoRegScreen --> ProviderIntakeFormScreen
   LoginScreen --> ForgotPassword
   LoginScreen --> SignUpStep1
   MessagesScreen --> ProviderChatScreen
@@ -89,6 +88,7 @@ graph LR
   ProviderBookingHistoryScreen --> ProviderInboxScreen
   ProviderClienteleScreen --> ProviderConversationScreen
   ProviderCommunicationsScreen --> BusinessInfoScreen
+  ProviderHomeScreen --> InfoRegScreen
   ProviderHomeScreen --> NotificationsScreen
   ProviderHomeScreen --> ProviderBookingDetailScreen
   ProviderHomeScreen --> ProviderConversationScreen
@@ -166,7 +166,6 @@ graph LR
 - `provider/BusinessDetailsScreen` → `provider/AboutYouScreen`, `provider/BusinessInfoScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/SchedulingScreen`, `provider/ServicesPricingScreen`
 - `provider/BusinessInfoScreen` → `provider/ProviderCommunicationsScreen`
 - `provider/BusinessProfileScreen` → `provider/BrandingScreen`, `provider/BusinessDetailsScreen`, `provider/InfoRegScreen`, `provider/ProviderAutomationsScreen`, `provider/ProviderCommunicationsScreen`
-- `provider/InfoRegScreen` → `provider/ProviderIntakeFormScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
 - `provider/ProviderAccountScreen` → `provider/BusinessProfileScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `SignUpStep3`
 - `provider/ProviderAnalyticsScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderBookingHistoryScreen`
@@ -174,7 +173,7 @@ graph LR
 - `provider/ProviderBookingHistoryScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderInboxScreen`, `shared/DevSettingsScreen`
 - `provider/ProviderClienteleScreen` → `provider/ProviderConversationScreen`
 - `provider/ProviderCommunicationsScreen` → `provider/BusinessInfoScreen`
-- `provider/ProviderHomeScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`, `shared/NotificationsScreen`
+- `provider/ProviderHomeScreen` → `provider/InfoRegScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`, `shared/NotificationsScreen`
 - `provider/ProviderInboxScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`
 - `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`

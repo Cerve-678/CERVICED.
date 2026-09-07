@@ -82,12 +82,14 @@ serve(async (req) => {
     const [{ data: account }, { data: provider }] = await Promise.all([
       supabase
         .from('users')
-        .select('name, email, business_name, business_email')
+        .select('name, email, business_name')
         .eq('id', user.id)
         .maybeSingle(),
       supabase
         .from('providers')
-        .select('display_name, email')
+        // display_name only — the provider email is deliberately no longer a
+        // recipient, so fetching it would just be dead weight.
+        .select('display_name')
         .eq('user_id', user.id)
         .maybeSingle(),
     ]);
@@ -95,12 +97,22 @@ serve(async (req) => {
     const name = account?.name ?? '';
     const businessName = provider?.display_name ?? account?.business_name ?? undefined;
 
-    // The provider-side emails go to the business address when there is one —
-    // that is the address a business actually reads — falling back to the
-    // login address. The client-side ones always go to the login address.
-    const to = (kind === 'provider_welcome' || kind === 'provider_hat_added')
-      ? (provider?.email || account?.business_email || account?.email || user.email)
-      : (account?.email || user.email);
+    // EVERY kind goes to the login address, including the provider ones.
+    //
+    // They used to prefer the business address, on the reasoning that it is
+    // the address a business actually reads. In practice a live account had
+    // `nailsbyellie@gamil.com` on file — "gamil", a registered typosquat of
+    // gmail.com with working MX records — so the mail was accepted and
+    // delivered to a third party instead of bouncing, and the provider simply
+    // never received it. Nothing validates business addresses on the way in,
+    // so that failure is silent and repeatable.
+    //
+    // The login address is the one address on the account that has been
+    // verified: it had to receive a code before the account could exist. Until
+    // business addresses are validated at entry, it is the only one we know
+    // the account holder actually reads. Restore business-address routing when
+    // that validation exists, not before.
+    const to = account?.email || user.email;
 
     if (!to) return json({ error: 'No address on file for this account.' }, 422);
 
