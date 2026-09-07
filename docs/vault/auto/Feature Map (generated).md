@@ -8,7 +8,7 @@
 ## Address release
 Curated: [[Address Release]] · **86 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/services/databaseService.ts` _(161)_
+- `src/services/databaseService.ts` _(162)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(78)_

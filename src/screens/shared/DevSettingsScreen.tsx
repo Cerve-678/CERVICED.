@@ -94,12 +94,12 @@ export default function DevSettingsScreen({ navigation }: any) {
   const sendTestEmail = async (kind: AccountEmailKind, label: string) => {
     setEmailBusy(kind);
     try {
-      await invokeSendAccountEmail(kind);
+      const to = await invokeSendAccountEmail(kind);
       Alert.alert(
         'Sent',
-        `“${label}” is on its way.\n\nClient-side and account emails go to ${
-          user?.email ?? 'your login address'
-        }. The two provider ones go to your business address when you have one set.`,
+        to
+          ? `“${label}” went to ${to}.`
+          : `“${label}” was sent, but this build of the function didn't report the address.`,
       );
     } catch (err) {
       logger.error(`[dev] test email ${kind} failed:`, err);

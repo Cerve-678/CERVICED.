@@ -8548,11 +8548,16 @@ export type AccountEmailKind =
  * There is deliberately no generic "send this html to this address" function
  * any more: that was an open relay on the cerviced.co sending domain.
  */
-export async function invokeSendAccountEmail(kind: AccountEmailKind): Promise<void> {
-  const { error } = await supabase.functions.invoke('send-account-email', {
+export async function invokeSendAccountEmail(
+  kind: AccountEmailKind,
+): Promise<string | undefined> {
+  const { data, error } = await supabase.functions.invoke('send-account-email', {
     body: { kind },
   });
   if (error) throw error;
+  // The address the server actually sent to — always one of the caller's own.
+  // Undefined against an older deployment that didn't return it yet.
+  return (data as { to?: string } | null)?.to;
 }
 
 export interface SupportRequestInput {

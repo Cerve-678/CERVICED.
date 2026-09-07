@@ -136,7 +136,12 @@ serve(async (req) => {
       return json({ error: 'Send failed.' }, 502);
     }
 
-    return json({ sent: true });
+    // Report the address actually used. The caller cannot influence it — it is
+    // resolved above from the JWT's own account — so echoing it back tells the
+    // signed-in user only where their own mail went. Worth returning because
+    // the provider kinds resolve to the business address, and "sent" with no
+    // address hides a wrong one on file.
+    return json({ sent: true, to });
   } catch (error) {
     console.error(`[account-email] unhandled: ${error instanceof Error ? error.message : String(error)}`);
     return json({ error: error instanceof Error ? error.message : String(error) }, 500);
