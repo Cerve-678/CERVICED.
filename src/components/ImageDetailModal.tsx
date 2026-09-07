@@ -269,23 +269,21 @@ interface CarouselController {
 const ImageCarousel: React.FC<{
   images: PortfolioItem['image'][];
   height: number;
-  /** Framing for the photo at `index` — the provider's own per-photo choice
-   *  where there is one, otherwise the caller's mixed-ratio fallback. */
-  fitFor: (index: number) => 'cover' | 'contain';
   backgroundColor: string;
   itemKey: string;
   initialIndex: number;
   controllerRef: React.MutableRefObject<CarouselController | null>;
   onIndexChange: (index: number) => void;
+  onImageAspectRatio: (index: number, aspectRatio: number) => void;
 }> = ({
   images,
   height,
-  fitFor,
   backgroundColor,
   itemKey,
   initialIndex,
   controllerRef,
   onIndexChange,
+  onImageAspectRatio,
 }) => {
   const listRef = useRef<FlatList<PortfolioItem['image']>>(null);
   const activeIndexRef = useRef(initialIndex);
@@ -356,8 +354,16 @@ const ImageCarousel: React.FC<{
         <Image
           source={{ uri: (source as { uri: string }).uri }}
           style={{ width: screenWidth, height, backgroundColor }}
-          contentFit={fitFor(index)}
+          // The detail view must always show the complete image. Unlike the
+          // grid, it is not a thumbnail, so cropping it with `cover` makes
+          // the photo appear to end underneath the information sheet.
+          contentFit="contain"
           transition={0}
+          onLoad={({ source: loadedSource }) => {
+            if (loadedSource.width > 0 && loadedSource.height > 0) {
+              onImageAspectRatio(index, loadedSource.width / loadedSource.height);
+            }
+          }}
         />
         )}
     />
@@ -401,60 +407,6 @@ function ModalBody({
   // Measured per render, not captured at module load: the carousel's page
   // offsets and the photo box's height are both derived from it.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  // The carousel gets ONE height for the whole photo set, taken from the
-  // set's median ratio — not from `item.aspectRatio`, which is only the
-  // ratio of the photo that happened to be tapped. Explore fans a service
-  // into one card per photo (see mapDbServiceToCards), so sizing off the
-  // tapped card meant the same service opened at a different height
-  // depending on which photo you came in through, and every other photo in
-  // the set was then cover-cropped to fit it. The median is stable whichever
-  // card is the entry point, and it's the ratio that leaves the set as a
-  // whole least distorted.
-  //
-  // A single-photo item (every portfolio and provider card) has a
-  // one-element set, so its median IS its own ratio and nothing about those
-  // changes.
-  const setRatios =
-    item.imageAspectRatios && item.imageAspectRatios.length > 0
-      ? item.imageAspectRatios.filter((r) => Number.isFinite(r) && r > 0)
-      : [item.aspectRatio];
-  const boxRatio = useMemo(() => {
-    const sorted = [...setRatios].sort((a, b) => a - b);
-    if (sorted.length === 0) return item.aspectRatio;
-    const mid = Math.floor(sorted.length / 2);
-    // Even count: average the middle pair rather than picking arbitrarily,
-    // so a two-photo set sits between its two shapes instead of snapping to
-    // the taller one.
-    return sorted.length % 2 === 1
-      ? (sorted[mid] as number)
-      : (((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setRatios.join(','), item.aspectRatio]);
-  // Capped so a very tall/narrow photo doesn't push the card off-screen. The
-  // cap is generous (0.85 of the screen, not 0.6) so the box tracks real
-  // proportions almost always.
-  const imageHeight = Math.min(screenHeight * 0.85, screenWidth / boxRatio);
-  // With one box for a mixed-ratio set, "cover" would crop whichever photos
-  // don't match the median — the exact thing this is fixing — so those sets
-  // letterbox against the surface colour instead. A set whose photos all
-  // share a shape (and every single-photo item) still fills the box edge to
-  // edge, because there "contain" and "cover" resolve identically.
-  const setHasMixedRatios = setRatios.some(
-    (r) => Math.abs(r - boxRatio) > 0.01,
-  );
-  // Per photo, the provider's stored choice wins outright — that control
-  // exists precisely so the app stops deciding this for them. Only where
-  // there's no choice to honour (a portfolio photo, or a service saved before
-  // the column existed) does the mixed-ratio fallback above apply.
-  const fitFor = (index: number): 'cover' | 'contain' =>
-    item.imageFits?.[index] ?? (setHasMixedRatios ? 'contain' : 'cover');
-  // How much of the photo's bottom the card visually rests on at open —
-  // the card is an absolutely-positioned layer painted in front of the
-  // image (see the image/ScrollView stacking below), so it now scrolls up
-  // *over* the photo rather than starting its scrollable region beneath
-  // it. Kept small so only a little scrolling is needed to bring
-  // additional content (description, More Like This) into view.
-  const CARD_OVERLAP = 64;
   // Full photo set when this is a service card (see PortfolioItem.images);
   // anything else (portfolio/provider cards) only ever has the one photo.
   const images =
@@ -468,7 +420,40 @@ function ModalBody({
     return idx >= 0 && idx < images.length ? idx : 0;
   }, [item.id, images.length]);
   const [activeImageIndex, setActiveImageIndex] = useState(initialImageIndex);
+  const [isSheetAtImageEdge, setIsSheetAtImageEdge] = useState(true);
+  const [loadedImageRatios, setLoadedImageRatios] = useState<
+    Record<string, number>
+  >({});
   const activeImageIndexRef = useRef(initialImageIndex);
+  // Size the box from the currently visible photo, rather than from a median
+  // of the whole carousel. That lets each image meet the horizontal edges
+  // exactly without cropping or leaving a thin band above the details sheet.
+  const activeImageRatio = item.imageAspectRatios?.[activeImageIndex];
+  const loadedImageRatio = loadedImageRatios[`${item.id}:${activeImageIndex}`];
+  const imageRatio =
+    Number.isFinite(loadedImageRatio) && (loadedImageRatio ?? 0) > 0
+      ? (loadedImageRatio as number)
+      : Number.isFinite(activeImageRatio) && (activeImageRatio ?? 0) > 0
+      ? (activeImageRatio as number)
+      : item.aspectRatio;
+  // A very tall portrait is capped to keep its full image view usable; it is
+  // still shown with `contain`, never cropped.
+  const imageHeight = Math.min(screenHeight * 0.85, screenWidth / imageRatio);
+  // An 8 px join visually seats the sheet on the image edge without covering
+  // any meaningful part of the photo.
+  const CARD_OVERLAP = 8;
+  const handleImageAspectRatio = useCallback(
+    (index: number, aspectRatio: number) => {
+      if (!Number.isFinite(aspectRatio) || aspectRatio <= 0) return;
+      const key = `${item.id}:${index}`;
+      setLoadedImageRatios((current) =>
+        Math.abs((current[key] ?? 0) - aspectRatio) < 0.001
+          ? current
+          : { ...current, [key]: aspectRatio },
+      );
+    },
+    [item.id],
+  );
   const carouselRef = useRef<CarouselController | null>(null);
   const panStartOffsetRef = useRef(0);
   const pendingCarouselOffsetRef = useRef<number | null>(null);
@@ -504,6 +489,18 @@ function ModalBody({
     activeImageIndexRef.current = initialImageIndex;
   }, [initialImageIndex]);
 
+  const handleSheetScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      // Once details cover the image area, give the sheet full control of
+      // vertical drags. Otherwise the carousel overlay would trap a pull-down.
+      const nextIsAtImageEdge = event.nativeEvent.contentOffset.y <= 1;
+      setIsSheetAtImageEdge((current) =>
+        current === nextIsAtImageEdge ? current : nextIsAtImageEdge,
+      );
+    },
+    [],
+  );
+
   const carouselPanResponder = useMemo(
     () =>
       PanResponder.create({
@@ -529,11 +526,12 @@ function ModalBody({
         onPanResponderRelease: (_, gesture) => {
           cancelPendingCarouselFrame();
           const maxIndex = images.length - 1;
-          // A light, unmistakably horizontal flick or a short drag commits
-          // one page. Anything smaller settles back to the page it began on.
+          // Keep left/right taps, but make a short horizontal drag or a light
+          // flick enough to change photos. The previous threshold felt sticky
+          // on a phone because it needed almost a tenth of the screen width.
           const isDeliberateSwipe =
-            Math.abs(gesture.dx) >= screenWidth * 0.09 ||
-            Math.abs(gesture.vx) >= 0.18;
+            Math.abs(gesture.dx) >= screenWidth * 0.045 ||
+            Math.abs(gesture.vx) >= 0.1;
           const startIndex = Math.round(panStartOffsetRef.current / screenWidth);
           const isTap = Math.abs(gesture.dx) < 8 && Math.abs(gesture.dy) < 8;
           const rawIndex = isTap
@@ -632,20 +630,18 @@ function ModalBody({
         </View>
       )}
 
-      {/* Keep the original two-layer composition: the image stays fixed behind
-          the card, while the card scrolls over it. `box-none` is the key to
-          making the carousel usable without changing that visual overlap —
-          the empty photo area passes touches through to the FlatList below,
-          but the card remains a normal vertical ScrollView. */}
+      {/* The image stays fixed behind the scrollable details sheet. `box-none`
+          lets the exposed photo area pass touches through to the carousel,
+          while the sheet remains a normal vertical ScrollView. */}
       <View style={[styles.imageLayer, { height: imageHeight }]}>
         <ImageCarousel
           images={images}
           height={imageHeight}
-          fitFor={fitFor}
           backgroundColor={P.surface}
           itemKey={item.id}
           initialIndex={initialImageIndex}
           controllerRef={carouselRef}
+          onImageAspectRatio={handleImageAspectRatio}
           onIndexChange={(index) => {
             activeImageIndexRef.current = index;
             setActiveImageIndex(index);
@@ -659,6 +655,7 @@ function ModalBody({
               styles.carouselTapZones,
               { height: imageHeight - CARD_OVERLAP },
             ]}
+            pointerEvents={isSheetAtImageEdge ? 'auto' : 'none'}
             {...carouselPanResponder.panHandlers}
           />
           {/* Visual cue only — the full exposed image remains the swipe/tap
@@ -671,10 +668,15 @@ function ModalBody({
             ]}
           >
             <View style={styles.carouselArrow}>
-              <Text style={styles.carouselArrowText}>‹</Text>
+              <Icon
+                name="chevron-right"
+                size={22}
+                color="#FFFFFF"
+                style={styles.carouselArrowLeftIcon}
+              />
             </View>
             <View style={styles.carouselArrow}>
-              <Text style={styles.carouselArrowText}>›</Text>
+              <Icon name="chevron-right" size={22} color="#FFFFFF" />
             </View>
           </View>
         </>
@@ -684,6 +686,8 @@ function ModalBody({
         style={styles.cardScroll}
         pointerEvents="box-none"
         showsVerticalScrollIndicator={false}
+        onScroll={handleSheetScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={[
           styles.contentContainer,
           { paddingTop: imageHeight - CARD_OVERLAP },
@@ -1006,19 +1010,17 @@ const styles = StyleSheet.create({
     zIndex: 6,
   },
   carouselArrow: {
-    width: 34,
-    height: 52,
-    borderRadius: 17,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.24)',
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.48)',
   },
-  carouselArrowText: {
-    color: '#FFFFFF',
-    fontSize: 34,
-    fontWeight: '300',
-    lineHeight: 38,
-    marginTop: -3,
+  carouselArrowLeftIcon: {
+    transform: [{ scaleX: -1 }],
   },
   // This stays above the image visually, but box-none lets taps in its empty
   // top padding fall through to the carousel's native FlatList.
