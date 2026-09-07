@@ -87,7 +87,9 @@ import {
   BUSINESS_TYPE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
+  ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
+  SERVICE_TYPE_OPTS,
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
@@ -123,6 +125,13 @@ const PREVIEW_SHEET_LIP_RADIUS = 36;
 // SERVICE_CATEGORY_OPTS (imported above) replaces what used to be a second,
 // separately-maintained copy of these seven strings in this file.
 const SERVICE_CATEGORIES: readonly string[] = SERVICE_CATEGORY_OPTS;
+
+// Chips show the human label, never the raw DB code — 'MUA' is a column value,
+// not a word a provider should have to recognise as "Makeup". Resolves against
+// the full list so a provider stamped with a retired type still reads properly
+// in the locked view.
+const serviceTypeLabelFor = (value: string): string =>
+  ALL_SERVICE_TYPE_OPTS.find(o => o.value === value)?.label ?? value;
 
 // businessTypeLabel() from the canonical table replaces what used to be a
 // fourth copy of these four strings in this file.
@@ -3605,6 +3614,30 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     [providerData.serviceCategories, providerData.providerService],
   );
 
+  // Add or remove one macro type at sign-up. Two rules the DB also holds, so
+  // the UI can never propose a state the save would reject:
+  //  - the set is never empty. Deselecting your last type is a no-op rather
+  //    than a disabled-looking chip, because "none" isn't a business.
+  //  - `providerService` is always the set's first entry, matching what
+  //    sync_provider_service_categories enforces between service_category and
+  //    service_categories[1]. Drop the headline and the next type inherits it.
+  // Order follows SERVICE_CATEGORIES, not tap order, so the headline is
+  // predictable rather than a side effect of which chip was pressed first.
+  const toggleServiceType = useCallback((category: string) => {
+    setProviderData(prev => {
+      const current = prev.serviceCategories?.length
+        ? prev.serviceCategories
+        : [prev.providerService];
+      const next = current.includes(category)
+        ? current.filter(c => c !== category)
+        : SERVICE_CATEGORIES.filter(c => c === category || current.includes(c));
+      const headline = next[0];
+      // Doubles as the never-empty guard: no headline means no types left.
+      if (!headline) return prev;
+      return { ...prev, serviceCategories: next, providerService: headline };
+    });
+  }, []);
+
   // Only the categories under the type currently selected in the switch —
   // this is what the pill strip renders and what drag-reorder operates on.
   const categoryNames = useMemo(
@@ -4254,7 +4287,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         >
                           <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
                           <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                            {serviceType}
+                            {serviceTypeLabelFor(serviceType)}
                           </Text>
                         </View>
                       ))}
@@ -4266,55 +4299,44 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </Text>
                   </>
                 ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.serviceCategoryScroll}
-                  >
-                    {SERVICE_CATEGORIES.map((category) => (
-                      <TouchableOpacity
-                        key={category}
-                        style={[
-                          styles.serviceCategoryChip,
-                          providerData.providerService === category &&
-                            styles.serviceCategoryChipSelected,
-                        ]}
-                        onPress={() =>
-                          { tapSelect(); setProviderData({ ...providerData, providerService: category }); }}
-                      >
-                        <Text
-                          style={[
-                            styles.serviceCategoryText,
-                            providerData.providerService === category &&
-                              styles.serviceCategoryTextSelected,
-                          ]}
-                        >
-                          {category}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                )}
-                {/* Custom Service Type Input when OTHER is selected */}
-                {providerData.providerService === 'OTHER' && (
-                  <View
-                    style={styles.customServiceInput}
-                    ref={registerField('customService')}
-                  >
-                    <View style={[styles.inputBlur, styles.profileInputBox]}>
-                      <TextInput
-                        style={styles.textInput}
-                        value={providerData.customServiceType}
-                        onChangeText={(text) =>
-                          setProviderData({ ...providerData, customServiceType: text })
-                        }
-                        placeholder="What service do you provide?"
-                        placeholderTextColor={chrome.fg(0.4)}
-                        autoFocus
-                        onFocus={() => handleInputFocus('customService', 'identity')}
-                      />
+                  /* Multi-select: a provider offering hair AND nails is one
+                     business, not two profiles. Wraps rather than scrolling
+                     horizontally, because a horizontal rail hides its own
+                     options — the types past the fold went unpicked simply
+                     for being off-screen, which is the wrong reason to end up
+                     in one category. Every option is on screen at once. */
+                  <>
+                    <View style={styles.serviceCategoryGrid}>
+                      {SERVICE_TYPE_OPTS.map(({ value, label }) => {
+                        const selected = serviceTypes.includes(value);
+                        return (
+                          <TouchableOpacity
+                            key={value}
+                            activeOpacity={0.75}
+                            style={[
+                              styles.serviceCategoryChip,
+                              selected && styles.serviceCategoryChipSelected,
+                            ]}
+                            onPress={() => { tapSelect(); toggleServiceType(value); }}
+                          >
+                            <Text
+                              style={[
+                                styles.serviceCategoryText,
+                                selected && styles.serviceCategoryTextSelected,
+                              ]}
+                            >
+                              {label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                  </View>
+                    <Text style={styles.inputHint}>
+                      Pick every type you offer. The first one you pick is your
+                      headline type — it's what clients see first, and what your
+                      specialty and template suggestions are built from.
+                    </Text>
+                  </>
                 )}
               </View>
 
@@ -6383,8 +6405,10 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
 
   // Service Categories
-  serviceCategoryScroll: {
-    flexGrow: 0,
+  serviceCategoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   serviceCategoryChip: {
     paddingHorizontal: 16,
@@ -7943,11 +7967,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontWeight: '700',
     fontSize: 11,
     color: '#fff',
-  },
-
-  // Custom Service Type Input
-  customServiceInput: {
-    marginTop: 10,
   },
 
   // Accent Color Preview

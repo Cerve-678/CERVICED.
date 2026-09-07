@@ -36,7 +36,7 @@ import {
 } from '../../features/business-details/BusinessDetailsKit';
 import {
   SPECIALTIES_MAP, CLIENTELE_OPTS, STYLE_OPTS, PRICE_OPTS, TEAM_SIZE_OPTS,
-  SERVICE_TYPE_OPTS,
+  ALL_SERVICE_TYPE_OPTS,
 } from '../../features/business-details/options';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -154,7 +154,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
   // from here. The value is edited in Business Info (one editor, under a
   // 90-day cooldown); this is a pointer to it, not a second one.
   const serviceTypeLabel =
-    SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory;
+    ALL_SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory;
   // Hair types only mean something for hair providers — a nail tech has no
   // use for the question, and asking would put noise in their profile.
   const isHairProvider = serviceCategory === 'HAIR';

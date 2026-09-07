@@ -24,10 +24,20 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ```
 OWNER:  session 4fe95792 (multi-select service types + drop OTHER)
 SINCE:  2026-09-08
-SCOPE:  providers.service_categories + services.service_category
-        (20260906193000_provider_multiple_service_types, still UNAPPLIED —
-        inherited from session ad8beea5 by merging
-        feat/provider-multiple-service-types into this branch)
+SCOPE:  providers.service_categories + services.service_category, and the
+        service-type cooldown/cascade triggers those two columns now share
+        with 20260907000413. Both files below are UNAPPLIED:
+          20260908090000_provider_multiple_service_types
+          20260908090100_service_type_cooldown_covers_the_whole_set
+        The first is session ad8beea5's, inherited by merging
+        feat/provider-multiple-service-types into this branch and RENUMBERED
+        from 20260906193000 — it sat below the applied frontier
+        (20260907000413), which is the ordering hazard CLAUDE.md warns about.
+        The second is new here and MUST be applied in the same sitting,
+        immediately after the first: on its own the first one opens a
+        cooldown bypass and skips the cascade (both explained in its header).
+        Neither has been run — the Supabase MCP was disconnected for this
+        whole session, so nothing was verified against live schema.
 ```
 
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)

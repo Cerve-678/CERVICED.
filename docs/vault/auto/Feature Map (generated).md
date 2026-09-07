@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **85 files**
 - … +55 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **159 files**
+Curated: [[Availability & Slots]] · **160 files**
 - `src/services/AvailabilityService.ts` _(330)_
 - `src/services/databaseService.ts` _(269)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **159 files**
 - `src/types/database.ts` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
-- … +129 more
+- … +130 more
 
 ## Payments
 Curated: [[Payments]] · **112 files**
@@ -126,8 +126,8 @@ Curated: [[Booking Flow]] · **242 files**
 - `src/services/AvailabilityService.ts` _(134)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `supabase/phase1_schema.sql` _(125)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(124)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(123)_
 - `src/screens/shared/NotificationsScreen.tsx` _(119)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(113)_
@@ -312,7 +312,7 @@ Curated: [[Contexts]] · **162 files**
 - … +132 more
 
 ## Becca / AI
-Curated: [[Services]] · **39 files**
+Curated: [[Services]] · **40 files**
 - `src/screens/shared/BeccaScreen.tsx` _(92)_
 - `src/services/becca/engine.ts` _(49)_
 - `src/services/becca/capabilities/client.ts` _(48)_
@@ -343,7 +343,7 @@ Curated: [[Services]] · **39 files**
 - `src/types/database.ts` _(3)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(2)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(2)_
-- … +9 more
+- … +10 more
 
 ## Cart & checkout
 Curated: [[Payments]] · **66 files**

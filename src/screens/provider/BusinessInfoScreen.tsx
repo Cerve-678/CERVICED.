@@ -46,6 +46,7 @@ import {
 import {
   ADDRESS_RELEASE_OPTS,
   BUSINESS_TYPE_OPTS,
+  ALL_SERVICE_TYPE_OPTS,
   SERVICE_TYPE_OPTS,
   isAddressReleaseAllowed,
   reconcileAddressReleasePolicy,
@@ -182,9 +183,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
     && !categoryChanged
     && customServiceType.trim() !== savedCustomServiceType.trim();
   const savedCategoryLabel =
-    SERVICE_TYPE_OPTS.find(o => o.value === savedServiceCategory)?.label ?? savedServiceCategory ?? '';
+    ALL_SERVICE_TYPE_OPTS.find(o => o.value === savedServiceCategory)?.label ?? savedServiceCategory ?? '';
   const pendingCategoryLabel =
-    SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '';
+    ALL_SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '';
 
   function isValidEmail(email: string) {
     return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

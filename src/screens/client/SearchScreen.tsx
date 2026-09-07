@@ -171,10 +171,15 @@ function formatPriceRange(range: { min: number; max: number }): string {
 const CATEGORY_CODE_MAP: Record<string, string> = {
   Hair: 'HAIR', Nails: 'NAILS', Makeup: 'MUA',
   Aesthetics: 'AESTHETICS', Brows: 'BROWS', Lashes: 'LASHES',
-  Other: 'OTHER',
 };
 
-const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics', 'Other']
+// No "Other" tab, matching Explore, which never had one. OTHER is retired as a
+// pickable provider type (see SERVICE_TYPE_OPTS) and it made a poor tab
+// regardless: a client browsing it learned nothing about what they'd find, and
+// the free-text custom_service_type that gave it meaning was never searchable.
+// Providers still stamped OTHER are reachable by name and by their services —
+// they just aren't offered as a category to browse.
+const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics']
   .map(c => ({ key: c, label: c }));
 
 // Price matching lives in src/utils/providerPriceMatch.ts, alongside the
