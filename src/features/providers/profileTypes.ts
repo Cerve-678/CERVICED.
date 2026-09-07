@@ -48,10 +48,12 @@ export interface ProviderProfileData {
   accentColor: string | null;
   backgroundImage: string | null;
   profileTheme: string;
+  brandFont: string | null;
   phone: string;
   email: string;
   instagram: string;
   website: string;
+  tiktok: string;
   externalBookingUrl: string | null;
   yearsExperience: string;
   specialties: string[];
