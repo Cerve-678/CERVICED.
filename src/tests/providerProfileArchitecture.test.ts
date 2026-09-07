@@ -79,25 +79,25 @@ describe("ProviderProfileScreen data architecture", () => {
     expect(auth).toContain("'pending' | 'resolved' | 'failed'");
     expect(auth).toContain("setMyProviderIdStatus('failed')");
 
-    // The screen trusts the session answer only when it actually resolved,
-    // and falls back to the per-profile check otherwise.
-    expect(source).toContain(
-      'myProviderIdStatus === "resolved" && providerDbId !== null',
+    // The gate consults the status, not just the id — the two nulls
+    // ('resolved: owns none' and 'failed: unknown') must not be conflated.
+    // What it does with each is pinned in bookingCtaVisibility.test.ts.
+    const gate = readFileSync(
+      join(__dirname, "../features/providers/bookingCtaVisibility.ts"),
+      "utf8",
     );
-    expect(source).toContain(
-      "isOwnProvider || (sessionOwnershipKnown && myProviderId === providerDbId)",
-    );
+    expect(gate).toContain('myProviderIdStatus === "resolved"');
   });
 
-  it("still withholds booking controls until ownership is actually known", () => {
-    // The safety property the gate exists for: a provider must never see a
-    // "Book" button on their own profile, not even for one frame. Either
-    // ownership check settling is enough to know, but one of them must.
-    expect(source).toContain("const canBookProvider = ownershipResolved && !ownsThisProfile;");
-    expect(source).toContain("const ownershipResolved = viewerChecked || sessionOwnershipKnown;");
-    // The per-profile check stays the authority and can still take the
-    // controls away if the two ever disagree.
-    expect(source).toContain("isOwnProvider ||");
+  it("delegates the booking-CTA gate rather than inlining it", () => {
+    // The gate's interesting states are all mid-load and pass too quickly to
+    // inspect in a running app, so the decision lives in a pure function with
+    // its own truth-table test (bookingCtaVisibility.test.ts). This only
+    // pins that the screen still routes through it.
+    expect(source).toContain("shouldShowBookingCta({");
+    expect(source).toContain("const canBookProvider = shouldShowBookingCta(");
+    // The original gate, which made every client wait a round trip.
+    expect(source).not.toContain("const canBookProvider = viewerChecked && !isOwnProvider");
   });
 
   it("resolves an owned provider id deterministically and does not swallow the error", () => {

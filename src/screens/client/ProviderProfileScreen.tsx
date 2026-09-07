@@ -50,6 +50,7 @@ import {
 } from "../../components/IconLibrary";
 import { useCart } from "../../contexts/CartContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 
 // Navigation types
 import { HomeStackParamList } from "../../navigation/types";
@@ -1374,23 +1375,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // the buttons popping in late. The per-profile check stays the authority and
   // can still take the controls away if the two ever disagree.
   const { myProviderId, myProviderIdStatus } = useAuth();
-  // The session-level answer counts only when the lookup actually succeeded.
-  // A failed lookup also leaves myProviderId null, and reading that as "owns
-  // no provider profile" would offer the owner a Book button on their own
-  // profile — and, because the lookup is cached for the session, on every
-  // visit rather than for a frame. On failure this falls through to the
-  // per-profile check, which is exactly the old behaviour.
-  const sessionOwnershipKnown =
-    myProviderIdStatus === "resolved" && providerDbId !== null;
-  const ownsThisProfile =
-    isOwnProvider || (sessionOwnershipKnown && myProviderId === providerDbId);
-  // Never render a booking CTA while ownership is still unknown: otherwise
-  // providers see a short-lived "Book" button on their own profile before it
-  // flips to the owner state. Either check settling is enough to know, and the
-  // session-level one normally settled long before this screen mounted. A
-  // server-side self-booking guard remains the final boundary.
-  const ownershipResolved = viewerChecked || sessionOwnershipKnown;
-  const canBookProvider = ownershipResolved && !ownsThisProfile;
+  // See shouldShowBookingCta for why this takes two answers to the same
+  // question: one fast enough to paint with the card, one authoritative.
+  const canBookProvider = shouldShowBookingCta({
+    providerDbId,
+    myProviderId,
+    myProviderIdStatus,
+    isOwnProvider,
+    viewerChecked,
+  });
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
