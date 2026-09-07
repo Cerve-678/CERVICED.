@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
-import { View, Animated, Dimensions, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, Animated, ScrollView, StyleSheet, RefreshControl, useWindowDimensions, Platform } from 'react-native';
 import { spacing } from '../constants/PlatformDimensions';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -26,6 +26,26 @@ const BALANCE_WEIGHT = 0.15;
 // scrolled to.
 export interface MasonryGridHandle {
   scrollToTop: (animated?: boolean) => void;
+}
+
+/**
+ * How many masonry columns a window of this width should show.
+ *
+ * A phone gets two. Anything wider fills the space it actually has rather than
+ * stretching two columns across a tablet — on an iPad, two columns means two
+ * enormous cards per row and almost nothing visible at once, which loses the
+ * browse-a-lot-at-a-glance feel the grid exists for. More columns also gives
+ * the shortest-column packing more places to put each card, so the stagger
+ * reads as more varied on a big screen rather than more regular.
+ *
+ * Breakpoints are window width in dp, so they respond to split-screen and
+ * rotation, not just to which device it is.
+ */
+export function masonryColumnsForWidth(width: number): number {
+  if (width >= 1200) return 5; // iPad Pro landscape
+  if (width >= 900) return 4;  // iPad landscape
+  if (width >= 600) return 3;  // iPad portrait, phone landscape
+  return 2;                    // phones
 }
 
 interface MasonryGridProps<T> {
@@ -56,7 +76,7 @@ function MasonryGridInner<T>(
     renderItem,
     getItemHeight,
     keyExtractor,
-    numColumns = 2,
+    numColumns: numColumnsProp,
     columnGap = spacing.sm,
     contentPadding = spacing.lg,
     ListHeaderComponent,
@@ -76,7 +96,9 @@ function MasonryGridInner<T>(
       scrollRef.current?.scrollTo({ y: 0, animated });
     },
   }), []);
-  const screenWidth = Dimensions.get('window').width;
+  const { width: screenWidth } = useWindowDimensions();
+  // Defaults to the width-derived count; an explicit prop still overrides it.
+  const numColumns = numColumnsProp ?? masonryColumnsForWidth(screenWidth);
   const columnWidth = (screenWidth - contentPadding * 2 - columnGap * (numColumns - 1)) / numColumns;
 
   const columns = useMemo(() => {
@@ -191,6 +213,12 @@ function MasonryGridInner<T>(
       onScrollEndDrag={onScrollEndDrag}
       onMomentumScrollEnd={onMomentumScrollEnd}
       scrollEventThrottle={16}
+      // The grid is one ScrollView holding every card — there is no
+      // virtualization to fall back on — so on Android, where the photo feed
+      // is heaviest, offscreen cards are detached from the view hierarchy
+      // while scrolling. Android-only: it is a no-op to slightly harmful on
+      // iOS, which is why the rest of the app gates it the same way.
+      removeClippedSubviews={Platform.OS === 'android'}
       refreshControl={
         onRefresh ? (
           <RefreshControl

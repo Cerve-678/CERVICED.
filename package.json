@@ -36,6 +36,7 @@
     "audit:live-review-authority": "node scripts/audit-live-review-authority.mjs",
     "audit:live-booking-authority": "node scripts/audit-live-booking-authority.mjs",
     "audit:live-intake-form-authority": "node scripts/audit-live-intake-form-authority.mjs",
+    "audit:live-account-hats": "node scripts/audit-live-account-hats.mjs",
     "lint:live-db": "supabase db lint --linked",
     "prepare": "git config core.hooksPath .githooks || true"
   },

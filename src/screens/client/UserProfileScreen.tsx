@@ -310,7 +310,7 @@ export default function UserProfileScreen({ navigation }: any) {
       </SafeAreaView>
 
       {/* ── Become a Provider modal ─────────────────────────────────────── */}
-      <Modal visible={showProviderModal} transparent animationType="fade" onRequestClose={() => setShowProviderModal(false)}>
+      <Modal visible={showProviderModal} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowProviderModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlayCenter}>
           <View style={[styles.modalCard, { backgroundColor: P.surfaceRaised, borderColor: P.border }]}>
             <Text style={[styles.modalTitle, { color: P.text }]}>Become a Provider</Text>
@@ -340,7 +340,7 @@ export default function UserProfileScreen({ navigation }: any) {
       </Modal>
 
       {/* ── Log out confirmation modal ──────────────────────────────────── */}
-      <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
+      <Modal visible={showLogoutModal} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: P.surfaceRaised, borderColor: P.border }]}>
             <Text style={[styles.modalTitle, { color: P.text }]}>Log Out</Text>

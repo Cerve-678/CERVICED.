@@ -893,7 +893,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
         )}
 
         {/* ── Waitlist invite modal ────────────────────────────────────── */}
-        <Modal visible={inviteModal.visible} transparent animationType="fade"
+        <Modal visible={inviteModal.visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade"
           onRequestClose={() => setInviteModal({ visible: false, entry: null })}>
           <View style={wl.backdrop}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setInviteModal({ visible: false, entry: null })} />

@@ -13,6 +13,14 @@
  */
 import { reportError } from './logger';
 
+/**
+ * Supabase Auth's own guard against "changing" a password to its current
+ * value — 422 same_password. Exported so a caller can special-case its
+ * dialog title: this isn't really a failure, just a rejected no-op, so
+ * "Error" reads wrong next to it.
+ */
+export const SAME_PASSWORD_MESSAGE = 'Your new password needs to be different from your current one.';
+
 const FRIENDLY_PATTERNS: { test: RegExp; message: string }[] = [
   { test: /network|fetch failed|timeout|offline|connect/i,
     message: 'No internet connection. Please check your network and try again.' },
@@ -30,6 +38,7 @@ const FRIENDLY_PATTERNS: { test: RegExp; message: string }[] = [
     message: "Your password isn't strong enough. Try mixing letters, numbers, and symbols." },
   { test: /password.*(short|characters)/i,
     message: 'Your password needs to be at least 8 characters long.' },
+  { test: /new password should be different/i, message: SAME_PASSWORD_MESSAGE },
   { test: /invalid login|invalid credentials|email not confirmed/i,
     message: "That email or password doesn't match an account." },
   { test: /permission|row-level security|not authorized|unauthorized|jwt/i,

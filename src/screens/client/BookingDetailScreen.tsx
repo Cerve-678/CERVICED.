@@ -5,7 +5,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
   Keyboard, TouchableWithoutFeedback,
-  LayoutAnimation, UIManager,
+  LayoutAnimation,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,10 +52,6 @@ import { buildClientReceiptHTML } from '../../features/bookings/receipt';
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
-
-if (Platform.OS === 'android') {
-  UIManager.setLayoutAnimationEnabledExperimental?.(true);
-}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -1269,7 +1265,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             cancelBooking), so a rejection surfaces as the RPC's own guard
             message via handleCancelBooking's catch, rather than this modal
             silently blocking the attempt itself. */}
-        <Modal visible={showCancelModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCancelModal(false)}>
+        <Modal visible={showCancelModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowCancelModal(false)}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.overlay}>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
@@ -1311,7 +1307,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Success Modal ─── */}
-        <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent
+        <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent
           onRequestClose={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }}>
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
@@ -1334,7 +1330,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Cooldown Modal ─── */}
-        <Modal visible={showCooldownModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCooldownModal(false)}>
+        <Modal visible={showCooldownModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowCooldownModal(false)}>
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
@@ -1357,7 +1353,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             ProviderBookingDetailScreen.handleStatusChange) — the accused
             party isn't here to answer, and the status is terminal
             (TERMINAL_BOOKING_STATUSES; the RPC refuses to write over it). */}
-        <Modal visible={showProviderNoShowModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowProviderNoShowModal(false)}>
+        <Modal visible={showProviderNoShowModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowProviderNoShowModal(false)}>
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
@@ -1386,7 +1382,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             A reason is required and is not optional politeness: it is the
             entire content of the support ticket, and a dispute that says
             nothing gives whoever reads it nothing to act on. */}
-        <Modal visible={showDisputeModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowDisputeModal(false)}>
+        <Modal visible={showDisputeModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowDisputeModal(false)}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={[st.sheetTitle, { color: C.text }]}>Dispute this no-show</Text>
@@ -1428,7 +1424,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Rating Modal ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 {!hasRated ? (
@@ -1468,7 +1464,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Tip Modal ─── */}
-        <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
+        <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 <Text style={[st.sheetTitle, { color: C.text }]}>Leave a Tip</Text>
@@ -1498,7 +1494,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Rebook Add-ons Modal ─── */}
-        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
+        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={[st.sheetTitle, { color: C.text }]}>Include Add-Ons?</Text>
@@ -1522,7 +1518,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Contact Sheet ─── */}
-        <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
+        <Modal visible={contactSheetVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} onPress={() => setContactSheetVisible(false)}>
             <Pressable style={[st.contactSheet, { backgroundColor: C.surfaceRaised }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
@@ -1629,7 +1625,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Info Pack Popup — short packs, as a small sheet instead of a
             takeover screen ─── */}
-        <Modal visible={!!viewingPack && !isLongBookingInfoPack(viewingPack)} animationType="fade" transparent onRequestClose={() => setViewingPack(null)}>
+        <Modal visible={!!viewingPack && !isLongBookingInfoPack(viewingPack)} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setViewingPack(null)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 28 }} onPress={() => setViewingPack(null)}>
             <Pressable style={{ width: '100%', maxWidth: 420, borderRadius: 20, padding: 22, backgroundColor: C.surfaceRaised }} onPress={e => e.stopPropagation()}>
               {viewingPack && (

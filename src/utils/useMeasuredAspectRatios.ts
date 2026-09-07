@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, LayoutAnimation, Platform, UIManager } from 'react-native';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+import { Image, LayoutAnimation, Platform } from 'react-native';
 
 // Real aspect ratios for remote images, measured from the files themselves.
 //
@@ -76,7 +72,16 @@ export function useMeasuredAspectRatios(uris: (string | undefined)[]): {
         // the jump into a smooth resize instead, so it reads as the grid
         // settling rather than visibly "re-leveling" after it's already on
         // screen.
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        // iOS only. On Android this batch typically lands WHILE the feed is
+        // being scrolled, and animating a full-grid re-pack there costs an
+        // extra layout pass on the frame it commits — which reads as the
+        // stutter it was meant to smooth. LayoutAnimation is also only
+        // partially supported under the New Architecture on Android, so the
+        // smoothing it buys is not reliably there to begin with. The re-pack
+        // still happens, just as a plain commit.
+        if (Platform.OS !== 'android') {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        }
         setVersion(v => v + 1);
       }
     };

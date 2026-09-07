@@ -817,7 +817,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
         {/* ── Quick-reply dialog ─────────────────────────────────────── */}
         <Modal
           visible={!!replyTarget}
-          transparent
+          transparent statusBarTranslucent navigationBarTranslucent
           animationType="fade"
           onRequestClose={() => setReplyTarget(null)}
         >

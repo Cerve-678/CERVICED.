@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   },
 
   saveBtn: {
-    height: 52,
+    minHeight: 52,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',

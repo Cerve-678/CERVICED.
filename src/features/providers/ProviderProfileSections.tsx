@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Modal,
   Platform,
@@ -8,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
@@ -20,11 +20,8 @@ import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./useProviderProfileData";
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
 const INLINE_PORTFOLIO_LIMIT = 8;
 const COLUMN_GAP = 12;
-const INLINE_COLUMN_WIDTH = (SCREEN_WIDTH - 40 - COLUMN_GAP) / 2;
-const MODAL_COLUMN_WIDTH = (SCREEN_WIDTH - 52) / 2;
 
 interface SectionPalette {
   text: string;
@@ -328,18 +325,23 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   interactiveImages?: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
+  // Measured per render rather than captured at module load, so the two-column
+  // maths stays right after a rotation or in split-screen.
+  const { width: screenWidth } = useWindowDimensions();
+  const inlineColumnWidth = (screenWidth - 40 - COLUMN_GAP) / 2;
+  const modalColumnWidth = (screenWidth - 52) / 2;
   const images = useMemo(() => items.map(item => ({ uri: item.image_url })), [items]);
   const columns = useMemo(() => {
     const result: PortfolioTile[][] = [[], []];
     const heights = [0, 0];
     items.slice(0, INLINE_PORTFOLIO_LIMIT).forEach((item, globalIndex) => {
-      const height = tileHeight(item, INLINE_COLUMN_WIDTH);
+      const height = tileHeight(item, inlineColumnWidth);
       const column = heights[0]! <= heights[1]! ? 0 : 1;
       result[column]!.push({ ...item, tileHeight: height, globalIndex });
       heights[column]! += height + COLUMN_GAP;
     });
     return result;
-  }, [items]);
+  }, [items, inlineColumnWidth]);
 
   if (items.length === 0) return null;
 
@@ -415,14 +417,14 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
             removeClippedSubviews={Platform.OS === "android"}
             renderItem={({ item, index }) => (
               <TouchableOpacity
-                style={styles.modalTile}
+                style={[styles.modalTile, { width: modalColumnWidth }]}
                 activeOpacity={0.88}
                 onPress={() => openFromModal(index)}
                 disabled={!interactiveImages}
               >
                 <Image
                   source={{ uri: item.image_url }}
-                  style={{ width: MODAL_COLUMN_WIDTH, height: tileHeight(item, MODAL_COLUMN_WIDTH) }}
+                  style={{ width: modalColumnWidth, height: tileHeight(item, modalColumnWidth) }}
                   contentFit="cover"
                   transition={0}
                   recyclingKey={item.id}
@@ -511,5 +513,5 @@ const styles = StyleSheet.create({
   closeButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   modalGrid: { paddingHorizontal: 20, paddingBottom: 40 },
   modalRow: { gap: COLUMN_GAP, marginBottom: COLUMN_GAP },
-  modalTile: { width: MODAL_COLUMN_WIDTH, borderRadius: 16, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  modalTile: { borderRadius: 16, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
 });

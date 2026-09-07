@@ -27,6 +27,7 @@ import {
   RESCHEDULE_MAX_DATES,
 } from '../../utils/rescheduleWindow';
 import { logger, reportError } from '../../utils/logger';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -773,7 +774,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               time (date, then time). Android: native dialogs render inline
               via the OS, no wrapper needed. */}
           {customPickerStep && Platform.OS === 'ios' && (
-            <Modal transparent animationType="fade" visible onRequestClose={() => setCustomPickerStep(null)}>
+            <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible onRequestClose={() => setCustomPickerStep(null)}>
               <View style={st.pickerModalWrap}>
                 <TouchableOpacity style={st.pickerDismiss} activeOpacity={1} onPress={() => setCustomPickerStep(null)} />
                 <View style={[st.pickerSheet, { backgroundColor: C.card }]}>
@@ -949,7 +950,7 @@ const st = StyleSheet.create({
   customTimeBtnText: { fontSize: 10, fontWeight: '700' },
   customTimeConfirm: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 10 },
   customTimeConfirmText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },

@@ -141,6 +141,14 @@ export interface BookingContextType {
   canReschedule: (bookingId: string) => { canReschedule: boolean; reason?: string };
   refreshBookingStatuses: () => void;
   reloadBookings: () => Promise<void>;
+  // Best-effort reload for a screen that just mounted/focused, not a real
+  // mutation. Skips the AsyncStorage+network reload entirely when the
+  // context already has a load from within the last few seconds — the
+  // provider loads once on mount and stays current via its own realtime
+  // subscription, so a screen re-mounting a moment later doesn't need to
+  // repeat that full reload. Callers after an actual write (cancel, reschedule,
+  // etc.) should keep using reloadBookings, which always reloads.
+  reloadBookingsIfStale: (maxAgeMs?: number) => Promise<void>;
 
   // getMyBookings() only loads a recent window (default 90 days) plus
   // everything upcoming, for scale — call this to page further back.
@@ -466,6 +474,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   // Paging state for history beyond getMyBookings()'s default recent window.
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
+  // When loadBookings last ran, for reloadBookingsIfStale's skip check.
+  const lastLoadedAtRef = useRef<number>(0);
 
   const loadBookings = useCallback(async () => {
     try {
@@ -689,6 +699,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
+    // Only reached on success — the catch above rethrows, so a failed load
+    // never stamps this. reloadBookingsIfStale trusts this timestamp to skip
+    // a reload; stamping it on failure too would make a load that just
+    // failed look "fresh" and mask the error from a screen mounting shortly
+    // after.
+    lastLoadedAtRef.current = Date.now();
   }, []);
 
   useEffect(() => {
@@ -2220,6 +2236,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     await loadBookings();
   }, [loadBookings]);
 
+  const reloadBookingsIfStale = useCallback(async (maxAgeMs = 15000) => {
+    if (Date.now() - lastLoadedAtRef.current < maxAgeMs) return;
+    await loadBookings();
+  }, [loadBookings]);
+
   // Pages further back than getMyBookings()'s default recent window, using
   // the oldest currently-loaded booking_date as the cursor.
   const loadOlderBookings = useCallback(async () => {
@@ -2369,6 +2390,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     canReschedule,
     refreshBookingStatuses,
     reloadBookings,
+    reloadBookingsIfStale,
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,
@@ -2400,6 +2422,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     canReschedule,
     refreshBookingStatuses,
     reloadBookings,
+    reloadBookingsIfStale,
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,

@@ -22,6 +22,7 @@ import { View, Text, TouchableOpacity, ScrollView, Modal, StyleSheet } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../constants/providerThemes';
+import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
 
 export interface AddOnPickerAddOn {
   id: string | number;
@@ -163,14 +164,14 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => onDone(selected)}>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => onDone(selected)}>
       {content}
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {

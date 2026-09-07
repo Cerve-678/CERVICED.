@@ -587,7 +587,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
         <Modal
           visible={showAddressModal}
-          transparent
+          transparent statusBarTranslucent navigationBarTranslucent
           animationType="fade"
           onRequestClose={closeAddressModal}
         >

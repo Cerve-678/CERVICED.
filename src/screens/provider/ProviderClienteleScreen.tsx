@@ -36,6 +36,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { formatTime12 } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
 import { toUserMessage } from '../../utils/userFacingError';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -123,7 +124,7 @@ function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: 
   loading: boolean; onClose: () => void; P: typeof LIGHT;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={chSt.backdrop} activeOpacity={1} onPress={onClose} />
       <View style={[chSt.sheet, { backgroundColor: P.surface }]}>
         <View style={[chSt.handle, { backgroundColor: P.border }]} />
@@ -470,7 +471,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
           />
         )}
         {(showDatePicker || showTimePicker) && Platform.OS === 'ios' && (
-          <Modal transparent animationType="fade" visible onRequestClose={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
+          <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible onRequestClose={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
             <View style={anSt.pickerModalWrap}>
               <TouchableOpacity
                 style={anSt.pickerDismiss}
@@ -573,10 +574,12 @@ const anSt = StyleSheet.create({
   pickerRow:    { flexDirection: 'row', gap: 8, marginTop: 10 },
   pickerBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 11 },
   pickerText:   { fontSize: 13, fontWeight: '600' },
-  sendBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 20 },
+  // marginBottom keeps the button off the system navigation bar — the sheet
+  // runs to the bottom of the window, so without it the button sits under it.
+  sendBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 20, marginBottom: BOTTOM_SAFE_GAP },
   sendBtnText:  { fontSize: 15, fontWeight: '700', color: '#fff' },
   errorText:    { fontSize: 13, color: '#FF6868', textAlign: 'center', marginTop: 10 },
-  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -906,7 +909,7 @@ const s = StyleSheet.create({
   emptyIcon:        { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   emptyTitle:       { fontSize: 18, fontWeight: '700' },
   emptySub:         { fontSize: 13, textAlign: 'center', lineHeight: 20 },
-  modalBackdrop:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  modalBackdrop:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)', paddingBottom: BOTTOM_SAFE_GAP },
   modalCard:        { maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
   modalHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle:       { fontSize: 17, fontWeight: '700', flex: 1, marginRight: 12 },

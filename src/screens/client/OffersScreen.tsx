@@ -283,7 +283,7 @@ export default function OffersScreen({ navigation }: Props) {
           rather than an anchored popover (a native headerRight button's
           on-screen position isn't something React Navigation exposes to
           measure against, so a centered sheet is the robust option here). */}
-      <Modal visible={sortModalVisible} transparent animationType="fade" onRequestClose={() => setSortModalVisible(false)}>
+      <Modal visible={sortModalVisible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setSortModalVisible(false)}>
         <TouchableOpacity
           style={styles.sortBackdrop}
           activeOpacity={1}
@@ -370,7 +370,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
-    elevation: 2,
+    // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+    // non-zero elevation clips Android's shadow to the rounded outline
+    // instead of letting it fade outward, showing as a dark ring. iOS keeps
+    // its shadow via shadow* above.
+    elevation: 0,
     overflow: 'hidden',
   },
   // In normal flow, above the provider name — not absolutely positioned

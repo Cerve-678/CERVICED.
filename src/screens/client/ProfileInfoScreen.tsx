@@ -26,6 +26,8 @@ import AreaPicker from '../../components/AreaPicker';
 import { updateUserDob } from '../../services/databaseService';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
 // Must be at least 16 to have an account (see validateDob in utils/validation.ts) —
 // encoded as the picker's maximumDate so the UI can't select an invalid date at all.
@@ -128,7 +130,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
       <StatusBar barStyle={theme.statusBar} translucent />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
+          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -252,7 +254,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
             />
           )}
           {showDobPicker && Platform.OS === 'ios' && (
-            <Modal transparent animationType="fade" visible onRequestClose={() => setShowDobPicker(false)}>
+            <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible onRequestClose={() => setShowDobPicker(false)}>
               <View style={styles.pickerModalWrap}>
                 <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setShowDobPicker(false)} />
                 <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
@@ -330,7 +332,7 @@ const styles = StyleSheet.create({
   lockedText: { flex: 1, fontSize: 15 },
   dobRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dobText: { fontSize: 15 },
-  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },

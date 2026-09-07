@@ -74,6 +74,7 @@ import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentati
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -2069,7 +2070,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       {/* ── Client history modal ── */}
       <Modal
         visible={clientHistoryVisible}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setClientHistoryVisible(false)}
       >
@@ -2156,7 +2157,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           branch. ── */}
       <Modal
         visible={showInitRescheduleModal}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={closeInitRescheduleModal}
       >
@@ -2270,7 +2271,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 </TouchableOpacity>
                 {initSlotDatePickerVisible && (
                   Platform.OS === 'ios' ? (
-                    <Modal transparent animationType="fade" visible={initSlotDatePickerVisible} onRequestClose={() => setInitSlotDatePickerVisible(false)}>
+                    <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={initSlotDatePickerVisible} onRequestClose={() => setInitSlotDatePickerVisible(false)}>
                       <View style={styles.pickerModalWrap}>
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitSlotDatePickerVisible(false)} />
                         <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
@@ -2346,7 +2347,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 </View>
                 {initCustomTimePickerVisible && (
                   Platform.OS === 'ios' ? (
-                    <Modal transparent animationType="fade" visible={initCustomTimePickerVisible} onRequestClose={() => setInitCustomTimePickerVisible(false)}>
+                    <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={initCustomTimePickerVisible} onRequestClose={() => setInitCustomTimePickerVisible(false)}>
                       <View style={styles.pickerModalWrap}>
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitCustomTimePickerVisible(false)} />
                         <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
@@ -2466,7 +2467,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           same pattern CartScreen.tsx uses client-side pre-booking. ── */}
       <Modal
         visible={showGroupRescheduleModal}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={closeGroupRescheduleModal}
       >
@@ -2575,7 +2576,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       {/* ── Help dropdown ── */}
       <Modal
         visible={showHelpDropdown}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="none"
         onRequestClose={() => setShowHelpDropdown(false)}
       >
@@ -2615,7 +2616,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       {/* ── Support dropdown ── */}
       <Modal
         visible={showMoreSheet}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setShowMoreSheet(false)}
       >
@@ -2665,7 +2666,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           dispute that says nothing gives whoever reads it nothing to act on. */}
       <Modal
         visible={showDisputeModal}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setShowDisputeModal(false)}
       >
@@ -2728,7 +2729,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       {/* ── Confirm/decline dialog ── */}
       <Modal
         visible={!!pendingConfirm}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setPendingConfirm(null)}
       >
@@ -2799,7 +2800,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       {/* ── Info Pack Picker Modal ──────────────────────────────────────────── */}
       <Modal
         visible={showInfoPackPicker}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setShowInfoPackPicker(false)}
       >
@@ -2957,7 +2958,13 @@ function ActionButton({
       style={[
         styles.actionBtn,
         ghost
-          ? { backgroundColor: color + '14', borderWidth: 1.5, borderColor: color + '55' }
+          // actionBtn's elevation/shadow is meant for the solid variant's
+          // opaque fill. Left on here, Android still casts the shadow from
+          // the button's full rounded-rect silhouette, and with this near-
+          // transparent (~8% alpha) fill it shows straight through as a dark
+          // band hugging the inside edge — a thick "shadow ring" instead of
+          // a normal outline chip. Zero it out for ghost buttons only.
+          ? { backgroundColor: color + '14', borderWidth: 1.5, borderColor: color + '55', elevation: 0, shadowOpacity: 0 }
           : { backgroundColor: color },
       ]}
       onPress={onPress}
@@ -3033,7 +3040,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.28,
         shadowRadius: 20,
       },
-      android: { elevation: 14 },
+      // elevation: 0 — overflow:'hidden' + borderRadius + a non-zero
+      // elevation clips Android's shadow to the rounded outline instead of
+      // letting it fade outward, showing as a dark ring.
+      android: { elevation: 0 },
     }),
   },
   supportDropdownBlur: {
@@ -3069,7 +3079,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.22,
         shadowRadius: 18,
       },
-      android: { elevation: 14 },
+      // elevation: 0 — overflow:'hidden' + borderRadius + a non-zero
+      // elevation clips Android's shadow to the rounded outline instead of
+      // letting it fade outward, showing as a dark ring.
+      android: { elevation: 0 },
     }),
   },
   helpDropdownContent: {
@@ -3441,6 +3454,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    // Keeps the sheet clear of the system navigation bar.
+    paddingBottom: BOTTOM_SAFE_GAP,
   },
   respondModal: {
     borderTopLeftRadius: 28,
@@ -3495,6 +3510,8 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     justifyContent: 'flex-end',
+    // Keeps the sheet clear of the system navigation bar.
+    paddingBottom: BOTTOM_SAFE_GAP,
   },
   pickerDismiss: {
     flex: 1,

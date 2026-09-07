@@ -57,8 +57,24 @@ function animateTo(toValue: 0 | 1) {
   });
 }
 
+// Attaching a `listener` to a native-driven Animated.event means RN has to
+// deliver EVERY scroll frame to JS to run it, which is most of the native
+// driver's benefit given back — and on Android, where scrollEventThrottle is
+// effectively ignored and events arrive at native cadence, that is enough
+// per-frame JS to make a heavy grid feel stiff. Direction tracking doesn't
+// need frame resolution: it decides between two states, and the pill's own
+// transition is 120ms. Sampling at 100ms costs nothing perceptible and cuts
+// the JS work by roughly a factor of six.
+const DIRECTION_SAMPLE_MS = 100;
+let lastSampleAt = 0;
+
 function trackScrollDirection(e: NativeSyntheticEvent<NativeScrollEvent>) {
   const y = e.nativeEvent.contentOffset.y;
+  const now = Date.now();
+  // Reaching the top must always resolve immediately — that one is a state
+  // the user can see is wrong, not a sampled direction.
+  if (y > 0 && now - lastSampleAt < DIRECTION_SAMPLE_MS) return;
+  lastSampleAt = now;
   const delta = y - lastOffsetY;
   if (y <= 0) {
     lastOffsetY = y;

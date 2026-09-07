@@ -9,7 +9,7 @@ import {
   Alert,
   Linking,
   Platform,
-  Dimensions,
+  useWindowDimensions,
   Modal,
   Pressable,
   FlatList,
@@ -44,6 +44,8 @@ import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
 // ==================== TYPES ====================
 
@@ -56,7 +58,6 @@ type BookingsListRow =
 
 // ==================== CONSTANTS ====================
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -215,7 +216,13 @@ const WaitlistCard = React.memo(function WaitlistCard({
 const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   useFont();
   const { theme, isDarkMode, palette: P } = useTheme();
-  const styles = useMemo(() => createStyles(theme, isDarkMode, P), [theme, isDarkMode, P]);
+  // Measured per render, not captured at module load, so the full-screen modal
+  // backdrops still cover the window after a rotation or in split-screen.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const styles = useMemo(
+    () => createStyles(theme, isDarkMode, P, screenWidth, screenHeight),
+    [theme, isDarkMode, P, screenWidth, screenHeight],
+  );
   const { user } = useAuth();
   const { addToCart } = useCart();
 
@@ -228,6 +235,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     allTodayBookingsCompleted,
     providerRespondToReschedule,
     reloadBookings,
+    reloadBookingsIfStale,
   } = useBooking();
 
   // Past Bookings only shows the last 30 days of history — older rows stay
@@ -798,12 +806,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ==================== EFFECTS ====================
 
-  // Detect initial load failure from BookingContext
+  // Detect initial load failure from BookingContext. This screen is a Stack
+  // screen in four separate tab stacks, so it's a fresh mount on nearly
+  // every visit — reloadBookingsIfStale skips the full AsyncStorage+network
+  // reload when the context already loaded within the last 15s (its own
+  // mount effect + realtime subscription already keep it current), instead
+  // of repeating that round trip on every navigation into this screen.
   useEffect(() => {
-    reloadBookings().catch(() => {
+    reloadBookingsIfStale().catch(() => {
       setBookingsError('Failed to load bookings. Pull down to retry.');
     });
-  }, [reloadBookings]);
+  }, [reloadBookingsIfStale]);
 
   useEffect(() => {
     if (currentBooking?.coordinates && mapRef.current) {
@@ -919,6 +932,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         const correctTab: 'all' | 'past' = isInPast ? 'past' : 'all';
         logger.log('Auto-detected tab:', correctTab);
         setActiveFilters(new Set([correctTab]));
+        // History keeps its own category filter, which the tab switch above
+        // doesn't touch — leave it set and a booking outside that category
+        // never appears in the list to scroll to or highlight.
+        if (isInPast) setPastCategoryFilter(null);
 
         setSelectedBooking(booking);
 
@@ -931,13 +948,23 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           }, 3000);
         }
 
-        // Move past the list header once the history view is active. The
-        // outer FlatList owns scrolling, so this keeps notification-driven
-        // navigation on the same virtualized surface as manual browsing.
+        // Scroll the booking itself into view rather than a fixed distance
+        // past the list header — an upcoming booking sits inside its
+        // service-category row, a past one is a row of its own. Rows below the
+        // render window aren't mounted yet, so onScrollToIndexFailed owns the
+        // offset fallback.
         setTimeout(() => {
-          if (mainScrollRef.current) {
-            mainScrollRef.current.scrollToOffset({ offset: 200, animated: true });
-            logger.log('Scrolled to bookings section');
+          const index = virtualizedListRowsRef.current.findIndex(row =>
+            row.kind === 'past-booking'
+              ? row.booking.id === bookingId
+              : row.kind === 'category' && row.bookings.some(b => b.id === bookingId)
+          );
+          if (index >= 0) {
+            mainScrollRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.25 });
+            logger.log('Scrolled to booking row', { bookingId, index });
+          } else {
+            mainScrollRef.current?.scrollToOffset({ offset: 200, animated: true });
+            logger.warn('Booking row not in the list yet, scrolled past the header instead', { bookingId });
           }
         }, 400);
 
@@ -1122,6 +1149,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     return rows;
   }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries]);
 
+  // The notification-driven scroll above fires on a timer, after the filter
+  // switch has re-rendered this list, so it needs the rows as they are at that
+  // moment rather than the ones its effect closed over.
+  const virtualizedListRowsRef = useRef<BookingsListRow[]>(virtualizedListRows);
+  useEffect(() => {
+    virtualizedListRowsRef.current = virtualizedListRows;
+  }, [virtualizedListRows]);
+
   // ✅ Check if booking has been rated or tipped
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);
   const hasBookingBeenTipped = useCallback((bookingId: string) => tippedBookings.has(bookingId), [tippedBookings]);
@@ -1236,7 +1271,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           keyExtractor={bookingListKeyExtractor}
           renderItem={renderBookingsListRow}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: isFilterView ? 120 : 40 }]}
+          // + FLOATING_TAB_BAR_CLEARANCE — a plain SafeAreaView bottom edge
+          // only reserves the system nav bar's own inset, not the floating
+          // pill tab bar that sits above it, so without this the last row
+          // ends up hidden behind the pill (worse on Android, where the pill
+          // sits directly on the nav bar inset with no extra float). Matches
+          // the same `40 + FLOATING_TAB_BAR_CLEARANCE` pattern used on
+          // ProviderAccountScreen/UserProfileScreen/ProfileInfoScreen.
+          contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: (isFilterView ? 120 : 40) + FLOATING_TAB_BAR_CLEARANCE }]}
           bounces={true}
           refreshControl={
             <RefreshControl
@@ -1326,8 +1368,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                             title={booking.serviceName}
                             description={booking.providerName}
                             onPress={() => focusMapOnLocation(booking.coordinates)}
+                            tracksViewChanges
                           >
+                            {/* collapsable={false} — Android's view-flattening
+                                optimization can strip this wrapper's own native
+                                handle since nothing else forces one, but
+                                react-native-maps' marker snapshot needs a real
+                                handle to measure/capture correctly. Without it
+                                the snapshot can be taken from a partial layout
+                                pass, rendering only half the pill. */}
                             <View
+                              collapsable={false}
                               style={[
                                 styles.serviceMarker,
                                 booking.id === currentBooking?.id && styles.activeServiceMarker,
@@ -1363,8 +1414,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       <Marker
                         coordinate={{ latitude: userLocation?.latitude ?? 51.5074, longitude: userLocation?.longitude ?? -0.1278 }}
                         title="No appointments today"
+                        tracksViewChanges
                       >
-                        <View style={styles.serviceMarker}>
+                        <View collapsable={false} style={styles.serviceMarker}>
                           <Text style={styles.serviceLabel}>YOUR AREA</Text>
                         </View>
                       </Marker>
@@ -1722,7 +1774,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     </TouchableOpacity>
                   </View>
                 )}
-                <Modal visible={pastFilterOpen} transparent animationType="fade" onRequestClose={() => setPastFilterOpen(false)}>
+                <Modal visible={pastFilterOpen} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setPastFilterOpen(false)}>
                   <Pressable style={styles.pastFilterScrim} onPress={() => setPastFilterOpen(false)}>
                     {pastFilterAnchor && (
                       <Pressable
@@ -1818,7 +1870,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         />
 
         {/* ─── Contact Sheet ─── */}
-        <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
+        <Modal visible={contactSheetVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={csSt.overlay} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); }}>
             <Pressable style={[csSt.sheet, { backgroundColor: P.card }]} onPress={e => e.stopPropagation()}>
               <View style={[csSt.handle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
@@ -1894,7 +1946,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             Again" on any booking with add-ons was a silent dead end.
             Centered popup card (not a slide-up sheet) to match the rest of
             the booking-detail confirmation dialogs, no emoji icons. ─── */}
-        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
+        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
               <Text style={[popSt.sheetTitle, { color: P.text }]}>Include Add-Ons?</Text>
@@ -1924,7 +1976,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             thanks, etc). This state existed and was set all over the file but
             nothing ever rendered it, so those confirmations were silently
             invisible. ─── */}
-        <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent
+        <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent
           onRequestClose={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
@@ -1945,7 +1997,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             invite_next_waitlist_entry() (waitlist_holds.sql). Fetched
             directly by id (see the route-params effect above) since it's
             deliberately excluded from the normal bookings lists. ─── */}
-        <Modal visible={!!waitlistHold} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setWaitlistHold(null)}>
+        <Modal visible={!!waitlistHold} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setWaitlistHold(null)}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⏳</Text>
@@ -1989,7 +2041,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             showRatingModal/rating/reviewText but nothing rendered a modal, so
             tapping Rate did nothing visible. handleRatingSubmit already wired
             up a real submitReview() call; only the UI was missing. ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 {!hasRated ? (
@@ -2037,7 +2089,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* ─── Tip Modal — same dead-state issue as Rating above. handleTipSubmit
             now actually persists via setBookingTip() instead of only flipping
             local state. ─── */}
-        <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
+        <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a Tip</Text>
@@ -2083,7 +2135,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 }
 // ==================== STYLES ====================
 
-const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSheet.create({
+const createStyles = (
+  theme: Theme,
+  isDarkMode: boolean,
+  P: AppTheme,
+  screenWidth: number,
+  screenHeight: number,
+) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -2130,6 +2188,11 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     marginBottom: 20,
     paddingHorizontal: 32,
   },
+  // elevation: 0 (Android only) — overflow:'hidden' + borderRadius + a
+  // non-zero elevation clips Android's shadow to the rounded outline
+  // instead of letting it fade outward, showing as a dark ring. iOS keeps
+  // its shadow via shadow* above. Same fix as appointmentCard/
+  // nextAppointmentCard below.
   mapContainer: {
     height: 300,
     marginHorizontal: 20,
@@ -2140,11 +2203,20 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 0,
   },
   map: {
     flex: 1,
   },
+  // elevation: 0 (Android only) — a different mechanism than the
+  // overflow+radius ring elsewhere in this file: react-native-maps snapshots
+  // a custom marker into a bitmap sized to its measured layout bounds, but
+  // elevation's drop shadow needs to paint OUTSIDE those bounds. Android
+  // marker snapshots don't reserve that extra canvas, so the shadow bleed
+  // throws off the captured crop — this is what was cutting the pill down
+  // to a quarter of itself even after collapsable={false}/tracksViewChanges.
+  // iOS never snapshots custom markers at all, so it keeps its shadow via
+  // shadow* above.
   serviceMarker: {
     backgroundColor: P.card,
     paddingHorizontal: 12,
@@ -2156,7 +2228,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 6,
+    elevation: 0,
   },
   activeServiceMarker: {
     borderColor: P.accent,
@@ -2232,6 +2304,14 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     fontWeight: '900',
     textAlign: 'center',
   },
+  // elevation: 0 (Android only — shadowOpacity/shadowColor/shadowRadius
+  // above are iOS-only and stay as-is). This card has no backgroundColor of
+  // its own; its only fill is cardBlur's near-transparent overlay. Android
+  // still casts the elevation shadow from the card's full rounded-rect
+  // silhouette regardless of how see-through the fill is, so it shows
+  // straight through as a dark ring hugging the inside edge — the same bug
+  // as the ghost ActionButton in ProviderBookingDetailScreen.tsx. overflow:
+  // 'hidden' does not prevent it; only removing elevation does.
   appointmentCard: {
     borderRadius: 20,
     overflow: 'hidden',
@@ -2246,7 +2326,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 0,
   },
   nextAppointmentCard: {
     borderRadius: 20,
@@ -2263,7 +2343,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 0,
   },
   cardBlur: {
     padding: 20,
@@ -2492,7 +2572,8 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
-    elevation: 12,
+    // elevation: 0 (Android only) — see mapContainer above for why.
+    elevation: 0,
   },
   pastFilterOption: {
     flexDirection: 'row',
@@ -3950,7 +4031,7 @@ intakeFormTodoBadgeText: {
 // Layout only — colors are theme-dependent and applied at the call site via
 // isDarkMode-branched overrides, same pattern as popSt below.
 const csSt = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
   handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20 },
   title:       { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 4 },

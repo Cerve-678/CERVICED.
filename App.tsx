@@ -31,6 +31,7 @@ import { storage, STORAGE_KEYS } from './src/utils/storage';
 import { useBookmarkStore } from './src/stores/useBookmarkStore';
 import { initSentry } from './src/lib/sentry';
 import { installAuthErrorFilter } from './src/utils/logger';
+import { applyFontScaleClamp } from './src/utils/fontScaleClamp';
 import * as Sentry from '@sentry/react-native';
 import { env } from './src/utils/env';
 import { configureBeccaAI } from './src/services/becca/aiRuntime';
@@ -52,6 +53,11 @@ const StripeProvider: React.ComponentType<{
 }> = env.isExpoGo
   ? ({ children }) => <>{children}</>
   : (require('@stripe/stripe-react-native').StripeProvider);
+
+// Before the first render: caps how far the OS font-size setting can enlarge
+// text, so an enlarged system font doesn't clip fixed-height rows and tile
+// grids. Text still scales, just not without bound.
+applyFontScaleClamp();
 
 Sentry.init({
   dsn: 'https://ab030af3bc295ecbc70a310530bbfb6d@o4511817937453056.ingest.de.sentry.io/4511817960325200',

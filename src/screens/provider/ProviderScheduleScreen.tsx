@@ -36,6 +36,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../../utils/dateUtils';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -514,7 +515,7 @@ export default function ProviderScheduleScreen() {
             {/* Native time picker (iOS inline / Android modal) */}
             {pickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={pickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={pickerVisible}>
                   <View style={s.pickerModalWrap}>
                     {/* Tap-to-dismiss overlay — sibling of sheet, never its parent */}
                     <TouchableOpacity
@@ -598,7 +599,7 @@ export default function ProviderScheduleScreen() {
             {/* Date picker for block */}
             {blockPickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={blockPickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={blockPickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity
                       style={s.pickerDismiss}
@@ -699,7 +700,7 @@ export default function ProviderScheduleScreen() {
             {/* Date picker for override date */}
             {overrideDatePickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={overrideDatePickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={overrideDatePickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideDatePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
@@ -722,7 +723,7 @@ export default function ProviderScheduleScreen() {
             {/* Time picker for override open/close */}
             {overrideTimePickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade" visible={overrideTimePickerVisible}>
+                <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={overrideTimePickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideTimePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
@@ -786,7 +787,13 @@ const s = StyleSheet.create({
   safe:        { flex: 1 },
   keyboardView:{ flex: 1 },
   list:        { flex: 1 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  // + FLOATING_TAB_BAR_CLEARANCE — a plain safe-area bottom edge only
+  // reserves the system nav bar's own inset, not the floating pill tab bar
+  // that sits above it, so without this the last row ends up hidden behind
+  // the pill (worse on Android, where the pill sits directly on the nav bar
+  // inset with no extra float). Matches the same pattern used on
+  // ProviderAccountScreen/UserProfileScreen/ProfileInfoScreen.
+  listContent: { paddingHorizontal: 16, paddingBottom: 24 + FLOATING_TAB_BAR_CLEARANCE },
 
   // Day rows
   dayRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },

@@ -960,7 +960,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {/* ✅ Full Message Popup Modal */}
         <Modal
           visible={showMessagePopup}
-          transparent={true}
+          transparent statusBarTranslucent navigationBarTranslucent={true}
           animationType="fade"
           onRequestClose={closeMessagePopup}
         >

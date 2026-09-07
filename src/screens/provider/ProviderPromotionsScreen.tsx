@@ -14,7 +14,7 @@ import {
   Platform,
   Modal,
   Image,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,7 +44,6 @@ import { formatTime12 } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { uploadToStorage } from '../../services/providerRegistrationService';
 
-const { width: SW } = Dimensions.get('window');
 
 // ── Brand Palette ──────────────────────────────────────────────────────────────
 // Static fallback used for StyleSheet.create (always dark variant for now,
@@ -398,8 +397,12 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
 }) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
+  // Measured per render, not captured at module load, so the two-up template
+  // grid still splits the screen correctly after a rotation.
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = (screenWidth - 60) / 2;
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
       <View style={tpSt.container}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
         <View style={[tpSt.sheet, { backgroundColor: C.surface }]}>
@@ -411,7 +414,7 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
           {TEMPLATES.map(tmpl => (
             <TouchableOpacity
               key={tmpl.id}
-              style={tpSt.card}
+              style={[tpSt.card, { width: cardWidth }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onSelect(tmpl); }}
               activeOpacity={0.8}
             >
@@ -441,7 +444,7 @@ const tpSt = StyleSheet.create({
   heading: { fontSize: 20, fontWeight: '700', color: CP.text, marginBottom: 4 },
   sub: { fontSize: 13, color: CP.sub, marginBottom: 20 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingBottom: 40 },
-  card: { width: (SW - 60) / 2, borderRadius: 14, overflow: 'hidden' },
+  card: { borderRadius: 14, overflow: 'hidden' },
   cardGrad: { padding: 16, gap: 8, minHeight: 110, justifyContent: 'flex-end', borderWidth: 0.5, borderColor: CP.border, borderRadius: 14 },
   cardName: { color: CP.text, fontSize: 14, fontWeight: '800' },
   cardTagline: { color: CP.sub, fontSize: 11, fontWeight: '500' },
@@ -501,7 +504,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
       <View style={nmSt.container}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
         <View style={[nmSt.sheet, { backgroundColor: C.surface }]}>

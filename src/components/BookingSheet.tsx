@@ -16,8 +16,6 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
-  Platform,
-  UIManager,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,16 +40,9 @@ import { EMERGENCY_BOOKINGS_ENABLED } from '../constants/featureFlags';
 import type { DbPromotion } from '../types/database';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
+import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// LayoutAnimation is opt-in on old-architecture Android; without this the
-// optional sections snap open instead of animating there. Same guard as
-// ModernBeautyCalendar/HomeScreen — set here too so this sheet doesn't
-// depend on another module's import side effect.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 // Matches MultiBookingSheet's own formatShortDate — same "Wed, 12 Aug" style
 // used everywhere else a booked date is summarised.
@@ -670,7 +661,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const showFullPaymentOption = !depositPolicy?.depositOnly;
 
   return (
-    <Modal visible={isVisible} animationType="slide" transparent={true} onRequestClose={onClose}>
+    <Modal visible={isVisible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent={true} onRequestClose={onClose}>
       {/* Without this, opening the keyboard for the Notes field left the
           footer (Add to Cart / Save Changes) exactly where it was — on
           shorter screens the keyboard covered it outright, or squeezed it
@@ -1200,7 +1191,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       <Modal
         visible={showProviderTerms}
         animationType="slide"
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         onRequestClose={() => setShowProviderTerms(false)}
       >
         <View style={styles.termsOverlay}>
@@ -1238,7 +1229,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       <Modal
         visible={showEmergencyPolicy}
         animationType="slide"
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         onRequestClose={() => setShowEmergencyPolicy(false)}
       >
         <View style={styles.termsOverlay}>
@@ -1280,7 +1271,7 @@ const styles = StyleSheet.create({
   // Dimmed backdrop + rounded sheet sliding up from the bottom — same
   // transparent-overlay idiom as CartScreen's PaymentModal, instead of an
   // opaque full-screen pageSheet.
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
@@ -1317,7 +1308,7 @@ const styles = StyleSheet.create({
   providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
-  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
   termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

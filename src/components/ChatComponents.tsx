@@ -1053,7 +1053,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
-    elevation: 1,
+    // elevation: 0 (Android only) — unlike providerCard just above (no
+    // overflow:'hidden', so it's unaffected), this card sets overflow:
+    // 'hidden', and combined with borderRadius + a non-zero elevation
+    // Android clips the shadow to the rounded outline instead of letting it
+    // fade outward, showing as a dark ring. iOS keeps its shadow via
+    // shadow* above.
+    elevation: 0,
   },
   inspirationImage: {
     width: '100%',

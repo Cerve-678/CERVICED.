@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutAnimation, Modal, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View, ViewStyle } from 'react-native';
+import { LayoutAnimation, Modal, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { AvailabilityService } from '../services/AvailabilityService';
 import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
@@ -15,24 +15,20 @@ import { RequestTimePanel } from './RequestTimePanel';
  *  red-outlined time are visibly the same fact. */
 const EMERGENCY_OUTLINE = '#FF3B30';
 
-// LayoutAnimation is opt-in on old-architecture Android; without this the
-// collapse/expand below snaps instead of animating there.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
 /** One offerable start time. `reasons` is empty for an ordinary slot, and
  *  names the provider's own rules the time breaks when it's only bookable as
  *  a request they have to accept (see AvailabilityService.TimeSlot). */
 /** One time in the day's grid. `blocked` is set when the time exists but
- *  can't be taken — already booked, already gone, or inside the provider's
- *  notice window. Those still render, greyed and inert: a day shown as an
- *  empty space can't be told apart from one that failed to load, and hiding
- *  a booked-out morning quietly rewrites how busy the provider looks. */
+ *  can't be taken — already booked, already gone, inside the provider's
+ *  notice window, or 'tight': free in itself, but this service won't fit
+ *  between the bookings around it. Those still render, greyed and inert: a
+ *  day shown as an empty space can't be told apart from one that failed to
+ *  load, and hiding a booked-out morning quietly rewrites how busy the
+ *  provider looks. */
 export type TimeSlot = {
   time: string;
   reasons: EmergencyReason[];
-  blocked?: 'booked' | 'past' | 'notice' | undefined;
+  blocked?: 'booked' | 'past' | 'notice' | 'tight' | undefined;
 };
 
 export type DayData = {
@@ -386,8 +382,15 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // booked-out day at an opted-in provider (there is always a free 4am),
         // and their absence must not make a day the provider simply doesn't
         // work look "booked", which would blame other clients for it.
+        // A 'tight' time counts towards fullness even though nobody took it:
+        // it's unreachable BECAUSE of the bookings around it, so a day of
+        // taken times and the gaps they leave really is booked out for this
+        // service. At least one has to be genuinely taken, or the claim has
+        // no other client behind it at all.
         const ordinary = grid.filter(slot => !slot.isByRequest);
-        const isFullyBooked = ordinary.length > 0 && ordinary.every(slot => slot.isBooked);
+        const isFullyBooked = ordinary.length > 0
+          && ordinary.every(slot => slot.isBooked || slot.unbookable === 'tight')
+          && ordinary.some(slot => slot.isBooked);
 
         // Everything the day contains, each carrying whether it can be taken.
         // A by-request time this caller isn't allowed to offer is dropped
@@ -405,20 +408,16 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 : {}),
           }));
 
-        // The filter above can leave nothing when every slot the day has is
-        // by-request (a beyond-window or blocked day at a provider who takes
-        // requests) — but if any of those were BOOKED, the day still has real
-        // activity on it. Falling through to dayDataFrom([]) would call it
-        // 'closed' ("provider doesn't work this day"), which is both wrong and,
-        // since that state is untappable, hides a genuinely booked-out day.
-        // Keep the booked ones visible so it reads as full instead.
-        if (slots.length === 0 && grid.some(slot => slot.isBooked)) {
-          const bookedOnly: TimeSlot[] = grid
-            .filter(slot => slot.isBooked)
-            .map(slot => ({ time: slot.time, reasons: [], blocked: 'booked' as const }));
-          return dayDataFrom(bookedOnly, true);
-        }
-
+        // A day whose WHOLE grid is by-request has no ordinary hours on it at
+        // all — the provider doesn't work it (the out-of-hours opt-in fills
+        // such a day end to end), it's one they blocked, or it's past their
+        // booking window. When this picker can't carry requests the filter
+        // above empties it, and 'closed' — "they don't work this day" — is the
+        // right answer even if a booking happens to sit there: an accepted
+        // out-of-hours request or a manual squeeze-in is the provider's own
+        // doing, not other clients taking the day. Showing those times struck
+        // through under "Fully booked" told the client the opposite, and sent
+        // them to a waitlist that can't help.
         return dayDataFrom(slots, isFullyBooked);
       } catch {
         // Fallback to base schedule without booking filter
@@ -715,7 +714,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {/* ── Full Calendar Popup ──────────────────────────────────────── */}
       <Modal
         visible={showFullCalendar}
-        transparent
+        transparent statusBarTranslucent navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setShowFullCalendar(false)}
       >
@@ -1034,7 +1033,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // times were booked and the rest simply expired is not booked out —
         // saying so would blame other clients for hours nobody ever wanted,
         // and tell this one to join a waitlist that won't help them.
-        const blockedTally = { booked: 0, past: 0, notice: 0 };
+        // 'tight' times sit with 'booked' here: they're unreachable because of
+        // the bookings around them, so the day genuinely is booked out for
+        // this service. A day held up only by tight gaps and no booking at all
+        // can't happen — a gap needs something either side of it.
+        const blockedTally = { booked: 0, past: 0, notice: 0, tight: 0 };
         openTimes.forEach(slot => { if (slot.blocked) blockedTally[slot.blocked] += 1; });
         const dayBadge = openTimes.length > 0 && bookableCount === 0
           ? (blockedTally.past === 0 && blockedTally.notice === 0
@@ -1052,9 +1055,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 const timeSel = selectedTime === slot.time;
                 const blocked = !!slot.blocked;
                 // Strike-through means "someone has this" — only a booked slot
-                // earns it. A time that simply passed (or is inside the notice
-                // window) was never taken; it's greyed and inert, but crossing
-                // it out would wrongly read as another client having claimed it.
+                // earns it. A time that simply passed, is inside the notice
+                // window, or is too tight to fit this service between the
+                // bookings either side was never taken; it's greyed and inert,
+                // but crossing it out would wrongly read as another client
+                // having claimed it.
                 const taken = slot.blocked === 'booked';
                 return (
                   <TouchableOpacity
@@ -1073,7 +1078,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     accessibilityLabel={
                       blocked
                         ? `${slot.time}, ${slot.blocked === 'booked' ? 'already booked'
-                            : slot.blocked === 'past' ? 'already passed' : 'too soon to book'}`
+                            : slot.blocked === 'past' ? 'already passed'
+                            : slot.blocked === 'tight' ? 'not enough time free here'
+                            : 'too soon to book'}`
                         : slot.time
                     }
                   >

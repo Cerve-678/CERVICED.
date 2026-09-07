@@ -35,7 +35,7 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -93,7 +93,6 @@ import {
 } from '../../features/providers/goLiveStatus';
 import { splitPortfolioByKind } from '../../features/providers/venuePhotos';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Hero → content transition, inherited from the client-facing profile.
 const SHEET_LIP_RADIUS = 36;
@@ -106,7 +105,9 @@ const PHOTO_H = 136;
 
 // Half-width cards, two to a row, same padding.
 const HALF_GAP = 12;
-const HALF_W = (screenWidth - 40 - HALF_GAP) / 2;
+/** Half-width tile, measured per render rather than captured at module
+ *  load, so the paired tiles still split the row after a rotation. */
+const halfWidth = (screenWidth: number) => (screenWidth - 40 - HALF_GAP) / 2;
 
 // Setup ring on the status card. Radius is inset by half the stroke so the
 // band sits fully inside the SVG box rather than clipping at its edge.
@@ -270,10 +271,12 @@ const ServiceTile = React.memo(function ServiceTile({
   onToggleActive: (service: DbService) => void;
 }) {
   const hidden = !service.is_active;
+  const { width: screenWidth } = useWindowDimensions();
   return (
     <TouchableOpacity
       style={[
         styles.serviceTile,
+        { width: halfWidth(screenWidth) },
         { backgroundColor: palette.cardBg, borderColor: palette.border },
         hidden && styles.serviceTileHidden,
       ]}
@@ -337,20 +340,19 @@ interface Props {
 
 export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { theme } = useTheme();
+  // Measured per render, not captured at module load: the paired tiles and the
+  // quick-action row both divide the screen width between them.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { user } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
   const [services, setServices] = useState<DbService[]>([]);
-  const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
-  // getProviderPortfolio returns the provider's venue/workspace shots in the
-  // same list as their work. They aren't portfolio photos to a client — they
-  // render inside Additional Information on the profile and never appear in
-  // Explore — and they're added and removed in Business Profile's "Address
-  // photos" grid, not here, so this screen's PORTFOLIO card counts and shows
-  // the work half only. Counting them here read as photos a client would
-  // browse, and the rail offered a delete for a photo this screen never
-  // explained.
-  const workPhotos = useMemo(() => splitPortfolioByKind(portfolio).work, [portfolio]);
+  // Work photos only — venue/workspace shots aren't portfolio photos to a
+  // client (they render inside Additional Information on the profile and never
+  // appear in Explore) and they're added and removed in Business Profile's
+  // "Address photos" grid, not here. getProviderPortfolio now excludes them in
+  // SQL unless asked for, so this screen never fetches what it can't show.
+  const [workPhotos, setWorkPhotos] = useState<DbPortfolioItem[]>([]);
   const [reviews, setReviews] = useState<
     { id: string; name: string; rating: number; comment: string; date: string }[]
   >([]);
@@ -424,7 +426,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               const catalogue = await getMyServiceCatalogue(profile.id);
               setServices(catalogue.services);
 
-              getProviderPortfolio(profile.id).then(setPortfolio).catch(() => {});
+              getProviderPortfolio(profile.id)
+                .then(({ work }) => setWorkPhotos(work))
+                .catch(() => {});
 
               getMyBookmarkCount()
                 .then(setBookmarkCount)
@@ -739,7 +743,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
           const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
           const item = await addPortfolioItem(providerId, publicUrl, ratio);
-          setPortfolio(prev => [item, ...prev]);
+          setWorkPhotos(prev => [item, ...prev]);
         } catch (e) {
           logger.error('[MyServices] portfolio upload failed:', e);
           Alert.alert(
@@ -759,11 +763,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          setPortfolio(prev => prev.filter(p => p.id !== item.id));
+          setWorkPhotos(prev => prev.filter(p => p.id !== item.id));
           try {
             await deletePortfolioItem(item.id);
           } catch (e) {
-            setPortfolio(prev => [item, ...prev]);
+            setWorkPhotos(prev => [item, ...prev]);
             logger.error('[MyServices] portfolio delete failed:', e);
             Alert.alert(
               'Could not remove',
@@ -1184,7 +1188,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           </View>
 
           <View style={[styles.contentSheet, { backgroundColor: PP.bg }]}>
-            <View style={[styles.contentSheetClip, { backgroundColor: PP.bg }]}>
+            <View style={[styles.contentSheetClip, { minHeight: screenHeight, backgroundColor: PP.bg }]}>
               {/* Dashboard vs Services. Two different jobs — how the
                   profile is doing, and the catalogue itself — so each gets a
                   tab rather than one scroll that buries the services under
@@ -1289,7 +1293,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       sentence claiming there are some. */}
                   <View style={styles.halfRow}>
                     <TouchableOpacity
-                      style={[styles.tintCard, { backgroundColor: tintStrong, borderColor: PP.border }]}
+                      style={[styles.tintCard, { width: halfWidth(screenWidth), backgroundColor: tintStrong, borderColor: PP.border }]}
                       onPress={handleEditPolicies}
                       activeOpacity={0.8}
                       accessibilityRole="button"
@@ -1331,7 +1335,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         the header, and a second door to it was worth less than
                         two numbers nothing else on this screen reports. Both
                         open the analytics screen that owns the detail. */}
-                    <View style={styles.tintColumn}>
+                    <View style={[styles.tintColumn, { width: halfWidth(screenWidth) }]}>
                       <TouchableOpacity
                         style={[styles.tintCardShort, { backgroundColor: tintSoft, borderColor: PP.border }]}
                         onPress={handleOpenAnalytics}
@@ -1491,7 +1495,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         {quickActions.map(action => (
                           <TouchableOpacity
                             key={action.key}
-                            style={styles.quickItem}
+                            style={[styles.quickItem, { width: (screenWidth - 76) / 5 }]}
                             onPress={action.onPress}
                             activeOpacity={0.7}
                             accessibilityRole="button"
@@ -1766,7 +1770,7 @@ const styles = StyleSheet.create({
   },
   primaryAction: {
     flex: 1,
-    height: 48,
+    minHeight: 48,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1802,7 +1806,6 @@ const styles = StyleSheet.create({
   // shadow — iOS silently drops a view's shadow when overflow:'hidden' is set
   // on that same view, so clip and shadow must be on different layers.
   contentSheetClip: {
-    minHeight: screenHeight,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 130,
@@ -1990,7 +1993,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   serviceTile: {
-    width: HALF_W,
     height: 124,
     padding: 14,
     borderRadius: 22,
@@ -2204,7 +2206,6 @@ const styles = StyleSheet.create({
   quickItem: {
     alignItems: 'center',
     gap: 8,
-    width: (screenWidth - 76) / 5,
   },
   quickCircle: {
     width: 50,
@@ -2224,7 +2225,6 @@ const styles = StyleSheet.create({
   // Paired tinted tiles. Fixed height so the two agree on a baseline even when
   // one carries swatches and the other doesn't.
   tintCard: {
-    width: HALF_W,
     height: 214,
     padding: 16,
     borderRadius: 22,
@@ -2277,7 +2277,6 @@ const styles = StyleSheet.create({
   // Two landscape tiles stacked beside the tall policies tile, summing to its
   // height so the row stays square-cornered rather than ragged.
   tintColumn: {
-    width: HALF_W,
     gap: HALF_GAP,
   },
   tintCardShort: {

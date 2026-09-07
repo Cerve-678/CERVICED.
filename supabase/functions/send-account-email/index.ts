@@ -1,26 +1,28 @@
 // supabase/functions/send-account-email/index.ts
-// Sends a welcome email to the signed-in user, for a hat they just took on.
+// Sends a transactional account email — a welcome for a hat the signed-in
+// user just took on, or a password-changed security notice — to that same
+// user's own address.
 //
 // Replaces the client-side path where the app built the HTML itself and posted
 // it to the old general-purpose send-email endpoint. The caller now names only
-// WHICH welcome it is; the template, the recipient and the name on it are all
+// WHICH email it is; the template, the recipient and the name on it are all
 // resolved here, so the phone can neither choose who receives our branded mail
 // nor what it says.
 //
 // `kind` is the one thing the caller supplies, and it deliberately is not
 // derived from the account's role: a provider adding a client hat gets the
 // CLIENT welcome, and role would give the wrong answer. It only selects
-// between two of our own templates going to the user's own address, so it
-// carries no authority.
+// between our own templates going to the user's own address, so it carries
+// no authority.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { clientWelcomeEmail, providerWelcomeEmail } from '../_shared/emailTemplates.ts';
+import { clientWelcomeEmail, providerWelcomeEmail, passwordChangedEmail } from '../_shared/emailTemplates.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
 
-const KINDS = ['client_welcome', 'provider_welcome'] as const;
+const KINDS = ['client_welcome', 'provider_welcome', 'password_changed'] as const;
 type Kind = typeof KINDS[number];
 
 const corsHeaders = {
@@ -86,6 +88,8 @@ serve(async (req) => {
           name: escapeHtml(name),
           ...(businessName ? { businessName: escapeHtml(businessName) } : {}),
         })
+      : kind === 'password_changed'
+      ? passwordChangedEmail({ name: escapeHtml(name) })
       : clientWelcomeEmail({ name: escapeHtml(name) });
 
     const res = await fetch('https://api.resend.com/emails', {
