@@ -75,7 +75,7 @@ Curated: [[Availability & Slots]] · **159 files**
 
 ## Payments
 Curated: [[Payments]] · **112 files**
-- `src/screens/client/CartScreen.tsx` _(499)_
+- `src/screens/client/CartScreen.tsx` _(500)_
 - `src/screens/provider/PaymentsScreen.tsx` _(149)_
 - `src/services/databaseService.ts` _(129)_
 - `src/services/bookingService.ts` _(117)_
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **242 files**
 - … +212 more
 
 ## Notifications
-Curated: [[Notifications]] · **147 files**
+Curated: [[Notifications]] · **148 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(279)_
 - `src/services/databaseService.ts` _(152)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **147 files**
 - `supabase/provider_follow_notify_cron.sql` _(24)_
 - `src/screens/client/NotificationsSettingsScreen.tsx` _(23)_
 - `supabase/notifications_full_matrix.sql` _(23)_
-- … +117 more
+- … +118 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **73 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **153 files**
 - … +123 more
 
 ## Auth
-Curated: [[Contexts]] · **162 files**
+Curated: [[Contexts]] · **163 files**
 - `src/services/databaseService.ts` _(224)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(139)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **162 files**
 - `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
 - `src/screens/provider/InfoRegScreen.tsx` _(11)_
-- … +132 more
+- … +133 more
 
 ## Becca / AI
 Curated: [[Services]] · **39 files**
