@@ -78,7 +78,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [categoryChangedAt, setCategoryChangedAt]       = useState<string | null>(null);
   // Whether providers.service_category_changed_at exists on the row we loaded,
   // NOT whether it has a value. The cooldown and the cascade both live in
-  // migration 20260906200000; until it's applied the column is absent, an
+  // migration 20260907000413; until it's applied the column is absent, an
   // UPDATE would change the category with no cooldown and no cascade, and this
   // screen must keep the field locked rather than offer an unguarded change.
   const [cooldownLive, setCooldownLive] = useState(false);

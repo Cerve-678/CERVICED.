@@ -7616,7 +7616,7 @@ export async function updateProviderContactDetails(
  * saving unrelated contact fields.
  *
  * Three things are enforced by the DB, not here (see
- * supabase/migrations/20260906200000_provider_service_category_change_cooldown.sql):
+ * supabase/migrations/20260907000413_provider_service_category_change_cooldown.sql):
  *   - a 90-day cooldown, which throws with a plain-English message naming the
  *     date it reopens — surface that message rather than a generic one;
  *   - custom_service_type cleared unless the new type is OTHER;
