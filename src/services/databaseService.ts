@@ -83,6 +83,7 @@ export function subscribeToAuthStateChanges(
 export async function signOutCurrentSession(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+  invalidateOwnProviderIds();
 }
 
 export async function clearUserStorageFolder(
@@ -341,6 +342,10 @@ export async function deleteClientAccountProfile(): Promise<AccountDeletionResul
 export async function deleteProviderAccountProfile(): Promise<AccountDeletionResult> {
   const { data, error } = await supabase.rpc("delete_provider_profile");
   if (error) throw error;
+  // The account no longer owns this row, so discovery should start showing
+  // it again (to them as much as anyone) rather than serving a stale
+  // "that's yours" answer for the rest of the session.
+  invalidateOwnProviderIds();
   return (data ?? {}) as AccountDeletionResult;
 }
 
@@ -391,6 +396,91 @@ export async function getClientPointsHistory(limit = 50): Promise<ClientPointsLe
 // ─────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────
+// OWN-PROFILE EXCLUSION
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Ids of the provider rows the signed-in user owns.
+ *
+ * A provider wearing their client hat is a normal client in every other
+ * respect, which means every discovery surface (Home's sections, Explore's
+ * feed, Search, Becca) was happily recommending them their own business —
+ * a result they can neither book nor usefully browse. These ids are what
+ * the client-facing queries below filter themselves out by.
+ *
+ * Returns *every* owned row rather than a single canonical one: a handful
+ * of accounts picked up duplicate provider rows during account churn (see
+ * getProviderProfileForUserId, which resolves that ambiguity for the
+ * provider hat), and excluding only the canonical row would leave the
+ * duplicate showing in the feed.
+ *
+ * Memoised per auth user id, so a whole Explore refresh costs one lookup
+ * rather than one per query, and so logging in as someone else can never
+ * inherit the previous account's ids. Ownership only changes when a
+ * profile is created or deleted — both of which invalidate it explicitly.
+ */
+let ownProviderIdsCache: { userId: string; ids: string[] } | null = null;
+
+/** Drop the memoised ownership answer — called wherever this file changes
+ *  which provider rows the current account owns (registration, claim,
+ *  profile deletion, sign-out). Deliberately not exported: nothing outside
+ *  this file can change that ownership without going through one of those. */
+function invalidateOwnProviderIds(): void {
+  ownProviderIdsCache = null;
+}
+
+async function getOwnProviderIds(): Promise<string[]> {
+  // getSession() reads the locally cached session; getUser() (used elsewhere
+  // in this file where the answer must be authoritative) costs a network
+  // round trip, which is not worth paying on every discovery query.
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return [];
+  if (ownProviderIdsCache?.userId === userId) return ownProviderIdsCache.ids;
+
+  const { data: rows, error } = await supabase
+    .from("providers")
+    .select("id")
+    .eq("user_id", userId);
+
+  // The one deliberate exception to this file's "always throw" rule, and it
+  // is scoped to exactly this lookup: it decorates an otherwise valid query
+  // rather than producing the query's result. Failing hard here would blank
+  // out Home and Explore over a filter whose worst-case absence is seeing
+  // your own card once. Logged, and deliberately not cached, so the next
+  // call retries.
+  if (error) {
+    logger.warn(
+      "[databaseService] Own-provider lookup failed; discovery will not self-exclude:",
+      error.message,
+    );
+    return [];
+  }
+
+  const ids = (rows ?? []).map((row: { id: string }) => row.id);
+  ownProviderIdsCache = { userId, ids };
+  return ids;
+}
+
+/** A uuid no provider row can hold. Standing in for "nothing to exclude"
+ *  keeps ownProviderIdExclusion() a plain string, so each client-facing
+ *  query below takes one unconditional `.not(…)` instead of branching its
+ *  whole builder on whether the viewer happens to be a provider. Every
+ *  column it is applied to is NOT NULL, so no row is lost to SQL's
+ *  `NULL NOT IN (…)` being NULL rather than true. */
+const NO_SUCH_PROVIDER_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * PostgREST value for `.not(column, "in", …)` — the provider rows the
+ * signed-in user owns, so a client-facing list never returns them their own
+ * business. Matches nothing for an account with no provider profile.
+ */
+async function ownProviderIdExclusion(): Promise<string> {
+  const ids = await getOwnProviderIds();
+  return `(${(ids.length ? ids : [NO_SUCH_PROVIDER_ID]).join(",")})`;
+}
+
+// ─────────────────────────────────────────────────────────
 // PHASE 5.4 — PERSONALISED HOME FEED
 // ─────────────────────────────────────────────────────────
 
@@ -407,6 +497,9 @@ export async function getNewProviders(limit = 10): Promise<PublicProviderSummary
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .gte("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -421,6 +514,9 @@ export async function getTopRatedProviders(limit = 10): Promise<PublicProviderSu
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .gte("review_count", 3)
     .gte("rating", 4.0)
     .order("rating", { ascending: false })
@@ -452,6 +548,9 @@ export async function getTrendingProviders(limit = 10): Promise<PublicProviderSu
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .in("id", rankedIds)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .eq("has_gone_live", true)
     .eq("is_active", true);
   if (error) throw new Error(error.message);
@@ -493,6 +592,9 @@ export async function getProviders(
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("is_active", true)
     .eq("has_gone_live", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
@@ -811,6 +913,9 @@ export async function searchProviders(
     .in("id", allIds)
     .eq("is_active", true)
     .eq("has_gone_live", true)
+    // A provider searching as a client should not turn up their own
+    // business — they can neither book it nor browse it usefully here.
+    .not("id", "in", await ownProviderIdExclusion())
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
@@ -1313,6 +1418,11 @@ export async function getPortfolioItems(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Never show a provider their own work back as discovery (see
+    // ownProviderIdExclusion). Filtered on portfolio_items.provider_id
+    // rather than the joined provider row, so it needs no foreign-table
+    // filter and no null handling — the column is NOT NULL.
+    .not("provider_id", "in", await ownProviderIdExclusion())
     // Venue/workspace shots are excluded from Explore's discovery feed and
     // Becca's inspiration search. getProviderPortfolio() (the provider
     // profile's own Portfolio grid) is deliberately NOT filtered — that is
@@ -1346,6 +1456,9 @@ export async function searchPortfolio(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Never show a provider their own work back as discovery (see
+    // ownProviderIdExclusion).
+    .not("provider_id", "in", await ownProviderIdExclusion())
     // Same exclusion as getPortfolioItems — this is the text-search half of
     // the same discovery/inspiration surface. A second .or() is a separate
     // top-level condition ANDed with the caption/tags one below, not a
@@ -1373,6 +1486,9 @@ export async function getDiscoverProviders(
     .select("*")
     .eq("is_active", true)
     .eq("has_gone_live", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .not("background_image_url", "is", null)
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
@@ -1461,6 +1577,9 @@ export async function getDiscoverServices(
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Never recommend a provider their own services (see
+    // ownProviderIdExclusion).
+    .not("provider_id", "in", await ownProviderIdExclusion())
     .limit(limit);
 
   if (category && category !== "All") {
@@ -1604,6 +1723,9 @@ export async function getActivePromotions(
     .eq("providers.is_active", true)
     .eq("providers.has_gone_live", true)
     .eq("is_active", true)
+    // A provider's own offer is not an offer to them (see
+    // ownProviderIdExclusion).
+    .not("provider_id", "in", await ownProviderIdExclusion())
     .gte("valid_until", new Date().toISOString().split("T")[0])
     .order("created_at", { ascending: false })
     .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
@@ -1625,6 +1747,9 @@ export async function getProviderIdsWithActivePromotions(): Promise<string[]> {
     .eq("providers.is_active", true)
     .eq("providers.has_gone_live", true)
     .eq("is_active", true)
+    // Kept in step with getActivePromotions — this badges the cards that
+    // list surfaces the offer on, and those cards are already gone.
+    .not("provider_id", "in", await ownProviderIdExclusion())
     .gte("valid_until", new Date().toISOString().split("T")[0])
     .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
   if (error) throw error;
@@ -8696,6 +8821,9 @@ export async function claimUnclaimedProviderProfile(
   });
   if (error) throw error;
   if (typeof data !== 'string') throw new Error('Invalid claim response.');
+  // Claiming attaches an existing row to this account — same ownership
+  // change as creating one, so the memoised answer has to go.
+  invalidateOwnProviderIds();
   return data;
 }
 
@@ -8959,6 +9087,8 @@ export async function insertProviderRegistrationRow(
     .select("id")
     .single();
   if (error) throw error;
+  // A brand-new provider row the memoised ownership answer predates.
+  invalidateOwnProviderIds();
   return data.id;
 }
 

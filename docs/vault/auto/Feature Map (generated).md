@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **147 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **73 files**
-- `src/services/databaseService.ts` _(64)_
+- `src/services/databaseService.ts` _(65)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(49)_
 - `src/features/providers/goLiveStatus.ts` _(35)_
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **153 files**
 
 ## Auth
 Curated: [[Contexts]] · **162 files**
-- `src/services/databaseService.ts` _(224)_
+- `src/services/databaseService.ts` _(233)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(139)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
@@ -316,7 +316,7 @@ Curated: [[Services]] · **39 files**
 - `src/screens/shared/BeccaScreen.tsx` _(92)_
 - `src/services/becca/engine.ts` _(49)_
 - `src/services/becca/capabilities/client.ts` _(48)_
-- `src/services/databaseService.ts` _(40)_
+- `src/services/databaseService.ts` _(41)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_
 - `src/services/becca/types.ts` _(32)_
 - `src/components/ChatComponents.tsx` _(29)_
