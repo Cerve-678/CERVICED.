@@ -165,6 +165,49 @@ export const dayDataFrom = (times: TimeSlot[], isFullyBooked = false): DayData =
   };
 };
 
+/**
+ * The one badge above the time grid, or null when there's still something to
+ * book. `times` is the day's ORDINARY grid (no by-request entries) — the
+ * badge speaks for what's rendered underneath it and nothing else.
+ *
+ * When nothing ordinary is left the greyed grid alone can't say WHY — "all
+ * taken" and "the day's simply over" look identical, and they want opposite
+ * responses (wait for this provider vs. just pick tomorrow).
+ *
+ * Every branch must be true of EVERY time in the grid, because the client
+ * reads the badge as a statement about all of them. The old shape let one
+ * blocked kind speak for the rest — any single past time won outright, so at
+ * 3:30pm on a provider with a 2-hour notice window (which is what every live
+ * provider runs) the morning's expired slots made the badge say "These times
+ * have passed" over a 4:00 PM that plainly had not passed and was greyed only
+ * because it was too soon. Same shape hid a booked-out day behind one expired
+ * time. A mixed day gets a label that's true of all of it instead of picking
+ * a winner.
+ *
+ * "Fully booked" stays the narrowest claim of the three: it says other
+ * clients took the day, so it's claimed only when they actually did. A day
+ * that emptied out because some times were booked and the rest expired is not
+ * booked out — saying so blames other clients for hours nobody ever wanted,
+ * and sends this one to a waitlist that can't help. 'tight' times sit with
+ * 'booked': they're unreachable BECAUSE of the bookings around them, so the
+ * day genuinely is booked out for this service. A day held up only by tight
+ * gaps and no booking at all can't happen — a gap needs something either side.
+ */
+export const dayBadgeFrom = (times: TimeSlot[], providerName: string): string | null => {
+  if (times.length === 0 || times.some(slot => !slot.blocked)) return null;
+
+  const taken = times.some(slot => slot.blocked === 'booked' || slot.blocked === 'tight');
+  const gone  = times.some(slot => slot.blocked === 'past');
+  const soon  = times.some(slot => slot.blocked === 'notice');
+
+  if (taken && !gone && !soon) return 'Fully booked';
+  if (gone && !taken && !soon) return 'These times have passed';
+  if (soon && !taken && !gone) return `Too soon — ${providerName} needs more notice`;
+  // Mixed. Anything more specific would be false of part of the grid. A past
+  // time can only exist on today, so that half of the split can name the day.
+  return gone ? 'Nothing left today' : 'Nothing left on this day';
+};
+
 export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   selectedDate,
   onDateSelect,
@@ -1021,31 +1064,8 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // offers times that can actually be asked for.
         const openTimes    = currentSlots.times.filter(slot => slot.reasons.length === 0);
         const requestTimes = currentSlots.times.filter(slot => slot.reasons.length > 0 && !slot.blocked);
-        const bookableCount = openTimes.filter(slot => !slot.blocked).length;
 
-        // One badge above the grid, rather than a sentence replacing it. When
-        // nothing ordinary is left the grid alone can't say WHY — "all taken"
-        // and "the day's simply over" look identical greyed out, and they want
-        // opposite responses (wait for this provider vs. just pick tomorrow).
-        //
-        // "Fully booked" is claimed ONLY when every one of the day's times was
-        // actually taken by someone. A day that ends up empty because some
-        // times were booked and the rest simply expired is not booked out —
-        // saying so would blame other clients for hours nobody ever wanted,
-        // and tell this one to join a waitlist that won't help them.
-        // 'tight' times sit with 'booked' here: they're unreachable because of
-        // the bookings around them, so the day genuinely is booked out for
-        // this service. A day held up only by tight gaps and no booking at all
-        // can't happen — a gap needs something either side of it.
-        const blockedTally = { booked: 0, past: 0, notice: 0, tight: 0 };
-        openTimes.forEach(slot => { if (slot.blocked) blockedTally[slot.blocked] += 1; });
-        const dayBadge = openTimes.length > 0 && bookableCount === 0
-          ? (blockedTally.past === 0 && blockedTally.notice === 0
-              ? 'Fully booked'
-              : blockedTally.past > 0
-                ? 'These times have passed'
-                : `Too soon — ${who} needs more notice`)
-          : null;
+        const dayBadge = dayBadgeFrom(openTimes, who);
 
         const renderGroup = (group: TimeSlot[]) => {
           const rows = chunkArray(group, Math.ceil(group.length / 3));

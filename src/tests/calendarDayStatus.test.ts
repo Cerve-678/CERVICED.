@@ -1,4 +1,4 @@
-import { dayDataFrom, type TimeSlot } from '../components/ModernBeautyCalendar';
+import { dayBadgeFrom, dayDataFrom, type TimeSlot } from '../components/ModernBeautyCalendar';
 
 const open = (time: string): TimeSlot => ({ time, reasons: [] });
 const blocked = (time: string, why: 'booked' | 'past' | 'notice'): TimeSlot =>
@@ -91,5 +91,65 @@ describe('day status vs. why the day emptied', () => {
     for (const why of ['booked', 'past', 'notice'] as const) {
       expect(dayDataFrom([blocked('9:00 AM', why)]).times).toHaveLength(1);
     }
+  });
+});
+
+// The badge speaks for EVERY time rendered under it, so each branch has to be
+// true of all of them. The old shape picked a winner instead: any single past
+// time beat both of the others outright.
+describe('dayBadgeFrom', () => {
+  const tight = (time: string): TimeSlot => ({ time, reasons: [], blocked: 'tight' });
+
+  it('says nothing while anything is still bookable', () => {
+    expect(dayBadgeFrom([open('9:00 AM'), blocked('10:00 AM', 'past')], 'Amy')).toBeNull();
+    expect(dayBadgeFrom([], 'Amy')).toBeNull();
+  });
+
+  it('names the reason when the whole grid shares one', () => {
+    expect(dayBadgeFrom([blocked('9:00 AM', 'past'), blocked('10:00 AM', 'past')], 'Amy'))
+      .toBe('These times have passed');
+    expect(dayBadgeFrom([blocked('9:00 AM', 'notice'), blocked('10:00 AM', 'notice')], 'Amy'))
+      .toBe('Too soon — Amy needs more notice');
+    expect(dayBadgeFrom([blocked('9:00 AM', 'booked'), tight('10:00 AM')], 'Amy'))
+      .toBe('Fully booked');
+  });
+
+  // The reported bug, and it hit every live provider daily: they all run a
+  // 2-hour minimum notice, so for the last two hours of every working day the
+  // grid is this exact mix — a morning that has genuinely gone, and a late
+  // slot greyed only because it's too soon. Saying "these times have passed"
+  // over a 4:00 PM at 3:30pm is a claim the client can disprove by looking at
+  // their clock.
+  it('never lets an expired morning speak for a time that has not passed', () => {
+    const badge = dayBadgeFrom(
+      [
+        blocked('9:00 AM', 'past'), blocked('10:00 AM', 'past'), blocked('11:00 AM', 'past'),
+        blocked('12:00 PM', 'past'), blocked('1:00 PM', 'past'), blocked('2:00 PM', 'past'),
+        blocked('3:00 PM', 'past'),
+        blocked('4:00 PM', 'notice'),
+      ],
+      'Amy',
+    );
+    expect(badge).not.toBe('These times have passed');
+    expect(badge).toBe('Nothing left today');
+  });
+
+  // Same shape the other way round: one expired time used to hide a day that
+  // other clients had genuinely taken.
+  it('does not let one expired time relabel a booked-out day', () => {
+    expect(
+      dayBadgeFrom(
+        [blocked('9:00 AM', 'past'), blocked('10:00 AM', 'booked'), blocked('11:00 AM', 'booked')],
+        'Amy',
+      ),
+    ).toBe('Nothing left today');
+  });
+
+  // 'Fully booked' is the narrowest claim of the three — it blames other
+  // clients and sends this one to a waitlist — so a mixed day must not make
+  // it, in either direction.
+  it('claims "Fully booked" only when clients really took the whole day', () => {
+    expect(dayBadgeFrom([blocked('9:00 AM', 'booked'), blocked('4:00 PM', 'notice')], 'Amy'))
+      .toBe('Nothing left on this day');
   });
 });

@@ -43,7 +43,7 @@ Curated: [[Address Release]] · **85 files**
 Curated: [[Availability & Slots]] · **159 files**
 - `src/services/AvailabilityService.ts` _(330)_
 - `src/services/databaseService.ts` _(269)_
-- `src/components/ModernBeautyCalendar.tsx` _(188)_
+- `src/components/ModernBeautyCalendar.tsx` _(193)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `src/screens/client/SearchScreen.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
