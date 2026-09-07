@@ -198,18 +198,32 @@ export default function LoginScreen({ navigation }: Props) {
         ],
       });
       if (!credential.identityToken) {
+        logger.error('[Login] Apple returned a credential with no identityToken');
         Alert.alert('Sign in failed', 'No identity token received from Apple.');
         return;
       }
+      logger.log('[Login] Apple credential received — exchanging with Supabase...');
       setIsLoading(true);
       const session = await signInWithAppleIdToken(credential.identityToken);
       setIsLoading(false);
       maybePromptEnableBiometric(session.refreshToken ?? undefined);
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
-      // A concurrent/duplicate attempt (or one that lands after the user is
-      // already signed in via an earlier in-flight call) must not show a
-      // false failure alert — check the real auth state before alerting.
+      // Log before the suppression checks below. A cancel is a normal user
+      // action, not a fault; anything else is a real failure and must leave a
+      // trace — "Sign in failed" with nothing in the logs is undiagnosable,
+      // and the error code is the only thing that says whether Apple's sheet
+      // or the Supabase exchange is what broke.
+      if (e?.code === 'ERR_REQUEST_CANCELED') {
+        logger.log('[Login] Apple sign-in cancelled by the user');
+      } else {
+        logger.error(
+          '[Login] Apple sign-in failed — code:', e?.code,
+          '| status:', e?.status,
+          '| message:', e?.message,
+          e,
+        );
+      }
       if (e.code !== 'ERR_REQUEST_CANCELED' && !isLoggedIn) {
         Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
       }
