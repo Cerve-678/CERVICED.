@@ -5,7 +5,7 @@
 
 #generated
 
-**2081 functions** across **276 files**.
+**2082 functions** across **276 files**.
 
 ### `src/components/` (40)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -213,7 +213,7 @@
 - `BeccaScreen.tsx` — BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · refreshSessions · scheduleNextTick · steps · thinkingStepsFor
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave
-- `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · exportBookings · fullClientReset · fullProviderReset · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
+- `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · exportBookings · fullClientReset · fullProviderReset · is · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
 - `HelpCentreScreen.tsx` — FAQItem · handleContactSupport · HelpCentreScreen · showMoreOptions
 - `InfoScreen.tsx` — ScreenNameHere
 - `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow

@@ -36,16 +36,29 @@ import {
 } from '../../services/pushNotificationService';
 import { logger, getLogBuffer, clearLogBuffer, subscribeToLogBuffer, LogEntry } from '../../utils/logger';
 
-// Every kind send-account-email accepts, so this screen doesn't quietly fall
-// behind the function. Adding a kind there means adding a row here.
-const EMAIL_KINDS: { kind: AccountEmailKind; label: string; note?: string }[] = [
-  { kind: 'general_welcome', label: 'General welcome', note: 'the brand email' },
-  { kind: 'client_welcome', label: 'Client welcome', note: 'new signup' },
-  { kind: 'provider_welcome', label: 'Provider welcome', note: 'new signup, business address' },
-  { kind: 'client_hat_added', label: 'Client hat added', note: 'second hat' },
-  { kind: 'provider_hat_added', label: 'Provider hat added', note: 'second hat, business address' },
-  { kind: 'password_changed', label: 'Password changed', note: 'security notice' },
-];
+// Every kind send-account-email accepts, so this screen can't quietly fall
+// behind the function. Keyed by AccountEmailKind rather than being an array of
+// them: a Record must name every member of the union, so adding a kind to the
+// function is a compile error here until it is listed. An array annotated
+// `{ kind: AccountEmailKind }[]` would look like the same guarantee and give
+// none — the annotation widens each literal back to the union and a missing
+// row type-checks fine.
+//
+// Object key order is insertion order for non-numeric string keys, so this
+// doubles as the display order.
+const EMAIL_KINDS: Record<AccountEmailKind, { label: string; note: string }> = {
+  general_welcome: { label: 'General welcome', note: 'the brand email' },
+  client_welcome: { label: 'Client welcome', note: 'new signup' },
+  provider_welcome: { label: 'Provider welcome', note: 'new signup, business address' },
+  client_hat_added: { label: 'Client hat added', note: 'second hat' },
+  provider_hat_added: { label: 'Provider hat added', note: 'second hat, business address' },
+  password_changed: { label: 'Password changed', note: 'security notice' },
+};
+
+const EMAIL_KIND_ROWS = Object.entries(EMAIL_KINDS) as [
+  AccountEmailKind,
+  { label: string; note: string },
+][];
 
 export default function DevSettingsScreen({ navigation }: any) {
   const [bookingCount, setBookingCount] = useState<number>(0);
@@ -754,7 +767,7 @@ export default function DevSettingsScreen({ navigation }: any) {
                 </View>
               </View>
 
-              {EMAIL_KINDS.map(({ kind, label, note }) => (
+              {EMAIL_KIND_ROWS.map(([kind, { label, note }]) => (
                 <TouchableOpacity
                   key={kind}
                   style={[
@@ -771,7 +784,7 @@ export default function DevSettingsScreen({ navigation }: any) {
                 >
                   <Text style={[styles.secondaryButtonText, { color: P.text }]}>
                     {emailBusy === kind ? 'Sending…' : label}
-                    {note ? <Text style={{ color: P.sub }}>{`  ·  ${note}`}</Text> : null}
+                    <Text style={{ color: P.sub }}>{`  ·  ${note}`}</Text>
                   </Text>
                 </TouchableOpacity>
               ))}
