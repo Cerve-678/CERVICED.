@@ -61,13 +61,14 @@ describe("venue photos are split from the work gallery", () => {
     expect(hits).toEqual([]);
   });
 
-  it("excludes venue rows from every multi-provider portfolio query", () => {
+  it("excludes venue rows from every portfolio query a client can see", () => {
     // getPortfolioItems (Explore's feed), searchPortfolio (Becca + text
-    // search) and getSavedPortfolioDetails (Explore's Favourites tab) are the
-    // three queries that return other providers' portfolio rows. Each needs
-    // the is-null OR neq form: a bare .neq() drops NULL-category rows too.
+    // search) and getSavedPortfolioDetails (Explore's Favourites tab) return
+    // other providers' portfolio rows; getProviderPortfolio returns one
+    // provider's, and a client reads it on their profile. Each needs the
+    // is-null OR neq form: a bare .neq() drops NULL-category rows too.
     const source = readFileSync("src/services/databaseService.ts", "utf8");
     const clause = "category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}";
-    expect(source.split(clause).length - 1).toBe(3);
+    expect(source.split(clause).length - 1).toBe(4);
   });
 });
