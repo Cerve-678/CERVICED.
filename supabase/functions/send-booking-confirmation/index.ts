@@ -18,7 +18,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
-import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -98,13 +97,16 @@ serve(async (req) => {
     const location = (isMobile ? booking.client_address : booking.provider_address_snapshot)
       || 'Address shared on confirmation';
 
+    // Raw — the template escapes its own HTML and leaves the subject as plain
+    // text, so a service called "Gel manicure & art" no longer reaches the
+    // inbox as "Gel manicure &amp; art".
     const { subject, html } = bookingConfirmationEmail({
-      clientName: escapeHtml(booking.customer_name || 'there'),
-      providerName: escapeHtml(booking.provider_name_snapshot || 'your provider'),
-      service: escapeHtml(booking.service_name_snapshot || 'your appointment'),
-      date: escapeHtml(formatLongDate(booking.booking_date)),
-      time: escapeHtml(formatTime12(booking.booking_time)),
-      location: escapeHtml(location),
+      clientName: booking.customer_name || 'there',
+      providerName: booking.provider_name_snapshot || 'your provider',
+      service: booking.service_name_snapshot || 'your appointment',
+      date: formatLongDate(booking.booking_date),
+      time: formatTime12(booking.booking_time),
+      location,
     });
 
     const res = await fetch('https://api.resend.com/emails', {

@@ -18,6 +18,7 @@
 // Requires a signed-in user (verify_jwt = true in config.toml).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { supportRequestEmail } from '../_shared/emailTemplates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
@@ -52,16 +53,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-}
-
-/** Everything below is user-typed or client-supplied and lands in an HTML email. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 /** Client-supplied context (platform, app version) — informational only, never trusted. */
@@ -198,18 +189,17 @@ serve(async (req) => {
     const ref = `#${ticket.ticket_number}`;
     rows.unshift(['Ticket', ref]);
 
-    const html = `<div style="font-family:sans-serif;max-width:640px;color:#1a1a1a">
-      <h2 style="color:#a342c3;margin:0 0 16px">${escapeHtml(category)}</h2>
-      <table cellpadding="4" cellspacing="0" style="font-size:13px;color:#444;margin-bottom:20px">
-        ${rows
-          .map(
-            ([label, value]) =>
-              `<tr><td style="color:#888">${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`,
-          )
-          .join('')}
-      </table>
-      <div style="white-space:pre-wrap;border-left:3px solid #a342c3;padding-left:14px;font-size:15px;line-height:1.5">${escapeHtml(description)}</div>
-    </div>`;
+    // Built from the shared templates so the support inbox gets the same
+    // letterhead as everything else we send — this was the last surface still
+    // on the retired orchid brand. Everything interpolated is escaped here,
+    // per the escape-at-the-call-site rule the templates assume.
+    const { subject, html } = supportRequestEmail({
+      ticketRef: ref,
+      category,
+      reporter: `${who} — ${reporterEmail}`,
+      description,
+      rows,
+    });
 
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -223,7 +213,7 @@ serve(async (req) => {
         // reply_to is the verified account email, so support can answer the
         // reporter directly without trusting anything in the request body.
         reply_to: user.email ? [user.email] : undefined,
-        subject: `${ref} [${category}] ${who} — ${reporterEmail}`,
+        subject,
         html,
       }),
     });

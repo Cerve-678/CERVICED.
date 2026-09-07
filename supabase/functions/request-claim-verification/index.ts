@@ -9,7 +9,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { claimVerificationEmail } from '../_shared/emailTemplates.ts';
-import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
@@ -121,8 +120,9 @@ serve(async (req) => {
         to: provider.email,
         ...claimVerificationEmail({
           code,
-          // A scraped listing's name is third-party text landing in HTML.
-          ...(provider.display_name ? { businessName: escapeHtml(provider.display_name) } : {}),
+          // A scraped listing's name is third-party text; the template escapes
+          // it where it lands in HTML.
+          ...(provider.display_name ? { businessName: provider.display_name } : {}),
         }),
       }),
     });
