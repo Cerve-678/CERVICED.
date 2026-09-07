@@ -24,12 +24,28 @@ import { clearSeenTours } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getCurrentUserStoredPushToken, runDevReset } from '../../services/databaseService';
+import {
+  getCurrentUserStoredPushToken,
+  runDevReset,
+  invokeSendAccountEmail,
+  AccountEmailKind,
+} from '../../services/databaseService';
 import {
   registerForPushNotifications,
   unregisterPushToken,
 } from '../../services/pushNotificationService';
 import { logger, getLogBuffer, clearLogBuffer, subscribeToLogBuffer, LogEntry } from '../../utils/logger';
+
+// Every kind send-account-email accepts, so this screen doesn't quietly fall
+// behind the function. Adding a kind there means adding a row here.
+const EMAIL_KINDS: { kind: AccountEmailKind; label: string; note?: string }[] = [
+  { kind: 'general_welcome', label: 'General welcome', note: 'the brand email' },
+  { kind: 'client_welcome', label: 'Client welcome', note: 'new signup' },
+  { kind: 'provider_welcome', label: 'Provider welcome', note: 'new signup, business address' },
+  { kind: 'client_hat_added', label: 'Client hat added', note: 'second hat' },
+  { kind: 'provider_hat_added', label: 'Provider hat added', note: 'second hat, business address' },
+  { kind: 'password_changed', label: 'Password changed', note: 'security notice' },
+];
 
 export default function DevSettingsScreen({ navigation }: any) {
   const [bookingCount, setBookingCount] = useState<number>(0);
@@ -55,6 +71,30 @@ export default function DevSettingsScreen({ navigation }: any) {
   // so the header rides up under the status bar. Pad manually with a fallback.
   const topInset =
     insets.top > 0 ? insets.top : Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 44;
+
+  // --- Transactional email test state ---
+  // The function resolves recipient and wording from the signed-in user, so a
+  // test can only ever reach the tester's own address — there is no field here
+  // to type someone else's in, deliberately.
+  const [emailBusy, setEmailBusy] = useState<string | null>(null);
+
+  const sendTestEmail = async (kind: AccountEmailKind, label: string) => {
+    setEmailBusy(kind);
+    try {
+      await invokeSendAccountEmail(kind);
+      Alert.alert(
+        'Sent',
+        `“${label}” is on its way.\n\nClient-side and account emails go to ${
+          user?.email ?? 'your login address'
+        }. The two provider ones go to your business address when you have one set.`,
+      );
+    } catch (err) {
+      logger.error(`[dev] test email ${kind} failed:`, err);
+      Alert.alert('Failed', String(err));
+    } finally {
+      setEmailBusy(null);
+    }
+  };
 
   // --- Push diagnostics state ---
   const [pushPerm, setPushPerm] = useState<string>('unknown');
@@ -699,6 +739,44 @@ export default function DevSettingsScreen({ navigation }: any) {
             </View>
 
             {/* Session & Build */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>TRANSACTIONAL EMAIL</Text>
+              <View style={[styles.statCard, { backgroundColor: P.card, borderColor: P.border }]}>
+                <View style={styles.statRow}>
+                  <Text style={[styles.statLabel, { color: P.text }]}>Sends to</Text>
+                  <Text
+                    style={[styles.statValue, { color: P.sub, maxWidth: '60%' }]}
+                    numberOfLines={1}
+                    selectable
+                  >
+                    {user?.email ?? '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {EMAIL_KINDS.map(({ kind, label, note }) => (
+                <TouchableOpacity
+                  key={kind}
+                  style={[
+                    styles.secondaryButton,
+                    {
+                      backgroundColor: P.surface,
+                      borderColor: P.border,
+                      opacity: emailBusy && emailBusy !== kind ? 0.4 : 1,
+                    },
+                  ]}
+                  disabled={emailBusy !== null}
+                  activeOpacity={0.7}
+                  onPress={() => sendTestEmail(kind, label)}
+                >
+                  <Text style={[styles.secondaryButtonText, { color: P.text }]}>
+                    {emailBusy === kind ? 'Sending…' : label}
+                    {note ? <Text style={{ color: P.sub }}>{`  ·  ${note}`}</Text> : null}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: P.sub }]}>SESSION & BUILD</Text>
               <View style={[styles.statCard, { backgroundColor: P.card, borderColor: P.border }]}>
