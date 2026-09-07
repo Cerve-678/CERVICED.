@@ -8,6 +8,8 @@
 // outreach/invite system, so it does not touch provider_outreach_suppressions.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { claimVerificationEmail } from '../_shared/emailTemplates.ts';
+import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
@@ -49,7 +51,7 @@ serve(async (req) => {
 
     const { data: provider, error: fetchError } = await supabase
       .from('providers')
-      .select('id, email, is_claimed, claim_token_last_sent_at')
+      .select('id, email, display_name, is_claimed, claim_token_last_sent_at')
       .eq('id', providerId)
       .maybeSingle();
 
@@ -117,13 +119,11 @@ serve(async (req) => {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: provider.email,
-        subject: `Your CERVICED verification code: ${code}`,
-        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
-          <h2 style="color:#a342c3">Claim your business listing</h2>
-          <p>Enter this code in the CERVICED app to confirm this listing is yours:</p>
-          <p style="font-size:32px;font-weight:700;letter-spacing:6px;margin:24px 0;">${code}</p>
-          <p style="color:#666;font-size:13px;">This code expires in 15 minutes. If you didn't request this, you can ignore this email.</p>
-        </div>`,
+        ...claimVerificationEmail({
+          code,
+          // A scraped listing's name is third-party text landing in HTML.
+          ...(provider.display_name ? { businessName: escapeHtml(provider.display_name) } : {}),
+        }),
       }),
     });
 

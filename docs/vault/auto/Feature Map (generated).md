@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **85 files**
+Curated: [[Address Release]] · **86 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(161)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **85 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
 - `src/features/providers/goLiveStatus.ts` _(15)_
-- … +55 more
+- … +56 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **162 files**
@@ -299,8 +299,8 @@ Curated: [[Contexts]] · **162 files**
 - `src/screens/auth/EmailVerificationScreen.tsx` _(23)_
 - `supabase/becca_chat_tables.sql` _(21)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
+- `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
-- `src/screens/shared/DevSettingsScreen.tsx` _(15)_
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_

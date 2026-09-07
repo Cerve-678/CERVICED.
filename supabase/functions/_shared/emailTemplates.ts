@@ -340,6 +340,39 @@ export function passwordChangedEmail(params: { name: string }) {
   };
 }
 
+/**
+ * The one-time code for claiming a scraped business listing. Provider-side, so
+ * it takes the provider palette. The code is the whole point of the email, so
+ * it is the largest thing in it and sits in its own panel rather than inline
+ * in a sentence where it competes with the words around it.
+ */
+export function claimVerificationEmail(params: { code: string; businessName?: string }) {
+  const P = PROVIDER;
+  const who = params.businessName ? ` for ${params.businessName}` : '';
+  return {
+    subject: `Your CERVICED verification code: ${params.code}`,
+    html: emailWrapper(
+      heading(P, 'Claim your listing', 'Verify it is really you') +
+        paragraph(
+          P,
+          `Someone asked to claim the CERVICED listing${who}. Enter this code in the app to confirm the business is yours:`,
+        ) +
+        `
+      <div style="background:${P.surface};border-radius:14px;padding:24px;text-align:center;margin-bottom:28px;">
+        <div style="font-family:${DISPLAY};color:${P.accent};font-size:38px;letter-spacing:12px;line-height:1.1;">${params.code}</div>
+        <div style="font-family:${BODY};color:${P.sub};font-size:12px;letter-spacing:1.5px;text-transform:uppercase;padding-top:12px;">Expires in 15 minutes</div>
+      </div>` +
+        note(
+          P,
+          "If you didn't ask for this, you can ignore this email — the listing stays unclaimed and nobody gets access to it without this code.",
+          8,
+        ) +
+        appHint(P),
+      P,
+    ),
+  };
+}
+
 export function bookingConfirmationEmail(params: {
   clientName: string;
   providerName: string;

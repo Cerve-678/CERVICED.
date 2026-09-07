@@ -4,71 +4,98 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const successPage = () => `<!DOCTYPE html>
+// The two outcome pages a verification link can land on. They were the last
+// surface still carrying the retired orchid branding (a #a342c3 gradient and
+// an Impact wordmark); they now use the app's own cream-and-chocolate base
+// theme and real mark, so the page you land on looks like the app you just
+// signed up for. One shell rather than two near-identical copies — they only
+// ever differed by icon and wording.
+const MARK =
+  'https://ztrfpfvvejzaysrelmfm.supabase.co/storage/v1/object/public/public/brand/cerviced-mark.png';
+
+const outcomePage = (o: {
+  title: string;
+  docTitle: string;
+  kicker: string;
+  icon: string;
+  body: string;
+}) => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Email Verified – CERVICED</title>
+  <title>${o.docTitle} – CERVICED</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;600&display=swap" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #F5E6FA; font-family: Georgia, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .card { background: #fff; border-radius: 24px; padding: 48px 40px; max-width: 460px; width: 100%; text-align: center; box-shadow: 0 4px 32px rgba(163,66,195,0.14); }
-    .brand { background: linear-gradient(135deg, #a342c3, #DA70D6); border-radius: 16px; padding: 20px 32px; display: inline-block; margin-bottom: 36px; }
-    .brand-name { color: #fff; font-size: 30px; font-weight: 900; letter-spacing: 4px; font-family: Impact, 'Arial Black', sans-serif; }
-    .brand-tag { color: rgba(255,255,255,0.85); font-size: 12px; letter-spacing: 1px; margin-top: 4px; }
-    .check { font-size: 56px; margin-bottom: 20px; }
-    h1 { color: #1a1a1a; font-size: 24px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .label { color: #DA70D6; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 24px; }
-    p { color: #555; font-size: 15px; line-height: 1.7; margin-bottom: 32px; }
-    .footer { margin-top: 36px; color: #a342c3; font-size: 12px; letter-spacing: 1px; }
+    body {
+      background: #F5F1EC;
+      font-family: 'Jura', 'Trebuchet MS', Verdana, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: #000;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #EDEAEA;
+      border-radius: 16px;
+      padding: 44px 36px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+    }
+    .mark { width: 72px; height: 72px; border-radius: 18px; display: block; margin: 0 auto 28px; }
+    .icon { font-size: 44px; line-height: 1; margin-bottom: 18px; }
+    h1 {
+      font-family: 'Bakbak One', 'Arial Black', Impact, sans-serif;
+      font-size: 26px; letter-spacing: 1px; line-height: 1.3; margin-bottom: 10px;
+    }
+    .kicker {
+      color: #5C4033; font-size: 12px; letter-spacing: 2px;
+      text-transform: uppercase; font-weight: 600; margin-bottom: 22px;
+    }
+    p { color: #7E6667; font-size: 15px; line-height: 1.7; }
+    strong { color: #000; }
+    .footer {
+      margin-top: 32px; padding-top: 20px; border-top: 1px solid #EDEAEA;
+      color: #7E6667; font-size: 11px; letter-spacing: 1.5px;
+    }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="brand">
-      <div class="brand-name">CERVICED</div>
-      <div class="brand-tag">Beauty at your fingertips</div>
-    </div>
-    <div class="check">✓</div>
-    <h1>Email Verified</h1>
-    <p class="label">You're all set</p>
-    <p>Your email is confirmed. Open the <strong>CERVICED app</strong> on your phone and tap <strong>"I've verified my email"</strong> to enter your account.</p>
+    <img class="mark" src="${MARK}" alt="CERVICED" />
+    <div class="icon">${o.icon}</div>
+    <h1>${o.title}</h1>
+    <p class="kicker">${o.kicker}</p>
+    <p>${o.body}</p>
     <div class="footer">© CERVICED · cerviced.co</div>
   </div>
 </body>
 </html>`;
 
-const errorPage = (message: string) => `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Verification Failed – CERVICED</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #F5E6FA; font-family: Georgia, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .card { background: #fff; border-radius: 24px; padding: 48px 40px; max-width: 460px; width: 100%; text-align: center; box-shadow: 0 4px 32px rgba(163,66,195,0.14); }
-    .brand { background: linear-gradient(135deg, #a342c3, #DA70D6); border-radius: 16px; padding: 20px 32px; display: inline-block; margin-bottom: 36px; }
-    .brand-name { color: #fff; font-size: 30px; font-weight: 900; letter-spacing: 4px; font-family: Impact, 'Arial Black', sans-serif; }
-    .icon { font-size: 56px; margin-bottom: 20px; }
-    h1 { color: #1a1a1a; font-size: 22px; font-weight: 700; margin-bottom: 16px; }
-    p { color: #666; font-size: 14px; line-height: 1.7; }
-    .footer { margin-top: 36px; color: #a342c3; font-size: 12px; letter-spacing: 1px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="brand">
-      <div class="brand-name">CERVICED</div>
-    </div>
-    <div class="icon">⚠️</div>
-    <h1>Link Expired</h1>
-    <p>${message}. Please open the CERVICED app and request a new verification email.</p>
-    <div class="footer">© CERVICED · cerviced.co</div>
-  </div>
-</body>
-</html>`;
+const successPage = () =>
+  outcomePage({
+    docTitle: 'Email Verified',
+    icon: '✓',
+    title: 'Email verified',
+    kicker: "You're all set",
+    body: 'Your email is confirmed. Open the <strong>CERVICED app</strong> on your phone and tap <strong>“I’ve verified my email”</strong> to enter your account.',
+  });
+
+const errorPage = (message: string) =>
+  outcomePage({
+    docTitle: 'Verification Failed',
+    icon: '⚠︎',
+    title: 'Link expired',
+    kicker: 'Nothing to worry about',
+    body: `${message}. Open the CERVICED app and request a new verification email — the new link will work straight away.`,
+  });
 
 serve(async (req) => {
   const url = new URL(req.url);
