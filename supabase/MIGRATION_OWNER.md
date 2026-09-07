@@ -22,8 +22,22 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session working fix/checkout-snapshots-and-notification-detail
+CLAIMED: 2026-09-08
+FILE:   20260908120000_checkout_writes_provider_category_and_says_when.sql
+STATE:  WRITTEN, NOT APPLIED -- the Supabase MCP connection dropped before it
+        could be applied. Do not renumber or apply it from another session;
+        release this lock only once it is applied and verified live.
 ```
+
+### Pending: 20260908120000 (checkout category + notification detail)
+
+Redefines `prepare_checkout()`, `finalize_checkout()` and
+`claim_cart_booking_slots()`, and backfills the `service_category_snapshot`
+rows the first of those wrote wrong. The version number is a placeholder off
+the wall clock -- `apply_migration` stamps its own version, so renumber the
+file to whatever it records, and confirm that number is above
+`max(version)` in `supabase_migrations.schema_migrations` first.
 
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
