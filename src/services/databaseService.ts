@@ -7533,17 +7533,37 @@ export async function upsertUserAfterVerification(data: {
 // PROVIDERS — additional reads
 // ─────────────────────────────────────────────────────────
 
-/** Fetch the provider's DB id for a given auth user id.
- * No has_gone_live filter — provider reading their own record. */
+/** Fetch the provider's DB id for a given auth user id, or null if this user
+ * owns no provider profile.
+ *
+ * No has_gone_live filter — provider reading their own record.
+ *
+ * Ordered and limited to exactly one row, matching getProviderProfileForUserId:
+ * a user should own one provider profile, but duplicates have crept in during
+ * the account churn, and a bare .maybeSingle() errors outright on more than one
+ * row rather than picking. Both functions must resolve to the same row (active
+ * first, then the oldest/original) or ownership checks disagree with the
+ * profile actually loaded.
+ *
+ * The error is thrown rather than swallowed into a null. Silently reporting
+ * "owns no provider profile" when the query in fact failed is indistinguishable
+ * to every caller from the truth, and this answer now gates whether an account
+ * is offered a Book button on its own profile.
+ */
 export async function getProviderIdForUserId(
   userId: string,
 ): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("id")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
-  return (data as any)?.id ?? null;
+
+  if (error) throw error;
+  return data?.id ?? null;
 }
 
 /** Fetch branding fields for the provider owned by the given user (Branding screen).

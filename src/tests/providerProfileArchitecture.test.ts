@@ -43,4 +43,57 @@ describe("ProviderProfileScreen data architecture", () => {
     expect(sections).toContain("removeClippedSubviews={Platform.OS === \"android\"}");
     expect(sections).toContain("recyclingKey={item.id}");
   });
+
+  it("answers profile ownership from the session, not a per-visit round trip", () => {
+    // The Book button used to appear only after getProviderProfileViewerContext
+    // resolved — a whole round trip chained behind the provider fetch, so the
+    // profile painted with no booking controls and they popped in afterwards.
+    // Ownership is now resolved once per session in AuthContext, which is what
+    // lets the button paint with the rest of the service card.
+    expect(source).toContain("useAuth()");
+    expect(source).toContain("myProviderId");
+    expect(source).toContain("myProviderIdChecked");
+    expect(source).not.toContain("const canBookProvider = viewerChecked && !isOwnProvider");
+
+    const auth = readFileSync(
+      join(__dirname, "../contexts/AuthContext.tsx"),
+      "utf8",
+    );
+    expect(auth).toContain("getProviderIdForUserId");
+    // upgradeToProvider creates the provider row mid-session and flips
+    // accountType; without it as a dep a new provider keeps the null they
+    // resolved to at login and gets offered Book on their own profile.
+    expect(auth).toContain("}, [user?.id, user?.accountType]);");
+  });
+
+  it("still withholds booking controls until ownership is actually known", () => {
+    // The safety property the gate exists for: a provider must never see a
+    // "Book" button on their own profile, not even for one frame. Either
+    // ownership check settling is enough to know, but one of them must.
+    expect(source).toContain("const canBookProvider = ownershipResolved && !ownsThisProfile;");
+    expect(source).toContain("viewerChecked || (myProviderIdChecked && providerDbId !== null)");
+    // The per-profile check stays the authority and can still take the
+    // controls away if the two ever disagree.
+    expect(source).toContain("isOwnProvider ||");
+  });
+
+  it("resolves an owned provider id deterministically and does not swallow the error", () => {
+    const db = readFileSync(
+      join(__dirname, "../services/databaseService.ts"),
+      "utf8",
+    );
+    const fn = db.slice(
+      db.indexOf("export async function getProviderIdForUserId"),
+      db.indexOf("export async function getProviderBrandingByUserId"),
+    );
+    expect(fn).toContain("getProviderIdForUserId");
+    // Duplicate provider rows exist in this database: a bare .maybeSingle()
+    // errors on >1 row instead of picking, and must pick the same row
+    // getProviderProfileForUserId does.
+    expect(fn).toContain('.order("is_active", { ascending: false })');
+    expect(fn).toContain('.order("created_at", { ascending: true })');
+    expect(fn).toContain(".limit(1)");
+    // Never report "owns no provider profile" for a query that actually failed.
+    expect(fn).toContain("if (error) throw error;");
+  });
 });

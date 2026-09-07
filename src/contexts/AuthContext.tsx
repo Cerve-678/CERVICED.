@@ -18,6 +18,7 @@ import {
   setAuthAutoRefresh,
   signOutCurrentSession,
   subscribeToAuthStateChanges,
+  getProviderIdForUserId,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
@@ -80,6 +81,13 @@ interface AuthContextType {
   session: Session | null;
   /** The only account/hat shape UI code should interpret. */
   hatState: AccountHatState;
+  /** The provider profile this account owns, or null if it owns none.
+   *  Resolved once per session so a screen can answer "is this mine?"
+   *  synchronously on first paint. */
+  myProviderId: string | null;
+  /** False only until the lookup above settles. Treat "not yet checked" as
+   *  "ownership unknown" and withhold anything an owner must never see. */
+  myProviderIdChecked: boolean;
   switchMode: () => Promise<void>;
   upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
@@ -142,6 +150,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => getAccountHatState(user?.accountType ?? null, user?.hasClientProfile, activeMode),
     [user?.accountType, user?.hasClientProfile, activeMode],
   );
+  // Ownership of a provider profile, resolved once per session rather than
+  // once per provider profile viewed. ProviderProfileScreen renders no
+  // booking controls at all until it knows the viewer isn't the owner, so
+  // asking per visit meant the Book button could only appear a round trip
+  // after the profile had already painted.
+  const [myProviderId, setMyProviderId] = useState<string | null>(null);
+  const [myProviderIdChecked, setMyProviderIdChecked] = useState(false);
+  useEffect(() => {
+    // Logged out: nobody owns anything, and there's nothing to look up.
+    // Settled immediately so a signed-out browser isn't made to wait.
+    if (!user?.id) {
+      setMyProviderId(null);
+      setMyProviderIdChecked(true);
+      return;
+    }
+    let cancelled = false;
+    setMyProviderIdChecked(false);
+    void getProviderIdForUserId(user.id)
+      .then((id) => {
+        if (!cancelled) setMyProviderId(id);
+      })
+      .catch((error: unknown) => {
+        // Fail closed on the id, open on the gate: an unresolved lookup must
+        // not strand every client on a profile with no way to book, and the
+        // per-profile owner check in useProviderProfileData still runs behind
+        // this as the authority. Server-side self-booking guards remain the
+        // real boundary either way.
+        logger.warn('[AuthContext] Could not resolve owned provider id:', error);
+        if (!cancelled) setMyProviderId(null);
+      })
+      .finally(() => {
+        if (!cancelled) setMyProviderIdChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // accountType is a dep, not just id: upgradeToProvider creates the row
+    // mid-session and flips this same field, so without it a brand-new
+    // provider would keep the null they were resolved to at login.
+  }, [user?.id, user?.accountType]);
+
   // Mirrors activeMode for applyMode's noop check without pulling activeMode
   // into that callback's deps (which would otherwise force it to be
   // re-created — and re-registered via registerModeSetter — on every switch).
@@ -696,11 +745,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
+    myProviderId, myProviderIdChecked,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
+    myProviderId, myProviderIdChecked,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,

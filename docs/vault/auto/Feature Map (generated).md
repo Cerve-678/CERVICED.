@@ -126,8 +126,8 @@ Curated: [[Booking Flow]] · **241 files**
 - `src/services/AvailabilityService.ts` _(134)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `supabase/phase1_schema.sql` _(125)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(124)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(122)_
 - `src/screens/shared/NotificationsScreen.tsx` _(119)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(113)_
@@ -281,7 +281,7 @@ Curated: [[Booking Flow]] · **153 files**
 Curated: [[Contexts]] · **161 files**
 - `src/services/databaseService.ts` _(224)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(134)_
+- `src/contexts/AuthContext.tsx` _(139)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_

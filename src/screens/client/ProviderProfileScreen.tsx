@@ -49,6 +49,7 @@ import {
   BellIcon,
 } from "../../components/IconLibrary";
 import { useCart } from "../../contexts/CartContext";
+import { useAuth } from "../../contexts/AuthContext";
 
 // Navigation types
 import { HomeStackParamList } from "../../navigation/types";
@@ -1364,11 +1365,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     setIsNotificationsEnabled,
     loadAllReviews,
   } = useProviderProfileData(providerId);
-  // `isOwnProvider` starts false while the viewer lookup is in flight. Never
-  // render a booking CTA during that interval: otherwise providers see a
-  // short-lived "Book" button on their own profile before it flips to the
-  // owner state. A server-side self-booking guard remains the final boundary.
-  const canBookProvider = viewerChecked && !isOwnProvider;
+  // Ownership is answered twice, on purpose. AuthContext resolves which
+  // provider profile this account owns once per session; useProviderProfileData
+  // confirms it again for this specific profile. The session-level answer is
+  // what lets the Book button paint together with the rest of the service card
+  // — waiting on the per-profile check meant a whole extra round trip between
+  // the profile appearing and its booking controls appearing, which read as
+  // the buttons popping in late. The per-profile check stays the authority and
+  // can still take the controls away if the two ever disagree.
+  const { myProviderId, myProviderIdChecked } = useAuth();
+  const ownsThisProfile =
+    isOwnProvider ||
+    (myProviderId !== null &&
+      providerDbId !== null &&
+      myProviderId === providerDbId);
+  // Never render a booking CTA while ownership is still unknown: otherwise
+  // providers see a short-lived "Book" button on their own profile before it
+  // flips to the owner state. Either check settling is enough to know, and the
+  // session-level one normally settled long before this screen mounted. A
+  // server-side self-booking guard remains the final boundary.
+  const ownershipResolved =
+    viewerChecked || (myProviderIdChecked && providerDbId !== null);
+  const canBookProvider = ownershipResolved && !ownsThisProfile;
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
