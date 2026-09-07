@@ -1,0 +1,30 @@
+#!/bin/sh
+# A checkout cannot be blocked by a post-checkout hook, but this makes the
+# exact failure mode that hid the September provider work impossible to miss:
+# moving to a branch whose history does not contain the branch just left.
+old_head="$1"
+new_head="$2"
+branch_checkout="$3"
+
+[ "$branch_checkout" = "1" ] || exit 0
+[ "$old_head" = "$new_head" ] && exit 0
+
+if ! git merge-base --is-ancestor "$old_head" "$new_head" 2>/dev/null; then
+  old_name=$(git name-rev --name-only --no-undefined "$old_head" 2>/dev/null || echo "$old_head")
+  new_name=$(git name-rev --name-only --no-undefined "$new_head" 2>/dev/null || echo "$new_head")
+  cat >&2 <<EOF
+
+WARNING: this branch does not contain the commit you just left.
+  left:    $old_name
+  entered: $new_name
+
+Nothing was deleted, but edits committed only on the old branch will be absent
+here. Compare before continuing:
+  git log --oneline $new_head..$old_head
+  git diff --stat $new_head...$old_head
+
+For combined work, branch from the current HEAD instead of an older main.
+EOF
+fi
+
+exit 0

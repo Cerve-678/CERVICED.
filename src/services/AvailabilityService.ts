@@ -99,7 +99,7 @@ const NO_EMERGENCY_REQUESTS: EmergencyRequestPolicy = {
   afterMins: null,
 };
 
-const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequestPolicy => ({
+export const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequestPolicy => ({
   outsideHours: row?.['allow_out_of_hours_requests'] === true,
   blockedDates: row?.['allow_blocked_date_requests'] === true,
   shortNotice:  row?.['allow_short_notice_requests'] === true,
@@ -109,6 +109,9 @@ const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequ
   beforeMins: toWindowMins(row?.['request_window_before_mins']),
   afterMins:  toWindowMins(row?.['request_window_after_mins']),
 });
+
+export const takesEmergencyRequests = (policy: EmergencyRequestPolicy): boolean =>
+  policy.outsideHours || policy.blockedDates || policy.shortNotice || policy.beyondWindow;
 
 /** A request-window bound in minutes, or null for "any time". Anything
  *  unparseable is null rather than 0: guessing a ceiling of zero would

@@ -56,6 +56,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
+import { resolveProviderFontFamily } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
@@ -599,6 +600,9 @@ interface OffersSidePanelProps {
   providerName: string;
   adaptiveAccentColor: string;
   themeTokens: ProviderThemeTokens;
+  /** Booking controls stay hidden until ownership is known and never appear
+   * on the provider's own public profile. */
+  canBookProvider: boolean;
   onBookOffer: (promo: ClientPromotion) => void;
 }
 
@@ -611,6 +615,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
     providerName,
     adaptiveAccentColor,
     themeTokens,
+    canBookProvider,
     onBookOffer,
   }) => {
     const { width: screenWidth } = useWindowDimensions();
@@ -816,21 +821,23 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                       </TouchableOpacity>
                     ) : null}
 
-                    <TouchableOpacity
-                      style={[
-                        offersStyles.bookBtn,
-                        { backgroundColor: adaptiveAccentColor },
-                      ]}
-                      onPress={() => {
-                        Haptics.impactAsync(
-                          Haptics.ImpactFeedbackStyle.Medium,
-                        ).catch(() => {});
-                        onBookOffer(promo);
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={offersStyles.bookBtnText}>Book Now</Text>
-                    </TouchableOpacity>
+                    {canBookProvider && (
+                      <TouchableOpacity
+                        style={[
+                          offersStyles.bookBtn,
+                          { backgroundColor: adaptiveAccentColor },
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(
+                            Haptics.ImpactFeedbackStyle.Medium,
+                          ).catch(() => {});
+                          onBookOffer(promo);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={offersStyles.bookBtnText}>Book Now</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))
               )}
@@ -1357,6 +1364,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     setIsNotificationsEnabled,
     loadAllReviews,
   } = useProviderProfileData(providerId);
+  // `isOwnProvider` starts false while the viewer lookup is in flight. Never
+  // render a booking CTA during that interval: otherwise providers see a
+  // short-lived "Book" button on their own profile before it flips to the
+  // owner state. A server-side self-booking guard remains the final boundary.
+  const canBookProvider = viewerChecked && !isOwnProvider;
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
@@ -2308,6 +2320,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         url: provider.website,
       });
     }
+    if (provider.tiktok) {
+      options.push({
+        key: "tiktok",
+        icon: "logo-tiktok",
+        label: "TikTok",
+        detail: `@${provider.tiktok}`,
+        url: `https://tiktok.com/@${provider.tiktok}`,
+      });
+    }
     return options;
   }, [provider]);
 
@@ -2329,7 +2350,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       headerTitle:
         isScrolledRef.current && provider ? provider.displayName : "",
       headerTitleStyle: {
-        fontFamily: SERIF,
+        fontFamily: resolveProviderFontFamily(provider?.brandFont),
         fontSize: 17,
         color: OP.text,
       },
@@ -2404,6 +2425,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     handleShare,
     OP.bg,
     OP.text,
+    provider?.brandFont,
   ]);
   const handleScroll = useCallback(
     (event: any) => {
@@ -3338,7 +3360,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           — with the "Select" entry point hidden, select mode can never be
           entered, so the floating bar and MultiBookingSheet below never show
           either. Single-service "Book" is unaffected. See FUTURE_LOGIC.md. */}
-      {MULTI_SERVICE_BOOKING_ENABLED && !provider.externalBookingUrl && (
+      {canBookProvider && MULTI_SERVICE_BOOKING_ENABLED && !provider.externalBookingUrl && (
         <TouchableOpacity
           onPress={toggleSelectMode}
           activeOpacity={0.6}
@@ -3539,7 +3561,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </View>
                 </View>
 
-                {/* Book + Waitlist stacked column */}
+                {/* Booking controls are absent, rather than merely disabled,
+                    on the provider's own profile and while ownership loads. */}
+                {canBookProvider && (
                 <View style={styles.serviceActionColumn}>
                   {(() => {
                     const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || serviceFullyBooked[service.dbId] === true;
@@ -3599,12 +3623,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                     return (
                       <TouchableOpacity
-                        disabled={isOwnProvider || fullyBooked}
+                        disabled={fullyBooked}
                         style={[
                           styles.bookButton,
                           {
                             backgroundColor:
-                              isOwnProvider || fullyBooked
+                              fullyBooked
                                 ? withAlpha(OP.sub, 0.18)
                                 : adaptiveAccentColor,
                           },
@@ -3614,19 +3638,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           handleBook(service);
                         }}
                         activeOpacity={0.8}
-                        accessibilityState={{ disabled: isOwnProvider || fullyBooked }}
+                        accessibilityState={{ disabled: fullyBooked }}
                       >
                         <Text
                           style={[
                             styles.bookButtonText,
-                            isOwnProvider || fullyBooked
+                            fullyBooked
                               ? { color: OP.sub, fontSize: 10 }
                               : { color: "#fff" },
                           ]}
                         >
-                          {isOwnProvider
-                            ? "Your profile"
-                            : fullyBooked
+                          {fullyBooked
                               ? "Fully Booked"
                               : "Book"}
                         </Text>
@@ -3752,6 +3774,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     );
                   })()}
                 </View>
+                )}
               </View>
             </View>
           </BlurView>
@@ -4006,6 +4029,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerName={provider?.providerName ?? ""}
           adaptiveAccentColor={adaptiveAccentColor}
           themeTokens={OP}
+          canBookProvider={canBookProvider}
           onBookOffer={handleBookOffer}
         />
 
@@ -4075,7 +4099,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     setShowAllServicesModal(false),
                   )}
                 </ScrollView>
-                {selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(16)}
+                {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(16)}
               </SafeAreaView>
 
               {/* Image viewer as an internal overlay, not a second <Modal> —
@@ -4547,7 +4571,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             it), and this screen sits under IslandPillTabBar's floating pill
             — needs FLOATING_TAB_BAR_CLEARANCE or the pill covers it and
             "Book" becomes untappable. */}
-        {selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
+        {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
 
         {/* No bottom edge inset — the pink sheet must run under the home indicator */}
         <SafeAreaView style={styles.safeArea} edges={[]}>
@@ -4619,7 +4643,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text
                     style={[
                       styles.providerDisplayName,
-                      { color: heroText },
+                      { color: heroText, fontFamily: resolveProviderFontFamily(provider.brandFont) },
                       heroIsDark && styles.heroTextShadow,
                     ]}
                   >

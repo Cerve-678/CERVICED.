@@ -46,6 +46,7 @@ export interface RegistrationData {
   // Provider "About your business" (Step 4) — location/pricing/team/contact
   // logistics needed for booking + the business profile. Mirrors columns
   // added in supabase/provider_signup_business_fields.sql.
+  location: string;
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
   teamSize: 'solo' | 'small_team' | 'large_team' | '';
   preferredContactMethods: string[];
@@ -106,6 +107,7 @@ const initialData: RegistrationData = {
   gender: null,
   has_kids: null,
   // Provider "About your business"
+  location: '',
   priceRange: '',
   teamSize: '',
   preferredContactMethods: [],

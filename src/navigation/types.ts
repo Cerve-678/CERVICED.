@@ -216,6 +216,8 @@ export type ProviderHomeStackParamList = {
   // fresh stack, so their back/save button fired an unhandled GO_BACK.
   EditProfile: { transferProviderId?: string } | undefined;
   Branding: undefined;
+  Policies: undefined;
+  Payments: undefined;
   BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; groupSiblings?: any[] };
   ProviderIntakeForm:
     | {
@@ -273,6 +275,7 @@ export type ProviderServicesStackParamList = {
   // same reason ProviderSchedule is registered here rather than jumped to on
   // the Account tab.
   Policies: undefined;
+  Payments: undefined;
   Branding: undefined;
   // Pushed from the dashboard's saved-by-clients tile, same reasoning.
   Analytics: undefined;

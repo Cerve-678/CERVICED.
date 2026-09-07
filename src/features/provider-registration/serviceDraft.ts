@@ -20,6 +20,7 @@ export interface ServiceTemplateSeed {
 
 export interface ProviderServiceDraft {
   id: number;
+  dbId: string | null;
   name: string;
   price: number;
   duration: string;
@@ -27,7 +28,7 @@ export interface ProviderServiceDraft {
   bufferAfterMins: number | null;
   description: string;
   images: ServiceImageDraft[];
-  addOns: { id: number; name: string; price: number }[];
+  addOns: { id: number; dbId: string | null; name: string; price: number }[];
   tags: string[];
   techniqueTags: string[];
   outcomeTags: string[];
@@ -59,6 +60,7 @@ function nextDraftId(): number {
 export function createServiceDraft(template?: ServiceTemplateSeed | null): ProviderServiceDraft {
   return {
     id: nextDraftId(),
+    dbId: null,
     name: template?.name ?? '',
     price: 0,
     duration: template?.duration ?? '',

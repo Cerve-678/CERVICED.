@@ -193,10 +193,12 @@ export interface DbProvider {
   accent_color: string | null;
   background_image_url: string | null;
   profile_theme: string | null; // preset key from src/constants/providerThemes.ts ('app', 'blush', …)
+  brand_font: string | null; // key from src/constants/providerFonts.ts; null = Prata
   phone: string | null;
   email: string | null;
   instagram: string | null;
   website: string | null;
+  tiktok: string | null;
   preferred_contact_methods: string[] | null;
   whatsapp_number: string | null;
   // When set, client-facing "Book" CTAs open this URL (Fresha, Treatwell,
@@ -813,10 +815,12 @@ export type ProviderWithServices = Pick<
   | "accent_color"
   | "background_image_url"
   | "profile_theme"
+  | "brand_font"
   | "phone"
   | "email"
   | "instagram"
   | "website"
+  | "tiktok"
   | "preferred_contact_methods"
   | "whatsapp_number"
   | "external_booking_url"

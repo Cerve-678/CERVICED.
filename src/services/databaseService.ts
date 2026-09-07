@@ -928,10 +928,12 @@ export async function getProviderBySlug(
         accent_color,
         background_image_url,
         profile_theme,
+        brand_font,
         phone,
         email,
         instagram,
         website,
+        tiktok,
         preferred_contact_methods,
         whatsapp_number,
         external_booking_url,
@@ -5239,6 +5241,59 @@ export async function getProviderFormLibrary(): Promise<LibraryForm[]> {
   return (data ?? []).map(mapLibraryForm);
 }
 
+/** The provider's own client-facing Terms & Conditions as editable prose. */
+export async function getMyProviderTermsText(): Promise<string> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return "";
+  const { data, error } = await supabase
+    .from("provider_form_library")
+    .select("questions")
+    .eq("provider_id", provider.id)
+    .eq("is_terms", true)
+    .maybeSingle();
+  if (error) throw error;
+  const questions = (data?.questions ?? []) as IntakeFormQuestion[];
+  return questions
+    .filter(question => question.type === "policy" && (question.body ?? "").trim() !== "")
+    .map(question => (question.body ?? "").trim())
+    .join("\n\n");
+}
+
+/** Save the one terms document clients read before booking. */
+export async function saveMyProviderTermsText(body: string): Promise<void> {
+  const provider = await getMyProviderProfile();
+  if (!provider) throw new Error("No provider profile");
+  const questions: IntakeFormQuestion[] = [
+    { id: "terms", type: "policy", label: "Terms & Conditions", body: body.trim(), required: true },
+  ];
+  const { data: existing, error: readError } = await supabase
+    .from("provider_form_library")
+    .select("id")
+    .eq("provider_id", provider.id)
+    .eq("is_terms", true)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (existing) {
+    const { error } = await supabase
+      .from("provider_form_library")
+      .update({ questions, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (error) throw error;
+    return;
+  }
+  if (body.trim() === "") return;
+  const { error } = await supabase.from("provider_form_library").insert({
+    provider_id: provider.id,
+    title: "Terms & Conditions",
+    questions,
+    service_names: [],
+    auto_send: false,
+    requires_signature: false,
+    is_terms: true,
+  });
+  if (error) throw error;
+}
+
 /** Narrow readiness check used by the provider profile preview. */
 export async function hasMyProviderTermsForm(): Promise<boolean> {
   const provider = await getMyProviderProfile();
@@ -5672,12 +5727,12 @@ export interface ProviderReschedulePolicy {
 
 /** Parse the provider's booking_policies reschedule settings.
  *  Values come from registration: rescheduleNotice 'same_day'|'24h'|'48h'|'72h',
- *  maxReschedules '1'|'2'|'unlimited'. Missing policy = 1 reschedule, 24h notice
- *  (matches the app's historical defaults). */
+ *  maxReschedules '1'|'2'|'unlimited'. Missing policy is unrestricted, matching
+ *  request_reschedule_own_booking() in the database. */
 function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
   const fallback: ProviderReschedulePolicy = {
-    maxReschedules: 1,
-    rescheduleNoticeHours: 24,
+    maxReschedules: null,
+    rescheduleNoticeHours: 0,
   };
   const bp = (data as any)?.booking_policies as {
     rescheduleNotice?: string;
@@ -5686,16 +5741,16 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
   if (!bp) return fallback;
 
   const max =
-    bp.maxReschedules === "unlimited"
+    !bp.maxReschedules || bp.maxReschedules === "unlimited"
       ? null
-      : parseInt(bp.maxReschedules ?? "1", 10) || 1;
+      : parseInt(bp.maxReschedules, 10) || null;
   const noticeMap: Record<string, number> = {
     same_day: 0,
     "24h": 24,
     "48h": 48,
     "72h": 72,
   };
-  const notice = noticeMap[bp.rescheduleNotice ?? "24h"] ?? 24;
+  const notice = bp.rescheduleNotice ? (noticeMap[bp.rescheduleNotice] ?? 0) : 0;
   return { maxReschedules: max, rescheduleNoticeHours: notice };
 }
 
@@ -6572,13 +6627,13 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return DEFAULT_NOTIF_PREFS;
+  if (!user) throw new Error("Not signed in");
   const { data, error } = await supabase
     .from("users")
     .select("notification_preferences")
     .eq("id", user.id)
     .single();
-  if (error) return DEFAULT_NOTIF_PREFS;
+  if (error) throw error;
   return { ...DEFAULT_NOTIF_PREFS, ...(data?.notification_preferences ?? {}) };
 }
 
@@ -6589,7 +6644,7 @@ export async function saveNotificationPreferences(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) throw new Error("Not signed in");
   const { error } = await supabase
     .from("users")
     .update({ notification_preferences: prefs })
@@ -6836,8 +6891,8 @@ export async function getProviderCheckoutMetadata(
     } else {
       depositPolicies[provider.display_name] = {
         depositType: "percentage",
-        depositAmount: 20,
-        depositAvailable: true,
+        depositAmount: 0,
+        depositAvailable: false,
         depositOnly: false,
       };
     }
@@ -6845,7 +6900,7 @@ export async function getProviderCheckoutMetadata(
   return { depositPolicies, mobileProviderNames };
 }
 
-/** Fetch deposit policies for multiple providers by display name (batch). Falls back to 20% default if no policy set. */
+/** Fetch deposit policies for multiple providers by display name (batch). */
 export async function getProviderDepositPoliciesByDisplayNames(
   displayNames: string[],
 ): Promise<Record<string, ProviderDepositPolicy>> {
@@ -6860,8 +6915,8 @@ export async function getProviderDepositPoliciesByDisplayNames(
 
   const defaultPolicy: ProviderDepositPolicy = {
     depositType: "percentage",
-    depositAmount: 20,
-    depositAvailable: true,
+    depositAmount: 0,
+    depositAvailable: false,
     depositOnly: false,
   };
   const result: Record<string, ProviderDepositPolicy> = {};
@@ -7075,8 +7130,10 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   business_type: string | null;
   instagram: string | null;
   website: string | null;
+  tiktok: string | null;
   service_interests: string[] | null;
   service_locations: string[] | null;
+  location_text: string | null;
   team_size: string | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
@@ -7088,8 +7145,8 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   const { data, error } = await supabase
     .from("users")
     .select(
-      "name, phone, business_name, business_email, business_phone, business_type, instagram, website, " +
-        "service_interests, service_locations, team_size, accessibility_notes, languages_spoken, specialties, " +
+      "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
+        "service_interests, service_locations, location_text, team_size, accessibility_notes, languages_spoken, specialties, " +
         "price_range, preferred_contact_methods, preferred_payment_methods",
     )
     .eq("id", userId)
@@ -7107,8 +7164,10 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     business_type: string | null;
     instagram: string | null;
     website: string | null;
+    tiktok: string | null;
     service_interests: string[] | null;
     service_locations: string[] | null;
+    location_text: string | null;
     team_size: string | null;
     accessibility_notes: string | null;
     languages_spoken: string[] | null;
@@ -7495,10 +7554,11 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
   accent_color: string | null;
   background_image_url: string | null;
   profile_theme: string | null;
+  brand_font: string | null;
 } | null> {
   const { data, error } = await supabase
     .from("providers")
-    .select("id, gradient, accent_color, background_image_url, profile_theme")
+    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font")
     .eq("user_id", userId)
     .single();
   if (error) return null;
@@ -7508,6 +7568,7 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
     accent_color: string | null;
     background_image_url: string | null;
     profile_theme: string | null;
+    brand_font: string | null;
   };
 }
 
@@ -7624,7 +7685,7 @@ export async function getProviderBasicById(
 // PROVIDERS — additional writes
 // ─────────────────────────────────────────────────────────
 
-/** Persist provider branding choices (gradient, accent colour, background, theme key) */
+/** Persist provider branding choices, including the public business-name font. */
 export async function updateProviderBranding(
   providerId: string,
   data: {
@@ -7632,6 +7693,7 @@ export async function updateProviderBranding(
     accent_color: string;
     background_image_url: string | null;
     profile_theme: string;
+    brand_font: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase
@@ -8022,7 +8084,7 @@ export async function getServiceSafetyFlags(
   for (const row of data ?? []) {
     map.set(row.id, {
       patchTestRequired: !!row.patch_test_required,
-      isPregnancySafe: row.is_pregnancy_safe !== false,
+      isPregnancySafe: row.is_pregnancy_safe === true,
     });
   }
   return map;

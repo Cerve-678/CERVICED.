@@ -122,6 +122,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         medical_notes:         meta['medical_notes']         ?? null,
         photography_consent:   meta['photography_consent']   ?? true,
         service_locations:     meta['service_locations']     ?? [],
+        location_text:         meta['location']              ?? null,
         maintenance_frequency: meta['maintenance_frequency'] ?? null,
         referral_source:       meta['referral_source']       ?? null,
         gender:                meta['gender']                ?? null,

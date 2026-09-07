@@ -46,6 +46,17 @@ export const SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: st
   { value: 'OTHER',      label: 'Other',      sub: 'Massage, waxing, tanning, holistic therapies' },
 ];
 
+// The same seven values as bare strings, for InfoRegScreen's sign-up picker,
+// which renders its own cards and needs only the ordered values. Derived from
+// SERVICE_TYPE_OPTS rather than written out a second time: these two lists
+// must offer the same types in the same order, and the surest way to keep
+// them in step is for there to be only one of them. Locked in InfoRegScreen
+// once a profile exists — BusinessInfoScreen is the only place the type can
+// be changed afterwards (with a 90-day cooldown) — because subcategory
+// suggestions, tag pools and templates are all scoped off this choice.
+export const SERVICE_CATEGORY_OPTS: readonly ServiceCategory[] =
+  SERVICE_TYPE_OPTS.map(option => option.value);
+
 export const CLIENTELE_OPTS     = ['Women', 'Men', 'Children', 'Seniors', 'Bridal & wedding parties', 'All welcome'];
 export const AVAILABILITY_OPTS  = ['Weekday mornings', 'Weekday afternoons', 'Weekday evenings', 'Saturdays', 'Sundays', 'Same-day bookings'];
 // Signup's list (SignUpStep5Screen's LANGUAGE_OPTIONS) leads, in its order, so
