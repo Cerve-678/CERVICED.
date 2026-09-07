@@ -12,8 +12,16 @@ if (__DEV__) {
 }
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
+import { Lobster_400Regular } from '@expo-google-fonts/lobster';
+import { DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
+import { Bungee_400Regular } from '@expo-google-fonts/bungee';
+import { Righteous_400Regular } from '@expo-google-fonts/righteous';
+import { Sniglet_800ExtraBold } from '@expo-google-fonts/sniglet';
+import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2';
+import { VarelaRound_400Regular } from '@expo-google-fonts/varela-round';
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { FontProvider } from './src/contexts/FontContext';
@@ -36,6 +44,17 @@ import * as Sentry from '@sentry/react-native';
 import { env } from './src/utils/env';
 import { configureBeccaAI } from './src/services/becca/aiRuntime';
 import { nvidiaBeccaInterpreter } from './src/services/becca/nvidiaInterpreter';
+
+// expo-image uses an on-device disk cache by default. A bounded cache keeps
+// provider and portfolio images fast without letting old images consume iOS
+// storage indefinitely. Once full, the least useful cached images are evicted.
+if (Platform.OS === 'ios') {
+  Image.configureCache({
+    maxDiskSize: 100 * 1024 * 1024, // 100 MB
+    maxMemoryCost: 30 * 1024 * 1024, // 30 MB
+    maxMemoryCount: 100,
+  });
+}
 
 // @stripe/stripe-react-native's native module binding throws at import time
 // (TurboModuleRegistry.getEnforcing) when the native module isn't present —
@@ -112,6 +131,14 @@ export default Sentry.wrap(function App() {
   const [fontsLoaded, fontError] = useFonts({
     'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
+    'Prata-Regular': require('./assets/fonts/Prata-Regular.ttf'),
+    Lobster_400Regular,
+    DancingScript_700Bold,
+    Bungee_400Regular,
+    Righteous_400Regular,
+    Sniglet_800ExtraBold,
+    Baloo2_700Bold,
+    VarelaRound_400Regular,
   });
 
   const onLayoutRootView = useCallback(async () => {
