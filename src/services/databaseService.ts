@@ -7886,20 +7886,29 @@ export async function updateProviderContactDetails(
  * calling again with the old value — the cooldown will refuse, and the
  * specialties are already gone.
  */
-export async function updateMyServiceCategory(
+/**
+ * Replace the provider's whole set of service types. Ordered: the first entry
+ * is the headline.
+ *
+ * Writes `service_categories` ONLY, and deliberately not `service_category`
+ * alongside it. trg_sync_provider_service_categories derives the headline from
+ * the array's first entry, so sending both invites the two to disagree in the
+ * payload and makes the trigger arbitrate something the caller shouldn't have
+ * had an opinion about. `custom_service_type` is likewise the DB's to clear —
+ * the cooldown guard nulls it whenever OTHER leaves the set.
+ *
+ * Throws on the 90-day cooldown (P0001), which callers surface verbatim.
+ */
+export async function updateMyServiceCategories(
   providerId: string,
-  category: ServiceCategory,
-  customServiceType: string | null,
+  categories: ServiceCategory[],
 ): Promise<void> {
+  if (!categories.length) {
+    throw new Error("A provider must offer at least one service type");
+  }
   const { error } = await supabase
     .from("providers")
-    .update({
-      service_category: category,
-      // Only meaningful for OTHER; the trigger nulls it for every other
-      // category regardless, so sending it here is belt-and-braces for the
-      // OTHER -> OTHER-with-a-new-label case the trigger doesn't fire on.
-      custom_service_type: category === "OTHER" ? customServiceType : null,
-    })
+    .update({ service_categories: categories })
     .eq("id", providerId);
   if (error) throw error;
 }

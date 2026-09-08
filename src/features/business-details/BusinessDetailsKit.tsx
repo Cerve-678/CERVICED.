@@ -148,6 +148,83 @@ const tgSt = StyleSheet.create({
 
 // ─── RadioGroup ───────────────────────────────────────────────────────────────
 
+/**
+ * Wrapping multi-select chips, for a field where more than one answer is true
+ * at once. RadioGroup's sibling: same option shape, same palette, but a set
+ * rather than a value.
+ *
+ * Chips rather than a stacked list because the choices are short labels and
+ * there are several — a list of rows makes six one-word options look like six
+ * decisions instead of one. And a wrapping grid rather than a horizontal rail
+ * because a rail hides its own options off-screen, which is the wrong reason
+ * for an option to go unpicked.
+ *
+ * `headline` marks the entry that leads the set (the first one). It's rendered
+ * as a caption rather than as different-looking chip, so the grid stays one
+ * readable row of equals and the ordering rule is stated in words instead of
+ * being left for the provider to infer from a visual difference.
+ */
+export function ChipMultiSelect({
+  options,
+  selected,
+  onToggle,
+  headlineNote,
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onToggle: (v: string) => void;
+  headlineNote?: (headlineLabel: string) => string;
+}) {
+  const C = useBusinessPalette();
+  const headline = options.find(o => o.value === selected[0]);
+  return (
+    <View style={{ marginBottom: 4 }}>
+      <View style={chipSt.grid}>
+        {options.map(opt => {
+          const active = selected.includes(opt.value);
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: active }}
+              style={[
+                chipSt.chip,
+                { backgroundColor: C.surface, borderColor: C.border },
+                // Same selected treatment as RadioGroup in this kit — a tint
+                // plus accentText, not a solid accent fill. White on the dark
+                // theme's dusty rose (#AF9197) is about 2.6:1, which fails
+                // legibility on 13px text.
+                active && { backgroundColor: C.accent + '12', borderColor: C.accent + '60' },
+              ]}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggle(opt.value); }}
+              activeOpacity={0.75}
+            >
+              <Text style={[chipSt.text, { color: active ? C.accentText : C.text }]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {headline && headlineNote ? (
+        <Text style={[chipSt.note, { color: C.sub }]}>{headlineNote(headline.label)}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const chipSt = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  text: { fontFamily: FONT_BODY, fontWeight: '600', fontSize: 13, letterSpacing: 0.2 },
+  note: { fontFamily: FONT_BODY, fontSize: 12, lineHeight: 17, marginTop: 10 },
+});
+
 export function RadioGroup({ options, value, onChange }: { options: { value: string; label: string; sub?: string }[]; value: string; onChange: (v: string) => void }) {
   const C = useBusinessPalette();
   return (

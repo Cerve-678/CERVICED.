@@ -37,11 +37,11 @@ import {
   getUserBusinessInfo,
   updateUserBusinessInfo,
   updateProviderContactDetails,
-  updateMyServiceCategory,
+  updateMyServiceCategories,
 } from '../../services/databaseService';
 import { useProviderDialog } from '../../components/ProviderDialog';
 import {
-  Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
+  Card, ChipMultiSelect, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
   ADDRESS_RELEASE_OPTS,
@@ -72,9 +72,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
   // about.
   const [savedName, setSavedName]         = useState('');
   const [nameChangedAt, setNameChangedAt] = useState<string | null>(null);
-  const [serviceCategory, setServiceCategory]           = useState<ServiceCategory | null>(null);
-  const [savedServiceCategory, setSavedServiceCategory] = useState<ServiceCategory | null>(null);
-  const [customServiceType, setCustomServiceType]       = useState('');
+  const [serviceCategories, setServiceCategories]       = useState<ServiceCategory[]>([]);
+  const [savedServiceCategories, setSavedServiceCategories] = useState<ServiceCategory[]>([]);
+  // Read-only now: OTHER is retired, so nothing can newly acquire this label.
+  // It is still displayed for providers stamped OTHER before the retirement.
   const [savedCustomServiceType, setSavedCustomServiceType] = useState('');
   const [categoryChangedAt, setCategoryChangedAt]       = useState<string | null>(null);
   // Whether providers.service_category_changed_at exists on the row we loaded,
@@ -122,10 +123,15 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setNameChangedAt(
             (providerData as { display_name_changed_at?: string | null }).display_name_changed_at ?? null,
           );
-          const category = (providerData.service_category as ServiceCategory | null) ?? null;
-          setServiceCategory(category);
-          setSavedServiceCategory(category);
-          setCustomServiceType(providerData.custom_service_type ?? '');
+          // service_categories is the set; service_category is its first
+          // entry, kept true by trg_sync_provider_service_categories. Falling
+          // back to the scalar covers a row loaded before that migration ran.
+          const headline = (providerData.service_category as ServiceCategory | null) ?? null;
+          const declared =
+            (providerData as { service_categories?: ServiceCategory[] | null }).service_categories;
+          const categories = declared?.length ? declared : headline ? [headline] : [];
+          setServiceCategories(categories);
+          setSavedServiceCategories(categories);
           setSavedCustomServiceType(providerData.custom_service_type ?? '');
           setCategoryChangedAt(
             (providerData as { service_category_changed_at?: string | null }).service_category_changed_at ?? null,
@@ -174,18 +180,39 @@ export default function BusinessInfoScreen({ navigation }: any) {
     : null;
   const categoryLocked =
     !cooldownLive || (categoryUnlocksAt != null && categoryUnlocksAt.getTime() > Date.now());
-  const categoryChanged = serviceCategory != null && serviceCategory !== savedServiceCategory;
-  // Renaming your own OTHER label is not a category change: the trigger never
-  // fires, no cooldown is spent, and it needs no confirmation — but it still
-  // has to be written.
-  const customLabelChanged =
-    serviceCategory === 'OTHER'
-    && !categoryChanged
-    && customServiceType.trim() !== savedCustomServiceType.trim();
-  const savedCategoryLabel =
-    ALL_SERVICE_TYPE_OPTS.find(o => o.value === savedServiceCategory)?.label ?? savedServiceCategory ?? '';
-  const pendingCategoryLabel =
-    ALL_SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '';
+  const labelFor = (v: string | null | undefined) =>
+    ALL_SERVICE_TYPE_OPTS.find(o => o.value === v)?.label ?? v ?? '';
+  const listLabels = (vs: readonly (string | null)[]) => vs.map(labelFor).join(', ');
+
+  // Order matters, not just membership: the first entry is the headline, so
+  // reordering IS a change even when the same types are ticked.
+  const categoryChanged =
+    serviceCategories.length > 0
+    && (serviceCategories.length !== savedServiceCategories.length
+        || serviceCategories.some((c, i) => c !== savedServiceCategories[i]));
+  // Whether the HEADLINE moved, which is a stricter thing than the set
+  // changing and is what actually triggers the cascade server-side (see
+  // 20260908090100). Adding a second type spends the cooldown but does not
+  // move your photos or clear your specialties, and the warning copy below
+  // must not claim otherwise.
+  const headlineChanged =
+    serviceCategories.length > 0 && serviceCategories[0] !== savedServiceCategories[0];
+  // Selection order, not the option list's order, because the first entry is
+  // the headline and the provider has to be able to choose it. Appending on
+  // select means "pick the one that leads first"; dropping the headline hands
+  // it to whatever you picked next, which is also the only way to change it
+  // without a second control this card doesn't have room to explain.
+  function toggleServiceCategory(value: string) {
+    const category = value as ServiceCategory;
+    setServiceCategories(prev =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category],
+    );
+  }
+
+  const savedCategoryLabel = labelFor(savedServiceCategories[0]);
+  const pendingCategoryLabel = labelFor(serviceCategories[0]);
 
   function isValidEmail(email: string) {
     return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -202,25 +229,38 @@ export default function BusinessInfoScreen({ navigation }: any) {
     if (!businessName.trim()) { flash('Enter your business name', 'error'); return; }
     if (!isValidEmail(businessEmail)) { flash('Enter a valid business email', 'error'); return; }
     if (!isValidEmail(bookingEmail))  { flash('Enter a valid public enquiry email', 'error'); return; }
-    // Only when the picker is actually on screen. A provider whose saved
-    // type is OTHER with no label (possible for older rows) would otherwise be
-    // blocked from saving anything at all on this screen, by a validation
-    // pointing at a field the cooldown is hiding.
-    if (!categoryLocked && serviceCategory === 'OTHER' && !customServiceType.trim()) {
-      flash('Describe the service you offer', 'error'); return;
+    // Only when the picker is actually on screen, so a provider isn't blocked
+    // from saving anything at all by a validation pointing at a field the
+    // cooldown is hiding.
+    if (!categoryLocked && serviceCategories.length === 0) {
+      flash('Pick at least one service type', 'error'); return;
     }
 
     if (categoryChanged) {
+      // Two different changes with two different costs, so two different
+      // warnings. Moving the headline runs the cascade; only adding or
+      // dropping a secondary type doesn't, and telling a provider their
+      // specialties will be cleared when they won't be is how a screen
+      // teaches people to stop reading its dialogs.
       showConfirm(
-        `Change your service type to ${pendingCategoryLabel}?`,
-        `You won't be able to change it again for ${CATEGORY_COOLDOWN_DAYS} days.\n\n`
-        + `• Clients will find you under ${pendingCategoryLabel} instead of ${savedCategoryLabel} in Explore and Search.\n`
-        + `• Your portfolio photos move across with you.\n`
-        + `• Your specialties are cleared — ${pendingCategoryLabel} offers a different list, so you'll need to pick them again in Services & Pricing.\n\n`
+        headlineChanged
+          ? `Change your headline service type to ${pendingCategoryLabel}?`
+          : `Update your service types?`,
+        (headlineChanged
+          ? `• Clients will find you under ${pendingCategoryLabel} instead of ${savedCategoryLabel} in Explore and Search.\n`
+            + `• Your portfolio photos move across with you.\n`
+            + `• Your specialties are cleared — ${pendingCategoryLabel} offers a different list, so you'll need to pick them again in Services & Pricing.\n`
+          : `• You'll be offering ${listLabels(serviceCategories)}.\n`
+            + `• ${savedCategoryLabel} stays your headline, so your photos and specialties are untouched.\n`)
+        + `\nEither way you won't be able to change your service types again for ${CATEGORY_COOLDOWN_DAYS} days.\n\n`
         + 'Bookings you already have are unaffected.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Change it', style: 'destructive', onPress: () => { void commitSave(); } },
+          {
+            text: headlineChanged ? 'Change it' : 'Save',
+            style: headlineChanged ? 'destructive' : 'default',
+            onPress: () => { void commitSave(); },
+          },
         ],
       );
       return;
@@ -239,14 +279,14 @@ export default function BusinessInfoScreen({ navigation }: any) {
       // already written half the contact fields would leave the provider
       // reading "you can change it again on <date>" over a form that had
       // silently saved anyway.
-      if (providerId && serviceCategory && (categoryChanged || customLabelChanged)) {
-        await updateMyServiceCategory(
-          providerId,
-          serviceCategory,
-          serviceCategory === 'OTHER' ? customServiceType.trim() || null : null,
-        );
-        setSavedServiceCategory(serviceCategory);
-        setSavedCustomServiceType(customServiceType.trim());
+      if (providerId && serviceCategories.length && categoryChanged) {
+        await updateMyServiceCategories(providerId, serviceCategories);
+        setSavedServiceCategories(serviceCategories);
+        // The DB clears the retired OTHER label once OTHER leaves the set;
+        // mirror that locally so the header stops printing it before reload.
+        if (!serviceCategories.includes('OTHER' as ServiceCategory)) {
+          setSavedCustomServiceType('');
+        }
       }
 
       const ops: Promise<void>[] = [];
@@ -372,44 +412,44 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 between categories while leaving their portfolio and
                 specialties describing the old one. */}
             <Card
-              title="Service Type"
-              sub="The headline service your business offers. Clients browse and filter by this in Explore and Search."
+              title="Service Types"
+              sub="Everything your business offers. Clients browse and filter by these in Explore and Search."
             >
               {categoryLocked ? (
                 <>
-                  <View style={[s.lockedChip, { backgroundColor: C.surface, borderColor: C.border }]}>
-                    <Ionicons name="lock-closed" size={12} color={C.sub} />
-                    <Text style={[s.lockedChipText, { color: C.text }]}>
-                      {savedCategoryLabel}
-                      {savedServiceCategory === 'OTHER' && savedCustomServiceType
-                        ? ` · ${savedCustomServiceType}`
-                        : ''}
-                    </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {savedServiceCategories.map(category => (
+                      <View
+                        key={category}
+                        style={[s.lockedChip, { backgroundColor: C.surface, borderColor: C.border }]}
+                      >
+                        <Ionicons name="lock-closed" size={12} color={C.sub} />
+                        <Text style={[s.lockedChipText, { color: C.text }]}>
+                          {labelFor(category)}
+                          {category === 'OTHER' && savedCustomServiceType
+                            ? ` · ${savedCustomServiceType}`
+                            : ''}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                   <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
                     {!cooldownLive
-                      ? 'Set at sign-up. Contact support if you need to change your service type.'
+                      ? 'Set at sign-up. Contact support if you need to change your service types.'
                       : categoryUnlocksAt
-                        ? `You changed this recently — you can change it again on ${formatLongDate(categoryUnlocksAt)}.`
+                        ? `You changed these recently — you can change them again on ${formatLongDate(categoryUnlocksAt)}.`
                         : ''}
                   </Text>
                 </>
               ) : (
                 <>
-                  <RadioGroup
+                  <ChipMultiSelect
                     options={SERVICE_TYPE_OPTS}
-                    value={serviceCategory ?? ''}
-                    onChange={v => setServiceCategory(v as ServiceCategory)}
+                    selected={serviceCategories}
+                    onToggle={toggleServiceCategory}
+                    headlineNote={label =>
+                      `${label} leads your profile — it's the first one you picked, and it's where your specialty and template suggestions come from. Unpick it to hand that over to the next.`}
                   />
-                  {serviceCategory === 'OTHER' && (
-                    <Field
-                      label="Describe your service"
-                      value={customServiceType}
-                      onChange={setCustomServiceType}
-                      placeholder="e.g. Massage therapy"
-                      note="Shown on your profile in place of a category name."
-                    />
-                  )}
                   {categoryChanged ? (
                     // Shown while deciding, not only in the confirm dialog: a
                     // provider should be able to read the consequences without
@@ -424,7 +464,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                     </View>
                   ) : (
                     <Text style={[s.cardSub, { color: C.sub, marginTop: 4, marginBottom: 0 }]}>
-                      Once you change this, you can't change it again for {CATEGORY_COOLDOWN_DAYS} days.
+                      Once you change these, you can't change them again for {CATEGORY_COOLDOWN_DAYS} days.
                     </Text>
                   )}
                 </>
