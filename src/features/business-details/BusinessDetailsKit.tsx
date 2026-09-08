@@ -190,11 +190,14 @@ export function ChipMultiSelect({
               style={[
                 chipSt.chip,
                 { backgroundColor: C.surface, borderColor: C.border },
-                // Same selected treatment as RadioGroup in this kit — a tint
-                // plus accentText, not a solid accent fill. White on the dark
-                // theme's dusty rose (#AF9197) is about 2.6:1, which fails
-                // legibility on 13px text.
-                active && { backgroundColor: C.accent + '12', borderColor: C.accent + '60' },
+                // Selected reads as an OUTLINE — accent border, no fill —
+                // rather than a tinted or solid chip. In light mode that is
+                // the brown (#5C4033); dark mode swaps to the dusty rose the
+                // rest of this kit uses, so the treatment is one rule rather
+                // than a hardcoded colour. A solid fill was the alternative
+                // and is worse here: white on #AF9197 is about 2.6:1, which
+                // fails on 13px text.
+                active && { borderColor: C.accent },
               ]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggle(opt.value); }}
               activeOpacity={0.75}
@@ -219,7 +222,10 @@ const chipSt = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
+    // Constant width, colour-only change on select. RN lays borders inside the
+    // box, so thickening one on selection nudges its label and the whole row
+    // reflows as you tap through.
+    borderWidth: 1.5,
   },
   text: { fontFamily: FONT_BODY, fontWeight: '600', fontSize: 13, letterSpacing: 0.2 },
   note: { fontFamily: FONT_BODY, fontSize: 12, lineHeight: 17, marginTop: 10 },
