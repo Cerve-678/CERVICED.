@@ -25,6 +25,29 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-09-08 (reschedule offer says accept or decline)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908105737 | `reschedule_offer_says_accept_or_decline` | Renamed from its authored placeholder `20260908140000`. Copy-only change to `handle_reschedule_request_change()`. Body reproduced from the LIVE `pg_get_functiondef`, **not** from `20260808181219_reschedule_flow_completion.sql`, which has drifted (the live body carries `20260809205845`'s group handling and writes `NEW.booking_id` where the file writes `NEW.id`) — applying from the file would have reverted the group-dedup fix. |
+
+Verified by comparing structural counts in `prosrc` before and after: 10
+`INSERT INTO public.notifications`, 4 `'reschedule_request'`, 2
+`'reschedule_provider_response'`, 2 `'reschedule_confirmed'`, 2
+`'reschedule_declined'`, 5 `NEW.response_note` and 6 `v_representative_id` —
+all **unchanged**, so no branch was dropped in transcription. The old copy is
+gone (`has proposed new times` and `has shared available dates` both 0) and the
+new call to action appears 4 times. `prosecdef = true`,
+`search_path=public, pg_temp`, and `on_reschedule_request_changed` still bound.
+The body recorded in `schema_migrations` hashes identical to the file
+(md5 `98113ec8…`).
+
+Note this file is tracked in git and therefore **per-branch**: this copy does
+not carry the other 2026-09-08 entries recorded on
+`fix/checkout-snapshots-and-notification-detail` and
+`fix/provider-name-trailing-whitespace`. Reconcile on merge. The live frontier
+at the time of this apply was `20260908104927`.
+
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
 | Recorded version | Name | Verified live |
