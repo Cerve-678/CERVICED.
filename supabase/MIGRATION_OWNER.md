@@ -22,13 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  session working fix/checkout-snapshots-and-notification-detail
-CLAIMED: 2026-09-08
-FILE:   20260908120000_checkout_writes_provider_category_and_says_when.sql
-STATE:  WRITTEN, NOT APPLIED -- the Supabase MCP connection dropped before it
-        could be applied. Do not renumber or apply it from another session;
-        release this lock only once it is applied and verified live.
+OWNER:  (none)
 ```
+
+> **Lock released while 20260908120000 is still unapplied**, at the user's
+> explicit request on 2026-09-08. This is the one case the rule below tells you
+> not to create, so read the pending entry before writing any migration: an
+> unapplied file numbered below whatever gets applied next is exactly how a
+> correct migration silently reverts someone else's work.
 
 ### Pending: 20260908120000 (checkout category + notification detail)
 
