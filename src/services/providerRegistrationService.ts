@@ -569,15 +569,24 @@ export async function saveProviderToSupabase(
     }
     providerId = existingProvider.id;
   } else {
+    // Trimmed, and not merely for tidiness: display_name is a lookup KEY —
+    // getProviderLocationsByDisplayNames and its siblings match it with
+    // .eq/.in — and it is concatenated straight into notification copy that
+    // send-push-notification uses as the push body verbatim. A trailing space
+    // renders as a double space mid-sentence ("Glam suit  needs to
+    // reschedule") and makes an exact-match lookup miss. BusinessInfoScreen
+    // already trims on rename; sign-up was the only writer that didn't.
+    const displayName = data.providerName.trim();
+
     // Generate unique slug
-    let slug = generateSlug(data.providerName);
+    let slug = generateSlug(displayName);
     if (await providerSlugExists(slug)) slug = `${slug}-${userId.substring(0, 8)}`;
 
     try {
       providerId = await insertProviderRegistrationRow({
         user_id: userId,
         slug,
-        display_name: data.providerName,
+        display_name: displayName,
         service_category: data.providerService,
         custom_service_type: data.customServiceType || null,
         location_text: data.location,

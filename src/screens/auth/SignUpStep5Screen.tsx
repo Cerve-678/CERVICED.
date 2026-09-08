@@ -331,7 +331,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         password: data.password,
         metadata: {
             name: data.name, phone: data.phone, role: data.accountType, dob,
-            business_name: data.businessName || null, business_email: data.businessEmail || null,
+            // Trimmed at the origin: this metadata is what EmailVerificationScreen
+            // later copies onto users.business_name, and a stray space there rides
+            // along into every sentence built from the name.
+            business_name: data.businessName?.trim() || null, business_email: data.businessEmail?.trim() || null,
             business_type: data.businessType || null,
             business_phone: data.businessPhone || null, instagram: data.instagram || null,
             tiktok: data.tiktok || null, website: data.website || null,

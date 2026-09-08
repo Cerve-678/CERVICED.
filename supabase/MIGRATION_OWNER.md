@@ -25,6 +25,17 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-09-08 (provider names carry no stray whitespace)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908104927 | `provider_names_carry_no_stray_whitespace` | Renamed from its authored placeholder `20260908130000`. Live after applying: **0** untrimmed values left in `providers.display_name` (was 3 of 8), `bookings.provider_name_snapshot` (was 48 of 95), `provider_waitlist.provider_name_snapshot` (was 3 of 3) or `users.business_name` (was 3 of 8); snapshot-to-`display_name` joins still match; `providers_normalise_display_name` BEFORE INSERT trigger present. Critically, `providers_display_name_cooldown` is **back to enabled** (`tgenabled = 'O'`) and **0** providers have a `display_name_changed_at` inside the last hour — the repair did not consume anyone's 14-day rename window, which is the whole reason the trigger is disabled around that one UPDATE. |
+
+Note this branch does NOT carry the 2026-09-08 checkout/service-type entries —
+those were recorded on `fix/checkout-snapshots-and-notification-detail`, since
+this file is tracked in git and therefore per-branch. Reconcile on merge. The
+live frontier at the time of this apply was `20260908002113`.
+
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
 | Recorded version | Name | Verified live |
