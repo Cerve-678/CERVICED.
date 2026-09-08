@@ -25,20 +25,60 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
-> **Lock released while 20260908120000 is still unapplied**, at the user's
-> explicit request on 2026-09-08. This is the one case the rule below tells you
-> not to create, so read the pending entry before writing any migration: an
-> unapplied file numbered below whatever gets applied next is exactly how a
-> correct migration silently reverts someone else's work.
+### BLOCKED — `service_type_cooldown_covers_the_whole_set` is NOT applied
 
-### Pending: 20260908120000 (checkout category + notification detail)
+**`feat/multi-select-service-type-chips` must not merge until this lands.**
+Its sibling `provider_multiple_service_types` **is** applied (below), and that
+pairing is precisely the state the blocked file's own header warns about: with
+`service_categories` live but the widened guard/cascade missing, an UPDATE that
+writes only the array
 
-Redefines `prepare_checkout()`, `finalize_checkout()` and
-`claim_cart_booking_slots()`, and backfills the `service_category_snapshot`
-rows the first of those wrote wrong. The version number is a placeholder off
-the wall clock -- `apply_migration` stamps its own version, so renumber the
-file to whatever it records, and confirm that number is above
-`max(version)` in `supabase_migrations.schema_migrations` first.
+1. **bypasses the 90-day cooldown** — `providers_service_category_cooldown` (a)
+   fires before `trg_sync_provider_service_categories` (t), so it sees an
+   unchanged headline, waves the write through and re-pins the stamp from OLD;
+   the sync trigger only then moves the headline. The window can be reset at
+   will by writing the array instead of the scalar.
+2. **skips the portfolio cascade** — `providers_service_category_cascade` is
+   still `AFTER UPDATE OF service_category` only, so a HAIR->NAILS provider
+   keeps every photo filed under Hair.
+
+Not currently reachable: `git grep service_categories` finds writers **only**
+on `feat/multi-select-service-type-chips`, which is unmerged — `main`,
+`design/email-redesign` and this branch have none. So the holes open the moment
+that branch ships, not before.
+
+Why it is unapplied: two `apply_migration` attempts on 2026-09-08 were refused
+by the Claude Code auto-mode permission classifier (the cascade body's
+`delete from public.provider_specialties`). Not a SQL error — the file was
+never sent to Postgres. It needs a session where that call is permitted.
+
+Also note for whoever owns that branch: its two files are still named for
+wall-clock placeholders. `20260908090000_provider_multiple_service_types.sql`
+was **recorded as `20260908002113`** and should be renamed to match; the
+cooldown file must then be numbered above it, not at `20260908090100`.
+
+### Applied 2026-09-08 (checkout snapshots + plural service types)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908001701 | `checkout_writes_provider_category_and_says_when` | Renamed from its authored `20260908120000`. The zero-row query in the file's own verification (snapshot equal to `services.category_name` yet differing from `providers.service_category`) returns **0 rows**, so the backfill caught every row the bug wrote. All three functions re-checked `SECURITY DEFINER` with `search_path` intact: `prepare_checkout` and `finalize_checkout` at `public, pg_temp`, `claim_cart_booking_slots` at `public`. The body recorded in `schema_migrations` hashes **identical** to the file (md5 `9d971e3b…`, trailing newline stripped), so nothing was dropped or paraphrased in transit. |
+| 20260908002113 | `provider_multiple_service_types` | Applied from `feat/multi-select-service-type-chips` at the user's request; authored there as `20260908090000`. Live: `providers.service_categories text[] NOT NULL DEFAULT '{}'` and `services.service_category text` both present; **0** providers with an empty set, **0** with `service_categories[1]` desynced from the headline, **0** of 53 services left untyped; `providers_service_categories_check` present and `convalidated = true`; both triggers (`trg_sync_provider_service_categories`, `trg_default_service_category`) and both indexes (`providers_service_categories_gin`, `services_service_category_idx`) created. **Its follow-up is blocked — see above.** |
+
+Neither collides with the other: `provider_multiple_service_types` keeps
+`providers.service_category` a scalar headline alongside the new array and does
+not redefine any checkout function, so applying it second did not revert the
+checkout fix. The two migrations were confirmed non-overlapping by reading both
+in full before either was applied.
+
+Latent issue spotted while reading `provider_multiple_service_types`, not fixed
+here because the file is another branch's to change:
+`sync_provider_service_categories()` is a `BEFORE INSERT OR UPDATE` trigger
+whose `ELSIF` arm reads `OLD.service_category`. On an INSERT that supplies a
+non-empty `service_categories` whose first element differs from
+`service_category`, that arm is reached with `OLD` unassigned and will raise.
+Today's inserts leave the array at its `'{}'` default and take the first arm
+instead, so nothing hits it yet — but the chips branch's own writers should be
+checked against it before merge.
 
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
