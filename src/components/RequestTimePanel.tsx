@@ -53,15 +53,98 @@ import { withAlpha } from '../constants/providerThemes';
  *  ModernBeautyCalendar's EMERGENCY_OUTLINE for why it isn't the accent. */
 const EMERGENCY_OUTLINE = '#FF3B30';
 
+/** Why a date has no requestable times. Mirrors the kinds ModernBeautyCalendar
+ *  already tallies for its own day badge, so the two surfaces can't tell the
+ *  client different stories about the same day. */
+export type RequestEmptyReason = 'past' | 'booked' | 'notice' | 'none';
+
+/** One blocked start, as the calendar's grid describes it. Structural on
+ *  purpose so the resolver below can be tested without a rendered day. */
+export interface RequestSlotShape {
+  reasons: EmergencyReason[];
+  blocked?: 'booked' | 'past' | 'notice' | 'tight' | undefined;
+}
+
+/** Why a day's request sheet has nothing to offer.
+ *
+ *  Exported for its own test, for the same reason resolveSlotOffer is: the
+ *  ORDER of these tests is the whole content of the function, and getting it
+ *  wrong is invisible — every branch returns a plausible-looking sentence.
+ *
+ *  'past' goes first because getAvailableSlots strips requestReasons off a
+ *  start that has already gone. Once it has, we can no longer tell whether it
+ *  would have been requestable — and "these have already gone" is true either
+ *  way, where a claim about the provider's policy would not be. Reading it in
+ *  the other order is precisely the bug this replaces: a day that had merely
+ *  run down reported as a day the provider takes no requests on.
+ *
+ *  'none' is last, and is the only branch that blames the provider. It is
+ *  reached only once nothing has passed, nothing sits inside their notice,
+ *  and no requestable start exists to have been booked out — i.e. only with
+ *  proof, which is the same bar ModernBeautyCalendar's badge holds itself to
+ *  before it will say "Fully booked".
+ *
+ *  Returns undefined when there ARE offerable times, so a caller can pass the
+ *  result straight through without deciding whether the sheet is empty. */
+export const resolveRequestEmptyReason = (
+  slots: readonly RequestSlotShape[],
+): RequestEmptyReason | undefined => {
+  if (slots.some(slot => slot.reasons.length > 0 && !slot.blocked)) return undefined;
+
+  const tally = { booked: 0, past: 0, notice: 0, tight: 0 };
+  slots.forEach(slot => { if (slot.blocked) tally[slot.blocked] += 1; });
+
+  if (tally.past > 0) return 'past';
+  // A by-request start keeps its reasons when it is booked, so this is the one
+  // blocked kind that can still be attributed to a request candidate.
+  if (tally.notice === 0 && slots.some(s => s.reasons.length > 0 && s.blocked === 'booked')) {
+    return 'booked';
+  }
+  if (tally.notice > 0) return 'notice';
+  return 'none';
+};
+
+/** The one place the "no times" wording lives, shared by the chip list's empty
+ *  state and the wheel's error so they can never drift apart.
+ *
+ *  Only 'none' is a claim about the provider, and it is only reached once the
+ *  caller has ruled out every other explanation. */
+const noRequestableTimesMessage = (
+  reason: RequestEmptyReason | undefined,
+  providerLabel: string,
+): string => {
+  switch (reason) {
+    case 'past':
+      return "Today's times have already gone. Try another date.";
+    case 'booked':
+      return `Every time ${providerLabel} could consider on this date is already booked.`;
+    case 'notice':
+      return `${providerLabel} needs more notice than that. Try another date.`;
+    default:
+      return `${providerLabel} isn't taking requests on this date. Try another one.`;
+  }
+};
+
 interface RequestTimePanelProps {
   /** 'YYYY-MM-DD' being requested. */
   date: string;
   /** Move to another date. The caller owns the fetch, so `requestTimes`
    *  arrives updated (with `loading` true meanwhile). */
   onDateChange: (date: string) => void;
-  /** Every by-request time for `date`, already resolved with the rules each
-   *  one breaks. Never recomputed here — see the header. */
+  /** Every by-request time for `date` that can actually be offered, already
+   *  resolved with the rules each one breaks. Never recomputed here — see
+   *  the header. */
   requestTimes: { time: string; reasons: EmergencyReason[] }[];
+  /** Why `requestTimes` is empty, when it is. The caller tallies this off the
+   *  whole day's grid, because the panel cannot work it out from an empty
+   *  list: getAvailableSlots strips requestReasons off a start that has
+   *  already gone, so a day that has simply run down arrives here looking
+   *  exactly like a day the provider takes no requests on. Saying the latter
+   *  when the former is true blames the provider's policy for the clock —
+   *  the same mistake the cart used to make, and the reason
+   *  ModernBeautyCalendar counts its own day's blocked times by kind rather
+   *  than guessing from a total. */
+  emptyReason?: RequestEmptyReason | undefined;
   loading: boolean;
   /** A time was chosen, by either route. The caller confirms it. */
   onPickTime: (time: string, reasons: EmergencyReason[]) => void;
@@ -96,6 +179,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
   date,
   onDateChange,
   requestTimes,
+  emptyReason,
   loading,
   onPickTime,
   onBack,
@@ -135,7 +219,11 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
   const commitPickedMinutes = (picked: number) => {
     const result = snapToRequestable(picked, candidates);
     if (result.kind === 'none') {
-      setWheelError(`${providerLabel} isn't taking requests on this date.`);
+      // snapToRequestable only answers 'none' when there are no candidates at
+      // all, which is the same situation the chip list's empty state
+      // describes — so it gets the same sentence rather than a second one
+      // that could contradict it.
+      setWheelError(noRequestableTimesMessage(emptyReason, providerLabel));
       return;
     }
     if (result.kind === 'out-of-range') {
@@ -244,7 +332,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
         </View>
       ) : candidates.length === 0 ? (
         <Text style={[styles.empty, { color: subColor }]}>
-          {providerLabel} isn't taking requests on this date. Try another one.
+          {noRequestableTimesMessage(emptyReason, providerLabel)}
         </Text>
       ) : (
         <>

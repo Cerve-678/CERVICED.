@@ -43,7 +43,7 @@ Curated: [[Address Release]] · **85 files**
 Curated: [[Availability & Slots]] · **159 files**
 - `src/services/AvailabilityService.ts` _(330)_
 - `src/services/databaseService.ts` _(269)_
-- `src/components/ModernBeautyCalendar.tsx` _(188)_
+- `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `src/screens/client/SearchScreen.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
@@ -61,6 +61,7 @@ Curated: [[Availability & Slots]] · **159 files**
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
 - `src/components/BookingSheet.tsx` _(35)_
 - `supabase/add_providers_availability_rpc.sql` _(31)_
+- `src/components/RequestTimePanel.tsx` _(29)_
 - `src/components/MultiBookingSheet.tsx` _(27)_
 - `src/utils/slotsRowText.ts` _(27)_
 - `src/utils/logger.ts` _(25)_
@@ -70,7 +71,6 @@ Curated: [[Availability & Slots]] · **159 files**
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(21)_
 - `src/types/database.ts` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
 - … +129 more
 
 ## Payments
@@ -373,8 +373,8 @@ Curated: [[Payments]] · **66 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
+- `src/components/RequestTimePanel.tsx` _(3)_
 - `src/constants/featureFlags.ts` _(3)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(3)_
 - `src/types/database.ts` _(3)_
-- `src/utils/policyDisplay.ts` _(3)_
 - … +36 more

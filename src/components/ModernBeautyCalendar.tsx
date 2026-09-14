@@ -6,6 +6,7 @@ import type { EmergencyReason, EmergencyRequestPolicy } from '../services/Availa
 import { withAlpha } from '../constants/providerThemes';
 import { formatLongDateNoYear } from '../utils/dateUtils';
 import { RequestTimePanel } from './RequestTimePanel';
+import { resolveRequestEmptyReason } from './RequestTimePanel';
 
 /** Emergency/by-request outline. Deliberately NOT the caller's accent: every
  *  other colour in this picker is derived from whatever sheet it's sitting in,
@@ -539,11 +540,38 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
    *  showing. */
   const requestPanelDate = selectedDate || toLocalDateString(new Date());
 
-  /** Only this date's by-request times. The panel never derives its own — see
-   *  RequestTimePanel's header for why that matters. */
-  const requestTimesForDate = useMemo(
-    () => (availableSlots[requestPanelDate]?.times ?? []).filter(slot => slot.reasons.length > 0),
+  /** The whole day's grid for the request sheet's date, blocked entries and
+   *  all. requestTimesForDate narrows it to what can be offered; the tally
+   *  below needs the ones that can't, to say why. */
+  const requestPanelSlots = useMemo(
+    () => availableSlots[requestPanelDate]?.times ?? [],
     [availableSlots, requestPanelDate],
+  );
+
+  /** Only this date's OFFERABLE by-request times. The panel never derives its
+   *  own — see RequestTimePanel's header for why that matters.
+   *
+   *  `!slot.blocked` matters as much as the reasons test: without it a
+   *  by-request start someone has already booked kept its reasons and was
+   *  rendered as a tappable chip, so the sheet offered a time the provider
+   *  could never accept. The inline grid above has always filtered it; this
+   *  list simply hadn't. */
+  const requestTimesForDate = useMemo(
+    () => requestPanelSlots.filter(slot => slot.reasons.length > 0 && !slot.blocked),
+    [requestPanelSlots],
+  );
+
+  /** Why the sheet has nothing to offer, when it has nothing to offer.
+   *
+   *  Same discipline as the day badge below: count what's actually there and
+   *  name the reason, rather than letting one message stand in for every way
+   *  a day can come up empty. Worked out here, from the whole grid, because
+   *  the panel is handed only the offerable times and so cannot see what
+   *  ruled the rest out — see resolveRequestEmptyReason for the ordering and
+   *  why it matters. */
+  const requestEmptyReason = useMemo(
+    () => resolveRequestEmptyReason(requestPanelSlots),
+    [requestPanelSlots],
   );
 
   /** Moving the request sheet's date has to move the WEEK with it: the slot
@@ -969,6 +997,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
             date={requestPanelDate}
             onDateChange={handleRequestDateChange}
             requestTimes={requestTimesForDate}
+            emptyReason={requestEmptyReason}
             loading={isLoadingSlots}
             onPickTime={handlePanelPickTime}
             onBack={() => {
