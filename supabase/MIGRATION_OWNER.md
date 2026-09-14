@@ -25,6 +25,44 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-09-14 (replace_provider_services writes service_category)
+
+`20260914025249_replace_provider_services_writes_service_category.sql` —
+`replace_provider_services(uuid, jsonb)` was reproduced from live
+`pg_get_functiondef()` (which already carried the 2026-09-13
+`skin_tones_suitable` patch — the tracked file
+`20260903000130_replace_provider_services_upsert_by_id.sql` was stale and was
+**not** used as the base) with exactly one change: `service_category` added to
+the UPDATE SET list and to the INSERT column/value list, in the same relative
+position as `category_name` in both. Everything else — `LANGUAGE`, `SECURITY
+DEFINER`, `SET search_path TO 'public'`, every other column — is byte-for-byte
+what was live.
+
+Verified structurally (search_path/SECURITY DEFINER intact, INSERT
+column/value order correct) and **functionally**, calling the real RPC (not a
+hand-written UPDATE) inside a `DO` block ending in `RAISE EXCEPTION` so the
+whole thing rolled back: faked `auth.uid()` via
+`set_config('request.jwt.claim.sub', ...)` as a real provider owner, called
+`replace_provider_services` with that provider's one existing service
+(id `8b7b9ee0-...`, headline category `NAILS`) reassigned to `service_category:
+'HAIR'`. Result: `before=NAILS, after=HAIR, rows_replaced=1`. Re-queried after
+the exception aborted the transaction — value was back to `NAILS`, confirming
+nothing persisted.
+
+**Found while verifying, not yet fixed — flagged, not silently patched:** the
+app-side half of this feature does not exist on `main`.
+`providerRegistrationService.ts`'s per-service save payload (~line 708-734)
+never sends `service_category` (or `skin_tones_suitable`) per service —
+`databaseService.ts`'s `getProviderBySlug` services embed (~line 961-979)
+doesn't select either column back — and `profileMapper.ts` has no `typeOf()`
+function or any per-service type consumption; services are only grouped by
+`category_name`. Per [[service-types-multi-select-and-other-retired]], that
+whole client-facing piece lives on the still-unmerged
+`feat/multi-select-service-type-chips` branch, which memory explicitly says
+must not merge yet. This migration only closes the DB-side gap so that branch
+has a working column to write to once it lands — it does not, on its own,
+make any type-switch UI appear on `main`.
+
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
 | Recorded version | Name | Verified live |
