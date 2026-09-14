@@ -192,7 +192,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
         || serviceCategories.some((c, i) => c !== savedServiceCategories[i]));
   // Whether the HEADLINE moved, which is a stricter thing than the set
   // changing and is what actually triggers the cascade server-side (see
-  // 20260908090100). Adding a second type spends the cooldown but does not
+  // 20260914130000). Adding a second type spends the cooldown but does not
   // move your photos or clear your specialties, and the warning copy below
   // must not claim otherwise.
   const headlineChanged =

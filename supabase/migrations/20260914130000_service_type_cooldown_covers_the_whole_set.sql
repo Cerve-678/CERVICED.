@@ -1,6 +1,6 @@
 -- The 90-day service-type cooldown predates plural service types, so it guards
 -- a column that is no longer the only way to change a provider's type. Two
--- separate holes open the moment 20260908090000 adds service_categories, and
+-- separate holes open the moment 20260908002113 adds service_categories, and
 -- both are about trigger firing order rather than about either migration being
 -- wrong on its own.
 --
@@ -25,7 +25,7 @@
 --    the headline. A HAIR -> NAILS provider would keep every portfolio photo
 --    filed under Hair, which is the exact thing the cascade exists to prevent.
 --
--- Both are fixed here rather than in 20260908090000 because that migration's
+-- Both are fixed here rather than in 20260908002113 because that migration's
 -- own definitions are correct in isolation; it is the combination that leaks.
 
 -- ── 1. Guard on the set as well as the headline ─────────────────────────────

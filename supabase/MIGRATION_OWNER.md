@@ -24,28 +24,19 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ```
 OWNER:  session 4fe95792 (multi-select service types + drop OTHER)
 SINCE:  2026-09-08
-SCOPE:  providers.service_categories + services.service_category, and the
-        service-type cooldown/cascade triggers those two columns now share
-        with 20260907000413. Both files below are UNAPPLIED:
-          20260908090000_provider_multiple_service_types
-          20260908090100_service_type_cooldown_covers_the_whole_set
-        The first is session ad8beea5's, inherited by merging
-        feat/provider-multiple-service-types into this branch and RENUMBERED
-        from 20260906193000 — it sat below the applied frontier
-        (20260907000413), which is the ordering hazard CLAUDE.md warns about.
-        The second is new here and MUST be applied in the same sitting,
-        immediately after the first: on its own the first one opens a
-        cooldown bypass and skips the cascade (both explained in its header).
-        CORRECTION 2026-09-14, verified over the REST API (MCP still down):
-        the FIRST file's effect IS live — providers.service_categories and
-        services.service_category both exist, and a provider already holds
-        two types — but it was applied without any record in git, so its
-        recorded version in schema_migrations is unknown. The SECOND file
-        exists only on this branch and is presumed NOT applied, which means
-        the cooldown bypass and skipped cascade it fixes are presumed LIVE.
-        First action when pg access returns: confirm whether
-        enforce_service_category_change_cooldown compares service_categories,
-        and apply 20260908090100 if it does not.
+SCOPE:  the service-type cooldown/cascade fix, still UNAPPLIED:
+          20260914130000_service_type_cooldown_covers_the_whole_set
+        Its prerequisite is already live: provider_multiple_service_types was
+        applied 2026-09-08 and recorded as 20260908002113 (file renamed here
+        to match; that apply is recorded on
+        fix/checkout-snapshots-and-notification-detail's copy of this file).
+        The cooldown fix was refused twice by the auto-mode permission
+        classifier — its cascade body DELETEs provider_specialties — so it
+        never reached Postgres. Renumbered from 20260908090100 to sit above
+        the applied frontier (20260914025249 is live; later files exist on
+        other branches). THIS BRANCH MUST NOT MERGE until it lands: it is the
+        only code that writes service_categories, so the cooldown bypass and
+        skipped cascade open the moment it ships, not before.
 ```
 
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
