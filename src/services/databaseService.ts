@@ -1874,6 +1874,10 @@ export interface MyServiceDraft {
   price: number;
   durationMinutes: number;
   description: string | null;
+  /** Update only; createMyService ignores it, since a new service always
+   *  starts visible. Written in the same UPDATE as the other fields, so a
+   *  visibility change can't land while the edit around it fails. */
+  isActive?: boolean;
 }
 
 export async function createMyService(
@@ -1923,6 +1927,7 @@ export async function updateMyService(
       description: draft.description,
       price: draft.price,
       duration_minutes: draft.durationMinutes,
+      ...(draft.isActive === undefined ? {} : { is_active: draft.isActive }),
     })
     .eq("id", serviceId)
     .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type")

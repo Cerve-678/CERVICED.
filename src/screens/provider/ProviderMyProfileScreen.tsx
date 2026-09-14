@@ -27,7 +27,7 @@
  * schedule item at all, so a provider could be told they were ready for
  * clients while the server was still refusing to publish them.
  */
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,12 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+// Gesture-handler's TouchableOpacity rather than react-native's, for the same
+// reason NotificationsScreen uses it: react-native's runs its own touch
+// responder, so a swipe that hasn't crossed the pan threshold yet can still
+// land as a tap and open the editor.
+import { TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -71,7 +77,7 @@ import {
 } from '../../services/databaseService';
 import type { DbPortfolioItem, DbService } from '../../types/database';
 import type { ProviderServicesStackParamList } from '../../navigation/types';
-import { resolveProviderTheme, withAlpha, isDarkColor } from '../../constants/providerThemes';
+import { resolveProviderTheme, withAlpha, isDarkColor, blend } from '../../constants/providerThemes';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
@@ -79,6 +85,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
+import { formatDurationMinutes } from '../../utils/dateUtils';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
   toEditorValue,
@@ -180,6 +187,11 @@ interface DashPalette {
   sub: string;
   border: string;
   sep: string;
+  /** cardBg as it actually appears over the content sheet, flattened to an
+   *  opaque colour. Swipeable rows need a solid fill (the Hide action sitting
+   *  behind a translucent row would show through it), and this keeps them the
+   *  same visible colour as every frosted card around them. */
+  card: string;
   cardBg: string;
   blurTint: 'light' | 'dark';
   blurIntensity: number;
@@ -266,82 +278,245 @@ const DashEmpty = React.memo(function DashEmpty({
   return <Text style={[styles.dashEmpty, { color: palette.sub }]}>{text}</Text>;
 });
 
-/** One service in the catalogue. The tile body opens the editor; the eye is a
- *  separate hit target that hides/shows without opening anything. */
-const ServiceTile = React.memo(function ServiceTile({
+const formatServicePrice = (service: DbService): string =>
+  `£${service.price}${service.price_max ? `–£${service.price_max}` : ''}`;
+
+type SwipeableHandle = React.ElementRef<typeof Swipeable>;
+
+/** Lets the screen keep one row swiped open at a time across every category,
+ *  the way Mail does, without each card knowing about the others. */
+interface RowSwipeRegistry {
+  register: (id: string, ref: SwipeableHandle | null) => void;
+  willOpen: (id: string) => void;
+  closed: (id: string) => void;
+}
+
+/** One line of a category's price list. Tapping opens the editor. Hiding a
+ *  live service is a swipe, since a price-list row has no spare room for a
+ *  control, and the editor carries the same switch for anyone who never
+ *  swipes. A hidden row isn't swipeable: it has its own "Show to clients"
+ *  button, because bringing a service back is why anyone opens the fold. */
+const ServiceRow = React.memo(function ServiceRow({
   service,
   palette,
   busy,
   onEdit,
   onToggleActive,
+  swipe,
 }: {
   service: DbService;
   palette: DashPalette;
   busy: boolean;
   onEdit: (service: DbService) => void;
   onToggleActive: (service: DbService) => void;
+  swipe: RowSwipeRegistry;
 }) {
   const hidden = !service.is_active;
-  const { width: screenWidth } = useWindowDimensions();
-  return (
-    <TouchableOpacity
-      style={[
-        styles.serviceTile,
-        { width: halfWidth(screenWidth) },
-        { backgroundColor: palette.cardBg, borderColor: palette.border },
-        hidden && styles.serviceTileHidden,
-      ]}
-      activeOpacity={0.75}
+  const price = formatServicePrice(service);
+  const duration = formatDurationMinutes(service.duration_minutes);
+  const swipeRef = useRef<SwipeableHandle | null>(null);
+  // Stable, so a re-render doesn't detach and re-register this row with the
+  // screen's open-row registry.
+  const attachSwipeable = useCallback(
+    (ref: SwipeableHandle | null) => {
+      swipeRef.current = ref;
+      swipe.register(service.id, ref);
+    },
+    [swipe, service.id],
+  );
+
+  const row = (
+    <GestureTouchableOpacity
+      style={[styles.serviceRow, { backgroundColor: palette.card }]}
+      activeOpacity={0.5}
       onPress={() => {
         Haptics.selectionAsync().catch(() => {});
         onEdit(service);
       }}
       accessibilityRole="button"
-      accessibilityLabel={`Edit ${service.name}`}
+      accessibilityLabel={[service.name, price, duration, hidden ? 'hidden from clients' : '']
+        .filter(Boolean)
+        .join(', ')}
+      accessibilityHint="Opens the editor"
+      accessibilityActions={hidden ? undefined : [{ name: 'hide', label: 'Hide from clients' }]}
+      onAccessibilityAction={() => onToggleActive(service)}
     >
-      <Text style={[styles.serviceTileName, { color: palette.text }]} numberOfLines={2}>
-        {service.name}
-      </Text>
-      <Text style={[styles.serviceTileMeta, { color: palette.sub }]} numberOfLines={1}>
-        {service.duration_minutes} min{hidden ? ' · hidden' : ''}
-      </Text>
-
-      <View style={styles.serviceTileFooter}>
-        <Text
-          style={[styles.serviceTilePrice, { color: hidden ? palette.sub : palette.text }]}
-          numberOfLines={1}
-        >
-          £{service.price}
-          {service.price_max ? `–£${service.price_max}` : ''}
+      <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+      <View style={styles.serviceRowLine}>
+        <Text style={[styles.serviceRowName, { color: hidden ? palette.sub : palette.text }]}>
+          {service.name}
         </Text>
+        <View style={styles.serviceRowLeader}>
+          <View style={[styles.serviceRowLeaderDots, { borderColor: palette.border }]} />
+        </View>
+        <Text style={[styles.serviceRowPrice, { color: hidden ? palette.sub : palette.text }]}>
+          {price}
+        </Text>
+      </View>
+      <View style={styles.serviceRowMeta}>
+        {duration ? (
+          <Text style={[styles.serviceRowMetaText, { color: palette.sub }]}>{duration}</Text>
+        ) : null}
+        {service.patch_test_required ? (
+          <View style={[styles.serviceRowTag, { backgroundColor: withAlpha(palette.sub, 0.12) }]}>
+            <Text style={[styles.serviceRowTagText, { color: palette.sub }]}>PATCH TEST</Text>
+          </View>
+        ) : null}
+        {hidden ? (
+          busy ? (
+            <ActivityIndicator size="small" color={palette.sub} style={styles.serviceRowShow} />
+          ) : (
+            <GestureTouchableOpacity
+              style={styles.serviceRowShow}
+              activeOpacity={0.5}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                onToggleActive(service);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Show ${service.name} to clients`}
+            >
+              <Text style={[styles.serviceRowShowText, { color: palette.accent }]}>
+                Show to clients
+              </Text>
+            </GestureTouchableOpacity>
+          )
+        ) : null}
+      </View>
+    </GestureTouchableOpacity>
+  );
+
+  if (hidden) return row;
+
+  return (
+    <Swipeable
+      ref={attachSwipeable}
+      renderRightActions={() => (
         <TouchableOpacity
-          style={styles.serviceToggle}
-          activeOpacity={0.6}
-          disabled={busy}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel={
-            service.is_active
-              ? `Hide ${service.name} from clients`
-              : `Show ${service.name} to clients`
-          }
+          style={[styles.serviceRowHide, { backgroundColor: palette.text }]}
+          activeOpacity={0.75}
           onPress={() => {
+            swipeRef.current?.close();
             Haptics.selectionAsync().catch(() => {});
             onToggleActive(service);
           }}
+          accessibilityRole="button"
+          accessibilityLabel={`Hide ${service.name} from clients`}
         >
-          {busy ? (
-            <ActivityIndicator size="small" color={palette.sub} />
-          ) : (
+          <Ionicons name="eye-off-outline" size={17} color={palette.card} />
+          <Text style={[styles.serviceRowHideText, { color: palette.card }]}>Hide</Text>
+        </TouchableOpacity>
+      )}
+      overshootRight={false}
+      onSwipeableWillOpen={() => swipe.willOpen(service.id)}
+      onSwipeableClose={() => swipe.closed(service.id)}
+    >
+      {row}
+    </Swipeable>
+  );
+});
+
+/** One category as a price list: what's on the menu, then what isn't, folded
+ *  away underneath so a retired service never sits between two live ones.
+ *  The fold starts open when nothing in the category is live, since the
+ *  hidden services are then all the card has to show. */
+const ServiceCategoryCard = React.memo(function ServiceCategoryCard({
+  name,
+  items,
+  palette,
+  togglingId,
+  onAdd,
+  onEdit,
+  onToggleActive,
+  swipe,
+}: {
+  name: string;
+  items: DbService[];
+  palette: DashPalette;
+  togglingId: string | null;
+  onAdd: (categoryName: string) => void;
+  onEdit: (service: DbService) => void;
+  onToggleActive: (service: DbService) => void;
+  swipe: RowSwipeRegistry;
+}) {
+  const live = useMemo(() => items.filter(service => service.is_active), [items]);
+  const hidden = useMemo(() => items.filter(service => !service.is_active), [items]);
+  const [showHidden, setShowHidden] = useState(live.length === 0);
+
+  const renderRow = (service: DbService) => (
+    <ServiceRow
+      key={service.id}
+      service={service}
+      palette={palette}
+      busy={togglingId === service.id}
+      onEdit={onEdit}
+      onToggleActive={onToggleActive}
+      swipe={swipe}
+    />
+  );
+
+  return (
+    <View style={styles.dashCardShadow}>
+      <View style={[styles.menuCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        <LinearGradient
+          colors={palette.highlight}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.cardHighlight}
+        />
+        <View style={styles.menuCardHeader}>
+          <Text style={[styles.menuCardTitle, { color: palette.text }]} numberOfLines={2}>
+            {name}
+          </Text>
+          <Text style={[styles.menuCardCount, { color: palette.sub }]}>
+            {live.length === 0 ? 'Nothing on your menu' : `${live.length} on your menu`}
+          </Text>
+        </View>
+
+        {live.map(renderRow)}
+
+        {hidden.length > 0 ? (
+          <TouchableOpacity
+            style={styles.menuCardFold}
+            activeOpacity={0.5}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setShowHidden(open => !open);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showHidden }}
+            accessibilityLabel={`${hidden.length} hidden from clients`}
+          >
+            <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+            <Text style={[styles.menuCardFoldText, { color: palette.sub }]}>
+              {hidden.length} hidden from clients
+            </Text>
             <Ionicons
-              name={service.is_active ? 'eye-outline' : 'eye-off-outline'}
-              size={18}
-              color={service.is_active ? palette.accent : palette.sub}
+              name={showHidden ? 'chevron-down' : 'chevron-forward'}
+              size={15}
+              color={palette.sub}
             />
-          )}
+          </TouchableOpacity>
+        ) : null}
+
+        {showHidden ? hidden.map(renderRow) : null}
+
+        <TouchableOpacity
+          style={styles.menuCardAdd}
+          activeOpacity={0.5}
+          onPress={() => onAdd(name)}
+          accessibilityRole="button"
+          accessibilityLabel={`Add a service to ${name}`}
+        >
+          <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+          <Ionicons name="add" size={16} color={palette.accent} />
+          <Text style={[styles.menuCardAddText, { color: palette.accent }]} numberOfLines={1}>
+            Add to {name}
+          </Text>
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 });
 
@@ -737,6 +912,29 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     }
   }, []);
 
+  // One swiped-open row at a time across every category, like Mail: opening a
+  // second row closes whichever was open, wherever it is on the screen.
+  const rowSwipeablesRef = useRef<Map<string, SwipeableHandle>>(new Map());
+  const openRowIdRef = useRef<string | null>(null);
+  const rowSwipe = useMemo<RowSwipeRegistry>(
+    () => ({
+      register: (id, ref) => {
+        if (ref) rowSwipeablesRef.current.set(id, ref);
+        else rowSwipeablesRef.current.delete(id);
+      },
+      willOpen: id => {
+        if (openRowIdRef.current && openRowIdRef.current !== id) {
+          rowSwipeablesRef.current.get(openRowIdRef.current)?.close();
+        }
+        openRowIdRef.current = id;
+      },
+      closed: id => {
+        if (openRowIdRef.current === id) openRowIdRef.current = null;
+      },
+    }),
+    [],
+  );
+
   // ── Portfolio ───────────────────────────────────────────────────────────
 
   const handleAddPhotos = useCallback(async () => {
@@ -821,7 +1019,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     () => resolveProviderTheme(providerData?.profileTheme),
     [providerData?.profileTheme],
   );
-  const cardBg = withAlpha(PP.card, PP.isDark ? 0.82 : 0.98);
+  // Shared, so the flattened colour below can never drift from the frosted one.
+  const cardAlpha = PP.isDark ? 0.82 : 0.98;
+  const cardBg = withAlpha(PP.card, cardAlpha);
+  // Cards sit on the solid content sheet, where blurring adds nothing, so
+  // cardBg's visible colour is just the card and the sheet blended.
+  const cardSolid = blend(PP.card, PP.bg, 1 - cardAlpha);
   const cardBlurTint = PP.isDark ? ('dark' as const) : ('light' as const);
   const cardBlurIntensity = PP.isDark ? 35 : 25;
   const cardHighlightColors = useMemo(
@@ -847,6 +1050,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       sub: PP.sub,
       border: PP.border,
       sep: PP.sep,
+      card: cardSolid,
       cardBg,
       blurTint: cardBlurTint,
       blurIntensity: cardBlurIntensity,
@@ -858,6 +1062,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       PP.sub,
       PP.border,
       PP.sep,
+      cardSolid,
       cardBg,
       cardBlurTint,
       cardBlurIntensity,
@@ -1625,43 +1830,24 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       </BlurView>
                     </View>
                   ) : (
-                    /* Every category on screen at once, as tiles: switching
-                       categories to change one price was a hop that earned
-                       nothing, and a tile shows the two things being managed —
-                       the price and whether clients can see it — without
-                       reading a row left to right. */
+                    /* A price list per category rather than a grid of tiles.
+                       It reads down like a salon's price board, fits far more
+                       of the catalogue on screen, and folds hidden services
+                       away instead of fading them in among the live ones.
+                       Each card only gets togglingId when the row being
+                       toggled is its own, so the other cards' memo holds. */
                     catalogue.groups.map(group => (
-                      <View key={group.name} style={styles.serviceGroup}>
-                        <View style={styles.rowHeader}>
-                          <Text style={[styles.sectionLabel, { color: PP.sub }]}>
-                            {group.name.toUpperCase()} · {group.items.length}{' '}
-                            {group.items.length === 1 ? 'SERVICE' : 'SERVICES'}
-                          </Text>
-                          <TouchableOpacity
-                            style={[styles.addChip, { borderColor: PP.border, marginBottom: 10 }]}
-                            onPress={() => openNewService(group.name)}
-                            activeOpacity={0.7}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Add a service to ${group.name}`}
-                          >
-                            <Ionicons name="add" size={15} color={accentColor} />
-                            <Text style={[styles.addChipText, { color: accentColor }]}>Add</Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.tileGrid}>
-                          {group.items.map(service => (
-                            <ServiceTile
-                              key={service.id}
-                              service={service}
-                              palette={dashPalette}
-                              busy={togglingId === service.id}
-                              onEdit={openEditService}
-                              onToggleActive={handleToggleActive}
-                            />
-                          ))}
-                        </View>
-                      </View>
+                      <ServiceCategoryCard
+                        key={group.name}
+                        name={group.name}
+                        items={group.items}
+                        palette={dashPalette}
+                        togglingId={group.items.some(service => service.id === togglingId) ? togglingId : null}
+                        onAdd={openNewService}
+                        onEdit={openEditService}
+                        onToggleActive={handleToggleActive}
+                        swipe={rowSwipe}
+                      />
                     ))
                   )}
                 </>
@@ -2035,56 +2221,145 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Service tiles
-  serviceGroup: {
-    marginBottom: 8,
-  },
-  tileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: HALF_GAP,
-    marginBottom: 14,
-  },
-  serviceTile: {
-    height: 124,
-    padding: 14,
-    borderRadius: 22,
+  // Service price list
+  menuCard: {
+    borderRadius: 26,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
-  // Hidden services stay legible rather than being greyed to nothing — the
-  // provider still has to read them to decide what to switch back on.
-  serviceTileHidden: {
-    opacity: 0.62,
+  menuCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
-  serviceTileName: {
+  menuCardTitle: {
+    flexShrink: 1,
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 19,
+    letterSpacing: 0.4,
   },
-  serviceTileMeta: {
+  menuCardCount: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
-    letterSpacing: 0.2,
-    marginTop: 3,
   },
-  serviceTileFooter: {
+  menuCardFold: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  menuCardFoldText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  menuCardAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingTop: 13,
+    paddingBottom: 15,
+  },
+  menuCardAddText: {
+    flexShrink: 1,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    letterSpacing: 0.4,
+  },
+  serviceRow: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  // Inset from the left like an iOS list, so the rules read as dividing rows
+  // rather than boxing each one.
+  serviceRowRule: {
+    position: 'absolute',
+    top: 0,
+    left: 18,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+  },
+  serviceRowLine: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginTop: 'auto',
   },
-  serviceTilePrice: {
+  serviceRowName: {
+    flexShrink: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 15,
+    lineHeight: 19,
+  },
+  // A dotted leader, the way a salon's price board joins a treatment to its
+  // price. iOS only draws a dotted border when all four sides have one, so the
+  // dots are a whole bordered box clipped down to its top edge.
+  serviceRowLeader: {
     flex: 1,
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 20,
-    lineHeight: 24,
+    minWidth: 12,
+    height: 2,
+    marginHorizontal: 6,
+    marginBottom: 5,
+    overflow: 'hidden',
   },
-  serviceToggle: {
-    width: 34,
-    height: 34,
+  serviceRowLeaderDots: {
+    height: 6,
+    borderWidth: 2,
+    borderStyle: 'dotted',
+    borderRadius: 1,
+  },
+  serviceRowPrice: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    lineHeight: 20,
+    fontVariant: ['tabular-nums'],
+  },
+  serviceRowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  serviceRowMetaText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  serviceRowTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  serviceRowTagText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 9,
+    letterSpacing: 0.9,
+  },
+  serviceRowShow: {
+    marginLeft: 'auto',
+  },
+  serviceRowShowText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  serviceRowHide: {
+    width: 88,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 3,
+  },
+  serviceRowHideText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    letterSpacing: 0.6,
   },
 
   // Portfolio grid
