@@ -16,7 +16,9 @@ describe('createServiceDraft', () => {
       price: 0,
       images: [],
       addOns: [],
-      patchTestRequired: false,
+      // null, not false: a new draft has not been answered yet, and false
+      // would be the provider stating no patch test is needed.
+      patchTestRequired: null,
     });
   });
 });

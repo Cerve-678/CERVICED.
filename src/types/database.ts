@@ -411,7 +411,8 @@ export interface DbService {
   // Safety & suitability
   /** Nullable in the database: null = the provider has not answered. */
   is_pregnancy_safe: boolean | null;
-  patch_test_required: boolean;
+  /** Nullable in the database: null = the provider has not answered. */
+  patch_test_required: boolean | null;
   min_age: number | null;
   contraindications: string[] | null;
   // Hair types this service suits (HAIR_TYPES vocabulary — Straight, Wavy,

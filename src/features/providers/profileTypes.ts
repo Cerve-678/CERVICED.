@@ -21,7 +21,9 @@ export interface ProviderProfileService {
    *  null/undefined = they have not answered. Never collapse the last
    *  two together: silence is not a warning. */
   isPregnancySafe?: boolean | null;
-  patchTestRequired?: boolean;
+  /** true = provider requires one, false = they say none needed,
+   *  null/undefined = not answered. Silence is not a requirement. */
+  patchTestRequired?: boolean | null;
   minAge?: number | null;
   contraindications?: string[];
   aftercareNotes?: string;

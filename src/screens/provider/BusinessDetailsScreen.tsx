@@ -21,13 +21,16 @@
  *
  * Shared form primitives live in src/features/business-details/.
  */
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useFocusEffect } from '@react-navigation/native';
 import { useBusinessPalette, type Palette } from '../../features/business-details/BusinessDetailsKit';
+import { fetchGoLiveStatus } from '../../features/providers/goLiveStatus';
+import { logger } from '../../utils/logger';
 
 interface RowProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -35,9 +38,14 @@ interface RowProps {
   subtitle: string;
   onPress: () => void;
   C: Palette;
+  /** Nothing saved in this section yet — marked with a red asterisk so the
+   *  provider can see what is still outstanding without opening all six.
+   *  Only set for sections whose done-ness is genuinely known; a section we
+   *  cannot determine gets no marker rather than a guessed one. */
+  incomplete?: boolean;
 }
 
-const NavRow = React.memo(({ icon, title, subtitle, onPress, C }: RowProps) => (
+const NavRow = React.memo(({ icon, title, subtitle, onPress, C, incomplete }: RowProps) => (
   <TouchableOpacity
     style={[st.row, { backgroundColor: C.card, borderColor: C.border }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
@@ -47,7 +55,10 @@ const NavRow = React.memo(({ icon, title, subtitle, onPress, C }: RowProps) => (
       <Ionicons name={icon} size={18} color={C.accent} />
     </View>
     <View style={{ flex: 1 }}>
-      <Text style={[st.rowTitle, { color: C.text }]}>{title}</Text>
+      <Text style={[st.rowTitle, { color: C.text }]}>
+        {title}
+        {incomplete && <Text style={st.incompleteMark}> *</Text>}
+      </Text>
       <Text style={[st.rowSub, { color: C.sub }]}>{subtitle}</Text>
     </View>
     <Ionicons name="chevron-forward" size={18} color={C.sub} style={{ opacity: 0.5 }} />
@@ -58,6 +69,23 @@ NavRow.displayName = 'NavRow';
 export default function BusinessDetailsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
+
+  // Re-read on focus: the provider gets here by coming BACK from one of these
+  // sub-screens, so a stale read would leave the asterisk on something they
+  // just finished. null until the first read lands (and for a client-only
+  // account), which renders no asterisks rather than six wrong ones.
+  const [status, setStatus] = useState<Awaited<ReturnType<typeof fetchGoLiveStatus>>>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      fetchGoLiveStatus()
+        .then(result => { if (!cancelled) setStatus(result); })
+        // A failed read must not be shown as "not set up" — leave the markers
+        // off entirely and let the sub-screens report their own trouble.
+        .catch(error => logger.error('BusinessDetailsScreen: go-live status read failed', error));
+      return () => { cancelled = true; };
+    }, []),
+  );
 
   return (
     <View style={[st.root, { backgroundColor: C.bg }]}>
@@ -89,6 +117,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="pricetags-outline"
             title="Services & Pricing"
+            incomplete={status ? !status.servicesSet : false}
             subtitle="Specialties, clientele, pricing & style"
             onPress={() => navigation.navigate('ServicesPricing')}
             C={C}
@@ -96,6 +125,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="document-text-outline"
             title="Policies"
+            incomplete={status ? !status.policiesSet : false}
             subtitle="Cancellations, reschedules, no-shows & refunds"
             onPress={() => navigation.navigate('Policies')}
             C={C}
@@ -110,6 +140,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="calendar-outline"
             title="Scheduling & Availability"
+            incomplete={status ? !status.scheduleSet : false}
             subtitle="Working hours, availability, buffers & booking rules"
             onPress={() => navigation.navigate('Scheduling')}
             C={C}
@@ -117,10 +148,18 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="card-outline"
             title="Payments"
+            incomplete={status ? !status.paymentSet : false}
             subtitle="Payment types you accept & your deposit"
             onPress={() => navigation.navigate('Payments')}
             C={C}
           />
+
+          {status && (!status.servicesSet || !status.policiesSet
+            || !status.scheduleSet || !status.paymentSet) && (
+            <Text style={[st.footnote, { color: C.sub }]}>
+              <Text style={st.incompleteMark}>*</Text> still needs setting up before clients can book you.
+            </Text>
+          )}
 
           <Text style={[st.footnote, { color: C.sub }]}>
             Looking for reminders and client nudges? Those live in Automations & Preferences.
@@ -151,6 +190,7 @@ const st = StyleSheet.create({
     marginBottom: 10,
   },
   iconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  incompleteMark: { color: '#D32F2F', fontWeight: '700' },
   rowTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 0.3 },
   rowSub:   { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, marginTop: 2, lineHeight: 16 },
 

@@ -8139,6 +8139,9 @@ export async function getServiceSafetyFlags(
 ): Promise<
   Map<string, { patchTestRequired: boolean; pregnancy: 'safe' | 'unsafe' | 'unanswered' }>
 > {
+  // patchTestRequired stays a boolean here because only an explicit `true`
+  // means anything to a client — "not answered" and "answered no" both mean
+  // no patch test is being asked of them.
   const map = new Map<
     string,
     { patchTestRequired: boolean; pregnancy: 'safe' | 'unsafe' | 'unanswered' }
@@ -8154,7 +8157,7 @@ export async function getServiceSafetyFlags(
     // that must not be reported as either a safety warning or a reassurance —
     // collapsing it into `=== true` made every unanswered service warn.
     map.set(row.id, {
-      patchTestRequired: !!row.patch_test_required,
+      patchTestRequired: row.patch_test_required === true,
       pregnancy: row.is_pregnancy_safe === true
         ? 'safe'
         : row.is_pregnancy_safe === false

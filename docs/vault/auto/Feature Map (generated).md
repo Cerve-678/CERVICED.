@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **147 files**
 - … +117 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **73 files**
+Curated: [[Provider Onboarding & Go-Live]] · **74 files**
 - `src/services/databaseService.ts` _(64)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(49)_
@@ -194,6 +194,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `supabase/require_services_for_go_live.sql` _(6)_
 - `src/screens/auth/SignUpStep5Screen.tsx` _(5)_
 - `src/screens/client/CartScreen.tsx` _(5)_
+- `src/screens/provider/BusinessDetailsScreen.tsx` _(5)_
 - `src/services/acuityTransferService.ts` _(5)_
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
 - `src/contexts/AuthContext.tsx` _(3)_
@@ -206,8 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
 - `src/services/becca/aiRuntime.ts` _(3)_
 - `supabase/add_providers_availability_rpc.sql` _(3)_
-- `supabase/availability_v2.sql` _(3)_
-- … +43 more
+- … +44 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**

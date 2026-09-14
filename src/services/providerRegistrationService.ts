@@ -72,7 +72,7 @@ export interface ServiceData {
    *  here is what turned every unanswered service into "not recommended
    *  during pregnancy" on the client's booking summary. */
   isPregnancySafe: boolean | null;
-  patchTestRequired: boolean;
+  patchTestRequired: boolean | null;
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;

@@ -3526,7 +3526,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     when the provider actually filled this in (real
                     treatments), directly under the description so clients
                     see it before booking. */}
-                  {(service.patchTestRequired ||
+                  {(service.patchTestRequired === true ||
+                    service.isPregnancySafe === false ||
                     !!service.minAge ||
                     (service.contraindications?.length ?? 0) > 0) && (
                     <View style={styles.serviceSafetyInline}>
@@ -3535,7 +3536,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       >
                         Treatment Safety
                       </Text>
-                      {service.patchTestRequired && (
+                      {service.patchTestRequired === true && (
                         <Text
                           style={[styles.serviceSafetyLine, { color: OP.sub }]}
                         >
