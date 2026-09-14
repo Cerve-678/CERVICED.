@@ -53,7 +53,7 @@ Curated: [[Availability & Slots]] · **159 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(80)_
 - `src/services/becca/capabilities/client.ts` _(71)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(67)_
-- `src/screens/client/RescheduleScreen.tsx` _(54)_
+- `src/screens/client/RescheduleScreen.tsx` _(55)_
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/provider/SchedulingScreen.tsx` _(44)_
 - `supabase/waitlist_holds.sql` _(43)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **242 files**
 - `src/screens/client/CartScreen.tsx` _(565)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(525)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/client/BookingDetailScreen.tsx` _(333)_
+- `src/screens/client/BookingDetailScreen.tsx` _(335)_
 - `src/screens/client/BookingsScreen.tsx` _(327)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(237)_
@@ -250,8 +250,8 @@ Curated: [[Booking Flow]] · **153 files**
 - `src/services/databaseService.ts` _(199)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
-- `src/screens/client/BookingDetailScreen.tsx` _(146)_
-- `src/screens/client/RescheduleScreen.tsx` _(140)_
+- `src/screens/client/BookingDetailScreen.tsx` _(147)_
+- `src/screens/client/RescheduleScreen.tsx` _(143)_
 - `src/services/becca/capabilities/client.ts` _(132)_
 - `src/screens/client/CartScreen.tsx` _(112)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
