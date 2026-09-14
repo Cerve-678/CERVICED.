@@ -409,7 +409,8 @@ export interface DbService {
   occasion_tags: string[] | null;
   trend_names: string[] | null;
   // Safety & suitability
-  is_pregnancy_safe: boolean;
+  /** Nullable in the database: null = the provider has not answered. */
+  is_pregnancy_safe: boolean | null;
   patch_test_required: boolean;
   min_age: number | null;
   contraindications: string[] | null;

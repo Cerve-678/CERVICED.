@@ -279,7 +279,7 @@ interface ServiceData {
   occasionTags: string[];
   trendNames: string[];
   // Safety
-  isPregnancySafe: boolean;
+  isPregnancySafe: boolean | null;
   patchTestRequired: boolean;
   minAge: number | null;
   contraindications: string[];
@@ -1179,7 +1179,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [serviceType, setServiceType] = useState<ServiceData['serviceType']>(service?.serviceType || '');
   const [audience, setAudience] = useState<ServiceData['audience']>(service?.audience || '');
   // Safety state
-  const [isPregnancySafe, setIsPregnancySafe] = useState(service?.isPregnancySafe ?? false);
+  // null until answered — see ProviderServiceDraft.isPregnancySafe. A new
+  // service must not arrive pre-answered, so this cannot default to a boolean.
+  const [isPregnancySafe, setIsPregnancySafe] = useState<boolean | null>(service?.isPregnancySafe ?? null);
   const [patchTestRequired, setPatchTestRequired] = useState(
     service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey))
   );
@@ -1238,7 +1240,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setTrendInput('');
     setServiceType(service?.serviceType || '');
     setAudience(service?.audience || '');
-    setIsPregnancySafe(service?.isPregnancySafe ?? false);
+    setIsPregnancySafe(service?.isPregnancySafe ?? null);
     setPatchTestRequired(service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey)));
     setMinAge(service?.minAge?.toString() || '');
     setContraindications(service?.contraindications || []);
@@ -1699,7 +1701,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                    see before booking a treatment ─────────────────────── */}
               {isAesthetics && (
                 <View style={[styles.inputGroup, styles.safetyCard]}>
-                  <Text style={styles.safetySectionTitle}>Treatment Safety</Text>
+                  <Text style={styles.safetySectionTitle}>
+                    Treatment Safety
+                    {/* A Switch cannot show "unanswered" — off and never-touched
+                        look identical. This asterisk is the only thing telling the
+                        provider the section still needs a decision, and it clears
+                        as soon as they move the toggle either way. */}
+                    {isPregnancySafe === null && (
+                      <Text style={styles.safetyRequiredAsterisk}> *</Text>
+                    )}
+                  </Text>
                   <Text style={styles.serviceSheetHint}>Required for aesthetic treatments — shown to clients under the service description</Text>
 
                   <View style={styles.toggleRow}>
@@ -1712,10 +1723,19 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
-                      <Text style={styles.toggleHint}>This treatment is safe during pregnancy</Text>
+                      <Text style={styles.toggleLabel}>
+                        Pregnancy Safe
+                        {isPregnancySafe === null && (
+                          <Text style={styles.safetyRequiredAsterisk}> *</Text>
+                        )}
+                      </Text>
+                      <Text style={styles.toggleHint}>
+                        {isPregnancySafe === null
+                          ? 'Not answered yet — clients are told nothing about pregnancy until you answer'
+                          : 'This treatment is safe during pregnancy'}
+                      </Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe === true} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['minAge'] = e.nativeEvent.layout.y; }}>
@@ -1764,10 +1784,19 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.inputGroup}>
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
-                      <Text style={styles.toggleHint}>This service is safe during pregnancy</Text>
+                      <Text style={styles.toggleLabel}>
+                        Pregnancy Safe
+                        {isPregnancySafe === null && (
+                          <Text style={styles.safetyRequiredAsterisk}> *</Text>
+                        )}
+                      </Text>
+                      <Text style={styles.toggleHint}>
+                        {isPregnancySafe === null
+                          ? 'Not answered yet — clients are told nothing about pregnancy until you answer'
+                          : 'This service is safe during pregnancy'}
+                      </Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe === true} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
                 </View>
               )}
@@ -7932,6 +7961,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // The Treatment Safety card's heading is the same class of subheading as
   // serviceSheetSection and sits in the same sheet, so it takes the same face —
   // only the colour differs, since the safety card is deliberately its own.
+  safetyRequiredAsterisk: { color: '#D32F2F', fontWeight: '700' },
   safetySectionTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,

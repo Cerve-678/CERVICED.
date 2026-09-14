@@ -3542,7 +3542,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           • Patch test required before this treatment
                         </Text>
                       )}
-                      {!service.isPregnancySafe && (
+                      {service.isPregnancySafe === false && (
                         <Text
                           style={[styles.serviceSafetyLine, { color: OP.sub }]}
                         >

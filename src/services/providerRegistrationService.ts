@@ -68,7 +68,10 @@ export interface ServiceData {
   outcomeTags: string[];
   occasionTags: string[];
   trendNames: string[];
-  isPregnancySafe: boolean;
+  /** null = not answered. Must survive the round trip -- writing `?? false`
+   *  here is what turned every unanswered service into "not recommended
+   *  during pregnancy" on the client's booking summary. */
+  isPregnancySafe: boolean | null;
   patchTestRequired: boolean;
   minAge: number | null;
   contraindications: string[];
@@ -721,7 +724,7 @@ export async function saveProviderToSupabase(
         outcome_tags: svc.outcomeTags?.length ? svc.outcomeTags : null,
         occasion_tags: svc.occasionTags?.length ? svc.occasionTags : null,
         trend_names: svc.trendNames?.length ? svc.trendNames : null,
-        is_pregnancy_safe: svc.isPregnancySafe ?? false,
+        is_pregnancy_safe: svc.isPregnancySafe ?? null,
         patch_test_required: svc.patchTestRequired ?? false,
         min_age: svc.minAge ?? null,
         contraindications: svc.contraindications?.length ? svc.contraindications : null,
@@ -862,7 +865,7 @@ export async function loadProviderFromSupabase(
       outcomeTags: svc.outcome_tags || [],
       occasionTags: svc.occasion_tags || [],
       trendNames: svc.trend_names || [],
-      isPregnancySafe: svc.is_pregnancy_safe ?? false,
+      isPregnancySafe: svc.is_pregnancy_safe ?? null,
       patchTestRequired: svc.patch_test_required ?? false,
       minAge: svc.min_age ?? null,
       contraindications: svc.contraindications || [],

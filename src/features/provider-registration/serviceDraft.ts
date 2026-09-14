@@ -34,7 +34,9 @@ export interface ProviderServiceDraft {
   outcomeTags: string[];
   occasionTags: string[];
   trendNames: string[];
-  isPregnancySafe: boolean;
+  /** null = the provider has not answered yet. Distinct from false, which
+   *  is them saying the treatment is NOT suitable during pregnancy. */
+  isPregnancySafe: boolean | null;
   patchTestRequired: boolean;
   minAge: number | null;
   contraindications: string[];
@@ -74,7 +76,7 @@ export function createServiceDraft(template?: ServiceTemplateSeed | null): Provi
     outcomeTags: template?.outcomeTags ?? [],
     occasionTags: template?.occasionTags ?? [],
     trendNames: template?.trendNames ?? [],
-    isPregnancySafe: false,
+    isPregnancySafe: null,
     patchTestRequired: false,
     minAge: null,
     contraindications: [],

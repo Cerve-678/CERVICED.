@@ -17,7 +17,10 @@ export interface ProviderProfileService {
   image: any;
   images?: any[];
   addOns?: ProviderProfileAddOn[];
-  isPregnancySafe?: boolean;
+  /** true = provider says safe, false = provider says not recommended,
+   *  null/undefined = they have not answered. Never collapse the last
+   *  two together: silence is not a warning. */
+  isPregnancySafe?: boolean | null;
   patchTestRequired?: boolean;
   minAge?: number | null;
   contraindications?: string[];

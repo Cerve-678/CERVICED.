@@ -8137,11 +8137,11 @@ export async function getRebookableService(
 export async function getServiceSafetyFlags(
   serviceIds: string[],
 ): Promise<
-  Map<string, { patchTestRequired: boolean; isPregnancySafe: boolean }>
+  Map<string, { patchTestRequired: boolean; pregnancy: 'safe' | 'unsafe' | 'unanswered' }>
 > {
   const map = new Map<
     string,
-    { patchTestRequired: boolean; isPregnancySafe: boolean }
+    { patchTestRequired: boolean; pregnancy: 'safe' | 'unsafe' | 'unanswered' }
   >();
   if (serviceIds.length === 0) return map;
   const { data, error } = await supabase
@@ -8150,9 +8150,16 @@ export async function getServiceSafetyFlags(
     .in("id", [...new Set(serviceIds)]);
   if (error) throw error;
   for (const row of data ?? []) {
+    // Three states, not two. NULL means the provider has not answered, and
+    // that must not be reported as either a safety warning or a reassurance —
+    // collapsing it into `=== true` made every unanswered service warn.
     map.set(row.id, {
       patchTestRequired: !!row.patch_test_required,
-      isPregnancySafe: row.is_pregnancy_safe === true,
+      pregnancy: row.is_pregnancy_safe === true
+        ? 'safe'
+        : row.is_pregnancy_safe === false
+          ? 'unsafe'
+          : 'unanswered',
     });
   }
   return map;

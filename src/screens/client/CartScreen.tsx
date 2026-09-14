@@ -1946,7 +1946,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // 20260817085443_safety_acknowledgement_checkout.sql, which
   // prepare_checkout enforces server-side regardless of this UI state).
   const [safetyFlagsByServiceId, setSafetyFlagsByServiceId] = useState<
-    Map<string, { patchTestRequired: boolean; isPregnancySafe: boolean }>
+    Map<string, { patchTestRequired: boolean; pregnancy: 'safe' | 'unsafe' | 'unanswered' }>
   >(new Map());
   const [confirmedCustomerInfo, setConfirmedCustomerInfo] = useState<{
     name: string; email: string; phone: string;
@@ -3950,10 +3950,28 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   of this checkbox — see supabase/migrations/
                   20260817085443_safety_acknowledgement_checkout.sql. */}
               {(() => {
-                const safetyItems = checkoutSnapshot.items.filter(i => {
+                // Only what the provider actually stated. An unanswered
+                // pregnancy flag is not a warning -- it used to be, because
+                // `!isPregnancySafe` treated "never answered" and "answered
+                // no" as the same thing, so a service with nothing switched
+                // on still raised a safety notice.
+                const flagged = checkoutSnapshot.items.map(i => {
                   const f = safetyFlagsByServiceId.get(i.serviceId);
-                  return f && (f.patchTestRequired || !f.isPregnancySafe);
-                });
+                  return {
+                    item: i,
+                    patch: !!f?.patchTestRequired,
+                    pregnancy: f?.pregnancy === 'unsafe',
+                  };
+                }).filter(x => x.patch || x.pregnancy);
+                const safetyItems = flagged.map(x => x.item);
+                // Name the reason that actually applies. Saying "patch test
+                // and/or pregnancy" told a client about a patch test their
+                // treatment never required.
+                const anyPatch = flagged.some(x => x.patch);
+                const anyPregnancy = flagged.some(x => x.pregnancy);
+                const reasonText = anyPatch && anyPregnancy
+                  ? 'a patch test and pregnancy suitability'
+                  : anyPatch ? 'a patch test' : 'pregnancy suitability';
                 const needsSafetyAck = safetyItems.length > 0;
                 return (
                   <>
@@ -3961,8 +3979,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       <View style={[styles.safetyAckNotice, { backgroundColor: P.surface, borderColor: P.border }]}>
                         <Text style={[styles.safetyAckNoticeText, { color: P.sub }]}>
                           {safetyItems.length === 1
-                            ? `${safetyItems[0]!.serviceName}'s provider has flagged safety information for this treatment (patch test and/or pregnancy) — see the service page for details.`
-                            : `${safetyItems.length} services in this order have provider-flagged safety information (patch test and/or pregnancy) — see each service page for details.`}
+                            ? `${safetyItems[0]!.serviceName} has safety information about ${reasonText} — see the service page for details.`
+                            : `${safetyItems.length} services in this order have safety information about ${reasonText} — see each service page for details.`}
                         </Text>
                       </View>
                     )}
