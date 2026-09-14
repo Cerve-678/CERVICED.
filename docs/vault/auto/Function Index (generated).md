@@ -5,7 +5,7 @@
 
 #generated
 
-**2100 functions** across **271 files**.
+**2106 functions** across **272 files**.
 
 ### `src/components/` (39)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -55,12 +55,13 @@
 - `support.ts` — **supportMailtoUrl**
 - `waitlist.ts` — changes
 
-### `src/contexts/` (6)
+### `src/contexts/` (7)
 - `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
 - `RegistrationContext.tsx` — **RegistrationProvider** · resetData · updateData · **useRegistration** · value
+- `StatusBarTintContext.tsx` — claimDarkTopArea · releaseDarkTopArea · **StatusBarTintProvider** · **useDarkTopArea** · **useStatusBarTint** · value
 - `ThemeContext.tsx` — contextValue · createEnterpriseTheme · enterpriseTheme · legacyTheme · loadThemePreference · saveThemePreference · setDarkMode · setThemePreference · **ThemeProvider** · toggleTheme · **useEnterpriseTheme** · **useLegacyTheme** · **useTheme**
 
 ### `src/data/` (2)

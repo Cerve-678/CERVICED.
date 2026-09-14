@@ -76,6 +76,7 @@ import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { useDarkTopArea } from '../../contexts/StatusBarTintContext';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
@@ -885,6 +886,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const heroIsDark =
     !!providerData?.backgroundImage || (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? '#FFFFFF' : '#26201E';
+  // The hero runs under the safe area, so the root status bar strip has to
+  // follow it rather than the theme's isDark token — Black pairs a true-black
+  // hero with a pale card, so isDark is false there. Gated on the profile
+  // actually rendering: the loading and empty states below fall back to the
+  // pale ThemedBackground, and heroIsDark defaults to true with no data, which
+  // would otherwise flash a dark strip over them.
+  useDarkTopArea(!isLoading && !!providerData && heroIsDark);
   const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
 
   if (isLoading) {

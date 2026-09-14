@@ -5,11 +5,12 @@
 
 #generated
 
-**6 contexts.** Curated overview: [[Contexts]].
+**7 contexts.** Curated overview: [[Contexts]].
 
 - `src/contexts/AuthContext.tsx` — `AuthProvider`, `useAuth`
 - `src/contexts/BookingContext.tsx` — `BookingProvider`, `createBookingDateTime`, `useBooking`
 - `src/contexts/CartContext.tsx` — `CartProvider`, `useCart`
 - `src/contexts/FontContext.tsx` — `FontProvider`, `useFont`
 - `src/contexts/RegistrationContext.tsx` — `RegistrationProvider`, `useRegistration`
+- `src/contexts/StatusBarTintContext.tsx` — `StatusBarTintProvider`, `useDarkTopArea`, `useStatusBarTint`
 - `src/contexts/ThemeContext.tsx` — `darkTheme`, `lightTheme`, `ThemeProvider`, `useEnterpriseTheme`, `useLegacyTheme`, `useTheme`
