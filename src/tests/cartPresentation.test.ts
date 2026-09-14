@@ -29,6 +29,10 @@ describe('cart presentation helpers', () => {
 // A cart that cannot possibly check out should say so on the offending cards
 // before the client taps anything, so these are all found with no network.
 describe('findCartItemIssues', () => {
+  // Pinned, not Date.now(): every entry below is dated 2026-09-01, and the
+  // elapsed-time check would otherwise start flagging all of them the moment
+  // that date fell into the past.
+  const NOW = new Date('2026-09-01T09:00:00').getTime();
   const entry = (over: Partial<Parameters<typeof findCartItemIssues>[0][number]>) => ({
     itemId: 'a',
     providerKey: 'provider-1',
@@ -42,7 +46,7 @@ describe('findCartItemIssues', () => {
     const issues = findCartItemIssues([
       entry({ itemId: 'a', time: '2:00 PM', duration: '1h' }),
       entry({ itemId: 'b', time: '2:30 PM', duration: '1h' }),
-    ]);
+    ], NOW);
     expect(issues.get('a')).toBe(CART_ISSUE.overlap);
     expect(issues.get('b')).toBe(CART_ISSUE.overlap);
   });
@@ -51,7 +55,7 @@ describe('findCartItemIssues', () => {
     expect(findCartItemIssues([
       entry({ itemId: 'a', time: '2:00 PM', duration: '1h' }),
       entry({ itemId: 'b', time: '3:00 PM', duration: '30min' }),
-    ]).size).toBe(0);
+    ], NOW).size).toBe(0);
   });
 
   it('flags an overlap across different providers too — the client can only be in one place', () => {
@@ -64,7 +68,7 @@ describe('findCartItemIssues', () => {
     const issues = findCartItemIssues([
       entry({ itemId: 'a', providerKey: 'provider-1', time: '2:00 PM', duration: '1h' }),
       entry({ itemId: 'b', providerKey: 'provider-2', time: '2:30 PM', duration: '1h' }),
-    ]);
+    ], NOW);
     expect(issues.get('a')).toBe(CART_ISSUE.overlap);
     expect(issues.get('b')).toBe(CART_ISSUE.overlap);
   });
@@ -73,27 +77,57 @@ describe('findCartItemIssues', () => {
     expect(findCartItemIssues([
       entry({ itemId: 'a', date: '2026-09-01' }),
       entry({ itemId: 'b', date: '2026-09-02' }),
-    ]).size).toBe(0);
+    ], NOW).size).toBe(0);
   });
 
   it('flags a line with no time at all, rather than silently ignoring it', () => {
-    expect(findCartItemIssues([entry({ time: undefined })]).get('a')).toBe(CART_ISSUE.noSchedule);
-    expect(findCartItemIssues([entry({ date: undefined })]).get('a')).toBe(CART_ISSUE.noSchedule);
+    expect(findCartItemIssues([entry({ time: undefined })], NOW).get('a')).toBe(CART_ISSUE.noSchedule);
+    expect(findCartItemIssues([entry({ date: undefined })], NOW).get('a')).toBe(CART_ISSUE.noSchedule);
   });
 
   // A stored value the app can't parse back shouldn't be possible, so it gets
   // no wording of its own — from the client's side it's the same situation as
   // never having picked a time. The raw value is logged for developers.
   it('reports an unparseable date or time as simply having no schedule', () => {
-    expect(findCartItemIssues([entry({ date: 'not-a-date' })]).get('a')).toBe(CART_ISSUE.noSchedule);
-    expect(findCartItemIssues([entry({ time: 'whenever' })]).get('a')).toBe(CART_ISSUE.noSchedule);
+    expect(findCartItemIssues([entry({ date: 'not-a-date' })], NOW).get('a')).toBe(CART_ISSUE.noSchedule);
+    expect(findCartItemIssues([entry({ time: 'whenever' })], NOW).get('a')).toBe(CART_ISSUE.noSchedule);
+  });
+
+  // The clock moved; nothing about the provider changed. Before this, a cart
+  // sat on overnight looked perfectly fine until the client tapped Checkout,
+  // and what came back then depended on which provider lookup answered first
+  // — usually "this provider isn't taking bookings right now", a claim about
+  // the provider that was simply false.
+  it('flags a time that has already passed as exactly that', () => {
+    const issues = findCartItemIssues([entry({ time: '8:00 AM' })], NOW);
+    expect(issues.get('a')).toBe(CART_ISSUE.timePassed);
+  });
+
+  it('flags yesterday even at a time of day that has not come round yet', () => {
+    const issues = findCartItemIssues([entry({ date: '2026-08-31', time: '11:00 PM' })], NOW);
+    expect(issues.get('a')).toBe(CART_ISSUE.timePassed);
+  });
+
+  // An appointment that can no longer happen at all doesn't need telling that
+  // it also clashes with something — the one real fix is the same either way.
+  it('reports the passed time and stops, rather than also calling it an overlap', () => {
+    const issues = findCartItemIssues([
+      entry({ itemId: 'a', time: '8:00 AM', duration: '1h' }),
+      entry({ itemId: 'b', time: '8:30 AM', duration: '1h' }),
+    ], NOW);
+    expect(issues.get('a')).toBe(CART_ISSUE.timePassed);
+    expect(issues.get('b')).toBe(CART_ISSUE.timePassed);
+  });
+
+  it('leaves a still-future time alone', () => {
+    expect(findCartItemIssues([entry({ time: '9:30 AM' })], NOW).size).toBe(0);
   });
 
   it('reports the missing schedule and stops — an item with no time cannot also be judged for overlapping', () => {
     const issues = findCartItemIssues([
       entry({ itemId: 'a', time: undefined }),
       entry({ itemId: 'b', time: '2:00 PM' }),
-    ]);
+    ], NOW);
     expect(issues.get('a')).toBe(CART_ISSUE.noSchedule);
     expect(issues.has('b')).toBe(false);
   });

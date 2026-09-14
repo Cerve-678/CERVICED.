@@ -5,7 +5,7 @@
 
 #generated
 
-**2099 functions** across **270 files**.
+**2100 functions** across **270 files**.
 
 ### `src/components/` (39)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -83,7 +83,7 @@
 
 ### `src/features/cart/` (3)
 - `platformFee.ts` — **calculatePlatformFee**
-- `presentation.ts` — **durationToMinutes** · **findCartItemIssues** · **formatTimeSpan** · **to24hMinutes** · toLabel
+- `presentation.ts` — **durationToMinutes** · **findCartItemIssues** · **formatTimeSpan** · slotStartMs · **to24hMinutes** · toLabel
 - `pricing.ts` — **getCartAddOnsSummary** · **getCartItemFullPrice** · **resolveDepositPolicyArg** · **toDepositPolicy**
 
 ### `src/features/home/` (1)

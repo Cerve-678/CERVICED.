@@ -107,6 +107,7 @@ function toCartIssue(serviceMessage: string): string {
     case "This time is outside the provider's working hours.":         return CART_ISSUE.outsideHours;
     case 'This time is outside the provider\u2019s working hours.':        return CART_ISSUE.outsideHours;
     case 'Provider is not available on this date.':                    return CART_ISSUE.dayUnavailable;
+    case 'That time has already passed — please pick a new slot.':      return CART_ISSUE.timePassed;
     case "This provider isn't set up for booking yet.":                return CART_ISSUE.providerUnbookable;
     case 'This service is no longer available from this provider. Please remove it to continue.':
                                                                        return CART_ISSUE.serviceUnavailable;

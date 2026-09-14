@@ -41,7 +41,7 @@ Curated: [[Address Release]] · **85 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **159 files**
-- `src/services/AvailabilityService.ts` _(330)_
+- `src/services/AvailabilityService.ts` _(333)_
 - `src/services/databaseService.ts` _(269)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
@@ -57,7 +57,7 @@ Curated: [[Availability & Slots]] · **159 files**
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/provider/SchedulingScreen.tsx` _(44)_
 - `supabase/waitlist_holds.sql` _(43)_
-- `src/screens/client/CartScreen.tsx` _(40)_
+- `src/screens/client/CartScreen.tsx` _(41)_
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
 - `src/components/BookingSheet.tsx` _(35)_
 - `supabase/add_providers_availability_rpc.sql` _(31)_
@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **241 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/RescheduleScreen.tsx` _(175)_
-- `src/services/AvailabilityService.ts` _(134)_
+- `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
@@ -353,15 +353,15 @@ Curated: [[Payments]] · **66 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(62)_
 - `src/components/BookingSheet.tsx` _(35)_
 - `src/contexts/CartContext.tsx` _(32)_
-- `src/services/AvailabilityService.ts` _(29)_
+- `src/services/AvailabilityService.ts` _(31)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_
 - `src/components/MultiBookingSheet.tsx` _(15)_
 - `src/screens/client/BookingDetailScreen.tsx` _(15)_
 - `src/screens/client/BookingsScreen.tsx` _(15)_
 - `src/services/bookingService.ts` _(14)_
 - `src/services/stripeService.ts` _(14)_
+- `src/features/cart/presentation.ts` _(13)_
 - `src/services/becca/capabilities/client.ts` _(13)_
-- `src/features/cart/presentation.ts` _(9)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/navigation/types.ts` _(7)_
 - `src/types/booking.ts` _(7)_
