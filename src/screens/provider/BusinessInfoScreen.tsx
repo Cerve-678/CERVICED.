@@ -211,6 +211,19 @@ export default function BusinessInfoScreen({ navigation }: any) {
     );
   }
 
+  // Split by the SAVED set, not the live selection, so a chip never moves
+  // group under your finger as you tap it.
+  // ALL_ rather than the pickable list: a provider stamped with a retired type
+  // (OTHER) still offers it, and a group called "what you offer now" that
+  // silently omits one of the things you offer is worse than useless — they
+  // could neither see it nor drop it. It appears here and never in "add
+  // another" below, so it can be left or removed but never re-chosen.
+  const committedOpts = ALL_SERVICE_TYPE_OPTS.filter(o =>
+    savedServiceCategories.includes(o.value));
+  const availableOpts = SERVICE_TYPE_OPTS.filter(o =>
+    !savedServiceCategories.includes(o.value));
+  const pendingHeadlineLabel = labelFor(serviceCategories[0]);
+
   const savedCategoryLabel = labelFor(savedServiceCategories[0]);
   const pendingCategoryLabel = labelFor(serviceCategories[0]);
 
@@ -443,13 +456,48 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 </>
               ) : (
                 <>
-                  <ChipMultiSelect
-                    options={SERVICE_TYPE_OPTS}
-                    selected={serviceCategories}
-                    onToggle={toggleServiceCategory}
-                    headlineNote={label =>
-                      `${label} leads your profile — it's the first one you picked, and it's where your specialty and template suggestions come from. Unpick it to hand that over to the next.`}
-                  />
+                  {/* Two groups, split by what is already LIVE rather than by
+                      what is currently ticked — so nothing jumps between
+                      groups as you tap. What you already offer sits on top,
+                      padlocked; everything else waits underneath. */}
+                  {committedOpts.length > 0 && (
+                    <>
+                      <Text style={[s.cardSub, { color: C.sub, marginBottom: 8 }]}>
+                        What you offer now
+                      </Text>
+                      <ChipMultiSelect
+                        options={committedOpts}
+                        selected={serviceCategories}
+                        onToggle={toggleServiceCategory}
+                        committed={savedServiceCategories}
+                      />
+                      <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 16 }]}>
+                        Tap one to stop offering it. Its services and photos stay on your
+                        account — clients just won't find you under that category.
+                      </Text>
+                    </>
+                  )}
+
+                  {availableOpts.length > 0 && (
+                    <>
+                      <Text style={[s.cardSub, { color: C.sub, marginBottom: 8 }]}>
+                        Add another
+                      </Text>
+                      <ChipMultiSelect
+                        options={availableOpts}
+                        selected={serviceCategories}
+                        onToggle={toggleServiceCategory}
+                      />
+                    </>
+                  )}
+
+                  {pendingHeadlineLabel ? (
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 12, marginBottom: 0 }]}>
+                      {pendingHeadlineLabel} leads your profile — it's where your specialty
+                      and template suggestions come from. Unpick it to hand that over to the
+                      next one.
+                    </Text>
+                  ) : null}
                   {categoryChanged ? (
                     // Shown while deciding, not only in the confirm dialog: a
                     // provider should be able to read the consequences without

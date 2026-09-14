@@ -153,6 +153,11 @@ const tgSt = StyleSheet.create({
  * at once. RadioGroup's sibling: same option shape, same palette, but a set
  * rather than a value.
  *
+ * `committed` marks the entries that are already saved and live, drawn with a
+ * padlock. The padlock is a status, not a prohibition: these are still
+ * tappable, and tapping one stages its removal. Whether it may be saved is the
+ * caller's business (and the DB's) — this component only reports taps.
+ *
  * Chips rather than a stacked list because the choices are short labels and
  * there are several — a list of rows makes six one-word options look like six
  * decisions instead of one. And a wrapping grid rather than a horizontal rail
@@ -168,20 +173,25 @@ export function ChipMultiSelect({
   options,
   selected,
   onToggle,
-  headlineNote,
+  committed,
 }: {
   options: { value: string; label: string }[];
   selected: string[];
   onToggle: (v: string) => void;
-  headlineNote?: (headlineLabel: string) => string;
+  committed?: string[];
 }) {
   const C = useBusinessPalette();
-  const headline = options.find(o => o.value === selected[0]);
   return (
     <View style={{ marginBottom: 4 }}>
       <View style={chipSt.grid}>
         {options.map(opt => {
           const active = selected.includes(opt.value);
+          const isCommitted = committed?.includes(opt.value) ?? false;
+          // Saved, and the provider has just tapped it off: it is coming off
+          // their profile when they save. Struck through rather than simply
+          // unstyled, so "I removed this" and "I never offered this" don't
+          // render identically in a grid that contains both.
+          const dropping = isCommitted && !active;
           return (
             <TouchableOpacity
               key={opt.value}
@@ -198,20 +208,27 @@ export function ChipMultiSelect({
                 // and is worse here: white on #AF9197 is about 2.6:1, which
                 // fails on 13px text.
                 active && { borderColor: C.accent },
+                dropping && { borderColor: C.border, opacity: 0.55 },
               ]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggle(opt.value); }}
               activeOpacity={0.75}
             >
-              <Text style={[chipSt.text, { color: active ? C.accentText : C.text }]}>
+              {isCommitted && active ? (
+                <Ionicons name="lock-closed" size={10} color={C.accentText} />
+              ) : null}
+              <Text
+                style={[
+                  chipSt.text,
+                  { color: active ? C.accentText : C.text },
+                  dropping && { textDecorationLine: 'line-through' },
+                ]}
+              >
                 {opt.label}
               </Text>
             </TouchableOpacity>
           );
         })}
       </View>
-      {headline && headlineNote ? (
-        <Text style={[chipSt.note, { color: C.sub }]}>{headlineNote(headline.label)}</Text>
-      ) : null}
     </View>
   );
 }
@@ -219,6 +236,9 @@ export function ChipMultiSelect({
 const chipSt = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 20,
