@@ -36,8 +36,16 @@ SCOPE:  providers.service_categories + services.service_category, and the
         The second is new here and MUST be applied in the same sitting,
         immediately after the first: on its own the first one opens a
         cooldown bypass and skips the cascade (both explained in its header).
-        Neither has been run — the Supabase MCP was disconnected for this
-        whole session, so nothing was verified against live schema.
+        CORRECTION 2026-09-14, verified over the REST API (MCP still down):
+        the FIRST file's effect IS live — providers.service_categories and
+        services.service_category both exist, and a provider already holds
+        two types — but it was applied without any record in git, so its
+        recorded version in schema_migrations is unknown. The SECOND file
+        exists only on this branch and is presumed NOT applied, which means
+        the cooldown bypass and skipped cascade it fixes are presumed LIVE.
+        First action when pg access returns: confirm whether
+        enforce_service_category_change_cooldown compares service_categories,
+        and apply 20260908090100 if it does not.
 ```
 
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
