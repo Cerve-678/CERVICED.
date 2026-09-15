@@ -25,6 +25,73 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-09-14 (client_bookings exposes booking_ref)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260914031215 | `client_bookings_expose_booking_ref` | `booking_ref` present on `public.client_bookings` at ordinal position 49 (appended, per the view's append-only constraint); every other column unchanged from the last live definition (`20260827161000`, 48 columns, confirmed via `information_schema.columns` before applying). 5 sampled live bookings returned identical `booking_ref` via `bookings` and via `client_bookings`. |
+
+Closes the gap `formatBookingRef()` and its test (`src/tests/bookingReference.test.ts`) already
+anticipated: `20260827153834` added `bookings.booking_ref` but never added it to
+`client_bookings`, which lists its columns explicitly rather than `b.*`. Since that column is
+backfilled + NOT NULL, every client-side read fell back to the old `id.slice(0,8)` truncation on
+every booking — the same appointment read `CRV-4B2X9K7M` to the provider and `34E82C04` to the
+client. Purely additive (a new SELECT column + matching GRANT), so it could not have reverted
+concurrent work in either order.
+
+Frontmost live migration before this was `20260914025249`
+(`replace_provider_services_writes_service_category`), confirmed via
+`SELECT max(version) FROM supabase_migrations.schema_migrations` before applying; nothing between
+`20260827161000` and the frontier redefines `client_bookings` (checked via
+`grep -l 'client_bookings' supabase/migrations/*.sql`). Renamed from its authored `20260914143000`
+to the version `apply_migration` actually recorded, per the standing gotcha.
+
+### Applied 2026-09-14 (service skin-tone suitability)
+
+`20260913234413_service_skin_tone_suitability.sql` adds nullable
+`services.skin_tones_suitable` with the Fair/Light/Medium/Tan/Deep/Rich constraint.
+Patches the current `replace_provider_services` definition, preserving existing
+ownership checks and execute grants. Older payloads that omit the field retain
+saved selections; explicit empty arrays clear them. No existing suitability was
+inferred or backfilled. The local CLI filename was renamed to the recorded version.
+
+Verified live with a rolled-back transaction: RPC save/readback, preservation
+through an older payload, clearing, invalid-value rejection and foreign-owner
+rejection all passed. Column, constraint and unchanged authenticated/service-role
+execute grants were checked separately. Frontmost live migration before this was
+`20260908105737` (the multi-service column is already present live).
+
+### Pending 2026-09-09 (restored multi-service provider offerings)
+
+The existing multi-service offering work was recovered from
+`feat/multi-select-service-type-chips`. Its two migrations remain **unapplied**
+and must be applied together, in this order:
+
+1. `20260908090000_provider_multiple_service_types`
+2. `20260908090100_service_type_cooldown_covers_the_whole_set`
+
+The first adds `providers.service_categories` and
+`services.service_category`. The second closes the service-type cooldown and
+category-cascade gaps introduced by plural types. The original first migration
+was authored as `20260906193000` but was deliberately renumbered above the
+already-applied `20260907000413` frontier; do not restore the old filename.
+
+### Applied 2026-09-07 (cart reservations remain private)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260907153528 | `own_cart_holds_never_block_their_owner` | The caller's own cart holds are excluded from their busy spans; a retry clears only that caller's stranded cart holds, guarded against transactions/reviews. |
+| 20260907153537 | `private_cart_holds_never_become_bookings` | `expire_waitlist_holds()` now selects waitlist holds only; `cancel_checkout()` deletes owner-scoped cart holds; 3 historical “Reserving…” rows and 6 linked notifications were safely removed. Post-apply counts: 0 phantom rows, 0 linked notifications. |
+
+`finalize-payment-intent` version 10 was deployed with JWT verification on and
+routes Stripe cancellation through the authenticated `cancel_checkout()` RPC;
+it no longer promotes cart holds with a service-role booking update.
+
+The app-side half of that fix (CartScreen's `abandonOutstandingCheckout`) is
+already in the working tree and does not depend on this migration; the
+migration covers the exits the app cannot observe (crash, force-quit, dev
+reload, dead network).
+
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
 | Recorded version | Name | Verified live |
