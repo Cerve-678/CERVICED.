@@ -52,7 +52,7 @@ import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { BOTTOM_SAFE_GAP, useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // Keep real payments opt-in until Stripe is explicitly switched on for a
 // release. Expo Go can never use this native module.
@@ -304,6 +304,10 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, palette: P } = useTheme();
+    // Live inset, not the module-load snapshot: this sheet is inside a
+    // <Modal>, where the snapshot can be 0 and <SafeAreaView> is inert. See
+    // useSystemBottomInset's comment.
+    const bottomInset = useSystemBottomInset();
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
       'card' | 'paypal' | 'apple' | 'google'
     >('card');
@@ -429,7 +433,7 @@ const handlePayment = useCallback(async () => {
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            <SafeAreaView style={styles.paymentModalContent}>
+            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
               {/* Payment Header */}
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
@@ -579,7 +583,7 @@ const handlePayment = useCallback(async () => {
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </SafeAreaView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -616,6 +620,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, isDarkMode, palette: P } = useTheme();
+    // See the mock PaymentModal above — same reason, same fix.
+    const bottomInset = useSystemBottomInset();
     const { initPaymentSheet, presentPaymentSheet } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
     const processingRef = useRef(false);
@@ -736,7 +742,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            <SafeAreaView style={styles.paymentModalContent}>
+            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
@@ -795,7 +801,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </SafeAreaView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -5170,8 +5176,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
+    // No paddingBottom here on purpose. Unlike the small pickers (which float
+    // clear of the edge, per 0ad7b1c), this sheet is near-fullscreen and has
+    // top-only corner radii, so a gap underneath just reads as a flat cut-off
+    // edge with backdrop showing beneath it. It seats on the bottom edge and
+    // carries the home-indicator inset inside instead, below the Pay button.
   },
   paymentModal: {
     flex: 1,
