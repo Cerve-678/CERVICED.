@@ -979,16 +979,18 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.nodePriceCol}>
+              <View style={styles.nodeService}>
                 <Text style={[styles.nodeServiceMeta, { color: P.sub }, !isScheduled && styles.nodeServiceMetaWarn]} numberOfLines={1}>
                   {isScheduled
                     ? `${duration} · ${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
                     : `${duration} · Unscheduled`}
                 </Text>
-                <Text style={[styles.nodePrice, { color: P.accentText }]}>£{effectivePrice.toFixed(2)}</Text>
-                {bookingInfo.isDepositOnly && (
-                  <Text style={[styles.nodePriceNote, { color: P.sub }]}>deposit</Text>
-                )}
+                <View style={styles.nodePriceCol}>
+                  <Text style={[styles.nodePrice, { color: P.accentText }]}>£{effectivePrice.toFixed(2)}</Text>
+                  {bookingInfo.isDepositOnly && (
+                    <Text style={[styles.nodePriceNote, { color: P.sub }]}>deposit</Text>
+                  )}
+                </View>
               </View>
 
               {issue && (
@@ -4640,10 +4642,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 4,
   },
+  // Only the service name shows on the card's left — this is the one
+  // thing the card is meant to read as at a glance, so it runs a size up
+  // from the app's usual serviceText.
   nodeServiceName: {
     flex: 1,
-    fontSize: fonts.serviceText - 1,
+    fontSize: fonts.serviceText + 2,
     fontFamily: 'BakbakOne-Regular',
   },
   nodePencil: {
@@ -4654,11 +4660,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Meta (duration/date) sits above the price, both right-aligned — no left
-  // column here at all, so the name up in nodeTop is the only thing shown
-  // on the card's left.
+  // Date/time back in its original row, alongside the price.
+  nodeService: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+  },
   nodeServiceMeta: {
-    fontSize: fonts.body.xsmall,
+    flex: 1,
+    fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
@@ -4668,16 +4679,14 @@ const styles = StyleSheet.create({
   },
   nodePriceCol: {
     alignItems: 'flex-end',
-    marginTop: 4,
   },
   nodePrice: {
-    fontSize: fonts.body.small,
+    fontSize: fonts.body.medium,
     fontFamily: 'BakbakOne-Regular',
     fontWeight: '700',
-    marginTop: 3,
   },
   nodePriceNote: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
@@ -4696,18 +4705,18 @@ const styles = StyleSheet.create({
   },
   nodeBannerText: {
     flex: 1,
-    fontSize: 10.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#F44336',
   },
   nodeBannerFix: {
-    fontSize: 10,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#F44336',
     textDecorationLine: 'underline',
   },
   nodeNote: {
-    fontSize: fonts.body.xsmall,
+    fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
     marginTop: 6,
   },
