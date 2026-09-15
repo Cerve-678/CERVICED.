@@ -3843,8 +3843,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           />
         )}
 
+        {/* Driven by this provider's hero, not theme.statusBar: their profile
+            theme never follows the viewer's dark mode, so reading the viewer's
+            setting put dark, invisible icons over a black hero in light mode.
+            Only the icons -- the app-wide safe-area strip stays as it is,
+            since this screen owns its own transparent navigation header. */}
         <StatusBar
-          barStyle={theme.statusBar}
+          barStyle={heroIsDark ? "light-content" : "dark-content"}
           translucent={true}
           backgroundColor="transparent"
         />
