@@ -1,10 +1,17 @@
 /**
  * A provider wearing their client hat is a normal client everywhere else in
- * the app, which is exactly why every discovery query happily recommended
- * them their own business — a result they can neither book nor usefully
- * browse. These pin the exclusion, and the two ways it is easy to get wrong:
- * dropping only the canonical provider row when an account owns duplicates,
- * and taking the whole feed down when the ownership lookup itself fails.
+ * the app, which is exactly why the passive recommendation surfaces (Home's
+ * New/Top Rated/Trending rails, Explore's discovery feed, offers) happily
+ * recommended them their own business — a result they can neither book nor
+ * usefully browse. These pin the exclusion, and the two ways it is easy to
+ * get wrong: dropping only the canonical provider row when an account owns
+ * duplicates, and taking the whole feed down when the ownership lookup
+ * itself fails.
+ *
+ * The exclusion is deliberately NOT applied to a plain provider list
+ * (getProviders) or to an explicit, typed search (searchProviders,
+ * searchPortfolio) — those aren't recommendations, so a provider's own
+ * business is allowed to appear there. See the second describe block below.
  */
 
 const mockState: {
@@ -57,7 +64,13 @@ jest.mock('../lib/supabase', () => {
   };
 });
 
-import { getProviders, getPortfolioItems } from '../services/databaseService';
+import {
+  getProviders,
+  getNewProviders,
+  getPortfolioItems,
+  searchProviders,
+  searchPortfolio,
+} from '../services/databaseService';
 
 /** The `.not(column, "in", …)` filter the query under test was given. */
 const exclusion = (): { column: string; value: string } | null => {
@@ -82,10 +95,10 @@ describe('own profile is never recommended back to its owner', () => {
     mockState.userId = `user-${Math.random().toString(36).slice(2)}`;
   });
 
-  it('excludes the signed-in provider from the provider list', async () => {
+  it('excludes the signed-in provider from a recommendation rail', async () => {
     mockState.ownRows = [{ id: 'mine-1' }];
 
-    await getProviders();
+    await getNewProviders();
 
     expect(exclusion()).toEqual({ column: 'id', value: '(mine-1)' });
   });
@@ -96,13 +109,13 @@ describe('own profile is never recommended back to its owner', () => {
     // canonical row would leave the duplicate sitting in the feed.
     mockState.ownRows = [{ id: 'mine-1' }, { id: 'mine-dupe' }];
 
-    await getProviders();
+    await getNewProviders();
 
     expect(exclusion()?.value).toBe('(mine-1,mine-dupe)');
   });
 
   it('excludes nothing real for a client with no provider profile', async () => {
-    await getProviders();
+    await getNewProviders();
 
     expect(exclusion()?.value).toBe(NO_SUCH_PROVIDER);
   });
@@ -110,7 +123,7 @@ describe('own profile is never recommended back to its owner', () => {
   it('excludes nothing real when signed out', async () => {
     mockState.userId = null;
 
-    await getProviders();
+    await getNewProviders();
 
     expect(exclusion()?.value).toBe(NO_SUCH_PROVIDER);
   });
@@ -131,7 +144,34 @@ describe('own profile is never recommended back to its owner', () => {
     // seeing your own card once.
     mockState.ownError = { message: 'network' };
 
-    await expect(getProviders()).resolves.toEqual([]);
+    await expect(getNewProviders()).resolves.toEqual([]);
     expect(exclusion()?.value).toBe(NO_SUCH_PROVIDER);
+  });
+});
+
+describe('own profile is allowed to show up outside recommendations', () => {
+  beforeEach(() => {
+    mockState.ownRows = [{ id: 'mine-1' }];
+    mockState.ownError = null;
+    mockState.filters = [];
+    mockState.userId = `user-${Math.random().toString(36).slice(2)}`;
+  });
+
+  it('does not exclude the signed-in provider from the plain provider list', async () => {
+    await getProviders();
+
+    expect(exclusion()).toBeNull();
+  });
+
+  it('does not exclude the signed-in provider from an explicit provider search', async () => {
+    await searchProviders('nails');
+
+    expect(exclusion()).toBeNull();
+  });
+
+  it('does not exclude the signed-in provider from an explicit portfolio search', async () => {
+    await searchPortfolio('nails');
+
+    expect(exclusion()).toBeNull();
   });
 });
