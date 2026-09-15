@@ -14,6 +14,7 @@ import {
   RefreshControl,
   Keyboard,
   TouchableWithoutFeedback,
+  Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -918,36 +919,47 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           <Swipeable
             ref={swipeRef}
             overshootRight={false}
-            renderRightActions={() => (
-              <TouchableOpacity
-                style={[styles.swipeDeleteAction, isLoading && styles.disabledButton]}
-                onPress={() => {
-                  swipeRef.current?.close();
-                  handleRemove();
-                }}
-                disabled={isLoading}
-                activeOpacity={0.8}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="trash" size={20} color="#fff" />
-                    <Text style={styles.swipeDeleteText}>Remove</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
+            friction={2}
+            rightThreshold={40}
+            renderRightActions={(progress: Animated.AnimatedInterpolation<number>) => {
+              const scale = progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.6, 1],
+                extrapolate: 'clamp',
+              });
+              return (
+                <Animated.View style={[styles.swipeDeleteAction, { transform: [{ scale }] }]}>
+                  <TouchableOpacity
+                    style={[styles.swipeDeleteButton, isLoading && styles.disabledButton]}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      handleRemove();
+                    }}
+                    disabled={isLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Ionicons name="trash" size={20} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            }}
           >
             {/* "Node card" look: provider identity is already owned by the
                 wrapping CartProviderSection header, so this card's own top
-                row is just the service name plus its edit/remove affordances
-                — not a repeated provider chip. Colours read from `P` (the
-                hat-aware palette), never `theme` — see DESIGN_SYSTEM.md's
-                AppDialog note for the same class of bug. */}
+                row is just the service name plus its edit affordance — not
+                a repeated provider chip. A surface tint (not the section's
+                own card colour) is what separates this card from the
+                section around it — a hairline border alone wasn't visible
+                enough. Colours read from `P` (the hat-aware palette), never
+                `theme` — see DESIGN_SYSTEM.md's AppDialog note for the same
+                class of bug. */}
             <View style={[
               styles.nodeCard,
-              { backgroundColor: P.card, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
+              { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : 0 },
             ]}>
               <View style={styles.nodeTop}>
                 <Text style={[styles.nodeServiceName, { color: P.text }]} numberOfLines={2}>
@@ -955,19 +967,6 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                   {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
                   {bookingInfo.isDepositOnly && ' (Deposit)'}
                 </Text>
-                {/* Non-swipe fallback for revealing Remove — required for
-                    accessibility, since swipe-only would strand anyone who
-                    can't perform the gesture. */}
-                <TouchableOpacity
-                  style={styles.nodeKebab}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    swipeRef.current?.openRight();
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="ellipsis-horizontal" size={14} color={P.sub} />
-                </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.nodePencil, { borderColor: P.border }]}
                   onPress={() => {
@@ -980,18 +979,16 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.nodeService}>
+              <View style={styles.nodePriceCol}>
                 <Text style={[styles.nodeServiceMeta, { color: P.sub }, !isScheduled && styles.nodeServiceMetaWarn]} numberOfLines={1}>
                   {isScheduled
                     ? `${duration} · ${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
                     : `${duration} · Unscheduled`}
                 </Text>
-                <View style={styles.nodePriceCol}>
-                  <Text style={[styles.nodePrice, { color: P.accentText }]}>£{effectivePrice.toFixed(2)}</Text>
-                  {bookingInfo.isDepositOnly && (
-                    <Text style={[styles.nodePriceNote, { color: P.sub }]}>deposit</Text>
-                  )}
-                </View>
+                <Text style={[styles.nodePrice, { color: P.accentText }]}>£{effectivePrice.toFixed(2)}</Text>
+                {bookingInfo.isDepositOnly && (
+                  <Text style={[styles.nodePriceNote, { color: P.sub }]}>deposit</Text>
+                )}
               </View>
 
               {issue && (
@@ -4522,7 +4519,7 @@ const styles = StyleSheet.create({
   providerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   // Collapse/expand control at the foot of each provider section.
   collapseHandle: {
@@ -4538,9 +4535,9 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
   },
   providerLogo: {
-    width: dimensions.providerLogo.size + 10,
-    height: dimensions.providerLogo.size + 10,
-    borderRadius: (dimensions.providerLogo.size + 10) / 2,
+    width: dimensions.providerLogo.size,
+    height: dimensions.providerLogo.size,
+    borderRadius: dimensions.providerLogo.size / 2,
     borderWidth: dimensions.providerLogo.borderWidth,
   },
   providerLogoContainer: {
@@ -4564,7 +4561,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   providerName: {
-    fontSize: fonts.providerName + 3,
+    fontSize: fonts.providerName,
     fontFamily: 'BakbakOne-Regular',
     color: '#000',
     marginBottom: spacing.xs,
@@ -4607,63 +4604,60 @@ const styles = StyleSheet.create({
   // three-band layout above — serviceCard/serviceCardShadow/conflictBanner/
   // itemEditButton/dateTextWarning stay shared with it, untouched).
   swipeRowWrap: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderRadius: dimensions.card.smallBorderRadius,
     overflow: 'hidden',
   },
+  // Native-style circular delete button (like iOS Mail's swipe action)
+  // rather than a full-height red rectangle — renderRightActions scales it
+  // in from progress, so it doesn't just snap into place.
   swipeDeleteAction: {
-    width: 84,
-    height: '100%',
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swipeDeleteButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#F44336',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-  },
-  swipeDeleteText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
   },
   // "Node card" look for ServiceCard (from the Concept B mockup, minus its
   // rail/time-column and provider-identity row — provider identity and
   // ordering both stay owned by CartProviderSection, unchanged; only the
-  // card's own internals were restyled). GroupedServiceCard's node-* reuse
-  // below shares these same styles for visual consistency between the two
-  // card types.
+  // card's own internals were restyled). A surface tint (not the section's
+  // own card colour) separates this card from CartProviderSection around it
+  // — a hairline border alone read as invisible. GroupedServiceCard's
+  // node-* reuse below shares these same styles for visual consistency
+  // between the two card types.
   nodeCard: {
-    borderRadius: 14,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: spacing.sm,
   },
   nodeTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
   },
   nodeServiceName: {
     flex: 1,
-    fontSize: fonts.serviceText,
+    fontSize: fonts.serviceText - 1,
     fontFamily: 'BakbakOne-Regular',
   },
-  nodeKebab: {
-    padding: 2,
-  },
   nodePencil: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
+    width: 20,
+    height: 20,
+    borderRadius: 6,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nodeService: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-  },
+  // Meta (duration/date) sits above the price, both right-aligned — no left
+  // column here at all, so the name up in nodeTop is the only thing shown
+  // on the card's left.
   nodeServiceMeta: {
-    flex: 1,
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
@@ -4674,11 +4668,13 @@ const styles = StyleSheet.create({
   },
   nodePriceCol: {
     alignItems: 'flex-end',
+    marginTop: 4,
   },
   nodePrice: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
     fontWeight: '700',
+    marginTop: 3,
   },
   nodePriceNote: {
     fontSize: 9,
@@ -4847,8 +4843,8 @@ const styles = StyleSheet.create({
   // tag+span header instead of a filled badge, chip rows instead of
   // hairline-divided ones, and a single due-now footer line.
   groupNodeCard: {
-    borderRadius: 14,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: spacing.sm,
   },
   groupHead: {
     flexDirection: 'row',
