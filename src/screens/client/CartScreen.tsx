@@ -19,6 +19,7 @@ import { Image } from 'expo-image';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
 import type { EmergencyRequest } from '../../contexts/CartContext';
@@ -845,6 +846,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const { palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
+    const swipeRef = useRef<Swipeable>(null);
 
     const totalPrice = useMemo(() => getCartItemFullPrice(item), [item]);
 
@@ -895,6 +897,16 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const showInstanceNumber =
       allCartItems.filter((i: CartItem) => i.serviceName === item.serviceName).length > 1;
 
+    // Shopping-cart-style "swatch" — ServiceCard has no per-service image or
+    // category field to show a real thumbnail, so the swatch is initials
+    // derived from the actual service name rather than a fabricated icon set.
+    const nameWords = serviceName.trim().split(/\s+/).filter(Boolean);
+    const swatchInitials = nameWords.length === 0
+      ? '?'
+      : nameWords.length === 1
+        ? nameWords[0]!.slice(0, 2).toUpperCase()
+        : (nameWords[0]![0]! + nameWords[1]![0]!).toUpperCase();
+
     return (
       <ErrorBoundary
         fallback={(error, retry) => (
@@ -912,114 +924,141 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           </View>
         )}
       >
-        <View style={[
-          styles.serviceCard,
-          styles.serviceCardShadow,
-          { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
-        ]}>
-          {issue && (
-            <View style={styles.conflictBanner}>
-              <Ionicons name="alert-circle" size={14} color="#F44336" />
-              <Text style={styles.conflictBannerText}>{issue}</Text>
-            </View>
-          )}
-          {/* An out-of-hours time looks exactly like an ordinary one once it
-              reaches the cart, and it isn't: the client is about to pay for
-              something the provider can still decline. Deliberately amber
-              rather than the by-request red used in the picker — in THIS
-              screen red already means "this item has a conflict, fix it", and
-              a request is not a fault. */}
-          {bookingInfo?.emergencyRequest && (
-            <View style={styles.requestBanner}>
-              <Ionicons name="time-outline" size={14} color="#FF9500" />
-              <Text style={styles.requestBannerText}>
-                Outside their usual hours — they have to accept this before it's booked.
-              </Text>
-            </View>
-          )}
-          {/* Header binds the service to its price on one line, with the
-              duration tucked directly under the name. Colours read from `P`
-              (the hat-aware palette), never `theme`: this card only ever
-              renders on the client cart, and `theme` is scoped to whichever
-              hat last set it, not necessarily the client palette — the same
-              class of bug DESIGN_SYSTEM.md flags for AppDialog. */}
-          <View style={styles.serviceHeader}>
-            <View style={styles.serviceInfo}>
-              <Text style={[styles.serviceName, { color: P.text }]} numberOfLines={2}>
-                {serviceName}
-                {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
-                {bookingInfo.isDepositOnly && ' (Deposit)'}
-              </Text>
-              <Text style={[styles.priceSummaryText, { color: P.sub }]} numberOfLines={1}>
-                {duration}
-              </Text>
-            </View>
-            <Text style={[styles.priceSummaryValue, { color: P.accentText }]}>
-              £{effectivePrice.toFixed(2)}
-            </Text>
-            <TouchableOpacity
-              style={[styles.removeButton, { backgroundColor: P.accentDim, borderColor: P.border }, isLoading && styles.disabledButton]}
-              onPress={handleRemove}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color={P.text} />
-              ) : (
-                <Text style={[styles.removeText, { color: P.text }]}>×</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+        <View style={styles.swipeRowWrap}>
+          <Swipeable
+            ref={swipeRef}
+            overshootRight={false}
+            renderRightActions={() => (
+              <TouchableOpacity
+                style={[styles.swipeDeleteAction, isLoading && styles.disabledButton]}
+                onPress={() => {
+                  swipeRef.current?.close();
+                  handleRemove();
+                }}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="trash" size={20} color="#fff" />
+                    <Text style={styles.swipeDeleteText}>Remove</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          >
+            {/* Colours read from `P` (the hat-aware palette), never `theme`:
+                this card only ever renders on the client cart, and `theme`
+                is scoped to whichever hat last set it, not necessarily the
+                client palette — the same class of bug DESIGN_SYSTEM.md
+                flags for AppDialog. */}
+            <View style={[
+              styles.swipeContent,
+              { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
+            ]}>
+              <View style={[styles.swipeSwatch, { backgroundColor: P.accentDim }]}>
+                <Text style={[styles.swipeSwatchText, { color: P.accentText }]}>{swatchInitials}</Text>
+              </View>
 
-          {/* Secondary detail — add-ons, deposit note, notes — sits tight
-              together as one block instead of each line carrying its own
-              margin. Cart is for review + payment, not a full pricing
-              ledger, so add-ons stay on one compact labelled line; detailed
-              per-add-on pricing is in BookingSheet via Edit. */}
-          {(addOnsSummary || bookingInfo.isDepositOnly || !!bookingInfo.notes) && (
-            <View style={styles.serviceMetaBlock}>
-              {addOnsSummary && (
-                <Text style={[styles.priceSummaryAddOns, { color: P.text }]} numberOfLines={2}>
-                  + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
-                  {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
+              <View style={styles.swipeBody}>
+                <View style={styles.swipeTopRow}>
+                  <Text style={[styles.swipeName, { color: P.text }]} numberOfLines={2}>
+                    {serviceName}
+                    {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
+                    {bookingInfo.isDepositOnly && ' (Deposit)'}
+                  </Text>
+                  {/* Non-swipe fallback for revealing Remove — required for
+                      accessibility, since swipe-only would strand anyone who
+                      can't perform the gesture. */}
+                  <TouchableOpacity
+                    style={styles.swipeKebab}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      swipeRef.current?.openRight();
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={15} color={P.sub} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.swipeMetaLine, { color: P.sub }]} numberOfLines={1}>
+                  {duration}
                 </Text>
-              )}
-              {bookingInfo.isDepositOnly && (
-                <Text style={[styles.depositNote, { color: P.sub }]}>
-                  Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
-                </Text>
-              )}
-              {!!bookingInfo.notes && (
-                <Text style={[styles.notesPreview, { color: P.sub }]} numberOfLines={2}>
-                  Notes: {bookingInfo.notes}
-                </Text>
-              )}
-            </View>
-          )}
 
-          {/* Footer: date/time + Edit, separated by a rule so the card ends
-              on a deliberate band rather than trailing off. A standalone
-              service edits directly, no chooser in between. */}
-          <View style={[styles.dateRow, { borderTopColor: P.border }]}>
-            <Text
-              style={[styles.dateText, { color: P.sub }, !isScheduled && styles.dateTextWarning]}
-              numberOfLines={2}
-            >
-              {isScheduled
-                ? `${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
-                : 'Unscheduled'}
-            </Text>
-            <TouchableOpacity
-              style={[styles.itemEditButton, { borderColor: P.accent }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                onEdit(item);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="pencil-outline" size={12} color={P.accentText} />
-              <Text style={[styles.itemEditButtonText, { color: P.accentText }]}>Edit</Text>
-            </TouchableOpacity>
-          </View>
+                {issue && (
+                  <View style={styles.swipeBanner}>
+                    <Ionicons name="alert-circle" size={11} color="#F44336" />
+                    <Text style={[styles.swipeBannerText, { color: '#F44336' }]}>{issue}</Text>
+                  </View>
+                )}
+                {/* An out-of-hours time looks exactly like an ordinary one
+                    once it reaches the cart, and it isn't: the client is
+                    about to pay for something the provider can still
+                    decline. Deliberately amber rather than the by-request
+                    red used above — red already means "this item has a
+                    conflict, fix it", and a request is not a fault. */}
+                {bookingInfo?.emergencyRequest && (
+                  <View style={styles.swipeBanner}>
+                    <Ionicons name="time-outline" size={11} color="#FF9500" />
+                    <Text style={[styles.swipeBannerText, { color: '#FF9500' }]}>
+                      Outside their usual hours — they have to accept this before it's booked.
+                    </Text>
+                  </View>
+                )}
+
+                {addOnsSummary && (
+                  <Text style={[styles.swipeNote, { color: P.text, fontWeight: '700' }]} numberOfLines={2}>
+                    + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
+                    {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
+                  </Text>
+                )}
+                {bookingInfo.isDepositOnly && (
+                  <Text style={[styles.swipeNote, { color: P.sub }]}>
+                    Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
+                  </Text>
+                )}
+                {!!bookingInfo.notes && (
+                  <Text style={[styles.swipeNote, { color: P.sub }]} numberOfLines={2}>
+                    Notes: {bookingInfo.notes}
+                  </Text>
+                )}
+
+                {/* Price band — its own full-width strip at the card's foot.
+                    Tapping the date/time here is the Edit entry point, so
+                    price and edit share one dedicated strip. */}
+                <View style={[styles.swipePriceBand, { borderTopColor: P.border }]}>
+                  <View style={styles.swipePriceLeft}>
+                    <Text style={[styles.swipePrice, { color: P.accentText }]}>
+                      £{effectivePrice.toFixed(2)}
+                    </Text>
+                    {bookingInfo.isDepositOnly && (
+                      <Text style={[styles.swipePriceNote, { color: P.sub }]}>deposit</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.swipeWhenTouchable}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      onEdit(item);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.swipeWhen, { color: P.sub }, !isScheduled && styles.swipeWhenWarn]}
+                      numberOfLines={1}
+                    >
+                      {isScheduled
+                        ? `${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
+                        : 'Unscheduled'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={11} color={isScheduled ? P.sub : '#D32F2F'} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Swipeable>
         </View>
         <DialogHost />
       </ErrorBoundary>
@@ -4738,6 +4777,125 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
     fontWeight: 'bold',
   },
+
+  // ServiceCard's shopping-cart-style row (GroupedServiceCard keeps the
+  // three-band layout above — serviceCard/serviceCardShadow/conflictBanner/
+  // itemEditButton/dateTextWarning stay shared with it, untouched).
+  swipeRowWrap: {
+    marginBottom: spacing.md,
+    borderRadius: dimensions.card.smallBorderRadius,
+    overflow: 'hidden',
+  },
+  swipeDeleteAction: {
+    width: 84,
+    height: '100%',
+    backgroundColor: '#F44336',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  swipeDeleteText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  swipeContent: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: dimensions.card.smallBorderRadius,
+  },
+  swipeSwatch: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  swipeSwatchText: {
+    fontSize: 20,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  swipeBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  swipeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+  },
+  swipeName: {
+    flex: 1,
+    fontSize: fonts.serviceText,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  swipeKebab: {
+    padding: 2,
+    marginTop: -2,
+  },
+  swipeMetaLine: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  swipeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  swipeBannerText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  swipeNote: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 3,
+  },
+  swipePriceBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  swipePriceLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+  },
+  swipePrice: {
+    fontSize: fonts.body.small,
+    fontFamily: 'BakbakOne-Regular',
+    fontWeight: '700',
+  },
+  swipePriceNote: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  swipeWhenTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  swipeWhen: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+  },
+  swipeWhenWarn: {
+    color: '#D32F2F',
+    fontWeight: 'bold',
+  },
+
   // "Which service?" chooser, opened from a provider header with >1 service.
   pickerOverlay: {
     flex: 1,
