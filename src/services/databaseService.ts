@@ -592,9 +592,9 @@ export async function getProviders(
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("is_active", true)
     .eq("has_gone_live", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
+    // Unlike the New/Top Rated/Trending rails and Explore's discovery feed,
+    // this is a plain browse/list, not a recommendation — a provider's own
+    // business is allowed to appear here (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
@@ -913,9 +913,9 @@ export async function searchProviders(
     .in("id", allIds)
     .eq("is_active", true)
     .eq("has_gone_live", true)
-    // A provider searching as a client should not turn up their own
-    // business — they can neither book it nor browse it usefully here.
-    .not("id", "in", await ownProviderIdExclusion())
+    // An explicit, typed search is not a recommendation — a provider's own
+    // business is allowed to turn up when it actually matches the query
+    // (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
@@ -1456,13 +1456,9 @@ export async function searchPortfolio(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    // Never show a provider their own work back as discovery (see
-    // ownProviderIdExclusion).
-    .not("provider_id", "in", await ownProviderIdExclusion())
-    // Same exclusion as getPortfolioItems — this is the text-search half of
-    // the same discovery/inspiration surface. A second .or() is a separate
-    // top-level condition ANDed with the caption/tags one below, not a
-    // replacement for it.
+    // Unlike getPortfolioItems (the passive discovery/inspiration feed),
+    // this is an explicit text search — a provider's own work is allowed
+    // to turn up here (see ownProviderIdExclusion).
     .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
     .or(`caption.ilike.%${query}%,tags.cs.{${query}}`)
     .order("created_at", { ascending: false })
