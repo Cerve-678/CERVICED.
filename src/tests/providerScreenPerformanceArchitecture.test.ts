@@ -57,6 +57,27 @@ describe('provider screen performance contracts', () => {
     expect(source).toContain('deletePortfolioItem(');
   });
 
+  it("writes a service's visibility with its other fields, and never on create", () => {
+    const sheet = fs.readFileSync(
+      path.join(__dirname, '..', 'features', 'providers', 'ServiceEditorSheet.tsx'),
+      'utf8',
+    );
+    const db = fs.readFileSync(
+      path.join(__dirname, '..', 'services', 'databaseService.ts'),
+      'utf8',
+    );
+
+    // The editor only offers visibility when editing. A new service always
+    // starts on the menu, so its draft must not carry an isActive at all.
+    expect(sheet).toContain('...(isNew ? {} : { isActive: value.isActive })');
+
+    // One UPDATE, not a second setMyServiceActive call after it: otherwise a
+    // failed edit could still flip whether clients can see the service.
+    expect(db).toContain(
+      '...(draft.isActive === undefined ? {} : { is_active: draft.isActive })',
+    );
+  });
+
   it('keeps Provider My Services on one go-live source of truth', () => {
     const source = readProviderScreen('ProviderMyProfileScreen');
 
