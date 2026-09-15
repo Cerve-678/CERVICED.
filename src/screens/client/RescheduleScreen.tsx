@@ -1,6 +1,7 @@
 // RescheduleScreen.tsx
 // Reschedule flow extracted from BookingsScreen. Receives { bookingId } route param.
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Platform, Modal,
@@ -13,7 +14,6 @@ import { useFont } from '../../contexts/FontContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAppDialog } from '../../components/AppDialog';
-import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useBooking, AvailableDate } from '../../contexts/BookingContext';
 import {
   getProviderReschedulePolicyById,
@@ -27,7 +27,7 @@ import {
   RESCHEDULE_MAX_DATES,
 } from '../../utils/rescheduleWindow';
 import { logger, reportError } from '../../utils/logger';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -103,6 +103,7 @@ async function fetchRealRescheduleDates(
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function RescheduleScreen({ navigation, route }: Props) {
+  const bottomInset = useSystemBottomInset();
   useFont();
   const { bookingId } = route.params;
   const { palette: C, isDarkMode } = useTheme();
@@ -135,6 +136,18 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     });
   }, [navigation, C]);
 
+  // Same mechanism as InfoRegScreen/ProviderProfileScreen: IslandPillTabBar
+  // reads tabBarStyle off the focused tab's route options. Cleanup restores
+  // the pill on blur so this screen's hidden state never leaks onto the next.
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (!isFocused) return;
+    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
+    return () => {
+      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
+    };
+  }, [isFocused, navigation]);
+
   // A group reschedule proposal (see supabase/fix_group_booking_reschedule.sql)
   // stamps EVERY sibling's request row with the same groupRescheduleBatchId —
   // its presence, not just booking.groupBookingId, is what means "this
@@ -148,6 +161,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   );
 
   const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
+  // Distinct from reschedulePolicy being null, which is also the "still
+  // loading" value. Without it the notice check below reads 0 hours while the
+  // fetch is in flight, renders the whole picker, then replaces it with the
+  // "Too Close to Reschedule" block once the real number arrives.
+  const [policyLoaded, setPolicyLoaded] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -186,12 +204,21 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     if (!booking) return;
     let active = true;
     setReschedulePolicy(null);
+    setPolicyLoaded(false);
     (booking.providerId
       ? getProviderReschedulePolicyById(booking.providerId)
       : getProviderReschedulePolicyByDisplayName(booking.providerName)
     ).then(policy => {
-      if (active) setReschedulePolicy(policy);
-    }).catch(() => {});
+      if (active) {
+        setReschedulePolicy(policy);
+        setPolicyLoaded(true);
+      }
+    }).catch(err => {
+      logger.error('Failed to load reschedule policy', err);
+      // Unblock the picker rather than spinning forever: the server still
+      // enforces the notice window and surfaces it as P0001 on submit.
+      if (active) setPolicyLoaded(true);
+    });
 
     // If the provider has already responded, use the specific slots they
     // offered — those are the only valid choices at that point, and no live
@@ -541,6 +568,18 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     );
   }
 
+  // Only the client-request path is notice-gated, so a provider-offered set of
+  // slots never has to wait on this.
+  if (!policyLoaded && !hasProviderResponse) {
+    return (
+      <ThemedBackground>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} edges={['bottom', 'left', 'right']}>
+          <ActivityIndicator color={C.accent} />
+        </SafeAreaView>
+      </ThemedBackground>
+    );
+  }
+
   if (isPastNoticeWindow) {
     return (
       <ThemedBackground>
@@ -627,9 +666,10 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   return (
     <ThemedBackground>
       {/* No bottom edge here — the footer below owns its own bottom
-          clearance via FLOATING_TAB_BAR_CLEARANCE (this screen sits under
-          IslandPillTabBar's floating pill), so a safe-area bottom inset here
-          on top of that would stack and make the footer needlessly tall. */}
+          clearance via useSystemBottomInset (this screen hides
+          IslandPillTabBar while focused, so it sits directly on the device
+          edge), so a safe-area bottom inset here on top of that would stack
+          and make the footer needlessly tall. */}
       <SafeAreaView style={{ flex: 1 }} edges={['left', 'right']}>
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
           {/* Header info */}
@@ -777,7 +817,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible onRequestClose={() => setCustomPickerStep(null)}>
               <View style={st.pickerModalWrap}>
                 <TouchableOpacity style={st.pickerDismiss} activeOpacity={1} onPress={() => setCustomPickerStep(null)} />
-                <View style={[st.pickerSheet, { backgroundColor: C.card }]}>
+                <View style={[st.pickerSheet, { backgroundColor: C.card, paddingBottom: Math.max(20, bottomInset + 16) }]}>
                   <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
                     <Text style={[st.pickerHeaderLabel, { color: C.text }]}>
                       {customPickerStep === 'date' ? 'Select Date' : 'Select Time'}
@@ -903,7 +943,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         </ScrollView>
 
         {/* Submit button */}
-        <View style={[st.footer, { borderTopColor: C.border, backgroundColor: C.bg }]}>
+        <View style={[st.footer, { borderTopColor: C.border, backgroundColor: C.bg, paddingBottom: Math.max(12, bottomInset) }]}>
           <TouchableOpacity
             style={[st.primaryBtn, { backgroundColor: selectedDate && selectedTime ? C.accent : C.border }]}
             disabled={!selectedDate || !selectedTime || isSubmitting || isDeclining}
@@ -950,7 +990,7 @@ const st = StyleSheet.create({
   customTimeBtnText: { fontSize: 10, fontWeight: '700' },
   customTimeConfirm: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 10 },
   customTimeConfirmText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -966,7 +1006,7 @@ const st = StyleSheet.create({
   // nested in a tab's stack) — it used to be a flat 28/16, which is roughly
   // home-indicator clearance only, so the pill sat right on top of the
   // Confirm/Request button.
-  footer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: FLOATING_TAB_BAR_CLEARANCE, borderTopWidth: StyleSheet.hairlineWidth },
+  footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   primaryBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   primaryBtnText: { fontSize: 16, fontWeight: '700' },
 });

@@ -64,6 +64,8 @@ import {
   money,
   providerFromDb,
   resolveProviderDbId,
+  sortByProximity,
+  NEAR_ME_RE,
 } from "./shared";
 
 /** Human labels for NotificationPreferences' keys. */
@@ -826,11 +828,35 @@ const findProviders: Capability = {
   // the user wants a provider list or examples of work, and as a generic
   // catch-all here it swallowed "show me some nail ideas" (see
   // discover.inspiration). Phrases here all imply wanting a PERSON.
+  // Grouped by the shape of the ask rather than alphabetically, because the
+  // point of the list is coverage of how a request opens — a phrase missing
+  // from a group is a whole family of sentences that falls to the "didn't
+  // catch that" fallback for a question Becca can answer.
   phrases: [
-    "find", "find me", "looking for", "need a", "want a", "recommend",
-    "who does", "anyone who", "search for", "book a", "show me providers",
-    "show me someone", "find someone", "i need my", "need my", "get my",
-    "want my", "sort my", "book me in", "who can do",
+    // Naming the search outright.
+    "find", "find me", "find someone", "search for", "looking for",
+    "trying to find", "help me find", "recommend", "any recommendations",
+    "recommendations for", "show me providers", "show me someone",
+    // Asking whether such a person exists — the most common opener of all,
+    // and the one that used to miss: "is there anyone who can do lashes"
+    // matched nothing until "is there anyone" was here.
+    "is there anyone", "is there someone", "is there anybody", "is there a",
+    "does anyone", "does anybody", "anyone who", "anybody who", "anyone that",
+    "someone who", "somebody who", "know anyone", "know any", "who does",
+    "who can do", "who can i", "who should i",
+    // Stating the want. "want to do" is the one that carried "i want to do
+    // almond" — a complete request with no search verb in it anywhere.
+    "need a", "want a", "want to do", "want to get", "want to book",
+    "would like a", "i'm after", "i am after", "im after", "in need of",
+    "hoping to find", "can i get", "where can i get", "where can i find",
+    // Treating it as already theirs to sort out.
+    "i need my", "need my", "get my", "want my", "sort my", "do my",
+    "book a", "book me a", "book me in", "get me a",
+    // A location clause with no verb at all — "nail techs near me" is a
+    // search, and without these it scored on the service entity alone and
+    // lost to discover.nearby, which would have answered with everyone
+    // nearby and quietly dropped the service the client actually named.
+    "near me", "nearby", "close to me", "in my area", "around me",
   ],
   // "looking for" and "find" are neutral about WHAT is being sought — the
   // noun decides. "Looking for soft glam looks" is a request for images, but
@@ -876,6 +902,17 @@ const findProviders: Capability = {
       dbProviders = dbProviders.filter((p) => activePracticeFilters.every((f) => f.matches(p)));
     }
 
+    // "any nail techs near me" — a location clause narrows nothing, it
+    // REORDERS. Applied before the price filter's slug↔UUID mapping below so
+    // that mapping still walks the same list it was built from.
+    const wantsNearby = NEAR_ME_RE.test(rawMessage);
+    let proximityNote = "";
+    if (wantsNearby && dbProviders.length > 0) {
+      const nearest = await sortByProximity(dbProviders);
+      dbProviders = nearest.providers;
+      proximityNote = `\n\n${nearest.note}`;
+    }
+
     let providers = dbProviders.map(providerFromDb);
 
     if (priceFilter && dbProviders.length > 0) {
@@ -918,11 +955,12 @@ const findProviders: Capability = {
     }
 
     return {
-      text: `I found **${providers.length} ${label} provider${providers.length !== 1 ? "s" : ""}**${priceSuffix}${practiceSuffix}.`,
+      text: `I found **${providers.length} ${label} provider${providers.length !== 1 ? "s" : ""}**${priceSuffix}${practiceSuffix}.${proximityNote}`,
       providers: providers.slice(0, 12),
       suggestions: [
         askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),
         askChip("top", "See top-rated", `Who are the best rated ${label} providers?`),
+        ...(wantsNearby ? [] : [askChip("near", "Who's nearest?", `Find ${label} near me`)]),
       ],
     };
   },
@@ -2248,21 +2286,36 @@ const topRated: Capability = {
   describe: "Who's best rated, newest or trending",
   phrases: [
     "best rated", "top rated", "highest rated", "best providers", "who's the best",
-    "whos the best", "new providers", "newest", "trending", "popular",
+    "whos the best", "the best", "any good", "new providers", "newest",
+    "just joined", "trending", "popular", "well reviewed", "good reviews",
   ],
   async run({ rawMessage }): Promise<CapabilityResult> {
     const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
-    const rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
+    let rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
+
+    // "see who is near me top rated" is one question with two clauses, and
+    // rating is the one that decides WHICH list. Distance then reorders it —
+    // so the answer is the top-rated people, nearest first, rather than
+    // silently dropping half of what was asked for.
+    const wantsNearby = NEAR_ME_RE.test(rawMessage);
+    let proximityNote = "";
+    if (wantsNearby && rows.length > 0) {
+      const nearest = await sortByProximity(rows);
+      rows = nearest.providers;
+      proximityNote = `\n\n${nearest.note}`;
+    }
 
     if (rows.length > 0) {
       return {
-        text: wantsNew
-          ? `**${rows.length}** provider${rows.length !== 1 ? "s" : ""} recently joined:`
-          : `Here are the top-rated providers right now:`,
+        text:
+          (wantsNew
+            ? `**${rows.length}** provider${rows.length !== 1 ? "s" : ""} recently joined:`
+            : `Here are the top-rated providers right now:`) + proximityNote,
         providers: rows.map(providerFromDb),
         suggestions: [
           askChip("free", "Who's free this week?", "Who's free this week?"),
           askChip("offers", "Any offers on?", "Any offers on?"),
+          ...(wantsNearby ? [] : [askChip("near", "Who's nearest?", "Which providers are near me?")]),
         ],
       };
     }
@@ -2312,6 +2365,74 @@ const topRated: Capability = {
       suggestions: [
         askChip("browse", "Show me everything", "Show me all services"),
         navChip("explore", "Browse Explore", "Explore"),
+      ],
+    };
+  },
+};
+
+/**
+ * "who's near me" with nothing else attached.
+ *
+ * `discover.find` already handles a location clause, but it REQUIRES a
+ * service — so a bare proximity question scored against it only to be turned
+ * back with "which service?", when "everyone close to you" is a perfectly
+ * answerable question and the more useful reply. Naming a service or a
+ * rating outranks this capability on phrase length, which is what keeps
+ * "nail techs near me" and "near me top rated" on their own capabilities.
+ */
+const nearbyProviders: Capability = {
+  id: "discover.nearby",
+  hat: "client",
+  describe: "Which providers are closest to me",
+  phrases: [
+    "near me", "nearby", "closest", "close to me", "close by", "around me",
+    "in my area", "my area", "local to me", "who's near", "whos near",
+    "who is near", "near my", "in my city", "walking distance",
+  ],
+  // "see who is near me top rated" is one question with two clauses. The
+  // ranking decides WHICH list; distance only reorders it — and `discover.top`
+  // applies that reordering itself. Without this veto, "who is near" (11
+  // chars) simply outscored "top rated" (9) and the rating clause was
+  // silently dropped. A veto, not a score tweak: the two capabilities are not
+  // close rivals here, one of them is plainly wrong for the sentence.
+  excludeWhen:
+    /\b(?:top[\s-]?rated|best[\s-]?rated|highest[\s-]?rated|best|well[\s-]?reviewed|good reviews|trending|popular|newest|new providers|just joined)\b/i,
+  async run(): Promise<CapabilityResult> {
+    const rows = await getProviders();
+    if (rows.length === 0) {
+      return {
+        text: "There aren't any providers to show yet.",
+        suggestions: [navChip("explore", "Browse Explore", "Explore")],
+      };
+    }
+
+    const nearest = await sortByProximity(rows);
+
+    // Location refused or unknown: say so instead of presenting the default
+    // rating order as "nearest", which is the one thing this answer must
+    // never do. The list is still worth showing — it just isn't a distance
+    // ranking, and the reply doesn't pretend it is.
+    if (!nearest.ranked) {
+      return {
+        text: `${nearest.note}\n\nHere's who's on CERVICED in the meantime:`,
+        providers: nearest.providers.slice(0, 12).map(providerFromDb),
+        // No "set my city" chip: that control lives in Home's location modal,
+        // which is not a destination Becca's navigation contract can reach
+        // (see CLIENT_BECCA_SCREENS). A chip that resolves to nothing is worse
+        // than the sentence above, which at least says where to go.
+        suggestions: [
+          askChip("top", "Show top-rated instead", "Who are the best rated providers?"),
+          askChip("browse", "Show me everything", "Show me all services"),
+        ],
+      };
+    }
+
+    return {
+      text: `Closest to you first:\n\n${nearest.note}`,
+      providers: nearest.providers.slice(0, 12).map(providerFromDb),
+      suggestions: [
+        askChip("free", "Who's free this week?", "Who's free this week?"),
+        askChip("top", "Best rated near me", "Who are the best rated providers near me?"),
       ],
     };
   },
@@ -2588,11 +2709,18 @@ const promoCode: Capability = {
     "is there a discount", "redeem a code", "apply a code", "referral code",
   ],
   needs: [{ kind: "provider", required: true }],
-  async run({ entities, rawMessage }): Promise<CapabilityResult> {
+  async run({ entities, verbatimMessage }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
     // Codes are conventionally uppercase/alphanumeric and stand out from
     // ordinary words; take the longest such token as the candidate.
-    const candidates = rawMessage.match(/\b[A-Z0-9]{4,}\b/g) ?? [];
+    //
+    // Read from `verbatimMessage`, NOT `rawMessage`: this is the one place
+    // that identifies a token by its shape rather than its meaning, and the
+    // normaliser corrects spelling case-insensitively. A provider whose code
+    // is "BALAYAGE" or "SHELLAC" would otherwise have it silently rewritten
+    // to lowercase before this ran, and the client — who typed the code
+    // correctly — would be asked what the code was.
+    const candidates = verbatimMessage.match(/\b[A-Z0-9]{4,}\b/g) ?? [];
     const code = candidates.sort((a, b) => b.length - a.length)[0];
 
     if (!code) {
@@ -3262,6 +3390,10 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   // Before `topRated`: "recommend something" is a request for a PERSONAL
   // suggestion, not a popularity ranking.
   forMe,
+  // Before `topRated` and `browse`: a bare "who's near me" is answerable on
+  // its own terms. Both of those would otherwise take it on a generic phrase
+  // and answer a question about ranking or categories instead of distance.
+  nearbyProviders,
   topRated,
   browse,
   appNavigation,

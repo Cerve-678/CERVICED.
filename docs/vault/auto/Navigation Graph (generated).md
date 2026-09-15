@@ -5,7 +5,7 @@
 
 #generated
 
-**124 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
+**126 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -95,13 +95,15 @@ graph LR
   ProviderInboxScreen --> ProviderBookingDetailScreen
   ProviderInboxScreen --> ProviderConversationScreen
   ProviderMyProfileScreen --> BrandingScreen
+  ProviderMyProfileScreen --> BusinessInfoScreen
   ProviderMyProfileScreen --> InfoRegScreen
+  ProviderMyProfileScreen --> PaymentsScreen
   ProviderMyProfileScreen --> PoliciesScreen
   ProviderMyProfileScreen --> ProviderAnalyticsScreen
   ProviderMyProfileScreen --> ProviderClienteleScreen
   ProviderMyProfileScreen --> ProviderInfoPackScreen
-  ProviderMyProfileScreen --> ProviderPromotionsScreen
   ProviderMyProfileScreen --> ProviderScheduleScreen
+  ProviderMyProfileScreen --> SchedulingScreen
   ProviderProfileScreen --> Cart
   ProviderProfileScreen --> CartScreen
   ProviderProfileScreen --> ClaimProvider
@@ -176,7 +178,7 @@ graph LR
 - `provider/ProviderCommunicationsScreen` → `provider/BusinessInfoScreen`
 - `provider/ProviderHomeScreen` → `provider/InfoRegScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`, `shared/NotificationsScreen`
 - `provider/ProviderInboxScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`
-- `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`
+- `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderScheduleScreen`, `provider/SchedulingScreen`
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`
 - `provider/SchedulingScreen` → `provider/ProviderScheduleScreen`
 - `provider/ServicesPricingScreen` → `provider/BusinessInfoScreen`

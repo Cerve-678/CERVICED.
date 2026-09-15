@@ -8,6 +8,8 @@ import ProviderClienteleScreen from '../../../screens/provider/ProviderClientele
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
+import BusinessInfoScreen from '../../../screens/provider/BusinessInfoScreen';
+import SchedulingScreen from '../../../screens/provider/SchedulingScreen';
 import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
 import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
@@ -84,6 +86,21 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="ProviderSchedule"
         component={ProviderScheduleScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      {/* Reached from the Manage section's Business info / Schedule and
+          availability tiles. Registered HERE (as well as on the Account
+          stack) for the same reason as ProviderSchedule above. */}
+      <ProviderServicesStack.Screen
+        name="BusinessInfo"
+        component={BusinessInfoScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderServicesStack.Screen
+        name="Scheduling"
+        component={SchedulingScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

@@ -1,7 +1,9 @@
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -131,6 +133,7 @@ interface ConfirmState {
 }
 
 function ConfirmDialog({ title, message, buttons, visible, onDismiss }: ConfirmState & { onDismiss: () => void }) {
+  const bottomInset = useSystemBottomInset();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -156,7 +159,7 @@ function ConfirmDialog({ title, message, buttons, visible, onDismiss }: ConfirmS
         pointerEvents={visible ? 'auto' : 'none'}
       >
         <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={dlgSt.content}>
+        <ScrollView bounces={false} contentContainerStyle={[dlgSt.content, { paddingBottom: bottomInset + 20 }]}>
           <View style={dlgSt.handle} />
           <Text style={dlgSt.title}>{title}</Text>
           {!!message && <Text style={dlgSt.message}>{message}</Text>}
@@ -189,7 +192,7 @@ function ConfirmDialog({ title, message, buttons, visible, onDismiss }: ConfirmS
               );
             })}
           </View>
-        </View>
+        </ScrollView>
       </Animated.View>
     </Modal>
   );
@@ -201,6 +204,7 @@ const dlgSt = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
+    maxHeight: '85%',
     position: 'absolute',
     bottom: 0,
     left: 0,

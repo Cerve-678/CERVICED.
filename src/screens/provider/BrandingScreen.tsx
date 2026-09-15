@@ -226,7 +226,7 @@ export default function BrandingScreen({ navigation }: any) {
           <View style={styles.previewWrapper}>
             {backgroundImage ? (
               <>
-                <Image source={{ uri: backgroundImage }} style={styles.previewBg} resizeMode="cover" />
+                <Image source={{ uri: backgroundImage }} style={styles.previewBg} resizeMode="cover" fadeDuration={0} />
                 <LinearGradient
                   colors={['rgba(0,0,0,0.18)', 'transparent', 'rgba(0,0,0,0.35)']}
                   locations={[0, 0.5, 1]}
@@ -289,7 +289,7 @@ export default function BrandingScreen({ navigation }: any) {
             </Text>
             <View style={styles.imageRow}>
               {backgroundImage ? (
-                <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" />
+                <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" fadeDuration={0} />
               ) : (
                 <View style={[styles.imagePlaceholder, { backgroundColor: P.surface, borderColor: P.border }]}>
                   <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>No image set</Text>

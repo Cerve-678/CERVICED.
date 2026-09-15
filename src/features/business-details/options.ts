@@ -24,10 +24,13 @@ export const SPECIALTIES_MAP: Record<string, string[]> = {
 };
 
 /**
- * The provider's headline service type — `providers.service_category`.
+ * Every macro service type the app has ever stored, in display order —
+ * `providers.service_category` / `providers.service_categories`.
  *
- * The same seven values InfoRegScreen offers at sign-up, in the same order.
- * The live CHECK constraint providers_service_category_check also permits
+ * This list is for RENDERING a stored value, so it still carries retired types
+ * (see SERVICE_TYPE_OPTS below for what can actually be picked). A provider
+ * stamped with a retired type must still see its proper label rather than the
+ * raw DB code. The live CHECK constraint providers_service_category_check also permits
  * MALE and KIDS, which are deliberately NOT offered here: those describe an
  * audience, not a trade, and are set per-service (`services.audience`) and
  * per-promotion rather than as a whole business's type.
@@ -36,7 +39,7 @@ export const SPECIALTIES_MAP: Record<string, string[]> = {
  * pool on ServicesPricingScreen is looked up by service_category, so a type
  * with no entry there would show a provider an empty specialty list.
  */
-export const SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: string }[] = [
+export const ALL_SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: string }[] = [
   { value: 'HAIR',       label: 'Hair',       sub: 'Cuts, colour, braids, extensions, styling' },
   { value: 'NAILS',      label: 'Nails',      sub: 'Manicures, pedicures, extensions, nail art' },
   { value: 'LASHES',     label: 'Lashes',     sub: 'Extensions, lifts, tints' },
@@ -46,14 +49,32 @@ export const SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: st
   { value: 'OTHER',      label: 'Other',      sub: 'Massage, waxing, tanning, holistic therapies' },
 ];
 
-// The same seven values as bare strings, for InfoRegScreen's sign-up picker,
-// which renders its own cards and needs only the ordered values. Derived from
+/**
+ * What a provider may actually pick — ALL_SERVICE_TYPE_OPTS minus the retired
+ * ones. Use this for any picker; use ALL_SERVICE_TYPE_OPTS to render a value
+ * that already exists.
+ *
+ * OTHER is retired. It was a catch-all that told a client nothing, put its
+ * providers in a bucket no one browses, and forced a free-text
+ * `custom_service_type` alongside it that no filter, tab or search could read.
+ * Providers already stamped OTHER keep the value and still render (that's what
+ * ALL_SERVICE_TYPE_OPTS is for) — it simply can't be chosen again. Anything
+ * reading `custom_service_type` is legacy display for exactly those rows.
+ */
+export const SERVICE_TYPE_OPTS = ALL_SERVICE_TYPE_OPTS.filter(
+  option => option.value !== 'OTHER',
+);
+
+// The pickable values as bare strings, for InfoRegScreen's sign-up picker,
+// which renders its own chips and needs only the ordered values. Derived from
 // SERVICE_TYPE_OPTS rather than written out a second time: these two lists
 // must offer the same types in the same order, and the surest way to keep
-// them in step is for there to be only one of them. Locked in InfoRegScreen
-// once a profile exists — BusinessInfoScreen is the only place the type can
-// be changed afterwards (with a 90-day cooldown) — because subcategory
-// suggestions, tag pools and templates are all scoped off this choice.
+// them in step is for there to be only one of them. Deriving it from the
+// PICKABLE list, not ALL_SERVICE_TYPE_OPTS, is what retires OTHER from sign-up
+// as well as from Business Info without either screen naming it. Locked in
+// InfoRegScreen once a profile exists — BusinessInfoScreen is the only place
+// the set can be changed afterwards (with a 90-day cooldown) — because
+// subcategory suggestions, tag pools and templates are all scoped off it.
 export const SERVICE_CATEGORY_OPTS: readonly ServiceCategory[] =
   SERVICE_TYPE_OPTS.map(option => option.value);
 

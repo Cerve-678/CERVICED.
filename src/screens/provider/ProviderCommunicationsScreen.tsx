@@ -112,7 +112,10 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const provider = await getMyProviderProfile();
+        const [provider, templates] = await Promise.all([
+          getMyProviderProfile(),
+          getMyProviderMessageTemplates(),
+        ]);
         if (!provider) return;
         setProviderId(provider.id);
         setProfileEmail(provider.email ?? '');
@@ -121,7 +124,6 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         const methods: ContactMethod[] = (provider as any).preferred_contact_methods ?? ['in_app'];
         setEnabled(new Set(methods));
         setWhatsappNumber((provider as any).whatsapp_number ?? '');
-        const templates = await getMyProviderMessageTemplates();
         setMessageTemplates(templates.map(({ label, content }) => ({ label, content })));
       } catch {
         flash('Could not load contact preferences', 'error');

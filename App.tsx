@@ -30,6 +30,10 @@ import { BookingProvider } from './src/contexts/BookingContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { RegistrationProvider } from './src/contexts/RegistrationContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
+import {
+  StatusBarTintProvider,
+  useStatusBarTint,
+} from './src/contexts/StatusBarTintContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
@@ -56,22 +60,15 @@ if (Platform.OS === 'ios') {
   });
 }
 
-// @stripe/stripe-react-native's native module binding throws at import time
-// (TurboModuleRegistry.getEnforcing) when the native module isn't present —
-// which is always true under Expo Go, since it only bundles Expo's own
-// native modules. A static top-level `import { StripeProvider } from
-// '@stripe/stripe-react-native'` would crash the entire app's module load
-// under Expo Go before any screen renders. Deferring to a runtime require()
-// behind this check keeps that import out of the Expo Go bundle path
-// entirely; a real dev/production build (env.isExpoGo === false) still
-// resolves and uses the real StripeProvider exactly as before.
+// Expo Go bundles the Expo-SDK-compatible Stripe native module, so card
+// PaymentSheet testing can use the real provider there too. Apple Pay and
+// Google Pay still require a development build because their native merchant
+// configuration is not available in the generic Expo Go app.
 const StripeProvider: React.ComponentType<{
   publishableKey: string;
   merchantIdentifier: string;
   children: React.ReactNode;
-}> = env.isExpoGo
-  ? ({ children }) => <>{children}</>
-  : (require('@stripe/stripe-react-native').StripeProvider);
+}> = require('@stripe/stripe-react-native').StripeProvider;
 
 // Before the first render: caps how far the OS font-size setting can enlarge
 // text, so an enlarged system font doesn't clip fixed-height rows and tile
@@ -117,11 +114,23 @@ function AppContent() {
   return <AppNavigator />;
 }
 
+// The frosted strip is painted for pale screens, where it keeps the dark status
+// bar icons legible over content scrolling under them.
+//
+// A screen whose top edge is dark (a provider's Black profile hero) gets no
+// strip at all, only light icons. Tinting the strip dark instead looks right
+// at the top of the page and wrong the moment you scroll: the strip is a fixed
+// 44pt band, so pale content sliding under it turns it into a visible black
+// bar across the top. Letting the screen's own hero show through has no edge
+// to notice.
 function StatusBarBlur() {
+  const isDarkTopArea = useStatusBarTint();
   return (
     <>
-      <StatusBar style="dark" />
-      <BlurView intensity={20} tint="light" style={styles.statusBarBlur} />
+      <StatusBar style={isDarkTopArea ? 'light' : 'dark'} />
+      {!isDarkTopArea && (
+        <BlurView intensity={20} tint="light" style={styles.statusBarBlur} />
+      )}
     </>
   );
 }
@@ -213,13 +222,15 @@ export default Sentry.wrap(function App() {
                   >
                     <CartProvider>
                       <BookingProvider>
-                        <View
-                          style={styles.container}
-                          onLayout={onLayoutRootView}
-                        >
-                          <StatusBarBlur />
-                          <AppContent />
-                        </View>
+                        <StatusBarTintProvider>
+                          <View
+                            style={styles.container}
+                            onLayout={onLayoutRootView}
+                          >
+                            <StatusBarBlur />
+                            <AppContent />
+                          </View>
+                        </StatusBarTintProvider>
                       </BookingProvider>
                     </CartProvider>
                   </StripeProvider>

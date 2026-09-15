@@ -67,10 +67,10 @@ Curated overview: [[Screens & Navigation]].
 - `Payments`
 - `ProviderIntakeForm`
 - `ProviderServicesMain`
+- `BusinessInfo`
 - `ProviderAccountMain`
 - `AccountInfo`
 - `BusinessDetails`
-- `BusinessInfo`
 - `ServicesPricing`
 - `AboutYou`
 - `Communications`

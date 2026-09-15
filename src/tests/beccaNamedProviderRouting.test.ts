@@ -94,6 +94,7 @@ describe("natural named-provider routing", () => {
       },
       hat: "client",
       rawMessage: "i'm looking for lola studio",
+      verbatimMessage: "i'm looking for lola studio",
       bookings: [],
       now: new Date("2026-08-18T12:00:00Z"),
     });

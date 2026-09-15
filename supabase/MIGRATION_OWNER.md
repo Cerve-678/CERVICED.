@@ -25,6 +25,79 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-09-14 (natural-width PM notification times)
+
+`20260914145609_notification_time_pm_natural_width.sql` routes all 14 live
+client- and provider-facing notification functions through a shared formatter:
+afternoon times use `2:00pm`; morning times use `09:00am`. It preserves the
+existing function bodies, ownership, configuration and execute grants while
+replacing only their time-format expressions.
+
+`20260914145722_repair_notification_time_formatter.sql` immediately restores
+the helper's non-recursive body after the first migration's rewrite also
+matched the helper itself. No notifications were sent during the correction.
+Verified live: `14:00` → `2:00pm`, `09:00` → `09:00am`, `12:00` → `12:00pm`;
+all 14 notification functions use the helper and none retain the old picture.
+
+### Applied 2026-09-14 (two-digit appointment times in notifications)
+
+`20260914131442_notification_time_two_digit_format.sql` updates the 14 live
+client- and provider-facing notification functions that formatted appointment
+times as `HH12:MI AM`. They now use `HH12:MIam`, yielding `02:00pm` and
+`09:00am`. The migration only rewrites each current function definition's
+format picture, preserving its existing logic, security configuration and
+execute grants; it changes no notification rows.
+
+Verified live: migration version recorded, no public functions retain the
+legacy format, and direct database formatting produced `02:00pm` / `09:00am`.
+The local filename was renamed to the recorded migration version.
+
+### Applied 2026-09-14 (service skin-tone suitability)
+
+`20260913234413_service_skin_tone_suitability.sql` adds nullable
+`services.skin_tones_suitable` with the Fair/Light/Medium/Tan/Deep/Rich constraint.
+Patches the current `replace_provider_services` definition, preserving existing
+ownership checks and execute grants. Older payloads that omit the field retain
+saved selections; explicit empty arrays clear them. No existing suitability was
+inferred or backfilled. The local CLI filename was renamed to the recorded version.
+
+Verified live with a rolled-back transaction: RPC save/readback, preservation
+through an older payload, clearing, invalid-value rejection and foreign-owner
+rejection all passed. Column, constraint and unchanged authenticated/service-role
+execute grants were checked separately. Frontmost live migration before this was
+`20260908105737` (the multi-service column is already present live).
+
+### Pending 2026-09-09 (restored multi-service provider offerings)
+
+The existing multi-service offering work was recovered from
+`feat/multi-select-service-type-chips`. Its two migrations remain **unapplied**
+and must be applied together, in this order:
+
+1. `20260908090000_provider_multiple_service_types`
+2. `20260908090100_service_type_cooldown_covers_the_whole_set`
+
+The first adds `providers.service_categories` and
+`services.service_category`. The second closes the service-type cooldown and
+category-cascade gaps introduced by plural types. The original first migration
+was authored as `20260906193000` but was deliberately renumbered above the
+already-applied `20260907000413` frontier; do not restore the old filename.
+
+### Applied 2026-09-07 (cart reservations remain private)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260907153528 | `own_cart_holds_never_block_their_owner` | The caller's own cart holds are excluded from their busy spans; a retry clears only that caller's stranded cart holds, guarded against transactions/reviews. |
+| 20260907153537 | `private_cart_holds_never_become_bookings` | `expire_waitlist_holds()` now selects waitlist holds only; `cancel_checkout()` deletes owner-scoped cart holds; 3 historical “Reserving…” rows and 6 linked notifications were safely removed. Post-apply counts: 0 phantom rows, 0 linked notifications. |
+
+`finalize-payment-intent` version 10 was deployed with JWT verification on and
+routes Stripe cancellation through the authenticated `cancel_checkout()` RPC;
+it no longer promotes cart holds with a service-role booking update.
+
+The app-side half of that fix (CartScreen's `abandonOutstandingCheckout`) is
+already in the working tree and does not depend on this migration; the
+migration covers the exits the app cannot observe (crash, force-quit, dev
+reload, dead network).
+
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
 | Recorded version | Name | Verified live |

@@ -29,7 +29,8 @@ export function formatTimeSpan(startMinutes: number, endMinutes: number): string
     const minute = String(minutes % 60).padStart(2, '0');
     const suffix = hour >= 12 ? 'pm' : 'am';
     const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-    return `${suffix === 'am' ? String(hour12).padStart(2, '0') : hour12}:${minute}${suffix}`;
+    const displayHour = hour >= 12 ? String(hour12) : String(hour12).padStart(2, '0');
+    return `${displayHour}:${minute}${suffix}`;
   };
 
   const total = Math.max(0, endMinutes - startMinutes);
@@ -37,6 +38,17 @@ export function formatTimeSpan(startMinutes: number, endMinutes: number): string
   const minutes = total % 60;
   const lengthLabel = hours > 0 ? `${hours}h${minutes ? ` ${minutes}m` : ''}` : `${minutes}m`;
   return `${toLabel(startMinutes)} – ${toLabel(endMinutes)} · ${lengthLabel}`;
+}
+
+/** Epoch ms for a 'YYYY-MM-DD' date plus minutes-from-midnight. Built from
+ *  local midnight and then offset, which is the same construction the
+ *  scheduler uses — parsing a date and a display time into one Date directly
+ *  isn't reliable across platforms. */
+function slotStartMs(date: string, minutesFromMidnight: number): number {
+  const d = new Date(date + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return Number.NaN;
+  d.setMinutes(minutesFromMidnight);
+  return d.getTime();
 }
 
 /** One cart line, reduced to just what the local checks need. */
@@ -71,6 +83,13 @@ export const CART_ISSUE = {
   // dialog, not printed whole on the card.
   crossProviderClash: 'Clashes with another service in your cart',
   slotTaken: 'This time slot is no longer available.',
+  // The clock moved, nothing about the provider changed. Kept distinct from
+  // every "provider" reason below on purpose: a cart item sat on overnight
+  // used to be reported as the provider not taking bookings or not working
+  // that day, which is a claim about them and usually false — they may well
+  // still have the same slot free next week. Say what actually happened and
+  // what fixes it.
+  timePassed: 'This time has already passed — pick a new one',
   outsideHours: "This time is outside the provider's working hours.",
   dayUnavailable: 'Provider is not available on this date.',
   providerUnbookable: "This provider isn't taking bookings right now",
@@ -88,7 +107,8 @@ export const CART_ISSUE = {
  *
  *  Ordered by what the client should fix first: a line with no time at all
  *  can't also be judged for overlapping something, so it reports that and
- *  nothing else.
+ *  nothing else. A time that has already passed is the same shape of finding
+ *  — it's reported on its own, and the item drops out of the overlap pass.
  *
  *  A date or time that can't be parsed back reports as noSchedule rather than
  *  getting wording of its own. It shouldn't be possible — the sheet only ever
@@ -100,7 +120,12 @@ export const CART_ISSUE = {
  *
  *  Back-to-back is NOT an overlap: a service ending at the minute the next one
  *  starts is exactly how a grouped appointment is built. */
-export function findCartItemIssues(entries: CartIssueEntry[]): Map<string, string> {
+export function findCartItemIssues(
+  entries: CartIssueEntry[],
+  // Injectable so the elapsed-time check below is testable without waiting
+  // for real time to pass.
+  now: number = Date.now(),
+): Map<string, string> {
   const issues = new Map<string, string>();
 
   // providerKey deliberately isn't carried onto a span — see the comment
@@ -117,6 +142,20 @@ export function findCartItemIssues(entries: CartIssueEntry[]): Map<string, strin
       continue;
     }
     const start = to24hMinutes(entry.time);
+    // A time that has already gone is reported as exactly that, and takes no
+    // further part in the overlap pass below — "clashes with another service"
+    // is not useful advice about an appointment that can no longer happen at
+    // all, and the one real fix (pick a new time) is the same either way.
+    //
+    // Checked here rather than left to the checkout round trip because it
+    // needs no network: the cart already knows the date, the time and the
+    // clock. Leaving it to AvailabilityService meant the card looked fine
+    // until the client tapped Checkout, and the reason they got back then
+    // depended on which of the provider lookups answered first.
+    if (slotStartMs(entry.date, start) < now) {
+      issues.set(entry.itemId, CART_ISSUE.timePassed);
+      continue;
+    }
     spans.push({
       itemId: entry.itemId,
       date: entry.date,

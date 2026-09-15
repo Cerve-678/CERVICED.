@@ -8,6 +8,10 @@ export interface PortfolioItem {
   caption: string;
   category: ServiceCategory;
   aspectRatio: number;
+  // Marks a placeholder ratio rather than dimensions captured at upload.
+  // Explore only probes the remote image when this is true, avoiding a
+  // second decode/request for the majority of cards with stored dimensions.
+  aspectRatioIsFallback?: boolean;
   providerId: string;
   tags?: string[] | undefined;
   price?: string | undefined;

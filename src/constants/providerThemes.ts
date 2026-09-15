@@ -171,6 +171,11 @@ const PRESET_DEFS: { key: string; name: string; description: string; backdrop: s
   // stop keeps depth without lifting it off black.
   { key: 'black',      name: 'Black',        description: 'True black hero over clean neutral cards', backdrop: '#000000', card: NEUTRAL_CARD, accent: '#000000', gradient: ['#000000', '#0B0B0D'], suggestedSheet: 'mist' },
   { key: 'pinkolive',  name: 'Pink & Olive', description: 'Soft pink backdrop with an olive accent', backdrop: '#F9D1D9', card: '#FDF6F7', accent: '#838F58', suggestedSheet: 'blush' },
+  // Burgundy carries its own wine-into-wine blend for the same reason Black
+  // does: the default [backdrop, sheet] fade would wash a deep hero out to
+  // the pale content colour. Blue accent is dark enough to hold white label
+  // text on the pale cards (WCAG ~6.8:1) while reading as a true blue, not navy.
+  { key: 'burgundyblue', name: 'Burgundy & Blue', description: 'Deep burgundy hero with a true blue accent', backdrop: '#6B2737', card: NEUTRAL_CARD, accent: '#2C5AA0', gradient: ['#5A1F2C', '#7E3644'], suggestedSheet: 'mist' },
 ];
 
 // Monochrome sets — ONE main colour drives the backdrop and accent; the

@@ -17,6 +17,8 @@ import {
   RefreshControl,
   TextInput,
   Keyboard,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
@@ -44,7 +46,7 @@ import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
 // ==================== TYPES ====================
@@ -55,6 +57,8 @@ type BookingsListRow =
   | { kind: 'past-booking'; booking: ConfirmedBooking }
   | { kind: 'waitlist-header' }
   | { kind: 'waitlist'; entry: WaitlistEntry };
+
+const IN_PROGRESS_PURPLE = '#7B2FBE';
 
 // ==================== CONSTANTS ====================
 
@@ -216,6 +220,7 @@ const WaitlistCard = React.memo(function WaitlistCard({
 const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   useFont();
   const { theme, isDarkMode, palette: P } = useTheme();
+  const modalBottomGap = useSystemBottomInset() + 16;
   // Measured per render, not captured at module load, so the full-screen modal
   // backdrops still cover the window after a rotation or in split-screen.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -284,6 +289,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const mapRef = useRef<MapView>(null);
   const mainScrollRef = useRef<FlatList<BookingsListRow>>(null);
   const modalScrollRef = useRef<ScrollView>(null);
+
+  // Category-pill (Upcoming/Past) entrance — the pill row itself used to
+  // just appear at rest; this brings it in line with the fade+slide-up
+  // treatment every other card/pill row in the app uses on mount.
+  const categoryFadeAnim = useRef(new Animated.Value(0)).current;
+  const categorySlideAnim = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(categoryFadeAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(categorySlideAnim, { toValue: 0, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Give-up timer for the "open booking from notification" effect below — a
   // booking that never resolves (e.g. it belongs to another user's stale
@@ -740,46 +758,53 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [reloadBookings]);
 
+  const refreshUserLocation = useCallback(async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        const newLocation = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        };
+        setUserLocation(newLocation);
+        logger.log('Location refreshed:', newLocation);
+
+        // Center map on user location if no active bookings
+        if (mapRef.current && !currentBooking) {
+          mapRef.current.animateToRegion(
+            {
+              ...newLocation,
+              latitudeDelta: 0.15,
+              longitudeDelta: 0.15,
+            },
+            1000
+          );
+        }
+      }
+    } catch (locationError) {
+      logger.error('Error refreshing location:', locationError);
+    }
+  }, [currentBooking]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setBookingsError(null);
-    try {
-      await reloadBookings();
 
-      // Refresh user location
-      try {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const location = await Location.getCurrentPositionAsync({});
-          const newLocation = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          };
-          setUserLocation(newLocation);
-          logger.log('Location refreshed:', newLocation);
+    // Bookings and location don't depend on each other, so refresh
+    // both concurrently instead of paying for two round trips serially.
+    const [bookingsResult] = await Promise.allSettled([
+      reloadBookings(),
+      refreshUserLocation(),
+    ]);
 
-          // Center map on user location if no active bookings
-          if (mapRef.current && !currentBooking) {
-            mapRef.current.animateToRegion(
-              {
-                ...newLocation,
-                latitudeDelta: 0.15,
-                longitudeDelta: 0.15,
-              },
-              1000
-            );
-          }
-        }
-      } catch (locationError) {
-        logger.error('Error refreshing location:', locationError);
-      }
-    } catch (error) {
-      logger.error('Refresh failed:', error);
+    if (bookingsResult.status === 'rejected') {
+      logger.error('Refresh failed:', bookingsResult.reason);
       setBookingsError('Failed to load bookings. Pull down to retry.');
-    } finally {
-      setRefreshing(false);
     }
-  }, [reloadBookings, currentBooking]);
+
+    setRefreshing(false);
+  }, [reloadBookings, refreshUserLocation]);
 
   // ==================== HEADER OPTIONS ====================
 
@@ -1322,7 +1347,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             )}
 
             {/* Category Toggle */}
-            <View style={styles.categoryContainer}>
+            <Animated.View
+              style={[
+                styles.categoryContainer,
+                { opacity: categoryFadeAnim, transform: [{ translateY: categorySlideAnim }] },
+              ]}
+            >
               <SlidingTabs
                 tabs={CATEGORY_TABS}
                 activeKey={activeFilters.has('all') ? 'all' : activeFilters.has('past') ? 'past' : null}
@@ -1338,7 +1368,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 springBounciness={0}
                 springSpeed={14}
               />
-            </View>
+            </Animated.View>
             {/* Tracking View */}
             {!isFilterView && (
               <>
@@ -1441,7 +1471,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                           renderItem={({ item: booking }) => (
                             <TouchableOpacity
                               style={styles.appointmentCard}
-                              onPress={() => booking.coordinates && focusMapOnLocation(booking.coordinates)}
+                              onPress={() => handleBookingPress(booking)}
                               activeOpacity={0.8}
                             >
                               <BlurView intensity={15} tint={isDarkMode ? 'dark' : 'light'} style={styles.cardBlur}>
@@ -1519,12 +1549,29 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       <>
                         {currentBooking && (
                           <View style={styles.upcomingSection}>
-                            <BlurView intensity={25} tint={isDarkMode ? 'dark' : 'light'} style={styles.sectionLabel}>
-                              <Text style={styles.upcomingLabelText}>UPCOMING</Text>
+                            <BlurView
+                              intensity={25}
+                              tint={isDarkMode ? 'dark' : 'light'}
+                              style={[
+                                styles.sectionLabel,
+                                currentBooking.status === BookingStatus.IN_PROGRESS && {
+                                  borderColor: IN_PROGRESS_PURPLE + '66',
+                                  backgroundColor: IN_PROGRESS_PURPLE + '14',
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.upcomingLabelText,
+                                  currentBooking.status === BookingStatus.IN_PROGRESS && { color: IN_PROGRESS_PURPLE },
+                                ]}
+                              >
+                                {currentBooking.status === BookingStatus.IN_PROGRESS ? 'IN PROGRESS' : 'UPCOMING'}
+                              </Text>
                             </BlurView>
                             <TouchableOpacity
                               style={styles.appointmentCard}
-                              onPress={() => focusMapOnLocation(currentBooking.coordinates)}
+                              onPress={() => handleBookingPress(currentBooking)}
                               activeOpacity={0.8}
                             >
                               <BlurView intensity={15} tint={isDarkMode ? 'dark' : 'light'} style={styles.cardBlur}>
@@ -1632,7 +1679,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                               renderItem={({ item: booking }) => (
                                 <TouchableOpacity
                                   style={styles.nextAppointmentCard}
-                                  onPress={() => focusMapOnLocation(booking.coordinates)}
+                                  onPress={() => handleBookingPress(booking)}
                                   activeOpacity={0.8}
                                 >
                                   <BlurView intensity={15} tint={isDarkMode ? 'dark' : 'light'} style={styles.cardBlur}>
@@ -1874,7 +1921,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={csSt.overlay} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); }}>
-            <Pressable style={[csSt.sheet, { backgroundColor: P.card }]} onPress={e => e.stopPropagation()}>
+            <Pressable style={[csSt.sheet, { backgroundColor: P.card, paddingBottom: Math.max(40, modalBottomGap) }]} onPress={e => e.stopPropagation()}>
               <View style={[csSt.handle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
               <Text style={[csSt.title, { color: P.text }]}>Contact {contactSheetBooking?.providerName}</Text>
               <Text style={[csSt.subtitle, { color: '#7E6667' }]}>Choose how you'd like to get in touch</Text>
@@ -4033,7 +4080,7 @@ intakeFormTodoBadgeText: {
 // Layout only — colors are theme-dependent and applied at the call site via
 // isDarkMode-branched overrides, same pattern as popSt below.
 const csSt = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
   handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20 },
   title:       { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 4 },

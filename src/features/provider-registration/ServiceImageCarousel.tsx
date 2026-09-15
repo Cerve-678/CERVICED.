@@ -216,7 +216,7 @@ export function ServiceImageCarousel({
               // Keyed by uri, not index: an index key would remount every
               // thumbnail after the list it belongs to reorders, which reads
               // as a flash rather than a move.
-              key={`${image.uri}-${index}`}
+              key={image.uri}
               {...(responders[index]?.panHandlers ?? {})}
               style={[
                 styles.carouselImageContainer,
@@ -298,7 +298,7 @@ export function ServiceImageCarousel({
         <View style={styles.carouselDots}>
           {images.map((image, index) => (
             <View
-              key={`${image.uri}-${index}`}
+              key={image.uri}
               style={[
                 styles.carouselDot,
                 activeIndex === index && styles.carouselDotActive,

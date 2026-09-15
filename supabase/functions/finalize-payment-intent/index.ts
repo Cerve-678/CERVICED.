@@ -76,10 +76,14 @@ serve(async (req) => {
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     if (body.action === 'cancel') {
-      await admin.from('bookings').update({ status: 'cancelled' })
-        .eq('hold_batch_id', batch.id).eq('status', 'on_hold');
-      await admin.from('checkout_batches').update({ status: 'cancelled' }).eq('id', batch.id);
       const paymentIntent = await stripe.paymentIntents.cancel(body.paymentIntentId);
+      // Run as the authenticated caller so cancel_checkout can enforce batch
+      // ownership. It deletes private on_hold rows instead of promoting the
+      // "Reserving…" placeholder to a cancelled booking (and notification).
+      const { error: cancelError } = await supabase.rpc('cancel_checkout', {
+        p_checkout_batch_id: batch.id,
+      });
+      if (cancelError) throw cancelError;
       return new Response(JSON.stringify({ status: paymentIntent.status }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     if (batch.status !== 'prepared' || new Date(batch.expires_at) <= new Date() || existing.status !== 'requires_capture') {

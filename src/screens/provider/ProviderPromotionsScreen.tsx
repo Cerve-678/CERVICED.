@@ -227,7 +227,7 @@ function PromoCard({ promo, services, onToggle, onEdit, onDelete, onNotify, onDu
       {/* Banner */}
       <View>
         {promo.image_url ? (
-          <Image source={{ uri: promo.image_url }} style={pcSt.image} resizeMode="cover" />
+          <Image source={{ uri: promo.image_url }} style={pcSt.image} resizeMode="cover" fadeDuration={0} />
         ) : (
           <View style={[pcSt.banner, { backgroundColor: C.card }]}>
             <Ionicons name="pricetag-outline" size={26} color={C.sub} />
@@ -900,7 +900,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
             {/* Cover image */}
             <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={fmSt.coverWrap}>
               {coverUri ? (
-                <Image source={{ uri: coverUri }} style={fmSt.cover} resizeMode="cover" />
+                <Image source={{ uri: coverUri }} style={fmSt.cover} resizeMode="cover" fadeDuration={0} />
               ) : (
                 <View style={[fmSt.coverEmpty, { backgroundColor: C.card }]}>
                   <Ionicons name="image-outline" size={30} color={C.sub} />

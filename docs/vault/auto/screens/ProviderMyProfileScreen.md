@@ -12,9 +12,11 @@ tags: [screen, provider]
 - [[BrandingScreen\|Branding]]
 - [[ProviderAnalyticsScreen\|Analytics]]
 - [[PoliciesScreen\|Policies]]
-- [[ProviderClienteleScreen\|Clientele]]
-- [[ProviderPromotionsScreen\|Promotions]]
+- [[BusinessInfoScreen\|BusinessInfo]]
+- [[PaymentsScreen\|Payments]]
+- [[SchedulingScreen\|Scheduling]]
 - [[ProviderInfoPackScreen\|InfoPacks]]
+- [[ProviderClienteleScreen\|Clientele]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

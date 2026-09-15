@@ -368,6 +368,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
         setSelectedBooking(only);
         setAddressText(only.client_address ?? "");
       }
+    } catch (err) {
+      logger.error('[ProviderChat] address bookings load failed:', err);
     } finally {
       setLoadingAddressBookings(false);
     }

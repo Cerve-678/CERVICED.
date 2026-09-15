@@ -11,6 +11,7 @@ import ProviderClienteleScreen from '../../../screens/provider/ProviderClientele
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
+import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
@@ -99,6 +100,15 @@ export default function ProviderHomeNavigator() {
       <ProviderHomeStack.Screen
         name="ProviderConversation"
         component={ProviderConversationScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      {/* Reached from the "Today's Schedule" notification. A plain push, not
+          part of the modal group below — the list is a regular screen in the
+          Calendar stack, not a transient overlay. */}
+      <ProviderHomeStack.Screen
+        name="BookingHistory"
+        component={ProviderBookingHistoryScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

@@ -19,6 +19,7 @@ import { Image } from 'expo-image';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
 import type { EmergencyRequest } from '../../contexts/CartContext';
@@ -48,28 +49,23 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
+import { toArgbHex } from '../../utils/color';
 import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
-// Keep real payments opt-in until Stripe is explicitly switched on for a
-// release. Expo Go can never use this native module.
-const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled && !env.isExpoGo;
+// Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
+// includes the SDK-compatible Stripe module, so it can show the card
+// PaymentSheet; wallet payments still require a development build.
+const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
 
-// Real useStripe() throws at import time under Expo Go (TurboModuleRegistry.
-// getEnforcing has no native module to find there). StripePaymentModal below
-// is only ever rendered when USE_STRIPE_PAYMENTS is true, which is forced
-// off under Expo Go, so this stub's return value never actually gets called
-// — it only needs to exist so the module loads and the hook-call shape below
-// stays valid.
+// Expo SDK 57 ships a compatible Stripe module in Expo Go, so use the real
+// hook in both Expo Go and custom native builds.
 const useStripe: () => { initPaymentSheet: (...args: any[]) => Promise<any>; presentPaymentSheet: (...args: any[]) => Promise<any> } =
-  env.isExpoGo
-    ? () => ({ initPaymentSheet: async () => ({}), presentPaymentSheet: async () => ({}) })
-    // The native module cannot be statically imported in Expo Go.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    : require('@stripe/stripe-react-native').useStripe;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
@@ -107,6 +103,7 @@ function toCartIssue(serviceMessage: string): string {
     case "This time is outside the provider's working hours.":         return CART_ISSUE.outsideHours;
     case 'This time is outside the provider\u2019s working hours.':        return CART_ISSUE.outsideHours;
     case 'Provider is not available on this date.':                    return CART_ISSUE.dayUnavailable;
+    case 'That time has already passed — please pick a new slot.':      return CART_ISSUE.timePassed;
     case "This provider isn't set up for booking yet.":                return CART_ISSUE.providerUnbookable;
     case 'This service is no longer available from this provider. Please remove it to continue.':
                                                                        return CART_ISSUE.serviceUnavailable;
@@ -304,6 +301,10 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, palette: P } = useTheme();
+    // Live inset, not the module-load snapshot: this sheet is inside a
+    // <Modal>, where the snapshot can be 0 and <SafeAreaView> is inert. See
+    // useSystemBottomInset's comment.
+    const bottomInset = useSystemBottomInset();
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
       'card' | 'paypal' | 'apple' | 'google'
     >('card');
@@ -429,7 +430,7 @@ const handlePayment = useCallback(async () => {
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            <SafeAreaView style={styles.paymentModalContent}>
+            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
               {/* Payment Header */}
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
@@ -579,7 +580,7 @@ const handlePayment = useCallback(async () => {
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </SafeAreaView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -615,7 +616,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentComplete,
     onBookingFailed,
   }) => {
-    const { theme, isDarkMode, palette: P } = useTheme();
+    const { theme, palette: P } = useTheme();
+    // See the mock PaymentModal above — same reason, same fix.
+    const bottomInset = useSystemBottomInset();
     const { initPaymentSheet, presentPaymentSheet } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
     const processingRef = useRef(false);
@@ -637,21 +640,26 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
         const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
 
-        // Theme the sheet to match the app's own palette (bound to the
-        // app's own isDarkMode, not the OS setting Stripe would otherwise
-        // auto-detect) instead of Stripe's generic default.
+        // Theme the sheet to match the app's own palette instead of Stripe's
+        // generic default. These are flat colours rather than Stripe's
+        // light/dark pair on purpose: the palette already resolves to the
+        // app's own dark mode, which is not necessarily the OS setting Stripe
+        // would otherwise auto-detect.
+        // Every value goes through toArgbHex: the palette's translucent tokens
+        // (sub, border) are CSS rgba() strings, which Stripe rejects outright
+        // rather than falling back on.
         const stripeColors = {
-          primary: P.accent,
-          background: P.bg,
-          componentBackground: P.surface,
-          componentBorder: isDarkMode ? '#2E7E6667' : '#247E6667', // P.border, as #AARRGGBB
-          componentDivider: isDarkMode ? '#2E7E6667' : '#247E6667',
-          primaryText: theme.text,
-          secondaryText: P.sub,
-          componentText: theme.text,
-          placeholderText: P.sub,
-          icon: P.sub,
-          error: '#FF3B30',
+          primary: toArgbHex(P.accent),
+          background: toArgbHex(P.bg),
+          componentBackground: toArgbHex(P.surface),
+          componentBorder: toArgbHex(P.border),
+          componentDivider: toArgbHex(P.border),
+          primaryText: toArgbHex(theme.text),
+          secondaryText: toArgbHex(P.sub),
+          componentText: toArgbHex(theme.text),
+          placeholderText: toArgbHex(P.sub),
+          icon: toArgbHex(P.sub),
+          error: '#FFFF3B30',
         };
 
         const { error: initError } = await initPaymentSheet({
@@ -661,7 +669,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             colors: stripeColors,
             shapes: { borderRadius: 20, borderWidth: 1 },
             primaryButton: {
-              colors: { background: P.accent, text: P.onAccent, border: P.accent },
+              colors: {
+                background: toArgbHex(P.accent),
+                text: toArgbHex(P.onAccent),
+                border: toArgbHex(P.accent),
+              },
               shapes: { borderRadius: 20 },
             },
           },
@@ -730,13 +742,13 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme, isDarkMode]);
+    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme]);
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            <SafeAreaView style={styles.paymentModalContent}>
+            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
@@ -795,7 +807,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </SafeAreaView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -839,6 +851,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const { palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
+    const swipeRef = useRef<Swipeable>(null);
 
     const totalPrice = useMemo(() => getCartItemFullPrice(item), [item]);
 
@@ -889,6 +902,16 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const showInstanceNumber =
       allCartItems.filter((i: CartItem) => i.serviceName === item.serviceName).length > 1;
 
+    // Shopping-cart-style "swatch" — ServiceCard has no per-service image or
+    // category field to show a real thumbnail, so the swatch is initials
+    // derived from the actual service name rather than a fabricated icon set.
+    const nameWords = serviceName.trim().split(/\s+/).filter(Boolean);
+    const swatchInitials = nameWords.length === 0
+      ? '?'
+      : nameWords.length === 1
+        ? nameWords[0]!.slice(0, 2).toUpperCase()
+        : (nameWords[0]![0]! + nameWords[1]![0]!).toUpperCase();
+
     return (
       <ErrorBoundary
         fallback={(error, retry) => (
@@ -906,114 +929,141 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           </View>
         )}
       >
-        <View style={[
-          styles.serviceCard,
-          styles.serviceCardShadow,
-          { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
-        ]}>
-          {issue && (
-            <View style={styles.conflictBanner}>
-              <Ionicons name="alert-circle" size={14} color="#F44336" />
-              <Text style={styles.conflictBannerText}>{issue}</Text>
-            </View>
-          )}
-          {/* An out-of-hours time looks exactly like an ordinary one once it
-              reaches the cart, and it isn't: the client is about to pay for
-              something the provider can still decline. Deliberately amber
-              rather than the by-request red used in the picker — in THIS
-              screen red already means "this item has a conflict, fix it", and
-              a request is not a fault. */}
-          {bookingInfo?.emergencyRequest && (
-            <View style={styles.requestBanner}>
-              <Ionicons name="time-outline" size={14} color="#FF9500" />
-              <Text style={styles.requestBannerText}>
-                Outside their usual hours — they have to accept this before it's booked.
-              </Text>
-            </View>
-          )}
-          {/* Header binds the service to its price on one line, with the
-              duration tucked directly under the name. Colours read from `P`
-              (the hat-aware palette), never `theme`: this card only ever
-              renders on the client cart, and `theme` is scoped to whichever
-              hat last set it, not necessarily the client palette — the same
-              class of bug DESIGN_SYSTEM.md flags for AppDialog. */}
-          <View style={styles.serviceHeader}>
-            <View style={styles.serviceInfo}>
-              <Text style={[styles.serviceName, { color: P.text }]} numberOfLines={2}>
-                {serviceName}
-                {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
-                {bookingInfo.isDepositOnly && ' (Deposit)'}
-              </Text>
-              <Text style={[styles.priceSummaryText, { color: P.sub }]} numberOfLines={1}>
-                {duration}
-              </Text>
-            </View>
-            <Text style={[styles.priceSummaryValue, { color: P.accentText }]}>
-              £{effectivePrice.toFixed(2)}
-            </Text>
-            <TouchableOpacity
-              style={[styles.removeButton, { backgroundColor: P.accentDim, borderColor: P.border }, isLoading && styles.disabledButton]}
-              onPress={handleRemove}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color={P.text} />
-              ) : (
-                <Text style={[styles.removeText, { color: P.text }]}>×</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+        <View style={styles.swipeRowWrap}>
+          <Swipeable
+            ref={swipeRef}
+            overshootRight={false}
+            renderRightActions={() => (
+              <TouchableOpacity
+                style={[styles.swipeDeleteAction, isLoading && styles.disabledButton]}
+                onPress={() => {
+                  swipeRef.current?.close();
+                  handleRemove();
+                }}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="trash" size={20} color="#fff" />
+                    <Text style={styles.swipeDeleteText}>Remove</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          >
+            {/* Colours read from `P` (the hat-aware palette), never `theme`:
+                this card only ever renders on the client cart, and `theme`
+                is scoped to whichever hat last set it, not necessarily the
+                client palette — the same class of bug DESIGN_SYSTEM.md
+                flags for AppDialog. */}
+            <View style={[
+              styles.swipeContent,
+              { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
+            ]}>
+              <View style={[styles.swipeSwatch, { backgroundColor: P.accentDim }]}>
+                <Text style={[styles.swipeSwatchText, { color: P.accentText }]}>{swatchInitials}</Text>
+              </View>
 
-          {/* Secondary detail — add-ons, deposit note, notes — sits tight
-              together as one block instead of each line carrying its own
-              margin. Cart is for review + payment, not a full pricing
-              ledger, so add-ons stay on one compact labelled line; detailed
-              per-add-on pricing is in BookingSheet via Edit. */}
-          {(addOnsSummary || bookingInfo.isDepositOnly || !!bookingInfo.notes) && (
-            <View style={styles.serviceMetaBlock}>
-              {addOnsSummary && (
-                <Text style={[styles.priceSummaryAddOns, { color: P.text }]} numberOfLines={2}>
-                  + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
-                  {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
+              <View style={styles.swipeBody}>
+                <View style={styles.swipeTopRow}>
+                  <Text style={[styles.swipeName, { color: P.text }]} numberOfLines={2}>
+                    {serviceName}
+                    {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
+                    {bookingInfo.isDepositOnly && ' (Deposit)'}
+                  </Text>
+                  {/* Non-swipe fallback for revealing Remove — required for
+                      accessibility, since swipe-only would strand anyone who
+                      can't perform the gesture. */}
+                  <TouchableOpacity
+                    style={styles.swipeKebab}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      swipeRef.current?.openRight();
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={15} color={P.sub} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.swipeMetaLine, { color: P.sub }]} numberOfLines={1}>
+                  {duration}
                 </Text>
-              )}
-              {bookingInfo.isDepositOnly && (
-                <Text style={[styles.depositNote, { color: P.sub }]}>
-                  Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
-                </Text>
-              )}
-              {!!bookingInfo.notes && (
-                <Text style={[styles.notesPreview, { color: P.sub }]} numberOfLines={2}>
-                  Notes: {bookingInfo.notes}
-                </Text>
-              )}
-            </View>
-          )}
 
-          {/* Footer: date/time + Edit, separated by a rule so the card ends
-              on a deliberate band rather than trailing off. A standalone
-              service edits directly, no chooser in between. */}
-          <View style={[styles.dateRow, { borderTopColor: P.border }]}>
-            <Text
-              style={[styles.dateText, { color: P.sub }, !isScheduled && styles.dateTextWarning]}
-              numberOfLines={2}
-            >
-              {isScheduled
-                ? `${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
-                : 'Unscheduled'}
-            </Text>
-            <TouchableOpacity
-              style={[styles.itemEditButton, { borderColor: P.accent }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                onEdit(item);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="pencil-outline" size={12} color={P.accentText} />
-              <Text style={[styles.itemEditButtonText, { color: P.accentText }]}>Edit</Text>
-            </TouchableOpacity>
-          </View>
+                {issue && (
+                  <View style={styles.swipeBanner}>
+                    <Ionicons name="alert-circle" size={11} color="#F44336" />
+                    <Text style={[styles.swipeBannerText, { color: '#F44336' }]}>{issue}</Text>
+                  </View>
+                )}
+                {/* An out-of-hours time looks exactly like an ordinary one
+                    once it reaches the cart, and it isn't: the client is
+                    about to pay for something the provider can still
+                    decline. Deliberately amber rather than the by-request
+                    red used above — red already means "this item has a
+                    conflict, fix it", and a request is not a fault. */}
+                {bookingInfo?.emergencyRequest && (
+                  <View style={styles.swipeBanner}>
+                    <Ionicons name="time-outline" size={11} color="#FF9500" />
+                    <Text style={[styles.swipeBannerText, { color: '#FF9500' }]}>
+                      Outside their usual hours — they have to accept this before it's booked.
+                    </Text>
+                  </View>
+                )}
+
+                {addOnsSummary && (
+                  <Text style={[styles.swipeNote, { color: P.text, fontWeight: '700' }]} numberOfLines={2}>
+                    + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
+                    {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
+                  </Text>
+                )}
+                {bookingInfo.isDepositOnly && (
+                  <Text style={[styles.swipeNote, { color: P.sub }]}>
+                    Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
+                  </Text>
+                )}
+                {!!bookingInfo.notes && (
+                  <Text style={[styles.swipeNote, { color: P.sub }]} numberOfLines={2}>
+                    Notes: {bookingInfo.notes}
+                  </Text>
+                )}
+
+                {/* Price band — its own full-width strip at the card's foot.
+                    Tapping the date/time here is the Edit entry point, so
+                    price and edit share one dedicated strip. */}
+                <View style={[styles.swipePriceBand, { borderTopColor: P.border }]}>
+                  <View style={styles.swipePriceLeft}>
+                    <Text style={[styles.swipePrice, { color: P.accentText }]}>
+                      £{effectivePrice.toFixed(2)}
+                    </Text>
+                    {bookingInfo.isDepositOnly && (
+                      <Text style={[styles.swipePriceNote, { color: P.sub }]}>deposit</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.swipeWhenTouchable}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      onEdit(item);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.swipeWhen, { color: P.sub }, !isScheduled && styles.swipeWhenWarn]}
+                      numberOfLines={1}
+                    >
+                      {isScheduled
+                        ? `${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
+                        : 'Unscheduled'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={11} color={isScheduled ? P.sub : '#D32F2F'} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Swipeable>
         </View>
         <DialogHost />
       </ErrorBoundary>
@@ -1517,6 +1567,7 @@ const CartCheckoutFooter = memo(function CartCheckoutFooter({
 
 // Main Cart Screen Component
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
+  const groupSheetBottomInset = useSystemBottomInset();
   const { theme, isDarkMode, palette: P } = useTheme();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   // A SECOND host, rendered inside the "Confirm Your Details" <Modal> rather
@@ -1580,6 +1631,53 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
 
+  // Mirrors of the two outstanding-checkout ids, for the abandon path below:
+  // it runs from a navigation listener and on unmount, neither of which can
+  // read the state values a render closed over.
+  const holdBatchIdRef = useRef<string | null>(null);
+  const serverCheckoutBatchIdRef = useRef<string | null>(null);
+  // True only while handlePaymentSuccess is converting the held rows into
+  // real bookings. Releasing during that window would DELETE the very rows
+  // claim_cart_booking_slots is mid-way through claiming, and the claim's
+  // fallback (a fresh client-side insert) has been RLS-blocked since
+  // 20260810180302 — so the booking wouldn't be re-created, it would just
+  // fail. Abandoning is therefore skipped while this is set.
+  const isClaimingRef = useRef(false);
+
+  /**
+   * Give back the slots this checkout is holding.
+   *
+   * The hold placed at "Confirm & Pay" is a real `on_hold` row on the
+   * provider's diary, and until 2026-09-07 the ONLY thing that handed it
+   * back early was the payment sheet's own × button. Every other way out of
+   * a checkout — switching tabs, a tapped notification, the screen
+   * unmounting, a dev reload — left the row sitting there for the full
+   * 10-minute TTL, and since get_provider_busy_spans counts held slots as
+   * busy, the client who placed the hold was then told their own slot was
+   * unavailable when they went back to pick it again. That is the bug this
+   * closes: two abandoned holds were reproduced live on 2026-09-07
+   * (11:30 and 12:30 on the same provider, neither ever released).
+   *
+   * Best-effort by design: releaseCartCheckoutSlots never throws, and the
+   * expire_cart_holds() cron sweep remains the real backstop for the routes
+   * no client-side signal can reach (a crash, a force-quit, a dead network).
+   */
+  const abandonOutstandingCheckout = useCallback(() => {
+    if (isClaimingRef.current) return;
+    const heldBatch = holdBatchIdRef.current;
+    if (heldBatch) {
+      holdBatchIdRef.current = null;
+      setHoldBatchId(null);
+      releaseCartCheckoutSlots(heldBatch);
+    }
+    const serverBatch = serverCheckoutBatchIdRef.current;
+    if (serverBatch) {
+      serverCheckoutBatchIdRef.current = null;
+      setServerCheckoutBatchId(null);
+      cancelCheckout(serverBatch).catch(error => logger.error('Could not release secure checkout:', error));
+    }
+  }, [releaseCartCheckoutSlots]);
+
   // An RN Modal renders in a native overlay above whatever screen is
   // focused — it isn't scoped to "Cart is the visible screen," just to this
   // boolean being true. If a push notification is tapped while the success
@@ -1589,9 +1687,24 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
       setShowPaymentSuccessModal(false);
+      // Leaving Cart abandons an in-progress checkout: hand the slots back
+      // rather than making the client (and everyone else) wait out the TTL.
+      // The payment sheet goes with them — it's the same native-overlay
+      // problem as the success modal above, and leaving it up over another
+      // screen would let the client pay for a hold that no longer exists.
+      setShowPaymentModal(false);
+      abandonOutstandingCheckout();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, abandonOutstandingCheckout]);
+
+  // Same handover for the screen going away entirely, which fires no 'blur'.
+  // Routed through a ref with an empty dep array on purpose: depending on the
+  // callback directly would re-run this effect — and so RELEASE a live hold
+  // mid-checkout — every time its identity changed.
+  const abandonRef = useRef(abandonOutstandingCheckout);
+  useEffect(() => { abandonRef.current = abandonOutstandingCheckout; }, [abandonOutstandingCheckout]);
+  useEffect(() => () => abandonRef.current(), []);
 
   const [checkoutSnapshot, setCheckoutSnapshot] = useState<{
   items: CartItem[];
@@ -1856,6 +1969,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // the legacy hold batch while the mock checkout remains available in Expo
   // Go and during the staged release.
   const [serverCheckoutBatchId, setServerCheckoutBatchId] = useState<string | null>(null);
+  // Kept in step with the refs abandonOutstandingCheckout reads. Mirrored
+  // rather than assigned at each setState call site so a future one can't
+  // quietly forget to, and leave a hold nothing knows how to release.
+  useEffect(() => { holdBatchIdRef.current = holdBatchId; }, [holdBatchId]);
+  useEffect(() => { serverCheckoutBatchIdRef.current = serverCheckoutBatchId; }, [serverCheckoutBatchId]);
   // True only while the "Confirm & Pay" tap's holdCartCheckoutSlots call is
   // in flight — guards against a double-tap firing two hold batches for
   // the same cart.
@@ -1976,6 +2094,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // proceeding on guessed data (every provider treated as non-mobile, every
   // deposit falling back to the generic 20%).
   const [checkoutMetadataError, setCheckoutMetadataError] = useState(false);
+  // True while that same fetch is in flight. The cart hydrates from
+  // AsyncStorage and renders instantly, well before this network round trip
+  // lands, so an eager tap on Checkout is an ordinary race — and it used to
+  // be answered with a "Still confirming your cart, try again in a few
+  // seconds" alert, i.e. the client was told off for tapping a button the
+  // app had left enabled. The button shows its own spinner instead, and the
+  // alert below stays only as the belt-and-braces case.
+  const [isCheckoutMetadataLoading, setIsCheckoutMetadataLoading] = useState(false);
   // The provider names covered by the last COMPLETED (successful) metadata
   // fetch — lets handleCheckout tell "this provider's fetch just hasn't
   // landed yet" (name absent here, self-resolves in a moment) apart from
@@ -2146,9 +2272,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       setMobileProviderNames([]);
       setCheckoutMetadataError(false);
       setResolvedProviderNames(new Set());
+      setIsCheckoutMetadataLoading(false);
       return;
     }
     let cancelled = false;
+    setIsCheckoutMetadataLoading(true);
     getProviderCheckoutMetadata(names)
       .then(({ depositPolicies, mobileProviderNames }) => {
         if (cancelled) return;
@@ -2156,6 +2284,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         setMobileProviderNames(names.filter(name => mobileProviderNames.has(name)));
         setCheckoutMetadataError(false);
         setResolvedProviderNames(new Set(names));
+        setIsCheckoutMetadataLoading(false);
       })
       .catch(error => {
         if (cancelled) return;
@@ -2172,6 +2301,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         // (nothing fetched yet) can't reach checkout on defaults either.
         logger.error('Could not fetch checkout metadata (deposit policies / mobile providers):', error);
         setCheckoutMetadataError(true);
+        setIsCheckoutMetadataLoading(false);
       });
     return () => { cancelled = true; };
   }, [providerNamesKey]);
@@ -3072,6 +3202,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     logger.log('═══════════════════════════════════════');
   }
 
+  // Claiming has started: the held rows are about to become real bookings,
+  // so nothing may release them from under it. Cleared in the finally below,
+  // by which point the batch has either been claimed or reported as failed.
+  isClaimingRef.current = true;
   try {
     // The secure Stripe route has already finalised its server-owned holds in
     // the Edge Function. Do not fall through to the legacy client insert
@@ -3293,6 +3427,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     // "Booking Failed" alert and closing the payment sheet — this only needs
     // to propagate the error up to it (after the diagnostics above).
     throw error;
+  } finally {
+    isClaimingRef.current = false;
   }
 }, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, paymentTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress]);
 
@@ -4220,7 +4356,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             onRequestClose={() => setGroupRescheduleItems(null)}
           >
             <View style={styles.groupSheetOverlay}>
-              <View style={[styles.groupSheet, { backgroundColor: P.card, borderColor: P.border }]}>
+              <View style={[styles.groupSheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(spacing.xl, groupSheetBottomInset + 16) }]}>
                 <View style={styles.groupSheetHeader}>
                   <View style={styles.groupSheetHeaderText}>
                     <Text style={[styles.pickerTitle, { color: theme.text }]}>
@@ -4384,7 +4520,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 promoSavings={promoSavingsShown}
                 platformFee={platformFee}
                 finalTotal={effectiveFinalTotal}
-                isLoading={isLoading}
+                isLoading={isLoading || isCheckoutMetadataLoading}
                 bottomInset={insets.bottom}
                 showGuide={hasUnscheduledItems}
                 onCheckout={handleCheckout}
@@ -4732,6 +4868,125 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
     fontWeight: 'bold',
   },
+
+  // ServiceCard's shopping-cart-style row (GroupedServiceCard keeps the
+  // three-band layout above — serviceCard/serviceCardShadow/conflictBanner/
+  // itemEditButton/dateTextWarning stay shared with it, untouched).
+  swipeRowWrap: {
+    marginBottom: spacing.md,
+    borderRadius: dimensions.card.smallBorderRadius,
+    overflow: 'hidden',
+  },
+  swipeDeleteAction: {
+    width: 84,
+    height: '100%',
+    backgroundColor: '#F44336',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  swipeDeleteText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  swipeContent: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: dimensions.card.smallBorderRadius,
+  },
+  swipeSwatch: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  swipeSwatchText: {
+    fontSize: 20,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  swipeBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  swipeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+  },
+  swipeName: {
+    flex: 1,
+    fontSize: fonts.serviceText,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  swipeKebab: {
+    padding: 2,
+    marginTop: -2,
+  },
+  swipeMetaLine: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  swipeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  swipeBannerText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  swipeNote: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 3,
+  },
+  swipePriceBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  swipePriceLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+  },
+  swipePrice: {
+    fontSize: fonts.body.small,
+    fontFamily: 'BakbakOne-Regular',
+    fontWeight: '700',
+  },
+  swipePriceNote: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  swipeWhenTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  swipeWhen: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+  },
+  swipeWhenWarn: {
+    color: '#D32F2F',
+    fontWeight: 'bold',
+  },
+
   // "Which service?" chooser, opened from a provider header with >1 service.
   pickerOverlay: {
     flex: 1,
@@ -4787,8 +5042,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   groupSheet: {
     maxHeight: '88%',
@@ -5170,8 +5423,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
+    // No paddingBottom here on purpose. Unlike the small pickers (which float
+    // clear of the edge, per 0ad7b1c), this sheet is near-fullscreen and has
+    // top-only corner radii, so a gap underneath just reads as a flat cut-off
+    // edge with backdrop showing beneath it. It seats on the bottom edge and
+    // carries the home-indicator inset inside instead, below the Pay button.
   },
   paymentModal: {
     flex: 1,

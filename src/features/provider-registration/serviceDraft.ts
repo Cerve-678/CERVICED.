@@ -41,6 +41,7 @@ export interface ProviderServiceDraft {
   aftercareNotes: string;
   serviceType: ProviderServiceType;
   hairTypesSuitable: string[];
+  skinTonesSuitable?: string[];
   audience: ProviderServiceAudience;
 }
 
@@ -81,6 +82,7 @@ export function createServiceDraft(template?: ServiceTemplateSeed | null): Provi
     aftercareNotes: '',
     serviceType: template?.serviceType ?? '',
     hairTypesSuitable: [],
+    skinTonesSuitable: [],
     audience: '',
   };
 }

@@ -40,7 +40,7 @@ import { EMERGENCY_BOOKINGS_ENABLED } from '../constants/featureFlags';
 import type { DbPromotion } from '../types/database';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
-import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -217,6 +217,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   onSubmit,
 }) => {
   const insets = useSafeAreaInsets();
+  const bottomInset = useSystemBottomInset();
   const sheetBackground = backgroundColor;
   // Every other colour in this sheet (text/sub/border/surface) is derived
   // from its own backdrop too — nothing here reads the app's light/dark
@@ -667,7 +668,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           shorter screens the keyboard covered it outright, or squeezed it
           off the bottom of the visible sheet. */}
       <KeyboardDismissView style={styles.overlay}>
-        <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
+        <View style={[styles.sheet, { backgroundColor: sheetBackground, paddingBottom: bottomInset + 16 }]}>
           <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
           {!isFirstStep && (
@@ -1195,7 +1196,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         onRequestClose={() => setShowProviderTerms(false)}
       >
         <View style={styles.termsOverlay}>
-          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground, paddingBottom: bottomInset + 16 }]}>
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
@@ -1233,7 +1234,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         onRequestClose={() => setShowEmergencyPolicy(false)}
       >
         <View style={styles.termsOverlay}>
-          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground, paddingBottom: bottomInset + 16 }]}>
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
@@ -1271,7 +1272,7 @@ const styles = StyleSheet.create({
   // Dimmed backdrop + rounded sheet sliding up from the bottom — same
   // transparent-overlay idiom as CartScreen's PaymentModal, instead of an
   // opaque full-screen pageSheet.
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
@@ -1308,7 +1309,7 @@ const styles = StyleSheet.create({
   providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
-  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

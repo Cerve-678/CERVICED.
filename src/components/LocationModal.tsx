@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
-import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 
 interface LocationModalProps {
   visible: boolean;
@@ -77,6 +77,7 @@ export default function LocationModal({
   // client Home, and the enterprise tokens are provider-hat only — they'd paint
   // brown/dusty-rose chrome inside the client's plum + blue-grey theme.
   const { palette: P } = useTheme();
+  const bottomInset = useSystemBottomInset();
 
   return (
     <Modal
@@ -88,14 +89,14 @@ export default function LocationModal({
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable
-          style={[styles.sheet, { backgroundColor: P.card, borderColor: P.border }]}
+          style={[styles.sheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(34, bottomInset + 16) }]}
           onPress={() => {}}
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: P.text }]}>LOCATION &amp; RADIUS</Text>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
             <View style={styles.sectionHead}>
               <Text style={[styles.sectionTitle, { color: P.sub }]}>City</Text>
             </View>
@@ -145,8 +146,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   sheet: {
     maxHeight: '75%',

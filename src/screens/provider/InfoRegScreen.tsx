@@ -1,3 +1,4 @@
+import { SKIN_TONES } from '../../constants/skinTones';
 import React, { useState, useCallback, useMemo, useRef, useEffect, useContext, createContext } from 'react';
 import {
   View,
@@ -20,7 +21,7 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
-import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -67,6 +68,7 @@ import {
 // Navigation types
 import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
+import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
@@ -79,6 +81,12 @@ import { ChipSelect } from '../../features/provider-registration/ChipSelect';
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import { InfoRegPager } from '../../features/provider-registration/InfoRegPager';
+import {
+  INFO_REG_SECTIONS as EDITOR_SECTIONS,
+  infoRegSectionIndex,
+  type InfoRegSectionKey as EditorSectionKey,
+} from '../../features/provider-registration/infoRegSections';
 import { toUserMessage } from '../../utils/userFacingError';
 
 import {
@@ -86,7 +94,9 @@ import {
   BUSINESS_TYPE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
+  ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
+  SERVICE_TYPE_OPTS,
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
@@ -123,28 +133,15 @@ const PREVIEW_SHEET_LIP_RADIUS = 36;
 // separately-maintained copy of these seven strings in this file.
 const SERVICE_CATEGORIES: readonly string[] = SERVICE_CATEGORY_OPTS;
 
+// Chips show the human label, never the raw DB code — 'MUA' is a column value,
+// not a word a provider should have to recognise as "Makeup". Resolves against
+// the full list so a provider stamped with a retired type still reads properly
+// in the locked view.
+const serviceTypeLabelFor = (value: string): string =>
+  ALL_SERVICE_TYPE_OPTS.find(o => o.value === value)?.label ?? value;
+
 // businessTypeLabel() from the canonical table replaces what used to be a
 // fourth copy of these four strings in this file.
-
-/** The editor is one continuous document, not a hub-and-editor split and not a
- *  wizard: all five sections render sequentially in a single scroll, separated
- *  by oversized numerals and typographic breaks rather than bordered cards.
- *  This list is the scrollspy rail's data source — the rail indicates reading
- *  position ONLY. It is deliberately not a stepper and not a navigation gate:
- *  there is no prescribed order, no Next/Finish, and nothing here can prevent
- *  a provider from reaching any part of the form. Scrolling is the progression.
- *  The old "review" step isn't in this list because the document *is* the
- *  review — required-field warnings surface inline at the offending field plus
- *  as a summary next to Publish. */
-const EDITOR_SECTIONS = [
-  { key: 'identity' as const, num: '01', title: 'Identity',          short: 'Identity', sub: 'Business identity · how clients first find you' },
-  { key: 'about' as const,    num: '02', title: 'About & Portfolio', short: 'About',    sub: 'Your introduction and the work clients see' },
-  { key: 'contact' as const,  num: '03', title: 'Contact',           short: 'Contact',  sub: 'Public details — anyone browsing can use these' },
-  { key: 'services' as const, num: '04', title: 'Services',          short: 'Services', sub: 'What you offer, and what it costs' },
-  { key: 'policies' as const, num: '05', title: 'Address Confirmation', short: 'Address', sub: 'Business setup, address release' },
-];
-
-type EditorSectionKey = (typeof EDITOR_SECTIONS)[number]['key'];
 
 // Maps a missing-required roll-up label (sectionSummaries' own row.label) to
 // the registerField() key of its actual input, for the roll-up's tap-to-jump.
@@ -287,6 +284,7 @@ interface ServiceData {
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
+  skinTonesSuitable?: string[];
   // Who this specific service is for. '' = not stated, read as "everyone" —
   // mirrors the live services_audience_check constraint.
   audience: 'women' | 'men' | 'kids' | 'everyone' | '';
@@ -1187,6 +1185,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [contraindications, setContraindications] = useState<string[]>(service?.contraindications || []);
   const [contraindicationInput, setContraindicationInput] = useState('');
   const [aftercareNotes, setAftercareNotes] = useState(service?.aftercareNotes || '');
+  const [skinTonesSuitable, setSkinTonesSuitable] = useState<string[]>(service?.skinTonesSuitable || []);
   const [hairTypesSuitable, setHairTypesSuitable] = useState<string[]>(service?.hairTypesSuitable || []);
   // Shown inline above the save button instead of an Alert, so the reason a
   // save was refused stays beside the button that refused it.
@@ -1245,6 +1244,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setContraindicationInput('');
     setAftercareNotes(service?.aftercareNotes || '');
     setHairTypesSuitable(service?.hairTypesSuitable || []);
+    setSkinTonesSuitable(service?.skinTonesSuitable || []);
     setError(null);
     setDurationOpen(false);
     setOpenBuffer(null);
@@ -1371,6 +1371,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       aftercareNotes: aftercareNotes.trim(),
       serviceType,
       hairTypesSuitable,
+      skinTonesSuitable,
       audience,
     });
     onClose();
@@ -1693,6 +1694,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <ChipSelect options={HAIR_TYPES} selected={hairTypesSuitable} onToggle={toggleTag(hairTypesSuitable, setHairTypesSuitable)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
+
+              <View style={styles.inputGroup}>
+                <View style={styles.serviceSheetSectionRule} />
+                <Text style={styles.serviceSheetSection}>Suitable Skin Tones</Text>
+                <Text style={styles.serviceSheetHint}>Select the skin tones this service suits. Leave blank if not specified.</Text>
+                <TouchableOpacity onPress={() => setSkinTonesSuitable(skinTonesSuitable.length === SKIN_TONES.length ? [] : [...SKIN_TONES])}>
+                  <Text style={[styles.serviceSheetHint, { color: accentColor }]}>{skinTonesSuitable.length === SKIN_TONES.length ? 'Clear selection' : 'Select all skin tones'}</Text>
+                </TouchableOpacity>
+                <ChipSelect options={SKIN_TONES} selected={skinTonesSuitable} onToggle={toggleTag(skinTonesSuitable, setSkinTonesSuitable)} accentColor={accentColor} styles={styles} />
+              </View>
 
               {/* ── Aesthetics Safety Section (AESTHETICS only) — shown right
                    under the description, since this is what clients need to
@@ -2266,6 +2277,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               source={{ uri: providerData.backgroundImage }}
               style={[styles.previewHeroImage, { opacity: 0.88 }]}
               resizeMode="cover"
+              fadeDuration={0}
             />
             <LinearGradient
               colors={['rgba(0,0,0,0.38)', 'rgba(0,0,0,0.18)', 'transparent']}
@@ -2305,6 +2317,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     source={{ uri: providerData.logo }}
                     style={styles.previewProviderLogo}
                     resizeMode="cover"
+                    fadeDuration={0}
                   />
                 ) : (
                   <View style={[styles.previewProviderLogo, { backgroundColor: accentColor, alignItems: 'center', justifyContent: 'center' }]}>
@@ -2782,11 +2795,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // This deliberately replaces the previous scheme, which stored a local
   // `e.nativeEvent.layout.y` from onLayout plus a per-field hardcoded fudge
   // constant (+150/+200/+500/+700/+750/+800/+850/+875/+900 …). Those
-  // constants existed only to hand-compensate for the fact that, when one
-  // section rendered at a time, a field's local layout.y was not its page
-  // position. In a single continuous document every one of them would be
-  // wrong at once — and wrong silently, scrolling to the wrong place rather
-  // than erroring. Measuring removes the guesswork entirely: there is no
+  // constants existed only to hand-compensate for nested local coordinates.
+  // With five independent page scrollers, those guesses would be wrong
+  // silently. Measuring removes the guesswork entirely: there is no
   // magic number left to keep in sync when the layout changes.
   const fieldNodes = useRef<Record<string, View | null>>({});
 
@@ -2824,6 +2835,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [providerData, setProviderData] = useState<ProviderRegistrationData>({
     providerName: '',
     providerService: 'HAIR',
+    serviceCategories: ['HAIR'],
+    categoryServiceTypes: {},
     customServiceType: '',
     location: '',
     aboutText: '',
@@ -2872,24 +2885,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // mounted (all 5 pages exist in the pager at once), so unsaved edits can't
   // be lost by swiping.
   const [activePage, setActivePage] = useState(0);
-  // The track/fill line used to run a hardcoded left:30/right:30 inset,
-  // which only lands on the first/last waypoint chip's true centre when
-  // every chip happens to be the same width — it doesn't ("Identity"/
-  // "Services" are noticeably wider than "About"). Measuring the actual
-  // chips' centres via onLayout replaces that guess with the real value,
-  // same fix as the field-focus-scroll rewrite elsewhere in this screen.
-  const [waypointLineEnds, setWaypointLineEnds] = useState<{ first: number; last: number } | null>(null);
-  const handleWaypointButtonLayout = useCallback((index: number, isLast: boolean) => (e: LayoutChangeEvent) => {
-    if (index !== 0 && !isLast) return;
-    const { x, width } = e.nativeEvent.layout;
-    const centerX = x + width / 2;
-    setWaypointLineEnds(prev => {
-      const next = { first: prev?.first ?? 0, last: prev?.last ?? 0 };
-      if (index === 0) next.first = centerX;
-      if (isLast) next.last = centerX;
-      return next;
-    });
-  }, []);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
   // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
@@ -2939,6 +2934,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     surf: surfForTheme(chromeTheme),
     onAccent: chromeTheme.onAccent,
   }), [chromeTheme]);
+  // Same frosted-glass treatment ProviderProfileScreen's category pills use
+  // (CategoryTabPill) — matched here so the category tab strip looks like the
+  // same control on both screens, not a flatter reimplementation.
+  const categoryTabBlurTint = chromeTheme.isDark ? ('dark' as const) : ('light' as const);
+  const categoryTabBlurIntensity = chromeTheme.isDark ? 35 : 25;
   // Header/inline icons can't read a StyleSheet colour, so they take the same
   // palette token the sheet above is built from.
   const chromeText = chromeTheme.text;
@@ -3014,19 +3014,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
                 const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
                 const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
-                // providerService defaults to 'HAIR' (not '') so the usual
-                // `prev.x || fallback` idiom can't tell "still the untouched
-                // default" from "provider genuinely picked Hair" — 'HAIR' is
-                // both. Since this whole prefill only ever runs once, before
-                // a first-time provider has had a chance to touch the
-                // category picker, treating 'HAIR' as "not yet chosen" here
-                // is safe in practice, same tradeoff every other field in
-                // this block already accepts for the brief async window.
-                const prefilledService = SERVICE_CATEGORIES.find(c => c === prefill.service_interests?.[0]);
+                // "Services you offer" on SignUpStep4 is already a
+                // multi-select, and its answer already lands in
+                // users.service_interests — it just never reached the
+                // provider profile, so every provider was made to narrow it
+                // back down to one type here. Carry it through instead.
+                // Filtered to the real vocabulary: service_interests is also
+                // written by the CLIENT signup path, where it holds interests
+                // rather than a business's own service types.
+                const prefilledServiceTypes = (prefill.service_interests ?? []).filter(
+                  (interest): interest is string =>
+                    typeof interest === 'string' && SERVICE_CATEGORIES.includes(interest),
+                );
                 setProviderData(prev => ({
                   ...prev,
+                  ...(prefilledServiceTypes.length
+                    ? {
+                        serviceCategories: prefilledServiceTypes,
+                        // The headline is the first of the set — the same
+                        // relationship the DB trigger enforces server-side.
+                        providerService: prefilledServiceTypes[0] as string,
+                      }
+                    : {}),
                   providerName: prev.providerName || prefill.business_name || prefill.name || '',
-                  providerService: prev.providerService === 'HAIR' ? (prefilledService || prev.providerService) : prev.providerService,
                   phone: prev.phone || prefill.business_phone || prefill.phone || '',
                   email: prev.email || prefill.business_email || '',
                   instagram: prev.instagram || prefill.instagram || '',
@@ -3271,6 +3281,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // template pre-filled) one, so the modal title & save copy stay correct.
   const [isEditingService, setIsEditingService] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  // Which of the provider's macro types the menu below is showing. Providers
+  // with one type never see the switch, so this simply stays on it.
+  const [selectedServiceType, setSelectedServiceType] = useState<string>('');
   // Keeps the selected category tab in view — panning back to the start of
   // the strip every time you pick a category (especially one further along
   // the list) was disorienting.
@@ -3330,9 +3343,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       ...prev,
       categories: { ...prev.categories, [name]: [] },
       categoryDescriptions: { ...prev.categoryDescriptions, [name]: description },
+      // Stamped with the type whose tab it was created under, so it lands in
+      // the right place instead of defaulting to the headline type.
+      categoryServiceTypes: {
+        ...prev.categoryServiceTypes,
+        [name]: selectedServiceType || prev.providerService,
+      },
     }));
     setSelectedCategory(name);
-  }, []);
+  }, [selectedServiceType]);
 
 
   // Delete category
@@ -3517,23 +3536,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }
   }, [providerData, user, policies, policiesLoaded, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted]);
 
-  // ── Pager position ────────────────────────────────────────────────────
-  // Which section-page is currently active — both the pill row's live
-  // indicator and the single source of truth goToSection jumps against.
-  // Replaces the old vertical scrollspy (a passive reading-position
-  // indicator over one continuous scroll) now that each section is its own
-  // horizontally-paged, independently-scrolling screen.
-  const handlePagerScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-    setActivePage(prev => (prev === idx ? prev : idx));
+  // The pager owns swipe tracking; this callback is the single imperative
+  // entry point used by timeline tabs, Next buttons and validation shortcuts.
+  const goToSection = useCallback((key: EditorSectionKey) => {
+    const idx = infoRegSectionIndex(key);
+    if (idx < 0) return;
+    // Update immediately instead of waiting for momentum-end: button and
+    // accessibility state must agree with the destination during the motion.
+    setActivePage(idx);
+    pagerRef.current?.scrollTo({ x: idx * screenWidth, animated: true });
   }, [screenWidth]);
 
-  // Jumps to a section by index — used by the pill row, and by the "Next"
-  // affordance at the top of each section.
-  const goToSection = useCallback((key: EditorSectionKey) => {
-    const idx = EDITOR_SECTIONS.findIndex(s => s.key === key);
-    if (idx < 0) return;
-    pagerRef.current?.scrollTo({ x: idx * screenWidth, animated: true });
+  // Keep the current page aligned after rotation or split-view resizing.
+  useEffect(() => {
+    pagerRef.current?.scrollTo({ x: activePage * screenWidth, animated: false });
+    // activePage changes already move through goToSection or a native swipe;
+    // this effect exists specifically for a page-width change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenWidth]);
 
   // Roll-up chip tap: page to the missing field's section, then — if it has
@@ -3559,7 +3578,68 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   );
   // Recomputed only when categories actually change, not on every keystroke
   // elsewhere in this screen's single providerData state blob.
-  const categoryNames = useMemo(() => Object.keys(providerData.categories), [providerData.categories]);
+  // Which macro type a category sits under. A category with nothing recorded
+  // belongs to the headline type — what every category meant before a
+  // provider could declare more than one.
+  const typeOfCategory = useCallback(
+    (categoryName: string): string =>
+      providerData.categoryServiceTypes?.[categoryName] || providerData.providerService,
+    [providerData.categoryServiceTypes, providerData.providerService],
+  );
+
+  const serviceTypes = useMemo(
+    () =>
+      providerData.serviceCategories?.length
+        ? providerData.serviceCategories
+        : [providerData.providerService],
+    [providerData.serviceCategories, providerData.providerService],
+  );
+
+  // Add or remove one macro type at sign-up. Two rules the DB also holds, so
+  // the UI can never propose a state the save would reject:
+  //  - the set is never empty. Deselecting your last type is a no-op rather
+  //    than a disabled-looking chip, because "none" isn't a business.
+  //  - `providerService` is always the set's first entry, matching what
+  //    sync_provider_service_categories enforces between service_category and
+  //    service_categories[1]. Drop the headline and the next type inherits it.
+  // Order follows SERVICE_CATEGORIES, not tap order, so the headline is
+  // predictable rather than a side effect of which chip was pressed first.
+  const toggleServiceType = useCallback((category: string) => {
+    setProviderData(prev => {
+      const current = prev.serviceCategories?.length
+        ? prev.serviceCategories
+        : [prev.providerService];
+      const next = current.includes(category)
+        ? current.filter(c => c !== category)
+        : SERVICE_CATEGORIES.filter(c => c === category || current.includes(c));
+      const headline = next[0];
+      // Doubles as the never-empty guard: no headline means no types left.
+      if (!headline) return prev;
+      return { ...prev, serviceCategories: next, providerService: headline };
+    });
+  }, []);
+
+  // Only the categories under the type currently selected in the switch —
+  // this is what the pill strip renders and what drag-reorder operates on.
+  const categoryNames = useMemo(
+    () =>
+      Object.keys(providerData.categories).filter(
+        name => typeOfCategory(name) === selectedServiceType,
+      ),
+    [providerData.categories, typeOfCategory, selectedServiceType],
+  );
+  // Every category name across every type, regardless of which tab is
+  // active. `categories` is one flat object keyed by name with no per-type
+  // namespacing, so two types can never share a name — AddCategoryModal's
+  // duplicate check has to see this, not the type-filtered categoryNames
+  // above. Scoping it to categoryNames let a same-named category created
+  // under a different type silently overwrite the original's services and
+  // steal its type, since `{ ...prev.categories, [name]: [] }` in
+  // handleAddCategory just replaces whatever already lived at that key.
+  const allCategoryNames = useMemo(
+    () => Object.keys(providerData.categories),
+    [providerData.categories],
+  );
   const serviceCount = useMemo(
     () => Object.values(providerData.categories).reduce((total, services) => total + services.length, 0),
     [providerData.categories],
@@ -3681,14 +3761,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const visibleMissingRequiredEntries = hasAttemptedSave ? missingRequiredEntries : EMPTY_MISSING_ENTRIES;
   const visibleMissingRequiredSet = hasAttemptedSave ? missingRequiredSet : EMPTY_STRING_SET;
 
-  // Keep the draggable order in sync with the real data — but never while a
-  // drag is in progress, or the live reflow would get stomped mid-gesture.
+  // Settle on a real service type once the form has loaded, and keep the
+  // selected category inside it — a category name valid under one type may
+  // not exist under another.
+  useEffect(() => {
+    setSelectedServiceType(prev =>
+      prev && serviceTypes.includes(prev) ? prev : serviceTypes[0] ?? '',
+    );
+  }, [serviceTypes]);
+
+  useEffect(() => {
+    setSelectedCategory(prev =>
+      prev && categoryNames.includes(prev) ? prev : categoryNames[0] ?? '',
+    );
+  }, [categoryNames]);
+
+  // Keep the draggable order in sync with the currently selected service
+  // type — switching type changes categoryNames even though the underlying
+  // categories object has not changed.
   useEffect(() => {
     if (draggingCategory) return;
     categoryOrderRef.current = categoryNames;
     setCategoryOrder(categoryNames);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerData.categories, draggingCategory]);
+  }, [categoryNames, draggingCategory]);
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -3724,11 +3819,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   }, []);
 
   const handleSetCategoryOrder = useCallback((order: string[]) => {
-    setProviderData(prev => {
-      const newCategories: Record<string, ServiceData[]> = {};
-      order.forEach(key => { newCategories[key] = prev.categories[key] || []; });
-      return { ...prev, categories: newCategories };
-    });
+    // The visible order covers one service type only. Preserve categories
+    // belonging to every other type instead of replacing the whole record.
+    setProviderData(prev => ({
+      ...prev,
+      categories: reorderCategoriesWithinType(prev.categories, order),
+    }));
   }, []);
 
   // Drag-to-reorder for the services inside the selected category. Keyed by
@@ -3860,19 +3956,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           (app-default during signup, the provider's chosen theme once
           they're editing an existing profile — see chromeTheme above). */}
       <View style={{ flex: 1, backgroundColor: chromeTheme.bg }}>
-        {/* Only paint the provider's custom gradient — same gate the hero
-            preview uses (line ~1768). Without it this rendered unconditionally,
-            defaulting to providerData.gradient's hardcoded placeholder rainbow
-            at 0.85 opacity over the whole screen, which visually smothered
-            the background's bg entirely. */}
-        {providerData.hasCustomGradient && (
-          <LinearGradient
-            colors={providerData.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.gradientOverlay}
-          />
-        )}
+        {/* No hero-gradient wash here, unlike the Preview modal and the real
+            ProviderProfileScreen. `hasCustomGradient` is true for almost
+            every provider — BrandingScreen writes a `gradient` column for
+            every preset, not just ones with a genuine two-tone blend (see
+            BrandingScreen.tsx ~161) — so this used to paint the provider's
+            hero colour full-screen at 0.85 opacity behind the whole form.
+            For dark hero colours (the Black preset's `#000000`, Burgundy &
+            Blue's `#6B2737`) that read as the entire registration form
+            having turned solid black/burgundy. The form's content sheet is
+            documented to ALWAYS stay the flat beige regardless of theme
+            (providerThemes.ts SHEET_BG comment) — chromeTheme.bg above
+            already provides that; the branding preview lives only in the
+            Preview modal. */}
 
         <StatusBar barStyle={statusBarStyle} translucent backgroundColor="transparent" />
 
@@ -3889,8 +3985,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           visible={showCategoryModal}
           onClose={() => setShowCategoryModal(false)}
           onAdd={handleAddCategory}
-          existing={categoryNames}
-          businessKind={providerData.providerService}
+          existing={allCategoryNames}
+          // Catered to whichever type tab is actually open, not always the
+          // headline — a provider on their Hair tab adding a category should
+          // see Hair subcategory suggestions, not Makeup ones just because
+          // Makeup happens to be first/headline. Falls back to the headline
+          // only for the moment before selectedServiceType has settled.
+          businessKind={selectedServiceType || providerData.providerService}
           accentColor={adaptiveAccentColor}
         />
 
@@ -3898,7 +3999,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         <ServiceTemplatePicker
           visible={showTemplatePicker}
           categoryName={currentCategory}
-          fallbackKind={providerData.providerService}
+          fallbackKind={selectedServiceType || providerData.providerService}
           accentColor={adaptiveAccentColor}
           onClose={() => setShowTemplatePicker(false)}
           onPick={(template) => {
@@ -3920,7 +4021,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           service={editingService}
           categoryName={currentCategory}
           isEditing={isEditingService}
-          fallbackKind={providerData.providerService}
+          fallbackKind={selectedServiceType || providerData.providerService}
           accentColor={adaptiveAccentColor}
         />
 
@@ -3990,92 +4091,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </View>
           )}
 
-          {/* Each EDITOR_SECTIONS entry is now its own full-width,
-              independently vertically-scrolling page inside one
-              horizontally-paged pager — replacing the old single continuous
-              vertical document the pill row below used to just spy on. */}
-          <View style={styles.docApp}>
-            {/* ── Waypoint row ── Both the live page indicator (done/
-                current/upcoming per section) and a jump control: tapping
-                any waypoint pages straight to that section via goToSection,
-                same as the "Next" button at the top of each section below.
-                Each waypoint shows its own section title rather than a bare
-                numbered/unlabeled bar. */}
-            <View style={styles.waypointRow}>
-              <View
-                style={[
-                  styles.waypointTrack,
-                  waypointLineEnds
-                    ? {
-                        left: waypointLineEnds.first,
-                        right: undefined,
-                        width: waypointLineEnds.last - waypointLineEnds.first,
-                      }
-                    : null,
-                ]}
-              />
-              <View
-                style={[
-                  styles.waypointFill,
-                  waypointLineEnds
-                    ? {
-                        left: waypointLineEnds.first,
-                        width: (waypointLineEnds.last - waypointLineEnds.first) * (activePage / (EDITOR_SECTIONS.length - 1)),
-                      }
-                    : { width: `${(activePage / (EDITOR_SECTIONS.length - 1)) * 100}%` },
-                ]}
-              />
-              {EDITOR_SECTIONS.map((s, i) => (
-                <TouchableOpacity
-                  key={s.key}
-                  onPress={() => { tapSelect(); goToSection(s.key); }}
-                  onLayout={handleWaypointButtonLayout(i, i === EDITOR_SECTIONS.length - 1)}
-                  hitSlop={{ top: 10, bottom: 10 }}
-                  style={styles.waypointButton}
-                  activeOpacity={0.6}
-                >
-                  <View
-                    style={[
-                      styles.waypointChip,
-                      i < activePage && styles.waypointChipDone,
-                      i === activePage && styles.waypointChipCurrent,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.waypointChipText,
-                        i < activePage && styles.waypointChipTextDone,
-                        i === activePage && styles.waypointChipTextCurrent,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {s.short}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <ScrollView
-              ref={pagerRef}
-              horizontal
-              pagingEnabled
-              style={styles.content}
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={handlePagerScrollEnd}
-              scrollEventThrottle={16}
-              // The Services page (04) below has its own category-pill and
-              // service-card drag gestures that need the vertical scroll
-              // *they* live in disabled while armed — see that page's own
-              // ScrollView for the full explanation. This outer pager needs
-              // the exact same gate: a drag in progress on the active page is
-              // still a touch this horizontal ScrollView's native recognizer
-              // could steal as a page-swipe if left enabled, same failure
-              // mode as the single-ScrollView version of this screen had,
-              // just one level up now that paging and section-scrolling are
-              // separate ScrollViews on separate axes.
-              scrollEnabled={!draggingCategory && !serviceDrag.draggingKey}
-            >
+          <InfoRegPager
+            ref={pagerRef}
+            sections={EDITOR_SECTIONS}
+            activeIndex={activePage}
+            pageWidth={screenWidth}
+            scrollEnabled={!draggingCategory && !serviceDrag.draggingKey}
+            colors={{
+              background: editTheme.bg,
+              border: editTheme.border,
+              accent: adaptiveAccentColor,
+              mutedText: editTheme.sub,
+              onAccent: chrome.onAccent,
+            }}
+            onActiveIndexChange={setActivePage}
+            onSectionPress={(key) => {
+              tapSelect();
+              goToSection(key);
+            }}
+          >
             {/* ── 01 · Identity ── First page of the pager. Oversized
                 numeral + typographic break carries the section's own
                 structure; the pill row above is the only navigation chrome
@@ -4168,68 +4202,67 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <RequiredLabel required styles={styles}>Service Type</RequiredLabel>
                 {isEditMode ? (
                   <>
-                    <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
-                      <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                        {providerData.providerService === 'OTHER'
-                          ? providerData.customServiceType || 'Other'
-                          : providerData.providerService || 'Not set'}
-                      </Text>
+                    {/* Every type they ticked at sign-up, each locked. One
+                        chip for a single-type provider — identical to how
+                        this has always looked for them. */}
+                    <View style={styles.lockedServiceTypeRow}>
+                      {serviceTypes.map(serviceType => (
+                        <View
+                          key={serviceType}
+                          style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                        >
+                          <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                          <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                            {serviceTypeLabelFor(serviceType)}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
                     <Text style={styles.inputHint}>
-                      Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 90 days.
+                      {serviceTypes.length > 1
+                        ? 'Set at sign-up — contact support to change your service types.'
+                        : 'Set at sign-up — contact support to change your service type.'}
                     </Text>
                   </>
                 ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.serviceCategoryScroll}
-                  >
-                    {SERVICE_CATEGORIES.map((category) => (
-                      <TouchableOpacity
-                        key={category}
-                        style={[
-                          styles.serviceCategoryChip,
-                          providerData.providerService === category &&
-                            styles.serviceCategoryChipSelected,
-                        ]}
-                        onPress={() =>
-                          { tapSelect(); setProviderData({ ...providerData, providerService: category }); }}
-                      >
-                        <Text
-                          style={[
-                            styles.serviceCategoryText,
-                            providerData.providerService === category &&
-                              styles.serviceCategoryTextSelected,
-                          ]}
-                        >
-                          {category}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                )}
-                {/* Custom Service Type Input when OTHER is selected */}
-                {providerData.providerService === 'OTHER' && (
-                  <View
-                    style={styles.customServiceInput}
-                    ref={registerField('customService')}
-                  >
-                    <View style={[styles.inputBlur, styles.profileInputBox]}>
-                      <TextInput
-                        style={styles.textInput}
-                        value={providerData.customServiceType}
-                        onChangeText={(text) =>
-                          setProviderData({ ...providerData, customServiceType: text })
-                        }
-                        placeholder="What service do you provide?"
-                        placeholderTextColor={chrome.fg(0.4)}
-                        autoFocus
-                        onFocus={() => handleInputFocus('customService', 'identity')}
-                      />
+                  /* Multi-select: a provider offering hair AND nails is one
+                     business, not two profiles. Wraps rather than scrolling
+                     horizontally, because a horizontal rail hides its own
+                     options — the types past the fold went unpicked simply
+                     for being off-screen, which is the wrong reason to end up
+                     in one category. Every option is on screen at once. */
+                  <>
+                    <View style={styles.serviceCategoryGrid}>
+                      {SERVICE_TYPE_OPTS.map(({ value, label }) => {
+                        const selected = serviceTypes.includes(value);
+                        return (
+                          <TouchableOpacity
+                            key={value}
+                            activeOpacity={0.75}
+                            style={[
+                              styles.serviceCategoryChip,
+                              selected && styles.serviceCategoryChipSelected,
+                            ]}
+                            onPress={() => { tapSelect(); toggleServiceType(value); }}
+                          >
+                            <Text
+                              style={[
+                                styles.serviceCategoryText,
+                                selected && styles.serviceCategoryTextSelected,
+                              ]}
+                            >
+                              {label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                  </View>
+                    <Text style={styles.inputHint}>
+                      Pick every type you offer. The first one you pick is your
+                      headline type — it's what clients see first, and what your
+                      specialty and template suggestions are built from.
+                    </Text>
+                  </>
                 )}
               </View>
 
@@ -4678,12 +4711,63 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </TouchableOpacity>
                 </View>
 
+                  {/* Service-type switch — plain underline, the same
+                      treatment as the History / To Do row on
+                      ProviderBookingHistoryScreen, and deliberately not a
+                      filled pill: the category pills directly below are
+                      already filled, and two filled controls stacked read
+                      as one level rather than two. Hidden entirely for a
+                      single-type provider. */}
+                  {serviceTypes.length > 1 ? (
+                    <View style={[styles.serviceTypeSwitch, { borderBottomColor: chrome.fg(0.15) }]}>
+                      {serviceTypes.map(serviceType => {
+                        const active = serviceType === selectedServiceType;
+                        const count = Object.entries(providerData.categories)
+                          .filter(([name]) => typeOfCategory(name) === serviceType)
+                          .reduce((total, [, list]) => total + list.length, 0);
+                        return (
+                          <TouchableOpacity
+                            key={serviceType}
+                            style={[
+                              styles.serviceTypeTab,
+                              active && { borderBottomColor: adaptiveAccentColor },
+                            ]}
+                            onPress={() => { tapSelect(); setSelectedServiceType(serviceType); }}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.serviceTypeTabText,
+                                {
+                                  color: active ? chrome.fg(0.95) : chrome.fg(0.5),
+                                  fontWeight: active ? '700' : '600',
+                                },
+                              ]}
+                            >
+                              {serviceType}
+                              {count > 0 ? `  ${count}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
                 {categoryNames.length === 0 ? (
                   <View style={styles.emptyServicesCard}>
                     <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
                     <Text style={styles.emptyServicesText}>
-                      Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
-                      (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
+                      {serviceTypes.length > 1 ? (
+                        <>
+                          Nothing under <Text style={{ fontWeight: '700' }}>{selectedServiceType}</Text> yet.
+                          Clients won't see it on your profile until you add a service to it.
+                        </>
+                      ) : (
+                        <>
+                          Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
+                          (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
+                        </>
+                      )}
                     </Text>
                   </View>
                 ) : (
@@ -4759,7 +4843,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 );
                               }}
                             >
-                              <View
+                              <BlurView
+                                intensity={categoryTabBlurIntensity}
+                                tint={categoryTabBlurTint}
                                 style={[
                                   styles.categoryTabBlur,
                                   isSel && styles.selectedCategoryTabBlur,
@@ -4773,11 +4859,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 >
                                   {item}
                                 </Text>
-                                {/* The handle starts a plain, immediate drag. */}
+                                {/* The handle starts a plain, immediate drag.
+                                    Selected tab is now a solid accent fill
+                                    (matching CategoryTabPill), so the handle
+                                    switches to an onAccent tint there instead
+                                    of the neutral fg tone that would sit low-
+                                    contrast on it. */}
                                 <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 16, bottom: 16, left: 12, right: 14 }}>
-                                  <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
+                                  <Ionicons
+                                    name="reorder-three-outline"
+                                    size={20}
+                                    color={isSel ? withAlpha(chromeTheme.onAccent, 0.75) : chrome.fg(0.4)}
+                                  />
                                 </View>
-                              </View>
+                              </BlurView>
                             </TouchableOpacity>
                             </Animated.View>
                           </ReAnimated.View>
@@ -4831,7 +4926,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                       horizontal
                                       pagingEnabled
                                       showsHorizontalScrollIndicator={false}
-                                      keyExtractor={(item, index) => `${item.uri}-${index}`}
+                                      keyExtractor={(item) => item.uri}
                                       renderItem={({ item }) => (
                                         <Image
                                           source={{ uri: item.uri }}
@@ -5301,7 +5396,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
               </ScrollView>
             </View>
-          </ScrollView>
+          </InfoRegPager>
 
           {/* Publish — the document's single commit action, and the only
               thing on this screen that writes to the server. Now permanently
@@ -5359,7 +5454,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </>
               )}
             </TouchableOpacity>
-          </View>
           </View>
 
           <ReleaseDayPicker
@@ -5537,14 +5631,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: P.bg,
     padding: 24,
   },
-  gradientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0.85,
-  },
   safeArea: {
     flex: 1,
   },
@@ -5616,9 +5702,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     color: '#7A4B00',
     marginRight: 8,
   },
-  content: {
-    flex: 1,
-  },
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
@@ -5681,98 +5764,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 10,
   },
 
-  // ── Continuous document ───────────────────────────────────────────────
-  // Direction B: the whole profile is one scroll. Structure is carried by
-  // oversized numerals and typographic breaks rather than bordered cards, so
-  // there is deliberately no border/blur/shadow on a section itself.
-  docApp: {
-    flex: 1,
-  },
-  // Waypoint row — both the live indicator (done/current/upcoming per
-  // section) and a tap target (goToSection) for jumping straight to a
-  // section. Replaces the old plain unlabeled pill-bar row (5 equal bars,
-  // no title anywhere) with a labeled strip — each waypoint shows its own
-  // section title, so the strip itself answers "where am I / what's next"
-  // without needing a separate readout line below it.
-  waypointRow: {
-    position: 'relative',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    // Top/bottom padding stays equal around the fixed-height chips.
-    paddingVertical: 12,
-  },
-  waypointTrack: {
-    position: 'absolute',
-    left: 30,
-    right: 30,
-    // Explicitly includes the row's 12px top padding. A percentage here is
-    // resolved against Yoga's inner content height and lands at the top edge
-    // of the 26px pills instead of halfway through them.
-    top: 24,
-    height: 2,
-    backgroundColor: P.border,
-    borderRadius: 1,
-  },
-  // Width is set inline per render (fraction of EDITOR_SECTIONS covered by
-  // activePage) — colour/position live here, the one dynamic value doesn't.
-  waypointFill: {
-    position: 'absolute',
-    left: 30,
-    top: 24,
-    height: 2,
-    backgroundColor: P.accent,
-    borderRadius: 1,
-  },
-  waypointButton: {
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  waypointChip: {
-    // Fixed height (rather than letting paddingVertical + text line-height
-    // set it) so the done/current/upcoming states — current's text is a
-    // point larger — stay exactly the same height as each other. The track
-    // line's top:'50%' only lands through every chip's true centre if every
-    // chip is actually the same height.
-    height: 26,
-    paddingHorizontal: 9,
-    justifyContent: 'center',
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: P.border,
-    backgroundColor: P.bg,
-  },
-  // Already-visited sections: accent outline, still on the flat bg — reads
-  // as "done" without competing with the current section's filled chip.
-  waypointChipDone: {
-    borderColor: P.accent,
-  },
-  // The active section's chip is the one filled solid with the theme's
-  // accent — same "this is genuinely selected" treatment the category tabs
-  // use elsewhere in this screen (selectedCategoryTabBlur), not a shade of
-  // the neutral chrome.
-  waypointChipCurrent: {
-    borderColor: P.accent,
-    backgroundColor: P.accent,
-    shadowColor: CARD_SHADOW_COLOR,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  waypointChipText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 10,
-    color: P.sub,
-  },
-  waypointChipTextDone: {
-    color: P.accent,
-  },
-  waypointChipTextCurrent: {
-    color: P.onAccent,
-    fontSize: 11,
-  },
   // Full-bleed section: a hairline rule and generous space do the separating.
   docSection: {
     marginBottom: 40,
@@ -5824,9 +5815,9 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     color: fg(0.85),
     marginBottom: 20,
   },
-  // Additive jump-to-next affordance at the foot of each section — the
-  // scrollspy rail stays a passive indicator, this is a separate, optional
-  // shortcut for a reader who'd rather tap than scroll. Deliberately a small,
+  // Jump-to-next affordance at the foot of each section — the timeline is
+  // also tappable, while this gives a natural forward action after completing
+  // a page. Deliberately a small,
   // right-aligned outlined pill — NOT full-width/filled/shadowed like a
   // primary CTA, since Publish (pinnedBarButton) is the only real primary
   // action on this screen and this shouldn't visually compete with it.
@@ -6247,8 +6238,10 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
 
   // Service Categories
-  serviceCategoryScroll: {
-    flexGrow: 0,
+  serviceCategoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   serviceCategoryChip: {
     paddingHorizontal: 16,
@@ -6330,6 +6323,33 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
 
   // Category Tabs
+  // Locked service-type chips wrap rather than scroll — a provider with
+  // three or four types should see all of them at once, not have to swipe a
+  // read-only row.
+  lockedServiceTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  // Service-type switch — plain underline indicator, mirroring the
+  // History / To Do row on ProviderBookingHistoryScreen.
+  serviceTypeSwitch: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  serviceTypeTab: {
+    paddingTop: 4,
+    paddingBottom: 12,
+    marginRight: 24,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  serviceTypeTabText: {
+    fontSize: 15,
+    letterSpacing: -0.1,
+  },
   categoryHint: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
@@ -6353,40 +6373,41 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingRight: 20,
     gap: 10,
   },
-  // Pills keep their capsule shape (they are pills, not cards) but pick up the
-  // accent-tinted border the rest of the screen's controls now share, so the
-  // restored strip sits inside the polished language rather than beside it.
+  // Matches CategoryTabPill (ProviderProfileScreen's category strip) exactly
+  // — frosted-glass capsule, neutral hairline border, solid accent fill with
+  // a transparent border on selection — so this screen's own category tabs
+  // (which also carry drag-to-reorder/edit, so can't just BE that shared
+  // component) still read as the same control as the client-facing one.
   categoryTab: {
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: accentBorder,
+    minWidth: 80,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: P.border,
   },
   categoryTabBlur: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
     paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingVertical: 11,
     backgroundColor: surf(0.08),
-    borderRadius: 20,
-    overflow: 'hidden',
   },
-  // The selected pill is the one piece of the strip that's genuinely the
-  // provider's own state, so it takes the provider accent rather than another
-  // near-identical surface tint (which read as barely-selected before).
   selectedCategoryTab: {
-    borderColor: isDark ? withAlpha(P.accent, 0.45) : P.accent,
+    borderColor: 'transparent',
   },
   selectedCategoryTabBlur: {
-    backgroundColor: isDark ? withAlpha(P.accent, 0.20) : withAlpha(P.accent, 0.12),
+    backgroundColor: P.accent,
   },
   selectedCategoryTabText: {
-    color: P.text,
+    color: P.onAccent,
+    fontWeight: 'bold',
   },
   categoryTabText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
     color: fg(0.7),
   },
   categoryDragHandle: {
@@ -7780,11 +7801,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontWeight: '700',
     fontSize: 11,
     color: '#fff',
-  },
-
-  // Custom Service Type Input
-  customServiceInput: {
-    marginTop: 10,
   },
 
   // Accent Color Preview

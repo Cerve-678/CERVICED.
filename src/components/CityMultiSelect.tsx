@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { UK_CITIES } from '../constants/ukCities';
 import { getCityAreaData, type CityAreaData } from '../data/cityAreas';
-import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string;
@@ -42,6 +42,7 @@ interface CityMultiSelectProps {
  * appending to this array instead of composing one string.
  */
 export function CityMultiSelect({ selected, onChange, palette: t, placeholder }: CityMultiSelectProps) {
+  const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
   const [otherText, setOtherText] = useState('');
@@ -125,7 +126,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
       <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
           <Pressable style={styles.backdrop} onPress={close} />
-          <View style={[styles.sheet, { backgroundColor: t.card }]}>
+          <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: bottomInset + 16 }]}>
             <View style={[styles.handle, { backgroundColor: t.border }]} />
             <View style={styles.header}>
               <Text style={[styles.title, { color: t.text }]}>Choose your cities</Text>
@@ -289,7 +290,7 @@ const styles = StyleSheet.create({
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { maxHeight: '75%', minHeight: 420, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, marginBottom: BOTTOM_SAFE_GAP },
+  sheet: { height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 0.5 },

@@ -324,8 +324,17 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
             <Text style={[bc.summaryLabel, { color: P.sub }]}>Service Total  </Text>
             <Text style={[bc.summaryVal, { color: P.text }]}>£{total}</Text>
           </View>
-          <Text style={bc.deposit}>Deposit paid – £{booking.amountPaid}</Text>
-          <Text style={bc.balance}>Total due – £{booking.remainingBalance ?? 0}</Text>
+          {booking.paymentType === 'deposit' ? (
+            // amount_paid includes CERVICED's platform fee on top of the
+            // deposit — never the provider's money, so this shows the
+            // deposit alone.
+            <>
+              <Text style={bc.deposit}>Deposit paid – £{booking.depositAmount ?? 0}</Text>
+              <Text style={bc.balance}>Balance due – £{booking.remainingBalance ?? 0}</Text>
+            </>
+          ) : (
+            <Text style={bc.deposit}>Paid in full – £{total}</Text>
+          )}
           <SummaryRow label="Payment Method" value={booking.paymentMethod || 'Card'} P={P} />
         </View>
       )}

@@ -18,12 +18,17 @@ import {
   setAuthAutoRefresh,
   signOutCurrentSession,
   subscribeToAuthStateChanges,
+  getProviderIdForUserId,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 
 export type AccountType = 'user' | 'provider';
+
+/** Result of the session-level owned-provider lookup. A failed lookup must
+ * stay distinct from a successful "owns no profile" null. */
+export type OwnedProviderLookupStatus = 'pending' | 'resolved' | 'failed';
 
 export interface UserData {
   id: string;
@@ -80,6 +85,9 @@ interface AuthContextType {
   session: Session | null;
   /** The only account/hat shape UI code should interpret. */
   hatState: AccountHatState;
+  /** Provider profile owned by this account. Meaningful once status resolves. */
+  myProviderId: string | null;
+  myProviderIdStatus: OwnedProviderLookupStatus;
   switchMode: () => Promise<void>;
   upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
@@ -142,6 +150,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => getAccountHatState(user?.accountType ?? null, user?.hasClientProfile, activeMode),
     [user?.accountType, user?.hasClientProfile, activeMode],
   );
+  // Resolve ownership once per session, before a provider profile is opened.
+  // This lets its Book button paint with the service card instead of waiting
+  // for a second per-profile request after the screen has appeared.
+  const [myProviderId, setMyProviderId] = useState<string | null>(null);
+  const [myProviderIdStatus, setMyProviderIdStatus] =
+    useState<OwnedProviderLookupStatus>('pending');
+  useEffect(() => {
+    if (!user?.id) {
+      setMyProviderId(null);
+      setMyProviderIdStatus('resolved');
+      return;
+    }
+
+    let cancelled = false;
+    setMyProviderIdStatus('pending');
+    void getProviderIdForUserId(user.id)
+      .then((id) => {
+        if (cancelled) return;
+        setMyProviderId(id);
+        setMyProviderIdStatus('resolved');
+      })
+      .catch((error: unknown) => {
+        logger.warn('[AuthContext] Could not resolve owned provider id:', error);
+        if (cancelled) return;
+        setMyProviderId(null);
+        setMyProviderIdStatus('failed');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // accountType changes when a provider row is created mid-session.
+  }, [user?.id, user?.accountType]);
   // Mirrors activeMode for applyMode's noop check without pulling activeMode
   // into that callback's deps (which would otherwise force it to be
   // re-created — and re-registered via registerModeSetter — on every switch).
@@ -696,11 +737,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
+    myProviderId, myProviderIdStatus,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
+    myProviderId, myProviderIdStatus,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,

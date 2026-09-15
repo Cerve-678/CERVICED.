@@ -111,6 +111,7 @@ export function useProviderProfileData(
   useEffect(() => {
     profileGenerationRef.current += 1;
     let cancelled = false;
+    let viewerCheckTimeout: ReturnType<typeof setTimeout> | null = null;
     setLoading(true);
     setLoadFailed(false);
     setProvider(null);
@@ -216,6 +217,15 @@ export function useProviderProfileData(
             logger.warn("Failed to load provider opening hours:", error);
           });
 
+        // Ownership is secondary viewer context, not profile content. Never
+        // let a stalled auth/follow query hold a Book-intent entrance forever:
+        // fail open after a short bound and keep the database self-booking
+        // guard as the final authority. If the request eventually resolves,
+        // it can still correct isOwnProvider for the visible screen.
+        viewerCheckTimeout = setTimeout(() => {
+          if (!cancelled) setViewerChecked(true);
+        }, 1500);
+
         void getProviderProfileViewerContext(data.id)
           .then((viewer) => {
             if (cancelled) return;
@@ -233,6 +243,10 @@ export function useProviderProfileData(
             // prevents self-booking, while a transient viewer-state failure
             // must not freeze every legitimate client's booking entry point.
             if (!cancelled) setViewerChecked(true);
+          })
+          .finally(() => {
+            if (viewerCheckTimeout) clearTimeout(viewerCheckTimeout);
+            viewerCheckTimeout = null;
           });
       } catch (error: unknown) {
         if (!cancelled) setLoadFailed(true);
@@ -245,6 +259,7 @@ export function useProviderProfileData(
     void loadProfile();
     return () => {
       cancelled = true;
+      if (viewerCheckTimeout) clearTimeout(viewerCheckTimeout);
       profileGenerationRef.current += 1;
     };
   }, [providerSlug]);

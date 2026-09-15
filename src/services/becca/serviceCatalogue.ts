@@ -38,7 +38,31 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "nail infill", keywords: ["infills", "nail infill", "rebalance"] },
     { specific: "nail removal", keywords: ["nail removal", "soak off", "gel removal", "acrylic removal"] },
     { specific: "nail repair", keywords: ["broken nail", "nail repair"] },
-    { keywords: ["nail", "nails"] },
+    // Shapes are how people name what they want — "i want to do almond" is a
+    // complete request to a nail tech. They carry NO `specific`, on purpose:
+    // `specific` is matched against real service names elsewhere (see
+    // discover.provider_services), and no provider lists "almond" as a
+    // bookable service, so claiming one would search for a row that cannot
+    // exist. The shape resolves the category; the provider's own menu names
+    // the service.
+    //
+    // Bare "square"/"round" are left out — too common in ordinary sentences
+    // to be safe as standalone keywords. "squoval", "coffin", "ballerina" and
+    // "stiletto" have no competing everyday meaning in a booking request.
+    {
+      keywords: [
+        "almond nails", "coffin nails", "ballerina nails", "stiletto nails",
+        "square nails", "round nails", "oval nails", "squoval nails",
+        "almond", "coffin", "ballerina", "stiletto", "squoval",
+      ],
+    },
+    {
+      keywords: [
+        "nail", "nails", "nail salon", "nail salons",
+        "nail tech", "nail techs", "nail technician", "nail technicians",
+        "nail artist", "nail artists",
+      ],
+    },
   ],
   HAIR: [
     { specific: "balayage", keywords: ["balayage", "painted highlights", "babylights"] },
@@ -55,7 +79,14 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "perm", keywords: ["perm", "curly perm", "relaxer"] },
     { specific: "hair treatment", keywords: ["hair treatment", "olaplex", "deep conditioning", "scalp treatment"] },
     { specific: "updo", keywords: ["updo", "bun", "wedding hair", "formal style", "bridal hair"] },
-    { keywords: ["hair", "hairdresser", "stylist", "salon"] },
+    {
+      keywords: [
+        "hair", "salon", "salons",
+        "hairdresser", "hairdressers", "stylist", "stylists",
+        "hair stylist", "hair stylists", "braider", "braiders",
+        "colourist", "colourists", "colorist", "colorists",
+      ],
+    },
   ],
   LASHES: [
     { specific: "classic lashes", keywords: ["classic lashes", "individual lashes", "classic set"] },
@@ -66,7 +97,13 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "lash fill", keywords: ["lash fill", "lash refill", "infill", "lash infills"] },
     { specific: "lash removal", keywords: ["lash removal", "lash soak off"] },
     { specific: "cluster lashes", keywords: ["cluster lashes", "strip lashes"] },
-    { keywords: ["lash", "lashes", "eyelash", "eyelashes"] },
+    {
+      keywords: [
+        "lash", "lashes", "eyelash", "eyelashes",
+        "lash tech", "lash techs", "lash technician", "lash technicians",
+        "lash artist", "lash artists",
+      ],
+    },
   ],
   BROWS: [
     { specific: "brow shaping", keywords: ["brow shaping", "brow shape", "arch", "brow tidy"] },
@@ -76,7 +113,12 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "henna brows", keywords: ["henna brows", "henna brow"] },
     { specific: "threading", keywords: ["threading", "thread"] },
     { specific: "brow wax", keywords: ["brow wax", "brow waxing"] },
-    { keywords: ["brow", "brows", "eyebrow", "eyebrows"] },
+    {
+      keywords: [
+        "brow", "brows", "eyebrow", "eyebrows",
+        "brow artist", "brow artists", "brow tech", "brow techs",
+      ],
+    },
   ],
   MUA: [
     { specific: "bridal makeup", keywords: ["bridal", "wedding makeup", "bride", "bridal trial"] },
@@ -100,13 +142,19 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "massage", keywords: ["massage", "deep tissue", "swedish massage", "sports massage", "back massage"] },
     { specific: "teeth whitening", keywords: ["teeth whitening", "tooth whitening", "whitening"] },
     { specific: "body treatment", keywords: ["body treatment", "body scrub", "body wrap", "lymphatic drainage"] },
-    { keywords: ["aesthetics", "aesthetic", "skin", "skincare", "beauty treatment"] },
+    {
+      keywords: [
+        "aesthetics", "aesthetic", "skin", "skincare", "beauty treatment",
+        "beautician", "beauticians", "aesthetician", "aestheticians",
+        "esthetician", "estheticians",
+      ],
+    },
   ],
   // Live category with its own Home section and filter tab. Barbering
   // vocabulary is deliberately distinct from HAIR's: someone asking for a
   // "fade" or a "beard trim" wants a barber, not a salon stylist.
   MALE: [
-    { specific: "barber cut", keywords: ["barber", "barbers", "barbershop", "mens haircut", "men's haircut", "mens cut"] },
+    { specific: "barber cut", keywords: ["barber", "barbers", "barbershop", "barbershops", "mens haircut", "men's haircut", "mens cut"] },
     { specific: "fade", keywords: ["fade", "skin fade", "taper fade", "high fade", "low fade", "buzz cut"] },
     { specific: "beard trim", keywords: ["beard", "beard trim", "beard shape", "beard lineup", "hot towel shave", "wet shave", "shave"] },
     { specific: "line up", keywords: ["line up", "lineup", "edge up", "shape up"] },

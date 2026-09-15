@@ -74,7 +74,6 @@ import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentati
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -103,10 +102,11 @@ const DARK = {
   sep:     'rgba(126,102,103,0.10)',
   iconBg:  'rgba(175,145,151,0.10)',
 };
+const PROVIDER_IN_PROGRESS_PURPLE = '#7B2FBE';
 
 type ProviderInvoiceBooking = Pick<
   ConfirmedBooking,
-  'id' | 'status' | 'addOns' | 'paymentType' | 'amountPaid' | 'price' | 'bookingDate' | 'bookingTime' | 'endTime' | 'serviceName'
+  'id' | 'status' | 'addOns' | 'paymentType' | 'amountPaid' | 'depositAmount' | 'price' | 'bookingDate' | 'bookingTime' | 'endTime' | 'serviceName'
 > & {
   customerName?: string;
   paymentMethod?: string;
@@ -117,13 +117,17 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
   const statusColors: Record<string, string> = {
     UPCOMING: '#007AFF', COMPLETED: '#34C759',
     CANCELLED: '#FF3B30', NO_SHOW: '#FF3B30',
-    PENDING: '#FF9500', IN_PROGRESS: '#AF9197',
+    PENDING: '#FF9500', IN_PROGRESS: PROVIDER_IN_PROGRESS_PURPLE,
   };
   const statusColor = statusColors[booking.status] ?? '#AF9197';
   const addOnsRows = (booking.addOns ?? []).map(addOn =>
     `<tr><td style="padding:8px 0;color:#555;padding-left:20px;font-size:16px">+ ${addOn.name}</td><td style="padding:8px 0;color:#555;font-size:16px;text-align:right">£${Number(addOn.price).toFixed(2)}</td></tr>`
   ).join('');
   const depositLabel = booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment';
+  // Provider's own cut, never amount_paid — that figure is what left the
+  // client's card and, on a card charge, includes CERVICED's platform fee,
+  // which is never the provider's money.
+  const paidAmount = booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice;
   const remainingBalance = booking.remainingBalance ?? 0;
   const balanceRow = remainingBalance > 0
     ? `<tr><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px">Balance due</td><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px;text-align:right">£${remainingBalance.toFixed(2)}</td></tr>`
@@ -154,7 +158,6 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
   .ref-block { margin-top: 36px; text-align: center; }
   .ref-label { font-size: 13px; letter-spacing: 2px; color: #888; }
   .ref-value { font-size: 17px; font-weight: 700; letter-spacing: 4px; margin-top: 6px; }
-  .footer { margin-top: 44px; text-align: center; font-size: 13px; color: #bbb; letter-spacing: 1px; }
   section { margin-bottom: 4px; }
 </style>
 </head>
@@ -197,7 +200,7 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
   <section>
     <div class="label">PAYMENT</div>
     <table>
-      <tr><td style="padding:6px 0;color:#34C759;font-weight:600">${depositLabel}</td><td style="padding:6px 0;color:#34C759;font-weight:600;text-align:right">£${Number(booking.amountPaid ?? 0).toFixed(2)}</td></tr>
+      <tr><td style="padding:6px 0;color:#34C759;font-weight:600">${depositLabel}</td><td style="padding:6px 0;color:#34C759;font-weight:600;text-align:right">£${paidAmount.toFixed(2)}</td></tr>
       ${balanceRow}
       <tr><td style="padding:6px 0;color:#555">Payment method</td><td style="padding:6px 0;color:#555;text-align:right;font-weight:600">${paymentMethodLabel}</td></tr>
     </table>
@@ -211,8 +214,6 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
     <div class="ref-label">REFERENCE</div>
     <div class="ref-value">${formatBookingRef(booking)}</div>
   </div>
-
-  <div class="footer">cerviced.app</div>
 </body>
 </html>`;
 }
@@ -1164,7 +1165,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     );
   }
 
-  const statusColor = BOOKING_STATUS_COLORS[booking.status] || '#007AFF';
+  // Provider-side in-progress actions use the same purple as Booking History.
+  const statusColor = booking.status === BookingStatus.IN_PROGRESS
+    ? PROVIDER_IN_PROGRESS_PURPLE
+    : BOOKING_STATUS_COLORS[booking.status] || '#007AFF';
 
   const isActive = booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS;
   const isPendingConfirmation = booking.status === BookingStatus.PENDING;
@@ -1201,16 +1205,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
-          {/* Hat label: this screen is reachable directly from a provider
-              notification on cold launch, where the tab bar is the only other
-              hat signal and is easy to miss. A dual-hat user must be able to
-              tell their own appointment from their client's job at a glance —
-              the two afford opposite actions. This screen is always the
-              provider hat's view of a job they are performing. */}
           <View style={styles.headerTitleWrap}>
-            <Text style={[styles.headerHat, { color: P.accent }]} numberOfLines={1}>
-              BUSINESS
-            </Text>
             <Text style={[styles.headerTitle, { color: P.text }]} numberOfLines={1}>
               Your Client's Booking
             </Text>
@@ -1384,7 +1379,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     rendered for mobile at all. The address itself lives in
                     the ADDRESS section further down; this is the status line
                     for it. */}
-                {!addressKnown ? (
+                {booking.status === BookingStatus.CANCELLED ? (
+                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                ) : !addressKnown ? (
                   <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
                 ) : isMobileProvider ? (
                   <Row
@@ -1620,13 +1617,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                               </Text>
                             </View>
                           )}
-                          {providerServiceCategory ? (
-                            <View style={{ backgroundColor: '#a342c322', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#a342c3', letterSpacing: 0.4 }}>
-                                {providerServiceCategory}
-                              </Text>
-                            </View>
-                          ) : null}
                         </View>
                         <Ionicons
                           name={profileExpanded ? 'chevron-up' : 'chevron-down'}
@@ -1878,10 +1868,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     "Full payment  £0.00" in green here would read as if £0
                     was collected via the app, when really nothing has been
                     collected through the app at all yet. */}
+                {/* amount_paid is what left the client's card, which for a
+                    card charge includes CERVICED's platform fee on top — the
+                    provider is never owed that fee, so this row shows the
+                    provider's own cut: the full service price when paid in
+                    full, or just the deposit (fee-free at source) otherwise. */}
                 {(booking.amountPaid ?? 0) > 0 && (
                   <Row
                     label={booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
-                    value={`£${(booking.amountPaid ?? 0).toFixed(2)}`}
+                    value={`£${(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)}`}
                     textColor={P.text}
                     divColor={rowDiv}
                     valueColor="#34C759"
@@ -1962,10 +1957,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── Receipt Footer ── */}
               <View style={[styles.receiptFooter, { borderTopColor: perf }]}>
-                <Text style={[styles.footerText, { color: P.sub }]}>
+                <Text style={[styles.footerLabel, { color: P.sub }]}>REFERENCE</Text>
+                <Text style={[styles.footerText, { color: P.text }]}>
                   {formatBookingRef(booking)}
                 </Text>
-                <Text style={[styles.footerText, { color: P.sub }]}>cerviced.app</Text>
               </View>
 
             </View>
@@ -2076,7 +2071,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={() => setClientHistoryVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '80%' }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '80%', paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <Text style={[styles.respondModalTitle, { color: P.text }]}>
                 {booking?.customerName ? `${booking.customerName}'s History` : 'Client History'}
@@ -2163,7 +2158,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={closeInitRescheduleModal}
       >
         <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             {initSent ? (
               <View style={styles.sentState}>
                 <Text style={styles.sentIcon}>{dbReschedule?.status === 'rejected' ? '✕' : '✓'}</Text>
@@ -2275,7 +2270,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={initSlotDatePickerVisible} onRequestClose={() => setInitSlotDatePickerVisible(false)}>
                       <View style={styles.pickerModalWrap}>
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitSlotDatePickerVisible(false)} />
-                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                        <View style={[styles.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                           <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
                             <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Date</Text>
                             <TouchableOpacity onPress={() => setInitSlotDatePickerVisible(false)}>
@@ -2351,7 +2346,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={initCustomTimePickerVisible} onRequestClose={() => setInitCustomTimePickerVisible(false)}>
                       <View style={styles.pickerModalWrap}>
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitCustomTimePickerVisible(false)} />
-                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                        <View style={[styles.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                           <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
                             <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Time</Text>
                             <TouchableOpacity onPress={() => setInitCustomTimePickerVisible(false)}>
@@ -2473,7 +2468,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={closeGroupRescheduleModal}
       >
         <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             {initSent ? (
               <View style={styles.sentState}>
                 <Text style={styles.sentIcon}>✓</Text>
@@ -2806,7 +2801,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={() => setShowInfoPackPicker(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '70%' }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '70%', paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             <Text style={[styles.respondModalTitle, { color: P.text }]}>Send Info Pack</Text>
             <Text style={[styles.respondModalSub, { color: P.sub, marginBottom: 12 }]}>
               Choose a pack to send to the client for this booking.
@@ -3009,12 +3004,6 @@ const styles = StyleSheet.create({
   },
   headerTitleWrap: {
     alignItems: 'center',
-  },
-  headerHat: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 1,
   },
   headerTitle: {
     fontSize: 17,
@@ -3409,17 +3398,22 @@ const styles = StyleSheet.create({
 
   // ── Receipt footer ──
   receiptFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: 4,
   },
+  footerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
   footerText: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.8,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
 
   // ── Action buttons (below receipt) ──
@@ -3455,8 +3449,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   respondModal: {
     borderTopLeftRadius: 28,
@@ -3511,8 +3503,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   pickerDismiss: {
     flex: 1,

@@ -892,11 +892,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                   Select which services this form applies to. Toggle Auto-send to send it automatically when the service is booked.
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceChipsScroll} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {providerServiceNames.map((name, idx) => {
+                  {providerServiceNames.map((name) => {
                     const selected = selectedServices.includes(name);
                     return (
                       <TouchableOpacity
-                        key={`${idx}-${name}`}
+                        key={name}
                         style={[styles.serviceChip,
                           { borderColor: selected ? P.accent : P.border,
                             backgroundColor: selected ? P.accent + '18' : P.card }]}

@@ -1,3 +1,4 @@
+import { SKIN_TONES } from '../../constants/skinTones';
 // src/screens/client/BeautyProfileScreen.tsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
@@ -38,7 +39,7 @@ import { HAIR_TYPES } from '../../constants/hairTypes';
 const SCALP_CONDITIONS = ['Healthy', 'Dry', 'Oily', 'Sensitive', 'Flaky'];
 const HAIR_GOALS       = ['Length retention', 'Volume', 'Colour / highlights', 'Moisture', 'Definition', 'Protective styling'];
 const SKIN_TYPES       = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'];
-const SKIN_TONES       = ['Fair', 'Light', 'Medium', 'Tan', 'Deep', 'Rich'];
+
 const SKIN_CONCERNS    = [
   'Acne prone', 'Hyperpigmentation', 'Rosacea', 'Eczema',
   'Psoriasis', 'Fine lines', 'Dark circles', 'Dry patches', 'Oiliness',
@@ -63,7 +64,6 @@ const TREATMENT_HISTORY = [
   'Virgin hair', 'Coloured', 'Bleached / lightened', 'Relaxed / permed',
   'Hair extensions', 'Lash extensions', 'Microblading', 'Fillers / Botox', 'Chemical peels',
 ];
-const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 
 const GENDER_LABELS: Record<Gender, string> = {
   female: 'Female',
@@ -500,9 +500,6 @@ export default function BeautyProfileScreen({ navigation }: any) {
             <Text style={[styles.sectionSub, { color: P.sub }]}>How would you describe your overall look?</Text>
             {renderChips(STYLE_VIBES, o => draft.styleVibe === o, o => setSingle('styleVibe', o))}
 
-            {sectionHead("SERVICES I'M INTO", '', { selected: draft.serviceInterests.length, total: SERVICE_CATEGORIES.length }, { optional: true })}
-            <Text style={[styles.sectionSub, { color: P.sub }]}>What you typically book</Text>
-            {renderChips(SERVICE_CATEGORIES, o => draft.serviceInterests.includes(o), o => toggleMulti('serviceInterests', o))}
           </>
         );
 

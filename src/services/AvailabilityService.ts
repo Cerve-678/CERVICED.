@@ -599,9 +599,40 @@ const resolveProviderId = async (providerIdOrName: string): Promise<string | nul
 };
 
 /**
- * Re-checks the two time-relative rules a slot can fail purely because the
- * clock moved: it's now in the past, or it has fallen inside the provider's
- * minimum-notice window.
+ * Has this slot simply gone? Nothing about the provider is involved — only
+ * the date, the time and the clock — so this deliberately needs no lookup,
+ * and callers run it BEFORE resolving a provider or reading their schedule.
+ *
+ * That ordering is the point. When this ran behind those reads, a cart item
+ * sat on overnight was answered by whichever of them failed first, and the
+ * client was told the provider wasn't taking bookings or didn't work that
+ * day — claims about the provider, both usually false, for a problem that
+ * was only ever the clock.
+ *
+ * Returns a BookingConflict to surface, or null when the time is still ahead.
+ */
+const checkElapsed = (date: string, time: string): BookingConflict | null => {
+  // Same construction as the slot generators above: midnight on the date,
+  // then offset by the slot's minutes-from-midnight. Parsing "HH:MM AM/PM"
+  // into a Date directly isn't reliable across platforms.
+  const slotStart = new Date(date + 'T00:00:00');
+  if (Number.isNaN(slotStart.getTime())) return null;
+  slotStart.setMinutes(parseTimeToMinutes(time));
+
+  if (slotStart.getTime() < Date.now()) {
+    return {
+      hasConflict: true,
+      message: 'That time has already passed — please pick a new slot.',
+    };
+  }
+  return null;
+};
+
+/**
+ * Re-checks the one time-relative rule a slot can fail purely because the
+ * clock moved and the provider has a say in: it has fallen inside their
+ * minimum-notice window. The other one — the time having passed outright —
+ * is checkElapsed above, which runs first and needs no provider at all.
  *
  * getAvailableSlots() applies both when generating the picker, but only at
  * selection time — a cart item sat on overnight can name a slot that was
@@ -616,23 +647,12 @@ const checkNoticeWindow = async (
   date: string,
   time: string,
   // The client accepted an explicit short-notice request for this exact slot
-  // and the provider takes them. The elapsed-time check below still applies:
-  // no opt-in makes a time that has already gone bookable.
+  // and the provider takes them.
   allowShortNotice = false,
 ): Promise<BookingConflict | null> => {
-  // Same construction as the slot generators above: midnight on the date,
-  // then offset by the slot's minutes-from-midnight. Parsing "HH:MM AM/PM"
-  // into a Date directly isn't reliable across platforms.
   const slotStart = new Date(date + 'T00:00:00');
   if (Number.isNaN(slotStart.getTime())) return null;
   slotStart.setMinutes(parseTimeToMinutes(time));
-
-  if (slotStart.getTime() < Date.now()) {
-    return {
-      hasConflict: true,
-      message: 'That time has already passed — please pick a new slot.',
-    };
-  }
 
   // display_name comes along on the read we're already doing — the message
   // below names the provider rather than saying "this provider", which reads
@@ -1164,6 +1184,13 @@ export const AvailabilityService = {
       const newDurationMinutes = parseDurationToMinutes(serviceDuration);
       const newEndMinutes = newStartMinutes + newDurationMinutes;
 
+      // Before any lookup: a time that has gone is gone regardless of who the
+      // provider is, whether they can still be resolved, and whether they have
+      // since blocked that date. Answering this first is what stops a stale
+      // cart item being reported as the provider not taking bookings.
+      const elapsed = checkElapsed(date, time);
+      if (elapsed) return elapsed;
+
       const providerId = await resolveProviderId(providerName);
 
       if (providerId) {
@@ -1176,14 +1203,14 @@ export const AvailabilityService = {
           return { hasConflict: true, message: 'Provider is not available on this date.' };
         }
 
-        // A slot that was valid when it was picked goes stale as the clock
-        // moves — a cart item sat on overnight can name a time that's since
-        // passed, or fallen inside the provider's minimum-notice window.
-        // getAvailableSlots() applies these same two rules when generating
-        // the picker, but only at selection time; without re-checking here a
-        // stale item sails through checkout and is only rejected by the
-        // enforce_booking_bookability trigger, mid-hold, with no way for the
-        // client to tell which appointment was at fault.
+        // The other half of the staleness check (the elapsed one ran above,
+        // before this provider was even resolved): a cart item sat on
+        // overnight can name a time that has fallen inside this provider's
+        // minimum-notice window. getAvailableSlots() applies the same rule
+        // when generating the picker, but only at selection time; without
+        // re-checking here a stale item sails through checkout and is only
+        // rejected by the enforce_booking_bookability trigger, mid-hold, with
+        // no way for the client to tell which appointment was at fault.
         const noticeConflict = await checkNoticeWindow(providerId, date, time, policy.shortNotice);
         if (noticeConflict) return noticeConflict;
 

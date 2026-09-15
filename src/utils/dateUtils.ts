@@ -3,7 +3,7 @@
  * Two canonical output styles:
  *  - formatLongDate:  "Wednesday 8th June 2026"
  *  - formatShortDate: "08/06/2026"
- *  - formatTime12:    "09:00am" (zero-padded hour, always :MM, lowercase am/pm, no space)
+ *  - formatTime12:    "09:00am" / "2:00pm" (AM hours are zero-padded, always :MM, lowercase am/pm, no space)
  */
 
 export const DAY_NAMES_FULL = [
@@ -80,15 +80,16 @@ export function formatShortDate(input: string | Date): string {
 }
 
 /**
- * Formats a time value to "09:00am" / "1:00pm"-free, always-zero-padded 12-hour style.
+ * Formats a time value to "09:00am" / "2:00pm": AM hours are zero-padded;
+ * PM hours use the natural 12-hour width.
  * Accepts:
  *  - 24-hour "HH:MM" or "HH:MM:SS" strings (e.g. "09:00", "14:30:00")
  *  - 12-hour strings with AM/PM in any case/spacing (e.g. "9:00 AM", "9:00am", "9:00 A.M.")
  *  - a Date object
  * Output: always two-digit minute, lowercase "am"/"pm", no space. The hour is
- * zero-padded for AM ("09:00am") but NOT for PM ("1:00pm", "7:00pm") — noon
- * and midnight are always "12:00pm"/"12:00am".
- * Examples: "09:00am", "1:00pm", "7:00pm", "12:00pm", "12:00am".
+ * zero-padded for both AM and PM. Noon and midnight are always
+ * "12:00pm"/"12:00am".
+ * Examples: "09:00am", "2:00pm", "7:00pm", "12:00pm", "12:00am".
  */
 export function formatTime12(input: string | Date): string {
   let hours: number;
@@ -120,7 +121,6 @@ export function formatTime12(input: string | Date): string {
   const isPM = hours >= 12;
   let displayHour = hours % 12;
   if (displayHour === 0) displayHour = 12;
-  // AM hours are zero-padded ("09:00am"); PM hours are not ("1:00pm").
   const displayHourStr = isPM ? String(displayHour) : String(displayHour).padStart(2, '0');
   const paddedMinute = String(minutes).padStart(2, '0');
   const period = isPM ? 'pm' : 'am';

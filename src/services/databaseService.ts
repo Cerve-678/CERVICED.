@@ -83,6 +83,7 @@ export function subscribeToAuthStateChanges(
 export async function signOutCurrentSession(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+  invalidateOwnProviderIds();
 }
 
 export async function clearUserStorageFolder(
@@ -341,6 +342,10 @@ export async function deleteClientAccountProfile(): Promise<AccountDeletionResul
 export async function deleteProviderAccountProfile(): Promise<AccountDeletionResult> {
   const { data, error } = await supabase.rpc("delete_provider_profile");
   if (error) throw error;
+  // The account no longer owns this row, so discovery should start showing
+  // it again (to them as much as anyone) rather than serving a stale
+  // "that's yours" answer for the rest of the session.
+  invalidateOwnProviderIds();
   return (data ?? {}) as AccountDeletionResult;
 }
 
@@ -391,12 +396,97 @@ export async function getClientPointsHistory(limit = 50): Promise<ClientPointsLe
 // ─────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────
+// OWN-PROFILE EXCLUSION
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Ids of the provider rows the signed-in user owns.
+ *
+ * A provider wearing their client hat is a normal client in every other
+ * respect, which means every discovery surface (Home's sections, Explore's
+ * feed, Search, Becca) was happily recommending them their own business —
+ * a result they can neither book nor usefully browse. These ids are what
+ * the client-facing queries below filter themselves out by.
+ *
+ * Returns *every* owned row rather than a single canonical one: a handful
+ * of accounts picked up duplicate provider rows during account churn (see
+ * getProviderProfileForUserId, which resolves that ambiguity for the
+ * provider hat), and excluding only the canonical row would leave the
+ * duplicate showing in the feed.
+ *
+ * Memoised per auth user id, so a whole Explore refresh costs one lookup
+ * rather than one per query, and so logging in as someone else can never
+ * inherit the previous account's ids. Ownership only changes when a
+ * profile is created or deleted — both of which invalidate it explicitly.
+ */
+let ownProviderIdsCache: { userId: string; ids: string[] } | null = null;
+
+/** Drop the memoised ownership answer — called wherever this file changes
+ *  which provider rows the current account owns (registration, claim,
+ *  profile deletion, sign-out). Deliberately not exported: nothing outside
+ *  this file can change that ownership without going through one of those. */
+function invalidateOwnProviderIds(): void {
+  ownProviderIdsCache = null;
+}
+
+async function getOwnProviderIds(): Promise<string[]> {
+  // getSession() reads the locally cached session; getUser() (used elsewhere
+  // in this file where the answer must be authoritative) costs a network
+  // round trip, which is not worth paying on every discovery query.
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return [];
+  if (ownProviderIdsCache?.userId === userId) return ownProviderIdsCache.ids;
+
+  const { data: rows, error } = await supabase
+    .from("providers")
+    .select("id")
+    .eq("user_id", userId);
+
+  // The one deliberate exception to this file's "always throw" rule, and it
+  // is scoped to exactly this lookup: it decorates an otherwise valid query
+  // rather than producing the query's result. Failing hard here would blank
+  // out Home and Explore over a filter whose worst-case absence is seeing
+  // your own card once. Logged, and deliberately not cached, so the next
+  // call retries.
+  if (error) {
+    logger.warn(
+      "[databaseService] Own-provider lookup failed; discovery will not self-exclude:",
+      error.message,
+    );
+    return [];
+  }
+
+  const ids = (rows ?? []).map((row: { id: string }) => row.id);
+  ownProviderIdsCache = { userId, ids };
+  return ids;
+}
+
+/** A uuid no provider row can hold. Standing in for "nothing to exclude"
+ *  keeps ownProviderIdExclusion() a plain string, so each client-facing
+ *  query below takes one unconditional `.not(…)` instead of branching its
+ *  whole builder on whether the viewer happens to be a provider. Every
+ *  column it is applied to is NOT NULL, so no row is lost to SQL's
+ *  `NULL NOT IN (…)` being NULL rather than true. */
+const NO_SUCH_PROVIDER_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * PostgREST value for `.not(column, "in", …)` — the provider rows the
+ * signed-in user owns, so a client-facing list never returns them their own
+ * business. Matches nothing for an account with no provider profile.
+ */
+async function ownProviderIdExclusion(): Promise<string> {
+  const ids = await getOwnProviderIds();
+  return `(${(ids.length ? ids : [NO_SUCH_PROVIDER_ID]).join(",")})`;
+}
+
+// ─────────────────────────────────────────────────────────
 // PHASE 5.4 — PERSONALISED HOME FEED
 // ─────────────────────────────────────────────────────────
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
+  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -407,6 +497,9 @@ export async function getNewProviders(limit = 10): Promise<PublicProviderSummary
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .gte("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -421,6 +514,9 @@ export async function getTopRatedProviders(limit = 10): Promise<PublicProviderSu
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .gte("review_count", 3)
     .gte("rating", 4.0)
     .order("rating", { ascending: false })
@@ -452,6 +548,9 @@ export async function getTrendingProviders(limit = 10): Promise<PublicProviderSu
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .in("id", rankedIds)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .eq("has_gone_live", true)
     .eq("is_active", true);
   if (error) throw new Error(error.message);
@@ -493,12 +592,18 @@ export async function getProviders(
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("is_active", true)
     .eq("has_gone_live", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
 
   if (category && category !== "ALL") {
-    query = query.eq("service_category", category);
+    // ANY of the provider's declared types, not just the headline one — a
+    // lashes-and-brows business must appear under BROWS too. GIN-indexed
+    // (providers_service_categories_gin), so this stays an index scan.
+    query = query.overlaps("service_categories", [category]);
   }
 
   const { data, error } = await query;
@@ -591,6 +696,7 @@ export interface ProviderServiceFacets {
    *  Absent/empty means nothing tagged — the same providers `.eq('audience',
    *  …)` would simply not have returned. */
   audiences: Map<string, Set<string>>;
+  skinTones: Map<string, Set<string>>;
 }
 
 /**
@@ -613,7 +719,8 @@ export async function getProviderServiceFacets(
 ): Promise<ProviderServiceFacets> {
   const priceRanges = new Map<string, { min: number; max: number }>();
   const audiences = new Map<string, Set<string>>();
-  if (providerIds.length === 0) return { priceRanges, audiences };
+  const skinTones = new Map<string, Set<string>>();
+  if (providerIds.length === 0) return { priceRanges, audiences, skinTones };
 
   // Same provider-visibility gate as the two functions this replaces — see
   // getProviderPriceRanges for why it lives here rather than being left to
@@ -621,7 +728,7 @@ export async function getProviderServiceFacets(
   const { data, error } = await supabase
     .from("services")
     .select(
-      "provider_id, price, price_max, audience, providers!inner(has_gone_live, is_active)",
+      "provider_id, price, price_max, audience, skin_tones_suitable, providers!inner(has_gone_live, is_active)",
     )
     .eq("is_active", true)
     .eq("providers.has_gone_live", true)
@@ -646,13 +753,19 @@ export async function getProviderServiceFacets(
       }
     }
 
+    for (const tone of row.skin_tones_suitable ?? []) {
+      const set = skinTones.get(providerId) ?? new Set<string>();
+      set.add(tone);
+      skinTones.set(providerId, set);
+    }
+
     if (row.audience) {
       const set = audiences.get(providerId) ?? new Set<string>();
       set.add(row.audience as string);
       audiences.set(providerId, set);
     }
   }
-  return { priceRanges, audiences };
+  return { priceRanges, audiences, skinTones };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -790,7 +903,7 @@ export async function searchProviders(
           .from("providers")
           .select("id")
           .eq("is_active", true)
-          .eq("service_category", categoryHint)
+          .overlaps("service_categories", [categoryHint])
           .limit(limit)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
   ]);
@@ -811,12 +924,15 @@ export async function searchProviders(
     .in("id", allIds)
     .eq("is_active", true)
     .eq("has_gone_live", true)
+    // A provider searching as a client should not turn up their own
+    // business — they can neither book it nor browse it usefully here.
+    .not("id", "in", await ownProviderIdExclusion())
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
 
   if (category && category !== "ALL") {
-    providerQuery = providerQuery.eq("service_category", category);
+    providerQuery = providerQuery.overlaps("service_categories", [category]);
   }
 
   if (locationTerms.length) {
@@ -920,6 +1036,7 @@ export async function getProviderBySlug(
         slug,
         display_name,
         service_category,
+        service_categories,
         custom_service_type,
         location_text,
         about_text,
@@ -960,6 +1077,7 @@ export async function getProviderBySlug(
         hair_types_catered,
         services (
           id,
+          service_category,
           category_name,
           category_description,
           name,
@@ -973,6 +1091,7 @@ export async function getProviderBySlug(
           min_age,
           contraindications,
           aftercare_notes,
+          skin_tones_suitable,
           service_type,
           service_images ( id, url, sort_order, aspect_ratio ),
           service_add_ons ( id, name, price, description, is_active )
@@ -1313,6 +1432,11 @@ export async function getPortfolioItems(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Never show a provider their own work back as discovery (see
+    // ownProviderIdExclusion). Filtered on portfolio_items.provider_id
+    // rather than the joined provider row, so it needs no foreign-table
+    // filter and no null handling — the column is NOT NULL.
+    .not("provider_id", "in", await ownProviderIdExclusion())
     // Venue/workspace shots are excluded from Explore's discovery feed and
     // Becca's inspiration search. getProviderPortfolio() (the provider
     // profile's own Portfolio grid) is deliberately NOT filtered — that is
@@ -1346,6 +1470,9 @@ export async function searchPortfolio(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Never show a provider their own work back as discovery (see
+    // ownProviderIdExclusion).
+    .not("provider_id", "in", await ownProviderIdExclusion())
     // Same exclusion as getPortfolioItems — this is the text-search half of
     // the same discovery/inspiration surface. A second .or() is a separate
     // top-level condition ANDed with the caption/tags one below, not a
@@ -1373,13 +1500,16 @@ export async function getDiscoverProviders(
     .select("*")
     .eq("is_active", true)
     .eq("has_gone_live", true)
+    // Never recommend a provider their own business (see
+    // ownProviderIdExclusion).
+    .not("id", "in", await ownProviderIdExclusion())
     .not("background_image_url", "is", null)
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
 
   if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
+    query = query.overlaps("service_categories", [category.toUpperCase()]);
   }
 
   const { data, error } = await query;
@@ -1418,14 +1548,14 @@ export async function getDiscoverUnclaimedProviders(
   let query = supabase
     .from("providers")
     .select(
-      "id, slug, display_name, service_category, location_text, logo_url, about_text, instagram, website",
+      "id, slug, display_name, service_category, service_categories, location_text, logo_url, about_text, instagram, website",
     )
     .eq("is_claimed", false)
     .order("scraped_at", { ascending: false })
     .limit(limit);
 
   if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
+    query = query.overlaps("service_categories", [category.toUpperCase()]);
   }
 
   const { data, error } = await query;
@@ -1453,7 +1583,7 @@ export async function getDiscoverServices(
     .from("services")
     .select(
       `
-      id, provider_id, name, description, price,
+      id, provider_id, name, description, price, service_category,
       service_images!inner ( url, sort_order, aspect_ratio, fit ),
       provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
     `,
@@ -1461,10 +1591,20 @@ export async function getDiscoverServices(
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Never recommend a provider their own services (see
+    // ownProviderIdExclusion).
+    .not("provider_id", "in", await ownProviderIdExclusion())
     .limit(limit);
 
+  // Filtered on the SERVICE's own category, not the provider's whole
+  // service_categories array — a provider who offers both Hair and Makeup
+  // overlaps both, so array-overlap put their Makeup services in the Hair
+  // section (and vice versa) just because the provider also does Hair.
+  // Each service row already carries its own real category (stamped at
+  // save time in providerRegistrationService.ts), so a client browsing
+  // "Hair" should see only services actually filed under Hair.
   if (category && category !== "All") {
-    query = query.eq("provider.service_category", category.toUpperCase());
+    query = query.eq("service_category", category.toUpperCase());
   }
   if (audience) {
     query = query.eq("audience", audience);
@@ -1604,6 +1744,9 @@ export async function getActivePromotions(
     .eq("providers.is_active", true)
     .eq("providers.has_gone_live", true)
     .eq("is_active", true)
+    // A provider's own offer is not an offer to them (see
+    // ownProviderIdExclusion).
+    .not("provider_id", "in", await ownProviderIdExclusion())
     .gte("valid_until", new Date().toISOString().split("T")[0])
     .order("created_at", { ascending: false })
     .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
@@ -1625,6 +1768,9 @@ export async function getProviderIdsWithActivePromotions(): Promise<string[]> {
     .eq("providers.is_active", true)
     .eq("providers.has_gone_live", true)
     .eq("is_active", true)
+    // Kept in step with getActivePromotions — this badges the cards that
+    // list surfaces the offer on, and those cards are already gone.
+    .not("provider_id", "in", await ownProviderIdExclusion())
     .gte("valid_until", new Date().toISOString().split("T")[0])
     .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
   if (error) throw error;
@@ -1778,7 +1924,7 @@ export async function getMyProviderServices(): Promise<
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
     )
     .eq("provider_id", provider.id)
     .eq("is_active", true)
@@ -1843,7 +1989,7 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type",
     )
     .eq("provider_id", providerId)
     .order("category_name", { ascending: true })
@@ -1862,6 +2008,10 @@ export interface MyServiceDraft {
   price: number;
   durationMinutes: number;
   description: string | null;
+  /** Update only; createMyService ignores it, since a new service always
+   *  starts visible. Written in the same UPDATE as the other fields, so a
+   *  visibility change can't land while the edit around it fails. */
+  isActive?: boolean;
 }
 
 export async function createMyService(
@@ -1894,7 +2044,7 @@ export async function createMyService(
       sort_order: ((last?.sort_order as number | undefined) ?? -1) + 1,
       is_active: true,
     })
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -1911,9 +2061,10 @@ export async function updateMyService(
       description: draft.description,
       price: draft.price,
       duration_minutes: draft.durationMinutes,
+      ...(draft.isActive === undefined ? {} : { is_active: draft.isActive }),
     })
     .eq("id", serviceId)
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -1971,7 +2122,7 @@ export async function getMyPromotionManagerCore(): Promise<{
     supabase
       .from("services")
       .select(
-        "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+        "id, provider_id, service_category, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
       )
       .eq("provider_id", provider.id)
       .eq("is_active", true)
@@ -6303,8 +6454,9 @@ export async function getClientBookingsForAddressShare(
     // client's side.
     .in("status", ["pending", "confirmed", "in_progress"])
     .order("booking_date", { ascending: true })
-    .order("booking_time", { ascending: true });
-  if (error) return [];
+    .order("booking_time", { ascending: true })
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
   // booking_id is that table's PRIMARY KEY so PostgREST returns one object,
   // but a to-one embed is indistinguishable from to-many by the foreign key
   // alone -- handle both rather than guess, exactly as bookingService does.
@@ -7533,17 +7685,23 @@ export async function upsertUserAfterVerification(data: {
 // PROVIDERS — additional reads
 // ─────────────────────────────────────────────────────────
 
-/** Fetch the provider's DB id for a given auth user id.
- * No has_gone_live filter — provider reading their own record. */
+/** Fetch the provider DB id owned by an auth user. No go-live filter: this is
+ * identity resolution. Order deterministically because legacy duplicate rows
+ * exist; never turn a query failure into the unsafe answer "owns none". */
 export async function getProviderIdForUserId(
   userId: string,
 ): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("id")
     .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
-  return (data as any)?.id ?? null;
+
+  if (error) throw error;
+  return data?.id ?? null;
 }
 
 /** Fetch branding fields for the provider owned by the given user (Branding screen).
@@ -7811,20 +7969,29 @@ export async function updateProviderContactDetails(
  * calling again with the old value — the cooldown will refuse, and the
  * specialties are already gone.
  */
-export async function updateMyServiceCategory(
+/**
+ * Replace the provider's whole set of service types. Ordered: the first entry
+ * is the headline.
+ *
+ * Writes `service_categories` ONLY, and deliberately not `service_category`
+ * alongside it. trg_sync_provider_service_categories derives the headline from
+ * the array's first entry, so sending both invites the two to disagree in the
+ * payload and makes the trigger arbitrate something the caller shouldn't have
+ * had an opinion about. `custom_service_type` is likewise the DB's to clear —
+ * the cooldown guard nulls it whenever OTHER leaves the set.
+ *
+ * Throws on the 90-day cooldown (P0001), which callers surface verbatim.
+ */
+export async function updateMyServiceCategories(
   providerId: string,
-  category: ServiceCategory,
-  customServiceType: string | null,
+  categories: ServiceCategory[],
 ): Promise<void> {
+  if (!categories.length) {
+    throw new Error("A provider must offer at least one service type");
+  }
   const { error } = await supabase
     .from("providers")
-    .update({
-      service_category: category,
-      // Only meaningful for OTHER; the trigger nulls it for every other
-      // category regardless, so sending it here is belt-and-braces for the
-      // OTHER -> OTHER-with-a-new-label case the trigger doesn't fire on.
-      custom_service_type: category === "OTHER" ? customServiceType : null,
-    })
+    .update({ service_categories: categories })
     .eq("id", providerId);
   if (error) throw error;
 }
@@ -8628,6 +8795,9 @@ export async function claimUnclaimedProviderProfile(
   });
   if (error) throw error;
   if (typeof data !== 'string') throw new Error('Invalid claim response.');
+  // Claiming attaches an existing row to this account — same ownership
+  // change as creating one, so the memoised answer has to go.
+  invalidateOwnProviderIds();
   return data;
 }
 
@@ -8885,6 +9055,8 @@ export async function insertProviderRegistrationRow(
     .select("id")
     .single();
   if (error) throw error;
+  // A brand-new provider row the memoised ownership answer predates.
+  invalidateOwnProviderIds();
   return data.id;
 }
 
@@ -8928,6 +9100,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
       .from("services")
       .select(`
         id,
+        service_category,
         category_name,
         category_description,
         name,
@@ -8948,7 +9121,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
         contraindications,
         aftercare_notes,
         service_type,
-        hair_types_suitable,
+        hair_types_suitable, skin_tones_suitable,
         audience,
         service_images ( url, sort_order, fit ),
         service_add_ons ( name, price )

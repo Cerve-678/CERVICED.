@@ -31,6 +31,7 @@ import {
   getProviderContactById,
   ProviderContactInfo,
   getProviderBookingDetailMetadata,
+  type ProviderBookingDetailMetadata,
   ProviderAddressPolicy,
   getInfoPacksByBooking, markInfoPackViewed, BookingInfoPack,
   ProviderReschedulePolicy,
@@ -115,6 +116,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [todoRetryNonce, setTodoRetryNonce] = useState(0);
   const todoBookingIdRef = useRef<string | null>(null);
   const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
+  // The reschedule gate below is only as good as this metadata. Holding the
+  // in-flight promise lets a tap that lands before it resolves wait for the
+  // real answer instead of falling through the gate — which is what let a
+  // booking inside the notice window reach the Reschedule screen and get
+  // blocked there instead of by the popup here.
+  const metadataRef = useRef<Promise<ProviderBookingDetailMetadata | null> | null>(null);
   const [addrSettings, setAddrSettings] = useState<ProviderAddressPolicy | null>(null);
   const [addrCountdown, setAddrCountdown] = useState('');
   const [cancellationNoticeHrs, setCancellationNoticeHrs] = useState(0);
@@ -235,10 +242,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     const pid = booking.providerId;
 
     let cancelled = false;
-    getProviderBookingDetailMetadata({
+    const request = getProviderBookingDetailMetadata({
       ...(pid ? { providerId: pid } : {}),
       displayName: booking.providerName,
-    })
+    });
+    // Resolves to null rather than rejecting, so awaiting it in the reschedule
+    // handler can never throw out of the tap.
+    metadataRef.current = request.catch(() => null);
+    request
       .then(metadata => {
         if (cancelled) return;
         setReschedulePolicy(metadata.reschedulePolicy);
@@ -252,7 +263,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         // mistaken for a mobile one.
         setAddrSettings(metadata.addressPolicy);
       })
-      .catch(() => {});
+      .catch(err => {
+        // Swallowing this outright left reschedulePolicy null for the rest of
+        // the session, which silently disabled the notice gate entirely.
+        logger.error('Failed to load booking detail metadata', err);
+      });
     return () => { cancelled = true; };
   }, [booking]);
 
@@ -479,7 +494,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     }
   }, [booking, disputeReason, activeMode]);
 
-  const handleReschedulePress = useCallback(() => {
+  const handleReschedulePress = useCallback(async () => {
     if (!booking) return;
     const check = canReschedule(booking.id);
     if (!check.canReschedule) {
@@ -487,18 +502,29 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setShowCooldownModal(true);
       return;
     }
-    if (reschedulePolicy) {
+    // Wait for the policy if the tap beat the fetch. Reading state alone meant
+    // a fast tap saw null, skipped every check below, and pushed the client
+    // into the Reschedule screen — which then blocked them with its own
+    // full-screen "Too Close to Reschedule" state after its copy of the same
+    // fetch landed. The popup here is the intended stop.
+    const policy =
+      reschedulePolicy ?? (await metadataRef.current)?.reschedulePolicy ?? null;
+    if (policy) {
       const used = booking.rescheduleRequest?.rescheduleCount ?? 0;
-      if (reschedulePolicy.maxReschedules !== null && used >= reschedulePolicy.maxReschedules) {
-        setCooldownMessage(`${booking.providerName} allows ${reschedulePolicy.maxReschedules} reschedule${reschedulePolicy.maxReschedules === 1 ? '' : 's'} per booking.`);
+      if (policy.maxReschedules !== null && used >= policy.maxReschedules) {
+        setCooldownMessage(`${booking.providerName} allows ${policy.maxReschedules} reschedule${policy.maxReschedules === 1 ? '' : 's'} per booking.`);
         setShowCooldownModal(true);
         return;
       }
-      if (reschedulePolicy.rescheduleNoticeHours > 0 && booking.bookingDate && booking.bookingTime) {
+      if (policy.rescheduleNoticeHours > 0 && booking.bookingDate && booking.bookingTime) {
         const start = createBookingDateTime(booking.bookingDate, booking.bookingTime);
         const hoursUntil = (start.getTime() - Date.now()) / 3_600_000;
-        if (hoursUntil >= 0 && hoursUntil < reschedulePolicy.rescheduleNoticeHours) {
-          setCooldownMessage(`${booking.providerName} requires ${formatNoticeWindow(reschedulePolicy.rescheduleNoticeHours)} notice to reschedule.`);
+        // No lower bound: an appointment that has already started is further
+        // past the notice window, not exempt from it. RescheduleScreen has
+        // always blocked that case, so the lower bound that used to sit here
+        // just moved the stop from this popup to that screen.
+        if (hoursUntil < policy.rescheduleNoticeHours) {
+          setCooldownMessage(`${booking.providerName} requires ${formatNoticeWindow(policy.rescheduleNoticeHours)} notice to reschedule.`);
           setShowCooldownModal(true);
           return;
         }
@@ -798,12 +824,25 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {/* To-do: intake form + info packs — only after both loads settle, so
-              the section appears once instead of popping in twice. The intake
+          {/* To-do: reserve its place from the first frame while intake forms
+              and info packs load, so it cannot pop into an already-laid-out
+              page and push every section beneath it down. The intake
               form row stays visible after completion (dimmed, "Completed"
               badge) instead of disappearing — it used to only render while
               status === 'pending', so once submitted there was no way back
               into ClientIntakeFormScreen to see the answers you'd just filled in. */}
+          {!todoLoaded && (
+            <View style={st.section} accessibilityLabel="Loading appointment tasks">
+              <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
+              <View style={[st.todoCard, st.todoLoadingCard, { backgroundColor: C.card, borderColor: C.border }]}>
+                <ActivityIndicator size="small" color={C.accent} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={[st.todoSkeletonLine, { backgroundColor: C.border, width: '48%' }]} />
+                  <View style={[st.todoSkeletonLine, { backgroundColor: C.border, width: '76%', marginTop: 8, opacity: 0.65 }]} />
+                </View>
+              </View>
+            </View>
+          )}
           {todoLoaded && todoLoadError && (
             <View style={st.section}>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, padding: 14, flexDirection: 'row', alignItems: 'center' }]}>
@@ -1166,7 +1205,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
                   <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleReschedulePress(); }} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); void handleReschedulePress(); }} activeOpacity={0.7}>
                   <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule</Text>
                 </TouchableOpacity>
               </View>
@@ -1679,6 +1718,8 @@ const st = StyleSheet.create({
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   statusText: { color: '#FFF', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
   todoCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 8 },
+  todoLoadingCard: { minHeight: 72 },
+  todoSkeletonLine: { height: 9, borderRadius: 5 },
   todoBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   todoBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
   receiptContainer: { borderRadius: 8, padding: 12 },

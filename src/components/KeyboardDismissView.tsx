@@ -6,6 +6,8 @@ import {
   TouchableWithoutFeedback,
   StyleProp,
   ViewStyle,
+  View,
+  StyleSheet,
 } from 'react-native';
 
 interface KeyboardDismissViewProps {
@@ -39,6 +41,13 @@ export function KeyboardDismissView({
   extraOffset = 0,
   dismissOnTap = false,
 }: KeyboardDismissViewProps) {
+  const layout = StyleSheet.flatten(style);
+  // iOS KeyboardAvoidingView replaces paddingBottom with the keyboard height,
+  // including zero when closed. Keep the caller's safe gap in normal layout
+  // so sheets and their footers retain it in both keyboard states.
+  const bottomPadding = Platform.OS === 'ios'
+    ? layout?.paddingBottom ?? layout?.paddingVertical ?? layout?.padding ?? 0
+    : 0;
   const content = (
     <KeyboardAvoidingView
       style={style ?? { flex: 1 }}
@@ -46,6 +55,9 @@ export function KeyboardDismissView({
       keyboardVerticalOffset={Platform.OS === 'ios' ? extraOffset : 0}
     >
       {children}
+      {bottomPadding !== 0 && (
+        <View pointerEvents="none" style={{ height: bottomPadding, flexShrink: 0 }} />
+      )}
     </KeyboardAvoidingView>
   );
 

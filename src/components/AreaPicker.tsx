@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { CITY_AREA_NAMES, getCityAreaData } from '../data/cityAreas';
-import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
@@ -59,6 +59,7 @@ export default function AreaPicker({
   disabled,
   subtitle = DEFAULT_SUBTITLE,
 }: AreaPickerProps) {
+  const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>('city');
   const [city, setCity] = useState<string | null>(null);
@@ -189,7 +190,7 @@ export default function AreaPicker({
       <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
           <Pressable style={styles.backdrop} onPress={close} />
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: bottomInset + 16 }]}>
             <View style={styles.handle} />
 
             <View style={styles.header}>
@@ -326,7 +327,7 @@ const styles = StyleSheet.create({
   placeholder: { color: '#8B8B95' },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.38)' },
-  sheet: { maxHeight: '82%', minHeight: 430, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, marginBottom: BOTTOM_SAFE_GAP },
+  sheet: { height: '82%', backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#D1D1D6', marginTop: 10, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   headingWrap: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },

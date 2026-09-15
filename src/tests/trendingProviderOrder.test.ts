@@ -17,6 +17,9 @@ const mockIn = jest.fn();
 
 jest.mock('../lib/supabase', () => ({
   supabase: {
+    // Signed out, so the own-profile exclusion resolves to "nothing to
+    // exclude" and this test stays about ranking order alone.
+    auth: { getSession: async () => ({ data: { session: null }, error: null }) },
     rpc: (...args: unknown[]) => mockRpc(...args),
     from: () => ({
       select: () => ({
@@ -26,10 +29,12 @@ jest.mock('../lib/supabase', () => ({
   },
 }));
 
-// .eq() is chained twice after .in() for has_gone_live / is_active.
+// .not() is chained after .in() for the own-profile exclusion, then .eq()
+// twice for has_gone_live / is_active.
 const chainable = (rows: unknown[]) => {
   const result = { data: rows, error: null };
   const chain: Record<string, unknown> = {
+    not: () => chain,
     eq: () => chain,
     then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
   };

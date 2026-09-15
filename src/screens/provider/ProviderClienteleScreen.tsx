@@ -36,7 +36,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { formatTime12 } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
 import { toUserMessage } from '../../utils/userFacingError';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -230,6 +230,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const { isDarkMode } = useTheme();
+  const bottomSafeGap = useSystemBottomInset() + 16;
 
   const audienceOptions: { key: AudienceKey; label: string; icon: string }[] = [
     { key: 'all',    label: 'All clients',    icon: 'people-outline' },
@@ -359,7 +360,12 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
         </TouchableOpacity>
       </View>
 
-      <BottomSheetScrollView style={anSt.scrollFlex} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={anSt.scroll}>
+      <BottomSheetScrollView
+        style={anSt.scrollFlex}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[anSt.scroll, { paddingBottom: bottomSafeGap }]}
+      >
         <Text style={[anSt.label, { color: P.sub }]}>AUDIENCE</Text>
         <View style={anSt.audienceRow}>
           {audienceOptions.map(opt => {
@@ -478,7 +484,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
                 activeOpacity={1}
                 onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}
               />
-              <View style={[anSt.pickerSheet, { backgroundColor: P.card }]}>
+              <View style={[anSt.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, bottomSafeGap) }]}>
                 <View style={[anSt.pickerHeader, { borderBottomColor: P.border }]}>
                   <Text style={[anSt.pickerHeaderLabel, { color: P.text }]}>
                     {showDatePicker ? 'Select Date' : 'Select Time'}
@@ -558,7 +564,7 @@ const anSt = StyleSheet.create({
   title:        { fontSize: 18, fontWeight: '700' },
   sub:          { fontSize: 12, marginTop: 2 },
   scrollFlex:   { flex: 1 },
-  scroll:       { paddingHorizontal: 20, paddingBottom: 64 },
+  scroll:       { paddingHorizontal: 20 },
   label:        { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8, marginTop: 16 },
   audienceRow:  { gap: 8 },
   audienceChip: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
@@ -574,12 +580,12 @@ const anSt = StyleSheet.create({
   pickerRow:    { flexDirection: 'row', gap: 8, marginTop: 10 },
   pickerBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 11 },
   pickerText:   { fontSize: 13, fontWeight: '600' },
-  // marginBottom keeps the button off the system navigation bar — the sheet
-  // runs to the bottom of the window, so without it the button sits under it.
-  sendBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 20, marginBottom: BOTTOM_SAFE_GAP },
+  // Bottom clearance belongs to the scroll container. Keeping another safe
+  // gap on this button double-counted it whenever the keyboard was open.
+  sendBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 20 },
   sendBtnText:  { fontSize: 15, fontWeight: '700', color: '#fff' },
   errorText:    { fontSize: 13, color: '#FF6868', textAlign: 'center', marginTop: 10 },
-  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -909,7 +915,7 @@ const s = StyleSheet.create({
   emptyIcon:        { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   emptyTitle:       { fontSize: 18, fontWeight: '700' },
   emptySub:         { fontSize: 13, textAlign: 'center', lineHeight: 20 },
-  modalBackdrop:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)', paddingBottom: BOTTOM_SAFE_GAP },
+  modalBackdrop:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   modalCard:        { maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
   modalHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle:       { fontSize: 17, fontWeight: '700', flex: 1, marginRight: 12 },

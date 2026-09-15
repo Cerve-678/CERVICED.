@@ -456,7 +456,10 @@ export default function HomeScreen() {
         image: { uri: cover.url },
         caption: s.description ?? '',
         serviceName: s.name,
-        category: p.service_category as unknown as ServiceCategory,
+        // This service's own category, not the provider's headline — see
+        // ExploreScreen's mapDbServiceToCards for why that distinction
+        // matters for a multi-category provider.
+        category: s.service_category.toUpperCase() as ServiceCategory,
         aspectRatio: cover.aspect_ratio ?? 0.8,
         providerId: p.slug,
         price: `£${s.price}`,
@@ -656,12 +659,12 @@ export default function HomeScreen() {
     if (!viewAllProviders) return {};
 
     return {
-      HAIR: providersData.hairProviders,
-      NAILS: providersData.nailProviders,
-      LASHES: providersData.lashProviders,
-      MUA: providersData.muaProviders,
-      BROWS: providersData.browProviders,
-      AESTHETICS: providersData.aestheticsProviders,
+      'HAIR STYLISTS': providersData.hairProviders,
+      'NAIL TECHS': providersData.nailProviders,
+      'LASH TECHS': providersData.lashProviders,
+      'MAKEUP ARTISTS': providersData.muaProviders,
+      'BROW SPECIALISTS': providersData.browProviders,
+      'AESTHETIC PRACTITIONERS': providersData.aestheticsProviders,
     };
   }, [viewAllProviders, providersData]);
 
@@ -1710,7 +1713,7 @@ export default function HomeScreen() {
                 <View>
                   {providersData.hairProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR STYLISTS</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -1732,7 +1735,7 @@ export default function HomeScreen() {
 
                   {providersData.nailProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAILS</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAIL TECHS</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}

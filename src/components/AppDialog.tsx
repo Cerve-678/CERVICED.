@@ -1,7 +1,9 @@
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -132,6 +134,7 @@ function ConfirmDialog({
   cardBackground: string;
   border: string;
 }) {
+  const bottomInset = useSystemBottomInset();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -162,7 +165,7 @@ function ConfirmDialog({
       pointerEvents={visible ? 'auto' : 'none'}
     >
       <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      <View style={[dlgSt.content, isCentered && dlgSt.contentCentered, { backgroundColor: cardBackground }]}>
+      <ScrollView bounces={false} contentContainerStyle={[dlgSt.content, { paddingBottom: bottomInset + 20 }, isCentered && dlgSt.contentCentered, { backgroundColor: cardBackground }]}>
         {/* Grabber only on the sheet — it's an affordance for dragging a panel
             back to an edge, and a floating box has no edge to drag to. */}
         {!isCentered && <View style={[dlgSt.handle, { backgroundColor: border }]} />}
@@ -198,7 +201,7 @@ function ConfirmDialog({
             );
           })}
         </View>
-      </View>
+      </ScrollView>
     </Animated.View>
   );
 
@@ -224,6 +227,7 @@ const dlgSt = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
+    maxHeight: '85%',
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -239,6 +243,7 @@ const dlgSt = StyleSheet.create({
     padding: 32,
   },
   centerCard: {
+    maxHeight: '100%',
     width: '100%',
     maxWidth: 340,
     borderRadius: 20,

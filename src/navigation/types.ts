@@ -209,6 +209,7 @@ export type ProviderHomeStackParamList = {
   // silently leaving the provider on whatever day they already had selected.
   ProviderHomeMain: { jumpToDate?: string } | undefined;
   ProviderSchedule: undefined;
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   AddBooking: undefined;
   // Reachable from the Calendar tab's profile quick-actions. Registered here
   // (as well as on the Profile stack) so those actions PUSH instead of jumping
@@ -271,6 +272,10 @@ export type ProviderServicesStackParamList = {
   // Pushed from the availability card on the provider's own profile, so the
   // schedule opens with that profile beneath it instead of at a bare tab root.
   ProviderSchedule: undefined;
+  // Pushed from the Manage section's Business info / Schedule tiles, same
+  // reasoning as ProviderSchedule above.
+  BusinessInfo: undefined;
+  Scheduling: undefined;
   // Pushed from the dashboard's Booking policies / Branding cards, for the
   // same reason ProviderSchedule is registered here rather than jumped to on
   // the Account tab.

@@ -7,8 +7,10 @@ import {
   TouchableOpacity,
   StatusBar,
   Animated,
+  Easing,
   useWindowDimensions,
 } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useFocusEffect, useIsFocused, NavigationProp } from '@react-navigation/native';
@@ -79,6 +81,20 @@ import { logger } from '../../utils/logger';
 // placeholder, so the feed only ever contains real photographs.
 function hasFeedImage(card: PortfolioItem): boolean {
   return !!(card.image as { uri?: string } | undefined)?.uri;
+}
+
+// MasonryGrid intentionally owns one stable ScrollView, but unlike a native
+// virtualized list it mounts every item it receives. Feed it a window that
+// grows near the end so opening Explore does not decode and render an entire
+// discovery catalogue before the first frame is useful.
+const INITIAL_EXPLORE_ITEMS = 24;
+const EXPLORE_BATCH_SIZE = 18;
+const LOAD_MORE_THRESHOLD = 900;
+const LOAD_MORE_COOLDOWN_MS = 300;
+
+function isNearGridEnd(event: NativeSyntheticEvent<NativeScrollEvent>): boolean {
+  const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+  return contentOffset.y + layoutMeasurement.height >= contentSize.height - LOAD_MORE_THRESHOLD;
 }
 
 function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
@@ -296,15 +312,43 @@ const ExploreScreen = memo(() => {
   const tourFavouritesRef = useRef<View>(null);
   const tourSavedRef = useRef<View>(null);
 
+  // Category-pill (filter chips) entrance — matches the fade+slide-up every
+  // other card/pill row in the app already does on mount.
+  const filterFadeAnim = useRef(new Animated.Value(0)).current;
+  const filterSlideAnim = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(filterFadeAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(filterSlideAnim, { toValue: 0, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Favourites — anything the user hearted, resolved from useBookmarkStore's
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
   const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
   const [favouritesLoading, setFavouritesLoading] = useState(false);
+  const [favouritesVisibleCount, setFavouritesVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
 
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
+  const [discoverVisibleCount, setDiscoverVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
+  const discoverLoadMoreAtRef = useRef(0);
+  const favouritesLoadMoreAtRef = useRef(0);
+
+  useEffect(() => {
+    setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
+    discoverLoadMoreAtRef.current = 0;
+  }, [selectedFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'favourites') {
+      setFavouritesVisibleCount(INITIAL_EXPLORE_ITEMS);
+      favouritesLoadMoreAtRef.current = 0;
+    }
+  }, [activeTab]);
 
   // The discover feed is shuffled client-side (see interleaveDiscoverFeed)
   // since every source query is deterministically ordered. Without caching
@@ -330,7 +374,8 @@ const ExploreScreen = memo(() => {
       // category = NULL should read as whatever its provider's real
       // category is, not silently masquerade as Nails.
       category: (item.category?.toUpperCase() as ServiceCategory) ?? (p.service_category as unknown as ServiceCategory),
-      aspectRatio: item.aspect_ratio,
+      aspectRatio: item.aspect_ratio ?? 0.8,
+      aspectRatioIsFallback: item.aspect_ratio == null,
       providerId: p?.slug ?? item.provider_id,
       tags: item.tags ?? [],
       imageUri: item.image_url,
@@ -358,6 +403,7 @@ const ExploreScreen = memo(() => {
     caption: p.about_text ?? '',
     category: p.service_category as unknown as ServiceCategory,
     aspectRatio: 0.8,
+    aspectRatioIsFallback: true,
     providerId: p.slug,
     providerName: p.display_name,
     providerSlug: p.slug,
@@ -387,6 +433,7 @@ const ExploreScreen = memo(() => {
     caption: p.about_text ?? '',
     category: p.service_category as unknown as ServiceCategory,
     aspectRatio: 0.8,
+    aspectRatioIsFallback: true,
     providerId: p.id,
     providerName: p.display_name,
     kind: 'provider',
@@ -421,12 +468,16 @@ const ExploreScreen = memo(() => {
       imageFits,
       caption: s.description ?? '',
       serviceName: s.name,
-      category: p.service_category as unknown as ServiceCategory,
+      // This service's own category, not the provider's headline
+      // (p.service_category) — a Makeup+Hair provider's Hair service must
+      // read as Hair even though the provider's own headline is Makeup.
+      category: s.service_category.toUpperCase() as ServiceCategory,
       // Real stored ratio where the upload measured one (see
       // service_images.aspect_ratio). Older rows predate that column and
       // come back null — those fall back to 0.8 for the first paint only,
       // then get corrected by useMeasuredAspectRatios measuring the file.
       aspectRatio: img.aspect_ratio ?? 0.8,
+      aspectRatioIsFallback: img.aspect_ratio == null,
       providerId: p.slug,
       price: `£${s.price}`,
       providerName: p.display_name,
@@ -546,6 +597,11 @@ const ExploreScreen = memo(() => {
   // and re-fetches, leaving every other filter's cached order untouched.
   const handleRefreshDiscover = useCallback(() => {
     discoverFeedCache.current.delete(selectedFilter);
+    // A refresh replaces the feed rather than extending the current one.
+    // Return to the lightweight initial window so a deeply-scrolled session
+    // does not mount the same large card count against all-new image URLs.
+    setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
+    discoverLoadMoreAtRef.current = 0;
     setPortfolioRefreshing(true);
     loadDiscoverFeed(selectedFilter)
       .then(feed => setPortfolioItems(feed))
@@ -603,17 +659,24 @@ const ExploreScreen = memo(() => {
     return (screenWidth - spacing.lg * 2 - spacing.sm * (columns - 1)) / columns;
   }, [screenWidth]);
 
-  // Measure the true dimensions of every photo in both feeds. Only portfolio
-  // cards carry a real aspect_ratio from the DB; service/provider/unclaimed
-  // cards are mapped with a hardcoded 0.8 above because nothing stores their
-  // dimensions, so without this a landscape service photo would be packed
-  // and rendered as a portrait card and cropped to fit.
+  const visiblePortfolioItems = useMemo(
+    () => portfolioItems.slice(0, discoverVisibleCount),
+    [portfolioItems, discoverVisibleCount],
+  );
+  const visibleFavouriteItems = useMemo(
+    () => favouriteItems.slice(0, favouritesVisibleCount),
+    [favouriteItems, favouritesVisibleCount],
+  );
+
+  // Only measure visible cards whose ratio is a fallback. Upload-time ratios
+  // are already trustworthy, and probing every offscreen URL on mount was
+  // competing with the images needed for the first viewport.
   const measuredUris = useMemo(
     () =>
-      [...portfolioItems, ...favouriteItems].map(
-        i => (i.image as { uri?: string } | undefined)?.uri,
-      ),
-    [portfolioItems, favouriteItems],
+      (activeTab === 'discover' ? visiblePortfolioItems : visibleFavouriteItems)
+        .filter(i => i.aspectRatioIsFallback)
+        .map(i => (i.image as { uri?: string } | undefined)?.uri),
+    [activeTab, visiblePortfolioItems, visibleFavouriteItems],
   );
   const { resolveRatio } = useMeasuredAspectRatios(measuredUris);
 
@@ -646,11 +709,26 @@ const ExploreScreen = memo(() => {
     navigation.navigate('Search', { morph: true });
   }, [navigation]);
 
+  const prepareDetailItem = useCallback((item: PortfolioItem): PortfolioItem => {
+    const uri = (item.image as { uri?: string } | undefined)?.uri;
+    return {
+      ...item,
+      // The masonry grid has usually measured this image already. Carry that
+      // result into the modal instead of reverting to the legacy 4:5 fallback
+      // and making the sheet jump when the same file decodes a second time.
+      aspectRatio: resolveRatio(uri, item.aspectRatio),
+    };
+  }, [resolveRatio]);
+
   const handleImagePress = useCallback((item: PortfolioItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setSelectedImage(item);
+    setSelectedImage(prepareDetailItem(item));
     setIsDetailVisible(true);
-  }, []);
+  }, [prepareDetailItem]);
+
+  const handleSelectSimilarItem = useCallback((item: PortfolioItem) => {
+    setSelectedImage(prepareDetailItem(item));
+  }, [prepareDetailItem]);
 
   const handleCloseDetail = useCallback(() => {
     // Deliberately does NOT clear selectedImage. ImageDetailModal returns
@@ -662,6 +740,34 @@ const ExploreScreen = memo(() => {
     // never seen, and the next open overwrites it.
     setIsDetailVisible(false);
   }, []);
+
+  const handleDiscoverScrollSettled = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      settleExplorePillTracking(event);
+      if (discoverVisibleCount >= portfolioItems.length || !isNearGridEnd(event)) return;
+      const now = Date.now();
+      if (now - discoverLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
+      discoverLoadMoreAtRef.current = now;
+      setDiscoverVisibleCount(current =>
+        Math.min(portfolioItems.length, current + EXPLORE_BATCH_SIZE),
+      );
+    },
+    [discoverVisibleCount, portfolioItems.length],
+  );
+
+  const handleFavouritesScrollSettled = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      settleExplorePillTracking(event);
+      if (favouritesVisibleCount >= favouriteItems.length || !isNearGridEnd(event)) return;
+      const now = Date.now();
+      if (now - favouritesLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
+      favouritesLoadMoreAtRef.current = now;
+      setFavouritesVisibleCount(current =>
+        Math.min(favouriteItems.length, current + EXPLORE_BATCH_SIZE),
+      );
+    },
+    [favouriteItems.length, favouritesVisibleCount],
+  );
 
   const handleViewProfile = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any) => {
@@ -825,7 +931,12 @@ const ExploreScreen = memo(() => {
             </View>
 
             {/* Filter Chips */}
-            <View style={[styles.filterSection, { backgroundColor: P.bg, borderBottomColor: P.sep }]}>
+            <Animated.View
+              style={[
+                styles.filterSection,
+                { backgroundColor: P.bg, borderBottomColor: P.sep, opacity: filterFadeAnim, transform: [{ translateY: filterSlideAnim }] },
+              ]}
+            >
               <SlidingTabs
                 tabs={filterTabs}
                 activeKey={selectedFilter}
@@ -838,7 +949,7 @@ const ExploreScreen = memo(() => {
                 inactiveTextColor={P.sub}
                 containerStyle={styles.filterScrollContent}
               />
-            </View>
+            </Animated.View>
 
             {/* Masonry Grid */}
             {portfolioLoading ? (
@@ -846,13 +957,13 @@ const ExploreScreen = memo(() => {
             ) : (
               <MasonryGrid
                 ref={discoverGridRef}
-                data={portfolioItems}
+                data={visiblePortfolioItems}
                 renderItem={renderPortfolioCard}
                 getItemHeight={getItemHeight}
                 keyExtractor={item => item.id}
                 onScroll={exploreScrollHandler}
-                onScrollEndDrag={settleExplorePillTracking}
-                onMomentumScrollEnd={settleExplorePillTracking}
+                onScrollEndDrag={handleDiscoverScrollSettled}
+                onMomentumScrollEnd={handleDiscoverScrollSettled}
                 refreshing={portfolioRefreshing}
                 onRefresh={handleRefreshDiscover}
                 ListHeaderComponent={
@@ -882,13 +993,13 @@ const ExploreScreen = memo(() => {
             <SkeletonMasonryGrid />
           ) : (
             <MasonryGrid
-              data={favouriteItems}
+              data={visibleFavouriteItems}
               renderItem={renderPortfolioCard}
               getItemHeight={getItemHeight}
               keyExtractor={item => item.id}
               onScroll={exploreScrollHandler}
-              onScrollEndDrag={settleExplorePillTracking}
-              onMomentumScrollEnd={settleExplorePillTracking}
+              onScrollEndDrag={handleFavouritesScrollSettled}
+              onMomentumScrollEnd={handleFavouritesScrollSettled}
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridCount, { color: P.sub }]}>
@@ -918,7 +1029,7 @@ const ExploreScreen = memo(() => {
         onViewProfile={handleViewProfile}
         onBookNow={handleBookNow}
         similarItems={portfolioItems}
-        onSelectItem={setSelectedImage}
+        onSelectItem={handleSelectSimilarItem}
       />
 
       {/* First-visit walkthrough of the grid's own affordances. Rendered

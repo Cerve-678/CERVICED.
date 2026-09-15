@@ -525,6 +525,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
             const bookingId = notification.bookingId;
             navigateProviderHome('BookingDetail', { bookingId, openReschedule: openReschedule || undefined });
             logger.log('Provider — navigating to BookingDetail:', bookingId);
+          } else if (notification.type === 'daily_recap') {
+            // The day's recap ("Today's Schedule") summarizes every booking
+            // that day rather than pointing at one, so it never carries a
+            // bookingId — its useful destination is the bookings list, not
+            // the calendar.
+            navigateProviderHome('BookingHistory', { initialTab: 'todo' });
+            logger.log('Provider — daily_recap, navigating to BookingHistory');
           } else {
             // No specific booking to open (shouldn't normally happen for
             // these types, but tapping the action button must never be a

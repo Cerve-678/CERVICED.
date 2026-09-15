@@ -1,3 +1,4 @@
+import { SKIN_TONES, matchesSkinTone } from '../../constants/skinTones';
 // SearchScreen.tsx
 import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect } from 'react';
 import {
@@ -39,7 +40,7 @@ import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { logger } from '../../utils/logger';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
   resolveProviderPriceRange,
   priceRangeMatchesBucket,
@@ -116,6 +117,7 @@ interface FilterOptions {
   // "does this provider cater to X at all" level — services.hair_types_
   // suitable is the per-service refinement shown once a service is picked.
   hairType?: string;
+  skinTone?: string;
   // Matches against the per-service services.audience column, derived from the
   // tags getProviderServiceFacets already fetched for the result set (no round
   // trip of its own) — a provider qualifies if ANY of
@@ -171,10 +173,15 @@ function formatPriceRange(range: { min: number; max: number }): string {
 const CATEGORY_CODE_MAP: Record<string, string> = {
   Hair: 'HAIR', Nails: 'NAILS', Makeup: 'MUA',
   Aesthetics: 'AESTHETICS', Brows: 'BROWS', Lashes: 'LASHES',
-  Other: 'OTHER',
 };
 
-const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics', 'Other']
+// No "Other" tab, matching Explore, which never had one. OTHER is retired as a
+// pickable provider type (see SERVICE_TYPE_OPTS) and it made a poor tab
+// regardless: a client browsing it learned nothing about what they'd find, and
+// the free-text custom_service_type that gave it meaning was never searchable.
+// Providers still stamped OTHER are reachable by name and by their services —
+// they just aren't offered as a category to browse.
+const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics']
   .map(c => ({ key: c, label: c }));
 
 // Price matching lives in src/utils/providerPriceMatch.ts, alongside the
@@ -360,6 +367,7 @@ ProviderCard.displayName = 'ProviderCard';
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
+  const bottomInset = useSystemBottomInset();
   const { isDarkMode, palette: P } = useTheme();
   const { user } = useAuth();
 
@@ -424,8 +432,12 @@ export default function SearchScreen({ navigation, route }: Props) {
   const barOpacity = useSharedValue(isMorphEntry ? 0 : 1);
   const barTranslateY = useSharedValue(isMorphEntry ? 10 : 0);
   const barScale = useSharedValue(isMorphEntry ? 0.97 : 1);
-  const chipsOpacity = useSharedValue(isMorphEntry ? 0 : 1);
-  const chipsTranslateY = useSharedValue(isMorphEntry ? 8 : 0);
+  // Category pills always animate in on mount, not just on a morph entry —
+  // previously these matched the bar/results (skipped entirely on a plain
+  // tab open), which meant the pill row just popped in at rest most of the
+  // time instead of ever showing the fade+slide.
+  const chipsOpacity = useSharedValue(0);
+  const chipsTranslateY = useSharedValue(8);
   const resultsOpacity = useSharedValue(isMorphEntry ? 0 : 1);
   const resultsTranslateY = useSharedValue(isMorphEntry ? 8 : 0);
 
@@ -435,12 +447,16 @@ export default function SearchScreen({ navigation, route }: Props) {
   const mergeEasing = Easing.out(Easing.cubic);
 
   React.useEffect(() => {
+    chipsOpacity.value = withDelay(40, withTiming(1, { duration: 190, easing: mergeEasing }));
+    chipsTranslateY.value = withDelay(40, withTiming(0, { duration: 210, easing: mergeEasing }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
     if (!isMorphEntry) return;
     barOpacity.value = withTiming(1, { duration: 200, easing: mergeEasing });
     barTranslateY.value = withTiming(0, { duration: 220, easing: mergeEasing });
     barScale.value = withTiming(1, { duration: 220, easing: mergeEasing });
-    chipsOpacity.value = withDelay(40, withTiming(1, { duration: 190, easing: mergeEasing }));
-    chipsTranslateY.value = withDelay(40, withTiming(0, { duration: 210, easing: mergeEasing }));
     resultsOpacity.value = withDelay(80, withTiming(1, { duration: 190, easing: mergeEasing }));
     resultsTranslateY.value = withDelay(80, withTiming(0, { duration: 210, easing: mergeEasing }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -677,6 +693,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // "Price on request" fallback with real data (or nothing, while
   // unresolved/absent) on the card.
   const [priceRangeByProviderId, setPriceRangeByProviderId] = useState<Map<string, { min: number; max: number }>>(new Map());
+  const [skinTonesByProviderId, setSkinTonesByProviderId] = useState<Map<string, Set<string>>>(new Map());
   const [audiencesByProviderId, setAudiencesByProviderId] = useState<Map<string, Set<string>>>(new Map());
   // Whether the facets query has answered for the CURRENT result set. Keeps
   // the audience filter's "don't claim a match until the lookup has answered"
@@ -695,6 +712,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (ids.length === 0) {
       setPriceRangeByProviderId(new Map());
       setAudiencesByProviderId(new Map());
+      setSkinTonesByProviderId(new Map());
       setFacetsLoaded(true);
       setPriceRangeLoading(false);
       return;
@@ -707,11 +725,13 @@ export default function SearchScreen({ navigation, route }: Props) {
         if (cancelled) return;
         setPriceRangeByProviderId(facets.priceRanges);
         setAudiencesByProviderId(facets.audiences);
+        setSkinTonesByProviderId(facets.skinTones ?? new Map());
       })
       .catch(() => {
         if (cancelled) return;
         setPriceRangeByProviderId(new Map());
         setAudiencesByProviderId(new Map());
+      setSkinTonesByProviderId(new Map());
       })
       .finally(() => {
         if (cancelled) return;
@@ -785,6 +805,10 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.city?.length) {
       list = list.filter(p => activeFilters.city!.some(c => p.serviceLocations.includes(c)));
     }
+    if (activeFilters.skinTone) {
+      if (!facetsLoaded) return [];
+      list = list.filter(p => matchesSkinTone([...skinTonesByProviderId.get(p.providerId) ?? []], activeFilters.skinTone!));
+    }
     if (activeFilters.hairType) {
       // Same "don't claim a match until the batched lookup has answered" rule
       // as Available Now above — hairTypeMatchIds is null while unresolved.
@@ -829,7 +853,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds]);
+  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, facetsLoaded, skinTonesByProviderId]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
@@ -949,6 +973,9 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
     if (activeFilters.city?.length) {
       chips.push({ key: 'city', label: activeFilters.city.join(', ') });
+    }
+    if (activeFilters.skinTone) {
+      chips.push({ key: 'skinTone', label: `${activeFilters.skinTone} skin tone` });
     }
     if (activeFilters.hairType) {
       chips.push({ key: 'hairType', label: activeFilters.hairType });
@@ -1124,7 +1151,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         onRequestClose={() => setFilterModalVisible(false)}
       >
         <Pressable style={styles.filterModalBackdrop} onPress={() => setFilterModalVisible(false)}>
-          <Pressable style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border }]} onPress={() => {}}>
+          <Pressable style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(20, bottomInset + 16) }]} onPress={() => {}}>
             <View style={styles.filterModalHeader}>
               <Text style={[styles.filterModalTitle, { color: P.text }]}>FILTERS</Text>
               {hasActiveFilters && (
@@ -1133,7 +1160,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               )}
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
               {/* Availability — surfaced first, above Sort: it's the
                   single most decision-relevant signal in this marketplace
                   (can I actually book this provider soon), and a lone
@@ -1289,6 +1316,23 @@ export default function SearchScreen({ navigation, route }: Props) {
                       activeOpacity={0.75}
                     >
                       <Text style={[styles.filterPillText, { color: isActive ? P.onAccent : P.text }]}>{type}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.filterSectionHead}>
+                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>Skin Tone</Text>
+              </View>
+              <View style={styles.pillGrid}>
+                {SKIN_TONES.map(tone => {
+                  const isActive = activeFilters.skinTone === tone;
+                  return (
+                    <TouchableOpacity key={tone}
+                      style={[styles.filterPill, { borderColor: P.border, backgroundColor: P.surface }, isActive && { backgroundColor: P.accent, borderColor: P.accent }]}
+                      onPress={() => updateFilter('skinTone', tone)} activeOpacity={0.75}
+                      accessibilityRole="button" accessibilityState={{ selected: isActive }}>
+                      <Text style={[styles.filterPillText, { color: isActive ? P.onAccent : P.text }]}>{tone}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -1525,7 +1569,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
     // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
+
   },
   filterModalSheet: {
     maxHeight: '75%',
@@ -1538,6 +1582,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   filterModalHeader: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1599,6 +1644,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   filterModalDone: {
+    flexShrink: 0,
     marginTop: 14,
     minHeight: 46,
     borderRadius: 23,

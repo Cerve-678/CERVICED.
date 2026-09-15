@@ -181,7 +181,17 @@ export interface DbProvider {
   user_id: string | null;
   slug: string;
   display_name: string;
+  /** The HEADLINE/primary type — kept as the single value every existing
+   *  reader (snapshots, portfolio stamping, legacy filters) already uses.
+   *  Always equals service_categories[0]; the DB trigger
+   *  trg_sync_provider_service_categories keeps that true rather than
+   *  leaving it to each writer to remember. */
   service_category: ServiceCategory;
+  /** EVERY macro type this provider offers, locked at sign-up from what they
+   *  ticked on SignUpStep4. Category filters match ANY entry, and the profile
+   *  shows a service-type switch once there's more than one. Never empty —
+   *  providers_service_categories_check enforces at least one. */
+  service_categories: ServiceCategory[];
   custom_service_type: string | null;
   location_text: string | null;
   latitude: number | null;
@@ -386,6 +396,16 @@ export interface DbProviderSpecialty {
 export interface DbService {
   id: string;
   provider_id: string;
+  /** Which of the provider's service_categories this service belongs to —
+   *  the macro type (LASHES/BROWS/...), sitting one level ABOVE the
+   *  provider's own free-text category_name grouping.
+   *
+   *  Nullable on purpose: a stale app build that predates this column is a
+   *  caller no app-side fix reaches, so an insert omitting it must not fail.
+   *  trg_default_service_category stamps the provider's headline type
+   *  instead, which is exactly what every service meant before the column
+   *  existed. Readers should fall back the same way. */
+  service_category: ServiceCategory | null;
   category_name: string;
   // Shown to clients under the category tab once selected — same value
   // stored redundantly on every service row sharing that category_name,
@@ -416,6 +436,7 @@ export interface DbService {
   // Hair types this service suits (HAIR_TYPES vocabulary — Straight, Wavy,
   // Curly, Coily, 4A, 4B, 4C). NULL/empty = suits all hair types.
   hair_types_suitable: string[] | null;
+  skin_tones_suitable?: string[] | null;
   // Who this specific service is for. NULL = not stated, read as "everyone" —
   // same convention as hair_types_suitable's "suits all" empty case. Mirrors
   // the live services_audience_check constraint.
@@ -807,6 +828,7 @@ export type ProviderWithServices = Pick<
   | "slug"
   | "display_name"
   | "service_category"
+  | "service_categories"
   | "custom_service_type"
   | "location_text"
   | "about_text"
@@ -852,6 +874,7 @@ export type ProviderWithServices = Pick<
   services: (Pick<
     DbService,
     | "id"
+    | "service_category"
     | "category_name"
     | "category_description"
     | "name"
@@ -865,6 +888,7 @@ export type ProviderWithServices = Pick<
     | "min_age"
     | "contraindications"
     | "aftercare_notes"
+    | "skin_tones_suitable"
     | "service_type"
   > & {
     images: Pick<
@@ -923,6 +947,10 @@ export interface DiscoverServiceWithProvider {
   name: string;
   description: string | null;
   price: number;
+  /** This SERVICE's own category — distinct from provider.service_category
+   *  (the provider's headline type), since a multi-category provider's
+   *  services can each belong to a different one. */
+  service_category: string;
   service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio" | "fit">[];
   provider: Pick<
     DbProvider,

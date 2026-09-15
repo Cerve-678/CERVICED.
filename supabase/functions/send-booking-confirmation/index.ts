@@ -44,14 +44,15 @@ function formatLongDate(ymd: string): string {
   });
 }
 
-/** "14:30:00" -> "2:30 PM", matching the app's formatTime12. */
+/** "14:30:00" -> "2:30pm", matching the app's formatTime12. */
 function formatTime12(value: string): string {
   const [hRaw, minRaw] = value.split(':');
   const h = Number(hRaw);
   if (Number.isNaN(h)) return value;
-  const suffix = h >= 12 ? 'PM' : 'AM';
+  const suffix = h >= 12 ? 'pm' : 'am';
   const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${minRaw ?? '00'} ${suffix}`;
+  const displayHour = h >= 12 ? String(hour12) : String(hour12).padStart(2, '0');
+  return `${displayHour}:${minRaw ?? '00'}${suffix}`;
 }
 
 serve(async (req) => {
