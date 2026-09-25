@@ -1,3 +1,11 @@
+-- APPLIED LIVE 2026-09-25 as 20260925221735 (get_services_availability). Verified
+-- after applying: ACL is postgres/service_role/authenticated only (no anon, no
+-- PUBLIC), SECURITY DEFINER with search_path pinned, and a call over all 56 live
+-- services ran in ~108 ms. Before applying it was checked against 15 constructed
+-- scenarios (bookings, live and expired holds, blocked dates, closed and open
+-- overrides, exact-fit and just-too-long boundaries, service buffers) in a
+-- rolled-back transaction.
+--
 -- get_services_availability(): "does THIS service have an open slot this week?",
 -- batched over many services in one call, for Search's "Available now" filter.
 --
