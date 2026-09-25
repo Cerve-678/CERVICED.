@@ -21,51 +21,23 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProviderDialog } from '../../components/ProviderDialog';
 import { toUserMessage } from '../../utils/userFacingError';
 import {
-  getProviderBookings,
   getProviderConversations,
   ProviderConversationWithClient,
-  updateBookingStatus,
-  updateGroupBookingStatus,
-  providerCancelOwnBooking,
-  providerCancelGroupBooking,
   markConversationReadByProvider,
   sendConversationQuickReply,
 } from '../../services/databaseService';
-import type { BookingWithAddOns, DbBooking } from '../../types/database';
-import { mapDbBookingToConfirmed } from '../../contexts/BookingContext';
-import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
-import { formatTime12 } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterKey = 'all' | 'pending' | 'confirmed' | 'done' | 'messages' | 'queries';
+type FilterKey = 'messages' | 'queries';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all',       label: 'All'       },
-  { key: 'pending',   label: 'Pending'   },
-  { key: 'confirmed', label: 'Confirmed' },
-  { key: 'done',      label: 'Completed' },
-  { key: 'messages',  label: 'Messages'  },
-  { key: 'queries',   label: 'Queries'   },
+  { key: 'messages', label: 'Messages' },
+  { key: 'queries',  label: 'Queries'  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function timeAgo(dateStr: string, timeStr: string): string {
-  const [y, mo, d] = dateStr.split('-').map(Number);
-  const [h, m]     = timeStr.split(':').map(Number);
-  const dt   = new Date(y!, mo! - 1, d!, h!, m!);
-  const diff = Date.now() - dt.getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1)  return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7)  return `${days}d ago`;
-  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
 
 function timeAgoISO(iso: string | null): string {
   if (!iso) return '';
@@ -83,25 +55,6 @@ function timeAgoISO(iso: string | null): string {
 function initials(name: string): string {
   return name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
 }
-
-function fmtDate(dateStr: string): string {
-  const [y, mo, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y!, mo! - 1, d!);
-  return dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-function fmtTime(timeStr: string): string {
-  return formatTime12(timeStr);
-}
-
-const STATUS_CONFIG: Record<string, { color: string; bg: string; dbg: string; label: string; icon: string }> = {
-  pending:     { color: '#FF9F0A', bg: '#FBF1E0', dbg: '#3D2E10', label: 'Pending',     icon: 'time-outline'          },
-  confirmed:   { color: '#0A84FF', bg: '#E5F2FF', dbg: '#102840', label: 'Confirmed',   icon: 'checkmark-circle-outline'},
-  in_progress: { color: '#BF5AF2', bg: '#F4EAFF', dbg: '#2E1A40', label: 'In Progress', icon: 'play-circle-outline'   },
-  completed:   { color: '#30D158', bg: '#E5F9EC', dbg: '#102A1A', label: 'Completed',   icon: 'checkmark-done-outline' },
-  cancelled:   { color: '#FF453A', bg: '#FDEAEA', dbg: '#3D1B1B', label: 'Cancelled',   icon: 'close-circle-outline'  },
-  no_show:     { color: '#FF9F0A', bg: '#FBF1E0', dbg: '#3D2E10', label: 'No Show',     icon: 'person-remove-outline' },
-};
 
 // ─── Shimmer skeleton ─────────────────────────────────────────────────────────
 
@@ -145,161 +98,6 @@ const sk = StyleSheet.create({
   line2:     { height: 11, width: '52%', borderRadius: 5 },
 });
 
-// ─── Inbox row ────────────────────────────────────────────────────────────────
-
-function InboxRow({
-  booking,
-  isUnread,
-  isPending,
-  index,
-  dark,
-  text,
-  sub,
-  border,
-  onPress,
-  onConfirm,
-  onDecline,
-}: {
-  booking: BookingWithAddOns;
-  isUnread: boolean;
-  isPending: boolean;
-  index: number;
-  dark: boolean;
-  text: string;
-  sub: string;
-  border: string;
-  onPress: () => void;
-  onConfirm: () => void;
-  onDecline: () => void;
-}) {
-  const slideAnim = useRef(new Animated.Value(20)).current;
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const swipeRef  = useRef<Swipeable>(null);
-
-  useEffect(() => {
-    const delay = Math.min(index * 45, 300);
-    Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 280, delay, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, index, slideAnim]);
-
-  const cfg  = STATUS_CONFIG[booking.status] ?? STATUS_CONFIG['confirmed']!;
-  const init = initials(booking.customer_name ?? '?');
-  const ago  = timeAgo(booking.booking_date, booking.booking_time);
-  const avatarBg = dark ? cfg.dbg : cfg.bg;
-
-  const renderRightActions = isPending
-    ? () => (
-        <View style={row.swipeActions}>
-          <TouchableOpacity
-            style={[row.swipeBtn, { backgroundColor: '#FF453A' }]}
-            onPress={() => { swipeRef.current?.close(); onDecline(); }}
-          >
-            <Ionicons name="close" size={18} color="#fff" />
-            <Text style={row.swipeBtnText}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[row.swipeBtn, { backgroundColor: '#34C759' }]}
-            onPress={() => { swipeRef.current?.close(); onConfirm(); }}
-          >
-            <Ionicons name="checkmark" size={18} color="#fff" />
-            <Text style={row.swipeBtnText}>Confirm</Text>
-          </TouchableOpacity>
-        </View>
-      )
-    : undefined;
-
-  const content = (
-    <TouchableOpacity
-      activeOpacity={0.72}
-      onPress={onPress}
-      style={[row.wrap, { borderBottomColor: border }]}
-    >
-      {/* Unread indicator */}
-      {isUnread && (
-        <View style={[row.unreadBar, { backgroundColor: cfg.color }]} />
-      )}
-
-      {/* Avatar */}
-      <View style={[row.avatar, { backgroundColor: avatarBg }]}>
-        <Text style={[row.avatarText, { color: cfg.color }]}>{init}</Text>
-      </View>
-
-      {/* Body */}
-      <View style={row.body}>
-        <View style={row.topLine}>
-          <Text style={[row.name, { color: text, fontWeight: isUnread ? '700' : '500' }]} numberOfLines={1}>
-            {booking.customer_name ?? 'Client'}
-          </Text>
-          <Text style={[row.timestamp, { color: sub }]}>{ago}</Text>
-        </View>
-
-        <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
-          {booking.service_name_snapshot}
-        </Text>
-
-        <View style={row.footer}>
-          <View style={[row.statusPill, { backgroundColor: dark ? cfg.dbg : cfg.bg }]}>
-            <Ionicons name={cfg.icon as any} size={11} color={cfg.color} />
-            <Text style={[row.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-          </View>
-          <Text style={[row.dateChip, { color: sub }]}>
-            {fmtDate(booking.booking_date)} · {fmtTime(booking.booking_time)}
-          </Text>
-        </View>
-
-        {/* This one broke the provider's own scheduling rules and only exists
-            because they opted into being asked. Confirm/Decline sit right
-            here, so the reason has to be visible BEFORE the tap — a request
-            that looks identical to an ordinary booking is one they'd accept
-            without registering that it's 8pm on a day they'd blocked out. */}
-        {booking.is_emergency_request && (
-          <View style={[row.requestPill, { backgroundColor: dark ? '#3A2E1A' : '#FFF4E0' }]}>
-            <Ionicons name="alert-circle-outline" size={11} color="#C2811A" />
-            <Text style={[row.requestText, { color: '#C2811A' }]}>
-              Outside your availability
-            </Text>
-          </View>
-        )}
-
-        {isPending && (
-          <View style={row.inlineActions}>
-            <TouchableOpacity
-              activeOpacity={0.75}
-              onPress={onDecline}
-              style={[row.inlineBtn, { borderColor: '#FF453A' }]}
-            >
-              <Text style={[row.inlineBtnText, { color: '#FF453A' }]}>Decline</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.75}
-              onPress={onConfirm}
-              style={[row.inlineBtn, { backgroundColor: '#34C759', borderColor: '#34C759' }]}
-            >
-              <Text style={[row.inlineBtnText, { color: '#fff' }]}>Confirm</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      <Ionicons name="chevron-forward" size={14} color={sub} style={{ opacity: 0.35, marginTop: 2, marginLeft: 4 }} />
-    </TouchableOpacity>
-  );
-
-  return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      {renderRightActions ? (
-        <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
-          {content}
-        </Swipeable>
-      ) : (
-        content
-      )}
-    </Animated.View>
-  );
-}
-
 const row = StyleSheet.create({
   wrap:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   unreadBar:   { width: 3, height: 40, borderRadius: 2, marginRight: 10, flexShrink: 0 },
@@ -310,19 +108,6 @@ const row = StyleSheet.create({
   name:        { fontSize: 15, flex: 1, marginRight: 8, letterSpacing: -0.2 },
   timestamp:   { fontSize: 12 },
   service:     { fontSize: 13 },
-  footer:      { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  statusPill:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 },
-  statusText:  { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
-  dateChip:    { fontSize: 11 },
-  requestPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 6,
-  },
-  requestText: { fontSize: 10.5, fontWeight: '700' },
-
-  inlineActions: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  inlineBtn:     { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8, borderWidth: 1.5 },
-  inlineBtnText: { fontSize: 12, fontWeight: '700' },
 
   swipeActions: { flexDirection: 'row', height: '100%' },
   swipeBtn:     { width: 76, alignItems: 'center', justifyContent: 'center', gap: 2 },
@@ -423,29 +208,6 @@ function ConversationRow({
   );
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
-
-function SectionHeader({ label, count, dark, text, sub }: { label: string; count: number; dark: boolean; text: string; sub: string }) {
-  return (
-    <View style={[sec.wrap, { backgroundColor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)' }]}>
-      <Text style={[sec.label, { color: sub }]}>{label.toUpperCase()}</Text>
-      <View style={[sec.badge, { backgroundColor: dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)' }]}>
-        <Text style={[sec.badgeText, { color: text }]}>{count}</Text>
-      </View>
-    </View>
-  );
-}
-
-const sec = StyleSheet.create({
-  wrap:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  label:     { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
-  badge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  badgeText: { fontSize: 11, fontWeight: '600' },
-});
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
-
-// ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT_P = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
@@ -473,15 +235,14 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const { user } = useAuth();
   const P = dark ? DARK_P : LIGHT_P;
 
-  const [bookings,      setBookings]      = useState<BookingWithAddOns[]>([]);
   const [conversations, setConversations] = useState<ProviderConversationWithClient[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
-  const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter ?? 'all');
+  const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter ?? 'messages');
 
-  // Both fetches used to log and swallow, so a failed load rendered as the
-  // "All clear" empty state — the single most misleading thing an inbox can
-  // say to a provider who actually has pending bookings waiting on them.
+  // The fetch used to log and swallow, so a failed load rendered as the empty
+  // state — the single most misleading thing an inbox can say to a provider
+  // who actually has unread messages waiting on them.
   const [loadError,     setLoadError]     = useState<string | null>(null);
 
   const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
@@ -495,35 +256,24 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     if (f) setFilter(f);
   }, [route?.params?.initialFilter]);
 
-  const fetchBookings = useCallback(async () => {
-    setBookings(await getProviderBookings());
-  }, []);
-
   const fetchConversations = useCallback(async () => {
     setConversations(await getProviderConversations());
   }, []);
 
-  // One banner for the pair: either half failing means what's on screen is
-  // incomplete, and the provider needs to know that before trusting it.
   const loadInbox = useCallback(async () => {
-    const [bookingsResult, conversationsResult] = await Promise.allSettled([
-      fetchBookings(),
-      fetchConversations(),
-    ]);
-    const failure =
-      bookingsResult.status === 'rejected' ? bookingsResult.reason
-      : conversationsResult.status === 'rejected' ? conversationsResult.reason
-      : null;
-    setLoadError(
-      failure
-        ? toUserMessage(
-            failure,
-            "We couldn't refresh your inbox just now.",
-            '[ProviderInbox] load failed',
-          )
-        : null,
-    );
-  }, [fetchBookings, fetchConversations]);
+    try {
+      await fetchConversations();
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(
+        toUserMessage(
+          err,
+          "We couldn't refresh your inbox just now.",
+          '[ProviderInbox] load failed',
+        ),
+      );
+    }
+  }, [fetchConversations]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -538,68 +288,6 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     await loadInbox();
     setRefreshing(false);
   }, [loadInbox]);
-
-  const runConfirmAction = useCallback((fn: () => Promise<void>) => {
-    Promise.resolve(fn())
-      // loadInbox absorbs its own failures into the banner, so a refresh
-      // problem after a successful action can't be reported as the action
-      // itself having failed.
-      .then(() => loadInbox())
-      .catch((err: any) => {
-        logger.error('[ProviderInbox] booking action failed:', err);
-        // Group RPCs (provider_update_group_booking_status /
-        // provider_cancel_group_booking) throw a specific, actionable reason
-        // as a DB guard message (P0001) when a sibling can't legally
-        // transition — that's written for people and safe to surface
-        // verbatim. Any other coded (RLS, etc.) or network error is not.
-        const isTechnical = err?.code && err.code !== 'P0001';
-        const message =
-          typeof err?.message === 'string' && err.message.length > 0 && !isTechnical && !err.message.includes('Network')
-            ? err.message
-            : 'Could not complete this action. Check your connection and try again.';
-        Alert.alert('Action failed', message);
-      });
-  }, [loadInbox]);
-
-  const handleConfirmBooking = useCallback((booking: BookingWithAddOns) => {
-    const isGroup = !!booking.group_booking_id;
-    Alert.alert(
-      'Confirm Booking',
-      `The client will be notified that their booking is confirmed.${isGroup ? ' This applies to all of this client’s services with you.' : ''}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm Booking', onPress: () => {
-        runConfirmAction(async () => {
-          if (isGroup) {
-            await updateGroupBookingStatus(booking.group_booking_id!, 'confirmed' as DbBooking['status']);
-          } else {
-            await updateBookingStatus(booking.id, 'confirmed' as DbBooking['status']);
-          }
-        });
-        } },
-      ],
-    );
-  }, [runConfirmAction]);
-
-  const handleDeclineBooking = useCallback((booking: BookingWithAddOns) => {
-    const isGroup = !!booking.group_booking_id;
-    Alert.alert(
-      'Decline Booking',
-      `The client will be notified. This cannot be undone.${isGroup ? ' This applies to all of this client’s services with you.' : ''}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Decline', style: 'destructive', onPress: () => {
-        runConfirmAction(async () => {
-          if (isGroup) {
-            await providerCancelGroupBooking(booking.group_booking_id!);
-          } else {
-            await providerCancelOwnBooking(booking.id);
-          }
-        });
-        } },
-      ],
-    );
-  }, [runConfirmAction]);
 
   const handleMarkConversationRead = useCallback((conversation: ProviderConversationWithClient) => {
     markConversationReadByProvider(conversation.id)
@@ -631,13 +319,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     setReplySending(false);
   }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast]);
 
-  const unreadConversations = useMemo(
-    () => [...conversations]
-      .filter(c => c.unread_count_provider > 0)
-      .sort((a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()),
-    [conversations]
+  const unreadConversationCount = useMemo(
+    () => conversations.filter(c => c.unread_count_provider > 0).length,
+    [conversations],
   );
-  const unreadConversationCount = unreadConversations.length;
   // Messages are from clients who have booked; Queries are Get In Touch
   // enquiries from people who haven't.
   const messageConversations = useMemo(() => conversations.filter(c => c.has_booked), [conversations]);
@@ -659,72 +344,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     }
   }, [conversations, unreadMessageCount, unreadQueryCount, route?.params?.initialFilter]);
 
-  const pendingIds = useMemo(
-    () => new Set(bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING).map(b => b.id)),
-    [bookings]
-  );
-
-  const filtered = useMemo(() => {
-    const sorted = [...bookings].sort(
-      (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
-    );
-    switch (filter) {
-      case 'pending':   return sorted.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING);
-      case 'confirmed': return sorted.filter(b => mapDbBookingStatus(b.status) === BookingStatus.UPCOMING || mapDbBookingStatus(b.status) === BookingStatus.IN_PROGRESS);
-      case 'done':      return sorted.filter(b => {
-        const s = mapDbBookingStatus(b.status);
-        return s === BookingStatus.COMPLETED || s === BookingStatus.CANCELLED || s === BookingStatus.NO_SHOW;
-      });
-      default:          return sorted;
-    }
-  }, [bookings, filter]);
-
-  const pendingCount = pendingIds.size;
-  // Everything outstanding — pending bookings AND unread messages both need a
-  // reply from the provider, so they share one "Needs attention" section
-  // instead of living in separate tabs the provider has to check separately.
-  const outstandingCount = pendingCount + unreadConversationCount;
-
-  // Flat items for FlatList
-  type ListItem =
-    | { key: string; t: 'section'; label: string; count: number }
-    | { key: string; t: 'booking'; booking: BookingWithAddOns; idx: number }
-    | { key: string; t: 'conversation'; conversation: ProviderConversationWithClient; idx: number };
-
-  const flatItems = useMemo((): ListItem[] => {
-    if (filter === 'messages' || filter === 'queries') {
-      const list = filter === 'messages' ? messageConversations : queryConversations;
-      return list.map((c, idx) => ({ key: c.id, t: 'conversation' as const, conversation: c, idx }));
-    }
-
-    if (filter !== 'all') {
-      return filtered.map((b, idx) => ({ key: b.id, t: 'booking' as const, booking: b, idx }));
-    }
-
-    const pending = filtered.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING);
-    const active  = filtered.filter(b => mapDbBookingStatus(b.status) === BookingStatus.UPCOMING || mapDbBookingStatus(b.status) === BookingStatus.IN_PROGRESS);
-    const done    = filtered.filter(b => {
-      const s = mapDbBookingStatus(b.status);
-      return s === BookingStatus.COMPLETED || s === BookingStatus.CANCELLED || s === BookingStatus.NO_SHOW;
-    });
-
-    const out: ListItem[] = [];
-    let idx = 0;
-    if (pending.length > 0 || unreadConversations.length > 0) {
-      out.push({ key: 'sec-needs-attention', t: 'section', label: 'Needs attention', count: pending.length + unreadConversations.length });
-      for (const b of pending) out.push({ key: b.id, t: 'booking', booking: b, idx: idx++ });
-      for (const c of unreadConversations) out.push({ key: c.id, t: 'conversation', conversation: c, idx: idx++ });
-    }
-    if (active.length > 0) {
-      out.push({ key: 'sec-upcoming', t: 'section', label: 'Upcoming', count: active.length });
-      for (const b of active) out.push({ key: b.id, t: 'booking', booking: b, idx: idx++ });
-    }
-    if (done.length > 0) {
-      out.push({ key: 'sec-past', t: 'section', label: 'Past', count: done.length });
-      for (const b of done) out.push({ key: b.id, t: 'booking', booking: b, idx: idx++ });
-    }
-    return out;
-  }, [filtered, filter, messageConversations, queryConversations, unreadConversations]);
+  const visibleConversations = filter === 'messages' ? messageConversations : queryConversations;
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -751,9 +371,9 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
 
           <View style={s.headerCenter}>
             <Text style={[s.title, { color: P.text }]}>Inbox</Text>
-            {outstandingCount > 0 && (
+            {unreadConversationCount > 0 && (
               <View style={[s.badge, { backgroundColor: '#FF3B30' }]}>
-                <Text style={s.badgeText}>{outstandingCount}</Text>
+                <Text style={s.badgeText}>{unreadConversationCount}</Text>
               </View>
             )}
           </View>
@@ -765,11 +385,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
         <View style={[s.filterRow, { backgroundColor: P.card, borderBottomColor: P.border }]}>
           {FILTERS.map(f => {
             const active = filter === f.key;
-            const badgeCount =
-              f.key === 'all'      ? outstandingCount :
-              f.key === 'pending'  ? pendingCount :
-              f.key === 'messages' ? unreadMessageCount :
-              f.key === 'queries'  ? unreadQueryCount : 0;
+            const badgeCount = f.key === 'messages' ? unreadMessageCount : unreadQueryCount;
             const isNew  = badgeCount > 0;
             return (
               <TouchableOpacity
@@ -795,66 +411,36 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           </View>
         ) : (
           <FlatList
-            data={flatItems}
-            keyExtractor={item => item.key}
+            data={visibleConversations}
+            keyExtractor={item => item.id}
             style={{ backgroundColor: P.card, flex: 1 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />
             }
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 60 }}
-            renderItem={({ item }) => {
-              if (item.t === 'section') {
-                return (
-                  <SectionHeader
-                    label={item.label}
-                    count={item.count}
-                    dark={dark}
-                    text={P.text}
-                    sub={P.sub}
-                  />
-                );
-              }
-              if (item.t === 'conversation') {
-                return (
-                  <ConversationRow
-                    conversation={item.conversation}
-                    index={item.idx}
-                    text={P.text}
-                    sub={P.sub}
-                    accent={P.accent}
-                    border={P.border}
-                    onPress={() => navigation.navigate('ProviderConversation', {
-                      conversationId: item.conversation.id,
-                      clientUserId: item.conversation.user_id,
-                      clientName: item.conversation.client?.name ?? 'Client',
-                    })}
-                    onReply={() => setReplyTarget(item.conversation)}
-                    onMarkRead={() => handleMarkConversationRead(item.conversation)}
-                  />
-                );
-              }
-              return (
-                <InboxRow
-                  booking={item.booking}
-                  isUnread={pendingIds.has(item.booking.id)}
-                  isPending={mapDbBookingStatus(item.booking.status) === BookingStatus.PENDING}
-                  index={item.idx}
-                  dark={dark}
-                  text={P.text}
-                  sub={P.sub}
-                  border={P.border}
-                  onPress={() => navigation.navigate('BookingDetail', { bookingId: item.booking.id, booking: mapDbBookingToConfirmed(item.booking) })}
-                  onConfirm={() => handleConfirmBooking(item.booking)}
-                  onDecline={() => handleDeclineBooking(item.booking)}
-                />
-              );
-            }}
+            renderItem={({ item, index }) => (
+              <ConversationRow
+                conversation={item}
+                index={index}
+                text={P.text}
+                sub={P.sub}
+                accent={P.accent}
+                border={P.border}
+                onPress={() => navigation.navigate('ProviderConversation', {
+                  conversationId: item.id,
+                  clientUserId: item.user_id,
+                  clientName: item.client?.name ?? 'Client',
+                })}
+                onReply={() => setReplyTarget(item)}
+                onMarkRead={() => handleMarkConversationRead(item)}
+              />
+            )}
             ListHeaderComponent={
               // With rows on screen the banner sits above them; with none, the
               // empty state below takes over, so "All clear" is never shown
               // for an inbox we simply failed to read.
-              loadError && flatItems.length > 0 ? (
+              loadError && visibleConversations.length > 0 ? (
                 <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
                   <Text style={[s.errorBannerText, { color: P.text }]}>
                     {loadError} This list may be out of date.
@@ -883,13 +469,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               ) : (
                 <View style={s.empty}>
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
-                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : filter === 'queries' ? 'help-circle-outline' : 'mail-open-outline'} size={36} color={P.sub} />
+                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'help-circle-outline'} size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>All clear</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{filter === 'messages' ? 'No messages' : 'No queries'}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
-                    {filter === 'messages' ? 'No messages from clients yet'
-                      : filter === 'queries' ? 'No enquiries yet — they land here when someone taps Get In Touch on your profile'
-                      : 'No bookings in this category'}
+                    {filter === 'messages'
+                      ? 'No messages from clients yet'
+                      : 'No queries yet. They land here when someone taps Get In Touch on your profile.'}
                   </Text>
                 </View>
               )

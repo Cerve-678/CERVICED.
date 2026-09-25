@@ -364,7 +364,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <Text style={[styles.sectionLabel, { color: P.sub }]}>MY BUSINESS</Text>
               <View style={styles.carousel}>
                 <CarouselCard key="schedule" icon="calendar-today" title="Schedule" subtitle="Set your hours & block dates" onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
-                <CarouselCard key="inbox" icon="email" title="Inbox" subtitle="Messages with your clients" onPress={() => navigation.navigate('ProviderInbox')} P={P} />
+                <CarouselCard key="inbox" icon="email" title="Inbox" subtitle="Messages and queries from clients" onPress={() => navigation.navigate('ProviderInbox')} P={P} />
                 <CarouselCard key="booking-history" icon="stack" title="Booking History" subtitle="View past bookings" onPress={() => navigation.navigate('BookingHistory')} P={P} />
               </View>
             </View>

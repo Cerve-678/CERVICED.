@@ -2185,7 +2185,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             { icon: 'people-outline',          title: 'Clientele',   sub: 'View & manage your client list',    route: 'Clientele'        },
             { icon: 'document-text-outline',   title: 'Info Pack',   sub: 'Share service details with clients',route: 'InfoPacks'        },
             { icon: 'clipboard-outline',       title: 'Forms',       sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
-            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Messages with your clients',        route: 'ProviderInbox'    },
+            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Messages and queries from clients',        route: 'ProviderInbox'    },
           ] as const).filter(item => OFFERS_ENABLED || item.route !== 'Promotions').map((item, idx, arr) => (
             <React.Fragment key={item.title}>
               <TouchableOpacity

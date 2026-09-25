@@ -8,7 +8,6 @@ tags: [screen, provider]
 
 ## → Navigates to
 - [[ProviderConversationScreen\|ProviderConversation]]
-- [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
