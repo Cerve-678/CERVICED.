@@ -3486,6 +3486,12 @@ export interface ProviderConversationWithClient {
   created_at: string;
   updated_at: string;
   client: { id: string; name: string; avatar_url: string | null } | null;
+  /**
+   * True when this person holds (or has held) a booking with the provider.
+   * False means the thread came from Get In Touch on the public profile — a
+   * general enquiry from someone who hasn't booked.
+   */
+  has_booked: boolean;
 }
 
 /** Fetch all conversations for the current provider, most recently updated first */
@@ -3507,18 +3513,32 @@ export async function getProviderConversations(): Promise<
   if (error) throw error;
   const conversations = (data ?? []) as Omit<
     ProviderConversationWithClient,
-    "client"
+    "client" | "has_booked"
   >[];
   if (conversations.length === 0) return [];
 
   // Client name/avatar via the same batched RPC as getProviderReviews — see
   // fix_users_table_pii_leak.sql for why this isn't an embedded users join.
   const userIds = [...new Set(conversations.map((c) => c.user_id))];
-  const { data: profiles, error: profilesError } = await supabase.rpc(
-    "get_user_public_profiles",
-    { p_user_ids: userIds },
-  );
+  // A held slot (on_hold) isn't a booking yet, same as getProviderBookings.
+  const [
+    { data: profiles, error: profilesError },
+    { data: bookedRows, error: bookedError },
+  ] = await Promise.all([
+    supabase.rpc("get_user_public_profiles", { p_user_ids: userIds }),
+    supabase
+      .from("bookings")
+      .select("user_id")
+      .eq("provider_id", provider.id)
+      .in("user_id", userIds)
+      .neq("status", "on_hold")
+      .limit(DEFAULT_PROVIDER_QUERY_LIMIT * 10),
+  ]);
   if (profilesError) throw profilesError;
+  if (bookedError) throw bookedError;
+  const bookedUserIds = new Set(
+    (bookedRows ?? []).map((b: { user_id: string }) => b.user_id),
+  );
   const profileById = new Map<
     string,
     { id: string; name: string; avatar_url: string | null }
@@ -3533,6 +3553,7 @@ export async function getProviderConversations(): Promise<
     (c): ProviderConversationWithClient => ({
       ...c,
       client: profileById.get(c.user_id) ?? null,
+      has_booked: bookedUserIds.has(c.user_id),
     }),
   );
 }

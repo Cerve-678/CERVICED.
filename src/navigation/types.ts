@@ -119,7 +119,7 @@ export type ProviderBeccaStackParamList = {
   AddBooking: undefined;
   Clientele: undefined;
   ProviderInbox:
-    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" | "queries" }
     | undefined;
   ProviderConversation: {
     conversationId: string;
@@ -234,7 +234,7 @@ export type ProviderHomeStackParamList = {
     | undefined;
   Notifications: undefined;
   ProviderInbox:
-    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" | "queries" }
     | undefined;
   ProviderConversation: {
     conversationId: string;
@@ -307,7 +307,7 @@ export type ProviderAccountStackParamList = {
     | { openTerms: true }
     | undefined;
   ProviderInbox:
-    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" | "queries" }
     | undefined;
   ProviderConversation: {
     conversationId: string;

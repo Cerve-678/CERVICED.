@@ -39,7 +39,7 @@ import { logger } from '../../utils/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterKey = 'all' | 'pending' | 'confirmed' | 'done' | 'messages';
+type FilterKey = 'all' | 'pending' | 'confirmed' | 'done' | 'messages' | 'queries';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all',       label: 'All'       },
@@ -47,6 +47,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'done',      label: 'Completed' },
   { key: 'messages',  label: 'Messages'  },
+  { key: 'queries',   label: 'Queries'   },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -637,6 +638,26 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     [conversations]
   );
   const unreadConversationCount = unreadConversations.length;
+  // Messages are from clients who have booked; Queries are Get In Touch
+  // enquiries from people who haven't.
+  const messageConversations = useMemo(() => conversations.filter(c => c.has_booked), [conversations]);
+  const queryConversations   = useMemo(() => conversations.filter(c => !c.has_booked), [conversations]);
+  const unreadMessageCount = useMemo(() => messageConversations.filter(c => c.unread_count_provider > 0).length, [messageConversations]);
+  const unreadQueryCount   = useMemo(() => queryConversations.filter(c => c.unread_count_provider > 0).length, [queryConversations]);
+
+  // Every "you have a new chat" deep link asks for the Messages tab without
+  // knowing which kind it was. If the only unread thread is an enquiry, land
+  // on Queries instead of an apparently-empty Messages tab. Once per arrival —
+  // never fights a tab the provider picked themselves.
+  const deepLinkSettled = useRef(false);
+  useEffect(() => { deepLinkSettled.current = false; }, [route?.params?.initialFilter]);
+  useEffect(() => {
+    if (deepLinkSettled.current || conversations.length === 0) return;
+    deepLinkSettled.current = true;
+    if (route?.params?.initialFilter === 'messages' && unreadMessageCount === 0 && unreadQueryCount > 0) {
+      setFilter('queries');
+    }
+  }, [conversations, unreadMessageCount, unreadQueryCount, route?.params?.initialFilter]);
 
   const pendingIds = useMemo(
     () => new Set(bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING).map(b => b.id)),
@@ -671,8 +692,9 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     | { key: string; t: 'conversation'; conversation: ProviderConversationWithClient; idx: number };
 
   const flatItems = useMemo((): ListItem[] => {
-    if (filter === 'messages') {
-      return conversations.map((c, idx) => ({ key: c.id, t: 'conversation' as const, conversation: c, idx }));
+    if (filter === 'messages' || filter === 'queries') {
+      const list = filter === 'messages' ? messageConversations : queryConversations;
+      return list.map((c, idx) => ({ key: c.id, t: 'conversation' as const, conversation: c, idx }));
     }
 
     if (filter !== 'all') {
@@ -702,7 +724,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       for (const b of done) out.push({ key: b.id, t: 'booking', booking: b, idx: idx++ });
     }
     return out;
-  }, [filtered, filter, conversations, unreadConversations]);
+  }, [filtered, filter, messageConversations, queryConversations, unreadConversations]);
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -746,7 +768,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             const badgeCount =
               f.key === 'all'      ? outstandingCount :
               f.key === 'pending'  ? pendingCount :
-              f.key === 'messages' ? unreadConversationCount : 0;
+              f.key === 'messages' ? unreadMessageCount :
+              f.key === 'queries'  ? unreadQueryCount : 0;
             const isNew  = badgeCount > 0;
             return (
               <TouchableOpacity
@@ -860,11 +883,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               ) : (
                 <View style={s.empty}>
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
-                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'mail-open-outline'} size={36} color={P.sub} />
+                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : filter === 'queries' ? 'help-circle-outline' : 'mail-open-outline'} size={36} color={P.sub} />
                   </View>
                   <Text style={[s.emptyTitle, { color: P.text }]}>All clear</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
-                    {filter === 'messages' ? 'No conversations yet' : 'No bookings in this category'}
+                    {filter === 'messages' ? 'No messages from clients yet'
+                      : filter === 'queries' ? 'No enquiries yet — they land here when someone taps Get In Touch on your profile'
+                      : 'No bookings in this category'}
                   </Text>
                 </View>
               )
