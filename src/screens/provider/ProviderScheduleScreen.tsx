@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 import { useProviderDialog } from '../../components/ProviderDialog';
@@ -79,7 +80,6 @@ type DayRow = {
   isOpen: boolean;
   openTime: string;  // 'HH:MM:SS'
   closeTime: string;
-  dirty: boolean;
 };
 type ExtraPeriod = { openTime: string; closeTime: string };
 
@@ -89,7 +89,6 @@ function makeDefault(): DayRow[] {
     isOpen: dow >= 1 && dow <= 5,
     openTime: '09:00:00',
     closeTime: '18:00:00',
-    dirty: false,
   }));
 }
 
@@ -132,6 +131,14 @@ export default function ProviderScheduleScreen() {
   const [tab, setTab] = useState<'hours' | 'blocked'>('hours');
   const [providerId, setProviderId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // The hours are read-only until the provider taps Edit. Save writes the whole
+  // week in one transaction and then RE-READS it from the database, so what's
+  // on screen afterwards is what was actually stored, not what was typed.
+  const [editingHours, setEditingHours] = useState(false);
+  // 'error' means the saved hours could not be read. The screen must not show
+  // the Mon-Fri 9-6 defaults as if they were the provider's hours: they would
+  // look real, and a Save would overwrite the real schedule with them.
+  const [hoursLoadState, setHoursLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   // Hours tab state
   const [days, setDays] = useState<DayRow[]>(makeDefault());
@@ -161,15 +168,22 @@ export default function ProviderScheduleScreen() {
   const [addingOverride, setAddingOverride] = useState(false);
 
   // ── Load data ──────────────────────────────────────────────────────────────
-  const loadData = useCallback(async () => {
+  // Resolves true only when the saved schedule was actually read. Callers that
+  // are about to claim "this is what's saved" (after a Save, after Cancel) need
+  // to know the difference between "re-read" and "load failed, still showing
+  // whatever was on screen".
+  const loadData = useCallback(async (): Promise<boolean> => {
     try {
       const profile = await getMyProviderProfile();
-      if (!profile) return;
+      if (!profile) { setHoursLoadState(prev => (prev === 'ready' ? prev : 'error')); return false; }
       setProviderId(profile.id);
 
+      // The windows read is not swallowed: a failure there used to fall back to
+      // the legacy one-period-per-day rows and present them as the whole
+      // schedule, hiding every break the provider had set.
       const [avail, windows, blocked, ovr] = await Promise.all([
         getProviderAvailability(profile.id),
-        getProviderAvailabilityWindows(profile.id).catch(() => []),
+        getProviderAvailabilityWindows(profile.id),
         getProviderBlockedDates(profile.id),
         getProviderAvailabilityOverrides(profile.id, dateToYMD(new Date())).catch(() => []),
       ]);
@@ -193,7 +207,6 @@ export default function ProviderScheduleScreen() {
             isOpen: true,
             openTime: window.start_time,
             closeTime: window.end_time,
-            dirty: false,
           };
           if (!dbRow) return row;
           return {
@@ -201,22 +214,33 @@ export default function ProviderScheduleScreen() {
             isOpen: !dbRow.is_closed,
             openTime: dbRow.open_time,
             closeTime: dbRow.close_time,
-            dirty: false,
           };
         }));
+      } else {
+        // Nothing saved yet: the defaults ARE the honest answer, and this is
+        // also what Cancel must restore for a provider who has never saved.
+        setExtraPeriods({});
+        setDays(makeDefault());
       }
       setBlockedDates(blocked);
       setOverrides(ovr);
+      setHoursLoadState('ready');
+      return true;
     } catch (e) {
       logger.error('ProviderScheduleScreen loadData:', e);
+      // A failed RE-read (after Save or Cancel) must not tear down a screen
+      // that is already showing hours — the caller tells the provider instead.
+      // Only a first load has nothing to fall back to.
+      setHoursLoadState(prev => (prev === 'ready' ? prev : 'error'));
+      return false;
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadData().catch(err => logger.error('ProviderScheduleScreen initial load:', err)); }, [loadData]);
 
   // ── Hours tab handlers ─────────────────────────────────────────────────────
   function toggleDay(dow: number) {
-    setDays(prev => prev.map(d => d.dow === dow ? { ...d, isOpen: !d.isOpen, dirty: true } : d));
+    setDays(prev => prev.map(d => d.dow === dow ? { ...d, isOpen: !d.isOpen } : d));
   }
 
   function openTimePicker(dow: number, field: 'open' | 'close', periodIndex?: number) {
@@ -245,8 +269,8 @@ export default function ProviderScheduleScreen() {
     setDays(prev => prev.map(d => {
       if (d.dow !== pickerTarget.dow) return d;
       return pickerTarget.field === 'open'
-        ? { ...d, openTime: timeStr, dirty: true }
-        : { ...d, closeTime: timeStr, dirty: true };
+        ? { ...d, openTime: timeStr }
+        : { ...d, closeTime: timeStr };
     }));
   }
 
@@ -260,7 +284,7 @@ export default function ProviderScheduleScreen() {
     if (close - open < 180) { showToast('Use at least three working hours before adding a break.', 'info'); return; }
     const breakStart = Math.floor((open + close - 60) / 2 / 15) * 15;
     const toTime = (mins: number) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}:00`;
-    setDays(prev => prev.map(d => d.dow === dow ? { ...d, closeTime: toTime(breakStart), dirty: true } : d));
+    setDays(prev => prev.map(d => d.dow === dow ? { ...d, closeTime: toTime(breakStart) } : d));
     setExtraPeriods(prev => ({ ...prev, [dow]: [...(prev[dow] ?? []), { openTime: toTime(breakStart + 60), closeTime: row.closeTime }] }));
   }
 
@@ -268,17 +292,28 @@ export default function ProviderScheduleScreen() {
     setExtraPeriods(prev => ({ ...prev, [dow]: (prev[dow] ?? []).filter((_, i) => i !== index) }));
   }
 
+  function startEditingHours() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setEditingHours(true);
+  }
+
+  // Cancel throws the edits away by re-reading what's saved, rather than
+  // remembering a copy: the screen then shows the database's answer, which is
+  // the same thing it shows after a Save.
+  async function cancelEditingHours() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const reloaded = await loadData();
+    if (reloaded) setEditingHours(false);
+    else showToast('Could not reload your saved hours. Your edits are still here.', 'error');
+  }
+
   async function handleSaveHours() {
     if (!providerId) return;
-    // Write EVERY day, not just the ones the provider touched. The rows the
-    // provider never toggled still render as open Mon-Fri 9-6 (makeDefault())
-    // — that's what they see and believe they're saving — but a day with no
-    // row in provider_availability is treated as closed everywhere a client
-    // checks availability (AvailabilityService, enforce_booking_bookability). Saving only
-    // "dirty" days meant a provider who accepted the shown defaults, or only
-    // edited one day, ended up with some or all days silently un-persisted:
-    // the screen looked fully configured but clients could never book those
-    // days at all.
+    // Write EVERY day. The rows the provider never toggled still render as open
+    // Mon-Fri 9-6 (makeDefault()) — that's what they see and believe they're
+    // saving — but a day with no row in provider_availability is treated as
+    // closed everywhere a client checks availability (AvailabilityService,
+    // enforce_booking_bookability). The RPC also requires all seven days.
     setSaving(true);
     try {
       const allWindows = days.flatMap(d => d.isOpen ? [
@@ -300,13 +335,25 @@ export default function ProviderScheduleScreen() {
         })),
         allWindows,
       );
-      setDays(prev => prev.map(d => ({ ...d, dirty: false })));
-      navigation.goBack();
-    } catch {
-      showToast('Could not save hours. Please try again.', 'error');
-    } finally {
+    } catch (e) {
+      logger.error('ProviderScheduleScreen handleSaveHours:', e);
+      // The write is a single transaction, so a failure here is not a
+      // half-saved week. The edits stay on screen for another try.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      showToast('Could not save your hours. Your changes are still here, so you can try again.', 'error');
       setSaving(false);
+      return;
     }
+    // The save landed. Show the stored schedule, not the typed one — and if
+    // that read-back fails, say so rather than implying the screen is verified.
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    const reloaded = await loadData();
+    setEditingHours(false);
+    setSaving(false);
+    showToast(
+      reloaded ? 'Hours saved.' : 'Hours saved, but the screen could not refresh. Reopen it to check.',
+      reloaded ? 'success' : 'info',
+    );
   }
 
   // ── Blocked dates handlers ─────────────────────────────────────────────────
@@ -441,8 +488,36 @@ export default function ProviderScheduleScreen() {
           />
         </View>
 
+        {/* ── Hours tab: loading / couldn't-load ─────────────────────────── */}
+        {tab === 'hours' && hoursLoadState !== 'ready' && (
+          <View style={s.stateWrap}>
+            {hoursLoadState === 'loading' ? (
+              <ActivityIndicator color={P.accent} />
+            ) : (
+              <>
+                <Text style={[s.stateTitle, { color: P.text }]}>Couldn’t load your hours</Text>
+                <Text style={[s.stateSub, { color: P.sub }]}>
+                  We couldn’t read your saved hours, so we’re not showing any. Try again.
+                </Text>
+                <TouchableOpacity
+                  style={[s.editBtn, { borderColor: P.accent }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setHoursLoadState('loading');
+                    loadData().catch(err => logger.error('ProviderScheduleScreen retry load:', err));
+                  }}
+                  activeOpacity={0.55}
+                  accessibilityRole="button"
+                >
+                  <Text style={[s.btnFont, s.editBtnTxt, { color: P.accent }]}>Try again</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
+
         {/* ── Hours tab ───────────────────────────────────────────────────── */}
-        {tab === 'hours' && (
+        {tab === 'hours' && hoursLoadState === 'ready' && (
           <>
             <ScrollView
               style={s.list}
@@ -451,65 +526,114 @@ export default function ProviderScheduleScreen() {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
             >
+              {/* Read-only by default; Edit unlocks the toggles and pickers. */}
+              <View style={s.hoursHeader}>
+                <Text style={[s.hoursHeaderTxt, { color: P.sub }]}>
+                  {editingHours ? 'Editing your weekly hours' : 'Your weekly hours'}
+                </Text>
+                {!editingHours && (
+                  <TouchableOpacity
+                    style={[s.editBtn, { borderColor: P.accent }]}
+                    onPress={startEditingHours}
+                    activeOpacity={0.55}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit weekly hours"
+                  >
+                    <Ionicons name="create-outline" size={15} color={P.accent} />
+                    <Text style={[s.btnFont, s.editBtnTxt, { color: P.accent }]}>Edit hours</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               {days.map((day, idx) => (
                 <View key={day.dow} style={[s.dayRow, idx < days.length - 1 && [s.dayRowBorder, { borderBottomColor: P.border }]]}>
                   <View style={s.dayLeft}>
                     <Text style={[s.dayLabel, { color: P.text }]}>{DAY_FULL[day.dow]}</Text>
                     {!day.isOpen && <Text style={[s.closedTag, { color: P.sub }]}>Closed</Text>}
                   </View>
-                  <View style={s.dayRight}>
-                    {day.isOpen && (
-                      <View style={s.periodStack}>
-                        <View style={s.timeRow}>
-                          <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open')}>
-                            <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.openTime)}</Text>
-                          </TouchableOpacity>
-                          <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
-                          <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close')}>
-                            <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.closeTime)}</Text>
-                          </TouchableOpacity>
+                  {!editingHours ? (
+                    <View style={s.dayRight}>
+                      {day.isOpen && (
+                        <View style={s.periodStack}>
+                          <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.openTime)} → {formatTime(day.closeTime)}</Text>
+                          {(extraPeriods[day.dow] ?? []).map((period, periodIndex) => (
+                            <Text key={`${day.dow}-${periodIndex}`} style={[s.timeTxt, { color: P.text }]}>
+                              {formatTime(period.openTime)} → {formatTime(period.closeTime)}
+                            </Text>
+                          ))}
                         </View>
-                        {(extraPeriods[day.dow] ?? []).map((period, periodIndex) => (
-                          <View key={`${day.dow}-${periodIndex}`} style={s.timeRow}>
-                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open', periodIndex)}>
-                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.openTime)}</Text>
+                      )}
+                    </View>
+                  ) : (
+                    <View style={s.dayRight}>
+                      {day.isOpen && (
+                        <View style={s.periodStack}>
+                          <View style={s.timeRow}>
+                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open')}>
+                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.openTime)}</Text>
                             </TouchableOpacity>
                             <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
-                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close', periodIndex)}>
-                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.closeTime)}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => removeExtraPeriod(day.dow, periodIndex)} hitSlop={8}>
-                              <Ionicons name="close-circle-outline" size={17} color={P.sub} />
+                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close')}>
+                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.closeTime)}</Text>
                             </TouchableOpacity>
                           </View>
-                        ))}
-                        <TouchableOpacity style={s.breakBtn} onPress={() => addSplitPeriod(day.dow)}>
-                          <Ionicons name="add" size={14} color={P.accent} />
-                          <Text style={[s.breakTxt, { color: P.accent }]}>Add break</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                    <Switch
-                      value={day.isOpen}
-                      onValueChange={() => toggleDay(day.dow)}
-                      trackColor={{ false: P.surface, true: P.accent }}
-                      thumbColor={day.isOpen ? P.ice : P.sub}
-                    />
-                  </View>
+                          {(extraPeriods[day.dow] ?? []).map((period, periodIndex) => (
+                            <View key={`${day.dow}-${periodIndex}`} style={s.timeRow}>
+                              <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open', periodIndex)}>
+                                <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.openTime)}</Text>
+                              </TouchableOpacity>
+                              <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
+                              <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close', periodIndex)}>
+                                <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.closeTime)}</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => removeExtraPeriod(day.dow, periodIndex)} hitSlop={8}>
+                                <Ionicons name="close-circle-outline" size={17} color={P.sub} />
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                          <TouchableOpacity style={s.breakBtn} onPress={() => addSplitPeriod(day.dow)}>
+                            <Ionicons name="add" size={14} color={P.accent} />
+                            <Text style={[s.breakTxt, { color: P.accent }]}>Add break</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      <Switch
+                        value={day.isOpen}
+                        onValueChange={() => toggleDay(day.dow)}
+                        trackColor={{ false: P.surface, true: P.accent }}
+                        thumbColor={day.isOpen ? P.ice : P.sub}
+                      />
+                    </View>
+                  )}
                 </View>
               ))}
 
-              {/* Save button inside scroll so it's always reachable */}
-              <TouchableOpacity
-                style={[s.saveBtn, { backgroundColor: P.accent, borderColor: P.ice + '30', marginTop: 16, marginBottom: Math.max(16, insets.bottom) }, saving && s.saveBtnDim]}
-                onPress={handleSaveHours}
-                disabled={saving}
-              >
-                {saving
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Save Hours</Text>
-                }
-              </TouchableOpacity>
+              {/* Cancel / Save inside the scroll so they're always reachable */}
+              {editingHours && (
+                <View style={[s.actionRow, { marginBottom: Math.max(16, insets.bottom) }]}>
+                  <TouchableOpacity
+                    style={[s.cancelBtn, { borderColor: P.border, backgroundColor: P.surface }, saving && s.saveBtnDim]}
+                    onPress={() => { cancelEditingHours().catch(err => logger.error('ProviderScheduleScreen cancel:', err)); }}
+                    disabled={saving}
+                    activeOpacity={0.55}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[s.btnFont, s.cancelTxt, { color: P.text }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.saveBtn, s.actionBtn, { backgroundColor: P.accent, borderColor: P.ice + '30' }, saving && s.saveBtnDim]}
+                    onPress={() => { handleSaveHours().catch(err => logger.error('ProviderScheduleScreen save:', err)); }}
+                    disabled={saving}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                  >
+                    {saving
+                      ? <ActivityIndicator color={P.ice} size="small" />
+                      : <Text style={[s.saveTxt, s.btnFont, { color: P.ice }]}>Save Hours</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              )}
             </ScrollView>
 
             {/* Native time picker (iOS inline / Android modal) */}
@@ -814,6 +938,20 @@ const s = StyleSheet.create({
   saveBtn:     { borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1 },
   saveBtnDim:  { opacity: 0.6 },
   saveTxt:     { fontSize: 15, fontWeight: '700' },
+  // minHeight = the Edit pill's height, so the week doesn't jump up when the pill is hidden in edit mode.
+  hoursHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, minHeight: 44 },
+  hoursHeaderTxt: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600' },
+  editBtn:        { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
+  // BakbakOne has one weight; 'normal' stops iOS synthesising a bold over it.
+  btnFont:        { fontFamily: 'BakbakOne-Regular', letterSpacing: 1, fontWeight: 'normal' },
+  editBtnTxt:     { fontSize: 13 },
+  actionRow:      { flexDirection: 'row', gap: 12, marginTop: 16 },
+  actionBtn:      { flex: 1 },
+  cancelBtn:      { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1 },
+  cancelTxt:      { fontSize: 15 },
+  stateWrap:      { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },
+  stateTitle:     { fontFamily: 'BakbakOne-Regular', fontSize: 17 },
+  stateSub:       { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', textAlign: 'center' },
 
   // Native time/date picker bottom sheet (iOS)
   // Overlay and sheet are SIBLINGS inside pickerModalWrap so the overlay colour

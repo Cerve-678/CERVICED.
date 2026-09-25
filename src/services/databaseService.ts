@@ -4922,50 +4922,20 @@ export async function getProviderAvailabilityWindows(
   return (data ?? []) as DbProviderAvailabilityWindow[];
 }
 
-/** Replace a provider's full weekly schedule atomically from the UI's point of view. */
-export async function replaceProviderAvailabilityWindows(
-  providerId: string,
-  windows: { day_of_week: number; start_time: string; end_time: string }[],
-): Promise<void> {
-  const { error: removeError } = await supabase
-    .from("provider_availability_windows")
-    .delete()
-    .eq("provider_id", providerId);
-  if (removeError) throw removeError;
-  // Both exits invalidate: clearing every window IS a schedule change, and
-  // this is the primitive every schedule write goes through, so putting it
-  // here covers the callers that don't go via saveProviderWeeklySchedule.
-  if (windows.length === 0) {
-    invalidateAvailabilityProviderCore(providerId);
-    return;
-  }
-  const { error } = await supabase
-    .from("provider_availability_windows")
-    .insert(windows.map((w) => ({ provider_id: providerId, ...w })));
-  if (error) throw error;
-  invalidateAvailabilityProviderCore(providerId);
-}
-
-/** Replace both legacy day rows and v2 working windows.
+/** Replace a provider's whole weekly schedule — the legacy day rows AND the v2
+ *  working windows — in ONE transaction, via `replace_provider_weekly_schedule()`.
  *
- *  NOT atomic, deliberately. This used to call `replace_provider_weekly_schedule()`,
- *  an RPC that does both in one transaction — but that function was never
- *  applied to the live database, so every call failed with "function not found"
- *  and NO provider could save their hours at all. Since a weekly schedule is
- *  one of the three go-live gates, that also silently blocked new providers
- *  from ever publishing.
+ *  All-or-nothing on purpose. This used to be three statements from the app (a
+ *  day-rows upsert, then a windows delete, then a windows insert), so a dropped
+ *  connection between them could leave new day rows over old windows — or a
+ *  provider with no windows at all, which reads as "closed every day" to
+ *  clients. The RPC validates the payload (each day exactly once, valid times,
+ *  no overlapping windows) and either applies every part or none of it, and it
+ *  runs SECURITY INVOKER so the provider's own RLS still decides what they can
+ *  write. Its definition is `supabase/migrations/20260901021349_atomic_provider_weekly_schedule.sql`.
  *
- *  The RPC's migration (`20260823065212_atomic_provider_weekly_schedule.sql`)
- *  is deliberately parked pending the provider terms & policy work rather than
- *  applied piecemeal, so this goes back to the two writes the app already owns.
- *  Restore the RPC call when that migration ships — the signature is unchanged.
- *
- *  The tradeoff: a failure between the two writes leaves day rows and windows
- *  out of step. Recoverable rather than silent — both writes throw, the screen
- *  keeps its `dirty` flags and tells the provider to retry, and a retry re-sends
- *  the complete schedule, overwriting whichever half landed.
- *
- *  Days go in ONE upsert rather than a loop over seven — see the no-N+1 rule. */
+ *  Clearing the picker's cached copy of these hours only after the RPC succeeds:
+ *  on failure nothing changed, so the cache is still right. */
 export async function saveProviderWeeklySchedule(
   providerId: string,
   days: {
@@ -4976,20 +4946,13 @@ export async function saveProviderWeeklySchedule(
   }[],
   windows: { day_of_week: number; start_time: string; end_time: string }[],
 ): Promise<void> {
-  if (days.length > 0) {
-    const { error } = await supabase.from("provider_availability").upsert(
-      days.map((d) => ({ provider_id: providerId, ...d })),
-      { onConflict: "provider_id,day_of_week" },
-    );
-    if (error) throw error;
-  }
-  // Windows second: the day rows are what check_and_set_provider_live() reads,
-  // so if the second write fails the provider is at worst still gated the same
-  // way they were before, never published against a schedule that isn't there.
-  // replaceProviderAvailabilityWindows invalidates the picker's cached copy
-  // of these hours on both its exits, so this provider won't be shown the
-  // previous week for the rest of the TTL.
-  await replaceProviderAvailabilityWindows(providerId, windows);
+  const { error } = await supabase.rpc("replace_provider_weekly_schedule", {
+    p_provider_id: providerId,
+    p_days: days,
+    p_windows: windows,
+  });
+  if (error) throw error;
+  invalidateAvailabilityProviderCore(providerId);
 }
 
 export async function getProviderAvailabilityOverrides(
@@ -5114,6 +5077,47 @@ export async function updateProviderAutomationSettings(
     .update({ automation_settings: settings })
     .eq("id", providerId);
   if (error) throw error;
+}
+
+/** Save everything the Payments screen edits — accepted payment methods, the
+ *  deposit rules in `booking_policies`, and `automation_settings.depositRequiredNew`
+ *  — as ONE update of the provider's row.
+ *
+ *  These used to be three separate writes run together. They are all columns of
+ *  the same `providers` row, so a single UPDATE is atomic for free: either the
+ *  provider's whole deposit setup changes or none of it does. Three writes could
+ *  land unevenly (deposit amount saved, "first-time clients only" not; methods
+ *  saved, deposit not), and the screen could only say "could not save" without
+ *  knowing which. It also means the go-live gate trigger sees the final state
+ *  once, not a row half-way between two saves.
+ *
+ *  `automationSettings` and `bookingPolicies` are whole-blob REPLACES: callers
+ *  must carry back every key they don't edit.
+ *
+ *  Throws if no row was updated. RLS turns "not your row" into zero affected
+ *  rows rather than an error, and reporting that as success is how a save that
+ *  stored nothing used to celebrate. */
+export async function saveProviderPaymentSettings(
+  providerId: string,
+  settings: {
+    preferredPaymentMethods: string[];
+    automationSettings: NonNullable<DbProvider["automation_settings"]>;
+    bookingPolicies: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("providers")
+    .update({
+      preferred_payment_methods: settings.preferredPaymentMethods,
+      automation_settings: settings.automationSettings,
+      booking_policies: settings.bookingPolicies,
+    })
+    .eq("id", providerId)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("Could not find your provider profile to save these settings to.");
+  }
 }
 
 /** Mirrors the precedence the display surfaces (InfoRegScreen, ProviderProfileScreen)

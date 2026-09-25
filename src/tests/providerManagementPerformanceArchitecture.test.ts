@@ -107,6 +107,11 @@ describe('provider management performance contracts', () => {
 
     expect(screen).toContain('saveProviderWeeklySchedule(');
     expect(screen).not.toContain('Promise.all(days.map');
+    // The service must actually call the RPC (it did not for a while, when the
+    // function was believed to be unapplied), not a hand-rolled multi-write.
+    const service = read('services/databaseService.ts');
+    expect(service).toContain('supabase.rpc("replace_provider_weekly_schedule"');
+    expect(service).not.toContain('replaceProviderAvailabilityWindows');
     expect(migration).toContain('SECURITY INVOKER');
     expect(migration).toContain('weekly schedule must contain each day exactly once');
     expect(migration).toContain('ON CONFLICT (provider_id, day_of_week) DO UPDATE');

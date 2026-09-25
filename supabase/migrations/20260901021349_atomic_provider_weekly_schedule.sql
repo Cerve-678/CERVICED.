@@ -1,20 +1,22 @@
--- !! DELIBERATELY NOT APPLIED -- parked 2026-08-26.
+-- replace_provider_weekly_schedule(): a provider's whole weekly schedule -- the
+-- legacy day rows in provider_availability AND the v2 working windows in
+-- provider_availability_windows -- written in ONE transaction, so a dropped
+-- connection can never leave new day rows over old windows (or no windows).
 --
--- This defines replace_provider_weekly_schedule(). It was never applied live,
--- but the app had ALREADY been changed to call it, so every provider attempt to
--- save their weekly hours failed with "function not found" -- and since a
--- weekly schedule is one of the three go-live gates, that silently blocked new
--- providers from ever publishing.
+-- APPLIED LIVE: recorded as 20260901021349 (atomic_provider_weekly_schedule),
+-- then corrected by 20260901170907 (fix_replace_provider_weekly_schedule_ordinality_syntax),
+-- which swapped the WITH ORDINALITY overlap check for row_number() OVER ().
+-- This file is the live definition as of 2026-09-25 (copied from
+-- pg_get_functiondef, not from the earlier draft of this file), so a fresh
+-- environment rebuilt from these files matches production.
 --
--- The app-side dependency was removed on 2026-08-26 (see
--- saveProviderWeeklySchedule in src/services/databaseService.ts, which now does
--- the same two writes non-atomically). Nothing calls this function, so the file
--- is inert until the provider terms & policy work ships and it is applied
--- deliberately alongside it. Its signature is unchanged, so restoring the RPC
--- call is a one-line revert at that point.
+-- SECURITY INVOKER is the default and pg_get_functiondef does not print it;
+-- it is spelled out here because it is the point: the provider's own RLS on
+-- both tables still decides what they may write.
 --
--- Do NOT apply it on its own to "tidy up the drift": the whole point of parking
--- it is that it belongs with that piece of work. Tracked in PRE-LAUNCH-TODO.md.
+-- History: the app called this before it was applied, every save failed with
+-- "function not found", and the call was backed out (2026-08-26). The function
+-- has been live since 2026-09-01; saveProviderWeeklySchedule() calls it again.
 
 CREATE OR REPLACE FUNCTION public.replace_provider_weekly_schedule(
   p_provider_id uuid,
@@ -24,8 +26,8 @@ CREATE OR REPLACE FUNCTION public.replace_provider_weekly_schedule(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY INVOKER
-SET search_path = public, pg_temp
-AS $$
+SET search_path TO 'public', 'pg_temp'
+AS $function$
 BEGIN
   IF jsonb_typeof(p_days) <> 'array' OR jsonb_typeof(p_windows) <> 'array' THEN
     RAISE EXCEPTION 'schedule payloads must be arrays';
@@ -53,12 +55,14 @@ BEGIN
     WHERE w.day_of_week NOT BETWEEN 0 AND 6 OR w.start_time >= w.end_time
   ) OR EXISTS (
     SELECT 1
-    FROM jsonb_to_recordset(p_windows) WITH ORDINALITY AS a(
-      day_of_week integer, start_time time, end_time time, row_number bigint
-    )
-    JOIN jsonb_to_recordset(p_windows) WITH ORDINALITY AS b(
-      day_of_week integer, start_time time, end_time time, row_number bigint
-    ) ON a.day_of_week = b.day_of_week AND a.row_number < b.row_number
+    FROM (
+      SELECT day_of_week, start_time, end_time, row_number() OVER () AS rn
+      FROM jsonb_to_recordset(p_windows) AS w(day_of_week integer, start_time time, end_time time)
+    ) a
+    JOIN (
+      SELECT day_of_week, start_time, end_time, row_number() OVER () AS rn
+      FROM jsonb_to_recordset(p_windows) AS w(day_of_week integer, start_time time, end_time time)
+    ) b ON a.day_of_week = b.day_of_week AND a.rn < b.rn
     WHERE a.start_time < b.end_time AND a.end_time > b.start_time
   ) THEN
     RAISE EXCEPTION 'invalid weekly schedule';
@@ -87,7 +91,8 @@ BEGIN
     day_of_week integer, start_time time, end_time time
   );
 END;
-$$;
+$function$;
 
+-- Live grants: postgres, service_role, authenticated. No PUBLIC, no anon.
 REVOKE ALL ON FUNCTION public.replace_provider_weekly_schedule(uuid, jsonb, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.replace_provider_weekly_schedule(uuid, jsonb, jsonb) TO authenticated;

@@ -759,33 +759,16 @@ anywhere in the app (§1b above). It is a product/legal call — see
 
 ---
 
-## 15. `replace_provider_weekly_schedule` is parked, not missing (2026-08-26)
+## 15. ~~`replace_provider_weekly_schedule` is parked~~ — RESOLVED (2026-09-25)
 
-`supabase/migrations/20260823065212_atomic_provider_weekly_schedule.sql` is
-**deliberately unapplied**. It defines `replace_provider_weekly_schedule()`,
-which makes the two halves of a weekly-schedule save (legacy day rows + v2
-working windows) one transaction.
-
-It was never applied live, but `databaseService.ts` had already been changed to
-call it — so **every provider attempt to save their hours failed with "function
-not found"**, and since a weekly schedule is one of the three go-live gates,
-that silently blocked new providers from publishing at all.
-
-Fixed 2026-08-26 by removing the app-side dependency: `saveProviderWeeklySchedule()`
-does the two writes directly again (one batched upsert for the seven day rows,
-then `replaceProviderAvailabilityWindows`). Provider scheduling works.
-
-**The tradeoff that is now live:** those two writes are not atomic. A failure
-between them leaves day rows and windows out of step. It is recoverable rather
-than silent — both throw, the screen keeps its `dirty` flags and asks the
-provider to retry, and a retry re-sends the whole schedule over whichever half
-landed. Windows are written second so a partial failure can never publish a
-provider against a schedule that isn't there.
-
-**To close this out:** apply the migration as part of the provider terms &
-policy work and restore the RPC call — the signature is unchanged, so it is a
-one-line revert. Do not apply it on its own to "tidy up the drift"; the file
-carries a header saying the same.
+The function **is live** (recorded `20260901021349`, corrected by
+`20260901170907`; `authenticated` has EXECUTE, SECURITY INVOKER). This entry
+used to say it was deliberately unapplied and that
+`saveProviderWeeklySchedule()` did the writes non-atomically instead; both
+halves of that were stale. `saveProviderWeeklySchedule()` now calls the RPC, so
+a weekly-hours save is one transaction, and
+`supabase/migrations/20260901021349_atomic_provider_weekly_schedule.sql` is the
+live definition (copied from `pg_get_functiondef`). Nothing left to do here.
 
 ---
 

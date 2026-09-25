@@ -36,9 +36,10 @@
  * So: no balance-collected toggles, no amount-received fields, no
  * payout/earnings surface here without that going through the real processor.
  *
- * PERSISTENCE mirrors ProviderAutomationsScreen's dual-write — `user_metadata`
- * (legacy fallback) plus the `providers` row (what clients and cron jobs
- * actually read). A setting written to only one of the two silently misbehaves.
+ * PERSISTENCE is ONE update of the `providers` row — payment methods,
+ * `booking_policies` and `automation_settings` together (see
+ * saveProviderPaymentSettings) — so the whole setup saves or none of it does.
+ * This screen does not write `user_metadata`.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -48,13 +49,9 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   getMyProviderProfile,
-  updateProviderContactDetails,
-  updateProviderAutomationSettings,
+  saveProviderPaymentSettings,
 } from '../../services/databaseService';
-import {
-  saveProviderPolicies,
-  loadProviderPolicies,
-} from '../../services/providerRegistrationService';
+import { loadProviderPolicies } from '../../services/providerRegistrationService';
 import {
   Card, ChipGroup, Field, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
@@ -75,7 +72,6 @@ export default function PaymentsScreen({ navigation }: any) {
   const C = useBusinessPalette();
 
   const [providerId, setProviderId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [depositRequiredNew, setDepositRequiredNew] = useState(false);
 
@@ -83,16 +79,16 @@ export default function PaymentsScreen({ navigation }: any) {
   const [depositType, setDepositType]     = useState<'percent' | 'fixed'>('percent');
   const [depositAmount, setDepositAmount] = useState('');
   const [depositNote, setDepositNote]     = useState('');
-  // saveProviderPolicies REPLACES the whole booking_policies blob rather than
-  // merging, exactly like PoliciesScreen — every cancellation/reschedule/
+  // The save REPLACES the whole booking_policies blob rather than merging,
+  // exactly like PoliciesScreen — every cancellation/reschedule/
   // no-show key this screen doesn't edit has to be carried back through the
   // save or it's silently wiped.
   const [otherPolicies, setOtherPolicies] = useState<Record<string, unknown>>({});
   // Read-only here — PoliciesScreen owns the write. Held only so the card
   // below can show what clients are currently told about refunds.
   const [refundPolicyNote, setRefundPolicyNote] = useState('');
-  // updateProviderAutomationSettings REPLACES the whole automation_settings
-  // blob rather than merging, so every key this screen doesn't edit has to be
+  // The save REPLACES the whole automation_settings blob rather than
+  // merging, so every key this screen doesn't edit has to be
   // carried back through the save or it's silently deleted.
   const [otherAutomation, setOtherAutomation] = useState<Record<string, unknown>>({});
 
@@ -113,7 +109,6 @@ export default function PaymentsScreen({ navigation }: any) {
         if (!profile) setLoadFailed(true);
         if (profile) {
           setProviderId(profile.id ?? null);
-          setUserId(profile.user_id ?? null);
           setPaymentMethods(profile.preferred_payment_methods ?? []);
           const a = ((profile as any).automation_settings ?? {}) as Record<string, unknown>;
           setDepositRequiredNew(Boolean(a['depositRequiredNew'] ?? false));
@@ -177,31 +172,29 @@ export default function PaymentsScreen({ navigation }: any) {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      await Promise.all([
-        updateProviderContactDetails(providerId, {
-          preferred_payment_methods: paymentMethods,
-        }),
-        updateProviderAutomationSettings(providerId, {
+      // ONE update of the providers row — see saveProviderPaymentSettings for
+      // why these three columns must not be written separately.
+      await saveProviderPaymentSettings(providerId, {
+        preferredPaymentMethods: paymentMethods,
+        automationSettings: {
           ...otherAutomation,
           depositRequiredNew,
-        } as Parameters<typeof updateProviderAutomationSettings>[1]),
+        } as Parameters<typeof saveProviderPaymentSettings>[1]['automationSettings'],
         // depositRequired/depositOnly are written alongside depositMode, not
         // instead of it: getProviderDepositPoliciesByDisplayNames still reads
         // the legacy pair as its fallback, and so does any client build that
         // predates depositMode. Keeping all three in sync on every write is
         // what makes the new mode safe to roll out mid-flight.
-        userId
-          ? saveProviderPolicies(userId, {
-              ...otherPolicies,
-              depositMode,
-              depositRequired: depositMode !== 'full_only',
-              depositOnly:     depositMode === 'deposit_required',
-              depositType,
-              depositAmount:   depositMode === 'full_only' ? '' : depositAmount,
-              depositNote:     depositMode === 'full_only' ? '' : depositNote,
-            })
-          : Promise.resolve(),
-      ]);
+        bookingPolicies: {
+          ...otherPolicies,
+          depositMode,
+          depositRequired: depositMode !== 'full_only',
+          depositOnly:     depositMode === 'deposit_required',
+          depositType,
+          depositAmount:   depositMode === 'full_only' ? '' : depositAmount,
+          depositNote:     depositMode === 'full_only' ? '' : depositNote,
+        },
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
@@ -211,7 +204,7 @@ export default function PaymentsScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed, navigation]);
+  }, [providerId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed, navigation]);
 
   if (loading) {
     return (
