@@ -306,6 +306,12 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
         )}
       </View>
 
+      {/* Row 4 — reference. Always visible: a provider matching a booking to
+          a client message or an email has it in hand without expanding. */}
+      <Text style={[bc.ref, { color: P.sub }]} numberOfLines={1} selectable>
+        Ref {ref}
+      </Text>
+
       {/* ── Booking Summary (state ≥ 1) ── */}
       {expansionState >= 1 && (
         <View style={[bc.expand, { borderTopColor: P.sep }]}>
@@ -342,7 +348,6 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
           {!!booking.notes && (
             <Text style={[bc.instructions, { color: P.sub }]}>“{booking.notes}”</Text>
           )}
-          <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
           <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={onViewMessages}>
             <Text style={[bc.msgBtnTxt, { color: '#fff' }]}>View Messages</Text>
           </TouchableOpacity>
@@ -409,6 +414,7 @@ const bc = StyleSheet.create({
   title:      { fontSize: 16, fontWeight: '600', letterSpacing: -0.3, marginBottom: 5 },
   row3:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   client:     { fontSize: 13, flex: 1, marginRight: 8 },
+  ref:        { fontSize: 11, fontWeight: '600', letterSpacing: 0.4, marginTop: 4 },
   etaBadge:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   etaTxt:     { fontSize: 12, fontWeight: '600' },
 
