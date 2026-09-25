@@ -23,6 +23,8 @@ import {
   passwordChangedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
+  recoveryCodeEmail,
+  signupCodeEmail,
   supportRequestEmail,
 } from './emailTemplates.ts';
 
@@ -137,4 +139,26 @@ describe('email templates', () => {
     expect(ops).not.toContain("You're receiving this because you have a CERVICED account");
     expect(ops).toContain('Support inbox');
   });
+});
+
+// The two Supabase Auth emails are rendered to static HTML that Supabase fills
+// in itself. What must survive rendering is the literal placeholder: if it
+// were escaped, evaluated or dropped, every user would be sent a code email
+// with no code in it.
+describe('Supabase Auth code emails', () => {
+  for (const [name, email] of [
+    ['signup', signupCodeEmail()],
+    ['recovery', recoveryCodeEmail()],
+  ] as const) {
+    it(`${name}: keeps Supabase's {{ .Token }} placeholder literal in body, preheader and subject`, () => {
+      expect(email.subject).toContain('{{ .Token }}');
+      // body + preheader
+      expect(email.html.match(/\{\{ \.Token \}\}/g)?.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it(`${name}: is on the letterhead, with no dark-mode or script surprises`, () => {
+      expect(email.html).toContain('CERVICED');
+      expect(email.html).not.toMatch(/<script/i);
+    });
+  }
 });

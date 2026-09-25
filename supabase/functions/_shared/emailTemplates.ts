@@ -572,6 +572,63 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
   };
 }
 
+// ---------------------------------------------------------------------------
+// Supabase Auth emails
+// ---------------------------------------------------------------------------
+// The signup and password-reset codes are sent by Supabase Auth, not by an edge
+// function, so nothing here is called at runtime: scripts/build-auth-email-
+// templates.ts renders these two into supabase/templates/*.html, and those files
+// are what the Supabase dashboard (or `supabase config push`) holds. The
+// `{{ .Token }}` below is Supabase's Go-template placeholder, left literal on
+// purpose. Both are account-level — a signup does not yet know its hat — so
+// like the password notice they take the base theme.
+
+/** Supabase's placeholder for the 6-digit OTP. Not ours to fill in. */
+const AUTH_TOKEN = '{{ .Token }}';
+
+/** Matches `otp_expiry = 3600` in supabase/config.toml. Change both together. */
+const AUTH_CODE_EXPIRY = 'Expires in 1 hour';
+
+export function signupCodeEmail() {
+  const P = PROVIDER;
+  return {
+    subject: `Your CERVICED verification code: ${AUTH_TOKEN}`,
+    html: letter(P, {
+      preview: `${AUTH_TOKEN} — your CERVICED verification code. ${AUTH_CODE_EXPIRY}.`,
+      content:
+        eyebrow(P, 'Confirm your email') +
+        headline(P, 'Your verification code') +
+        lede(P, 'Enter this code in the CERVICED app to confirm your email address and finish creating your account:') +
+        codePanel(P, AUTH_TOKEN, AUTH_CODE_EXPIRY) +
+        alertPanel(
+          P,
+          "Didn't sign up?",
+          'You can ignore this email. No account is created without this code.',
+        ),
+    }),
+  };
+}
+
+export function recoveryCodeEmail() {
+  const P = PROVIDER;
+  return {
+    subject: `Your CERVICED password reset code: ${AUTH_TOKEN}`,
+    html: letter(P, {
+      preview: `${AUTH_TOKEN} — your CERVICED password reset code. ${AUTH_CODE_EXPIRY}.`,
+      content:
+        eyebrow(P, 'Password reset') +
+        headline(P, 'Reset your password') +
+        lede(P, 'Enter this code in the CERVICED app to choose a new password:') +
+        codePanel(P, AUTH_TOKEN, AUTH_CODE_EXPIRY) +
+        alertPanel(
+          P,
+          "Didn't ask for this?",
+          `You can ignore this email and your password stays exactly as it is. If you keep getting these, contact <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a>.`,
+        ),
+    }),
+  };
+}
+
 export function bookingConfirmationEmail(params: {
   clientName: string;
   providerName: string;
