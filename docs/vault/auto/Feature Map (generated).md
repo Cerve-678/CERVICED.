@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **85 files**
 - … +55 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **159 files**
+Curated: [[Availability & Slots]] · **158 files**
 - `src/services/AvailabilityService.ts` _(330)_
 - `src/services/databaseService.ts` _(270)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **159 files**
 - `src/types/database.ts` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
-- … +129 more
+- … +128 more
 
 ## Payments
 Curated: [[Payments]] · **112 files**
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **112 files**
 - … +82 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **243 files**
+Curated: [[Booking Flow]] · **242 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(694)_
 - `src/services/databaseService.ts` _(618)_
@@ -130,7 +130,6 @@ Curated: [[Booking Flow]] · **243 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(123)_
 - `src/screens/shared/NotificationsScreen.tsx` _(119)_
 - `supabase/booking_flow_fixes.sql` _(116)_
-- `src/screens/provider/ProviderInboxScreen.tsx` _(113)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/booking.ts` _(99)_
@@ -139,10 +138,11 @@ Curated: [[Booking Flow]] · **243 files**
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
-- … +213 more
+- `src/services/bookingService.ts` _(88)_
+- … +212 more
 
 ## Notifications
-Curated: [[Notifications]] · **148 files**
+Curated: [[Notifications]] · **147 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(279)_
 - `src/services/databaseService.ts` _(152)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **148 files**
 - `supabase/provider_follow_notify_cron.sql` _(24)_
 - `src/screens/client/NotificationsSettingsScreen.tsx` _(23)_
 - `supabase/notifications_full_matrix.sql` _(23)_
-- … +118 more
+- … +117 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **73 files**

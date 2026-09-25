@@ -1123,8 +1123,21 @@ export default function SearchScreen({ navigation, route }: Props) {
         animationType="slide"
         onRequestClose={() => setFilterModalVisible(false)}
       >
-        <Pressable style={styles.filterModalBackdrop} onPress={() => setFilterModalVisible(false)}>
-          <Pressable style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border }]} onPress={() => {}}>
+        <View style={styles.filterModalBackdrop}>
+          {/* Tap-to-dismiss overlay — a SIBLING of the sheet, never its parent.
+              The sheet used to be a Pressable nested inside the backdrop
+              Pressable (with a no-op onPress to stop taps closing it), and a
+              Pressable that owns the touch responder competes with the
+              ScrollView inside it: drags start scrolling and then get
+              cancelled, which reads as a sticky, jerky sheet. The other modals
+              in this app (provider schedule time picker, image detail) use the
+              same sibling arrangement for the same reason. */}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setFilterModalVisible(false)}
+            accessibilityLabel="Close filters"
+          />
+          <View style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border }]}>
             <View style={styles.filterModalHeader}>
               <Text style={[styles.filterModalTitle, { color: P.text }]}>FILTERS</Text>
               {hasActiveFilters && (
@@ -1133,7 +1146,18 @@ export default function SearchScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               )}
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              // Inside a Modal on Android the sheet's own gesture handling can
+              // swallow the drag; this lets the list claim it.
+              nestedScrollEnabled
+              // Chips inside must stay tappable while the list is mid-scroll.
+              keyboardShouldPersistTaps="handled"
+              bounces
+              // Room under the last group so it isn't flush against the Show
+              // results button when scrolled to the end.
+              contentContainerStyle={styles.filterModalScrollContent}
+            >
               {/* Availability — surfaced first, above Sort: it's the
                   single most decision-relevant signal in this marketplace
                   (can I actually book this provider soon), and a lone
@@ -1369,8 +1393,8 @@ export default function SearchScreen({ navigation, route }: Props) {
                 Show {filteredProviders.length} {filteredProviders.length === 1 ? 'result' : 'results'}
               </Text>
             </TouchableOpacity>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* ── Results area — wraps the FlatList. ── */}
@@ -1536,6 +1560,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 20,
+  },
+  filterModalScrollContent: {
+    paddingBottom: 8,
   },
   filterModalHeader: {
     flexDirection: 'row',
