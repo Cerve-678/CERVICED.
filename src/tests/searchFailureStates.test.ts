@@ -95,20 +95,23 @@ describe('SearchScreen tells "couldn\'t check" apart from "no matches"', () => {
     expect(source).not.toMatch(/\.catch\(\(\) => \{\s*if \(cancelled\) return;\s*setAvailabilityBySlug\(new Map\(\)\)/);
     expect(source).not.toMatch(/\.catch\(\(\) => \{\s*if \(cancelled\) return;\s*setPriceRangeByProviderId\(new Map\(\)\)/);
     expect(source).toContain('setAvailabilityError(true)');
-    expect(source).toContain('setFacetsError(true)');
+    expect(source).toContain('setServicesError(true)');
+    expect(source).toContain('setServiceAvailabilityError(true)');
   });
 
   it('only marks the service lookup "loaded" when it actually answered', () => {
-    const finallyBlock = source.slice(
-      source.indexOf("setFacetsError(true);"),
-      source.indexOf('}, [providerData, facetsRetryKey]);'),
-    );
-    expect(finallyBlock).not.toContain('setFacetsLoaded(true)');
+    const start = source.indexOf('setServicesError(true);');
+    const end = source.indexOf('}, [providerData, servicesRetryKey]);');
+    // Guard the slice itself: a missing marker would make this pass vacuously.
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(source.slice(start, end)).not.toContain('setServicesLoaded(true)');
   });
 
   it('logs every swallowed-looking failure so developers still get the real reason', () => {
     expect(source).toContain("logger.error('[Search] availability lookup failed:'");
     expect(source).toContain("logger.error('[Search] service details lookup failed:'");
+    expect(source).toContain("logger.error('[Search] service availability lookup failed:'");
     expect(source).toContain("'SearchScreen.load'");
   });
 
@@ -122,11 +125,13 @@ describe('SearchScreen tells "couldn\'t check" apart from "no matches"', () => {
   it('gives every failed operation its own retry', () => {
     expect(source).toContain('setProvidersRetryKey(k => k + 1)');
     expect(source).toContain('setAvailabilityRetryKey(k => k + 1)');
-    expect(source).toContain('setFacetsRetryKey(k => k + 1)');
+    expect(source).toContain('setServicesRetryKey(k => k + 1)');
+    expect(source).toContain('setServiceAvailabilityRetryKey(k => k + 1)');
     // Each key is a dependency of exactly the effect it retries.
     expect(source).toContain('user?.id, providersRetryKey]');
     expect(source).toContain('activeFilters.hairType, availabilityRetryKey]');
-    expect(source).toContain('[providerData, facetsRetryKey]');
+    expect(source).toContain('[providerData, servicesRetryKey]');
+    expect(source).toContain('availabilityMissingIds, serviceAvailabilityRetryKey]');
   });
 
   it('retries a failed refresh as a refresh, so the results it says are still shown are not wiped', () => {
@@ -141,8 +146,9 @@ describe('SearchScreen tells "couldn\'t check" apart from "no matches"', () => {
   });
 
   it('shows the spinner, not "No one matches", while a hair-type or audience retry is in flight', () => {
-    expect(source).toContain('(activeFilters.availableOnly || !!activeFilters.hairType) && availabilityLoading');
-    expect(source).toContain('!!activeFilters.audience && !facetsLoaded && !facetsError');
+    expect(source).toContain('!!activeFilters.hairType && availabilityLoading');
+    // Price, audience and Available now share one "still checking" flag.
+    expect(source).toContain('|| serviceFiltersPending ? (');
   });
 
   it('whichever request is current clears both loading flags, so a lost race cannot pin the spinner', () => {

@@ -8,8 +8,10 @@ tags: [screen, client]
 
 ## → Navigates to
 - `availableOnly` _(navigator / dynamic)_
+- `availability` _(navigator / dynamic)_
 - `hairType` _(navigator / dynamic)_
 - `priceRange` _(navigator / dynamic)_
+- `prices` _(navigator / dynamic)_
 - `audience` _(navigator / dynamic)_
 - [[ProviderProfileScreen\|ProviderProfile]]
 

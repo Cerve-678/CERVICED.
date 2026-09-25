@@ -29,8 +29,8 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug } from '../../services/databaseService';
-import type { ProviderAvailabilityStatus } from '../../services/databaseService';
+import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getSearchableServices, getServicesAvailability, prefetchProviderBySlug } from '../../services/databaseService';
+import type { ProviderAvailabilityStatus, SearchableService, ServiceAvailability } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
 import userLearningService from '../../services/userLearningService';
@@ -43,9 +43,17 @@ import { toUserMessage } from '../../utils/userFacingError';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 import {
   resolveProviderPriceRange,
-  priceRangeMatchesBucket,
   priceSortKey,
 } from '../../utils/providerPriceMatch';
+import {
+  hasServiceCriteria,
+  pickMatchingService,
+  priceRangeAcrossServices,
+  serviceMatchesCriteria,
+  serviceRange,
+  type ServiceFilterCriteria,
+} from '../../utils/serviceFilterMatch';
+import { formatDurationMinutes } from '../../utils/dateUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -53,7 +61,7 @@ interface ProviderCardData {
   // The real providers.id (uuid) — id above is the slug (used for
   // navigation/keys). Needed separately to batch-fetch this provider's
   // actual service price range and audience tags via
-  // getProviderServiceFacets(), which is keyed by provider id, not slug.
+  // getSearchableServices(), which is keyed by provider id, not slug.
   providerId: string;
   name: string;
   service: string;
@@ -70,6 +78,11 @@ interface ProviderCardData {
   // "Price on request" placeholder; the card simply omits the price line
   // until real data is available.
   priceRange: { min: number; max: number } | null;
+  // The ONE service that satisfies every service-level filter (price, audience,
+  // Available now) — set only while at least one of those is active. When set,
+  // priceRange above is THAT service's own price, not the provider-wide span,
+  // and the card names the service and offers to book it.
+  matchedService: MatchedServiceInfo | null;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
   businessType: BusinessType | null;
   specialties: string[];
@@ -87,6 +100,14 @@ interface ProviderCardData {
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
+}
+
+interface MatchedServiceInfo {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  /** First day this service has an open slot, when "Available now" looked it up. */
+  nextAvailable: string | null;
 }
 
 // Mirrors HomeScreen's FilterOptions (src/screens/client/HomeScreen.tsx) so
@@ -117,12 +138,12 @@ interface FilterOptions {
   // "does this provider cater to X at all" level — services.hair_types_
   // suitable is the per-service refinement shown once a service is picked.
   hairType?: string;
-  // Matches against the per-service services.audience column, derived from the
-  // tags getProviderServiceFacets already fetched for the result set (no round
-  // trip of its own) — a provider qualifies if ANY of
-  // their active services is tagged for this audience, same "provider
-  // qualifies via any matching service" rule HomeScreen's Male/Kids sections
-  // use. 'everyone' is deliberately not offered as a filter value here — it
+  // Matches against the per-service services.audience column, using the
+  // services getSearchableServices already fetched for the result set (no
+  // round trip of its own). Price, audience and Available now are judged
+  // TOGETHER against one service (see serviceFilterMatch.ts), so a provider
+  // qualifies only through a single service that is all of them.
+  // 'everyone' is deliberately not offered as a filter value here — it
   // isn't a narrowing choice, it's what an untagged service already means.
   audience?: 'women' | 'men' | 'kids';
   // Straightforward provider-level boolean matches — no batched lookup
@@ -141,6 +162,8 @@ const DEFAULT_FILTER_OPTIONS: FilterOptions = {
 interface ProviderCardProps {
   provider: ProviderCardData;
   onPress: () => void;
+  /** Book Now — opens the matched service's booking sheet when there is one. */
+  onBookPress: () => void;
   index: number;
   P: AppTheme;
 }
@@ -164,6 +187,20 @@ function formatPriceRange(range: { min: number; max: number }): string {
   const min = Math.round(range.min);
   const max = Math.round(range.max);
   return min === max ? `£${min}` : `£${min}–£${max}`;
+}
+
+// "Today" / "Tomorrow" / "Sat" for a 'YYYY-MM-DD' day, in the client's own
+// calendar — the RPC works out London's date, and the client is in the UK.
+function formatNextAvailable(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return ymd;
+  const day = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((day.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  return day.toLocaleDateString('en-GB', { weekday: 'short' });
 }
 
 // Maps the display label shown on a category pill to the raw DB service
@@ -269,10 +306,18 @@ const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: str
 
 
 // ── Provider Card — vertical, sits two-up in the results grid ──────────────────
-const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) => {
+const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, onBookPress, index, P }) => {
   const slideAnim = useRef(new Animated.Value(24)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const availInfo = provider.availability ? AVAILABILITY_INFO[provider.availability] : null;
+  // When a specific service was matched and "Available now" found its first
+  // open day, that is the availability worth showing — the provider-wide
+  // badge answers a different question ("does the diary have room?").
+  const nextLabel = provider.matchedService?.nextAvailable
+    ? formatNextAvailable(provider.matchedService.nextAvailable)
+    : null;
+  const availInfo = nextLabel
+    ? { label: `Next: ${nextLabel}`, color: '#4CAF50' }
+    : provider.availability ? AVAILABILITY_INFO[provider.availability] : null;
 
   React.useEffect(() => {
     // Delay cycles every 2 cards (one grid row) rather than every card, so a
@@ -301,8 +346,8 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
           </Text>
 
           <View style={[styles.servicePill, { backgroundColor: `${P.accent}18`, borderColor: `${P.accent}50` }]}>
-            <Text style={[styles.servicePillText, { color: P.accentText }]}>
-              {provider.service}
+            <Text style={[styles.servicePillText, { color: P.accentText }]} numberOfLines={1}>
+              {provider.matchedService?.name ?? provider.service}
             </Text>
           </View>
 
@@ -315,6 +360,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
             <Text style={[styles.priceText, { color: P.sub }]} numberOfLines={1} ellipsizeMode="tail">
               {[
                 provider.priceRange ? formatPriceRange(provider.priceRange) : null,
+                provider.matchedService ? formatDurationMinutes(provider.matchedService.durationMinutes) : null,
                 provider.location || null,
               ].filter(Boolean).join(' · ')}
             </Text>
@@ -351,7 +397,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
       </TouchableOpacity>
 
       {/* Book Now */}
-      <TouchableOpacity style={[styles.bookBtn, { backgroundColor: P.accent }]} onPress={onPress} activeOpacity={0.8}>
+      <TouchableOpacity style={[styles.bookBtn, { backgroundColor: P.accent }]} onPress={onBookPress} activeOpacity={0.8}>
         <Text style={[styles.bookBtnText, { color: P.onAccent }]}>Book Now</Text>
       </TouchableOpacity>
     </Animated.View>
@@ -400,7 +446,8 @@ export default function SearchScreen({ navigation, route }: Props) {
   // versa. Each is a dependency of exactly one effect below.
   const [providersRetryKey, setProvidersRetryKey] = useState(0);
   const [availabilityRetryKey, setAvailabilityRetryKey] = useState(0);
-  const [facetsRetryKey, setFacetsRetryKey] = useState(0);
+  const [servicesRetryKey, setServicesRetryKey] = useState(0);
+  const [serviceAvailabilityRetryKey, setServiceAvailabilityRetryKey] = useState(0);
   // The header filters button opens this single sheet — no more per-pill
   // popovers anchored under an always-visible row.
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -491,6 +538,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       // see providersWithPriceRange below. price_tier is kept purely for
       // the Price filter's tier-bucket sort/comparison, not for display.
       priceRange: null,
+      matchedService: null,
       priceTier: p.price_tier,
       businessType: p.business_type,
       specialties: specialtiesFor(p.service_category),
@@ -695,67 +743,73 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithDistance, availabilityBySlug]);
 
-  // Real £min–£max per provider (from their active services) AND the audience
-  // tags they offer, resolved via ONE batched query for the whole current
-  // result set — see getProviderServiceFacets' doc comment. Both come off the
-  // same services scan; fetching them separately meant a search with the
-  // audience filter on paid two round trips for one table read. Keyed by
-  // providerId (the real providers.id, not slug) since that's what the
-  // underlying services table is queried by. Replaces the old hardcoded
-  // "Price on request" fallback with real data (or nothing, while
-  // unresolved/absent) on the card.
-  const [priceRangeByProviderId, setPriceRangeByProviderId] = useState<Map<string, { min: number; max: number }>>(new Map());
-  const [audiencesByProviderId, setAudiencesByProviderId] = useState<Map<string, Set<string>>>(new Map());
-  // Whether the facets query has answered for the CURRENT result set. Keeps
-  // the audience filter's "don't claim a match until the lookup has answered"
-  // rule meaningful now that the match set is derived rather than fetched —
-  // without it an in-flight query is indistinguishable from "nobody matches".
-  const [facetsLoaded, setFacetsLoaded] = useState(false);
-  // Same fetch as facetsLoaded (getProviderServiceFacets returns both price
-  // and audience together) but tracked separately for the Price filter,
-  // which needs its own "no provider here has priced services" vs "the
-  // fetch hasn't come back" distinction rather than inferring it from an
-  // empty map.
-  const [priceRangeLoading, setPriceRangeLoading] = useState(false);
+  // Every active service of the current result set, resolved via ONE batched
+  // query — see getSearchableServices' doc comment. The price range on each
+  // card, the Price filter, the Who-it's-for filter and "Available now" all read
+  // these SAME rows, so that a provider can be judged on one service satisfying
+  // all of them (see serviceFilterMatch.ts) instead of on each filter alone.
+  // Keyed by providerId (the real providers.id, not slug) since that's what
+  // the underlying services table is queried by.
+  const [servicesByProviderId, setServicesByProviderId] = useState<Map<string, SearchableService[]>>(new Map());
+  // Whether the services query has ANSWERED for the current result set. Keeps
+  // "don't judge a provider until their services have landed" meaningful — an
+  // in-flight query is otherwise indistinguishable from "nobody matches".
+  const [servicesLoaded, setServicesLoaded] = useState(false);
+  const [servicesLoading, setServicesLoading] = useState(false);
   // True when the services lookup FAILED for the current result set — see
   // availabilityError for why that must not be modelled as empty maps.
-  const [facetsError, setFacetsError] = useState(false);
+  const [servicesError, setServicesError] = useState(false);
 
   React.useEffect(() => {
     const ids = providerData.map(p => p.providerId);
     if (ids.length === 0) {
-      setPriceRangeByProviderId(new Map());
-      setAudiencesByProviderId(new Map());
-      setFacetsLoaded(true);
-      setFacetsError(false);
-      setPriceRangeLoading(false);
+      setServicesByProviderId(new Map());
+      setServicesLoaded(true);
+      setServicesError(false);
+      setServicesLoading(false);
       return;
     }
     let cancelled = false;
-    setFacetsLoaded(false);
-    setFacetsError(false);
-    setPriceRangeLoading(true);
-    getProviderServiceFacets(ids)
-      .then(facets => {
+    setServicesLoaded(false);
+    setServicesError(false);
+    setServicesLoading(true);
+    getSearchableServices(ids)
+      .then(services => {
         if (cancelled) return;
-        setPriceRangeByProviderId(facets.priceRanges);
-        setAudiencesByProviderId(facets.audiences);
-        setFacetsLoaded(true);
+        const grouped = new Map<string, SearchableService[]>();
+        for (const service of services) {
+          const list = grouped.get(service.providerId);
+          if (list) list.push(service);
+          else grouped.set(service.providerId, [service]);
+        }
+        setServicesByProviderId(grouped);
+        setServicesLoaded(true);
       })
       .catch((error) => {
         if (cancelled) return;
         logger.error('[Search] service details lookup failed:', error);
-        // facetsLoaded stays false: "loaded" means the lookup ANSWERED, and
+        // servicesLoaded stays false: "loaded" means the lookup ANSWERED, and
         // marking it true here made every price/audience filter judge
-        // providers against empty maps — i.e. reject all of them.
-        setFacetsError(true);
+        // providers against empty data — i.e. reject all of them.
+        setServicesError(true);
       })
       .finally(() => {
         if (cancelled) return;
-        setPriceRangeLoading(false);
+        setServicesLoading(false);
       });
     return () => { cancelled = true; };
-  }, [providerData, facetsRetryKey]);
+  }, [providerData, servicesRetryKey]);
+
+  // The provider-wide £min–£max shown on a card when no service-level filter is
+  // active, derived from the same services rows.
+  const priceRangeByProviderId = useMemo(() => {
+    const ranges = new Map<string, { min: number; max: number }>();
+    for (const [providerId, services] of servicesByProviderId) {
+      const range = priceRangeAcrossServices(services);
+      if (range) ranges.set(providerId, range);
+    }
+    return ranges;
+  }, [servicesByProviderId]);
 
   const providersWithPriceRange = useMemo(() => {
     if (priceRangeByProviderId.size === 0) return providersWithAvailability;
@@ -765,57 +819,146 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
 
-  // Audience matches, derived from the tags already fetched above rather than
-  // re-queried. Toggling this filter used to cost a round trip each time even
-  // though the answer was a re-read of the same services rows; now it is a
-  // pure narrowing of data the screen already holds. null = filter off, which
-  // the filter step below treats as "don't narrow" (distinct from an empty
-  // set, which means "nobody matches").
-  const audienceMatchIds = useMemo(() => {
-    const audience = activeFilters.audience;
-    if (!audience) return null;
-    if (!facetsLoaded) return null;
-    const matches = new Set<string>();
-    for (const [providerId, tags] of audiencesByProviderId) {
-      if (tags.has(audience)) matches.add(providerId);
+  // ── Service-level filters: price, audience, Available now — one service ──
+  // A service must satisfy EVERY active one of these itself; the cheapest that
+  // does is what the card shows. availableServiceIds joins the criteria only
+  // once the availability lookup has answered.
+  const serviceFilterActive = !!activeFilters.priceRange || !!activeFilters.audience || !!activeFilters.availableOnly;
+  const baseServiceCriteria = useMemo<ServiceFilterCriteria>(() => ({
+    priceBucket: activeFilters.priceRange,
+    audience: activeFilters.audience,
+  }), [activeFilters.priceRange, activeFilters.audience]);
+
+  // "Available now" asks the database about the services that already pass the
+  // other filters — asking about every service would check slots for ones the
+  // client has already excluded, and asking per provider is the question this
+  // replaces. It is one batched call (chunked inside getServicesAvailability).
+  const availabilityCandidateIds = useMemo(() => {
+    if (!activeFilters.availableOnly || !servicesLoaded) return [] as string[];
+    const ids: string[] = [];
+    for (const services of servicesByProviderId.values()) {
+      for (const service of services) {
+        if (serviceMatchesCriteria(service, baseServiceCriteria)) ids.push(service.id);
+      }
+    }
+    return ids;
+  }, [activeFilters.availableOnly, servicesLoaded, servicesByProviderId, baseServiceCriteria]);
+
+  // Everything the availability lookup has answered for THIS result set, kept
+  // across filter changes. Toggling price or audience with Available now on
+  // changes which services are candidates, but the ones already answered are
+  // still answered — refetching them all blanked the grid and replayed every
+  // card's entrance animation on each tap. Only ids not yet answered are asked
+  // for. Cleared when the result set itself changes (a new search or category).
+  const [serviceAvailability, setServiceAvailability] = useState<Map<string, ServiceAvailability>>(new Map());
+  const [serviceAvailabilityLoading, setServiceAvailabilityLoading] = useState(false);
+  const [serviceAvailabilityError, setServiceAvailabilityError] = useState(false);
+
+  React.useEffect(() => {
+    setServiceAvailability(new Map());
+    setServiceAvailabilityError(false);
+  }, [providerData]);
+
+  // Computed during render (not in the effect) so the frame in which a filter
+  // changes already knows an answer is outstanding, instead of judging
+  // providers against a stale map for one render.
+  const availabilityMissingIds = useMemo(
+    () => availabilityCandidateIds.filter(id => !serviceAvailability.has(id)),
+    [availabilityCandidateIds, serviceAvailability],
+  );
+
+  React.useEffect(() => {
+    if (!activeFilters.availableOnly || !servicesLoaded) return;
+    if (availabilityMissingIds.length === 0) {
+      setServiceAvailabilityLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setServiceAvailabilityLoading(true);
+    setServiceAvailabilityError(false);
+    getServicesAvailability(availabilityMissingIds)
+      .then(answered => {
+        if (cancelled) return;
+        setServiceAvailability(prev => new Map([...prev, ...answered]));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        logger.error('[Search] service availability lookup failed:', error);
+        setServiceAvailabilityError(true);
+      })
+      .finally(() => { if (!cancelled) setServiceAvailabilityLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeFilters.availableOnly, servicesLoaded, availabilityMissingIds, serviceAvailabilityRetryKey]);
+
+  // True while a service-level filter is on and the lookups it needs haven't
+  // answered. The grid stays empty behind "Checking providers…" rather than
+  // judging providers on data that hasn't arrived — that blinked a full grid to
+  // "No providers found" and back.
+  const serviceFiltersPending = serviceFilterActive
+    && !servicesError
+    && !serviceAvailabilityError
+    && (
+      !servicesLoaded
+      || servicesLoading
+      || (!!activeFilters.availableOnly && (serviceAvailabilityLoading || availabilityMissingIds.length > 0))
+    );
+
+  const serviceCriteria = useMemo<ServiceFilterCriteria>(() => {
+    if (!activeFilters.availableOnly) return baseServiceCriteria;
+    const available = new Set<string>();
+    for (const [serviceId, info] of serviceAvailability) {
+      if (info.hasSlot) available.add(serviceId);
+    }
+    return { ...baseServiceCriteria, availableServiceIds: available };
+  }, [baseServiceCriteria, activeFilters.availableOnly, serviceAvailability]);
+
+  // providerId → the service that satisfies every active service-level filter.
+  // A provider with no entry has no such service and is filtered out.
+  const matchedServiceByProviderId = useMemo(() => {
+    const matches = new Map<string, SearchableService>();
+    if (!hasServiceCriteria(serviceCriteria)) return matches;
+    for (const [providerId, services] of servicesByProviderId) {
+      const picked = pickMatchingService(services, serviceCriteria);
+      if (picked) matches.set(providerId, picked);
     }
     return matches;
-  }, [audiencesByProviderId, facetsLoaded, activeFilters.audience]);
+  }, [serviceCriteria, servicesByProviderId]);
 
   // ── Client-side filter/sort on top of the server-searched set — category
   // and text query are already applied server-side (see the debounced effect
   // above); rating/price/distance/service-type/availability/sort narrow that
   // result set further, the same way HomeScreen's filter dropdown does. ─────
-  // Which ACTIVE filter can't be answered because its lookup failed. Applying
-  // it anyway would either show unfiltered providers as if they'd been
-  // checked, or (the old behaviour) reject every provider — both tell the
+  // Which ACTIVE filters can't be answered because their lookup failed.
+  // Applying them anyway would either show unfiltered providers as if they'd
+  // been checked, or (the old behaviour) reject every provider — both tell the
   // client something the app doesn't know. The grid empties instead and says
-  // what couldn't be checked, with a retry for that lookup alone.
+  // what couldn't be checked, with a retry for those lookups alone.
   const failedCheck = useMemo<{ what: string; keys: (keyof FilterOptions)[]; retry: () => void } | null>(() => {
-    if (availabilityError && (activeFilters.availableOnly || activeFilters.hairType)) {
-      const keys: (keyof FilterOptions)[] = [];
-      if (activeFilters.availableOnly) keys.push('availableOnly');
-      if (activeFilters.hairType) keys.push('hairType');
-      return {
-        what: keys.length === 2 ? 'availability and hair type'
-          : activeFilters.availableOnly ? 'availability' : 'hair type',
-        keys,
-        retry: () => setAvailabilityRetryKey(k => k + 1),
-      };
+    const keys: (keyof FilterOptions)[] = [];
+    const labels: string[] = [];
+    if (activeFilters.availableOnly && (serviceAvailabilityError || servicesError)) {
+      keys.push('availableOnly'); labels.push('availability');
     }
-    if (facetsError && (activeFilters.priceRange || activeFilters.audience)) {
-      const keys: (keyof FilterOptions)[] = [];
-      if (activeFilters.priceRange) keys.push('priceRange');
-      if (activeFilters.audience) keys.push('audience');
-      return {
-        what: keys.length === 2 ? 'prices and who services are for'
-          : activeFilters.priceRange ? 'prices' : 'who services are for',
-        keys,
-        retry: () => setFacetsRetryKey(k => k + 1),
-      };
+    if (activeFilters.hairType && availabilityError) {
+      keys.push('hairType'); labels.push('hair type');
     }
-    return null;
-  }, [availabilityError, facetsError, activeFilters.availableOnly, activeFilters.hairType, activeFilters.priceRange, activeFilters.audience]);
+    if (activeFilters.priceRange && servicesError) {
+      keys.push('priceRange'); labels.push('prices');
+    }
+    if (activeFilters.audience && servicesError) {
+      keys.push('audience'); labels.push('who services are for');
+    }
+    if (keys.length === 0) return null;
+    return {
+      what: labels.join(' and '),
+      keys,
+      retry: () => {
+        if (servicesError) setServicesRetryKey(k => k + 1);
+        if (serviceAvailabilityError) setServiceAvailabilityRetryKey(k => k + 1);
+        if (availabilityError) setAvailabilityRetryKey(k => k + 1);
+      },
+    };
+  }, [availabilityError, servicesError, serviceAvailabilityError, activeFilters.availableOnly, activeFilters.hairType, activeFilters.priceRange, activeFilters.audience]);
 
   // A failed lookup whose filter ISN'T active only costs the client a badge or
   // a price line — the list is still right, so it stays and a banner offers
@@ -823,9 +966,9 @@ export default function SearchScreen({ navigation, route }: Props) {
   const backgroundFailure = useMemo<{ what: string; retry: () => void } | null>(() => {
     if (failedCheck) return null;
     if (availabilityError) return { what: 'availability', retry: () => setAvailabilityRetryKey(k => k + 1) };
-    if (facetsError) return { what: 'prices', retry: () => setFacetsRetryKey(k => k + 1) };
+    if (servicesError) return { what: 'prices', retry: () => setServicesRetryKey(k => k + 1) };
     return null;
-  }, [failedCheck, availabilityError, facetsError]);
+  }, [failedCheck, availabilityError, servicesError]);
 
   const filteredProviders = useMemo(() => {
     if (failedCheck) return [];
@@ -834,23 +977,28 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.rating && activeFilters.rating > 0) {
       list = list.filter(p => p.rating >= activeFilters.rating!);
     }
-    if (activeFilters.priceRange) {
-      // Same "don't answer until the batched lookup has" rule Available Now
-      // follows below. Real prices arrive after the cards do, and judging a
-      // provider before theirs land rejects every one of them — the client
-      // would watch a full grid blink to "No providers found" and back.
-      if (priceRangeLoading) return [];
-      const bucket = activeFilters.priceRange;
-      list = list.filter(p =>
-        priceRangeMatchesBucket(resolveProviderPriceRange(p.priceRange, p.priceTier), bucket),
-      );
-    }
-    if (activeFilters.availableOnly) {
-      // Don't claim a provider is bookable until the batched availability
-      // lookup has answered. This makes "Available now" precise rather than
-      // quietly including unknown or fully booked providers.
-      if (availabilityLoading) return [];
-      list = list.filter(p => p.availability === 'available' || p.availability === 'limited');
+    if (serviceFilterActive) {
+      // Price, audience and Available now are judged against ONE service: a
+      // provider stays only if some single service satisfies all the active
+      // ones, and the card then shows that service — its own price and next
+      // open day, not a span across everything the provider offers. Real
+      // prices/services arrive after the cards do, so don't judge until they
+      // have (serviceFiltersPending) — see its comment.
+      if (serviceFiltersPending) return [];
+      list = list.flatMap(p => {
+        const service = matchedServiceByProviderId.get(p.providerId);
+        if (!service) return [];
+        return [{
+          ...p,
+          priceRange: serviceRange(service),
+          matchedService: {
+            id: service.id,
+            name: service.name,
+            durationMinutes: service.durationMinutes,
+            nextAvailable: serviceAvailability.get(service.id)?.nextAvailable ?? null,
+          },
+        }];
+      });
     }
     // serviceType values are business_type's own values now — direct
     // comparison, no collapsing map needed (see FilterOptions' comment).
@@ -868,12 +1016,6 @@ export default function SearchScreen({ navigation, route }: Props) {
       // as Available Now above — hairTypeMatchIds is null while unresolved.
       if (!hairTypeMatchIds) return [];
       list = list.filter(p => hairTypeMatchIds.has(p.providerId));
-    }
-    if (activeFilters.audience) {
-      // null here means the facets query hasn't answered for this result set
-      // yet — same rule as hairType above, don't claim matches prematurely.
-      if (!audienceMatchIds) return [];
-      list = list.filter(p => audienceMatchIds.has(p.providerId));
     }
     if (activeFilters.walkInsWelcome) {
       list = list.filter(p => p.walkInsWelcome);
@@ -907,7 +1049,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, failedCheck]);
+  }, [providersWithPriceRange, activeFilters, serviceFilterActive, serviceFiltersPending, matchedServiceByProviderId, serviceAvailability, hairTypeMatchIds, failedCheck]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
@@ -1004,17 +1146,29 @@ export default function SearchScreen({ navigation, route }: Props) {
       });
   }, [searchQuery, selectedFilter, mapDbToCardData]);
 
-  const handleProviderPress = useCallback((provider: ProviderCardData) => {
+  const openProvider = useCallback((provider: ProviderCardData, openServiceId?: string) => {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // The 'view' interaction is tracked once, by ProviderProfileScreen itself
     // on load — tracking it again here double-counted every visit.
     prefetchProviderBySlug(provider.id);
-    navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
+    navigation.navigate('ProviderProfile', {
+      providerId: provider.id,
+      source: 'search',
+      ...(openServiceId && { openServiceId }),
+    });
   }, [navigation]);
 
   const renderCard: ListRenderItem<ProviderCardData> = useCallback(({ item, index }) => (
-    <ProviderCard provider={item} onPress={() => handleProviderPress(item)} index={index} P={P} />
-  ), [handleProviderPress, P]);
+    <ProviderCard
+      provider={item}
+      onPress={() => openProvider(item)}
+      // Book Now opens the booking sheet for the service the filters matched;
+      // tapping the card body only opens the profile.
+      onBookPress={() => openProvider(item, item.matchedService?.id)}
+      index={index}
+      P={P}
+    />
+  ), [openProvider, P]);
 
   // Each active (non-default) filter as a dismissible chip — key, label, and
   // the callback to clear just that one. distance's "Any" value is 999, not
@@ -1530,9 +1684,8 @@ export default function SearchScreen({ navigation, route }: Props) {
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             {providersLoading
-              || ((activeFilters.availableOnly || !!activeFilters.hairType) && availabilityLoading)
-              || (!!activeFilters.priceRange && priceRangeLoading)
-              || (!!activeFilters.audience && !facetsLoaded && !facetsError) ? (
+              || (!!activeFilters.hairType && availabilityLoading)
+              || serviceFiltersPending ? (
               <>
                 <ActivityIndicator size="large" color={P.accent} />
                 <Text style={[styles.emptyTitle, { color: P.text }]}>Checking providers…</Text>
@@ -1885,6 +2038,9 @@ const styles = StyleSheet.create({
   },
   servicePill: {
     alignSelf: 'flex-start',
+    // The pill names the matched service while a filter is on, which can be
+    // longer than a category — cap it to the card so it truncates, not overflows.
+    maxWidth: '100%',
     borderRadius: 6,
     borderWidth: 1,
     paddingHorizontal: 6,

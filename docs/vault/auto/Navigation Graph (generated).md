@@ -5,7 +5,7 @@
 
 #generated
 
-**128 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
+**130 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -112,9 +112,11 @@ graph LR
   SchedulingScreen --> ProviderScheduleScreen
   SearchScreen --> ProviderProfileScreen
   SearchScreen --> audience
+  SearchScreen --> availability
   SearchScreen --> availableOnly
   SearchScreen --> hairType
   SearchScreen --> priceRange
+  SearchScreen --> prices
   ServicesPricingScreen --> BusinessInfoScreen
   SignUpStep1Screen --> SignUpStep2
   SignUpStep2Screen --> SignUpStep3
@@ -165,7 +167,7 @@ graph LR
 - `client/MessagesScreen` → `client/ProviderChatScreen`
 - `client/OffersScreen` → `client/ProviderProfileScreen`
 - `client/ProviderProfileScreen` → `Cart`, `ClaimProvider`, `client/CartScreen`, `client/ProviderChatScreen`
-- `client/SearchScreen` → `audience`, `availableOnly`, `client/ProviderProfileScreen`, `hairType`, `priceRange`
+- `client/SearchScreen` → `audience`, `availability`, `availableOnly`, `client/ProviderProfileScreen`, `hairType`, `priceRange`, `prices`
 - `client/UserProfileScreen` → `client/BeautyProfileScreen`, `client/BookingsScreen`, `client/BookmarkedProvidersScreen`, `client/MessagesScreen`, `client/NotificationsSettingsScreen`, `client/PaymentMethodsScreen`, `client/PointsScreen`, `client/ProfileInfoScreen`, `client/SubscriptionScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `SignUpStep3`
 - `provider/AddBookingScreen` → `ProviderHome`
 - `provider/BusinessDetailsScreen` → `provider/AboutYouScreen`, `provider/BusinessInfoScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/SchedulingScreen`, `provider/ServicesPricingScreen`

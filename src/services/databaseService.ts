@@ -685,76 +685,156 @@ export async function getProviderAudienceMatches(
   return matches;
 }
 
-export interface ProviderServiceFacets {
-  /** £min–£max across the provider's active services. Absent when they have
-   *  none priced. */
-  priceRanges: Map<string, { min: number; max: number }>;
-  /** The distinct `services.audience` tags each provider actually offers.
-   *  Absent/empty means nothing tagged — the same providers `.eq('audience',
-   *  …)` would simply not have returned. */
-  audiences: Map<string, Set<string>>;
+/** One active service, with exactly what Search needs to judge a filter against
+ *  THAT service rather than against its provider as a whole. */
+export interface SearchableService {
+  id: string;
+  providerId: string;
+  name: string;
+  price: number;
+  /** Top of a "from £x to £y" price; null for a fixed price. */
+  priceMax: number | null;
+  durationMinutes: number;
+  /** 'women' | 'men' | 'kids' | 'everyone', or null when the provider never tagged it. */
+  audience: string | null;
 }
 
+// Providers per query. PostgREST returns at most 1000 rows however large a
+// .limit() is asked for, and one query for all ~200 providers of a result set
+// can hold well over 1000 services — which silently dropped the tail, so those
+// providers looked like they had no services at all. 40 providers x the 25
+// services or so a provider realistically lists stays inside the cap.
+const SEARCHABLE_SERVICES_CHUNK = 40;
+
 /**
- * Price range AND audience tags for a set of providers, in ONE query.
+ * Every active service of a set of providers, one row per service, behind the
+ * same has_gone_live/is_active gate as every client-facing provider query.
  *
- * getProviderPriceRanges and getProviderAudienceMatches ask the same table,
- * over the same provider ids, behind the same has_gone_live/is_active gate —
- * they differ only in which column they read. Search ran both, so a search
- * with the audience filter on paid two round trips for one table scan. Callers
- * that need both should use this; the two single-purpose functions remain for
- * callers that genuinely need only one.
+ * Search filters on price, audience and availability. Judged per PROVIDER those
+ * are independent questions — a provider passes "under £60" on one service,
+ * "for men" on another and "free this week" on a third — so it can appear for a
+ * combination no single service satisfies. Returning services rather than
+ * per-provider aggregates is what lets the caller require all of them of the
+ * same service, and then show that service.
  *
- * Returning the audience SET rather than a pre-filtered match set is
- * deliberate: it lets a caller re-answer "does this provider serve men?" for a
- * different audience without going back to the network, which is what makes
- * toggling that filter free rather than another round trip.
+ * Throws on any failed chunk: a partial list would read as "these providers
+ * have no matching service", which is a claim about the providers.
  */
-export async function getProviderServiceFacets(
+export async function getSearchableServices(
   providerIds: string[],
-): Promise<ProviderServiceFacets> {
-  const priceRanges = new Map<string, { min: number; max: number }>();
-  const audiences = new Map<string, Set<string>>();
-  if (providerIds.length === 0) return { priceRanges, audiences };
+): Promise<SearchableService[]> {
+  if (providerIds.length === 0) return [];
 
-  // Same provider-visibility gate as the two functions this replaces — see
-  // getProviderPriceRanges for why it lives here rather than being left to
-  // each caller to remember.
-  const { data, error } = await supabase
-    .from("services")
-    .select(
-      "provider_id, price, price_max, audience, providers!inner(has_gone_live, is_active)",
-    )
-    .eq("is_active", true)
-    .eq("providers.has_gone_live", true)
-    .eq("providers.is_active", true)
-    .in("provider_id", providerIds);
-  if (error) throw error;
-
-  for (const row of data ?? []) {
-    const providerId = row.provider_id as string;
-
-    // A service with no price at all contributes an audience tag but must not
-    // drag the range down to 0 — price is NOT NULL in practice, but a null
-    // here would otherwise read as "free".
-    if (row.price != null) {
-      const high = row.price_max ?? row.price;
-      const existing = priceRanges.get(providerId);
-      if (!existing) {
-        priceRanges.set(providerId, { min: row.price, max: high });
-      } else {
-        existing.min = Math.min(existing.min, row.price);
-        existing.max = Math.max(existing.max, high);
-      }
-    }
-
-    if (row.audience) {
-      const set = audiences.get(providerId) ?? new Set<string>();
-      set.add(row.audience as string);
-      audiences.set(providerId, set);
-    }
+  const chunks: string[][] = [];
+  for (let i = 0; i < providerIds.length; i += SEARCHABLE_SERVICES_CHUNK) {
+    chunks.push(providerIds.slice(i, i + SEARCHABLE_SERVICES_CHUNK));
   }
-  return { priceRanges, audiences };
+
+  type Row = {
+    id: string;
+    provider_id: string;
+    name: string;
+    price: number | null;
+    price_max: number | null;
+    duration_minutes: number | null;
+    audience: string | null;
+  };
+
+  const pages = await Promise.all(
+    chunks.map(async (ids) => {
+      const { data, error } = await supabase
+        .from("services")
+        .select(
+          "id, provider_id, name, price, price_max, duration_minutes, audience, providers!inner(has_gone_live, is_active)",
+        )
+        .eq("is_active", true)
+        .eq("providers.has_gone_live", true)
+        .eq("providers.is_active", true)
+        .in("provider_id", ids)
+        .limit(1000);
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as Row[];
+      // A full page means the cap may have cut it off, and the missing tail
+      // would read as "those providers have no services". Fail loudly so the
+      // screen offers a retry instead of a wrong "no matching service".
+      if (rows.length >= 1000) {
+        throw new Error("Search services page reached the row cap; results may be incomplete");
+      }
+      return rows;
+    }),
+  );
+
+  const services: SearchableService[] = [];
+  for (const row of pages.flat()) {
+    // price is NOT NULL in practice; a null here would otherwise read as free.
+    if (row.price == null) continue;
+    services.push({
+      id: row.id,
+      providerId: row.provider_id,
+      name: row.name,
+      price: row.price,
+      priceMax: row.price_max,
+      durationMinutes: row.duration_minutes ?? 60,
+      audience: row.audience,
+    });
+  }
+  return services;
+}
+
+/** Whether ONE service has an open slot in the next week, and the first day it does. */
+export interface ServiceAvailability {
+  hasSlot: boolean;
+  /** 'YYYY-MM-DD' (London), null when there is no open slot this week. */
+  nextAvailable: string | null;
+}
+
+// get_services_availability considers at most 300 services per call.
+const SERVICE_AVAILABILITY_CHUNK = 300;
+
+/**
+ * Per-service availability for many services, batched — the service-level
+ * counterpart to getProvidersAvailability, which cannot say whether a provider
+ * has room for a service of a given length. Follows the app's own slot rules
+ * (see supabase/migrations/20260925090000_get_services_availability.sql).
+ *
+ * EVERY requested id appears in the result. One the database doesn't consider
+ * bookable (inactive service, provider not live) comes back as no slot rather
+ * than absent, so a caller can tell "answered: not available" from "not asked
+ * yet" — a missing key would otherwise be re-requested forever.
+ */
+export async function getServicesAvailability(
+  serviceIds: string[],
+): Promise<Map<string, ServiceAvailability>> {
+  const result = new Map<string, ServiceAvailability>();
+  if (serviceIds.length === 0) return result;
+  for (const id of serviceIds) result.set(id, { hasSlot: false, nextAvailable: null });
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < serviceIds.length; i += SERVICE_AVAILABILITY_CHUNK) {
+    chunks.push(serviceIds.slice(i, i + SERVICE_AVAILABILITY_CHUNK));
+  }
+
+  const pages = await Promise.all(
+    chunks.map(async (ids) => {
+      const { data, error } = await supabase.rpc("get_services_availability", {
+        p_service_ids: ids,
+      });
+      if (error) throw error;
+      return (data ?? []) as {
+        service_id: string;
+        has_slot: boolean;
+        next_available: string | null;
+      }[];
+    }),
+  );
+
+  for (const row of pages.flat()) {
+    result.set(row.service_id, {
+      hasSlot: row.has_slot,
+      nextAvailable: row.next_available,
+    });
+  }
+  return result;
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
