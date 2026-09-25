@@ -65,18 +65,20 @@ function monthsAgo(offset: number): Date {
   return d;
 }
 
+// Whole days from `date` to today — how far back a query has to reach to
+// include it.
+function daysSince(date: Date): number {
+  return Math.ceil((Date.now() - date.getTime()) / 86_400_000) + 1;
+}
+
+const RECENT_WINDOW_DAYS = 210;
+
+function monthKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function monthKey(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function prevMonthKey(): string {
-  const d = monthsAgo(1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -1142,11 +1144,12 @@ const quad = StyleSheet.create({
 
 // ── Range pill (sliding indicator) ────────────────────────────────────────────
 
-type Range = '7d' | '30d' | '90d' | 'all';
+type Range = '7d' | '30d' | '90d' | 'month' | 'all';
 const RANGES: { key: Range; label: string }[] = [
   { key: '7d',  label: '7d'  },
   { key: '30d', label: '30d' },
   { key: '90d', label: '90d' },
+  { key: 'month', label: 'Month' },
   { key: 'all', label: 'All' },
 ];
 
@@ -1236,15 +1239,28 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   const [followerCount, setFollowerCount] = useState(0);
   const [refreshing, setRefreshing]     = useState(false);
   const [range, setRange]               = useState<Range>('30d');
+  // How many calendar months back the "Month" range is showing (0 = this
+  // month). The 7d/30d/90d ranges are rolling windows, so a finished month
+  // only ever stayed visible until it slid out of them — this is how a
+  // provider gets back to one.
+  const [monthOffset, setMonthOffset]   = useState(0);
+  // Every month-relative figure (the hero comparison, the six-month chart)
+  // anchors on the picked month, and on this month for the rolling ranges.
+  const anchorOffset = range === 'month' ? monthOffset : 0;
 
   const fetchBookingsForRange = useCallback(async () => {
     try {
       // The default dashboard and six-month chart need only a bounded recent
       // window. Fetch lifetime history only when the provider explicitly
       // selects All; long-tenured accounts should not pay that cost on entry.
-      setBookings(await getProviderBookings(range === 'all' ? Infinity : 210));
+      // A browsed month reaches back further, but only as far as that month's
+      // six-month chart needs.
+      const daysBack = range === 'all'
+        ? Infinity
+        : Math.max(RECENT_WINDOW_DAYS, daysSince(monthsAgo(anchorOffset + 5)));
+      setBookings(await getProviderBookings(daysBack));
     } catch {}
-  }, [range]);
+  }, [range, anchorOffset]);
 
   const fetchSupportingMetrics = useCallback(async () => {
     try {
@@ -1274,11 +1290,15 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   // Filter by range
   const inRange = useMemo(() => {
     if (range === 'all') return bookings;
+    if (range === 'month') {
+      const key = monthKeyOf(monthsAgo(monthOffset));
+      return bookings.filter(b => monthKey(b.booking_date) === key);
+    }
     const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     return bookings.filter(b => new Date(b.booking_date + 'T00:00:00') >= cutoff);
-  }, [bookings, range]);
+  }, [bookings, range, monthOffset]);
 
   // KPIs
   const kpi = useMemo(() => {
@@ -1291,18 +1311,20 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     const cRate      = total > 0 ? completed.length / total : 0;
 
     // Month-over-month revenue
-    const thisMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === currentMonthKey()));
-    const lastMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === prevMonthKey()));
+    const thisKey    = monthKeyOf(monthsAgo(anchorOffset));
+    const prevKey    = monthKeyOf(monthsAgo(anchorOffset + 1));
+    const thisMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === thisKey));
+    const lastMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === prevKey));
     const momDelta   = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
 
     return { revenue, pending, cancelled, noShow, total, cRate, thisMonth, lastMonth, momDelta };
-  }, [inRange, bookings]);
+  }, [inRange, bookings, anchorOffset]);
 
   // 6-month bar chart data
   const chartData = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
-      const d = monthsAgo(5 - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const d = monthsAgo(anchorOffset + 5 - i);
+      const key = monthKeyOf(d);
       const bs  = bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === key);
       return {
         label:    d.toLocaleDateString('en-GB', { month: 'short' }),
@@ -1310,7 +1332,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
         bookings: bs.length,
       };
     });
-  }, [bookings]);
+  }, [bookings, anchorOffset]);
 
   const momColor = kpi.momDelta >= 0 ? CHART.green : CHART.pink;
   const momSign  = kpi.momDelta >= 0 ? '+' : '';
@@ -1355,6 +1377,29 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             </PressScale>
           </View>
 
+          {range === 'month' && (
+            <View style={main.monthStepper}>
+              <PressScale
+                onPress={() => setMonthOffset(o => o + 1)}
+                haptic="light"
+                style={[main.monthBtn, { backgroundColor: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
+              >
+                <Ionicons name="chevron-back" size={18} color={theme.text} />
+              </PressScale>
+              <Text style={[main.monthLabel, { color: theme.text }]}>
+                {monthsAgo(monthOffset).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+              </Text>
+              <PressScale
+                onPress={() => setMonthOffset(o => Math.max(0, o - 1))}
+                haptic="light"
+                disabled={monthOffset === 0}
+                style={[main.monthBtn, { backgroundColor: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', opacity: monthOffset === 0 ? 0.35 : 1 }]}
+              >
+                <Ionicons name="chevron-forward" size={18} color={theme.text} />
+              </PressScale>
+            </View>
+          )}
+
           <View style={main.body}>
 
             {/* ── Hero revenue card ── */}
@@ -1390,7 +1435,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                     </View>
                   </View>
                   <Text style={[main.heroSub, { color: theme.secondaryText }]}>
-                    vs £{kpi.lastMonth.toFixed(0)} last month
+                    vs £{kpi.lastMonth.toFixed(0)} {anchorOffset === 0 ? 'last month' : `in ${monthsAgo(anchorOffset + 1).toLocaleDateString('en-GB', { month: 'long' })}`}
                   </Text>
 
                   {/* Inline bar chart */}
@@ -1479,6 +1524,10 @@ const main = StyleSheet.create({
 
   rangeArea:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 8, marginBottom: 20 },
   historyBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+
+  monthStepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20, marginTop: -8 },
+  monthBtn:   { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  monthLabel: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
 
   body:       { paddingHorizontal: 20, gap: 12 },
 

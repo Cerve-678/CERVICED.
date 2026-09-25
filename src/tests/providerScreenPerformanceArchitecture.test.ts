@@ -18,7 +18,9 @@ describe('provider screen performance contracts', () => {
       'Promise.all([fetchBookings(), fetchConversations()]).finally(() => setLoading(false))',
     );
     expect(analytics).not.toContain('getProviderBookings(Infinity),');
-    expect(analytics).toContain("range === 'all' ? Infinity : 210");
+    // Lifetime history is fetched only for "All"; every other range (including
+    // a browsed past month) reaches back just as far as it needs to.
+    expect(analytics).toMatch(/range === 'all'\s*\?\s*Infinity\s*:\s*Math\.max\(RECENT_WINDOW_DAYS/);
   });
 
   it('loads Provider My Services once per focus, reusing the provider row it fetched', () => {
