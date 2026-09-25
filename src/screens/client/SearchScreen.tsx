@@ -39,6 +39,7 @@ import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { logger } from '../../utils/logger';
+import { toUserMessage } from '../../utils/userFacingError';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 import {
   resolveProviderPriceRange,
@@ -394,6 +395,12 @@ export default function SearchScreen({ navigation, route }: Props) {
   const [providerData, setProviderData]   = useState<ProviderCardData[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState<string | null>(null);
+  // Bumped by the Retry buttons so each failed operation re-runs on its own —
+  // retrying availability must not refetch the whole provider list, and vice
+  // versa. Each is a dependency of exactly one effect below.
+  const [providersRetryKey, setProvidersRetryKey] = useState(0);
+  const [availabilityRetryKey, setAvailabilityRetryKey] = useState(0);
+  const [facetsRetryKey, setFacetsRetryKey] = useState(0);
   // The header filters button opens this single sheet — no more per-pill
   // popovers anchored under an always-visible row.
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -563,12 +570,22 @@ export default function SearchScreen({ navigation, route }: Props) {
             logger.error('[Search] trackSearch failed:', error),
           );
         }
-      } catch {
+      } catch (error) {
         if (requestId !== providerRequestIdRef.current) return;
+        // Cleared, unlike a failed pull-to-refresh: this fetch was for a NEW
+        // query/category, so the list on screen belongs to the previous one
+        // and showing it under the new search term would be a false answer.
         setProviderData([]);
-        setProvidersError('Could not refresh providers. Pull down to try again.');
+        setProvidersError(toUserMessage(error, "We couldn't load providers. Check your connection and try again.", 'SearchScreen.load'));
       } finally {
-        if (requestId === providerRequestIdRef.current) setProvidersLoading(false);
+        // Both flags, not just this path's own: a pull-to-refresh and a new
+        // query share one request id, so whichever lost the race never gets to
+        // run its own cleanup — and "Checking providers…" would stay up forever,
+        // hiding the failure states below.
+        if (requestId === providerRequestIdRef.current) {
+          setProvidersLoading(false);
+          setRefreshing(false);
+        }
       }
     };
 
@@ -581,7 +598,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
-  }, [searchQuery, selectedFilter, mapDbToCardData, user?.id]);
+  }, [searchQuery, selectedFilter, mapDbToCardData, user?.id, providersRetryKey]);
 
   // Distance is derived separately from the raw fetch, since it depends on
   // userCoords resolving (async, and possibly after providerData already
@@ -615,6 +632,11 @@ export default function SearchScreen({ navigation, route }: Props) {
   const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityStatus>>(new Map());
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [hairTypeMatchIds, setHairTypeMatchIds] = useState<Set<string> | null>(null);
+  // True when the availability/hair-type lookup FAILED for the current result
+  // set. Distinct from an empty map: an empty map is a real answer ("nobody
+  // has availability"), a failure is "we couldn't check" and must never be
+  // filtered on as if it were the former.
+  const [availabilityError, setAvailabilityError] = useState(false);
 
   React.useEffect(() => {
     const hairType = activeFilters.hairType;
@@ -622,11 +644,13 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (slugs.length === 0) {
       setAvailabilityBySlug(new Map());
       setAvailabilityLoading(false);
+      setAvailabilityError(false);
       setHairTypeMatchIds(hairType ? new Set() : null);
       return;
     }
     let cancelled = false;
     setAvailabilityLoading(true);
+    setAvailabilityError(false);
     const slugToProviderId = new Map(providerData.map(p => [p.id, p.providerId]));
     // Deliberately NOT cleared to an empty map here — a category change or
     // pull-to-refresh used to wipe every badge the instant this effect
@@ -650,14 +674,18 @@ export default function SearchScreen({ navigation, route }: Props) {
         setAvailabilityBySlug(statusBySlug);
         setHairTypeMatchIds(matchIds);
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
-        setAvailabilityBySlug(new Map());
-        setHairTypeMatchIds(hairType ? new Set() : null);
+        logger.error('[Search] availability lookup failed:', error);
+        // Not an empty Map/Set: that read as "nobody is available / nobody
+        // matches this hair type" and emptied the grid on a dropped request.
+        // Leave the last-known badges alone and flag the failure instead.
+        setHairTypeMatchIds(null);
+        setAvailabilityError(true);
       })
       .finally(() => { if (!cancelled) setAvailabilityLoading(false); });
     return () => { cancelled = true; };
-  }, [providerData, activeFilters.hairType]);
+  }, [providerData, activeFilters.hairType, availabilityRetryKey]);
 
   const providersWithAvailability = useMemo(() => {
     if (availabilityBySlug.size === 0) return providersWithDistance;
@@ -689,6 +717,9 @@ export default function SearchScreen({ navigation, route }: Props) {
   // fetch hasn't come back" distinction rather than inferring it from an
   // empty map.
   const [priceRangeLoading, setPriceRangeLoading] = useState(false);
+  // True when the services lookup FAILED for the current result set — see
+  // availabilityError for why that must not be modelled as empty maps.
+  const [facetsError, setFacetsError] = useState(false);
 
   React.useEffect(() => {
     const ids = providerData.map(p => p.providerId);
@@ -696,30 +727,35 @@ export default function SearchScreen({ navigation, route }: Props) {
       setPriceRangeByProviderId(new Map());
       setAudiencesByProviderId(new Map());
       setFacetsLoaded(true);
+      setFacetsError(false);
       setPriceRangeLoading(false);
       return;
     }
     let cancelled = false;
     setFacetsLoaded(false);
+    setFacetsError(false);
     setPriceRangeLoading(true);
     getProviderServiceFacets(ids)
       .then(facets => {
         if (cancelled) return;
         setPriceRangeByProviderId(facets.priceRanges);
         setAudiencesByProviderId(facets.audiences);
+        setFacetsLoaded(true);
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
-        setPriceRangeByProviderId(new Map());
-        setAudiencesByProviderId(new Map());
+        logger.error('[Search] service details lookup failed:', error);
+        // facetsLoaded stays false: "loaded" means the lookup ANSWERED, and
+        // marking it true here made every price/audience filter judge
+        // providers against empty maps — i.e. reject all of them.
+        setFacetsError(true);
       })
       .finally(() => {
         if (cancelled) return;
-        setFacetsLoaded(true);
         setPriceRangeLoading(false);
       });
     return () => { cancelled = true; };
-  }, [providerData]);
+  }, [providerData, facetsRetryKey]);
 
   const providersWithPriceRange = useMemo(() => {
     if (priceRangeByProviderId.size === 0) return providersWithAvailability;
@@ -750,7 +786,49 @@ export default function SearchScreen({ navigation, route }: Props) {
   // and text query are already applied server-side (see the debounced effect
   // above); rating/price/distance/service-type/availability/sort narrow that
   // result set further, the same way HomeScreen's filter dropdown does. ─────
+  // Which ACTIVE filter can't be answered because its lookup failed. Applying
+  // it anyway would either show unfiltered providers as if they'd been
+  // checked, or (the old behaviour) reject every provider — both tell the
+  // client something the app doesn't know. The grid empties instead and says
+  // what couldn't be checked, with a retry for that lookup alone.
+  const failedCheck = useMemo<{ what: string; keys: (keyof FilterOptions)[]; retry: () => void } | null>(() => {
+    if (availabilityError && (activeFilters.availableOnly || activeFilters.hairType)) {
+      const keys: (keyof FilterOptions)[] = [];
+      if (activeFilters.availableOnly) keys.push('availableOnly');
+      if (activeFilters.hairType) keys.push('hairType');
+      return {
+        what: keys.length === 2 ? 'availability and hair type'
+          : activeFilters.availableOnly ? 'availability' : 'hair type',
+        keys,
+        retry: () => setAvailabilityRetryKey(k => k + 1),
+      };
+    }
+    if (facetsError && (activeFilters.priceRange || activeFilters.audience)) {
+      const keys: (keyof FilterOptions)[] = [];
+      if (activeFilters.priceRange) keys.push('priceRange');
+      if (activeFilters.audience) keys.push('audience');
+      return {
+        what: keys.length === 2 ? 'prices and who services are for'
+          : activeFilters.priceRange ? 'prices' : 'who services are for',
+        keys,
+        retry: () => setFacetsRetryKey(k => k + 1),
+      };
+    }
+    return null;
+  }, [availabilityError, facetsError, activeFilters.availableOnly, activeFilters.hairType, activeFilters.priceRange, activeFilters.audience]);
+
+  // A failed lookup whose filter ISN'T active only costs the client a badge or
+  // a price line — the list is still right, so it stays and a banner offers
+  // the retry rather than blanking the grid.
+  const backgroundFailure = useMemo<{ what: string; retry: () => void } | null>(() => {
+    if (failedCheck) return null;
+    if (availabilityError) return { what: 'availability', retry: () => setAvailabilityRetryKey(k => k + 1) };
+    if (facetsError) return { what: 'prices', retry: () => setFacetsRetryKey(k => k + 1) };
+    return null;
+  }, [failedCheck, availabilityError, facetsError]);
+
   const filteredProviders = useMemo(() => {
+    if (failedCheck) return [];
     let list = [...providersWithPriceRange];
 
     if (activeFilters.rating && activeFilters.rating > 0) {
@@ -829,7 +907,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds]);
+  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, failedCheck]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
@@ -869,6 +947,17 @@ export default function SearchScreen({ navigation, route }: Props) {
     setActiveFilters(prev => ({ ...prev, [key]: DEFAULT_FILTER_OPTIONS[key] }));
   }, []);
 
+  // Clears just the filters whose lookup failed — not Reset, which would also
+  // drop unrelated filters (rating, city, sort) the client set on purpose.
+  const clearFilterKeys = useCallback((keys: (keyof FilterOptions)[]) => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveFilters(prev => {
+      const next: FilterOptions = { ...prev };
+      for (const key of keys) Object.assign(next, { [key]: DEFAULT_FILTER_OPTIONS[key] });
+      return next;
+    });
+  }, []);
+
   // ── Search input handler ─────────────────────────────────────────────────────
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
@@ -899,12 +988,20 @@ export default function SearchScreen({ navigation, route }: Props) {
         setProviderData(data.map(mapDbToCardData));
         setProvidersError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         if (requestId !== providerRequestIdRef.current) return;
-        setProviderData([]);
-        setProvidersError('Could not refresh providers. Pull down to try again.');
+        // Keep the list: a refresh re-asks the SAME query, so what's on screen
+        // is still the last good answer to it. Wiping it turned a dropped
+        // connection into "No providers" for a client who had results a
+        // moment ago. The banner says the refresh failed.
+        setProvidersError(toUserMessage(error, "We couldn't refresh providers. Check your connection and try again.", 'SearchScreen.refresh'));
       })
-      .finally(() => { if (requestId === providerRequestIdRef.current) setRefreshing(false); });
+      .finally(() => {
+        if (requestId === providerRequestIdRef.current) {
+          setRefreshing(false);
+          setProvidersLoading(false);
+        }
+      });
   }, [searchQuery, selectedFilter, mapDbToCardData]);
 
   const handleProviderPress = useCallback((provider: ProviderCardData) => {
@@ -1034,13 +1131,19 @@ export default function SearchScreen({ navigation, route }: Props) {
   }, [navigation, P, hasActiveFilters, activeFilterChips.length]);
 
   // ── List header: just result count ─────────────────────────────────────────
+  // No count while a lookup failed: "0 providers" is the exact "nobody matches"
+  // claim the failure states below exist to avoid making.
+  // The list itself failed to load (as opposed to a refresh failing while an
+  // older list is still on screen — that keeps its results and shows a banner).
+  const loadFailed = providersError != null && providerData.length === 0;
+  const countUnknown = failedCheck != null || loadFailed;
   const renderHeader = useCallback(() => (
     <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
       <Text style={[styles.countText, { color: P.sub }]}>
-        {filteredProviders.length} {filteredProviders.length === 1 ? 'provider' : 'providers'}
+        {countUnknown ? ' ' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
       </Text>
     </View>
-  ), [filteredProviders.length, P]);
+  ), [filteredProviders.length, countUnknown, P]);
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1366,7 +1469,7 @@ export default function SearchScreen({ navigation, route }: Props) {
               activeOpacity={0.75}
             >
               <Text style={[styles.filterModalDoneText, { color: P.onAccent }]}>
-                Show {filteredProviders.length} {filteredProviders.length === 1 ? 'result' : 'results'}
+                {countUnknown ? 'Show results' : `Show ${filteredProviders.length} ${filteredProviders.length === 1 ? 'result' : 'results'}`}
               </Text>
             </TouchableOpacity>
           </Pressable>
@@ -1375,6 +1478,34 @@ export default function SearchScreen({ navigation, route }: Props) {
 
       {/* ── Results area — wraps the FlatList. ── */}
       <ReAnimated.View style={[{ flex: 1 }, resultsAnimatedStyle]}>
+
+      {/* ── Failure banner — the list on screen is still valid, but something
+          around it couldn't be checked. Never shown instead of results, and
+          each Retry re-runs only the lookup that failed. ── */}
+      {(providerData.length > 0 && providersError) || backgroundFailure ? (
+        <View style={[styles.checkBanner, { backgroundColor: P.surface, borderColor: P.sep }]}>
+          <Text style={[styles.checkBannerText, { color: P.sub }]}>
+            {providerData.length > 0 && providersError
+              ? 'Couldn’t refresh — showing your last results.'
+              : `Couldn’t check ${backgroundFailure?.what} right now.`}
+          </Text>
+          <TouchableOpacity
+            // A failed refresh retries as a refresh (keeps the list if it fails
+            // again, shows the pull-to-refresh spinner while it runs); the
+            // new-query reload path would wipe the very results this banner
+            // says are still being shown.
+            onPress={providerData.length > 0 && providersError
+              ? handleRefresh
+              : backgroundFailure?.retry}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+          >
+            <Text style={[styles.checkBannerRetry, { color: P.accent }]}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* ── Provider grid — two columns, matches the provider-grid layout used
           on the bookmarked-providers screen ── */}
@@ -1399,27 +1530,58 @@ export default function SearchScreen({ navigation, route }: Props) {
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             {providersLoading
-              || (activeFilters.availableOnly && availabilityLoading)
-              || (!!activeFilters.priceRange && priceRangeLoading) ? (
+              || ((activeFilters.availableOnly || !!activeFilters.hairType) && availabilityLoading)
+              || (!!activeFilters.priceRange && priceRangeLoading)
+              || (!!activeFilters.audience && !facetsLoaded && !facetsError) ? (
               <>
                 <ActivityIndicator size="large" color={P.accent} />
                 <Text style={[styles.emptyTitle, { color: P.text }]}>Checking providers…</Text>
               </>
+            ) : failedCheck ? (
+              // "Couldn't check" — deliberately not the "No providers found"
+              // copy below. The filter can't be answered, so the grid can't
+              // claim nobody matches.
+              <>
+                <TabIcon name="magnifying-glass" size={44} color={P.border} />
+                <Text style={[styles.emptyTitle, { color: P.text }]}>Couldn’t check {failedCheck.what}</Text>
+                <Text style={[styles.emptySub, { color: P.sub }]}>
+                  We couldn’t check {failedCheck.what}, so we can’t tell who matches. Try again, or clear {failedCheck.keys.length === 1 ? 'that filter' : 'those filters'}.
+                </Text>
+                <TouchableOpacity onPress={failedCheck.retry} activeOpacity={0.7} style={styles.emptyClearBtn} accessibilityRole="button">
+                  <Text style={[styles.emptyClearText, { color: P.accent }]}>Try again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => clearFilterKeys(failedCheck.keys)} activeOpacity={0.7} style={styles.emptyClearBtn} accessibilityRole="button">
+                  <Text style={[styles.emptyClearText, { color: P.sub }]}>
+                    Clear {failedCheck.keys.length === 1 ? 'that filter' : 'those filters'}
+                  </Text>
+                </TouchableOpacity>
+              </>
             ) : (
               <>
                 <TabIcon name="magnifying-glass" size={44} color={P.border} />
-                <Text style={[styles.emptyTitle, { color: P.text }]}>{providersError ? 'Couldn’t load providers' : 'No providers found'}</Text>
+                <Text style={[styles.emptyTitle, { color: P.text }]}>{loadFailed ? 'Couldn’t load providers' : 'No providers found'}</Text>
                 {/* Name what actually emptied the grid. "Try adjusting your
                     filters" was the same sentence whether one filter was on or
                     six, and whether the search itself had matched nothing —
                     so it never told the client which of those to change. */}
                 <Text style={[styles.emptySub, { color: P.sub }]}>
-                  {providersError
-                    ?? (activeFilterChips.length > 0
+                  {loadFailed
+                    ? providersError
+                    : (activeFilterChips.length > 0
                       ? `No one matches ${activeFilterChips.map(c => c.label).join(' · ')}`
                       : 'Try a different search term or category')}
                 </Text>
-                {!providersError && activeFilterChips.length > 0 && (
+                {loadFailed && (
+                  <TouchableOpacity
+                    onPress={() => setProvidersRetryKey(k => k + 1)}
+                    activeOpacity={0.7}
+                    style={styles.emptyClearBtn}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.emptyClearText, { color: P.accent }]}>Try again</Text>
+                  </TouchableOpacity>
+                )}
+                {!loadFailed && activeFilterChips.length > 0 && (
                   <TouchableOpacity onPress={resetFilters} activeOpacity={0.7} style={styles.emptyClearBtn}>
                     <Text style={[styles.emptyClearText, { color: P.accent }]}>
                       Clear {activeFilterChips.length === 1 ? 'this filter' : 'all filters'}
@@ -1815,5 +1977,28 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '600',
+  },
+  checkBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  checkBannerText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  checkBannerRetry: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

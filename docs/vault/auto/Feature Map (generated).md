@@ -44,8 +44,8 @@ Curated: [[Availability & Slots]] · **159 files**
 - `src/services/AvailabilityService.ts` _(330)_
 - `src/services/databaseService.ts` _(269)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
+- `src/screens/client/SearchScreen.tsx` _(138)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
-- `src/screens/client/SearchScreen.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(85)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(84)_
@@ -334,10 +334,10 @@ Curated: [[Services]] · **39 files**
 - `src/utils/env.ts` _(8)_
 - `src/navigation/provider/ProviderTabNavigator.tsx` _(7)_
 - `src/navigation/client/ClientTabNavigator.tsx` _(6)_
+- `src/services/becca/entityResolver.ts` _(5)_
 - `src/services/becca/capabilities/shared.ts` _(4)_
 - `src/navigation/provider/tabs/ProviderServicesNavigator.tsx` _(3)_
 - `src/screens/shared/HelpCentreScreen.tsx` _(3)_
-- `src/services/becca/entityResolver.ts` _(3)_
 - `src/services/becca/matcher.ts` _(3)_
 - `src/services/userLearningService.ts` _(3)_
 - `src/types/database.ts` _(3)_

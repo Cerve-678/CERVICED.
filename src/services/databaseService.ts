@@ -867,11 +867,7 @@ export async function searchProviders(
 
   // None of these three lookups depend on each other's result, so run them
   // together instead of waiting on one before starting the next.
-  const [
-    { data: serviceMatches },
-    { data: nameMatches },
-    { data: categoryMatches },
-  ] = await Promise.all([
+  const [serviceLookup, nameLookup, categoryLookup] = await Promise.all([
     // 1. Provider IDs where a service name or description matches
     supabase
       .from("services")
@@ -897,11 +893,19 @@ export async function searchProviders(
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
   ]);
 
-  const serviceIds = (serviceMatches ?? []).map(
+  // A failed lookup must throw, not read as "no matches": with all three
+  // empty this function returns [] and Search tells the client nobody
+  // offers what they typed, when really nothing was checked. One failed
+  // lookup out of three would silently return a partial list the same way.
+  if (serviceLookup.error) throw serviceLookup.error;
+  if (nameLookup.error) throw nameLookup.error;
+  if (categoryLookup.error) throw categoryLookup.error;
+
+  const serviceIds = (serviceLookup.data ?? []).map(
     (r: { provider_id: string }) => r.provider_id,
   );
-  const nameIds = (nameMatches ?? []).map((r: { id: string }) => r.id);
-  const categoryIds = (categoryMatches ?? []).map((r: { id: string }) => r.id);
+  const nameIds = (nameLookup.data ?? []).map((r: { id: string }) => r.id);
+  const categoryIds = (categoryLookup.data ?? []).map((r: { id: string }) => r.id);
   const allIds = [...new Set([...serviceIds, ...nameIds, ...categoryIds])];
 
   if (allIds.length === 0) return [];

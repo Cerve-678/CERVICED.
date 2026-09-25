@@ -9,6 +9,7 @@
 import type { ConfirmedBooking } from "../../types/booking";
 import { BookingStatus } from "../../types/booking";
 import { dateToYMD, formatShortDate, DAY_NAMES_FULL } from "../../utils/dateUtils";
+import { logger } from "../../utils/logger";
 import { searchProviders, getBookmarkedProviders } from "../databaseService";
 import type {
   AmbiguousEntity,
@@ -535,10 +536,12 @@ export async function resolveProvider(
           },
         };
       }
-    } catch {
+    } catch (error) {
       // A failed name lookup just means "couldn't resolve a provider" — the
       // capability layer decides how to degrade, per the databaseService
-      // contract that callers own degradation.
+      // contract that callers own degradation. Logged so a search that FAILED
+      // isn't indistinguishable from a provider that doesn't exist.
+      logger.error('[Becca] provider name lookup failed:', error);
     }
   }
 
@@ -558,7 +561,8 @@ async function lookupProviderByName(
       kind: "provider",
       value: { slug: exact.slug, dbId: exact.id, displayName: exact.display_name },
     };
-  } catch {
+  } catch (error) {
+    logger.error('[Becca] provider lookup by name failed:', error);
     return null;
   }
 }
