@@ -18,7 +18,7 @@ import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   markConversationReadByProvider,
@@ -51,7 +51,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   // hand-rolled OL/OD copy that could drift from the canonical palette.
   const { palette: OP } = useTheme();
   const { user } = useAuth();
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, DialogHost } = useAppDialog();
 
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);

@@ -39,7 +39,7 @@ import {
   updateProviderContactDetails,
   updateMyServiceCategory,
 } from '../../services/databaseService';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import {
   Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
@@ -94,7 +94,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const { showConfirm, DialogHost } = useProviderDialog();
+  const { showConfirm, DialogHost } = useAppDialog();
 
   useEffect(() => {
     (async () => {
