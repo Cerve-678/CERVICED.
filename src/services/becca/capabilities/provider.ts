@@ -61,13 +61,23 @@ const todaySchedule: Capability = {
       return { text: "I couldn't load your provider profile just now." };
     }
 
+    // Only a bare "what's on" defaults to today; once the provider has named a
+    // day, the natural next question is the other side of it, not "tomorrow"
+    // again.
+    const askedForToday = !entities.date;
+    const otherDayChip = askedForToday
+      ? askChip("tomorrow", "What's on tomorrow?", "What's on tomorrow?")
+      : askChip("today", "What's on today?", "What's on today?");
+
     const rows = await getProviderBookingsByDate(profile.id, ymd);
     if (rows.length === 0) {
       return {
         text: `Nothing booked ${label}.`,
         suggestions: [
-          askChip("gaps", "Anyone on my waitlist?", "Who's on my waitlist?"),
-          navChip("schedule", "My schedule", "schedule"),
+          otherDayChip,
+          askChip("week", "How's my week looking?", "How's my week looking?"),
+          askChip("waitlist", "Anyone on my waitlist?", "Who's on my waitlist?"),
+          askChip("messages", "Any unread messages?", "Any unread messages?"),
         ],
       };
     }
@@ -82,19 +92,22 @@ const todaySchedule: Capability = {
     return {
       text: `## ${rows.length} booking${rows.length !== 1 ? "s" : ""} ${label}\nHere’s your schedule:\n\n${lines}`,
       suggestions: [
-        // Mirror the client experience: each schedule line Becca shows can
-        // be opened directly, rather than making a provider hunt through the
-        // whole day after choosing it in chat.
-        ...rows.slice(0, 6).map((booking) =>
+        // Each booking Becca lists opens directly, labelled by who it's for —
+        // the service is already in the answer above, the client is what a
+        // provider scans for. Capped so the follow-up questions below stay
+        // on screen instead of being pushed under a wall of cards.
+        ...rows.slice(0, 4).map((booking) =>
           navChip(
             `booking-${booking.id}`,
-            `View: ${booking.service_name_snapshot} · ${formatTime12(booking.booking_time)}`,
+            `${formatTime12(booking.booking_time)} · ${booking.customer_name ?? "Client"}`,
             "BookingDetail",
             { bookingId: booking.id },
           ),
         ),
-        ...(rows.length > 6 ? [navChip("home", "Open all today’s bookings", "home")] : []),
+        ...(rows.length > 4 ? [navChip("home", `See all ${rows.length} bookings`, "home")] : []),
+        otherDayChip,
         askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
+        askChip("week", "How's my week looking?", "How's my week looking?"),
       ],
     };
   },
@@ -284,7 +297,7 @@ const clientele: Capability = {
         text: "You haven't got any clients on record yet — they'll appear here after their first booking.",
         suggestions: [
           askChip("reach", "How's my reach?", "How many followers have I got?"),
-          askChip("reach", "How's my reach?", "How many followers have I got?"),
+          askChip("reviews", "What are people saying?", "What are clients saying?"),
           navChip("services", "Check my services", "services"),
         ],
       };
@@ -292,8 +305,10 @@ const clientele: Capability = {
     return {
       text: `You've got ${members.length} client${members.length !== 1 ? "s" : ""} on record.`,
       suggestions: [
-        navChip("clients", "Open Clientele", "clients"),
         askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
+        askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
+        askChip("waitlist", "Anyone on my waitlist?", "Who's on my waitlist?"),
+        navChip("clients", "Open Clientele", "clients"),
       ],
     };
   },
@@ -956,6 +971,7 @@ const analytics: Capability = {
         navChip("analytics", "Open Analytics", "analytics"),
         navChip("history", "Booking History", "history"),
         askChip("week", "How's my week?", "How busy am I this week?"),
+        askChip("reviews", "What are people saying?", "What are clients saying?"),
         askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
       ],
     };
