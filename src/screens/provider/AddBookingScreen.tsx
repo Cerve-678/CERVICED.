@@ -14,7 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   getMyProviderProfile,
@@ -86,7 +86,7 @@ function timeToMinutes(t: string): number {
 
 export default function AddBookingScreen() {
   const navigation = useNavigation();
-  const { showToast, showConfirm, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useAppDialog();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const onAccent = isDarkColor(P.accent) ? '#fff' : '#1B2740';

@@ -18,7 +18,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import { toUserMessage } from '../../utils/userFacingError';
 import {
   getProviderConversations,
@@ -230,7 +230,7 @@ const DARK_P = {
 };
 
 export default function ProviderInboxScreen({ navigation, route }: any) {
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, DialogHost } = useAppDialog();
   const { isDarkMode: dark } = useTheme();
   const { user } = useAuth();
   const P = dark ? DARK_P : LIGHT_P;

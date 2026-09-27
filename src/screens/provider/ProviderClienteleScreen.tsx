@@ -30,7 +30,7 @@ import {
   getOrCreateConversation,
 } from '../../services/databaseService';
 import type { ClienteleMember, DbBooking } from '../../types/database';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { formatTime12 } from '../../utils/dateUtils';
@@ -692,7 +692,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const [historyBookings, setHistoryBookings] = useState<DbBooking[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, DialogHost } = useAppDialog();
 
   const load = useCallback(async () => {
     setLoading(true);

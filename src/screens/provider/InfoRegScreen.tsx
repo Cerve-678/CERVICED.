@@ -46,7 +46,7 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // Auth
 import { useAuth } from '../../contexts/AuthContext';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 
 // Supabase registration service
 import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
@@ -2689,7 +2689,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Themed (not native Alert) specifically for the "this will pause your
   // account" warning on deleting the last service — everything else on this
   // screen still uses Alert.alert, left as-is.
-  const { showConfirm, DialogHost } = useProviderDialog();
+  const { showConfirm, DialogHost } = useAppDialog();
 
   // Read from the ROOT provider (App.tsx), deliberately not the nested
   // <SafeAreaProvider> this screen renders further down: this hook call sits

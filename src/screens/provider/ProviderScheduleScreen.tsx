@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   getMyProviderProfile,
@@ -124,7 +124,7 @@ function formatYMD(ymd: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ProviderScheduleScreen() {
   const navigation = useNavigation();
-  const { showToast, showConfirm, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useAppDialog();
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;

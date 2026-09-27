@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **54 files**
 - … +24 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **153 files**
+Curated: [[Booking Flow]] · **152 files**
 - `src/contexts/BookingContext.tsx` _(319)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(267)_
 - `src/services/databaseService.ts` _(199)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **153 files**
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_
-- … +123 more
+- … +122 more
 
 ## Auth
 Curated: [[Contexts]] · **163 files**
