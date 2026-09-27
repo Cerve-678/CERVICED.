@@ -207,7 +207,9 @@ export type ProviderHomeStackParamList = {
   // jumpToDate: set after AddBookingScreen creates a booking outside "today",
   // so the calendar opens straight to the day it was added on instead of
   // silently leaving the provider on whatever day they already had selected.
-  ProviderHomeMain: { jumpToDate?: string } | undefined;
+  // viewMode: lets a caller (the daily-recap notification) open the calendar
+  // straight into the list view rather than whichever mode was last used.
+  ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
   ProviderSchedule: undefined;
   AddBooking: undefined;
   // Reachable from the Calendar tab's profile quick-actions. Registered here
