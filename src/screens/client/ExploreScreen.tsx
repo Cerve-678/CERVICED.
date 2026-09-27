@@ -300,6 +300,12 @@ const ExploreScreen = memo(() => {
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
   const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
   const [favouritesLoading, setFavouritesLoading] = useState(false);
+  // A load failure is distinct from an empty list: an empty list means "you
+  // haven't saved anything", an error means "we couldn't fetch what you saved".
+  // Conflating them (the old bare `catch` that just set [] ) made a broken
+  // fetch look like the user had no favourites at all.
+  const [favouritesError, setFavouritesError] = useState(false);
+  const [favouritesReloadKey, setFavouritesReloadKey] = useState(0);
 
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
@@ -559,11 +565,13 @@ const ExploreScreen = memo(() => {
     if (activeTab !== 'favourites') return;
     if (savedPortfolioIds.length === 0) {
       setFavouriteItems([]);
+      setFavouritesError(false);
       return;
     }
 
     let cancelled = false;
     setFavouritesLoading(true);
+    setFavouritesError(false);
 
     const load = async () => {
       try {
@@ -585,15 +593,18 @@ const ExploreScreen = memo(() => {
         const order = new Map(savedPortfolioIds.map((id, i) => [id, i]));
         cards.sort((a, b) => (order.get(b.id) ?? 0) - (order.get(a.id) ?? 0));
         setFavouriteItems(cards);
-      } catch {
-        if (!cancelled) setFavouriteItems([]);
+      } catch (error) {
+        if (!cancelled) {
+          logger.error('Failed to load favourites:', error);
+          setFavouritesError(true);
+        }
       } finally {
         if (!cancelled) setFavouritesLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
+  }, [activeTab, savedPortfolioIds, favouritesReloadKey, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
 
   // Column width for masonry
   // Must match MasonryGrid's own column maths exactly — it lays the cards out,
@@ -880,6 +891,24 @@ const ExploreScreen = memo(() => {
         {activeTab === 'favourites' && (
           favouritesLoading ? (
             <SkeletonMasonryGrid />
+          ) : favouritesError ? (
+            <View style={styles.emptyContainer}>
+              <TabIcon name="heart" size={48} color={P.sub} />
+              <Text style={[styles.emptyText, { color: P.text }]}>Couldn&apos;t load favourites</Text>
+              <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                Something went wrong loading your saved items. Check your connection and try again.
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFavouritesReloadKey(k => k + 1);
+                }}
+                activeOpacity={0.7}
+                style={[styles.favRetryButton, { borderColor: P.border }]}
+              >
+                <Text style={[styles.favRetryText, { color: P.text }]}>Try again</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <MasonryGrid
               data={favouriteItems}
@@ -1030,6 +1059,20 @@ const styles = StyleSheet.create({
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
     marginTop: spacing.sm,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  favRetryButton: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  favRetryText: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
 
 });

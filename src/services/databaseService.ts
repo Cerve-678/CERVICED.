@@ -1678,9 +1678,15 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
       ? supabase
           .from("services")
           .select(
+            // Must stay in step with getDiscoverServices' service select:
+            // mapDbServiceToCards reads s.service_category (`.toUpperCase()`,
+            // which throws on undefined and takes the whole Favourites load
+            // down with it) and the per-image aspect_ratio/fit. Dropping any
+            // of these here is what silently emptied the Favourites tab for
+            // anyone with a saved service.
             `
-            id, provider_id, name, description, price,
-            service_images ( url, sort_order ),
+            id, provider_id, name, description, price, service_category,
+            service_images ( url, sort_order, aspect_ratio, fit ),
             provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
           `,
           )
