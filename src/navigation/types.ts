@@ -220,7 +220,10 @@ export type ProviderHomeStackParamList = {
   Branding: undefined;
   Policies: undefined;
   Payments: undefined;
-  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; groupSiblings?: any[] };
+  // fromRescheduleRequest: set when opened from a reschedule-request notification,
+  // so the screen can say so if that request is no longer open, instead of
+  // quietly offering a fresh "propose new times" sheet for a request that's gone.
+  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; fromRescheduleRequest?: boolean; groupSiblings?: any[] };
   ProviderIntakeForm:
     | {
         bookingId: string;

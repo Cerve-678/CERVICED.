@@ -45,6 +45,8 @@ import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useAppDialog } from '../../components/AppDialog';
+import { getRescheduleBlock, getStaleRequestBlock, type OpenRequestStatus } from '../../utils/rescheduleBlockedReason';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
 // ==================== TYPES ====================
@@ -214,6 +216,7 @@ const WaitlistCard = React.memo(function WaitlistCard({
 // ==================== MAIN COMPONENT ====================
 
 const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { showAlert, DialogHost } = useAppDialog();
   useFont();
   const { theme, isDarkMode, palette: P } = useTheme();
   // Measured per render, not captured at module load, so the full-screen modal
@@ -973,14 +976,36 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         // Small delay to ensure view is switched, then navigate to the detail/reschedule screen
         setTimeout(async () => {
           if (shouldOpenReschedule) {
+            // What state is the request in? A local booking that already has the
+            // provider's offered dates is answered; otherwise ask the server.
+            let openRequest: OpenRequestStatus = booking.rescheduleRequest?.providerAvailableDates
+              ? 'provider_responded'
+              : booking.isPendingReschedule ? 'pending' : null;
+            let lookupFailed = false;
             // Sync active reschedule request from Supabase before navigating
             if (!booking.rescheduleRequest?.providerAvailableDates) {
               try {
                 const dbReq = await getActiveRescheduleRequest(booking.id);
+                openRequest = dbReq?.status === 'pending' || dbReq?.status === 'provider_responded' ? dbReq.status : null;
                 if (dbReq?.status === 'provider_responded' && (dbReq.provider_available_slots ?? []).length > 0) {
                   await providerRespondToReschedule(booking.id, dbReq.provider_available_slots!);
                 }
-              } catch {}
+              } catch (err) {
+                // Can't tell whether the request is still open, so don't claim it isn't.
+                logger.warn('[Bookings] reschedule request lookup failed:', err);
+                lookupFailed = true;
+              }
+            }
+            // An old "provider offered new times" notification can outlive the
+            // booking (cancelled, finished, date passed) and the offer itself.
+            // Say what happened, in the app's bottom sheet, instead of dropping
+            // the client on a picker that can't work.
+            const block =
+              getRescheduleBlock(booking.status, booking.bookingDate, booking.bookingTime, new Date(), 'client') ??
+              (lookupFailed ? null : getStaleRequestBlock('client', openRequest, booking.providerName));
+            if (block) {
+              showAlert(block.title, block.message);
+              return;
             }
             logger.log('Navigating to Reschedule screen');
             navigation.navigate('Reschedule', { bookingId: booking.id });
@@ -1044,7 +1069,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setActiveFilters(new Set([route.params.initialTab]));
       navigation.setParams({ initialTab: undefined } as any);
     }
-  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule]);
+  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule, showAlert]);
 
   // ✅ Update selectedBooking ONLY when modal is visible and booking state changes
   // Use ref to track last update to prevent infinite loops
@@ -2131,6 +2156,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </KeyboardDismissView>
         </Modal>
 
+        <DialogHost />
       </SafeAreaView>
     </ThemedBackground>
   );
