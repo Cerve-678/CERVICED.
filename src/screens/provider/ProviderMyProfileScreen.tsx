@@ -776,22 +776,27 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const totalReviews = reviewCount ?? reviews.length;
 
   const handleEditProfile = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('EditProfile');
   }, [navigation]);
 
   const handleEditSchedule = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('ProviderSchedule');
   }, [navigation]);
 
   const handleEditBranding = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Branding');
   }, [navigation]);
 
   const handleOpenAnalytics = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Analytics');
   }, [navigation]);
 
   const handleEditPolicies = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Policies');
   }, [navigation]);
 
@@ -880,6 +885,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch (e) {
         logger.error('[MyServices] save service failed:', e);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         Alert.alert(
           'Could not save',
           toUserMessage(e, "That didn't save. Please try again.", 'MyServices.saveService'),
@@ -904,6 +910,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         prev.map(s => (s.id === service.id ? { ...s, is_active: service.is_active } : s)),
       );
       logger.error('[MyServices] toggle service failed:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert(
         'Could not update',
         toUserMessage(e, "That didn't save. Please try again.", 'MyServices.toggleService'),
@@ -998,6 +1005,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
           setWorkPhotos(prev => prev.filter(p => p.id !== item.id));
           try {
             await deletePortfolioItem(item.id);
@@ -1678,7 +1686,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         </View>
                         <TouchableOpacity
                           style={[styles.addChip, { borderColor: PP.border }]}
-                          onPress={handleAddPhotos}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => {});
+                            void handleAddPhotos();
+                          }}
                           disabled={photoUploading}
                           activeOpacity={0.7}
                           accessibilityRole="button"
@@ -1716,7 +1727,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                             />
                             <TouchableOpacity
                               style={styles.photoRemove}
-                              onPress={() => handleRemovePhoto(item)}
+                              onPress={() => {
+                                Haptics.selectionAsync().catch(() => {});
+                                handleRemovePhoto(item);
+                              }}
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                               accessibilityRole="button"
                               accessibilityLabel="Remove this photo"
@@ -1762,7 +1776,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           <TouchableOpacity
                             key={action.key}
                             style={[styles.quickItem, { width: (screenWidth - 76) / 5 }]}
-                            onPress={action.onPress}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              action.onPress();
+                            }}
                             activeOpacity={0.7}
                             accessibilityRole="button"
                             accessibilityLabel={action.label}
