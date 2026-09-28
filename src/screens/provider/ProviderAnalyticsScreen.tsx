@@ -21,7 +21,15 @@ import { getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '.
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { formatShortDate } from '../../utils/dateUtils';
+import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
+import {
+  chartBuckets,
+  currentWindow,
+  inWindow,
+  previousPeriodLabel,
+  previousWindow,
+  type AnalyticsRange,
+} from '../../utils/analyticsPeriod';
 
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
@@ -67,16 +75,6 @@ function monthsAgo(offset: number): Date {
 
 function monthKey(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function prevMonthKey(): string {
-  const d = monthsAgo(1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -293,8 +291,10 @@ function RevenueChart({
   const anims  = useRef(data.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
+    // Denser charts (30 daily bars) stagger faster so the last bar doesn't
+    // sit waiting a second and a half after the first one starts.
     Animated.stagger(
-      60,
+      Math.min(60, Math.floor(900 / data.length)),
       anims.map((a, i) =>
         Animated.spring(a, {
           toValue: data[i]!.revenue / maxRev,
@@ -307,12 +307,17 @@ function RevenueChart({
   }, [anims, data, maxRev]);
 
   const BAR_TOTAL_H = 100;
+  // A 7- or 3-bar chart labels every bar; a 30-bar daily chart would collide
+  // labels into an unreadable smear, so it shows only a handful, evenly
+  // spaced, always including the last (today).
+  const labelEvery = data.length > 10 ? Math.ceil(data.length / 5) : 1;
+  const barGap = data.length > 15 ? 2 : data.length > 8 ? 4 : 6;
 
   return (
     <View style={chart.wrap}>
-      <View style={chart.bars}>
+      <View style={[chart.bars, { gap: barGap }]}>
         {data.map((d, i) => (
-          <View key={d.label} style={chart.barCol}>
+          <View key={i} style={chart.barCol}>
             <View style={[chart.barBg, { height: BAR_TOTAL_H, backgroundColor: dark ? 'rgba(175,145,151,0.14)' : 'rgba(92,64,51,0.08)' }]}>
               <Animated.View
                 style={[
@@ -333,7 +338,9 @@ function RevenueChart({
                 />
               </Animated.View>
             </View>
-            <Text style={[chart.label, { color: theme.secondaryText }]}>{d.label}</Text>
+            <Text style={[chart.label, { color: theme.secondaryText }]} numberOfLines={1}>
+              {(i % labelEvery === 0 || i === data.length - 1) ? d.label : ''}
+            </Text>
           </View>
         ))}
       </View>
@@ -1142,7 +1149,7 @@ const quad = StyleSheet.create({
 
 // ── Range pill (sliding indicator) ────────────────────────────────────────────
 
-type Range = '7d' | '30d' | '90d' | 'all';
+type Range = AnalyticsRange;
 const RANGES: { key: Range; label: string }[] = [
   { key: '7d',  label: '7d'  },
   { key: '30d', label: '30d' },
@@ -1271,16 +1278,20 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     setRefreshing(false);
   }, [fetchBookingsForRange, fetchSupportingMetrics]);
 
-  // Filter by range
-  const inRange = useMemo(() => {
-    if (range === 'all') return bookings;
-    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    return bookings.filter(b => new Date(b.booking_date + 'T00:00:00') >= cutoff);
-  }, [bookings, range]);
+  // Everything below is derived from the selected range and one date string,
+  // so the headline, the tiles, the comparison and the bars can't disagree.
+  const today = dateToYMD(new Date());
+  const period = useMemo(() => currentWindow(range, today), [range, today]);
+  const prevPeriod = useMemo(() => previousWindow(range, today), [range, today]);
 
-  // KPIs
+  // Bookings from the start of the range onwards. Upcoming ones stay in so the
+  // lists and the Pending count still show what's coming; the figures that
+  // only make sense for the past cap at today below.
+  const inRange = useMemo(
+    () => (period ? bookings.filter(b => b.booking_date >= period.start) : bookings),
+    [bookings, period],
+  );
+
   const kpi = useMemo(() => {
     const completed  = inRange.filter(b => b.status === 'completed');
     const revenue    = totalForBookings(completed);
@@ -1288,32 +1299,43 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     const cancelled  = inRange.filter(b => b.status === 'cancelled').length;
     const noShow     = inRange.filter(b => b.status === 'no_show').length;
     const total      = inRange.length;
-    const cRate      = total > 0 ? completed.length / total : 0;
+    // Completion rate is over appointments whose day has come — an upcoming
+    // booking hasn't had the chance to complete yet.
+    const due        = inRange.filter(b => b.booking_date <= today).length;
+    const cRate      = due > 0 ? completed.length / due : 0;
 
-    // Month-over-month revenue
-    const thisMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === currentMonthKey()));
-    const lastMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === prevMonthKey()));
-    const momDelta   = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
+    // Compared with the equal-length period just before the selected one.
+    const prevRevenue = prevPeriod
+      ? totalForBookings(bookings.filter(b => b.status === 'completed' && inWindow(b.booking_date, prevPeriod)))
+      : 0;
+    const delta = prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : null;
 
-    return { revenue, pending, cancelled, noShow, total, cRate, thisMonth, lastMonth, momDelta };
-  }, [inRange, bookings]);
+    return { revenue, pending, cancelled, noShow, total, cRate, prevRevenue, delta };
+  }, [inRange, bookings, prevPeriod, today]);
 
-  // 6-month bar chart data
+  // Bars tile the selected range, so they add up to the headline revenue.
   const chartData = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = monthsAgo(5 - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const bs  = bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === key);
-      return {
-        label:    d.toLocaleDateString('en-GB', { month: 'short' }),
-        revenue:  totalForBookings(bs),
-        bookings: bs.length,
-      };
+    const completed = bookings.filter(b => b.status === 'completed');
+    const earliest = completed.reduce<string | null>(
+      (min, b) => (min === null || b.booking_date < min ? b.booking_date : min),
+      null,
+    );
+    return chartBuckets(range, today, earliest).map(bucket => {
+      const bs = completed.filter(b => inWindow(b.booking_date, bucket));
+      return { label: bucket.label, revenue: totalForBookings(bs), bookings: bs.length };
     });
-  }, [bookings]);
+  }, [bookings, range, today]);
 
-  const momColor = kpi.momDelta >= 0 ? CHART.green : CHART.pink;
-  const momSign  = kpi.momDelta >= 0 ? '+' : '';
+  // The reviews tile follows the range too, like every other figure up here.
+  const reviewsInRange = useMemo(
+    () => (period ? reviews.filter(r => inWindow(dateToYMD(new Date(r.created_at)), period)) : reviews),
+    [reviews, period],
+  );
+
+  const momDelta = kpi.delta ?? 0;
+  const momColor = momDelta >= 0 ? CHART.green : CHART.pink;
+  const momSign  = momDelta >= 0 ? '+' : '';
+  const compareLabel = previousPeriodLabel(range);
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -1378,24 +1400,28 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                         style={[main.heroValue, { color: theme.text }]}
                       />
                     </View>
-                    <View style={[main.momBadge, { backgroundColor: momColor + '20' }]}>
-                      <Ionicons
-                        name={kpi.momDelta >= 0 ? 'trending-up' : 'trending-down'}
-                        size={14}
-                        color={momColor}
-                      />
-                      <Text style={[main.momTxt, { color: momColor }]}>
-                        {momSign}{kpi.momDelta.toFixed(1)}%
-                      </Text>
-                    </View>
+                    {kpi.delta !== null && (
+                      <View style={[main.momBadge, { backgroundColor: momColor + '20' }]}>
+                        <Ionicons
+                          name={momDelta >= 0 ? 'trending-up' : 'trending-down'}
+                          size={14}
+                          color={momColor}
+                        />
+                        <Text style={[main.momTxt, { color: momColor }]}>
+                          {momSign}{momDelta.toFixed(1)}%
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={[main.heroSub, { color: theme.secondaryText }]}>
-                    vs £{kpi.lastMonth.toFixed(0)} last month
-                  </Text>
+                  {compareLabel && (
+                    <Text style={[main.heroSub, { color: theme.secondaryText }]}>
+                      vs £{kpi.prevRevenue.toFixed(0)} {compareLabel}
+                    </Text>
+                  )}
 
                   {/* Inline bar chart */}
                   <View style={{ marginTop: 20 }}>
-                    <RevenueChart data={chartData} dark={dark} theme={theme} accent={accent} />
+                    <RevenueChart key={`${range}-${chartData.length}`} data={chartData} dark={dark} theme={theme} accent={accent} />
                   </View>
                 </View>
               </DeckCard>
@@ -1410,8 +1436,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                 { label: 'Pending',    value: kpi.pending,                                                                                             icon: 'time',           color: CHART.amber },
                 { label: 'No Shows',   value: kpi.noShow,                                                                                              icon: 'alert-circle',   color: CHART.pink },
                 {
-                  label: reviews.length > 0 ? `${reviews.length} review${reviews.length !== 1 ? 's' : ''}` : 'No reviews yet',
-                  value: reviews.length > 0 ? parseFloat((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)) : 0,
+                  label: reviewsInRange.length > 0 ? `${reviewsInRange.length} review${reviewsInRange.length !== 1 ? 's' : ''}` : 'No reviews yet',
+                  value: reviewsInRange.length > 0 ? parseFloat((reviewsInRange.reduce((s, r) => s + r.rating, 0) / reviewsInRange.length).toFixed(1)) : 0,
                   icon: 'star', color: CHART.amber,
                 },
                 { label: 'Cancelled',  value: kpi.cancelled,                                                                                           icon: 'close-circle',   color: CHART.plum },
