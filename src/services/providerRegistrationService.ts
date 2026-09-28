@@ -746,7 +746,7 @@ export async function saveProviderToSupabase(
         outcome_tags: svc.outcomeTags?.length ? svc.outcomeTags : null,
         occasion_tags: svc.occasionTags?.length ? svc.occasionTags : null,
         trend_names: svc.trendNames?.length ? svc.trendNames : null,
-        is_pregnancy_safe: svc.isPregnancySafe ?? false,
+        is_pregnancy_safe: svc.isPregnancySafe ?? true,
         patch_test_required: svc.patchTestRequired ?? false,
         min_age: svc.minAge ?? null,
         contraindications: svc.contraindications?.length ? svc.contraindications : null,
@@ -892,7 +892,9 @@ export async function loadProviderFromSupabase(
       outcomeTags: svc.outcome_tags || [],
       occasionTags: svc.occasion_tags || [],
       trendNames: svc.trend_names || [],
-      isPregnancySafe: svc.is_pregnancy_safe ?? false,
+      // null (never stated) reads as safe/off — same as the toggle's default —
+      // so a service isn't shown flagged unless is_pregnancy_safe is explicitly false.
+      isPregnancySafe: svc.is_pregnancy_safe ?? true,
       patchTestRequired: svc.patch_test_required ?? false,
       minAge: svc.min_age ?? null,
       contraindications: svc.contraindications || [],

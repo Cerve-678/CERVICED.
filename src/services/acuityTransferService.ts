@@ -55,7 +55,10 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       outcomeTags: [],
       occasionTags: [],
       trendNames: [],
-      isPregnancySafe: false,
+      // Safe/off by default — the toggle flags a service as unsafe, so an
+      // imported service isn't shown "not recommended during pregnancy" unless
+      // the provider turns it on.
+      isPregnancySafe: true,
       patchTestRequired: false,
       minAge: null,
       contraindications: [],

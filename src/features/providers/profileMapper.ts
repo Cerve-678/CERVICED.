@@ -47,7 +47,10 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
           price: Number(addOn.price),
           description: addOn.description ?? '',
         })),
-      isPregnancySafe: service.is_pregnancy_safe,
+      // null = never stated → treated as safe (no warning), matching the
+      // provider toggle's off-by-default meaning. Only an explicit false shows
+      // "not recommended during pregnancy".
+      isPregnancySafe: service.is_pregnancy_safe ?? true,
       patchTestRequired: service.patch_test_required,
       minAge: service.min_age,
       contraindications: service.contraindications ?? [],

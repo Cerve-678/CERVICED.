@@ -1176,8 +1176,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [trendInput, setTrendInput] = useState('');
   const [serviceType, setServiceType] = useState<ServiceData['serviceType']>(service?.serviceType || '');
   const [audience, setAudience] = useState<ServiceData['audience']>(service?.audience || '');
-  // Safety state
-  const [isPregnancySafe, setIsPregnancySafe] = useState(service?.isPregnancySafe ?? false);
+  // Safety state.
+  // Model: the toggle asks the provider to FLAG a service as unsafe, not to
+  // attest it's safe. Off (the default) = safe/no warning; on = "not
+  // recommended during pregnancy". `isPregnancySafe` stays the source of truth
+  // (true = safe), so an untoggled service defaults to true and the Switch
+  // below binds to its inverse.
+  const [isPregnancySafe, setIsPregnancySafe] = useState(service?.isPregnancySafe ?? true);
   const [patchTestRequired, setPatchTestRequired] = useState(
     service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey))
   );
@@ -1237,7 +1242,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setTrendInput('');
     setServiceType(service?.serviceType || '');
     setAudience(service?.audience || '');
-    setIsPregnancySafe(service?.isPregnancySafe ?? false);
+    setIsPregnancySafe(service?.isPregnancySafe ?? true);
     setPatchTestRequired(service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey)));
     setMinAge(service?.minAge?.toString() || '');
     setContraindications(service?.contraindications || []);
@@ -1723,10 +1728,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
-                      <Text style={styles.toggleHint}>This treatment is safe during pregnancy</Text>
+                      <Text style={styles.toggleLabel}>Not Safe During Pregnancy</Text>
+                      <Text style={styles.toggleHint}>Turn on to warn clients this treatment isn't recommended during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={!isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(!v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['minAge'] = e.nativeEvent.layout.y; }}>
@@ -1770,15 +1775,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 </View>
               )}
 
-              {/* ── Pregnancy safe toggle (non-aesthetics) ───────────── */}
+              {/* ── Pregnancy warning toggle (non-aesthetics) ─────────── */}
               {!isAesthetics && (
                 <View style={styles.inputGroup}>
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
-                      <Text style={styles.toggleHint}>This service is safe during pregnancy</Text>
+                      <Text style={styles.toggleLabel}>Not Safe During Pregnancy</Text>
+                      <Text style={styles.toggleHint}>Turn on to warn clients this service isn't recommended during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={!isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(!v); }} trackColor={{ false: chrome.surf(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
                 </View>
               )}
