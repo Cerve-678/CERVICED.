@@ -36,6 +36,11 @@
  * So: no balance-collected toggles, no amount-received fields, no
  * payout/earnings surface here without that going through the real processor.
  *
+ * The "Payouts" card IS that sanctioned exception: it onboards the provider to
+ * Stripe Connect (Express) so Cerviced can pay them out through the real
+ * processor. It's gated behind STRIPE_CONNECT_PAYOUTS_ENABLED and stays hidden
+ * until the Connect backend is live. It does not track any in-person money.
+ *
  * PERSISTENCE mirrors ProviderAutomationsScreen's dual-write — `user_metadata`
  * (legacy fallback) plus the `providers` row (what clients and cron jobs
  * actually read). A setting written to only one of the two silently misbehaves.
@@ -45,12 +50,17 @@ import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TextInput, 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   getMyProviderProfile,
   updateProviderContactDetails,
   updateProviderAutomationSettings,
+  getMyProviderPayoutStatus,
+  startProviderPayoutOnboarding,
+  type StripeConnectStatus,
 } from '../../services/databaseService';
+import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import {
   saveProviderPolicies,
   loadProviderPolicies,
@@ -99,6 +109,11 @@ export default function PaymentsScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Stripe Connect payouts (gated by STRIPE_CONNECT_PAYOUTS_ENABLED). null =
+  // not loaded / not applicable.
+  const [payoutStatus, setPayoutStatus] = useState<StripeConnectStatus | null>(null);
+  const [payoutBusy, setPayoutBusy]     = useState(false);
   // Both writes below (booking_policies and automation_settings) are full
   // REPLACEs, and the keys this screen doesn't own are only preserved via the
   // otherPolicies/otherAutomation copies read on load. If that read failed
@@ -161,6 +176,39 @@ export default function PaymentsScreen({ navigation }: any) {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   }
+
+  // Payout status is loaded independently of the deposit/payment-type settings
+  // above so a failure here (e.g. the Connect backend not yet live) can never
+  // stop the rest of the screen loading. Only runs when the feature is on.
+  const loadPayoutStatus = useCallback(async () => {
+    if (!STRIPE_CONNECT_PAYOUTS_ENABLED) return;
+    try {
+      setPayoutStatus(await getMyProviderPayoutStatus());
+    } catch {
+      // Leave status null; the card shows the "set up" call to action.
+    }
+  }, []);
+
+  useEffect(() => { loadPayoutStatus(); }, [loadPayoutStatus]);
+
+  const handleSetUpPayouts = useCallback(async () => {
+    setPayoutBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      // Stripe bounces back into the app via these deep links (cerviced://…):
+      // returnUrl when they finish or bail, refreshUrl if the link expired.
+      const returnUrl = Linking.createURL('payouts/return');
+      const refreshUrl = Linking.createURL('payouts/refresh');
+      const { url } = await startProviderPayoutOnboarding(refreshUrl, returnUrl);
+      await Linking.openURL(url);
+      // We can't await the return; refresh status when they reopen the screen.
+      await loadPayoutStatus();
+    } catch (e: any) {
+      flash(toUserMessage(e, 'Could not start payout setup.', 'PaymentsScreen.payouts'), 'error');
+    } finally {
+      setPayoutBusy(false);
+    }
+  }, [loadPayoutStatus]);
 
   const handleSave = useCallback(async () => {
     if (!providerId) { flash('No provider profile found', 'error'); return; }
@@ -377,6 +425,49 @@ export default function PaymentsScreen({ navigation }: any) {
               <Ionicons name="chevron-forward" size={16} color={C.sub} style={{ opacity: 0.5 }} />
             </TouchableOpacity>
           </Card>
+
+          {STRIPE_CONNECT_PAYOUTS_ENABLED && (
+            <Card
+              title="Payouts"
+              sub="Get paid through Cerviced for online bookings, straight to your bank."
+            >
+              {payoutStatus?.chargesEnabled ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="checkmark-circle" size={18} color={C.accent} />
+                  <Text style={{ flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: C.text, lineHeight: 19 }}>
+                    You’re set up to receive payouts. Cerviced pays you your share automatically after each appointment.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: C.sub, lineHeight: 19, marginBottom: 12 }}>
+                    {payoutStatus?.detailsSubmitted
+                      ? 'Your details are with Stripe for review. This card will update once you’re approved to receive payouts.'
+                      : payoutStatus?.accountId
+                        ? 'You’ve started setting up payouts but haven’t finished. Pick up where you left off.'
+                        : 'Set up secure payouts with Stripe so clients can pay online and the money reaches your bank. Takes a few minutes.'}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12,
+                      backgroundColor: C.accent, opacity: payoutBusy ? 0.6 : 1,
+                    }}
+                    onPress={handleSetUpPayouts}
+                    disabled={payoutBusy}
+                    activeOpacity={0.85}
+                  >
+                    {payoutBusy
+                      ? <ActivityIndicator color={C.ice} size="small" />
+                      : <Ionicons name="card-outline" size={16} color={C.ice} />}
+                    <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3, color: C.ice }}>
+                      {payoutStatus?.accountId ? 'Continue payout setup' : 'Set up payouts'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </Card>
+          )}
 
           <Card title="Getting Paid">
             <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: C.sub, lineHeight: 19 }}>

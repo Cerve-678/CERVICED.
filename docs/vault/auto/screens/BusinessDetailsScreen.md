@@ -12,7 +12,6 @@ tags: [screen, provider]
 - [[PoliciesScreen\|Policies]]
 - [[AboutYouScreen\|AboutYou]]
 - [[SchedulingScreen\|Scheduling]]
-- [[PaymentsScreen\|Payments]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

@@ -74,10 +74,10 @@ Curated: [[Availability & Slots]] · **159 files**
 - … +129 more
 
 ## Payments
-Curated: [[Payments]] · **112 files**
+Curated: [[Payments]] · **114 files**
 - `src/screens/client/CartScreen.tsx` _(499)_
-- `src/screens/provider/PaymentsScreen.tsx` _(149)_
-- `src/services/databaseService.ts` _(129)_
+- `src/screens/provider/PaymentsScreen.tsx` _(164)_
+- `src/services/databaseService.ts` _(152)_
 - `src/services/bookingService.ts` _(117)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/components/BookingSheet.tsx` _(109)_
@@ -105,7 +105,7 @@ Curated: [[Payments]] · **112 files**
 - `src/screens/auth/SignUpStep4Screen.tsx` _(21)_
 - `src/screens/provider/PoliciesScreen.tsx` _(21)_
 - `src/services/stripeService.ts` _(21)_
-- … +82 more
+- … +84 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **242 files**
@@ -176,8 +176,8 @@ Curated: [[Notifications]] · **147 files**
 - … +117 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **73 files**
-- `src/services/databaseService.ts` _(64)_
+Curated: [[Provider Onboarding & Go-Live]] · **74 files**
+- `src/services/databaseService.ts` _(69)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(49)_
 - `src/features/providers/goLiveStatus.ts` _(35)_
@@ -196,6 +196,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `src/screens/client/CartScreen.tsx` _(5)_
 - `src/services/acuityTransferService.ts` _(5)_
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
+- `src/screens/provider/PaymentsScreen.tsx` _(4)_
 - `src/contexts/AuthContext.tsx` _(3)_
 - `src/screens/auth/ClaimProviderScreen.tsx` _(3)_
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
@@ -206,8 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
 - `src/services/becca/aiRuntime.ts` _(3)_
 - `supabase/add_providers_availability_rpc.sql` _(3)_
-- `supabase/availability_v2.sql` _(3)_
-- … +43 more
+- … +44 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **153 files**
 
 ## Auth
 Curated: [[Contexts]] · **162 files**
-- `src/services/databaseService.ts` _(224)_
+- `src/services/databaseService.ts` _(228)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(139)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_

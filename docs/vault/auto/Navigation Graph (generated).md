@@ -33,7 +33,6 @@ graph LR
   BookmarkedProvidersScreen --> ProviderProfileScreen
   BusinessDetailsScreen --> AboutYouScreen
   BusinessDetailsScreen --> BusinessInfoScreen
-  BusinessDetailsScreen --> PaymentsScreen
   BusinessDetailsScreen --> PoliciesScreen
   BusinessDetailsScreen --> SchedulingScreen
   BusinessDetailsScreen --> ServicesPricingScreen
@@ -41,6 +40,7 @@ graph LR
   BusinessProfileScreen --> BrandingScreen
   BusinessProfileScreen --> BusinessDetailsScreen
   BusinessProfileScreen --> InfoRegScreen
+  BusinessProfileScreen --> PaymentsScreen
   BusinessProfileScreen --> ProviderAutomationsScreen
   BusinessProfileScreen --> ProviderCommunicationsScreen
   CartScreen --> BookingsScreen
@@ -164,9 +164,9 @@ graph LR
 - `client/SearchScreen` → `client/ProviderProfileScreen`
 - `client/UserProfileScreen` → `client/BeautyProfileScreen`, `client/BookingsScreen`, `client/BookmarkedProvidersScreen`, `client/MessagesScreen`, `client/NotificationsSettingsScreen`, `client/PaymentMethodsScreen`, `client/PointsScreen`, `client/ProfileInfoScreen`, `client/SubscriptionScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `SignUpStep3`
 - `provider/AddBookingScreen` → `ProviderHome`
-- `provider/BusinessDetailsScreen` → `provider/AboutYouScreen`, `provider/BusinessInfoScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/SchedulingScreen`, `provider/ServicesPricingScreen`
+- `provider/BusinessDetailsScreen` → `provider/AboutYouScreen`, `provider/BusinessInfoScreen`, `provider/PoliciesScreen`, `provider/SchedulingScreen`, `provider/ServicesPricingScreen`
 - `provider/BusinessInfoScreen` → `provider/ProviderCommunicationsScreen`
-- `provider/BusinessProfileScreen` → `provider/BrandingScreen`, `provider/BusinessDetailsScreen`, `provider/InfoRegScreen`, `provider/ProviderAutomationsScreen`, `provider/ProviderCommunicationsScreen`
+- `provider/BusinessProfileScreen` → `provider/BrandingScreen`, `provider/BusinessDetailsScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/ProviderAutomationsScreen`, `provider/ProviderCommunicationsScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
 - `provider/ProviderAccountScreen` → `provider/BusinessProfileScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `SignUpStep3`
 - `provider/ProviderAnalyticsScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderBookingHistoryScreen`
