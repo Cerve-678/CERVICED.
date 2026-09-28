@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-09-28 (loyalty points first-bonus rebalance)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260928201412 | `loyalty_points_first_bonus_rebalance` | `award_points_on_booking_completed()` and `award_points_on_review_left()` reproduced from the verified-live `pg_get_functiondef()` (identical to `20260906174647`, no drift) with only three deltas changed: `first_booking` 200→100 (and its inline `(+100)` notification line), `first_review` 10→50, `review_left` 4→2. Post-apply re-fetch confirmed: first_booking=100, booking notif says `(+100)`, `booking_completed` still +2, `birthday_bonus` still +50, first_review v_delta=50, later-review v_delta=2, and `SET search_path` intact on both functions. `returning_client` (+30) and `profile_completed` (+30) left untouched. App-side `PointsScreen.tsx` earn copy updated to match (First Booking +100, First Review +50, Leave a Review +2). Filename renamed from authored `20260928000000` to the recorded version. Frontier before apply was `20260925221735`. |
+
 ### Applied 2026-09-14 (client_bookings exposes booking_ref)
 
 | Recorded version | Name | Verified live |

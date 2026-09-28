@@ -25,9 +25,9 @@ import { logger } from '../../utils/logger';
 
 const EARN_WAYS = [
   { icon: 'event-available', label: 'Complete a Booking', points: '+2 pts', desc: 'Every completed appointment', live: true },
-  { icon: 'star', label: 'Leave a Review', points: '+4 pts', desc: 'After each booking', live: true },
-  { icon: 'auto-awesome', label: 'First Review', points: '+10 pts', desc: 'One-time bonus for your first review', live: true },
-  { icon: 'emoji-events', label: 'First Booking', points: '+200 pts', desc: 'One-time welcome bonus', live: true },
+  { icon: 'star', label: 'Leave a Review', points: '+2 pts', desc: 'After each booking', live: true },
+  { icon: 'auto-awesome', label: 'First Review', points: '+50 pts', desc: 'One-time bonus for your first review', live: true },
+  { icon: 'emoji-events', label: 'First Booking', points: '+100 pts', desc: 'One-time welcome bonus', live: true },
   { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'On your birthday', live: true },
   { icon: 'person-add', label: 'Refer a Friend', points: '', desc: 'Coming soon', live: false },
 ];
