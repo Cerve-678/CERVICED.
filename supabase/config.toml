@@ -19,6 +19,20 @@ verify_jwt = true
 [functions.send-booking-confirmation]
 verify_jwt = true
 
+# Stripe calls this endpoint directly and cannot present a Supabase JWT, so
+# verify_jwt MUST be false — the function authenticates the request by
+# verifying the Stripe signature (STRIPE_WEBHOOK_SECRET) instead. Deploy with
+# `supabase functions deploy stripe-webhook --no-verify-jwt` too, since the
+# CLI flag is what the platform reads at deploy time.
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Woken only by pg_cron (process_due_payouts) with the service_role key as the
+# bearer, never by a user session — the function additionally checks the bearer
+# equals the service role key before moving any money.
+[functions.release-payouts]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.
