@@ -222,6 +222,19 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Loyalty points earned (client-only) ─────────────────────────────────────
+  // Opens the Rewards screen, which lives in the client Profile tab's stack.
+  // Client-only: 'Points' isn't a route in the provider navigator, so a provider
+  // tap deep-linking into it would bubble up and mount the client navigator.
+  if (type === 'points_earned') {
+    if (!isProvider) {
+      navigateNested('Profile', 'Points');
+    } else {
+      openNotifications();
+    }
+    return;
+  }
+
   // ── Everything else → Notifications screen ───────────────────────────────────
   // (promotion, daily_recap, schedule_fully_booked, etc.) Either they have no
   // specific destination, or the in-app handler covers them.
