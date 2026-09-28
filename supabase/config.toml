@@ -33,6 +33,12 @@ verify_jwt = false
 [functions.release-payouts]
 verify_jwt = true
 
+# Called by the owning provider (their JWT) or by admin tooling with the
+# service-role bearer. The function authorises the caller against the booking's
+# provider before moving any money.
+[functions.refund-payment]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

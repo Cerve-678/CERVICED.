@@ -39,14 +39,13 @@ CREATE OR REPLACE FUNCTION public.create_held_payout_on_finalize()
  SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
-  -- ⚠️ PRODUCT DECISION (flag for the user): how long AFTER the appointment
-  -- ends the payout stays held before the release job may transfer it. The
-  -- cancellation window closes BEFORE the appointment, so the appointment end
-  -- is already the binding "window closed" moment; this buffer is the extra
-  -- safety margin that lets a no-show / quality dispute be raised before the
-  -- provider is paid (CERVICED already has a no-show dispute flow). 24h is a
-  -- sensible default, not a locked decision — change this one literal to
-  -- retune it. 0 would release as soon as the appointment passes.
+  -- How long AFTER the appointment ends the payout stays held before the
+  -- release job may transfer it. The cancellation window closes BEFORE the
+  -- appointment, so the appointment end is already the binding "window closed"
+  -- moment; this buffer is the extra safety margin that lets a no-show /
+  -- quality dispute be raised before the provider is paid (CERVICED already
+  -- has a no-show dispute flow). 24h is the user-confirmed value (2026-09-29);
+  -- change this one literal to retune it.
   v_dispute_hold interval := interval '24 hours';
 
   v_stripe_account_id text;
