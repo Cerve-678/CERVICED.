@@ -3049,6 +3049,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   tiktok: prev.tiktok || prefill.tiktok || '',
                   businessType: prev.businessType || prefilledBusinessType || '',
                   teamSize: prev.teamSize || prefilledTeamSize || '',
+                  // Optional at signup, staged on users.years_experience. Carried
+                  // through so the first save writes it to providers; edited
+                  // afterwards in Business Info. String form because the field
+                  // (and the hero preview) are string-typed.
+                  yearsExperience: prev.yearsExperience || (prefill.years_experience != null ? String(prefill.years_experience) : ''),
                   location: prev.location || prefill.location_text || '',
                   accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
                   languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),

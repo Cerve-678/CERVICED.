@@ -92,7 +92,60 @@ export const AVAILABILITY_OPTS  = ['Weekday mornings', 'Weekday afternoons', 'We
 // value as an extra chip rather than silently discarding it — never assume
 // every stored language appears here.
 export const LANGUAGE_OPTS      = ['English', 'Urdu', 'Punjabi', 'Polish', 'Arabic', 'French', 'Spanish', 'BSL', 'Bengali', 'Gujarati', 'Yoruba', 'Igbo', 'Twi/Akan', 'Somali', 'Portuguese', 'Mandarin', 'Hindi', 'Tamil', 'Turkish'];
+// The generic fallback list, also used for OTHER-category providers. Kept as
+// the base so anything importing STYLE_OPTS still resolves; the per-category
+// lists below are what ServicesPricingScreen actually renders.
 export const STYLE_OPTS         = ['Natural & minimal', 'Full glam', 'Edgy & creative', 'Classic & timeless', 'Bohemian', 'Bridal & romantic', 'Editorial & high-fashion'];
+
+/**
+ * Provider-level "style aesthetic" choices (providers.style_tags), tailored to
+ * the provider's service_category rather than one hair/makeup-flavoured list
+ * shown to every trade — a nail tech has no use for "Bohemian", and a lash
+ * artist thinks in "wispy / doll / cat-eye", not "Full glam".
+ *
+ * These are capitalized, client-facing labels stored whole in providers.style_tags
+ * (the provider-level claim). They are deliberately distinct from InfoRegScreen's
+ * lowercase per-SERVICE STYLE_TAGS_BY_CATEGORY — that vocabulary tags an
+ * individual service, this one describes the whole business. Modelled on the
+ * same category shapes so the two read as one product, not two taxonomies.
+ *
+ * A category with no entry (or an unknown/legacy value) falls back to STYLE_OPTS.
+ * ServicesPricingScreen additionally unions in any already-stored value so a
+ * provider never loses a tag chosen under the old generic list.
+ */
+export const STYLE_AESTHETIC_MAP: Record<string, string[]> = {
+  HAIR:       ['Natural & minimal', 'Sleek & polished', 'Lived-in & undone', 'Bohemian', 'Edgy & creative', 'Classic & timeless', 'Bridal & romantic', 'Editorial & high-fashion', 'Colour specialist'],
+  NAILS:      ['Natural & minimal', 'Intricate nail art', 'Bold & statement', 'Trend-led', 'Chrome & metallics', 'French-inspired', 'Classic & timeless', 'Bridal & occasion', 'Editorial & high-fashion'],
+  LASHES:     ['Natural & subtle', 'Wispy & textured', 'Full & dramatic', 'Doll & cat-eye', 'Classic & timeless', 'Bridal & occasion', 'Editorial & high-fashion'],
+  BROWS:      ['Natural & fluffy', 'Soft & feathered', 'Bold & defined', 'Sculpted & arched', 'Classic & timeless', 'Bridal & occasion', 'Editorial & high-fashion'],
+  MUA:        ['Natural & minimal', 'Full glam', 'Soft glam', 'Dewy & fresh', 'Bold & creative', 'Classic & timeless', 'Bridal & romantic', 'Editorial & high-fashion', 'SFX & character'],
+  AESTHETICS: ['Natural enhancement', 'Results-driven', 'Preventative & anti-ageing', 'Relaxing & restorative', 'Clinical & advanced', 'Holistic', 'Glow-up & event prep'],
+  OTHER:      STYLE_OPTS,
+};
+
+/** The generic products hint, used for OTHER-category and unknown values. */
+export const PRODUCTS_PLACEHOLDER_DEFAULT = 'e.g. the brands and products you work with...';
+
+/** Category-tailored hint for the free-text "Products & brands you use" field. */
+export const PRODUCTS_PLACEHOLDER_MAP: Record<string, string> = {
+  HAIR:       "e.g. Olaplex, KÉRASTASE, Redken, Wella, L'Oréal...",
+  NAILS:      'e.g. The GelBottle, Mylee, OPI, Gelish, CND...',
+  LASHES:     'e.g. Lash FX, London Lash, SL Lashes, Sugarlash...',
+  BROWS:      'e.g. Brow Code, HD Brows, Everlasting Brows, henna...',
+  MUA:        'e.g. Charlotte Tilbury, MAC, NARS, Huda Beauty...',
+  AESTHETICS: 'e.g. Dermalogica, ZO Skin Health, Environ, Obagi...',
+  OTHER:      PRODUCTS_PLACEHOLDER_DEFAULT,
+};
+
+/** Style-aesthetic options for a category, falling back to the generic list. */
+export function styleAestheticOptions(serviceCategory: string | null | undefined): string[] {
+  return (serviceCategory ? STYLE_AESTHETIC_MAP[serviceCategory] : undefined) ?? STYLE_OPTS;
+}
+
+/** Products placeholder for a category, falling back to the generic hint. */
+export function productsPlaceholder(serviceCategory: string | null | undefined): string {
+  return (serviceCategory ? PRODUCTS_PLACEHOLDER_MAP[serviceCategory] : undefined) ?? PRODUCTS_PLACEHOLDER_DEFAULT;
+}
 export const ACCESSIBILITY_OPTS = ['Wheelchair accessible', 'Parking available', 'Ground floor access', 'Home visits for mobility', 'Step-free entrance'];
 
 // NOTE: there is no SETTING_OPTS list here on purpose. The old "Where You

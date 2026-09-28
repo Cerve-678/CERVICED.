@@ -105,6 +105,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const [selectedServices, setSelectedServices] = useState<string[]>(data.serviceInterests);
   const [selectedLocation, setSelectedLocation] = useState<string>(data.location);
   const [selectedPriceRange, setSelectedPriceRange] = useState<typeof data.priceRange>(data.priceRange);
+  const [yearsExperience, setYearsExperience] = useState<string>(data.yearsExperience);
   const [selectedTeamSize, setSelectedTeamSize] = useState<typeof data.teamSize>(data.teamSize);
   const [selectedContactMethods, setSelectedContactMethods] = useState<string[]>(
     data.preferredContactMethods.length ? data.preferredContactMethods : ['in_app']
@@ -223,6 +224,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
         businessType: selectedBusinessType,
         serviceInterests: selectedServices,
         location: selectedLocation,
+        yearsExperience: yearsExperience.trim(),
         priceRange: selectedPriceRange,
         teamSize: selectedTeamSize,
         preferredContactMethods: selectedContactMethods,
@@ -522,6 +524,30 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               </View>
             </View>
 
+            {/* Years of experience (optional) */}
+            <View>
+              <Text style={[styles.sectionLabel, { color: t.text }]}>YEARS OF EXPERIENCE</Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>How long have you been working in your field? (optional)</Text>
+              <View style={[styles.textAreaWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                <TextInput
+                  style={[styles.yearsInput, { color: t.text }]}
+                  value={yearsExperience}
+                  onChangeText={v => {
+                    const digits = v.replace(/[^0-9]/g, '');
+                    // Clamp to the 0–80 range the users.years_experience CHECK
+                    // enforces, so an absurd value can't fail the whole signup
+                    // profile upsert at verification.
+                    setYearsExperience(digits && Number(digits) > 80 ? '80' : digits);
+                  }}
+                  placeholder="e.g. 5"
+                  placeholderTextColor={t.sub}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  returnKeyType="done"
+                />
+              </View>
+            </View>
+
             {/* Who you work with */}
             <View onLayout={(e: LayoutChangeEvent) => { teamSizeY.current = e.nativeEvent.layout.y; }}>
               <Text style={[styles.sectionLabel, { color: showErrors && !selectedTeamSize ? '#DC2626' : t.text }]}>
@@ -622,6 +648,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0.3,
     minHeight: 72,
+    padding: 0,
+  },
+  yearsInput: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 15,
+    letterSpacing: 0.3,
     padding: 0,
   },
   consentRow: {

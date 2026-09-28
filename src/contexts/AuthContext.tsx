@@ -93,6 +93,7 @@ interface AuthContextType {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
     dobDay?: string; dobMonth?: string; dobYear?: string;
     serviceInterests?: string[]; serviceLocations?: string[];
+    yearsExperience?: string;
     priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
     accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
     preferredPaymentMethods?: string[];
@@ -544,6 +545,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
       dobDay?: string; dobMonth?: string; dobYear?: string;
       serviceInterests?: string[]; serviceLocations?: string[];
+      yearsExperience?: string;
       priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
       accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
       preferredPaymentMethods?: string[];

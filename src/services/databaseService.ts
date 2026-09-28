@@ -7286,6 +7286,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   service_interests: string[] | null;
   service_locations: string[] | null;
   location_text: string | null;
+  years_experience: number | null;
   team_size: string | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
@@ -7298,7 +7299,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     .from("users")
     .select(
       "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
-        "service_interests, service_locations, location_text, team_size, accessibility_notes, languages_spoken, specialties, " +
+        "service_interests, service_locations, location_text, years_experience, team_size, accessibility_notes, languages_spoken, specialties, " +
         "price_range, preferred_contact_methods, preferred_payment_methods",
     )
     .eq("id", userId)
@@ -7320,6 +7321,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     service_interests: string[] | null;
     service_locations: string[] | null;
     location_text: string | null;
+    years_experience: number | null;
     team_size: string | null;
     accessibility_notes: string | null;
     languages_spoken: string[] | null;
@@ -7362,6 +7364,7 @@ export async function upgradeUserToProvider(
     dobYear?: string;
     serviceInterests?: string[];
     serviceLocations?: string[];
+    yearsExperience?: string;
     priceRange?: string;
     teamSize?: string;
     preferredContactMethods?: string[];
@@ -7395,6 +7398,11 @@ export async function upgradeUserToProvider(
         : {}),
       ...(extras?.serviceLocations?.length
         ? { service_locations: extras.serviceLocations }
+        : {}),
+      // Parsed to an INT — the users staging column is INT (mirrors
+      // providers.years_experience). A blank/NaN answer is left unstaged.
+      ...(extras?.yearsExperience && !Number.isNaN(parseInt(extras.yearsExperience, 10))
+        ? { years_experience: parseInt(extras.yearsExperience, 10) }
         : {}),
       ...(extras?.teamSize ? { team_size: extras.teamSize } : {}),
       ...(extras?.accessibilityNotes
