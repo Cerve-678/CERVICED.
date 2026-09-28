@@ -483,6 +483,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       'birthday_greeting',
       'post_appt_check_in',
       'rebooking_nudge',
+      'points_earned',
     ]);
     if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
       logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
@@ -683,6 +684,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
+    } else if (notification.type === 'points_earned') {
+      // Loyalty points earned — open the Rewards screen, which lives in the
+      // client Profile tab's stack. Client-only (already guarded above via
+      // CLIENT_ONLY_TYPES), so no provider branch is needed. Same dismiss-then-
+      // navigate-via-root-ref pattern as the other client deep-links.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+      }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
 
@@ -814,6 +823,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'points_earned':
+        return 'View Points';
       default:
         return 'View';
     }
