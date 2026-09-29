@@ -10,14 +10,15 @@
  *   ServicesPricingScreen   — specialties, clientele, pricing, style
  *   AboutYouScreen          — credentials, patch test, cities covered, access
  *   SchedulingScreen        — availability, booking rules, → working hours
- *   PaymentsScreen          — payment types, the whole deposit setup
  *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
  *
- * Scheduling and Payments came later than the original three: availability had
- * spread across ServicesPricing, Automations and the calendar, and payment
- * settings across ServicesPricing and Automations. Both now have one home.
+ * Scheduling came later than the original three: availability had spread
+ * across ServicesPricing, Automations and the calendar and now has one home.
  * Policies came later still, moved out of InfoRegScreen's one-shot editor.
+ * Payments (payment types, deposits and payouts) used to live here too; it
+ * moved up to Business Profile alongside Automations & Preferences so getting
+ * paid isn't buried a level down. It's still the same PaymentsScreen.
  *
  * Shared form primitives live in src/features/business-details/.
  */
@@ -114,16 +115,10 @@ export default function BusinessDetailsScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Scheduling')}
             C={C}
           />
-          <NavRow
-            icon="card-outline"
-            title="Payments"
-            subtitle="Payment types you accept & your deposit"
-            onPress={() => navigation.navigate('Payments')}
-            C={C}
-          />
 
           <Text style={[st.footnote, { color: C.sub }]}>
             Looking for reminders and client nudges? Those live in Automations & Preferences.
+            Payment types, deposits and payouts moved to Payments, alongside Automations.
           </Text>
         </ScrollView>
       </SafeAreaView>

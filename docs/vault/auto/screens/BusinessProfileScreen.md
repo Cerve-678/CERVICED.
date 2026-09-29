@@ -12,6 +12,7 @@ tags: [screen, provider]
 - [[BusinessDetailsScreen\|BusinessDetails]]
 - [[ProviderCommunicationsScreen\|Communications]]
 - [[ProviderAutomationsScreen\|Automations]]
+- [[PaymentsScreen\|Payments]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

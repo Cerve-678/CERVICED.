@@ -25,6 +25,30 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-09-29 (Stripe Connect payouts — 6 migrations)
+
+Applied via `apply_migration` (each stamped its own clock version) against the
+live project, frontier before was `20260928213516`. All verified against the
+live schema, not just trusted to have run. Files in this branch renamed to the
+recorded versions below. **This branch's MIGRATION_OWNER.md is behind `main`**
+(missing the loyalty/years-experience/pregnancy entries) — reconcile on merge;
+do not treat this list as the whole ledger.
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260929050150 | `stripe_connect_account_columns` | 4 `providers.stripe_*` columns present; `on_provider_stripe_change` AFTER-UPDATE trigger present; `check_and_set_provider_live` NOT modified (go-live gate deliberately not applied). ⚠️ Its `REVOKE UPDATE(col)` is a no-op — see guard migration below. |
+| 20260929050213 | `provider_refund_columns` | 3 `bookings.refunded_*` columns present. bookings RLS has no UPDATE policy, so clients can't write them regardless. |
+| 20260929050240 | `provider_payouts_ledger` | `provider_payouts` table + RLS on + owner-read policy + 2 key constraints (split-adds-up, one-per-booking-provider) + 4 indexes + updated_at trigger. |
+| 20260929050324 | `provider_payout_creation_trigger` | `create_held_payout_on_finalize()` SECURITY DEFINER, `search_path=public, pg_temp`; `on_booking_finalized_create_payout` trigger present. Reads the split (amount_paid/service_charge), never recomputes. |
+| 20260929050657 | `guard_provider_stripe_columns_server_only` | **NEW, not in original drafts.** BEFORE UPDATE trigger (`enforce_provider_stripe_columns_server_only`, SECURITY **INVOKER**) rejects a client-role write to any `stripe_*` column — the real enforcement the no-op REVOKE never gave. Verified functionally (rolled-back): authenticated own-row write to `stripe_charges_enabled` rejected with `check_violation`; service_role writes pass. |
+| 20260929052423 | `provider_payout_release_job` | `process_due_payouts()` SECURITY DEFINER; pg_cron job `release-due-payouts` `*/15 * * * *`. Short-circuits when nothing due. `release-payouts` edge fn deployed; vault `service_role_key` present. |
+
+**NOT applied, deliberately held:** `DRAFT_stripe_connect_gate_go_live.sql`
+(still DRAFT). It adds `stripe_charges_enabled = TRUE` to the go-live gate and
+would dark all 7 currently-live providers (0 onboarded). Apply ONLY after
+providers have onboarded via a shipped build carrying `STRIPE_CONNECT_PAYOUTS_
+ENABLED = true` — otherwise the marketplace goes dark with no way to onboard.
+
 ### Applied 2026-09-28 (loyalty points first-bonus rebalance)
 
 | Recorded version | Name | Verified live |
