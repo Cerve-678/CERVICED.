@@ -21,6 +21,17 @@
  *    supabase/MIGRATION_OWNER.md, "go-live now requires policies + payment"
  *    / "go-live now also requires a logo"). Never add anything here that
  *    the server doesn't also gate on, or the checklist starts lying again.
+ *    A SEVENTH blocking step, `stripe` (Stripe Connect payouts / KYC
+ *    complete), is emitted ONLY when STRIPE_CONNECT_PAYOUTS_ENABLED is on —
+ *    because its matching server gate (stripe_charges_enabled in
+ *    check_and_set_provider_live, DRAFT_stripe_connect_gate_go_live.sql) is
+ *    deliberately HELD until providers have onboarded (applying it darks
+ *    every not-yet-onboarded provider). The flag is the coordination point:
+ *    the checklist gains the step exactly when the flag is flipped, and the
+ *    flag must be flipped in the same rollout as applying that migration, or
+ *    the checklist would claim a block the DB doesn't yet enforce. While the
+ *    flag is off the checklist is byte-for-byte its pre-Stripe self. See the
+ *    auto-memory stripe-connect-payouts-build-handoff.
  *  - RECOMMENDED (`profile`, plus `portfolio`/`terms` for callers that
  *    supply them) is real setup worth finishing but that the server does
  *    not require to publish — writing an About/intro text, adding
@@ -45,6 +56,7 @@ import {
   hasMyProviderGoLiveAddress,
 } from '../../services/databaseService';
 import { resolveDepositMode } from '../../utils/depositPolicy';
+import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import type { DbProvider } from '../../types/database';
 
 export interface GoLiveStatus {
@@ -64,6 +76,17 @@ export interface GoLiveStatus {
   paymentSet: boolean;
   /** Blocking as of 2026-09-03 — same change, same day. */
   brandingSet: boolean;
+  /** Blocking, but conditional: `true`/`false` when the Stripe Connect
+   *  payouts feature is on (STRIPE_CONNECT_PAYOUTS_ENABLED), `undefined` when
+   *  it's off. Undefined omits the step entirely (buildGoLiveSteps only emits
+   *  it when the field is present), so the checklist matches the server gate,
+   *  which is likewise held while the feature is off. Value is
+   *  `providers.stripe_charges_enabled` — KYC complete, the account can be
+   *  paid. Derive it via deriveStripeGoLiveField so both fetch sites agree.
+   *  Explicitly `| undefined` (not merely optional): the fetch sites assign
+   *  the derived value unconditionally, and exactOptionalPropertyTypes
+   *  distinguishes "absent" from "present and undefined". */
+  stripeSet?: boolean | undefined;
   /** providers.has_gone_live, straight from the database. The authority on
    *  whether clients can actually find this provider — never re-derive it
    *  from the steps below. */
@@ -79,7 +102,7 @@ export interface GoLiveStatus {
 
 export type GoLiveStepKey =
   | 'profile' | 'schedule' | 'services' | 'address'
-  | 'policies' | 'payment' | 'logo' | 'portfolio' | 'terms';
+  | 'policies' | 'payment' | 'logo' | 'stripe' | 'portfolio' | 'terms';
 
 export interface GoLiveStep {
   key: GoLiveStepKey;
@@ -154,6 +177,20 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       blocking: true,
     },
   ];
+  // Blocking, but conditional on the Stripe Connect payouts feature being on
+  // (see the `stripeSet` doc on GoLiveStatus and the header comment). Kept
+  // adjacent to the money steps (policies/payment) it belongs with. When the
+  // field is undefined the feature is off and no Stripe step exists at all —
+  // exactly as it was before Stripe, and matching the held server gate.
+  if (status.stripeSet !== undefined) {
+    steps.push({
+      key: 'stripe',
+      label: 'Set up Stripe payouts',
+      done: status.stripeSet,
+      required: true,
+      blocking: true,
+    });
+  }
   // Recommended, Profile-Health-only — see the `portfolioSet`/`termsSet`
   // doc comment on GoLiveStatus for why these are conditional rather than
   // always present.
@@ -268,6 +305,17 @@ export function deriveRecommendedGoLiveFields(profile: DbProvider): {
   };
 }
 
+/** The Stripe go-live field, or `undefined` when the payouts feature is off.
+ *  Read straight off the provider row (providers.stripe_charges_enabled is a
+ *  select('*') column) so no caller pays an extra query. `undefined` while
+ *  STRIPE_CONNECT_PAYOUTS_ENABLED is off makes buildGoLiveSteps omit the step
+ *  entirely, keeping the checklist identical to its pre-Stripe self and in
+ *  step with the held server gate. Shared by both fetch sites (fetchGoLiveStatus
+ *  and ProviderHomeScreen's focus fetch) so they can never disagree. */
+export function deriveStripeGoLiveField(profile: DbProvider): boolean | undefined {
+  return STRIPE_CONNECT_PAYOUTS_ENABLED ? profile.stripe_charges_enabled === true : undefined;
+}
+
 /**
  * Read the calling provider's live status in one pass.
  *
@@ -307,6 +355,7 @@ export async function fetchGoLiveStatus(
     addressSet,
     ...deriveRecommendedGoLiveFields(profile),
     brandingSet: !!profile.logo_url,
+    stripeSet: deriveStripeGoLiveField(profile),
     isLive: !!profile.has_gone_live,
   };
 }

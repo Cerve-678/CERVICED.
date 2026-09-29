@@ -84,10 +84,11 @@ Curated: [[Payments]] · **114 files**
 - `src/contexts/BookingContext.tsx` _(100)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/features/bookings/receipt.ts` _(64)_
+- `src/types/database.ts` _(52)_
 - `src/features/bookings/paymentPresentation.ts` _(50)_
+- `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(44)_
 - `src/screens/client/BookingDetailScreen.tsx` _(41)_
-- `src/types/database.ts` _(40)_
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(37)_
@@ -104,7 +105,6 @@ Curated: [[Payments]] · **114 files**
 - `src/services/becca/capabilities/provider.ts` _(23)_
 - `src/screens/auth/SignUpStep4Screen.tsx` _(21)_
 - `src/screens/provider/PoliciesScreen.tsx` _(21)_
-- `src/services/stripeService.ts` _(21)_
 - … +84 more
 
 ## Booking flow
@@ -179,8 +179,8 @@ Curated: [[Notifications]] · **148 files**
 Curated: [[Provider Onboarding & Go-Live]] · **74 files**
 - `src/services/databaseService.ts` _(70)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(58)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(49)_
-- `src/features/providers/goLiveStatus.ts` _(35)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(52)_
+- `src/features/providers/goLiveStatus.ts` _(46)_
 - `src/screens/provider/InfoRegScreen.tsx` _(31)_
 - `src/contexts/RegistrationContext.tsx` _(27)_
 - `src/services/providerRegistrationService.ts` _(27)_

@@ -69,6 +69,7 @@ import {
   buildGoLiveSteps,
   buildGoLiveHeadline,
   deriveRecommendedGoLiveFields,
+  deriveStripeGoLiveField,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
@@ -374,6 +375,9 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
   policies: 'Policies',
   payment: 'Payments',
   logo: 'Branding',
+  // The "Set up payouts" card lives on PaymentsScreen (same screen as the
+  // deposit/payment options step above).
+  stripe: 'Payments',
   portfolio: 'EditProfile',
   terms: 'EditProfile',
 };
@@ -1467,6 +1471,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           addressSet: goLiveAddress,
           ...deriveRecommendedGoLiveFields(profile),
           brandingSet: !!profile.logo_url,
+          // Same source and flag-gating as fetchGoLiveStatus — undefined while
+          // the payouts feature is off, so no Stripe step appears (matching the
+          // held server gate). profile is a select('*') row, so the column is
+          // present without an extra read.
+          stripeSet: deriveStripeGoLiveField(profile),
           isLive: !!profile.has_gone_live,
         });
 
