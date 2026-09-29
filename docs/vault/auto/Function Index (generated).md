@@ -5,7 +5,7 @@
 
 #generated
 
-**2112 functions** across **273 files**.
+**2131 functions** across **274 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -193,7 +193,7 @@
 - `PoliciesScreen.tsx` — flash · handlePickPolicyImage · handleRemovePolicyImage · handleSave · Pills · PoliciesScreen · setPolicy
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
-- `ProviderAnalyticsScreen.tsx` — accentColor · AnimatedFillBar · AnimatedNumber · AnimatedPath · bookingServiceMap · chartData · CompletionRing · currentMonthKey · DeckCard · fetchBookingsForRange · fetchSupportingMetrics · fmtGBP · handlePress · inRange · kpi · LivePulse · monthKey · monthlyRatings · months · monthsAgo · onRefresh · pressIn · pressOut · PressScale · prevMonthKey · ProviderAnalyticsScreen · quadChartWidth · quadWidth · RangeSelector · ranked · RatingAnalytics · ratingChartWidth · recent · RecentStream · Reveal · RevenueChart · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · StatTile · tileWidth · topServices · TopServices · totalForBookings
+- `ProviderAnalyticsScreen.tsx` — accentColor · AnimatedFillBar · AnimatedNumber · AnimatedPath · bookingServiceMap · bucketNoun · buildInsight · chartData · CompletionRing · DeckCard · fetchBookingsForRange · fetchSupportingMetrics · fmtGBP · handlePress · hasCompletedInRange · inRange · InsightStrip · insightText · kpi · LivePulse · maxBarIndex · monthKey · monthlyRatings · months · monthsAgo · onRefresh · period · pressIn · pressOut · PressScale · prevPeriod · ProviderAnalyticsScreen · quadChartWidth · quadWidth · RangeSelector · ranked · RatingAnalytics · ratingChartWidth · recent · RecentStream · Reveal · RevenueChart · revenueOf · reviewsInRange · SectionLabel · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · StatTile · tileWidth · topServices · TopServices · totalForBookings
 - `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · PlatformBadge · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
 - `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · buildInvoiceHTML · cancelBooking · canDispute · catLabel · chipRow · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · CR · displayDuration · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · handleSubmitDispute · isAddressReleased · parseMin · Perf · ProviderBookingDetailScreen · refreshBookingStatus · releaseAddressNow · relevantInfoPacks · Row · s · show · to12 · toggleInitTime · updateBookingStatus
 - `ProviderBookingHistoryScreen.tsx` — agendaSort · BookingCard · counts · fetchBookings · fetchUnreadMessages · fetchWaitlist · filterBookings · fmtDayLabel · fmtMoney · fmtTime · handleComplete · handleConfirmInvite · handleHistoryFilterPress · handleTabPress · isHistoryStatus · items · matchesHistoryFilter · onRefresh · openInvitePicker · pendingCount · PendingPill · ProviderBookingHistoryScreen · rescheduleRequestCount · rescheduleRequestRows · SkeletonList · statusFor · waitlistCount
@@ -259,9 +259,10 @@
 ### `src/types/` (1)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 
-### `src/utils/` (30)
+### `src/utils/` (31)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
+- `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `cartUtils.ts` — **getCartSummary**

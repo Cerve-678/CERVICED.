@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `Analytics`
 
 ## → Navigates to
-- [[ProviderBookingHistoryScreen\|BookingHistory]]
+- [[ProviderClienteleScreen\|Clientele]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map
