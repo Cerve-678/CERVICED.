@@ -119,7 +119,7 @@ export type ProviderBeccaStackParamList = {
   AddBooking: undefined;
   Clientele: undefined;
   ProviderInbox:
-    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | { initialFilter?: "messages" | "queries" }
     | undefined;
   ProviderConversation: {
     conversationId: string;
@@ -207,7 +207,9 @@ export type ProviderHomeStackParamList = {
   // jumpToDate: set after AddBookingScreen creates a booking outside "today",
   // so the calendar opens straight to the day it was added on instead of
   // silently leaving the provider on whatever day they already had selected.
-  ProviderHomeMain: { jumpToDate?: string } | undefined;
+  // viewMode: lets a caller (the daily-recap notification) open the calendar
+  // straight into the list view rather than whichever mode was last used.
+  ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
   ProviderSchedule: undefined;
   AddBooking: undefined;
   // Reachable from the Calendar tab's profile quick-actions. Registered here
@@ -218,7 +220,10 @@ export type ProviderHomeStackParamList = {
   Branding: undefined;
   Policies: undefined;
   Payments: undefined;
-  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; groupSiblings?: any[] };
+  // fromRescheduleRequest: set when opened from a reschedule-request notification,
+  // so the screen can say so if that request is no longer open, instead of
+  // quietly offering a fresh "propose new times" sheet for a request that's gone.
+  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; fromRescheduleRequest?: boolean; groupSiblings?: any[] };
   ProviderIntakeForm:
     | {
         bookingId: string;
@@ -234,7 +239,7 @@ export type ProviderHomeStackParamList = {
     | undefined;
   Notifications: undefined;
   ProviderInbox:
-    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | { initialFilter?: "messages" | "queries" }
     | undefined;
   ProviderConversation: {
     conversationId: string;
@@ -307,7 +312,7 @@ export type ProviderAccountStackParamList = {
     | { openTerms: true }
     | undefined;
   ProviderInbox:
-    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | { initialFilter?: "messages" | "queries" }
     | undefined;
   ProviderConversation: {
     conversationId: string;

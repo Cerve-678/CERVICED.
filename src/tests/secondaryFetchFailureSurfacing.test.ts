@@ -35,8 +35,8 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
 
       expect(source).not.toContain("logger.error('[ProviderInbox] load conversations failed:', err)");
       expect(source).toContain('const [loadError,     setLoadError]     = useState<string | null>(null)');
-      // Both halves feed one banner: either failing means the list is partial.
-      expect(source).toContain('Promise.allSettled([');
+      // A failed load raises the banner instead of rendering as an empty list.
+      expect(source).toContain("'[ProviderInbox] load failed'");
       expect(source).toContain("Couldn't load your inbox");
     });
   });

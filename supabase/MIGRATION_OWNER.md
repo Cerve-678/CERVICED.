@@ -49,6 +49,197 @@ would dark all 7 currently-live providers (0 onboarded). Apply ONLY after
 providers have onboarded via a shipped build carrying `STRIPE_CONNECT_PAYOUTS_
 ENABLED = true` — otherwise the marketplace goes dark with no way to onboard.
 
+### Applied 2026-09-28 (loyalty points first-bonus rebalance)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260928201412 | `loyalty_points_first_bonus_rebalance` | `award_points_on_booking_completed()` and `award_points_on_review_left()` reproduced from the verified-live `pg_get_functiondef()` (identical to `20260906174647`, no drift) with only three deltas changed: `first_booking` 200→100 (and its inline `(+100)` notification line), `first_review` 10→50, `review_left` 4→2. Post-apply re-fetch confirmed: first_booking=100, booking notif says `(+100)`, `booking_completed` still +2, `birthday_bonus` still +50, first_review v_delta=50, later-review v_delta=2, and `SET search_path` intact on both functions. `returning_client` (+30) and `profile_completed` (+30) left untouched. App-side `PointsScreen.tsx` earn copy updated to match (First Booking +100, First Review +50, Leave a Review +2). Filename renamed from authored `20260928000000` to the recorded version. Frontier before apply was `20260925221735`. |
+
+### Applied 2026-09-14 (client_bookings exposes booking_ref)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260914031215 | `client_bookings_expose_booking_ref` | `booking_ref` present on `public.client_bookings` at ordinal position 49 (appended, per the view's append-only constraint); every other column unchanged from the last live definition (`20260827161000`, 48 columns, confirmed via `information_schema.columns` before applying). 5 sampled live bookings returned identical `booking_ref` via `bookings` and via `client_bookings`. |
+
+Closes the gap `formatBookingRef()` and its test (`src/tests/bookingReference.test.ts`) already
+anticipated: `20260827153834` added `bookings.booking_ref` but never added it to
+`client_bookings`, which lists its columns explicitly rather than `b.*`. Since that column is
+backfilled + NOT NULL, every client-side read fell back to the old `id.slice(0,8)` truncation on
+every booking — the same appointment read `CRV-4B2X9K7M` to the provider and `34E82C04` to the
+client. Purely additive (a new SELECT column + matching GRANT), so it could not have reverted
+concurrent work in either order.
+
+Frontmost live migration before this was `20260914025249`
+(`replace_provider_services_writes_service_category`), confirmed via
+`SELECT max(version) FROM supabase_migrations.schema_migrations` before applying; nothing between
+`20260827161000` and the frontier redefines `client_bookings` (checked via
+`grep -l 'client_bookings' supabase/migrations/*.sql`). Renamed from its authored `20260914143000`
+to the version `apply_migration` actually recorded, per the standing gotcha.
+
+### Applied 2026-09-14 (service skin-tone suitability)
+
+`20260913234413_service_skin_tone_suitability.sql` adds nullable
+`services.skin_tones_suitable` with the Fair/Light/Medium/Tan/Deep/Rich constraint.
+Patches the current `replace_provider_services` definition, preserving existing
+ownership checks and execute grants. Older payloads that omit the field retain
+saved selections; explicit empty arrays clear them. No existing suitability was
+inferred or backfilled. The local CLI filename was renamed to the recorded version.
+
+Verified live with a rolled-back transaction: RPC save/readback, preservation
+through an older payload, clearing, invalid-value rejection and foreign-owner
+rejection all passed. Column, constraint and unchanged authenticated/service-role
+execute grants were checked separately. Frontmost live migration before this was
+`20260908105737` (the multi-service column is already present live).
+
+### BLOCKED — `service_type_cooldown_covers_the_whole_set` is NOT applied
+
+**`feat/multi-select-service-type-chips` must not merge until this lands.**
+Its sibling `provider_multiple_service_types` **is** applied (below), and that
+pairing is precisely the state the blocked file's own header warns about: with
+`service_categories` live but the widened guard/cascade missing, an UPDATE that
+writes only the array
+
+1. **bypasses the 90-day cooldown** — `providers_service_category_cooldown` (a)
+   fires before `trg_sync_provider_service_categories` (t), so it sees an
+   unchanged headline, waves the write through and re-pins the stamp from OLD;
+   the sync trigger only then moves the headline. The window can be reset at
+   will by writing the array instead of the scalar.
+2. **skips the portfolio cascade** — `providers_service_category_cascade` is
+   still `AFTER UPDATE OF service_category` only, so a HAIR->NAILS provider
+   keeps every photo filed under Hair.
+
+Not currently reachable: `git grep service_categories` finds writers **only**
+on `feat/multi-select-service-type-chips`, which is unmerged — `main`,
+`design/email-redesign` and this branch have none. So the holes open the moment
+that branch ships, not before.
+
+Why it is unapplied: two `apply_migration` attempts on 2026-09-08 were refused
+by the Claude Code auto-mode permission classifier (the cascade body's
+`delete from public.provider_specialties`). Not a SQL error — the file was
+never sent to Postgres. It needs a session where that call is permitted.
+
+Also note for whoever owns that branch: its two files are still named for
+wall-clock placeholders. `20260908090000_provider_multiple_service_types.sql`
+was **recorded as `20260908002113`** and should be renamed to match; the
+cooldown file must then be numbered above it, not at `20260908090100`.
+
+### Applied 2026-09-08 (checkout snapshots + plural service types)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908001701 | `checkout_writes_provider_category_and_says_when` | Renamed from its authored `20260908120000`. The zero-row query in the file's own verification (snapshot equal to `services.category_name` yet differing from `providers.service_category`) returns **0 rows**, so the backfill caught every row the bug wrote. All three functions re-checked `SECURITY DEFINER` with `search_path` intact: `prepare_checkout` and `finalize_checkout` at `public, pg_temp`, `claim_cart_booking_slots` at `public`. The body recorded in `schema_migrations` hashes **identical** to the file (md5 `9d971e3b…`, trailing newline stripped), so nothing was dropped or paraphrased in transit. |
+| 20260908002113 | `provider_multiple_service_types` | Applied from `feat/multi-select-service-type-chips` at the user's request; authored there as `20260908090000`. Live: `providers.service_categories text[] NOT NULL DEFAULT '{}'` and `services.service_category text` both present; **0** providers with an empty set, **0** with `service_categories[1]` desynced from the headline, **0** of 53 services left untyped; `providers_service_categories_check` present and `convalidated = true`; both triggers (`trg_sync_provider_service_categories`, `trg_default_service_category`) and both indexes (`providers_service_categories_gin`, `services_service_category_idx`) created. **Its follow-up is blocked — see above.** |
+
+Neither collides with the other: `provider_multiple_service_types` keeps
+`providers.service_category` a scalar headline alongside the new array and does
+not redefine any checkout function, so applying it second did not revert the
+checkout fix. The two migrations were confirmed non-overlapping by reading both
+in full before either was applied.
+
+Latent issue spotted while reading `provider_multiple_service_types`, not fixed
+here because the file is another branch's to change:
+`sync_provider_service_categories()` is a `BEFORE INSERT OR UPDATE` trigger
+whose `ELSIF` arm reads `OLD.service_category`. On an INSERT that supplies a
+non-empty `service_categories` whose first element differs from
+`service_category`, that arm is reached with `OLD` unassigned and will raise.
+Today's inserts leave the array at its `'{}'` default and take the first arm
+instead, so nothing hits it yet — but the chips branch's own writers should be
+checked against it before merge.
+
+### Applied 2026-09-07 (cart reservations remain private)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260907153528 | `own_cart_holds_never_block_their_owner` | The caller's own cart holds are excluded from their busy spans; a retry clears only that caller's stranded cart holds, guarded against transactions/reviews. |
+| 20260907153537 | `private_cart_holds_never_become_bookings` | `expire_waitlist_holds()` now selects waitlist holds only; `cancel_checkout()` deletes owner-scoped cart holds; 3 historical “Reserving…” rows and 6 linked notifications were safely removed. Post-apply counts: 0 phantom rows, 0 linked notifications. |
+
+`finalize-payment-intent` version 10 was deployed with JWT verification on and
+routes Stripe cancellation through the authenticated `cancel_checkout()` RPC;
+it no longer promotes cart holds with a service-role booking update.
+
+The app-side half of that fix (CartScreen's `abandonOutstandingCheckout`) is
+already in the working tree and does not depend on this migration; the
+migration covers the exits the app cannot observe (crash, force-quit, dev
+reload, dead network).
+
+### Applied 2026-09-08 (reschedule offer says accept or decline)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908105737 | `reschedule_offer_says_accept_or_decline` | Renamed from its authored placeholder `20260908140000`. Copy-only change to `handle_reschedule_request_change()`. Body reproduced from the LIVE `pg_get_functiondef`, **not** from `20260808181219_reschedule_flow_completion.sql`, which has drifted (the live body carries `20260809205845`'s group handling and writes `NEW.booking_id` where the file writes `NEW.id`) — applying from the file would have reverted the group-dedup fix. |
+
+Verified by comparing structural counts in `prosrc` before and after: 10
+`INSERT INTO public.notifications`, 4 `'reschedule_request'`, 2
+`'reschedule_provider_response'`, 2 `'reschedule_confirmed'`, 2
+`'reschedule_declined'`, 5 `NEW.response_note` and 6 `v_representative_id` —
+all **unchanged**, so no branch was dropped in transcription. The old copy is
+gone (`has proposed new times` and `has shared available dates` both 0) and the
+new call to action appears 4 times. `prosecdef = true`,
+`search_path=public, pg_temp`, and `on_reschedule_request_changed` still bound.
+The body recorded in `schema_migrations` hashes identical to the file
+(md5 `98113ec8…`).
+
+Note this file is tracked in git and therefore **per-branch**: this copy does
+not carry the other 2026-09-08 entries recorded on
+`fix/checkout-snapshots-and-notification-detail` and
+`fix/provider-name-trailing-whitespace`. Reconcile on merge. The live frontier
+at the time of this apply was `20260908104927`.
+
+### BLOCKED — `service_type_cooldown_covers_the_whole_set` is NOT applied
+
+**`feat/multi-select-service-type-chips` must not merge until this lands.**
+Its sibling `provider_multiple_service_types` **is** applied (below), and that
+pairing is precisely the state the blocked file's own header warns about: with
+`service_categories` live but the widened guard/cascade missing, an UPDATE that
+writes only the array
+
+1. **bypasses the 90-day cooldown** — `providers_service_category_cooldown` (a)
+   fires before `trg_sync_provider_service_categories` (t), so it sees an
+   unchanged headline, waves the write through and re-pins the stamp from OLD;
+   the sync trigger only then moves the headline. The window can be reset at
+   will by writing the array instead of the scalar.
+2. **skips the portfolio cascade** — `providers_service_category_cascade` is
+   still `AFTER UPDATE OF service_category` only, so a HAIR->NAILS provider
+   keeps every photo filed under Hair.
+
+Not currently reachable: `git grep service_categories` finds writers **only**
+on `feat/multi-select-service-type-chips`, which is unmerged — `main`,
+`design/email-redesign` and this branch have none. So the holes open the moment
+that branch ships, not before.
+
+Why it is unapplied: two `apply_migration` attempts on 2026-09-08 were refused
+by the Claude Code auto-mode permission classifier (the cascade body's
+`delete from public.provider_specialties`). Not a SQL error — the file was
+never sent to Postgres. It needs a session where that call is permitted.
+
+Also note for whoever owns that branch: its two files are still named for
+wall-clock placeholders. `20260908090000_provider_multiple_service_types.sql`
+was **recorded as `20260908002113`** and should be renamed to match; the
+cooldown file must then be numbered above it, not at `20260908090100`.
+
+### Applied 2026-09-08 (checkout snapshots + plural service types)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908001701 | `checkout_writes_provider_category_and_says_when` | Renamed from its authored `20260908120000`. The zero-row query in the file's own verification (snapshot equal to `services.category_name` yet differing from `providers.service_category`) returns **0 rows**, so the backfill caught every row the bug wrote. All three functions re-checked `SECURITY DEFINER` with `search_path` intact: `prepare_checkout` and `finalize_checkout` at `public, pg_temp`, `claim_cart_booking_slots` at `public`. The body recorded in `schema_migrations` hashes **identical** to the file (md5 `9d971e3b…`, trailing newline stripped), so nothing was dropped or paraphrased in transit. |
+| 20260908002113 | `provider_multiple_service_types` | Applied from `feat/multi-select-service-type-chips` at the user's request; authored there as `20260908090000`. Live: `providers.service_categories text[] NOT NULL DEFAULT '{}'` and `services.service_category text` both present; **0** providers with an empty set, **0** with `service_categories[1]` desynced from the headline, **0** of 53 services left untyped; `providers_service_categories_check` present and `convalidated = true`; both triggers (`trg_sync_provider_service_categories`, `trg_default_service_category`) and both indexes (`providers_service_categories_gin`, `services_service_category_idx`) created. **Its follow-up is blocked — see above.** |
+
+Neither collides with the other: `provider_multiple_service_types` keeps
+`providers.service_category` a scalar headline alongside the new array and does
+not redefine any checkout function, so applying it second did not revert the
+checkout fix. The two migrations were confirmed non-overlapping by reading both
+in full before either was applied.
+
+Latent issue spotted while reading `provider_multiple_service_types`, not fixed
+here because the file is another branch's to change:
+`sync_provider_service_categories()` is a `BEFORE INSERT OR UPDATE` trigger
+whose `ELSIF` arm reads `OLD.service_category`. On an INSERT that supplies a
+non-empty `service_categories` whose first element differs from
+`service_category`, that arm is reached with `OLD` unassigned and will raise.
+Today's inserts leave the array at its `'{}'` default and take the first arm
+instead, so nothing hits it yet — but the chips branch's own writers should be
+checked against it before merge.
+
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
 | Recorded version | Name | Verified live |

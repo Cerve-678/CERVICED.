@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,6 +11,15 @@ import {
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { tabBarClearance } from '../utils/tabBarGeometry';
+
+// The toast is anchored to the bottom edge, and the floating tab bar is an
+// overlay the Tab.Navigator draws on top of every nested screen — so a toast
+// seated near the bottom lands *behind* the bar and is clipped. Seat it above
+// the bar's footprint (its own value, not the component's, to avoid importing
+// the whole tab-bar component here). Screens with no tab bar just show it a
+// little higher, which reads fine.
+const TOAST_BOTTOM = tabBarClearance(Platform.OS === 'android');
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -68,7 +78,7 @@ function Toast({ message, type, visible, isDarkMode, accent, text }: ToastState 
 const toastSt = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    bottom: 36,
+    bottom: TOAST_BOTTOM,
     left: 20,
     right: 20,
     zIndex: 9999,
@@ -305,9 +315,8 @@ const dlgSt = StyleSheet.create({
 });
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
-// Client-facing equivalent of useProviderDialog (src/components/ProviderDialog.tsx).
-// Themed via the app's light/dark ThemeContext instead of the provider side's
-// fixed palette, since clients shouldn't see provider branding.
+// The app's single dialog + toast system, used by both hats. Colour comes from
+// useTheme().palette, which is hat-aware — never the raw `theme` field.
 
 export function useAppDialog() {
   const { palette, isDarkMode } = useTheme();

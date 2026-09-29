@@ -30,6 +30,10 @@ import { BookingProvider } from './src/contexts/BookingContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { RegistrationProvider } from './src/contexts/RegistrationContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
+import {
+  StatusBarTintProvider,
+  useStatusBarTint,
+} from './src/contexts/StatusBarTintContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
@@ -117,11 +121,19 @@ function AppContent() {
   return <AppNavigator />;
 }
 
+// Tinted to match whatever is actually behind it. Screens with a dark top edge
+// (a provider's Black profile hero, say) claim it via useDarkTopArea(); every
+// other screen keeps the original light strip with dark icons.
 function StatusBarBlur() {
+  const isDarkTopArea = useStatusBarTint();
   return (
     <>
-      <StatusBar style="dark" />
-      <BlurView intensity={20} tint="light" style={styles.statusBarBlur} />
+      <StatusBar style={isDarkTopArea ? 'light' : 'dark'} />
+      <BlurView
+        intensity={20}
+        tint={isDarkTopArea ? 'dark' : 'light'}
+        style={styles.statusBarBlur}
+      />
     </>
   );
 }
@@ -213,13 +225,15 @@ export default Sentry.wrap(function App() {
                   >
                     <CartProvider>
                       <BookingProvider>
-                        <View
-                          style={styles.container}
-                          onLayout={onLayoutRootView}
-                        >
-                          <StatusBarBlur />
-                          <AppContent />
-                        </View>
+                        <StatusBarTintProvider>
+                          <View
+                            style={styles.container}
+                            onLayout={onLayoutRootView}
+                          >
+                            <StatusBarBlur />
+                            <AppContent />
+                          </View>
+                        </StatusBarTintProvider>
                       </BookingProvider>
                     </CartProvider>
                   </StripeProvider>

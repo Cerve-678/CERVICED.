@@ -28,6 +28,8 @@ import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
+import { useAppDialog } from '../../components/AppDialog';
+import { getRescheduleBlock, getStaleRequestBlock } from '../../utils/rescheduleBlockedReason';
 import { AvailabilityService, BackToBackSlot } from '../../services/AvailabilityService';
 import {
   getActiveRescheduleRequest,
@@ -233,10 +235,11 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
   const { user, hatState } = useAuth();
   const activeMode = hatState.active;
-  const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule } = route.params;
+  const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule, fromRescheduleRequest } = route.params;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
+  const { showAlert, DialogHost } = useAppDialog();
   // Deliberately NOT wired to BookingContext: that cache is the client hat's
   // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
   // come from the client_bookings view where the address is masked until
@@ -258,6 +261,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const [dbReschedule, setDbReschedule] = useState<DbBookingRescheduleRequest | null>(null);
+  // Whether the request lookup has come back. An old reschedule notification
+  // can only be judged "no longer open" once we know there's genuinely no open
+  // request — before that, dbReschedule is null simply because it's loading.
+  const [rescheduleLookup, setRescheduleLookup] = useState<'loading' | 'done' | 'failed'>('loading');
   // `status` is a MAPPED BookingStatus, never a raw DB string — it is merged
   // straight into booking.status, which the screen compares against
   // BookingStatus members. Typed as such so a raw 'confirmed' can't slip in.
@@ -411,8 +418,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   useEffect(() => {
     if (!bookingId) return;
     getActiveRescheduleRequest(bookingId)
-      .then(r => setDbReschedule(r))
-      .catch((err) => logger.error('[ProviderBookingDetail] reschedule request load failed:', err));
+      .then(r => { setDbReschedule(r); setRescheduleLookup('done'); })
+      .catch((err) => { logger.error('[ProviderBookingDetail] reschedule request load failed:', err); setRescheduleLookup('failed'); });
   }, [bookingId]);
 
   // Realtime: keep reschedule state + booking date/time in sync while screen is open.
@@ -596,25 +603,33 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const openRescheduleHandled = useRef(false);
   useEffect(() => {
     if (!openReschedule || openRescheduleHandled.current || !booking) return;
+    // From an old reschedule notification, wait for the request lookup: "no
+    // open request" can't be told apart from "not loaded yet" until it returns.
+    if (fromRescheduleRequest && rescheduleLookup === 'loading') return;
     openRescheduleHandled.current = true;
-    navigation.setParams({ openReschedule: undefined } as never);
-    // Mirrors the manual Reschedule button's own gate (UPCOMING only,
-    // IN_PROGRESS also allowed here since that's a valid reschedule target
-    // too) — a pending/completed/cancelled booking isn't "rescheduled", so
-    // silently doing nothing for those would look like a dead button rather
-    // than a deliberate rule.
-    if (booking.status !== BookingStatus.UPCOMING && booking.status !== BookingStatus.IN_PROGRESS) {
-      Alert.alert(
-        'Can’t reschedule yet',
-        booking.status === BookingStatus.PENDING
-          ? 'This booking is still pending confirmation — confirm or decline it first.'
-          : 'This booking can no longer be rescheduled.'
-      );
+    navigation.setParams({ openReschedule: undefined, fromRescheduleRequest: undefined } as never);
+    // An old notification can outlive the booking it pointed at, and the
+    // request it was about. Say what actually happened — cancelled, finished,
+    // date passed, or the request already answered/closed — rather than a
+    // generic refusal. getRescheduleBlock owns the booking-level precedence;
+    // the request check only applies once the booking itself is fine. Shown in
+    // the app's own bottom sheet, not the system alert.
+    const block =
+      getRescheduleBlock(booking.status, booking.bookingDate, booking.bookingTime) ??
+      (fromRescheduleRequest && rescheduleLookup === 'done'
+        ? getStaleRequestBlock(
+            'provider',
+            dbReschedule?.status === 'pending' || dbReschedule?.status === 'provider_responded' ? dbReschedule.status : null,
+            booking.customerName ?? 'the client',
+          )
+        : null);
+    if (block) {
+      showAlert(block.title, block.message);
       return;
     }
     const openGroup = groupSiblings.length > 1;
     setTimeout(() => (openGroup ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true)), 260);
-  }, [openReschedule, booking, groupSiblings.length, navigation]);
+  }, [openReschedule, fromRescheduleRequest, rescheduleLookup, dbReschedule, booking, groupSiblings.length, navigation, showAlert]);
 
   const updateBookingStatus = useCallback(async (id: string, status: BookingStatus) => {
     const dbStatus = PROVIDER_BOOKING_DB_STATUS[status];
@@ -2882,6 +2897,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           </View>
         </View>
       </Modal>
+      <DialogHost />
     </View>
   );
 }

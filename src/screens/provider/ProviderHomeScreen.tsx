@@ -711,6 +711,9 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
 // have to share the width a single day timeline gets to itself.
 const WK_HOUR_H     = 56;
 const WK_TIME_COL_W = 44;
+// Right-hand spacer in both the day-header row and the grid; the header's
+// "next week" arrow lives in it so the columns stay pixel-aligned.
+const WK_ARROW_COL_W = 32;
 // Headroom above the first hour line, mirroring the day timeline's own
 // TL_TOP_INSET — and the same generous +80 buffer it adds beyond the raw
 // hours height, so the ScrollView's reported content size actually covers
@@ -738,16 +741,6 @@ function shiftDateString(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
   return formatDateString(d);
-}
-
-function weekRangeLabel(weekDates: string[]): string {
-  const [fy, fm, fd] = weekDates[0]!.split('-').map(Number);
-  const [ly, lm, ld] = weekDates[6]!.split('-').map(Number);
-  const fMon = MONTH_NAMES[fm! - 1]!.slice(0, 3);
-  const lMon = MONTH_NAMES[lm! - 1]!.slice(0, 3);
-  if (fy === ly && fm === lm) return `${fMon} ${fd} – ${ld}`;
-  if (fy === ly) return `${fMon} ${fd} – ${lMon} ${ld}`;
-  return `${fMon} ${fd}, ${fy} – ${lMon} ${ld}, ${ly}`;
 }
 
 interface WeekViewProps {
@@ -818,25 +811,24 @@ function WeekView({
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Week navigation — arrows page a week at a time. A swipe gesture on
-          the grid was tried here too, but a PanResponder wrapping the
-          ScrollView made its own vertical scroll feel broken even when
-          gated to horizontal drags, so arrows are the only way to page. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, paddingBottom: 6 }}>
-        <TouchableOpacity onPress={goPrevWeek} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
-          <Ionicons name="chevron-back" size={18} color={P.sub} />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: P.sub }}>{weekRangeLabel(weekDates)}</Text>
-        <TouchableOpacity onPress={goNextWeek} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
-          <Ionicons name="chevron-forward" size={18} color={P.sub} />
-        </TouchableOpacity>
-      </View>
-
       {/* Day headers, aligned with the columns below — same date-circle
           treatment as the date strip and month grid so "selected" and
-          "today" read the same way in every view. */}
+          "today" read the same way in every view. The week arrows sit at
+          either end of this row, in the time gutter and in a spacer the grid
+          mirrors, so paging a week needs no row of its own. Arrows are the
+          only way to page: a swipe gesture on the grid was tried, but a
+          PanResponder wrapping the ScrollView made its own vertical scroll
+          feel broken even when gated to horizontal drags. */}
       <View style={{ flexDirection: 'row', marginHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: P.border }}>
-        <View style={{ width: WK_TIME_COL_W }} />
+        {/* Bottom-aligned with a 5px lift: the date circle is 36 tall and the
+            arrow 26, so this centres the arrow on the numbers whatever height
+            the day-letter row above them ends up. flex-start keeps it clear of
+            Monday's circle, which overlaps the gutter by 8. */}
+        <View style={{ width: WK_TIME_COL_W, alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+          <TouchableOpacity onPress={goPrevWeek} accessibilityLabel="Previous week" hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }} style={{ padding: 4, marginBottom: 5 }}>
+            <Ionicons name="chevron-back" size={18} color={P.sub} />
+          </TouchableOpacity>
+        </View>
         {/* Same spacer + flex:1-wrapper-of-flex:1-columns nesting as the grid
             below, so the two rows resolve to pixel-identical column widths
             instead of two separately-computed flex layouts that could drift. */}
@@ -851,7 +843,7 @@ function WeekView({
                 key={dateStr}
                 activeOpacity={0.75}
                 onPress={() => onSelectDate(dateStr)}
-                style={{ flex: 1, alignItems: 'flex-start', marginLeft: -8 }}
+                style={{ flex: 1, alignItems: 'center' }}
               >
                 {/* Reuses the date strip's own tile styles (s.tileDayLetter /
                     s.dateCircle / s.tileNum) rather than new ones — those
@@ -875,6 +867,11 @@ function WeekView({
               </TouchableOpacity>
             );
           })}
+        </View>
+        <View style={{ width: WK_ARROW_COL_W, alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+          <TouchableOpacity onPress={goNextWeek} accessibilityLabel="Next week" hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ padding: 4, marginBottom: 5 }}>
+            <Ionicons name="chevron-forward" size={18} color={P.sub} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -1004,12 +1001,13 @@ function WeekView({
               );
             })}
           </View>
+          <View style={{ width: WK_ARROW_COL_W }} />
 
           {/* Now line — spans the full grid width, not just today's column,
               so it reads as "this moment" across the whole week rather than
               a mark stuck inside one day's box. */}
           {todayInWeek && showNowLine && (
-            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: 0, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
+            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: WK_ARROW_COL_W, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
           )}
         </View>
       </ScrollView>
@@ -1203,7 +1201,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       {
         key: 'view-mode',
         title: 'Three ways to see your bookings',
-        body: 'Switch between a plain list, the hour-by-hour timeline for one day, and the full week at a glance.',
+        body: 'Switch between the hour-by-hour timeline for one day, a plain list, and the full week at a glance.',
         target: { ref: viewModeBtnRef },
         radius: 17,
         icon: 'list',
@@ -1359,6 +1357,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     navigation.setParams({ jumpToDate: undefined });
     return undefined;
   }, [route.params?.jumpToDate, navigation]);
+
+  // The daily-recap notification ("Today's Schedule") lands here in list view:
+  // it summarises the day as a list, so the timeline would answer a different
+  // question. Cleared after use so a later re-focus doesn't force the mode again.
+  useEffect(() => {
+    const requested = route.params?.viewMode;
+    if (!requested) return;
+    setViewMode(requested);
+    navigation.setParams({ viewMode: undefined });
+  }, [route.params?.viewMode, navigation]);
 
   // Fetch bookings. `providerId`, when the caller already has it (the
   // combined focus effect below fetches the profile once for both this and
@@ -1770,7 +1778,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </TouchableOpacity>
             <TouchableOpacity
               ref={viewModeBtnRef}
-              onPress={() => setViewMode(v => v === 'list' ? 'timeline' : v === 'timeline' ? 'week' : 'list')}
+              // Tap order: timeline (the default) → list → week → back to timeline.
+              onPress={() => setViewMode(v => v === 'timeline' ? 'list' : v === 'list' ? 'week' : 'timeline')}
               style={[s.iconBtn, { backgroundColor: P.accent }]}
             >
               <Ionicons
@@ -2013,7 +2022,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
         {/* ── Blocked / closed-day banner ──────────────────────────── */}
         {(isSelectedDateBlocked || todayAvailability?.is_closed) && (
-          <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 2, borderRadius: 12, backgroundColor: dark ? '#3D1B1B' : '#FDEAEA', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: viewMode === 'week' ? 20 : 2, borderRadius: 12, backgroundColor: dark ? '#3D1B1B' : '#FDEAEA', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="ban-outline" size={16} color="#C73535" />
             <Text style={{ color: '#C73535', fontSize: 13, fontWeight: '600' }}>
               {isSelectedDateBlocked ? 'This day is blocked' : 'Closed — not available'}
@@ -2078,7 +2087,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                       <Ionicons name="calendar-outline" size={36} color={P.sub} style={{ opacity: 0.45, marginBottom: 10 }} />
                       <Text style={[s.emptyTitle, { color: P.text }]}>No appointments</Text>
                       <Text style={[s.emptySub, { color: P.sub }]}>
-                        {item.dateStr === todayStr ? "You're free today" : 'This day is free'}
+                        {/* YYYY-MM-DD strings compare correctly as text. A day that's
+                            already gone reads in the past tense. */}
+                        {item.dateStr === todayStr ? "You're free today" : item.dateStr < todayStr ? 'This day was free' : 'This day is free'}
                       </Text>
                     </View>
                   );
@@ -2185,7 +2196,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             { icon: 'people-outline',          title: 'Clientele',   sub: 'View & manage your client list',    route: 'Clientele'        },
             { icon: 'document-text-outline',   title: 'Info Pack',   sub: 'Share service details with clients',route: 'InfoPacks'        },
             { icon: 'clipboard-outline',       title: 'Forms',       sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
-            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Messages with your clients',        route: 'ProviderInbox'    },
+            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Messages and queries from clients',        route: 'ProviderInbox'    },
           ] as const).filter(item => OFFERS_ENABLED || item.route !== 'Promotions').map((item, idx, arr) => (
             <React.Fragment key={item.title}>
               <TouchableOpacity

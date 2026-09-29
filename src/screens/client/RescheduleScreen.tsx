@@ -148,6 +148,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   );
 
   const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
+  // Distinct from reschedulePolicy being null, which is also the "still
+  // loading" value. Without it the notice check below reads 0 hours while the
+  // fetch is in flight, renders the whole picker, then replaces it with the
+  // "Too Close to Reschedule" block once the real number arrives.
+  const [policyLoaded, setPolicyLoaded] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -186,12 +191,21 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     if (!booking) return;
     let active = true;
     setReschedulePolicy(null);
+    setPolicyLoaded(false);
     (booking.providerId
       ? getProviderReschedulePolicyById(booking.providerId)
       : getProviderReschedulePolicyByDisplayName(booking.providerName)
     ).then(policy => {
-      if (active) setReschedulePolicy(policy);
-    }).catch(() => {});
+      if (active) {
+        setReschedulePolicy(policy);
+        setPolicyLoaded(true);
+      }
+    }).catch(err => {
+      logger.error('Failed to load reschedule policy', err);
+      // Unblock the picker rather than spinning forever: the server still
+      // enforces the notice window and surfaces it as P0001 on submit.
+      if (active) setPolicyLoaded(true);
+    });
 
     // If the provider has already responded, use the specific slots they
     // offered — those are the only valid choices at that point, and no live
@@ -536,6 +550,18 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           }} activeOpacity={0.7}>
             <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Back to Bookings</Text>
           </TouchableOpacity>
+        </SafeAreaView>
+      </ThemedBackground>
+    );
+  }
+
+  // Only the client-request path is notice-gated, so a provider-offered set of
+  // slots never has to wait on this.
+  if (!policyLoaded && !hasProviderResponse) {
+    return (
+      <ThemedBackground>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} edges={['bottom', 'left', 'right']}>
+          <ActivityIndicator color={C.accent} />
         </SafeAreaView>
       </ThemedBackground>
     );

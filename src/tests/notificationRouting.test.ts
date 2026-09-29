@@ -121,6 +121,26 @@ describe('notification routing — deep-link payload', () => {
     expect(screen).toContain("navigateTab('MyServices')");
   });
 
+  it('opens the Rewards screen from a points_earned notification, in both entry points', () => {
+    // THE BUG: points_earned was routed by neither handler, so tapping the
+    // "You earned points" notification (in-app action button OR push tap) just
+    // dumped the client on the notifications list. Points lives at 'Points' in
+    // the client Profile tab's stack.
+    const tap = tapHandler();
+    expect(tap).toContain("if (type === 'points_earned')");
+    expect(tap).toContain("navigateNested('Profile', 'Points')");
+
+    const screen = notificationsScreen();
+    expect(screen).toContain("} else if (notification.type === 'points_earned') {");
+    expect(screen).toContain("navigateNested('Profile', 'Points')");
+    // Client-only, so a provider tap must not leak into the client navigator.
+    const clientOnly = screen.slice(
+      screen.indexOf('const CLIENT_ONLY_TYPES'),
+      screen.indexOf(']);', screen.indexOf('const CLIENT_ONLY_TYPES')),
+    );
+    expect(clientOnly).toContain('points_earned');
+  });
+
   it('marks a notification read when its push is tapped', () => {
     // The in-app list marked on tap; a push deep-linked past the list, so those
     // stayed unread forever and the badge kept counting them.

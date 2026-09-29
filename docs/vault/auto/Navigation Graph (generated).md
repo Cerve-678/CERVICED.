@@ -5,7 +5,7 @@
 
 #generated
 
-**124 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
+**123 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -92,7 +92,6 @@ graph LR
   ProviderHomeScreen --> NotificationsScreen
   ProviderHomeScreen --> ProviderBookingDetailScreen
   ProviderHomeScreen --> ProviderConversationScreen
-  ProviderInboxScreen --> ProviderBookingDetailScreen
   ProviderInboxScreen --> ProviderConversationScreen
   ProviderMyProfileScreen --> BrandingScreen
   ProviderMyProfileScreen --> InfoRegScreen
@@ -175,7 +174,7 @@ graph LR
 - `provider/ProviderClienteleScreen` → `provider/ProviderConversationScreen`
 - `provider/ProviderCommunicationsScreen` → `provider/BusinessInfoScreen`
 - `provider/ProviderHomeScreen` → `provider/InfoRegScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`, `shared/NotificationsScreen`
-- `provider/ProviderInboxScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`
+- `provider/ProviderInboxScreen` → `provider/ProviderConversationScreen`
 - `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`
 - `provider/SchedulingScreen` → `provider/ProviderScheduleScreen`

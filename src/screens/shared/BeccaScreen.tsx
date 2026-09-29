@@ -280,8 +280,10 @@ export default function BeccaScreen({
       timestamp: new Date(),
     };
 
-    // Provider hat → business assistant. Suggestions route to provider screens
-    // only (semantic `screen` keys resolved in handleSuggestionPress).
+    // Provider hat → business assistant. The starters ask Becca a question and
+    // answer in the conversation (pv.today / pv.clients / pv.inbox /
+    // pv.analytics); each answer then offers its own "Open …" chip for the
+    // full screen. See beccaProviderStarters.test.ts for the routing.
     if (isProviderMode) {
       return {
         ...base,
@@ -295,26 +297,26 @@ export default function BeccaScreen({
           {
             id: "today",
             text: "Today's Bookings",
-            action: "navigate",
-            data: { screen: "home" },
+            action: "message",
+            data: { message: "What's on today?" },
           },
           {
             id: "clients",
             text: "My Clients",
-            action: "navigate",
-            data: { screen: "clients" },
+            action: "message",
+            data: { message: "How many clients do I have?" },
           },
           {
             id: "messages",
             text: "Messages",
-            action: "navigate",
-            data: { screen: "messages" },
+            action: "message",
+            data: { message: "Any unread messages?" },
           },
           {
             id: "analytics",
             text: "Analytics",
-            action: "navigate",
-            data: { screen: "analytics" },
+            action: "message",
+            data: { message: "How am I doing?" },
           },
         ],
       };

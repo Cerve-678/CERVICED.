@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { formatBookingRef } from '../features/bookings/presentation';
 
 // A booking reference gets read aloud between a client and a provider, so two
@@ -32,5 +35,37 @@ describe('formatBookingRef', () => {
 
   it('does not reintroduce the 10-character provider-side variant', () => {
     expect(formatBookingRef({ id })).toHaveLength(8);
+  });
+});
+
+// The fallback above only stays harmless while every read path actually
+// carries booking_ref. Providers read the `bookings` table with select("*")
+// and get it; clients read the `client_bookings` VIEW, which lists its
+// columns explicitly. When that view omitted the column the client fell back
+// to the legacy truncation on EVERY booking -- so the same appointment was
+// CRV-4B2X9K7M to the provider and 34E82C04 to the client, which is the exact
+// split the ref column was added to end.
+describe('client_bookings exposes the booking reference', () => {
+  const migrations = join(__dirname, '../../supabase/migrations');
+
+  // CREATE OR REPLACE VIEW cannot drop or reorder columns, so the newest
+  // definition is the whole definition -- checking only the latest is correct.
+  const latestViewDefinition = readdirSync(migrations)
+    .filter(f => f.endsWith('.sql'))
+    .sort()
+    .filter(f =>
+      readFileSync(join(migrations, f), 'utf8').includes(
+        'CREATE OR REPLACE VIEW public.client_bookings',
+      ),
+    )
+    .pop();
+
+  it('has a view definition to check', () => {
+    expect(latestViewDefinition).toBeDefined();
+  });
+
+  it('selects booking_ref, so the client is not left on the legacy fallback', () => {
+    const sql = readFileSync(join(migrations, latestViewDefinition!), 'utf8');
+    expect(sql).toMatch(/\bb\.booking_ref\b/);
   });
 });

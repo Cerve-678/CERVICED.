@@ -79,8 +79,43 @@ describe('client detail screen performance and safety contracts', () => {
 
     expect(source).toContain('}, [bookingId]);');
     expect(loader).toContain('let active = true;');
-    expect(loader).toContain('if (active) setReschedulePolicy(policy);');
+    // The policy write must stay behind the `active` guard. Its exact
+    // formatting is free to change — an UNguarded setReschedulePolicy(policy)
+    // is the bug this pins.
+    expect(loader).toMatch(/if \(active\)[\s\S]{0,60}setReschedulePolicy\(policy\)/);
     expect(loader).toContain('() => active');
     expect(loader).toContain('return () => { active = false; };');
+  });
+
+  it('stops a reschedule inside the notice window at the popup, not the next screen', () => {
+    const source = read('screens', 'client', 'BookingDetailScreen.tsx');
+    const handler = source.slice(
+      source.indexOf('const handleReschedulePress'),
+      source.indexOf('[booking, canReschedule, reschedulePolicy, navigation]'),
+    );
+
+    // A tap that beats the metadata fetch used to read a null policy from
+    // state, skip every check, and push the client into RescheduleScreen —
+    // which then blocked them with its own full-screen state instead.
+    expect(handler).toContain('await metadataRef.current');
+
+    // An appointment that has already started is further past the notice
+    // window, not exempt from it.
+    expect(handler).not.toContain('hoursUntil >= 0');
+    expect(handler).toContain('hoursUntil < policy.rescheduleNoticeHours');
+  });
+
+  it('holds the reschedule picker until the notice policy is known', () => {
+    const source = read('screens', 'client', 'RescheduleScreen.tsx');
+
+    // Without this the notice check reads 0 hours while the fetch is in
+    // flight, renders the picker, then swaps it for "Too Close to Reschedule".
+    expect(source).toContain('const [policyLoaded, setPolicyLoaded] = useState(false);');
+    expect(source).toContain('if (!policyLoaded && !hasProviderResponse)');
+
+    // The gate must sit ahead of the block it exists to stop flashing.
+    expect(source.indexOf('if (!policyLoaded && !hasProviderResponse)')).toBeLessThan(
+      source.indexOf('if (isPastNoticeWindow)'),
+    );
   });
 });

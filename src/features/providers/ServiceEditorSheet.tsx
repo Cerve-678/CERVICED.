@@ -1,5 +1,6 @@
 /**
- * Edit one service — name, price, duration, description.
+ * Edit one service — name, price, duration, description, and whether clients
+ * can see it.
  *
  * Deliberately narrow. The fuller service editor in InfoRegScreen still owns
  * safety flags, tags, buffers, add-ons and photos; this is the set a provider
@@ -16,12 +17,14 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { withAlpha } from '../../constants/providerThemes';
 import * as Haptics from 'expo-haptics';
 import type { MyServiceDraft } from '../../services/databaseService';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
@@ -40,6 +43,8 @@ export interface ServiceEditorValue {
   price: string;
   duration: string;
   description: string;
+  /** Only offered when editing. A new service always starts on the menu. */
+  isActive: boolean;
 }
 
 /** What a service row looks like coming in. Strings, because that's what the
@@ -49,12 +54,14 @@ export function toEditorValue(service: {
   price: number;
   duration_minutes: number;
   description: string | null;
+  is_active: boolean;
 }): ServiceEditorValue {
   return {
     name: service.name,
     price: String(service.price ?? ''),
     duration: String(service.duration_minutes ?? ''),
     description: service.description ?? '',
+    isActive: service.is_active,
   };
 }
 
@@ -63,6 +70,7 @@ export const EMPTY_SERVICE_VALUE: ServiceEditorValue = {
   price: '',
   duration: '',
   description: '',
+  isActive: true,
 };
 
 /** Null when the value is usable; otherwise the reason, phrased for the
@@ -80,12 +88,13 @@ function validateServiceValue(value: ServiceEditorValue): string | null {
   return null;
 }
 
-function toDraft(value: ServiceEditorValue): MyServiceDraft {
+function toDraft(value: ServiceEditorValue, isNew: boolean): MyServiceDraft {
   return {
     name: value.name.trim(),
     price: Number(value.price),
     durationMinutes: Number(value.duration),
     description: value.description.trim() || null,
+    ...(isNew ? {} : { isActive: value.isActive }),
   };
 }
 
@@ -128,8 +137,8 @@ export default function ServiceEditorSheet({
       return;
     }
     setError(null);
-    onSave(toDraft(value));
-  }, [value, onSave]);
+    onSave(toDraft(value, isNew));
+  }, [value, isNew, onSave]);
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="slide" onRequestClose={onClose}>
@@ -156,6 +165,39 @@ export default function ServiceEditorSheet({
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled" style={styles.body}>
+            {/* The price list hides a service with a swipe. This switch is the
+                same action for anyone who never finds the swipe. */}
+            {isNew ? null : (
+              <View
+                style={[styles.visibilityRow, { backgroundColor: palette.card, borderColor: palette.border }]}
+              >
+                <View style={styles.visibilityText}>
+                  <Text style={[styles.visibilityTitle, { color: palette.text }]}>
+                    {value.isActive ? 'On your menu' : 'Hidden from clients'}
+                  </Text>
+                  <Text style={[styles.visibilityHint, { color: palette.sub }]}>
+                    {/* Only what hiding actually does. Whether a shown service
+                        can be BOOKED also depends on going live and on
+                        availability, so this doesn't promise that. */}
+                    {value.isActive
+                      ? 'Shown on your profile.'
+                      : 'Not shown on your profile. Nothing is deleted.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={value.isActive}
+                  onValueChange={isActive => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setValue(v => ({ ...v, isActive }));
+                  }}
+                  trackColor={{ false: withAlpha(palette.text, 0.18), true: palette.accent }}
+                  ios_backgroundColor={withAlpha(palette.text, 0.18)}
+                  thumbColor={value.isActive ? '#fff' : '#E5E5EA'}
+                  accessibilityLabel="Visible to clients"
+                />
+              </View>
+            )}
+
             <Text style={[styles.label, { color: palette.sub }]}>NAME</Text>
             <TextInput
               value={value.name}
@@ -300,6 +342,30 @@ const styles = StyleSheet.create({
   },
   pairItem: {
     flex: 1,
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  visibilityText: {
+    flex: 1,
+  },
+  visibilityTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+  },
+  visibilityHint: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
   },
   error: {
     color: '#FF453A',
