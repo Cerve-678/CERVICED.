@@ -1,8 +1,6 @@
--- DRAFT — NOT YET APPLIED. Rename above the live max(version) at apply time;
--- claim the migration lock first (CLAUDE.md migration-ownership rule). Apply
--- AFTER both DRAFT_stripe_connect_account_columns.sql (adds
--- providers.stripe_account_id) and DRAFT_provider_payouts.sql (the ledger
--- table) — this migration depends on both existing.
+-- APPLIED 20260929050324 (2026-09-29). Applied after
+-- 20260929050150_stripe_connect_account_columns (providers.stripe_account_id)
+-- and 20260929050240_provider_payouts_ledger (the ledger table).
 --
 -- Step 2 of the Connect build (handoff: stripe-connect-payouts-build-handoff):
 -- write a 'held' payout row the moment a booking is finalised with a real

@@ -1,6 +1,5 @@
--- DRAFT — NOT YET APPLIED. Rename above the live max(version) at apply time;
--- claim the migration lock first. Apply AFTER DRAFT_provider_payouts.sql (the
--- ledger table) and the release-payouts edge function is deployed.
+-- APPLIED 20260929052423 (2026-09-29). Applied after provider_payouts_ledger
+-- and after the release-payouts edge function was deployed.
 --
 -- Step 3 of the Connect build: the release job's DB side. release-payouts (the
 -- edge function) does the actual Stripe Transfers; this just wakes it on a
@@ -48,6 +47,14 @@ BEGIN
   RETURN true;
 END;
 $function$;
+
+-- Idempotent scheduling: drop any prior copy of this job before creating it, so
+-- a re-run doesn't error or duplicate the schedule.
+DO $$
+BEGIN
+  PERFORM cron.unschedule('release-due-payouts')
+  WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'release-due-payouts');
+END $$;
 
 -- Every 15 minutes. Payouts release 24h after the appointment, so this is not
 -- time-critical to the minute; a backlog drains over successive runs (the edge

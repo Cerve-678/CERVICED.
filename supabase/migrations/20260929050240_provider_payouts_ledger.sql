@@ -1,5 +1,4 @@
--- DRAFT — NOT YET APPLIED. Rename above the live max(version) at apply time;
--- claim the migration lock first (CLAUDE.md migration-ownership rule).
+-- APPLIED 20260929050240 (2026-09-29).
 --
 -- The payout ledger for the "buyers purchase from you + split payouts + HOLD"
 -- model (user decisions 2026-09-27/28). One row per provider per paid booking:
@@ -80,6 +79,7 @@ ALTER TABLE public.provider_payouts ENABLE ROW LEVEL SECURITY;
 -- may INSERT/UPDATE/DELETE from the client roles — every write is server-side
 -- via SECURITY DEFINER RPC / the service role (release job, webhook, refund).
 -- Money rows the client could edit would defeat the whole point.
+DROP POLICY IF EXISTS provider_payouts_owner_read ON public.provider_payouts;
 CREATE POLICY provider_payouts_owner_read ON public.provider_payouts
   FOR SELECT TO authenticated
   USING (
@@ -90,6 +90,7 @@ CREATE POLICY provider_payouts_owner_read ON public.provider_payouts
 -- INSERT/UPDATE/DELETE policy, those are denied for anon/authenticated. The
 -- service role bypasses RLS for the server-side writers.
 
+DROP TRIGGER IF EXISTS set_provider_payouts_updated_at ON public.provider_payouts;
 CREATE TRIGGER set_provider_payouts_updated_at
   BEFORE UPDATE ON public.provider_payouts
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();

@@ -1,7 +1,11 @@
--- DRAFT — NOT YET APPLIED. Rename to a real version number ABOVE the live
--- max(version) in supabase_migrations.schema_migrations at apply time (never
--- off the wall clock), and claim the lock in supabase/MIGRATION_OWNER.md
--- first. See CLAUDE.md's migration-ownership rule.
+-- APPLIED 20260929050150 (2026-09-29).
+--
+-- ⚠️ The `REVOKE UPDATE (col...) FROM anon, authenticated` below is a NO-OP —
+-- it enforces nothing, because the client roles hold a table-level UPDATE
+-- grant and providers_owner_all RLS lets a provider update their own row's
+-- every column. The real enforcement is the BEFORE UPDATE trigger in the
+-- companion migration 20260929050657_guard_provider_stripe_columns_server_only.
+-- The REVOKE is kept only as documentation of intent.
 --
 -- Stripe Connect (Express) — provider connected-account columns + go-live
 -- plumbing. This file is ADDITIVE and SAFE to apply on its own: it only adds

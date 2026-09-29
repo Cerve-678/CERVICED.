@@ -1,5 +1,6 @@
--- DRAFT — NOT YET APPLIED. Rename above the live max(version) at apply time;
--- claim the migration lock first. Additive/safe (nullable columns + a REVOKE).
+-- APPLIED 20260929050213 (2026-09-29). Additive (nullable columns + a REVOKE).
+-- NOTE: the REVOKE is belt-and-braces only — bookings RLS has no UPDATE policy
+-- at all, so clients cannot UPDATE any booking column regardless of grant.
 --
 -- Step 4 of the Connect build: audit columns for refunds. The refund-payment
 -- edge function records the client-side refund here; the provider-side (the
