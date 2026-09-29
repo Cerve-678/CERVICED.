@@ -691,14 +691,20 @@ system popup can't be themed and breaks the screen's visual language.
 - Render `<DialogHost />` **last** in the screen's tree so dialogs and toasts
   layer above any bottom sheet.
 
-The provider side has its own `useProviderDialog()` (`src/components/
-ProviderDialog.tsx`) with a fixed provider palette. `useAppDialog()` is the
-client-hat equivalent and must read colour through `useTheme().palette`
+`useAppDialog()` is the only dialog system, on both hats — provider screens use
+it too. (A separate `useProviderDialog()` with its own fixed burgundy/teal
+palette existed until September 2026; it ignored the theme and light/dark mode,
+so provider popups looked like a different app. It was removed — don't
+reintroduce a per-hat dialog.) It must read colour through `useTheme().palette`
 (hat-aware), never the raw `theme` field (always provider) — it did the
 latter until August 2026, which made every client-side confirm dialog
 ("Are you sure you want to discard?" etc.) render in provider-brown
 regardless of hat or dark mode. Same rule as the palette note at the top of
 this doc: read `palette`, not `theme`.
+
+- Pass `'center'` as the last argument to `showAlert` / `showConfirm` for a short
+  "you can't do that here" statement (a floating box reads as a full stop); the
+  default bottom sheet is for a decision the user is being walked through.
 
 ### Bottom sheets
 

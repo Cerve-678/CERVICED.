@@ -1125,7 +1125,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>Contact Provider</Text>
-                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openContactSheet(booking); }} style={[st.actionChip, { backgroundColor: C.accent }]} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openContactSheet(booking); }} style={[st.actionChip, { backgroundColor: C.accent, flexDirection: 'row', alignItems: 'center', gap: 5 }]} activeOpacity={0.7}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={14} color={C.onAccent} />
                     <Text style={{ color: C.onAccent, fontSize: 12, fontWeight: '600' }}>Contact</Text>
                   </TouchableOpacity>
                 </View>
@@ -1567,27 +1568,27 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={{ gap: 8, marginTop: 8 }}>
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); openProviderChat(booking); }}>
-                    <View style={[st.contactIcon, { backgroundColor: '#5B1E32' }]}><Text>💬</Text></View>
+                    <View style={[st.contactIcon, { backgroundColor: '#5B1E32' }]}><Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" /></View>
                     <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>In-app message</Text><Text style={{ color: C.sub, fontSize: 12 }}>Chat directly inside Cerviced</Text></View>
                     <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                   </TouchableOpacity>
                   {contactSheetInfo?.preferred_contact_methods?.includes('email') && contactSheetInfo.email && (
                     <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}>
-                      <View style={[st.contactIcon, { backgroundColor: '#1C3A5B' }]}><Text>✉️</Text></View>
+                      <View style={[st.contactIcon, { backgroundColor: '#1C3A5B' }]}><Ionicons name="mail-outline" size={20} color="#fff" /></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>Email</Text><Text style={{ color: C.sub, fontSize: 12 }} numberOfLines={1}>{contactSheetInfo.email}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('whatsapp') && contactSheetInfo.whatsapp_number && (
                     <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}>
-                      <View style={[st.contactIcon, { backgroundColor: '#1A3D2B' }]}><Text>💚</Text></View>
+                      <View style={[st.contactIcon, { backgroundColor: '#1A3D2B' }]}><Ionicons name="logo-whatsapp" size={20} color="#fff" /></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>WhatsApp</Text><Text style={{ color: C.sub, fontSize: 12 }}>{contactSheetInfo.whatsapp_number}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('phone') && contactSheetInfo.phone && (
                     <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}>
-                      <View style={[st.contactIcon, { backgroundColor: '#2B2B1A' }]}><Text>📞</Text></View>
+                      <View style={[st.contactIcon, { backgroundColor: '#2B2B1A' }]}><Ionicons name="call-outline" size={20} color="#fff" /></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>Phone call</Text><Text style={{ color: C.sub, fontSize: 12 }}>{contactSheetInfo.phone}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                     </TouchableOpacity>

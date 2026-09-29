@@ -33,7 +33,7 @@ import {
 } from '../../services/databaseService';
 import type { BookingWithAddOns } from '../../types/database';
 import { ProviderHomeScreenProps } from '../../navigation/types';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import { buildPolicyDisplayRows, PolicyDisplayRow } from '../../utils/policyDisplay';
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
@@ -327,7 +327,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, DialogHost } = useAppDialog();
 
   // ── Global state ──────────────────────────────────────────────────────────
   const [mode, setMode]           = useState<Mode>('picker');

@@ -14,6 +14,7 @@ import {
   RefreshControl,
   Keyboard,
   TouchableWithoutFeedback,
+  Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,7 +51,8 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
 import { toArgbHex } from '../../utils/color';
-import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
+import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
+import { newestAddedItem } from '../../utils/newestAddedItem';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
@@ -117,6 +119,13 @@ function toCartIssue(serviceMessage: string): string {
 // remounts this screen), short enough that reopening the cart later still
 // gets the fully-collapsed scannable list.
 const JUST_ADDED_WINDOW_MS = 60_000;
+
+// Breathing room above a newly added card when the cart scrolls to it, so it
+// lands with a little of the card above visible rather than flush to the edge.
+const SCROLL_TO_NEW_ITEM_MARGIN = 16;
+
+/** The cart item that was just added, and the provider section it sits in. */
+type CartScrollTarget = { providerName: string; itemId: string };
 
 /** "Ana", "Ana and Bea", "Ana, Bea and Cleo" — for naming the mobile
  *  providers in a sentence rather than saying "your provider" and leaving a
@@ -895,22 +904,13 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     }, [item.id, item.serviceName, onRemove, showConfirm]);
 
     const isScheduled = Boolean(bookingInfo?.selectedDate && bookingInfo?.selectedTime);
+    const whenColor = !isScheduled ? '#D32F2F' : bookingInfo?.emergencyRequest ? '#FF9500' : P.accentText;
 
     const serviceName = item?.serviceName || 'Unknown Service';
     const serviceInstanceIndex = item?.serviceInstanceIndex || 1;
     const duration = item?.duration || 'Unknown duration';
     const showInstanceNumber =
       allCartItems.filter((i: CartItem) => i.serviceName === item.serviceName).length > 1;
-
-    // Shopping-cart-style "swatch" — ServiceCard has no per-service image or
-    // category field to show a real thumbnail, so the swatch is initials
-    // derived from the actual service name rather than a fabricated icon set.
-    const nameWords = serviceName.trim().split(/\s+/).filter(Boolean);
-    const swatchInitials = nameWords.length === 0
-      ? '?'
-      : nameWords.length === 1
-        ? nameWords[0]!.slice(0, 2).toUpperCase()
-        : (nameWords[0]![0]! + nameWords[1]![0]!).toUpperCase();
 
     return (
       <ErrorBoundary
@@ -933,135 +933,141 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           <Swipeable
             ref={swipeRef}
             overshootRight={false}
-            renderRightActions={() => (
-              <TouchableOpacity
-                style={[styles.swipeDeleteAction, isLoading && styles.disabledButton]}
-                onPress={() => {
-                  swipeRef.current?.close();
-                  handleRemove();
-                }}
-                disabled={isLoading}
-                activeOpacity={0.8}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="trash" size={20} color="#fff" />
-                    <Text style={styles.swipeDeleteText}>Remove</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-          >
-            {/* Colours read from `P` (the hat-aware palette), never `theme`:
-                this card only ever renders on the client cart, and `theme`
-                is scoped to whichever hat last set it, not necessarily the
-                client palette — the same class of bug DESIGN_SYSTEM.md
-                flags for AppDialog. */}
-            <View style={[
-              styles.swipeContent,
-              { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
-            ]}>
-              <View style={[styles.swipeSwatch, { backgroundColor: P.accentDim }]}>
-                <Text style={[styles.swipeSwatchText, { color: P.accentText }]}>{swatchInitials}</Text>
-              </View>
-
-              <View style={styles.swipeBody}>
-                <View style={styles.swipeTopRow}>
-                  <Text style={[styles.swipeName, { color: P.text }]} numberOfLines={2}>
-                    {serviceName}
-                    {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
-                    {bookingInfo.isDepositOnly && ' (Deposit)'}
-                  </Text>
-                  {/* Non-swipe fallback for revealing Remove — required for
-                      accessibility, since swipe-only would strand anyone who
-                      can't perform the gesture. */}
+            friction={2}
+            rightThreshold={40}
+            renderRightActions={(progress: Animated.AnimatedInterpolation<number>) => {
+              const scale = progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.6, 1],
+                extrapolate: 'clamp',
+              });
+              return (
+                <Animated.View style={[styles.swipeDeleteAction, { transform: [{ scale }] }]}>
                   <TouchableOpacity
-                    style={styles.swipeKebab}
+                    style={[styles.swipeDeleteButton, isLoading && styles.disabledButton]}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                      swipeRef.current?.openRight();
+                      swipeRef.current?.close();
+                      handleRemove();
                     }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    disabled={isLoading}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={15} color={P.sub} />
-                  </TouchableOpacity>
-                </View>
-                <Text style={[styles.swipeMetaLine, { color: P.sub }]} numberOfLines={1}>
-                  {duration}
-                </Text>
-
-                {issue && (
-                  <View style={styles.swipeBanner}>
-                    <Ionicons name="alert-circle" size={11} color="#F44336" />
-                    <Text style={[styles.swipeBannerText, { color: '#F44336' }]}>{issue}</Text>
-                  </View>
-                )}
-                {/* An out-of-hours time looks exactly like an ordinary one
-                    once it reaches the cart, and it isn't: the client is
-                    about to pay for something the provider can still
-                    decline. Deliberately amber rather than the by-request
-                    red used above — red already means "this item has a
-                    conflict, fix it", and a request is not a fault. */}
-                {bookingInfo?.emergencyRequest && (
-                  <View style={styles.swipeBanner}>
-                    <Ionicons name="time-outline" size={11} color="#FF9500" />
-                    <Text style={[styles.swipeBannerText, { color: '#FF9500' }]}>
-                      Outside their usual hours — they have to accept this before it's booked.
-                    </Text>
-                  </View>
-                )}
-
-                {addOnsSummary && (
-                  <Text style={[styles.swipeNote, { color: P.text, fontWeight: '700' }]} numberOfLines={2}>
-                    + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
-                    {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
-                  </Text>
-                )}
-                {bookingInfo.isDepositOnly && (
-                  <Text style={[styles.swipeNote, { color: P.sub }]}>
-                    Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
-                  </Text>
-                )}
-                {!!bookingInfo.notes && (
-                  <Text style={[styles.swipeNote, { color: P.sub }]} numberOfLines={2}>
-                    Notes: {bookingInfo.notes}
-                  </Text>
-                )}
-
-                {/* Price band — its own full-width strip at the card's foot.
-                    Tapping the date/time here is the Edit entry point, so
-                    price and edit share one dedicated strip. */}
-                <View style={[styles.swipePriceBand, { borderTopColor: P.border }]}>
-                  <View style={styles.swipePriceLeft}>
-                    <Text style={[styles.swipePrice, { color: P.accentText }]}>
-                      £{effectivePrice.toFixed(2)}
-                    </Text>
-                    {bookingInfo.isDepositOnly && (
-                      <Text style={[styles.swipePriceNote, { color: P.sub }]}>deposit</Text>
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Ionicons name="trash" size={20} color="#fff" />
                     )}
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            }}
+          >
+            {/* The card answers "what and when" first: a tappable date/time
+                chip (tapping it is how you change the time), the service
+                name, one small meta line. Everything else is inline and
+                small — no drop-down. Issue and out-of-hours state stay
+                visible: a flag the client can't see is the same as no flag.
+                Colours read from `P` (hat-aware palette), never `theme` —
+                see DESIGN_SYSTEM.md's AppDialog note. */}
+            <View style={[
+              styles.nodeCard,
+              { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : 0 },
+            ]}>
+              <View style={styles.nodeTopRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.nodeWhenChip,
+                    { backgroundColor: !isScheduled ? 'rgba(244, 67, 54, 0.09)' : bookingInfo?.emergencyRequest ? 'rgba(255, 149, 0, 0.12)' : P.accentDim },
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    onEdit(item);
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={isScheduled
+                    ? `Change time, currently ${formatShortDayDate(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
+                    : 'Pick a date and time'}
+                >
+                  <Ionicons name="calendar-outline" size={13} color={whenColor} />
+                  <Text style={[styles.nodeWhenText, { color: whenColor }]} numberOfLines={1}>
+                    {isScheduled
+                      ? `${formatShortDayDate(bookingInfo.selectedDate)} · ${formatTime12(bookingInfo.selectedTime)}`
+                      : 'No time picked'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={12} color={whenColor} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.nodeRemove, { borderColor: P.border }]}
+                  onPress={handleRemove}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${serviceName}`}
+                >
+                  <Ionicons name="close" size={16} color={P.sub} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.nodeNameRow}>
+                <Text style={[styles.nodeServiceName, { color: P.text }]} numberOfLines={2}>
+                  {serviceName}
+                  {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
+                </Text>
+                <Text style={[styles.nodePrice, { color: P.sub }]}>£{effectivePrice.toFixed(2)}</Text>
+              </View>
+
+              <View style={styles.nodeMetaRow}>
+                <Text style={[styles.nodeMeta, { color: P.sub }]} numberOfLines={1}>{duration}</Text>
+                {bookingInfo.isDepositOnly && (
+                  <View style={[styles.nodeTag, { backgroundColor: P.accentDim }]}>
+                    <Text style={[styles.nodeTagText, { color: P.accentText }]}>Deposit</Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.swipeWhenTouchable}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                      onEdit(item);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[styles.swipeWhen, { color: P.sub }, !isScheduled && styles.swipeWhenWarn]}
-                      numberOfLines={1}
-                    >
-                      {isScheduled
-                        ? `${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
-                        : 'Unscheduled'}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={11} color={isScheduled ? P.sub : '#D32F2F'} />
+                )}
+              </View>
+
+              {issue && (
+                <View style={styles.nodeBanner}>
+                  <Ionicons name="alert-circle" size={12} color="#F44336" />
+                  <Text style={styles.nodeBannerText}>{issue}</Text>
+                  <TouchableOpacity onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    onEdit(item);
+                  }}>
+                    <Text style={styles.nodeBannerFix}>Fix</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              )}
+              {/* An out-of-hours time looks exactly like an ordinary one
+                  once it reaches the cart, and it isn't: the client is
+                  about to pay for something the provider can still
+                  decline. Amber rather than red — red means "this item has
+                  a conflict, fix it", and a request is not a fault. */}
+              {bookingInfo?.emergencyRequest && (
+                <View style={[styles.nodeBanner, styles.nodeBannerWarn]}>
+                  <Ionicons name="time-outline" size={12} color="#FF9500" />
+                  <Text style={[styles.nodeBannerText, { color: '#FF9500' }]}>
+                    Outside their usual hours — they have to accept this before it's booked.
+                  </Text>
+                </View>
+              )}
+
+              {addOnsSummary && (
+                <Text style={[styles.nodeNote, { color: P.sub }]} numberOfLines={2}>
+                  + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
+                  {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
+                </Text>
+              )}
+              {bookingInfo.isDepositOnly && (
+                <Text style={[styles.nodeNote, { color: P.sub }]}>
+                  Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
+                </Text>
+              )}
+              {!!bookingInfo.notes && (
+                <Text style={[styles.nodeNote, { color: P.sub }]} numberOfLines={2}>
+                  Note: {bookingInfo.notes}
+                </Text>
+              )}
             </View>
           </Swipeable>
         </View>
@@ -1150,14 +1156,13 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     const isScheduled = Boolean(firstBooking.selectedDate && firstBooking.selectedTime);
     const spanKnown = isScheduled && startMinutes !== Number.MAX_SAFE_INTEGER && endMinutes > startMinutes;
     // Every flagged service in this group, in render order, so the banner can
-    // name them rather than the client having to guess which of four rows the
-    // red border is about.
+    // name them rather than the client having to guess which of four chips
+    // it's about.
     const flagged = useMemo(
       () => items.map(i => ({ item: i, issue: issuesByItemId.get(i.id) }))
                  .filter((f): f is { item: CartItem; issue: string } => Boolean(f.issue)),
       [items, issuesByItemId],
     );
-    const hasConflict = flagged.length > 0;
 
     const handleRemoveOne = useCallback((item: CartItem) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1179,15 +1184,11 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     }, [onRemove, showConfirm]);
 
     return (
-      <View style={[
-        styles.serviceCard,
-        styles.serviceCardShadow,
-        { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
-      ]}>
+      <View style={[styles.groupNodeCard, { backgroundColor: P.accentDim }]}>
         {flagged.length > 0 && (
-          <View style={styles.conflictBanner}>
-            <Ionicons name="alert-circle" size={14} color="#F44336" />
-            <Text style={styles.conflictBannerText}>
+          <View style={styles.nodeBanner}>
+            <Ionicons name="alert-circle" size={12} color="#F44336" />
+            <Text style={styles.nodeBannerText}>
               {flagged.length === 1
                 ? `${flagged[0]!.item.serviceName}: ${flagged[0]!.issue}`
                 : `${flagged.length} services in this appointment need attention`}
@@ -1195,20 +1196,16 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           </View>
         )}
 
-        {/* Shared header: a filled badge (not a bare icon) so a group card is
-            obviously different from a single one at a glance, plus this
-            card's Edit — which opens the chooser rather than editing
-            straight through. */}
-        <View style={styles.groupHeader}>
-          <View style={[styles.groupBadge, { backgroundColor: P.accent }]}>
-            <Ionicons name="link" size={11} color={P.onAccent} />
-            <Text style={[styles.groupBadgeText, { color: P.onAccent }]}>
-              GROUP BOOKING · {items.length}
-            </Text>
-          </View>
-          <View style={styles.groupHeaderSpacer} />
+        {/* Plain tag + span (not a filled badge) plus a pencil-only edit —
+            same quiet-chrome language as ServiceCard's own top row, since
+            provider identity here is also already owned by the wrapping
+            CartProviderSection header. */}
+        <View style={styles.groupHead}>
+          <Text style={[styles.groupTag, { color: P.accentText }]}>GROUP BOOKING</Text>
+          <Text style={[styles.groupTagSpan, { color: P.sub }]}>{items.length} services</Text>
+          <View style={{ flex: 1 }} />
           <TouchableOpacity
-            style={[styles.itemEditButton, { borderColor: P.accent }]}
+            style={[styles.nodePencil, { borderColor: P.border, backgroundColor: P.card }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onEditGroup(items);
@@ -1216,7 +1213,6 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
             activeOpacity={0.8}
           >
             <Ionicons name="pencil-outline" size={12} color={P.accentText} />
-            <Text style={[styles.itemEditButtonText, { color: P.accentText }]}>Edit</Text>
           </TouchableOpacity>
         </View>
         <Text
@@ -1231,18 +1227,18 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           </Text>
         )}
 
-        {/* One row per service — no per-row date, the header owns it */}
-        <View style={styles.groupRows}>
+        {/* One chip per service — no per-row date, the header owns it */}
+        <View style={styles.gchipList}>
           {items.map(item => {
             const b = getBooking(item.id);
             return (
-              <View key={item.id} style={[styles.groupRow, { borderTopColor: P.border }]}>
-                <View style={styles.groupRowInfo}>
-                  <Text style={[styles.groupRowName, { color: theme.text }]} numberOfLines={1}>
+              <View key={item.id} style={[styles.gchip, { backgroundColor: P.card }]}>
+                <View style={styles.gchipInfo}>
+                  <Text style={[styles.gchipName, { color: theme.text }]} numberOfLines={1}>
                     {item.serviceName}
                     {b.isDepositOnly ? ' (Deposit)' : ''}
                   </Text>
-                  <Text style={[styles.groupRowMeta, { color: theme.secondaryText }]} numberOfLines={1}>
+                  <Text style={[styles.gchipMeta, { color: theme.secondaryText }]} numberOfLines={1}>
                     {item.duration}
                   </Text>
                   {issuesByItemId.get(item.id) && (
@@ -1271,7 +1267,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                     </Text>
                   )}
                 </View>
-                <Text style={[styles.groupRowPrice, { color: P.accentText }]}>
+                <Text style={[styles.gchipPrice, { color: P.accentText }]}>
                   £{priceOf(item).toFixed(2)}
                 </Text>
                 <TouchableOpacity
@@ -1286,44 +1282,26 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           })}
         </View>
 
-        {/* Group footer — on a deposit group the service total and remainder
-            sit above the amount actually charged now, so all three
-            reconcile; otherwise it stays a single total. */}
-        <View style={[styles.groupFooter, { borderTopColor: P.border }]}>
+        {/* Group footer — a single due-now line (with a small service-total
+            note under the label) rather than a 3-row breakdown, matching
+            the chip list's compact language; only the deposit case needs
+            the extra note at all. */}
+        <View style={styles.gfoot}>
           {hasDeposit ? (
-            <View style={styles.groupFooterBreakdown}>
-              <View style={styles.groupFooterRow}>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  {items.length} services
-                </Text>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  £{groupServiceTotal.toFixed(2)}
+            <>
+              <View>
+                <Text style={[styles.gfootLabel, { color: theme.text }]}>Deposit due now</Text>
+                <Text style={[styles.gfootSubnote, { color: theme.secondaryText }]}>
+                  £{groupServiceTotal.toFixed(2)} service total · £{groupRemaining.toFixed(2)} at appointment
                 </Text>
               </View>
-              <View style={styles.groupFooterRow}>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  Remaining at appointment
-                </Text>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  £{groupRemaining.toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.groupFooterRow}>
-                <Text style={[styles.groupFooterTotalLabel, { color: theme.text }]}>Deposit due now</Text>
-                <Text style={[styles.groupFooterValue, { color: P.accentText }]}>
-                  £{groupTotal.toFixed(2)}
-                </Text>
-              </View>
-            </View>
+              <Text style={[styles.gfootAmt, { color: P.accentText }]}>£{groupTotal.toFixed(2)}</Text>
+            </>
           ) : (
-            <View style={styles.groupFooterRow}>
-              <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                {items.length} services
-              </Text>
-              <Text style={[styles.groupFooterValue, { color: P.accentText }]}>
-                £{groupTotal.toFixed(2)}
-              </Text>
-            </View>
+            <>
+              <Text style={[styles.gfootLabel, { color: theme.text }]}>{items.length} services</Text>
+              <Text style={[styles.gfootAmt, { color: P.accentText }]}>£{groupTotal.toFixed(2)}</Text>
+            </>
           )}
         </View>
         <DialogHost />
@@ -1339,6 +1317,10 @@ interface CartProviderSectionProps {
   providerItems: CartItem[];
   providerData: { instanceCount: number; total: number };
   renderUnits: CartRenderUnit[];
+  /** True only when the basket holds more than one provider. A lone
+   *  provider's section has nothing to collapse against, so it gets no
+   *  Hide/Show handle and is always open. */
+  collapsible: boolean;
   isCollapsed: boolean;
   issuesByItemId: ReadonlyMap<string, string>;
   depositPolicy?: ProviderDepositPolicy;
@@ -1349,6 +1331,10 @@ interface CartProviderSectionProps {
   onEdit: (item: CartItem) => void;
   onEditGroup: (items: CartItem[]) => void;
   onToggleCollapsed: (providerName: string) => void;
+  /** Set only on the section holding a just-added item: which item. */
+  scrollTargetItemId: string | null;
+  /** Reports how far down this section that item's card sits, once laid out. */
+  onScrollTargetLaidOut: (offsetInSection: number) => void;
 }
 
 const CartProviderSection = memo(function CartProviderSection({
@@ -1356,6 +1342,7 @@ const CartProviderSection = memo(function CartProviderSection({
   providerItems,
   providerData,
   renderUnits,
+  collapsible,
   isCollapsed,
   issuesByItemId,
   depositPolicy,
@@ -1366,8 +1353,19 @@ const CartProviderSection = memo(function CartProviderSection({
   onEdit,
   onEditGroup,
   onToggleCollapsed,
+  scrollTargetItemId,
+  onScrollTargetLaidOut,
 }: CartProviderSectionProps) {
   const { palette: P } = useTheme();
+  // Layout arrives from two places (the list, then the card inside it), in
+  // either order — remember each and report once both are known.
+  const servicesListYRef = useRef<number | null>(null);
+  const targetUnitRef = useRef<{ itemId: string; y: number } | null>(null);
+  const reportTargetOffset = useCallback(() => {
+    const unit = targetUnitRef.current;
+    if (!scrollTargetItemId || servicesListYRef.current === null || unit?.itemId !== scrollTargetItemId) return;
+    onScrollTargetLaidOut(servicesListYRef.current + unit.y);
+  }, [scrollTargetItemId, onScrollTargetLaidOut]);
   const flaggedCount = providerItems.filter(item => issuesByItemId.has(item.id)).length;
   const displayName = providerItems[0]?.providerDisplayName ?? providerName;
 
@@ -1376,7 +1374,7 @@ const CartProviderSection = memo(function CartProviderSection({
       backgroundColor: P.card,
       borderColor: flaggedCount > 0 ? '#F44336' : P.border,
       borderWidth: flaggedCount > 0 ? 1.5 : StyleSheet.hairlineWidth,
-    }]}>
+    }, !collapsible && styles.providerSectionSolo]}>
       <View style={styles.providerHeader}>
         <TouchableOpacity onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1409,9 +1407,24 @@ const CartProviderSection = memo(function CartProviderSection({
       </View>
 
       {!isCollapsed ? (
-        <View style={styles.servicesList}>
+        <View
+          style={styles.servicesList}
+          onLayout={scrollTargetItemId ? e => {
+            servicesListYRef.current = e.nativeEvent.layout.y;
+            reportTargetOffset();
+          } : undefined}
+        >
           {renderUnits.map((unit, index) => (
-            <View key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id} style={styles.serviceItemWrapper}>
+            <View
+              key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id}
+              style={styles.serviceItemWrapper}
+              onLayout={scrollTargetItemId && (unit.kind === 'group'
+                ? unit.items.some(i => i.id === scrollTargetItemId)
+                : unit.item.id === scrollTargetItemId) ? e => {
+                targetUnitRef.current = { itemId: scrollTargetItemId, y: e.nativeEvent.layout.y };
+                reportTargetOffset();
+              } : undefined}
+            >
               {unit.kind === 'group' ? (
                 <GroupedServiceCard
                   items={unit.items}
@@ -1435,24 +1448,27 @@ const CartProviderSection = memo(function CartProviderSection({
               {index < renderUnits.length - 1 ? <View style={[styles.serviceSeparator, { backgroundColor: P.accentDim }]} /> : null}
             </View>
           ))}
+
         </View>
       ) : null}
 
-      <TouchableOpacity
-        style={[styles.collapseHandle, { borderTopColor: P.border }]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-          onToggleCollapsed(providerName);
-        }}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.collapseHandleText, { color: P.sub }]}>
-          {isCollapsed
-            ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
-            : 'Hide'}
-        </Text>
-        <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={P.sub} />
-      </TouchableOpacity>
+      {collapsible ? (
+        <TouchableOpacity
+          style={[styles.collapseHandle, { borderTopColor: P.border }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            onToggleCollapsed(providerName);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.collapseHandleText, { color: P.sub }]}>
+            {isCollapsed
+              ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
+              : 'Hide'}
+          </Text>
+          <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={P.sub} />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 });
@@ -1625,6 +1641,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Providers whose section is collapsed to just its header. Collapsed-by-key
   // rather than expanded-by-key so a newly added provider defaults to open.
   const [collapsedProviders, setCollapsedProviders] = useState<Set<string>>(new Set());
+  // The card the cart should scroll to after something is added. Set by the
+  // add-detection effect below, cleared once the scroll has happened.
+  const [scrollTarget, setScrollTarget] = useState<CartScrollTarget | null>(null);
+  const listRef = useRef<FlatList<[string, CartItem[]]>>(null);
+  // Where the last requested scroll was headed, so onScrollToIndexFailed can
+  // retry the same jump once FlatList has measured enough rows.
+  const pendingScrollRef = useRef<{ index: number; viewOffset: number; animated: boolean } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -2200,6 +2223,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Tracked by item id (not just provider key) so adding a second service to
   // a provider already in the cart counts as an add too, not only a
   // brand-new provider.
+  //
+  // This only ever takes effect with more than one provider in the basket —
+  // a lone provider's section has no Hide/Show handle and is always open
+  // (see `collapsible` on CartProviderSection).
   const knownItemIdsRef = useRef<Set<string> | null>(null);
   useEffect(() => {
     const providerKeys = Object.keys(itemsByProvider);
@@ -2229,6 +2256,16 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           new Set(providerKeys.filter(k => !recentlyAddedProviders.has(k))),
         );
       }
+      // Land on the booking that was just added, not the top of the list.
+      const justAdded = newestAddedItem(
+        items.filter(i => {
+          const addedAt = Date.parse(i.addedAt ?? '');
+          return Number.isFinite(addedAt) && addedAt >= justAddedCutoff;
+        }),
+      );
+      if (justAdded) {
+        setScrollTarget({ providerName: justAdded.providerName || 'Unknown Provider', itemId: justAdded.id });
+      }
       return;
     }
 
@@ -2250,6 +2287,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setCollapsedProviders(
       new Set(providerKeys.filter(k => !providersWithNewItems.has(k))),
     );
+
+    // A long cart puts the new card off screen, so scroll to it.
+    const added = newestAddedItem(items.filter(i => !previousItemIds.has(i.id)));
+    if (added) {
+      setScrollTarget({ providerName: added.providerName || 'Unknown Provider', itemId: added.id });
+    }
   }, [items, itemsByProvider]);
 
   // Keyed on the sorted, deduped provider-name SET rather than `items`
@@ -3504,6 +3547,60 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     [bookingSummary.providers, itemsByProvider],
   );
 
+  const scrollTargetRef = useRef<CartScrollTarget | null>(null);
+  scrollTargetRef.current = scrollTarget;
+
+  const jumpToRow = useCallback((index: number, viewOffset: number, animated: boolean) => {
+    pendingScrollRef.current = { index, viewOffset, animated };
+    listRef.current?.scrollToIndex({ index, viewPosition: 0, viewOffset, animated });
+  }, []);
+
+  // Second stage, fired by the target's own section once its card has been
+  // laid out: `offsetInSection` is how far down the section the card sits, so
+  // a provider with a tall list still lands on the new card rather than on
+  // that provider's header. Only ever runs once per target.
+  const handleScrollTargetLaidOut = useCallback((offsetInSection: number) => {
+    const target = scrollTargetRef.current;
+    if (!target) return;
+    const index = cartProviderRows.findIndex(([name]) => name === target.providerName);
+    if (index < 0) return;
+    setScrollTarget(null);
+    jumpToRow(index, -Math.max(0, offsetInSection - SCROLL_TO_NEW_ITEM_MARGIN), true);
+  }, [cartProviderRows, jumpToRow]);
+
+  // First stage: if the target's section hasn't rendered (FlatList is
+  // virtualised, so a long cart leaves it unmounted and unmeasured), jump to
+  // the section so it mounts — its card then reports back to
+  // handleScrollTargetLaidOut above. The short delay lets an already-mounted
+  // section report first, so the common case is one smooth scroll, not two.
+  // The second timer gives up so a target that never lays out can't linger.
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const index = cartProviderRows.findIndex(([name]) => name === scrollTarget.providerName);
+    if (index < 0) {
+      setScrollTarget(null);
+      return;
+    }
+    const jump = setTimeout(() => jumpToRow(index, 0, false), 300);
+    const giveUp = setTimeout(() => setScrollTarget(null), 4000);
+    return () => {
+      clearTimeout(jump);
+      clearTimeout(giveUp);
+    };
+    // cartProviderRows is deliberately not a dependency: re-arming the timers
+    // on every cart edit would push the scroll back indefinitely.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollTarget, jumpToRow]);
+
+  const handleScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+    const pending = pendingScrollRef.current;
+    if (!pending) return;
+    // Rows this far down haven't been measured yet. Get close by estimate so
+    // FlatList renders them, then repeat the same jump.
+    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    setTimeout(() => jumpToRow(pending.index, pending.viewOffset, pending.animated), 120);
+  }, [jumpToRow]);
+
   const renderCartProviderRow = useCallback(({
     item: [providerName, providerItems],
   }: {
@@ -3519,7 +3616,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
         providerItems={providerItems}
         providerData={providerData}
         renderUnits={buildRenderUnits(providerItems)}
-        isCollapsed={collapsedProviders.has(providerName)}
+        collapsible={cartProviderRows.length > 1}
+        isCollapsed={cartProviderRows.length > 1 && collapsedProviders.has(providerName)}
         issuesByItemId={displayedItemIssues}
         allCartItems={items}
         getBooking={getServiceBooking}
@@ -3528,16 +3626,21 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
         onEdit={handleEditItem}
         onEditGroup={setPickerItems}
         onToggleCollapsed={toggleProviderCollapsed}
+        scrollTargetItemId={scrollTarget?.providerName === providerName ? scrollTarget.itemId : null}
+        onScrollTargetLaidOut={handleScrollTargetLaidOut}
         {...(policy !== undefined ? { depositPolicy: policy } : {})}
       />
     );
   }, [
     bookingSummary.providers,
     buildRenderUnits,
+    cartProviderRows.length,
     collapsedProviders,
     displayedItemIssues,
     getServiceBooking,
     handleEditItem,
+    handleScrollTargetLaidOut,
+    scrollTarget,
     handleRemoveFromCart,
     items,
     navigateToProvider,
@@ -4183,9 +4286,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
               <View style={styles.modalOverlayNoBlur}>
                 <View style={[styles.liquidGlassSuccessModalNoBlur, { backgroundColor: P.card }]}>
                   <View style={styles.liquidGlassSuccessContent}>
-                    {/* Success Icon */}
-                    <View style={styles.liquidGlassSuccessIcon}>
-                      <Text style={[styles.liquidGlassSuccessCheckmark, { color: '#34C759' }]}>✓</Text>
+                    {/* Success Icon — double concentric ring (Direction A) */}
+                    <View style={styles.liquidGlassSuccessIconRing}>
+                      <View style={styles.liquidGlassSuccessIcon}>
+                        <Text style={[styles.liquidGlassSuccessCheckmark, { color: '#34C759' }]}>✓</Text>
+                      </View>
                     </View>
 
                     <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>Success!</Text>
@@ -4197,20 +4302,22 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     </Text>
 
                     <View style={styles.successButtonsContainer}>
+                      {/* Primary — filled accent, the action we want most clients to take */}
                       <TouchableOpacity
-                        style={[styles.liquidGlassSuccessButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
+                        style={[styles.liquidGlassSuccessButtonPrimary, { backgroundColor: P.accent }]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setShowPaymentSuccessModal(false);
                           navigation.navigate('Bookings'); // ✅ JUST NAVIGATE - bookings already created
                         }}
-                        activeOpacity={0.7}
+                        activeOpacity={0.85}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accentText }]}>View Bookings</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.onAccent }]}>View Bookings</Text>
                       </TouchableOpacity>
 
+                      {/* Secondary — outlined ghost, quieter than the primary */}
                       <TouchableOpacity
-                        style={[styles.liquidGlassSuccessButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
+                        style={[styles.liquidGlassSuccessButtonGhost, { borderColor: P.border }]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setShowPaymentSuccessModal(false);
@@ -4492,6 +4599,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
           )}
 
           <FlatList
+            ref={listRef}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
             style={styles.content}
             data={items.length > 0 ? cartProviderRows : []}
             keyExtractor={([providerName]) => providerName}
@@ -4658,28 +4767,16 @@ const styles = StyleSheet.create({
     // its shadow via shadow* above.
     elevation: 0,
   },
+  // Only provider in the basket: no Hide/Show handle at the foot, so the
+  // section supplies its own bottom padding.
+  providerSectionSolo: {
+    paddingBottom: spacing.md,
+  },
   providerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: spacing.md,
   },
-  // Per-card Edit pill — used by both a single service card (edits it
-  // directly) and a group card (opens the chooser).
-  itemEditButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1.5,
-  },
-  itemEditButtonText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'BakbakOne-Regular',
-    fontWeight: 'bold',
-  },
-
   // Collapse/expand control at the foot of each provider section.
   collapseHandle: {
     flexDirection: 'row',
@@ -4694,9 +4791,9 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
   },
   providerLogo: {
-    width: dimensions.providerLogo.size + 10,
-    height: dimensions.providerLogo.size + 10,
-    borderRadius: (dimensions.providerLogo.size + 10) / 2,
+    width: dimensions.providerLogo.size,
+    height: dimensions.providerLogo.size,
+    borderRadius: dimensions.providerLogo.size / 2,
     borderWidth: dimensions.providerLogo.borderWidth,
   },
   providerLogoContainer: {
@@ -4720,7 +4817,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   providerName: {
-    fontSize: fonts.providerName + 3,
+    fontSize: fonts.providerName,
     fontFamily: 'BakbakOne-Regular',
     color: '#000',
     marginBottom: spacing.xs,
@@ -4749,120 +4846,10 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
 
-  // Service Card
-  serviceCard: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    overflow: 'hidden',
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  serviceCardShadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
   summaryItemRequestNote: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FF9500', marginTop: 2 },
-  conflictBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(244, 67, 54, 0.12)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: spacing.sm,
-  },
-  conflictBannerText: {
-    color: '#F44336',
-    fontSize: 12,
-    fontWeight: '600',
-    flex: 1,
-  },
-  requestBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 149, 0, 0.12)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: spacing.sm,
-  },
-  requestBannerText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '600', color: '#FF9500' },
-  serviceHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  serviceInfo: {
-    flex: 1,
-  },
-  serviceName: {
-    fontSize: fonts.serviceText,
-    fontFamily: 'BakbakOne-Regular',
-    marginBottom: 1,
-  },
-  // Duration, directly under the service name in the header.
-  priceSummaryText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-  },
-  // Add-ons/deposit/notes as one tight block under the header, rather than
-  // three separately-margined full-width rows.
-  serviceMetaBlock: {
-    marginTop: spacing.xs,
-    gap: 2,
-  },
-  // Bold/darker so add-ons read as labelled paid extras rather than blending
-  // into the plain secondary-text lines around them. Spacing is owned by the
-  // serviceMetaBlock wrapper, not this line.
-  priceSummaryAddOns: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-  },
-  priceSummaryValue: {
-    fontSize: fonts.body.small,
-    fontFamily: 'BakbakOne-Regular',
-    fontWeight: '700',
-  },
-  depositNote: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-  },
-  removeButton: {
-    width: dimensions.button.small.width,
-    height: dimensions.button.small.height,
-    borderRadius: dimensions.button.small.borderRadius,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   removeText: {
     fontSize: fonts.title.medium,
     fontWeight: 'bold',
-  },
-
-  // Schedule row — plain long-form date/time text. Not interactive: editing
-  // is reached from the provider header's Edit button.
-  dateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  dateText: {
-    fontSize: fonts.body.small,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    flexShrink: 1,
-    marginRight: spacing.sm,
   },
   dateTextWarning: {
     color: '#D32F2F',
@@ -4873,118 +4860,145 @@ const styles = StyleSheet.create({
   // three-band layout above — serviceCard/serviceCardShadow/conflictBanner/
   // itemEditButton/dateTextWarning stay shared with it, untouched).
   swipeRowWrap: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderRadius: dimensions.card.smallBorderRadius,
     overflow: 'hidden',
   },
+  // Native-style circular delete button (like iOS Mail's swipe action)
+  // rather than a full-height red rectangle — renderRightActions scales it
+  // in from progress, so it doesn't just snap into place.
   swipeDeleteAction: {
-    width: 84,
-    height: '100%',
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swipeDeleteButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#F44336',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
   },
-  swipeDeleteText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
+  // "Node card" look for ServiceCard (from the Concept B mockup, minus its
+  // rail/time-column and provider-identity row — provider identity and
+  // ordering both stay owned by CartProviderSection, unchanged; only the
+  // card's own internals were restyled). A surface tint (not the section's
+  // own card colour) separates this card from CartProviderSection around it
+  // — a hairline border alone read as invisible. GroupedServiceCard's
+  // node-* reuse below shares these same styles for visual consistency
+  // between the two card types.
+  nodeCard: {
+    borderRadius: 12,
+    padding: spacing.sm,
   },
-  swipeContent: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: dimensions.card.smallBorderRadius,
-  },
-  swipeSwatch: {
-    width: 60,
-    height: 60,
-    borderRadius: 14,
+  nodePencil: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  swipeSwatchText: {
-    fontSize: 20,
-    fontFamily: 'BakbakOne-Regular',
-  },
-  swipeBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  swipeTopRow: {
+  nodeTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacing.xs,
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  swipeName: {
-    flex: 1,
-    fontSize: fonts.serviceText,
-    fontFamily: 'BakbakOne-Regular',
-  },
-  swipeKebab: {
-    padding: 2,
-    marginTop: -2,
-  },
-  swipeMetaLine: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  swipeBanner: {
+  // Tapping the date/time is how the time is changed — regular weight on
+  // purpose (the display face reads as bold already, so this uses Jura).
+  nodeWhenChip: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: 5,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
-  swipeBannerText: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  swipeNote: {
-    fontSize: fonts.body.xsmall,
+  nodeWhenText: {
+    flexShrink: 1,
+    fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '500',
+  },
+  nodeRemove: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+    marginTop: 8,
+  },
+  // Name and price share one size, a step up from the app's usual
+  // serviceText — the date/time chip above is what leads the card.
+  nodeServiceName: {
+    flex: 1,
+    fontSize: fonts.serviceText + 1,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  nodePrice: {
+    fontSize: fonts.serviceText + 1,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  nodeMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     marginTop: 3,
   },
-  swipePriceBand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  swipePriceLeft: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 5,
-  },
-  swipePrice: {
-    fontSize: fonts.body.small,
-    fontFamily: 'BakbakOne-Regular',
-    fontWeight: '700',
-  },
-  swipePriceNote: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  swipeWhenTouchable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  swipeWhen: {
+  nodeMeta: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
-  swipeWhenWarn: {
-    color: '#D32F2F',
-    fontWeight: 'bold',
+  nodeTag: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  nodeTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  nodeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(244, 67, 54, 0.09)',
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    marginTop: 8,
+  },
+  nodeBannerWarn: {
+    backgroundColor: 'rgba(255, 149, 0, 0.09)',
+  },
+  nodeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F44336',
+  },
+  nodeBannerFix: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#F44336',
+    textDecorationLine: 'underline',
+  },
+  nodeNote: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 6,
   },
 
   // "Which service?" chooser, opened from a provider header with >1 service.
@@ -5111,28 +5125,31 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
   },
 
-  // Grouped card — services scheduled back-to-back, shown as one appointment.
-  groupHeader: {
+  // Grouped card — services scheduled back-to-back, shown as one appointment,
+  // restyled as a tinted "node card" (from the Concept B mockup): a plain
+  // tag+span header instead of a filled badge, chip rows instead of
+  // hairline-divided ones, and a single due-now footer line.
+  groupNodeCard: {
+    borderRadius: 12,
+    padding: spacing.sm,
+  },
+  groupHead: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     marginBottom: spacing.sm,
   },
-  groupHeaderSpacer: {
-    flex: 1,
-  },
-  groupBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  groupBadgeText: {
+  groupTag: {
     fontSize: 9,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
     letterSpacing: 0.5,
-    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  groupTagSpan: {
+    fontSize: 9,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupHeaderDate: {
     fontSize: fonts.body.medium,
@@ -5144,38 +5161,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 1,
   },
-  groupRows: {
+  gchipList: {
     marginTop: spacing.md,
+    gap: 7,
   },
-  groupRow: {
+  gchip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderRadius: 9,
+    padding: spacing.sm,
   },
-  groupRowInfo: {
+  gchipInfo: {
     flex: 1,
   },
-  groupRowName: {
+  gchipName: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
     marginBottom: 1,
   },
-  groupRowMeta: {
+  gchipMeta: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
-  providerIssueCount: {
-    color: '#F44336',
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  // Same red as the card banner and border, so a flagged row reads as part of
-  // the same signal rather than a second, unrelated warning colour.
+  // Same red as the card banner, so a flagged chip reads as part of the
+  // same signal rather than a second, unrelated warning colour.
   groupRowIssue: {
     color: '#F44336',
     fontSize: fonts.body.xsmall,
@@ -5195,7 +5206,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 1,
   },
-  groupRowPrice: {
+  gchipPrice: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
   },
@@ -5203,31 +5214,32 @@ const styles = StyleSheet.create({
     paddingLeft: 2,
     marginTop: -2,
   },
-  groupFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  groupFooterBreakdown: {
-    gap: 2,
-  },
-  groupFooterRow: {
+  gfoot: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: spacing.md,
   },
-  groupFooterLabel: {
+  gfootLabel: {
     fontSize: fonts.body.xsmall,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  gfootSubnote: {
+    fontSize: 9,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
+    marginTop: 1,
   },
-  groupFooterTotalLabel: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'BakbakOne-Regular',
-  },
-  groupFooterValue: {
+  gfootAmt: {
     fontSize: fonts.body.medium,
     fontFamily: 'BakbakOne-Regular',
+  },
+  providerIssueCount: {
+    color: '#F44336',
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    marginTop: 4,
   },
   pickerRowInfo: {
     flex: 1,
@@ -5613,16 +5625,29 @@ const styles = StyleSheet.create({
     borderRadius: dimensions.card.largeBorderRadius,
     width: '88%',
     maxWidth: 360,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
+    // Accent-tinted shadow (plum) rather than flat black — same signature as
+    // ProviderProfileScreen's tinted card shadow, adapted to the client hat.
+    shadowColor: '#3F1E36',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
     elevation: 10,
   },
   liquidGlassSuccessContent: {
     padding: spacing.xxl,
     alignItems: 'center',
     width: '100%',
+  },
+  // Outer faint ring wrapping the icon — the double-ring treatment.
+  liquidGlassSuccessIconRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(52,199,89,0.18)',
   },
   liquidGlassSuccessIcon: {
     width: 72,
@@ -5631,7 +5656,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(52,199,89,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xxl,
     borderWidth: 1,
     borderColor: 'rgba(52,199,89,0.25)',
   },
@@ -5661,12 +5685,20 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.md,
   },
-  liquidGlassSuccessButton: {
+  liquidGlassSuccessButtonPrimary: {
     borderRadius: dimensions.card.smallBorderRadius,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     width: '100%',
     alignItems: 'center',
+  },
+  liquidGlassSuccessButtonGhost: {
+    borderRadius: dimensions.card.smallBorderRadius,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
   },
   liquidGlassSuccessButtonText: {

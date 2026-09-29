@@ -17,9 +17,7 @@ const mockIn = jest.fn();
 
 jest.mock('../lib/supabase', () => ({
   supabase: {
-    // Signed out, so the own-profile exclusion resolves to "nothing to
-    // exclude" and this test stays about ranking order alone.
-    auth: { getSession: async () => ({ data: { session: null }, error: null }) },
+    // Trending is independent of viewer ownership. No auth lookup is needed.
     rpc: (...args: unknown[]) => mockRpc(...args),
     from: () => ({
       select: () => ({
@@ -29,12 +27,10 @@ jest.mock('../lib/supabase', () => ({
   },
 }));
 
-// .not() is chained after .in() for the own-profile exclusion, then .eq()
-// twice for has_gone_live / is_active.
+// Only active, live providers are hydrated; ownership must not filter them.
 const chainable = (rows: unknown[]) => {
   const result = { data: rows, error: null };
   const chain: Record<string, unknown> = {
-    not: () => chain,
     eq: () => chain,
     then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
   };

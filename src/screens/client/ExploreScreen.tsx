@@ -20,6 +20,7 @@ import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
 import { shuffle } from '../../utils/shuffle';
 import { pickTourCardId } from '../../utils/coachMarkTargets';
+import { mergeSavedExploreCards } from '../../utils/mergeSavedExploreCards';
 import { ExploreStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -619,7 +620,13 @@ const ExploreScreen = memo(() => {
     }
 
     let cancelled = false;
-    setFavouritesLoading(true);
+    const localSavedCards = portfolioItems.filter((card) =>
+      savedPortfolioIds.includes(card.id),
+    );
+    // A card just hearted in Discover is already complete and visible. Put it
+    // in Favourites now; the database fetch fills in older saves afterwards.
+    setFavouriteItems(localSavedCards);
+    setFavouritesLoading(localSavedCards.length === 0);
 
     const load = async () => {
       try {
@@ -632,24 +639,25 @@ const ExploreScreen = memo(() => {
         // were actually saved — so the flat-mapped cards need filtering back
         // down to exactly the saved ids before they're shown as favourites.
         const savedIdSet = new Set(savedPortfolioIds);
-        const cards = [
+        const hydratedCards = [
           ...savedPortfolio.map(mapDbPortfolioItem),
           ...providers.map(mapDbProviderToCard),
           ...services.flatMap(mapDbServiceToCards).filter(c => savedIdSet.has(c.id)),
         ];
-        // Most-recently-saved first, matching save order in savedPortfolioIds.
-        const order = new Map(savedPortfolioIds.map((id, i) => [id, i]));
-        cards.sort((a, b) => (order.get(b.id) ?? 0) - (order.get(a.id) ?? 0));
-        setFavouriteItems(cards);
+        setFavouriteItems(
+          mergeSavedExploreCards(savedPortfolioIds, localSavedCards, hydratedCards),
+        );
       } catch {
-        if (!cancelled) setFavouriteItems([]);
+        // Retain current-session saves when the background hydration fails.
+        // An empty state would falsely imply that a heart did not work.
+        if (!cancelled) setFavouriteItems(localSavedCards);
       } finally {
         if (!cancelled) setFavouritesLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
+  }, [activeTab, savedPortfolioIds, portfolioItems, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
 
   // Column width for masonry
   // Must match MasonryGrid's own column maths exactly — it lays the cards out,

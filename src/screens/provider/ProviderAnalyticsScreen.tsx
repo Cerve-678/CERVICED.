@@ -21,7 +21,15 @@ import { getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '.
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { formatShortDate } from '../../utils/dateUtils';
+import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
+import {
+  chartBuckets,
+  currentWindow,
+  inWindow,
+  previousPeriodLabel,
+  previousWindow,
+  type AnalyticsRange,
+} from '../../utils/analyticsPeriod';
 
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
@@ -70,21 +78,68 @@ function monthKey(dateStr: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function prevMonthKey(): string {
-  const d = monthsAgo(1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 function totalForBookings(bs: BookingWithAddOns[]): number {
   return bs.reduce((s, b) => {
     const addOns = b.add_ons?.reduce((a, x) => a + (x.price_snapshot ?? 0), 0) ?? 0;
     return s + (b.base_price ?? 0) + addOns;
   }, 0);
+}
+
+function revenueOf(b: BookingWithAddOns): number {
+  const addOns = b.add_ons?.reduce((a, x) => a + (x.price_snapshot ?? 0), 0) ?? 0;
+  return (b.base_price ?? 0) + addOns;
+}
+
+// What one chart bar represents, so the heading names the unit rather than
+// leaving the reader to guess ("Revenue by month" vs "…by day"/"…by quarter").
+function bucketNoun(range: Range): string {
+  switch (range) {
+    case '7d': return 'day';
+    case '90d': return 'quarter';
+    default: return 'month'; // 6mo and All are both monthly buckets
+  }
+}
+
+/** One plain-English sentence about the selected period, built from the real
+ *  bookings so it can never assert something that didn't happen. Returns null
+ *  when there's nothing yet worth saying (the strip then hides). */
+function buildInsight(
+  range: Range,
+  inRange: BookingWithAddOns[],
+  chartData: { label: string; revenue: number; bookings: number }[],
+  noShow: number,
+): string | null {
+  const completed = inRange.filter(b => b.status === 'completed');
+  if (completed.length === 0) return null;
+
+  const clauses: string[] = [];
+
+  // Top-earning service by revenue (only interesting when there's more than one).
+  const byService = new Map<string, number>();
+  for (const b of completed) {
+    byService.set(b.service_name_snapshot, (byService.get(b.service_name_snapshot) ?? 0) + revenueOf(b));
+  }
+  const topSvc = Array.from(byService.entries()).sort((a, b) => b[1] - a[1])[0];
+  if (topSvc && byService.size > 1) clauses.push(`${topSvc[0]} is your top earner`);
+
+  // Best bucket in the chart (only meaningful with more than one populated bar).
+  const withRev = chartData.filter(d => d.revenue > 0);
+  if (withRev.length > 1) {
+    const best = withRev.reduce((m, d) => (d.revenue > m.revenue ? d : m), withRev[0]!);
+    clauses.push(`${best.label} was your strongest ${bucketNoun(range)}`);
+  }
+
+  // No-shows, only if there are none (a small win worth naming) — a non-zero
+  // count is already visible in the tiles, so don't repeat bad news here.
+  if (noShow === 0 && completed.length >= 3) clauses.push('no no-shows');
+
+  if (clauses.length === 0) return null;
+  // Join naturally: "a", "a, and b", "a, b, and c".
+  const joined =
+    clauses.length === 1
+      ? clauses[0]!
+      : clauses.slice(0, -1).join(', ') + ', and ' + clauses[clauses.length - 1];
+  return joined.charAt(0).toUpperCase() + joined.slice(1) + '.';
 }
 
 // ── Entrance reveal (fade + rise, staggered by index) ────────────────────────
@@ -283,18 +338,24 @@ function RevenueChart({
   dark,
   theme,
   accent,
+  selectedIndex,
+  onSelect,
 }: {
   data: { label: string; revenue: number; bookings: number }[];
   dark: boolean;
   theme: any;
   accent: string;
+  selectedIndex: number;
+  onSelect: (i: number) => void;
 }) {
   const maxRev = Math.max(...data.map(d => d.revenue), 1);
   const anims  = useRef(data.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
+    // Denser charts (30 daily bars) stagger faster so the last bar doesn't
+    // sit waiting a second and a half after the first one starts.
     Animated.stagger(
-      60,
+      Math.min(60, Math.floor(900 / data.length)),
       anims.map((a, i) =>
         Animated.spring(a, {
           toValue: data[i]!.revenue / maxRev,
@@ -307,35 +368,59 @@ function RevenueChart({
   }, [anims, data, maxRev]);
 
   const BAR_TOTAL_H = 100;
+  // A 7- or 3-bar chart labels every bar; a 30-bar daily chart would collide
+  // labels into an unreadable smear, so it shows only a handful, evenly
+  // spaced, always including the last (today).
+  const labelEvery = data.length > 10 ? Math.ceil(data.length / 5) : 1;
+  const barGap = data.length > 15 ? 2 : data.length > 8 ? 4 : 6;
 
   return (
     <View style={chart.wrap}>
-      <View style={chart.bars}>
-        {data.map((d, i) => (
-          <View key={d.label} style={chart.barCol}>
-            <View style={[chart.barBg, { height: BAR_TOTAL_H, backgroundColor: dark ? 'rgba(175,145,151,0.14)' : 'rgba(92,64,51,0.08)' }]}>
-              <Animated.View
-                style={[
-                  chart.bar,
-                  {
-                    height: anims[i]!.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, BAR_TOTAL_H],
-                    }),
-                  },
-                ]}
+      <View style={[chart.bars, { gap: barGap }]}>
+        {data.map((d, i) => {
+          const isSel = i === selectedIndex;
+          return (
+            <TouchableOpacity
+              key={i}
+              style={chart.barCol}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                onSelect(i);
+              }}
+            >
+              <View style={[chart.barBg, { height: BAR_TOTAL_H, backgroundColor: dark ? 'rgba(175,145,151,0.14)' : 'rgba(92,64,51,0.08)' }]}>
+                <Animated.View
+                  style={[
+                    chart.bar,
+                    {
+                      // The selected bar reads at full strength; the rest dim
+                      // back so the one being read is unmistakable.
+                      opacity: isSel ? 1 : 0.32,
+                      height: anims[i]!.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, BAR_TOTAL_H],
+                      }),
+                    },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[accent, accent + 'AA']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                </Animated.View>
+              </View>
+              <Text
+                style={[chart.label, { color: isSel ? accent : theme.secondaryText, fontWeight: isSel ? '700' : '500' }]}
+                numberOfLines={1}
               >
-                <LinearGradient
-                  colors={[accent, accent + 'AA']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              </Animated.View>
-            </View>
-            <Text style={[chart.label, { color: theme.secondaryText }]}>{d.label}</Text>
-          </View>
-        ))}
+                {(i % labelEvery === 0 || i === data.length - 1 || isSel) ? d.label : ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -1142,7 +1227,7 @@ const quad = StyleSheet.create({
 
 // ── Range pill (sliding indicator) ────────────────────────────────────────────
 
-type Range = '7d' | '30d' | '90d' | 'all';
+type Range = AnalyticsRange;
 const RANGES: { key: Range; label: string }[] = [
   { key: '7d',  label: '7d'  },
   { key: '30d', label: '30d' },
@@ -1225,6 +1310,35 @@ const rangeSel = StyleSheet.create({
   txt:       { fontSize: 13 },
 });
 
+// ── Section label ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ children, theme }: { children: React.ReactNode; theme: any }) {
+  return <Text style={[sect.label, { color: theme.secondaryText }]}>{children}</Text>;
+}
+
+const sect = StyleSheet.create({
+  label: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginTop: 8, marginBottom: 2, marginLeft: 2 },
+});
+
+// ── Insight strip (plain-English read of the period) ──────────────────────────
+
+function InsightStrip({ text, dark, theme, accent }: { text: string; dark: boolean; theme: any; accent: string }) {
+  return (
+    <View style={[insight.wrap, { backgroundColor: accent + (dark ? '1F' : '14'), borderColor: accent + (dark ? '2E' : '1F') }]}>
+      <View style={[insight.icon, { backgroundColor: accent }]}>
+        <Ionicons name="sparkles" size={13} color={dark ? '#201817' : '#FFFFFF'} />
+      </View>
+      <Text style={[insight.text, { color: theme.text }]}>{text}</Text>
+    </View>
+  );
+}
+
+const insight = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, borderWidth: 1, borderRadius: 18, padding: 14, marginBottom: 16 },
+  icon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  text: { flex: 1, fontSize: 13.5, lineHeight: 20, fontWeight: '500' },
+});
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ProviderAnalyticsScreen({ navigation }: any) {
@@ -1236,6 +1350,11 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   const [followerCount, setFollowerCount] = useState(0);
   const [refreshing, setRefreshing]     = useState(false);
   const [range, setRange]               = useState<Range>('30d');
+  // Which bar the provider has tapped to read; null falls back to the biggest
+  // bar so the readout always shows something meaningful. Reset when the range
+  // changes, since the buckets are then a different shape.
+  const [selectedBar, setSelectedBar]   = useState<number | null>(null);
+  useEffect(() => { setSelectedBar(null); }, [range]);
 
   const fetchBookingsForRange = useCallback(async () => {
     try {
@@ -1271,16 +1390,20 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     setRefreshing(false);
   }, [fetchBookingsForRange, fetchSupportingMetrics]);
 
-  // Filter by range
-  const inRange = useMemo(() => {
-    if (range === 'all') return bookings;
-    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    return bookings.filter(b => new Date(b.booking_date + 'T00:00:00') >= cutoff);
-  }, [bookings, range]);
+  // Everything below is derived from the selected range and one date string,
+  // so the headline, the tiles, the comparison and the bars can't disagree.
+  const today = dateToYMD(new Date());
+  const period = useMemo(() => currentWindow(range, today), [range, today]);
+  const prevPeriod = useMemo(() => previousWindow(range, today), [range, today]);
 
-  // KPIs
+  // Bookings from the start of the range onwards. Upcoming ones stay in so the
+  // lists and the Pending count still show what's coming; the figures that
+  // only make sense for the past cap at today below.
+  const inRange = useMemo(
+    () => (period ? bookings.filter(b => b.booking_date >= period.start) : bookings),
+    [bookings, period],
+  );
+
   const kpi = useMemo(() => {
     const completed  = inRange.filter(b => b.status === 'completed');
     const revenue    = totalForBookings(completed);
@@ -1288,32 +1411,63 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     const cancelled  = inRange.filter(b => b.status === 'cancelled').length;
     const noShow     = inRange.filter(b => b.status === 'no_show').length;
     const total      = inRange.length;
-    const cRate      = total > 0 ? completed.length / total : 0;
+    // Completion rate is over appointments whose day has come — an upcoming
+    // booking hasn't had the chance to complete yet.
+    const due        = inRange.filter(b => b.booking_date <= today).length;
+    const cRate      = due > 0 ? completed.length / due : 0;
 
-    // Month-over-month revenue
-    const thisMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === currentMonthKey()));
-    const lastMonth  = totalForBookings(bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === prevMonthKey()));
-    const momDelta   = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
+    // Compared with the equal-length period just before the selected one.
+    const prevRevenue = prevPeriod
+      ? totalForBookings(bookings.filter(b => b.status === 'completed' && inWindow(b.booking_date, prevPeriod)))
+      : 0;
+    const delta = prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : null;
 
-    return { revenue, pending, cancelled, noShow, total, cRate, thisMonth, lastMonth, momDelta };
-  }, [inRange, bookings]);
+    return { revenue, pending, cancelled, noShow, total, cRate, prevRevenue, delta };
+  }, [inRange, bookings, prevPeriod, today]);
 
-  // 6-month bar chart data
+  // Bars tile the selected range, so they add up to the headline revenue.
   const chartData = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = monthsAgo(5 - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const bs  = bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === key);
-      return {
-        label:    d.toLocaleDateString('en-GB', { month: 'short' }),
-        revenue:  totalForBookings(bs),
-        bookings: bs.length,
-      };
+    const completed = bookings.filter(b => b.status === 'completed');
+    const earliest = completed.reduce<string | null>(
+      (min, b) => (min === null || b.booking_date < min ? b.booking_date : min),
+      null,
+    );
+    return chartBuckets(range, today, earliest).map(bucket => {
+      const bs = completed.filter(b => inWindow(b.booking_date, bucket));
+      return { label: bucket.label, revenue: totalForBookings(bs), bookings: bs.length };
     });
-  }, [bookings]);
+  }, [bookings, range, today]);
 
-  const momColor = kpi.momDelta >= 0 ? CHART.green : CHART.pink;
-  const momSign  = kpi.momDelta >= 0 ? '+' : '';
+  // The reviews tile follows the range too, like every other figure up here.
+  const reviewsInRange = useMemo(
+    () => (period ? reviews.filter(r => inWindow(dateToYMD(new Date(r.created_at)), period)) : reviews),
+    [reviews, period],
+  );
+
+  // The bar the readout describes: the tapped one, or the biggest by default.
+  const maxBarIndex = useMemo(() => {
+    let idx = 0, max = -Infinity;
+    chartData.forEach((d, i) => { if (d.revenue > max) { max = d.revenue; idx = i; } });
+    return idx;
+  }, [chartData]);
+  const selectedIndex =
+    selectedBar !== null && selectedBar < chartData.length ? selectedBar : maxBarIndex;
+  const selectedBucket = chartData[selectedIndex];
+
+  // Plain-English read of the period, straight from the real bookings.
+  const insightText = useMemo(
+    () => buildInsight(range, inRange, chartData, kpi.noShow),
+    [range, inRange, chartData, kpi.noShow],
+  );
+
+  // Sections that render nothing when empty; used to keep their labels from
+  // sitting over a blank space.
+  const hasCompletedInRange = useMemo(() => inRange.some(b => b.status === 'completed'), [inRange]);
+
+  const momDelta = kpi.delta ?? 0;
+  const momColor = momDelta >= 0 ? CHART.green : CHART.pink;
+  const momSign  = momDelta >= 0 ? '+' : '';
+  const compareLabel = previousPeriodLabel(range);
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -1343,15 +1497,15 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             <View style={{ width: 36 }} />
           </View>
 
-          {/* ── Range selector + history button ── */}
+          {/* ── Range selector + clientele shortcut ── */}
           <View style={main.rangeArea}>
             <RangeSelector range={range} onChange={setRange} dark={dark} theme={theme} />
             <PressScale
-              onPress={() => navigation.navigate('BookingHistory', { initialTab: 'history' })}
+              onPress={() => navigation.navigate('Clientele')}
               haptic="light"
               style={[main.historyBtn, { backgroundColor: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
             >
-              <Ionicons name="menu" size={20} color={theme.secondaryText} />
+              <Ionicons name="people-outline" size={20} color={theme.secondaryText} />
             </PressScale>
           </View>
 
@@ -1378,30 +1532,67 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                         style={[main.heroValue, { color: theme.text }]}
                       />
                     </View>
-                    <View style={[main.momBadge, { backgroundColor: momColor + '20' }]}>
-                      <Ionicons
-                        name={kpi.momDelta >= 0 ? 'trending-up' : 'trending-down'}
-                        size={14}
-                        color={momColor}
-                      />
-                      <Text style={[main.momTxt, { color: momColor }]}>
-                        {momSign}{kpi.momDelta.toFixed(1)}%
-                      </Text>
-                    </View>
+                    {kpi.delta !== null && (
+                      <View style={[main.momBadge, { backgroundColor: momColor + '20' }]}>
+                        <Ionicons
+                          name={momDelta >= 0 ? 'trending-up' : 'trending-down'}
+                          size={14}
+                          color={momColor}
+                        />
+                        <Text style={[main.momTxt, { color: momColor }]}>
+                          {momSign}{momDelta.toFixed(1)}%
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={[main.heroSub, { color: theme.secondaryText }]}>
-                    vs £{kpi.lastMonth.toFixed(0)} last month
-                  </Text>
+                  {compareLabel && (
+                    <Text style={[main.heroSub, { color: theme.secondaryText }]}>
+                      vs £{kpi.prevRevenue.toFixed(0)} {compareLabel}
+                    </Text>
+                  )}
 
-                  {/* Inline bar chart */}
+                  {/* Labeled bar chart with a tap-to-read value */}
                   <View style={{ marginTop: 20 }}>
-                    <RevenueChart data={chartData} dark={dark} theme={theme} accent={accent} />
+                    <View style={main.chartHead}>
+                      <Text style={[main.chartHeadK, { color: theme.secondaryText }]}>
+                        Revenue by {bucketNoun(range)}
+                      </Text>
+                      {selectedBucket && (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={[main.roMonth, { color: theme.secondaryText }]}>{selectedBucket.label}</Text>
+                          <Text style={[main.roVal, { color: accent }]}>{fmtGBP(selectedBucket.revenue)}</Text>
+                          <Text style={[main.roBk, { color: theme.secondaryText }]}>
+                            {selectedBucket.bookings} booking{selectedBucket.bookings !== 1 ? 's' : ''}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <RevenueChart
+                      key={`${range}-${chartData.length}`}
+                      data={chartData}
+                      dark={dark}
+                      theme={theme}
+                      accent={accent}
+                      selectedIndex={selectedIndex}
+                      onSelect={setSelectedBar}
+                    />
+                    <Text style={[main.chartHint, { color: theme.secondaryText }]}>
+                      Tap a bar to see what it earned
+                    </Text>
                   </View>
                 </View>
               </DeckCard>
             </Reveal>
 
-            {/* ── Stat tile grid (3×2) ── */}
+            {/* ── Plain-English insight ── */}
+            {insightText && (
+              <Reveal index={1}>
+                <InsightStrip text={insightText} dark={dark} theme={theme} accent={accent} />
+              </Reveal>
+            )}
+
+            {/* ── At a glance ── */}
+            <SectionLabel theme={theme}>At a glance</SectionLabel>
             <View style={main.tileGrid}>
               {[
                 { label: 'Bookings',   value: kpi.total,                                                                                              icon: 'calendar',       color: CHART.blue },
@@ -1410,8 +1601,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                 { label: 'Pending',    value: kpi.pending,                                                                                             icon: 'time',           color: CHART.amber },
                 { label: 'No Shows',   value: kpi.noShow,                                                                                              icon: 'alert-circle',   color: CHART.pink },
                 {
-                  label: reviews.length > 0 ? `${reviews.length} review${reviews.length !== 1 ? 's' : ''}` : 'No reviews yet',
-                  value: reviews.length > 0 ? parseFloat((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)) : 0,
+                  label: reviewsInRange.length > 0 ? `${reviewsInRange.length} review${reviewsInRange.length !== 1 ? 's' : ''}` : 'No reviews yet',
+                  value: reviewsInRange.length > 0 ? parseFloat((reviewsInRange.reduce((s, r) => s + r.rating, 0) / reviewsInRange.length).toFixed(1)) : 0,
                   icon: 'star', color: CHART.amber,
                 },
                 { label: 'Cancelled',  value: kpi.cancelled,                                                                                           icon: 'close-circle',   color: CHART.plum },
@@ -1430,37 +1621,53 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
               ))}
             </View>
 
-            {/* ── Completion rate ── */}
+            {/* ── Where your money comes from ── */}
+            {hasCompletedInRange && (
+              <>
+                <SectionLabel theme={theme}>Where your money comes from</SectionLabel>
+                <Reveal index={9}>
+                  <TopServices bookings={inRange} dark={dark} theme={theme} />
+                </Reveal>
+              </>
+            )}
+
+            {/* ── Performance ── */}
+            <SectionLabel theme={theme}>Performance</SectionLabel>
             <Reveal index={8}>
               <CompletionRing rate={kpi.cRate} dark={dark} theme={theme} />
             </Reveal>
+            {bookings.length > 0 && (
+              <Reveal index={10}>
+                <ServiceQuadrantCharts bookings={bookings} dark={dark} theme={theme} />
+              </Reveal>
+            )}
 
-            {/* ── Top services ── */}
-            <Reveal index={9}>
-              <TopServices bookings={inRange} dark={dark} theme={theme} />
-            </Reveal>
-
-            {/* ── Service quadrant line charts ── */}
-            <Reveal index={10}>
-              <ServiceQuadrantCharts bookings={bookings} dark={dark} theme={theme} />
-            </Reveal>
-
-            {/* ── Rating analytics ── */}
-            <Reveal index={11}>
-              <RatingAnalytics reviews={reviews} bookings={bookings} dark={dark} theme={theme} />
-            </Reveal>
+            {/* ── Reputation ── */}
+            {reviews.length > 0 && (
+              <>
+                <SectionLabel theme={theme}>Reputation</SectionLabel>
+                <Reveal index={11}>
+                  <RatingAnalytics reviews={reviews} bookings={bookings} dark={dark} theme={theme} />
+                </Reveal>
+              </>
+            )}
 
             {/* ── Recent activity ── */}
-            <Reveal index={12}>
-              <RecentStream
-                bookings={inRange}
-                dark={dark}
-                theme={theme}
-                onPress={b =>
-                  navigation.navigate('BookingDetail', { bookingId: b.id, booking: mapDbBookingToConfirmed(b) })
-                }
-              />
-            </Reveal>
+            {inRange.length > 0 && (
+              <>
+                <SectionLabel theme={theme}>Recent activity</SectionLabel>
+                <Reveal index={12}>
+                  <RecentStream
+                    bookings={inRange}
+                    dark={dark}
+                    theme={theme}
+                    onPress={b =>
+                      navigation.navigate('BookingDetail', { bookingId: b.id, booking: mapDbBookingToConfirmed(b) })
+                    }
+                  />
+                </Reveal>
+              </>
+            )}
 
           </View>
         </ScrollView>
@@ -1490,6 +1697,13 @@ const main = StyleSheet.create({
   heroSub:    { fontSize: 12, marginTop: 2 },
   momBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
   momTxt:     { fontSize: 12, fontWeight: '700' },
+
+  chartHead:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 },
+  chartHeadK: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  roMonth:    { fontSize: 11, fontWeight: '600' },
+  roVal:      { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+  roBk:       { fontSize: 11 },
+  chartHint:  { fontSize: 11, textAlign: 'center', marginTop: 10, opacity: 0.8 },
 
   tileGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });

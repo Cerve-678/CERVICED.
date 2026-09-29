@@ -25,6 +25,24 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### PENDING APPLY 2026-09-28 (pregnancy-safe write default)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20260928220000 | `pregnancy_safe_defaults_to_true` | **Written, NOT yet applied.** Flips `services.is_pregnancy_safe` column DEFAULT `false`→`true` and the `replace_provider_services` RPC's two `is_pregnancy_safe` COALESCE fallbacks `false`→`true` (UPDATE + INSERT branches), so an unspecified pregnancy value is written SAFE — matching every read of the column (prepare_checkout `= false`, profile mapper/registration `?? true`, getServiceSafetyFlags `!== false`). RPC reproduced verbatim from verified-live `pg_get_functiondef`; only those two deltas changed, `SET search_path TO 'public'` preserved. `patch_test_required` fallback left at `false` intentionally. Frontier at authoring: `20260928213516`. If applied via `apply_migration` it stamps its own clock version — rename the file to match and record the live version here. A separate one-off backfill of existing rows (`update public.services set is_pregnancy_safe = true where is_pregnancy_safe is distinct from true`) is user-run in the SQL editor and is NOT part of this migration.
+
+### Applied 2026-09-28 (users.years_experience staging column)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260928213516 | `users_years_experience_staging` | `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS years_experience INT CHECK (0–80 or NULL)`. Post-apply `information_schema.columns` confirms `users.years_experience` is `integer`. Additive/nullable, no default. Staging column for the new "Years of experience" answer on SignUpStep4 — mirrors `team_size`/`price_range`, copied into `providers.years_experience` by InfoRegScreen's first-save prefill. Authored version `20260928210000`; apply_migration stamped its own clock version `20260928213516` and the file was renamed to match. Frontier before apply: `20260928201412`. Step 4 input clamps to 0–80 so the CHECK can never fail the verification upsert.
+
+### Applied 2026-09-28 (loyalty points first-bonus rebalance)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260928201412 | `loyalty_points_first_bonus_rebalance` | `award_points_on_booking_completed()` and `award_points_on_review_left()` reproduced from the verified-live `pg_get_functiondef()` (identical to `20260906174647`, no drift) with only three deltas changed: `first_booking` 200→100 (and its inline `(+100)` notification line), `first_review` 10→50, `review_left` 4→2. Post-apply re-fetch confirmed: first_booking=100, booking notif says `(+100)`, `booking_completed` still +2, `birthday_bonus` still +50, first_review v_delta=50, later-review v_delta=2, and `SET search_path` intact on both functions. `returning_client` (+30) and `profile_completed` (+30) left untouched. App-side `PointsScreen.tsx` earn copy updated to match (First Booking +100, First Review +50, Leave a Review +2). Filename renamed from authored `20260928000000` to the recorded version. Frontier before apply was `20260925221735`.
+
 ### Applied 2026-09-14 (natural-width PM notification times)
 
 `20260914145609_notification_time_pm_natural_width.sql` routes all 14 live

@@ -310,9 +310,8 @@ const dlgSt = StyleSheet.create({
 });
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
-// Client-facing equivalent of useProviderDialog (src/components/ProviderDialog.tsx).
-// Themed via the app's light/dark ThemeContext instead of the provider side's
-// fixed palette, since clients shouldn't see provider branding.
+// The app's single dialog + toast system, used by both hats. Colour comes from
+// useTheme().palette, which is hat-aware — never the raw `theme` field.
 
 export function useAppDialog() {
   const { palette, isDarkMode } = useTheme();

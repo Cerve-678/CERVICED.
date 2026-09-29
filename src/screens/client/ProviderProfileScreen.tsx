@@ -1379,6 +1379,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     viewerChecked,
   });
 
+  const canSaveProvider = viewerChecked && canBookProvider && providerDbId !== null;
+
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
@@ -1874,26 +1876,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   }, [slideRightAnimation]);
 
-  // Notification toggle handler
-  const handleNotificationToggle = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const [isNotificationLoading, setIsNotificationLoading] = useState(false);
+  const handleNotificationToggle = useCallback(async () => {
+    if (!canSaveProvider || !providerDbId || isNotificationLoading) return;
     const newState = !isNotificationsEnabled;
-    // Optimistic — the toast fires immediately either way; roll back only
-    // if the write actually fails.
-    setIsNotificationsEnabled(newState);
-    setNotificationMessageType("bell"); // SET TO BELL
-    showRightNotification();
-    if (!providerDbId) return;
-    setProviderFollowNotify(providerDbId, newState).catch((error) => {
+    setIsNotificationLoading(true);
+    try {
+      // Verify ownership and save before displaying a successful subscription.
+      await setProviderFollowNotify(providerDbId, newState);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setIsNotificationsEnabled(newState);
+      setNotificationMessageType("bell");
+      showRightNotification();
+    } catch (error) {
       logger.error("Error updating follow notifications:", error);
-      setIsNotificationsEnabled(!newState);
-    });
-  }, [
-    isNotificationsEnabled,
-    showRightNotification,
-    providerDbId,
-    setIsNotificationsEnabled,
-  ]);
+    } finally {
+      setIsNotificationLoading(false);
+    }
+  }, [canSaveProvider, providerDbId, isNotificationLoading, isNotificationsEnabled,
+    setIsNotificationsEnabled, showRightNotification]);
 
   // Bookmark toggle handler
   const {
@@ -2005,7 +2006,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const providerIsBookmarked = isBookmarkedFn(providerDbId ?? providerId);
 
   const handleBookmarkToggle = useCallback(async () => {
-    if (isBookmarkLoading) return;
+    if (isBookmarkLoading || !canSaveProvider) return;
     // Saving yourself to "Your Providers" is the bookmark equivalent of
     // booking yourself — the list is for providers you want to come back to
     // as a client, and your own profile is always one tap away in provider
@@ -2086,6 +2087,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [
     providerIsBookmarked,
     isBookmarkLoading,
+    canSaveProvider,
     providerId,
     providerDbId,
     addBookmark,
@@ -2298,6 +2300,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       providerId: provider.id,
       providerDbId,
       providerName: provider.displayName,
+      promptMode: "enquiry",
     });
   }, [provider, providerDbId, navigation, isOwnProvider]);
 
@@ -2413,7 +2416,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             ]}
             onPress={handleBookmarkToggle}
             activeOpacity={0.7}
-            disabled={isBookmarkLoading}
+            disabled={isBookmarkLoading || !canSaveProvider}
             accessibilityLabel={
               providerIsBookmarked ? "Remove bookmark" : "Bookmark provider"
             }
@@ -2472,6 +2475,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isBookmarkLoading,
     adaptiveAccentColor,
     handleBookmarkToggle,
+    canSaveProvider,
     handleShare,
     OP.bg,
     OP.text,
@@ -4941,10 +4945,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <TouchableOpacity
                         style={styles.bellButtonInline}
                         onPress={handleNotificationToggle}
+                        disabled={!canSaveProvider || isNotificationLoading}
                         activeOpacity={0.8}
                         accessibilityLabel="Notifications"
                         accessibilityRole="button"
-                        accessibilityState={{ selected: isNotificationsEnabled }}
+                        accessibilityState={{ selected: isNotificationsEnabled, disabled: !canSaveProvider || isNotificationLoading }}
                       >
                         <BellIcon
                           size={16}

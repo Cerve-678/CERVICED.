@@ -70,6 +70,12 @@ export function formatLongDateNoYear(input: string | Date): string {
   return `${weekday} ${day} ${month}`;
 }
 
+/** "Sat 3 Oct" — compact weekday + date for dense card headers. */
+export function formatShortDayDate(input: string | Date): string {
+  const date = toLocalDate(input);
+  return `${DAY_NAMES_ABBREV[date.getDay()]} ${date.getDate()} ${MONTH_NAMES_ABBREV[date.getMonth()]}`;
+}
+
 /** "08/06/2026" (DD/MM/YYYY) */
 export function formatShortDate(input: string | Date): string {
   const date = toLocalDate(input);

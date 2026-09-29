@@ -175,7 +175,7 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   // ── Message types ────────────────────────────────────────────────────────────
   if (type === 'provider_message' || type === 'new_message') {
     if (isProvider) {
-      navigateNested('ProviderHome', 'ProviderInbox', { initialFilter: 'messages' });
+      navigateNested('ProviderHome', 'ProviderInbox', { initialFilter: 'unread' });
       return;
     }
     // Client chat is keyed by the provider's SLUG, not their id, so it needs one
@@ -200,6 +200,20 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     } catch (err) {
       // A lookup failure must still leave the user somewhere useful.
       logger.warn('[NotificationTap] Provider lookup failed for chat:', err);
+      openNotifications();
+    }
+    return;
+  }
+
+  // ── Loyalty points (client-only) ─────────────────────────────────────────────
+  // Lands on the Points screen, which lives in the Profile tab's stack. This
+  // notification carries a booking_id (the award's source booking) but is
+  // deliberately NOT in BOOKING_TYPES: the useful destination is the rewards
+  // balance, not the booking the points happened to come from.
+  if (type === 'points_earned') {
+    if (!isProvider) {
+      navigateNested('Profile', 'Points');
+    } else {
       openNotifications();
     }
     return;

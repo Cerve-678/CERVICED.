@@ -20,7 +20,7 @@ import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./useProviderProfileData";
 
-const INLINE_PORTFOLIO_LIMIT = 8;
+const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
 
 interface SectionPalette {

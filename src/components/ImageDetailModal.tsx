@@ -31,6 +31,7 @@ import TabIcon from './TabIcon';
 import Icon from './IconLibrary';
 import { fonts, spacing } from '../constants/PlatformDimensions';
 import { buildMoreLikeThis } from '../features/explore/moreLikeThis';
+import { savedCarouselImageId } from '../utils/savedCarouselImageId';
 
 
 
@@ -144,17 +145,16 @@ export const ImageDetailModal = ({
 
   const hasProvider = !!item.providerName;
 
-  const isSaved = isPortfolioSaved(item.id);
   // A specific bookable service (has its own serviceId) goes straight to
   // Book Now; a bare portfolio/provider photo has nothing specific to book,
   // so its primary action is viewing the provider instead.
   const isBookableService = item.kind === 'service';
 
-  const handleBookmark = () => {
-    if (isSaved) {
-      unsavePortfolioItem(item.id);
+  const handleBookmark = (savedItemId: string) => {
+    if (isPortfolioSaved(savedItemId)) {
+      unsavePortfolioItem(savedItemId);
     } else {
-      savePortfolioItem(item.id);
+      savePortfolioItem(savedItemId);
     }
   };
 
@@ -211,7 +211,6 @@ export const ImageDetailModal = ({
           palette={P}
           isDarkMode={isDarkMode}
           hasProvider={hasProvider}
-          isSaved={isSaved}
           isBookableService={isBookableService}
           moreLikeThis={moreLikeThis}
           moreLikeThisIsFallback={moreLikeThisIsFallback}
@@ -352,14 +351,13 @@ interface ModalBodyProps {
   palette: ReturnType<typeof useTheme>['palette'];
   isDarkMode: boolean;
   hasProvider: boolean;
-  isSaved: boolean;
   isBookableService: boolean;
   moreLikeThis: PortfolioItem[];
   moreLikeThisIsFallback: boolean;
   scrollRef: React.RefObject<ScrollView | null>;
   onClose: () => void;
   onSelectItem?: ((item: PortfolioItem) => void) | undefined;
-  handleBookmark: () => void;
+  handleBookmark: (savedItemId: string) => void;
   handleViewProfile: () => void;
   handleBookNow: () => void;
 }
@@ -369,7 +367,6 @@ function ModalBody({
   palette: P,
   isDarkMode,
   hasProvider,
-  isSaved,
   isBookableService,
   moreLikeThis,
   moreLikeThisIsFallback,
@@ -397,6 +394,7 @@ function ModalBody({
     return idx >= 0 && idx < images.length ? idx : 0;
   }, [item.id, images.length]);
   const [activeImageIndex, setActiveImageIndex] = useState(initialImageIndex);
+  const { isPortfolioSaved } = useBookmarkStore();
   const [isSheetAtImageEdge, setIsSheetAtImageEdge] = useState(true);
   const [loadedImageRatios, setLoadedImageRatios] = useState<
     Record<string, number>
@@ -501,6 +499,9 @@ function ModalBody({
     Haptics.selectionAsync().catch(() => {});
   }, []);
 
+  const activeSavedItemId = savedCarouselImageId(item, activeImageIndex);
+  const isSaved = isPortfolioSaved(activeSavedItemId);
+
   const handleSheetScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       // Once details cover the image area, give the sheet full control of
@@ -594,7 +595,7 @@ function ModalBody({
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
             () => {},
           );
-          handleBookmark();
+          handleBookmark(activeSavedItemId);
         }}
         activeOpacity={0.65}
       >

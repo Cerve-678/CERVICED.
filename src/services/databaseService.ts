@@ -429,7 +429,7 @@ function invalidateOwnProviderIds(): void {
   ownProviderIdsCache = null;
 }
 
-async function getOwnProviderIds(): Promise<string[]> {
+export async function getOwnProviderIds(): Promise<string[]> {
   // getSession() reads the locally cached session; getUser() (used elsewhere
   // in this file where the answer must be authoritative) costs a network
   // round trip, which is not worth paying on every discovery query.
@@ -472,8 +472,8 @@ const NO_SUCH_PROVIDER_ID = "00000000-0000-0000-0000-000000000000";
 
 /**
  * PostgREST value for `.not(column, "in", …)` — the provider rows the
- * signed-in user owns, so a client-facing list never returns them their own
- * business. Matches nothing for an account with no provider profile.
+ * signed-in user owns, for recommendation queries only. Plain browse and
+ * explicit searches allow the owner’s business. Matches nothing for an account with no provider profile.
  */
 async function ownProviderIdExclusion(): Promise<string> {
   const ids = await getOwnProviderIds();
@@ -497,9 +497,6 @@ export async function getNewProviders(limit = 10): Promise<PublicProviderSummary
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
     .gte("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -514,9 +511,6 @@ export async function getTopRatedProviders(limit = 10): Promise<PublicProviderSu
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
     .gte("review_count", 3)
     .gte("rating", 4.0)
     .order("rating", { ascending: false })
@@ -548,9 +542,6 @@ export async function getTrendingProviders(limit = 10): Promise<PublicProviderSu
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .in("id", rankedIds)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
     .eq("has_gone_live", true)
     .eq("is_active", true);
   if (error) throw new Error(error.message);
@@ -592,9 +583,9 @@ export async function getProviders(
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("is_active", true)
     .eq("has_gone_live", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
+    // Unlike Explore's recommendation feed,
+    // this is a plain browse/list, not a recommendation — a provider's own
+    // business is allowed to appear here (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
@@ -924,9 +915,9 @@ export async function searchProviders(
     .in("id", allIds)
     .eq("is_active", true)
     .eq("has_gone_live", true)
-    // A provider searching as a client should not turn up their own
-    // business — they can neither book it nor browse it usefully here.
-    .not("id", "in", await ownProviderIdExclusion())
+    // An explicit, typed search is not a recommendation — a provider's own
+    // business is allowed to turn up when it actually matches the query
+    // (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
     .limit(limit);
@@ -987,6 +978,59 @@ type ProviderProfileJoinRow = Omit<
   provider_specialties: ProviderWithServices["specialties"] | null;
 };
 
+type ProviderProfileCoreJoinRow = Omit<
+  ProviderProfileJoinRow,
+  "services" | "provider_specialties"
+>;
+
+// Kept separate from the nested catalogue selection so Provider Profile can
+// paint its hero and business information without waiting for every service,
+// image and add-on to cross the network.
+const PROVIDER_PROFILE_PUBLIC_FIELDS = `
+  id,
+  slug,
+  display_name,
+  service_category,
+  service_categories,
+  custom_service_type,
+  location_text,
+  about_text,
+  logo_url,
+  gradient,
+  accent_color,
+  background_image_url,
+  profile_theme,
+  brand_font,
+  phone,
+  email,
+  instagram,
+  website,
+  tiktok,
+  preferred_contact_methods,
+  whatsapp_number,
+  external_booking_url,
+  rating,
+  years_experience,
+  is_verified,
+  booking_policies,
+  business_type,
+  online_consultations_available,
+  cancellation_notice_hours,
+  automation_schedule_release_day:automation_settings->scheduleReleaseDay,
+  automation_waitlist_enabled:automation_settings->waitlistEnabled,
+  accessibility_notes,
+  languages_spoken,
+  qualifications,
+  is_insured_self_declared,
+  dbs_checked_self_declared,
+  team_size,
+  walk_ins_welcome,
+  group_bookings_available,
+  vegan_cruelty_free,
+  travel_radius,
+  products_used
+`;
+
 const PROVIDER_PROFILE_CACHE_TTL_MS = 60_000;
 const PROVIDER_PROFILE_CACHE_MAX_ENTRIES = 50;
 const PROVIDER_PROFILE_SERVICES_LIMIT = 200;
@@ -997,11 +1041,112 @@ const providerProfileCache = new BoundedTtlCache<
   string,
   ProviderWithServices | null
 >(PROVIDER_PROFILE_CACHE_TTL_MS, PROVIDER_PROFILE_CACHE_MAX_ENTRIES);
+const providerProfilePreviewCache = new BoundedTtlCache<
+  string,
+  ProviderWithServices | null
+>(PROVIDER_PROFILE_CACHE_TTL_MS, PROVIDER_PROFILE_CACHE_MAX_ENTRIES);
 const providerProfileRequests = new Map<
   string,
   Promise<ProviderWithServices | null>
 >();
+const providerProfilePreviewRequests = new Map<
+  string,
+  Promise<ProviderWithServices | null>
+>();
 const providerProfileRequestTokens = new Map<string, symbol>();
+
+function mapProviderProfileJoinRow(row: ProviderProfileJoinRow): ProviderWithServices {
+  const {
+    automation_schedule_release_day: scheduleReleaseDay,
+    automation_waitlist_enabled: waitlistEnabled,
+    services: joinedServices,
+    provider_specialties: providerSpecialties,
+    ...publicProvider
+  } = row;
+  const publicAutomationSettings =
+    scheduleReleaseDay !== null || waitlistEnabled !== null
+      ? {
+          ...(scheduleReleaseDay !== null ? { scheduleReleaseDay } : {}),
+          ...(waitlistEnabled !== null ? { waitlistEnabled } : {}),
+        }
+      : null;
+  return {
+    ...publicProvider,
+    // Do not retain unrelated operational automation settings in the
+    // process-wide public profile cache or expose them to client features.
+    automation_settings: publicAutomationSettings,
+    services: (joinedServices ?? [])
+      .filter((service) => service.is_active)
+      .sort((left, right) => left.sort_order - right.sort_order)
+      .map(({ service_images, service_add_ons, ...service }) => ({
+        ...service,
+        images: service_images ?? [],
+        // Cache only the public/active child shape. Owner RLS can return
+        // inactive add-ons; allowing those into this process-wide cache
+        // could expose them after an account switch even if the screen
+        // mapper currently filters them again.
+        add_ons: (service_add_ons ?? []).filter((addOn) => addOn.is_active),
+      })),
+    specialties: providerSpecialties ?? [],
+  };
+}
+
+/**
+ * Fetch the lightweight, public part of a provider profile. The full
+ * catalogue remains a separate request so a client can see who they opened
+ * before every service image and add-on has loaded.
+ */
+export async function getProviderProfilePreviewBySlug(
+  slug: string,
+  options: { forceRefresh?: boolean } = {},
+): Promise<ProviderWithServices | null> {
+  const normalizedSlug = slug.trim();
+  if (!normalizedSlug) return null;
+
+  if (!options.forceRefresh) {
+    const fullProfile = providerProfileCache.get(normalizedSlug);
+    if (fullProfile !== undefined) return fullProfile;
+    const cached = providerProfilePreviewCache.get(normalizedSlug);
+    if (cached !== undefined) return cached;
+    const inFlight = providerProfilePreviewRequests.get(normalizedSlug);
+    if (inFlight) return inFlight;
+  }
+
+  const request = (async (): Promise<ProviderWithServices | null> => {
+    const { data, error } = await supabase
+      .from("providers")
+      .select(`${PROVIDER_PROFILE_PUBLIC_FIELDS}, hair_types_catered`)
+      .eq("slug", normalizedSlug)
+      .eq("is_active", true)
+      .eq("has_gone_live", true)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        providerProfilePreviewCache.set(normalizedSlug, null);
+        return null;
+      }
+      throw error;
+    }
+
+    const profile = mapProviderProfileJoinRow({
+      ...(data as ProviderProfileCoreJoinRow),
+      services: [],
+      provider_specialties: [],
+    });
+    providerProfilePreviewCache.set(normalizedSlug, profile);
+    return profile;
+  })();
+
+  providerProfilePreviewRequests.set(normalizedSlug, request);
+  try {
+    return await request;
+  } finally {
+    if (providerProfilePreviewRequests.get(normalizedSlug) === request) {
+      providerProfilePreviewRequests.delete(normalizedSlug);
+    }
+  }
+}
 
 /**
  * Fetch a single public provider profile by slug.
@@ -1032,48 +1177,7 @@ export async function getProviderBySlug(
       .from("providers")
       .select(
         `
-        id,
-        slug,
-        display_name,
-        service_category,
-        service_categories,
-        custom_service_type,
-        location_text,
-        about_text,
-        logo_url,
-        gradient,
-        accent_color,
-        background_image_url,
-        profile_theme,
-        brand_font,
-        phone,
-        email,
-        instagram,
-        website,
-        tiktok,
-        preferred_contact_methods,
-        whatsapp_number,
-        external_booking_url,
-        rating,
-        years_experience,
-        is_verified,
-        booking_policies,
-        business_type,
-        online_consultations_available,
-        cancellation_notice_hours,
-        automation_schedule_release_day:automation_settings->scheduleReleaseDay,
-        automation_waitlist_enabled:automation_settings->waitlistEnabled,
-        accessibility_notes,
-        languages_spoken,
-        qualifications,
-        is_insured_self_declared,
-        dbs_checked_self_declared,
-        team_size,
-        walk_ins_welcome,
-        group_bookings_available,
-        vegan_cruelty_free,
-        travel_radius,
-        products_used,
+        ${PROVIDER_PROFILE_PUBLIC_FIELDS},
         hair_types_catered,
         services (
           id,
@@ -1120,48 +1224,19 @@ export async function getProviderBySlug(
       if (error.code === "PGRST116") {
         if (providerProfileRequestTokens.get(normalizedSlug) === requestToken) {
           providerProfileCache.set(normalizedSlug, null);
+          providerProfilePreviewCache.set(normalizedSlug, null);
         }
         return null;
       }
       throw error;
     }
 
-    const row = data as unknown as ProviderProfileJoinRow;
-    const {
-      automation_schedule_release_day: scheduleReleaseDay,
-      automation_waitlist_enabled: waitlistEnabled,
-      services: joinedServices,
-      provider_specialties: providerSpecialties,
-      ...publicProvider
-    } = row;
-    const publicAutomationSettings =
-      scheduleReleaseDay !== null || waitlistEnabled !== null
-        ? {
-            ...(scheduleReleaseDay !== null ? { scheduleReleaseDay } : {}),
-            ...(waitlistEnabled !== null ? { waitlistEnabled } : {}),
-          }
-        : null;
-    const profile: ProviderWithServices = {
-      ...publicProvider,
-      // Do not retain unrelated operational automation settings in the
-      // process-wide public profile cache or expose them to client features.
-      automation_settings: publicAutomationSettings,
-      services: (joinedServices ?? [])
-        .filter((service) => service.is_active)
-        .sort((left, right) => left.sort_order - right.sort_order)
-        .map(({ service_images, service_add_ons, ...service }) => ({
-          ...service,
-          images: service_images ?? [],
-          // Cache only the public/active child shape. Owner RLS can return
-          // inactive add-ons; allowing those into this process-wide cache
-          // could expose them after an account switch even if the screen
-          // mapper currently filters them again.
-          add_ons: (service_add_ons ?? []).filter((addOn) => addOn.is_active),
-        })),
-      specialties: providerSpecialties ?? [],
-    };
+    const profile = mapProviderProfileJoinRow(
+      data as unknown as ProviderProfileJoinRow,
+    );
     if (providerProfileRequestTokens.get(normalizedSlug) === requestToken) {
       providerProfileCache.set(normalizedSlug, profile);
+      providerProfilePreviewCache.set(normalizedSlug, profile);
     }
     return profile;
   })();
@@ -1179,9 +1254,9 @@ export async function getProviderBySlug(
   }
 }
 
-/** Warm the bounded profile cache before a navigation transition completes. */
+/** Warm the fast first-paint cache before a navigation transition completes. */
 export function prefetchProviderBySlug(slug: string): void {
-  void getProviderBySlug(slug).catch((error: unknown) => {
+  void getProviderProfilePreviewBySlug(slug).catch((error: unknown) => {
     logger.warn("Provider profile prefetch failed:", error);
   });
 }
@@ -1470,13 +1545,9 @@ export async function searchPortfolio(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    // Never show a provider their own work back as discovery (see
-    // ownProviderIdExclusion).
-    .not("provider_id", "in", await ownProviderIdExclusion())
-    // Same exclusion as getPortfolioItems — this is the text-search half of
-    // the same discovery/inspiration surface. A second .or() is a separate
-    // top-level condition ANDed with the caption/tags one below, not a
-    // replacement for it.
+    // Unlike getPortfolioItems (the passive discovery/inspiration feed),
+    // this is an explicit text search — a provider's own work is allowed
+    // to turn up here (see ownProviderIdExclusion).
     .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
     .or(`caption.ilike.%${query}%,tags.cs.{${query}}`)
     .order("created_at", { ascending: false })
@@ -2697,6 +2768,19 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (id: string) => UUID_RE.test(id);
 
+/** Fresh ownership check for viewer actions; never trust a delayed UI lookup
+ * or the session ownership cache when writing a bookmark/follow. */
+async function assertNotOwnProvider(providerId: string, userId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id")
+    .eq("id", providerId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) throw new Error("You can't bookmark or follow your own profile.");
+}
+
 /** Add a bookmark */
 export async function addBookmark(providerId: string): Promise<void> {
   if (!isUuid(providerId)) return; // static/demo provider — local store only
@@ -2705,6 +2789,7 @@ export async function addBookmark(providerId: string): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+  await assertNotOwnProvider(providerId, user.id);
 
   const { error } = await supabase
     .from("bookmarks")
@@ -3477,7 +3562,30 @@ export interface ProviderConversationWithClient {
   unread_count_provider: number;
   created_at: string;
   updated_at: string;
+  has_booking: boolean;
   client: { id: string; name: string; avatar_url: string | null } | null;
+}
+
+/** Classify by the same non-cancelled booking history used in client chat.
+ * Page lightweight rows so old clients are not lost to the diary date window
+ * or the API row limit. Provider scope and RLS apply to every page.
+ */
+async function getBookedConversationUserIds(providerId: string, userIds: string[]): Promise<Set<string>> {
+  const booked = new Set<string>();
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("id, user_id")
+      .eq("provider_id", providerId)
+      .in("user_id", userIds)
+      .neq("status", "cancelled")
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    for (const booking of data ?? []) booked.add(booking.user_id);
+    if ((data?.length ?? 0) < pageSize || booked.size === userIds.length) return booked;
+  }
 }
 
 /** Fetch all conversations for the current provider, most recently updated first */
@@ -3499,17 +3607,18 @@ export async function getProviderConversations(): Promise<
   if (error) throw error;
   const conversations = (data ?? []) as Omit<
     ProviderConversationWithClient,
-    "client"
+    "client" | "has_booking"
   >[];
   if (conversations.length === 0) return [];
 
   // Client name/avatar via the same batched RPC as getProviderReviews — see
   // fix_users_table_pii_leak.sql for why this isn't an embedded users join.
   const userIds = [...new Set(conversations.map((c) => c.user_id))];
-  const { data: profiles, error: profilesError } = await supabase.rpc(
-    "get_user_public_profiles",
-    { p_user_ids: userIds },
-  );
+  const [profileResult, bookedUserIds] = await Promise.all([
+    supabase.rpc("get_user_public_profiles", { p_user_ids: userIds }),
+    getBookedConversationUserIds(provider.id, userIds),
+  ]);
+  const { data: profiles, error: profilesError } = profileResult;
   if (profilesError) throw profilesError;
   const profileById = new Map<
     string,
@@ -3525,6 +3634,7 @@ export async function getProviderConversations(): Promise<
     (c): ProviderConversationWithClient => ({
       ...c,
       client: profileById.get(c.user_id) ?? null,
+      has_booking: bookedUserIds.has(c.user_id),
     }),
   );
 }
@@ -6670,6 +6780,7 @@ export async function setProviderFollowNotify(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+  await assertNotOwnProvider(providerId, user.id);
   const { error } = await supabase
     .from("provider_follows")
     .upsert(
@@ -7977,29 +8088,20 @@ export async function updateProviderContactDetails(
  * calling again with the old value — the cooldown will refuse, and the
  * specialties are already gone.
  */
-/**
- * Replace the provider's whole set of service types. Ordered: the first entry
- * is the headline.
- *
- * Writes `service_categories` ONLY, and deliberately not `service_category`
- * alongside it. trg_sync_provider_service_categories derives the headline from
- * the array's first entry, so sending both invites the two to disagree in the
- * payload and makes the trigger arbitrate something the caller shouldn't have
- * had an opinion about. `custom_service_type` is likewise the DB's to clear —
- * the cooldown guard nulls it whenever OTHER leaves the set.
- *
- * Throws on the 90-day cooldown (P0001), which callers surface verbatim.
- */
-export async function updateMyServiceCategories(
+export async function updateMyServiceCategory(
   providerId: string,
-  categories: ServiceCategory[],
+  category: ServiceCategory,
+  customServiceType: string | null,
 ): Promise<void> {
-  if (!categories.length) {
-    throw new Error("A provider must offer at least one service type");
-  }
   const { error } = await supabase
     .from("providers")
-    .update({ service_categories: categories })
+    .update({
+      service_category: category,
+      // Only meaningful for OTHER; the trigger nulls it for every other
+      // category regardless, so sending it here is belt-and-braces for the
+      // OTHER -> OTHER-with-a-new-label case the trigger doesn't fire on.
+      custom_service_type: category === "OTHER" ? customServiceType : null,
+    })
     .eq("id", providerId);
   if (error) throw error;
 }
@@ -8259,7 +8361,13 @@ export async function getServiceSafetyFlags(
   for (const row of data ?? []) {
     map.set(row.id, {
       patchTestRequired: !!row.patch_test_required,
-      isPregnancySafe: row.is_pregnancy_safe === true,
+      // Only an EXPLICIT false is "unsafe in pregnancy" — a null (never-set)
+      // service is treated as safe, matching prepare_checkout's own gate
+      // (`is_pregnancy_safe = false`), the profile mapper, and the
+      // registration service (both `?? true`). Reading `=== true` here made
+      // the cart the one surface that flagged null services nothing else
+      // considers unsafe and the server never requires an ack for.
+      isPregnancySafe: row.is_pregnancy_safe !== false,
     });
   }
   return map;

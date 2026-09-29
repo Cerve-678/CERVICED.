@@ -75,6 +75,21 @@ instead of re-deriving their knowledge from scratch:
   or a fix file that exists but isn't wired into `RUN_ALL_MIGRATIONS.sql`.
   Use before trusting any `supabase/*.sql` file as ground truth.
 
+## Autonomous workforce
+
+Project-local Codex roles live in `.codex/agents/`. For sustained or
+multi-agent work, start with `cerviced-workforce-director`, which selects one
+ready ticket from `docs/operations/agent-backlog.md`, delegates it to the
+owning department, and records the evidence needed for review. The operating
+model, ownership boundaries, and unattended-work limits are in
+`docs/operations/agent-workflow.md`.
+
+The workforce may investigate, implement, test, and make scoped local commits
+on its assigned branch. It must stop for user direction before production
+migrations, releases/submissions, irreversible data changes, new paid-service
+costs, or product/legal decisions about money, refunds, age, privacy, and
+terms. Do not have multiple agents edit the same feature or migration.
+
 ---
 
 ## Security

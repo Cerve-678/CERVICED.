@@ -510,14 +510,14 @@ A full-app survey found real, already-consistent patterns alongside genuine
 silent drift — several component jobs have 2-4 unmerged implementations doing
 the same thing, sometimes coexisting in the same file:
 
-- **Quick informational alerts** — 4 variants: `useAppDialog`/`useProviderDialog`'s
+- **Quick informational alerts** — 4 variants: `useAppDialog`'s
   blurred bottom sheet (`showAlert`), two independently hand-copied centered-card
   families (`UserProfileScreen`/`ProviderAccountScreen` vs. `BookingDetailScreen`/
   `BookingsScreen`), and raw `Alert.alert` — 203 call sites across 32 files,
   unthemed, winning purely by inertia.
 - **Toasts** — 3 families: `AppDialog`'s floating+blurred, `ProviderPromotionsScreen`'s
   near-identical floating-unblurred cousin (hand-rolled in the same file that
-  also imports the real `useProviderDialog` hook), and a non-floating inline
+  also imports the real `useAppDialog` hook), and a non-floating inline
   banner used in 3 provider screens.
 - **Tabs** — the healthiest category: `SlidingTabs` (10 screens) and
   `CategoryTabPill` (3 screens) are both genuinely shared and self-documented

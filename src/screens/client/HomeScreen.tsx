@@ -38,7 +38,7 @@ import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { resolveClientLocation } from '../../services/clientLocationService';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
-import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
+import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
@@ -280,6 +280,11 @@ export default function HomeScreen() {
 
   // Live providers from Supabase; starts empty until data loads
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
+  const [ownProviderIds, setOwnProviderIds] = useState<string[]>([]);
+  const recommendationCandidates = useMemo(
+    () => liveProviders.filter(p => !ownProviderIds.includes(p.id)),
+    [liveProviders, ownProviderIds],
+  );
   const [providersLoading, setProvidersLoading] = useState(true);
 
   // Device location, for the "Near You" section — null until permission is
@@ -474,7 +479,8 @@ export default function HomeScreen() {
     };
 
     // Fetch live providers — shows empty state if DB has no data
-    getProviders().then(data => {
+    Promise.all([getProviders(), getOwnProviderIds()]).then(([data, ownIds]) => {
+      setOwnProviderIds(ownIds);
       setLiveProviders(data.map(mapDbProvider));
       setProvidersLoading(false);
     }).catch(() => {
@@ -557,26 +563,20 @@ export default function HomeScreen() {
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
+    let cancelled = false;
     const updateProviderData = async () => {
       try {
         // Get bookmarked providers from store — cross-reference against live providers
         const bookmarkedProviders = liveProviders.filter(p => bookmarkedIds.includes(p.id));
 
-        // Score all live providers — no limit here, slicing happens at render time
-        const personalizedRecommended = await userLearningService.getPersonalizedProviders(
-          liveProviders
-        );
-
-        // Exclude bookmarked providers from recommended (they already have their own section)
         const yourProviderIds = new Set(bookmarkedProviders.map(p => p.id));
-        const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
+        const defaultRecommended = recommendationCandidates.filter(p => !yourProviderIds.has(p.id));
 
-        // Fallback: all non-bookmarked providers in original DB order
-        const defaultRecommended = liveProviders.filter(p => !yourProviderIds.has(p.id));
-
+        // Render browse sections immediately; personalisation must not hold
+        // every category behind its storage/initialisation work.
         setProvidersData({
           yourProviders: bookmarkedProviders.length > 0 ? bookmarkedProviders : [],
-          recommended: recommendedFiltered.length > 0 ? recommendedFiltered : defaultRecommended,
+          recommended: defaultRecommended,
           hairProviders: liveProviders.filter(p => p.service === 'HAIR'),
           nailProviders: liveProviders.filter(p => p.service === 'NAILS'),
           lashProviders: liveProviders.filter(p => p.service === 'LASHES'),
@@ -590,6 +590,14 @@ export default function HomeScreen() {
           // Kids providers — same widening via audience='kids'.
           kidsProviders: liveProviders.filter(p => p.service === 'KIDS' || kidsServiceProviderIds.has(p.id)),
         });
+
+        const personalizedRecommended = await userLearningService.getPersonalizedProviders(recommendationCandidates);
+        if (cancelled) return;
+        const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
+        setProvidersData(previous => ({
+          ...previous,
+          recommended: recommendedFiltered.length > 0 ? recommendedFiltered : defaultRecommended,
+        }));
 
         // Phase 5.4 — recently viewed from userLearningService interaction log.
         // Raw window is wider than the 15 we display, since repeat views of
@@ -610,7 +618,8 @@ export default function HomeScreen() {
     };
 
     updateProviderData();
-  }, [bookmarkedIds, liveProviders, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
+    return () => { cancelled = true; };
+  }, [bookmarkedIds, liveProviders, recommendationCandidates, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
 
   // "Near You" — nearest-first, not "every active provider" in arbitrary DB
   // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
@@ -622,9 +631,9 @@ export default function HomeScreen() {
   const NEARBY_RADIUS_KM = 50;
   const MIN_NEARBY_RESULTS = 5;
   const nearbyProviders = useMemo(() => {
-    if (!userCoords) return liveProviders;
+    if (!userCoords) return recommendationCandidates;
 
-    const withDistance = liveProviders
+    const withDistance = recommendationCandidates
       .filter(p => p.latitude != null && p.longitude != null)
       .map(p => ({
         ...p,
@@ -634,7 +643,7 @@ export default function HomeScreen() {
 
     const withinRadius = withDistance.filter(p => p.distanceKm <= NEARBY_RADIUS_KM);
     return withinRadius.length >= MIN_NEARBY_RESULTS ? withinRadius : withDistance;
-  }, [liveProviders, userCoords]);
+  }, [recommendationCandidates, userCoords]);
 
   // User picked a city from LocationModal (either the first-run prompt, or
   // reopening it later to change area) — geocode it once and feed it into

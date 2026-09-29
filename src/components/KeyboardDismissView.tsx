@@ -13,12 +13,9 @@ import {
 interface KeyboardDismissViewProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  // Height of anything rendered ABOVE this component that KeyboardAvoidingView
-  // itself doesn't know about — a custom header, safe-area inset, etc. On iOS,
-  // `padding` behavior offsets from this component's own top, so omitting this
-  // is what caused the extra-gap-above-input bug on screens with a header
-  // rendered outside the KeyboardAvoidingView (see ProviderConversationScreen's
-  // pre-existing correct `insets.top + headerHeight` for the shape to pass in).
+  // Distance from the screen top to this component's parent coordinate
+  // system (e.g. a native navigation header). Sibling custom headers already
+  // contribute to its measured y position and must not be counted twice.
   extraOffset?: number;
   // Tap-outside-to-dismiss. Off by default because a ScrollView ancestor with
   // keyboardShouldPersistTaps="handled" (the app's existing convention on

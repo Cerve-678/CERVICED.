@@ -125,7 +125,7 @@ Curated: [[Booking Flow]] · **244 files**
 - `src/screens/client/RescheduleScreen.tsx` _(175)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
-- `src/screens/shared/NotificationsScreen.tsx` _(125)_
+- `src/screens/shared/NotificationsScreen.tsx` _(127)_
 - `supabase/phase1_schema.sql` _(125)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(124)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **244 files**
 ## Notifications
 Curated: [[Notifications]] · **149 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(285)_
+- `src/screens/shared/NotificationsScreen.tsx` _(291)_
 - `src/services/databaseService.ts` _(152)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(102)_
@@ -155,8 +155,8 @@ Curated: [[Notifications]] · **149 files**
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(52)_
 - `supabase/automation_jobs.sql` _(51)_
+- `src/services/notificationTapHandler.ts` _(44)_
 - `src/services/becca/capabilities/client.ts` _(42)_
-- `src/services/notificationTapHandler.ts` _(42)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_
 - `supabase/notifications_cleanup_2026_08.sql` _(40)_
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **149 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **73 files**
-- `src/services/databaseService.ts` _(66)_
+- `src/services/databaseService.ts` _(67)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(49)_
 - `src/features/providers/goLiveStatus.ts` _(35)_

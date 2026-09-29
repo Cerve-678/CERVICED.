@@ -20,7 +20,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProviderAccountStackParamList } from '../../navigation/types';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { formatShortDate } from '../../utils/dateUtils';
@@ -270,7 +270,7 @@ const ss = StyleSheet.create({
 export default function ProviderInfoPackScreen({ navigation }: Props) {
   const { isDarkMode: dark } = useTheme();
   const { user } = useAuth();
-  const { showToast, showConfirm, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useAppDialog();
   const P = dark ? DARK_P : LIGHT_P;
 
   const [view,       setView]       = useState<'list' | 'create'>('list');

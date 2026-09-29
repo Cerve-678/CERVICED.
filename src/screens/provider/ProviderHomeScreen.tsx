@@ -64,6 +64,10 @@ import type {
 } from '../../types/database';
 import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes, overridesFromDate } from '../../utils/dateUtils';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
+import * as Haptics from 'expo-haptics';
+
+/** Light selection tick for every tappable on this screen. */
+const tap = () => { Haptics.selectionAsync().catch(() => {}); };
 import { formatBookingRef } from '../../features/bookings/presentation';
 import {
   buildGoLiveSteps,
@@ -230,6 +234,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
 
   const handleExpand = (e: any) => {
     e.stopPropagation?.();
+    tap();
     Animated.sequence([
       Animated.timing(expandScale, { toValue: 0.82, duration: 70,  useNativeDriver: true }),
       Animated.spring(expandScale,  { toValue: 1,    tension: 160, friction: 7, useNativeDriver: true }),
@@ -240,7 +245,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
   return (
     <TouchableOpacity
       activeOpacity={0.88}
-      onPress={onPress}
+      onPress={() => { tap(); onPress(); }}
       style={[
         bc.wrap,
         { backgroundColor: P.card, borderColor: P.border, shadowColor: dark ? 'transparent' : '#000' },
@@ -352,7 +357,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
             <Text style={[bc.instructions, { color: P.sub }]}>“{booking.notes}”</Text>
           )}
           <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
-          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={onViewMessages}>
+          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={() => { tap(); onViewMessages(); }}>
             <Text style={[bc.msgBtnTxt, { color: '#fff' }]}>View Messages</Text>
           </TouchableOpacity>
         </View>
@@ -656,7 +661,7 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
               <TouchableOpacity
                 key={booking.id}
                 activeOpacity={0.82}
-                onPress={() => onPress(booking)}
+                onPress={() => { tap(); onPress(booking); }}
                 style={{
                   position: 'absolute',
                   top,
@@ -720,6 +725,9 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
 // have to share the width a single day timeline gets to itself.
 const WK_HOUR_H     = 56;
 const WK_TIME_COL_W = 44;
+// Right-hand spacer in both the day-header row and the grid; the header's
+// "next week" arrow lives in it so the columns stay pixel-aligned.
+const WK_ARROW_COL_W = 32;
 // Headroom above the first hour line, mirroring the day timeline's own
 // TL_TOP_INSET — and the same generous +80 buffer it adds beyond the raw
 // hours height, so the ScrollView's reported content size actually covers
@@ -747,16 +755,6 @@ function shiftDateString(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
   return formatDateString(d);
-}
-
-function weekRangeLabel(weekDates: string[]): string {
-  const [fy, fm, fd] = weekDates[0]!.split('-').map(Number);
-  const [ly, lm, ld] = weekDates[6]!.split('-').map(Number);
-  const fMon = MONTH_NAMES[fm! - 1]!.slice(0, 3);
-  const lMon = MONTH_NAMES[lm! - 1]!.slice(0, 3);
-  if (fy === ly && fm === lm) return `${fMon} ${fd} – ${ld}`;
-  if (fy === ly) return `${fMon} ${fd} – ${lMon} ${ld}`;
-  return `${fMon} ${fd}, ${fy} – ${lMon} ${ld}, ${ly}`;
 }
 
 interface WeekViewProps {
@@ -822,30 +820,29 @@ function WeekView({
   const showNowLine = nowMinutes >= WK_START_HOUR * 60 && nowMinutes <= WK_END_HOUR * 60;
   const todayInWeek = weekDates.includes(TODAY_STR);
 
-  const goPrevWeek = useCallback(() => onSelectDate(shiftDateString(selectedDate, -7)), [selectedDate, onSelectDate]);
-  const goNextWeek = useCallback(() => onSelectDate(shiftDateString(selectedDate, 7)), [selectedDate, onSelectDate]);
+  const goPrevWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, -7)); }, [selectedDate, onSelectDate]);
+  const goNextWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, 7)); }, [selectedDate, onSelectDate]);
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Week navigation — arrows page a week at a time. A swipe gesture on
-          the grid was tried here too, but a PanResponder wrapping the
-          ScrollView made its own vertical scroll feel broken even when
-          gated to horizontal drags, so arrows are the only way to page. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, paddingBottom: 6 }}>
-        <TouchableOpacity onPress={goPrevWeek} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
-          <Ionicons name="chevron-back" size={18} color={P.sub} />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: P.sub }}>{weekRangeLabel(weekDates)}</Text>
-        <TouchableOpacity onPress={goNextWeek} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
-          <Ionicons name="chevron-forward" size={18} color={P.sub} />
-        </TouchableOpacity>
-      </View>
-
       {/* Day headers, aligned with the columns below — same date-circle
           treatment as the date strip and month grid so "selected" and
-          "today" read the same way in every view. */}
+          "today" read the same way in every view. The week arrows sit at
+          either end of this row, in the time gutter and in a spacer the grid
+          mirrors, so paging a week needs no row of its own. Arrows are the
+          only way to page: a swipe gesture on the grid was tried, but a
+          PanResponder wrapping the ScrollView made its own vertical scroll
+          feel broken even when gated to horizontal drags. */}
       <View style={{ flexDirection: 'row', marginHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: P.border }}>
-        <View style={{ width: WK_TIME_COL_W }} />
+        {/* Bottom-aligned with a 5px lift: the date circle is 36 tall and the
+            arrow 26, so this centres the arrow on the numbers whatever height
+            the day-letter row above them ends up. flex-start keeps it clear of
+            Monday's circle, which overlaps the gutter by 8. */}
+        <View style={{ width: WK_TIME_COL_W, alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+          <TouchableOpacity onPress={goPrevWeek} accessibilityLabel="Previous week" hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }} style={{ padding: 4, marginBottom: 5 }}>
+            <Ionicons name="chevron-back" size={18} color={P.sub} />
+          </TouchableOpacity>
+        </View>
         {/* Same spacer + flex:1-wrapper-of-flex:1-columns nesting as the grid
             below, so the two rows resolve to pixel-identical column widths
             instead of two separately-computed flex layouts that could drift. */}
@@ -859,8 +856,8 @@ function WeekView({
               <TouchableOpacity
                 key={dateStr}
                 activeOpacity={0.75}
-                onPress={() => onSelectDate(dateStr)}
-                style={{ flex: 1, alignItems: 'flex-start', marginLeft: -8 }}
+                onPress={() => { tap(); onSelectDate(dateStr); }}
+                style={{ flex: 1, alignItems: 'center' }}
               >
                 {/* Reuses the date strip's own tile styles (s.tileDayLetter /
                     s.dateCircle / s.tileNum) rather than new ones — those
@@ -884,6 +881,11 @@ function WeekView({
               </TouchableOpacity>
             );
           })}
+        </View>
+        <View style={{ width: WK_ARROW_COL_W, alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+          <TouchableOpacity onPress={goNextWeek} accessibilityLabel="Next week" hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ padding: 4, marginBottom: 5 }}>
+            <Ionicons name="chevron-forward" size={18} color={P.sub} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -981,7 +983,7 @@ function WeekView({
                       <TouchableOpacity
                         key={booking.id}
                         activeOpacity={0.82}
-                        onPress={() => onPressBooking(booking)}
+                        onPress={() => { tap(); onPressBooking(booking); }}
                         style={{ position: 'absolute', top, height, left: `${left}%`, width: `${blockW}%`, paddingHorizontal: 1.5 }}
                       >
                         <View style={{
@@ -1013,12 +1015,13 @@ function WeekView({
               );
             })}
           </View>
+          <View style={{ width: WK_ARROW_COL_W }} />
 
           {/* Now line — spans the full grid width, not just today's column,
               so it reads as "this moment" across the whole week rather than
               a mark stuck inside one day's box. */}
           {todayInWeek && showNowLine && (
-            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: 0, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
+            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: WK_ARROW_COL_W, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
           )}
         </View>
       </ScrollView>
@@ -1212,7 +1215,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       {
         key: 'view-mode',
         title: 'Three ways to see your bookings',
-        body: 'Switch between a plain list, the hour-by-hour timeline for one day, and the full week at a glance.',
+        body: 'Switch between the hour-by-hour timeline for one day, a plain list, and the full week at a glance.',
         target: { ref: viewModeBtnRef },
         radius: 17,
         icon: 'list',
@@ -1273,6 +1276,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const backdropOp = useRef(new Animated.Value(0)).current;
 
   const openSheet = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     sheetY.setValue(screenHeight);
     backdropOp.setValue(0);
     setShowAddSheet(true);
@@ -1283,6 +1287,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [sheetY, backdropOp]);
 
   const closeSheet = useCallback(() => {
+    tap();
     Animated.parallel([
       Animated.timing(sheetY,     { toValue: screenHeight, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(backdropOp, { toValue: 0,        duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }),
@@ -1368,6 +1373,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     navigation.setParams({ jumpToDate: undefined });
     return undefined;
   }, [route.params?.jumpToDate, navigation]);
+
+  // The daily-recap notification ("Today's Schedule") lands here in list view:
+  // it summarises the day as a list, so the timeline would answer a different
+  // question. Cleared after use so a later re-focus doesn't force the mode again.
+  useEffect(() => {
+    const requested = route.params?.viewMode;
+    if (!requested) return;
+    setViewMode(requested);
+    navigation.setParams({ viewMode: undefined });
+  }, [route.params?.viewMode, navigation]);
 
   // Fetch bookings. `providerId`, when the caller already has it (the
   // combined focus effect below fetches the profile once for both this and
@@ -1742,12 +1757,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [navigation]);
 
   const handleDateTap = useCallback((dateStr: string) => {
+    tap();
     setSelectedDate(dateStr);
     const idx = STRIP_DATES.indexOf(dateStr);
     if (idx >= 0) stripRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.4 });
   }, []);
 
   const toggleMonth = () => {
+    tap();
     setShowMonth(v => !v);
   };
 
@@ -1779,7 +1796,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </TouchableOpacity>
             <TouchableOpacity
               ref={viewModeBtnRef}
-              onPress={() => setViewMode(v => v === 'list' ? 'timeline' : v === 'timeline' ? 'week' : 'list')}
+              // Tap order: timeline (the default) → list → week → back to timeline.
+              onPress={() => { tap(); setViewMode(v => v === 'timeline' ? 'list' : v === 'list' ? 'week' : 'timeline'); }}
               style={[s.iconBtn, { backgroundColor: P.accent }]}
             >
               <Ionicons
@@ -1790,7 +1808,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </TouchableOpacity>
             <TouchableOpacity
               ref={bellRef}
-              onPress={() => navigation.navigate('Notifications')}
+              onPress={() => { tap(); navigation.navigate('Notifications'); }}
               style={[s.iconBtn, { backgroundColor: P.iconBg }]}
             >
               <Ionicons name="notifications-outline" size={17} color={P.sub} />
@@ -1819,7 +1837,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               Add your services, schedule, and address so clients can find and book you.
             </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate('EditProfile' as never)}
+              onPress={() => { tap(); navigation.navigate('EditProfile' as never); }}
               activeOpacity={0.7}
               style={{
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -1851,7 +1869,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               </Text>
               {/* Only dismissible once bookable (schedule set) — the schedule is the hard blocker */}
               {setupStatus.scheduleSet && (
-                <TouchableOpacity onPress={() => setSetupDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity onPress={() => { tap(); setSetupDismissed(true); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="close" size={16} color={P.sub} />
                 </TouchableOpacity>
               )}
@@ -1874,7 +1892,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             {buildGoLiveSteps(setupStatus).filter(step => step.blocking).map(step => (
               <TouchableOpacity
                 key={step.key}
-                onPress={() => navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never)}
+                onPress={() => { tap(); navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never); }}
                 disabled={step.done}
                 activeOpacity={0.7}
                 style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}
@@ -1904,11 +1922,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
             {/* Nav */}
             <View style={s.monthNav}>
-              <TouchableOpacity onPress={() => setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()-1); return n; })} style={s.monthArrow}>
+              <TouchableOpacity onPress={() => { tap(); setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()-1); return n; }); }} style={s.monthArrow}>
                 <Ionicons name="chevron-back" size={20} color={P.text} />
               </TouchableOpacity>
               <Text style={[s.monthNavLabel, { color: P.text }]}>{monthLabel}</Text>
-              <TouchableOpacity onPress={() => setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()+1); return n; })} style={s.monthArrow}>
+              <TouchableOpacity onPress={() => { tap(); setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()+1); return n; }); }} style={s.monthArrow}>
                 <Ionicons name="chevron-forward" size={20} color={P.text} />
               </TouchableOpacity>
             </View>
@@ -2022,7 +2040,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
         {/* ── Blocked / closed-day banner ──────────────────────────── */}
         {(isSelectedDateBlocked || todayAvailability?.is_closed) && (
-          <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 2, borderRadius: 12, backgroundColor: dark ? '#3D1B1B' : '#FDEAEA', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: viewMode === 'week' ? 20 : 2, borderRadius: 12, backgroundColor: dark ? '#3D1B1B' : '#FDEAEA', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="ban-outline" size={16} color="#C73535" />
             <Text style={{ color: '#C73535', fontSize: 13, fontWeight: '600' }}>
               {isSelectedDateBlocked ? 'This day is blocked' : 'Closed — not available'}
@@ -2087,7 +2105,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                       <Ionicons name="calendar-outline" size={36} color={P.sub} style={{ opacity: 0.45, marginBottom: 10 }} />
                       <Text style={[s.emptyTitle, { color: P.text }]}>No appointments</Text>
                       <Text style={[s.emptySub, { color: P.sub }]}>
-                        {item.dateStr === todayStr ? "You're free today" : 'This day is free'}
+                        {/* YYYY-MM-DD strings compare correctly as text. A day that's
+                            already gone reads in the past tense. */}
+                        {item.dateStr === todayStr ? "You're free today" : item.dateStr < todayStr ? 'This day was free' : 'This day is free'}
                       </Text>
                     </View>
                   );
@@ -2155,7 +2175,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </Text>
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={() => setShowGoLiveCelebration(false)}
+              onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); setShowGoLiveCelebration(false); }}
               style={{ marginTop: 20, backgroundColor: P.accent, paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12 }}
             >
               <Text style={{ color: P.ice, fontWeight: '700', fontSize: 15 }}>Let's go</Text>
@@ -2194,7 +2214,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             { icon: 'people-outline',          title: 'Clientele',   sub: 'View & manage your client list',    route: 'Clientele'        },
             { icon: 'document-text-outline',   title: 'Info Pack',   sub: 'Share service details with clients',route: 'InfoPacks'        },
             { icon: 'clipboard-outline',       title: 'Forms',       sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
-            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Messages with your clients',        route: 'ProviderInbox'    },
+            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Enquiries and client messages',        route: 'ProviderInbox'    },
           ] as const).filter(item => OFFERS_ENABLED || item.route !== 'Promotions').map((item, idx, arr) => (
             <React.Fragment key={item.title}>
               <TouchableOpacity

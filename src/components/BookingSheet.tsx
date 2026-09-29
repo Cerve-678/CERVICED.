@@ -16,10 +16,11 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardDismissView } from './KeyboardDismissView';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
 import { EmergencyBookingPrompt } from './EmergencyBookingPrompt';
 import { AvailabilityService } from '../services/AvailabilityService';
@@ -286,6 +287,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const [emergencyAck, setEmergencyAck] = useState(false);
   const [emergencyRequest, setEmergencyRequest] = useState<EmergencyRequest | null>(null);
   const [showEmergencyPolicy, setShowEmergencyPolicy] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   // The provider's Emergency Booking Policy — a free-text field on
   // booking_policies, authored on PoliciesScreen. Its own document, distinct
   // from `providerTerms` (the add-to-cart T&Cs form); the client reads it in
@@ -305,6 +307,25 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       ? (effectiveBookingPolicies['emergencyBookingPolicy'] as string).trim()
       : '';
   const scrollRef = useRef<ScrollView>(null);
+  const notesScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollOffsetY = useRef(0);
+
+  useEffect(() => () => {
+    if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
+  }, []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
   useEffect(() => {
@@ -663,11 +684,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   return (
     <Modal visible={isVisible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent={true} onRequestClose={onClose}>
-      {/* Without this, opening the keyboard for the Notes field left the
-          footer (Add to Cart / Save Changes) exactly where it was — on
-          shorter screens the keyboard covered it outright, or squeezed it
-          off the bottom of the visible sheet. */}
-      <KeyboardDismissView style={styles.overlay}>
+      {/* The keyboard overlays the lower payment summary. Promo code stays
+          put; Notes gets only a small local nudge for typing comfort. */}
+      <View style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: sheetBackground, paddingBottom: bottomInset + 16 }]}>
           <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
@@ -709,9 +728,18 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         <ScrollView
           ref={scrollRef}
           style={styles.body}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+          scrollEventThrottle={16}
+          onScroll={(event) => {
+            scrollOffsetY.current = event.nativeEvent.contentOffset.y;
+          }}
           // The footer is pinned, so leave enough room to scroll the last
           // field fully above it instead of letting it sit behind the CTA.
-          contentContainerStyle={[styles.bodyContent, { paddingBottom: 180 + insets.bottom }]}
+          contentContainerStyle={[
+            styles.bodyContent,
+            { paddingBottom: 180 + insets.bottom + keyboardHeight },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {step === 'addons' ? (
@@ -923,6 +951,18 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   multiline
                   numberOfLines={4}
                   maxLength={500}
+                  onFocus={() => {
+                    // Notes sits closest to the payment summary. Give it a
+                    // small nudge when typing starts, without moving promo
+                    // code or avoiding the keyboard across the whole sheet.
+                    if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
+                    notesScrollTimer.current = setTimeout(() => {
+                      scrollRef.current?.scrollTo({
+                        y: scrollOffsetY.current + 80,
+                        animated: true,
+                      });
+                    }, 100);
+                  }}
                 />
                 <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
               </View>
@@ -1066,10 +1106,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             {
               borderTopColor: tokens.border,
               backgroundColor: sheetBackground,
-              // Keep the action above the home indicator / Android gesture
-              // bar, including on shorter devices where the modal reaches
-              // the very bottom of the display.
-              bottom: Math.max(16, insets.bottom + 16),
+              // The sheet's own paddingBottom (bottomInset + 16, above)
+              // already clears the home indicator / Android gesture bar —
+              // adding insets.bottom again here double-counted it and
+              // pushed the buttons noticeably higher than intended.
+              bottom: 0,
             },
           ]}
         >
@@ -1161,7 +1202,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         </View>
           </SafeAreaView>
         </View>
-      </KeyboardDismissView>
+      </View>
 
       {/* Same nesting rule as the terms sheet below: rendered inside the
           sheet's own Modal so the confirmation lands ON the booking sheet,

@@ -47,10 +47,10 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // Auth
 import { useAuth } from '../../contexts/AuthContext';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 
 // Supabase registration service
-import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
@@ -2707,7 +2707,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Themed (not native Alert) specifically for the "this will pause your
   // account" warning on deleting the last service — everything else on this
   // screen still uses Alert.alert, left as-is.
-  const { showConfirm, DialogHost } = useProviderDialog();
+  const { showConfirm, DialogHost } = useAppDialog();
 
   // Read from the ROOT provider (App.tsx), deliberately not the nested
   // <SafeAreaProvider> this screen renders further down: this hook call sits
@@ -2886,10 +2886,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   const [isEditMode, setIsEditMode] = useState(false);
   // Which section-page is active — drives the pill row and is the only
-  // thing goToSection/handlePagerScrollEnd write to. Every section is always
-  // mounted (all 5 pages exist in the pager at once), so unsaved edits can't
-  // be lost by swiping.
+  // thing goToSection/handlePagerScrollEnd write to. The initial render only
+  // mounts Identity; each subsequent page mounts the first time it is opened
+  // and remains mounted afterwards, so edits are never lost by swiping.
   const [activePage, setActivePage] = useState(0);
+  const [mountedPages, setMountedPages] = useState<ReadonlySet<number>>(
+    () => new Set([0]),
+  );
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
   // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
@@ -2954,9 +2957,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // left with a silently-blank, unclaimed profile and no explanation.
   const [claimError, setClaimError] = useState<string | null>(null);
 
-  // Load existing provider data and policies from Supabase/AsyncStorage on mount
+  // Render an existing provider's last saved profile as soon as AsyncStorage
+  // responds, then reconcile it with Supabase in the background. The cache is
+  // only a fast starting point: the live read still owns the final state and
+  // failures only surface when neither source can provide a profile.
   useEffect(() => {
     if (!user?.id) { setIsLoadingProvider(false); return; }
+    const userId = user.id;
+    let cancelled = false;
+    const cachedProfile = getCachedProviderData(userId).catch(() => null);
+
+    cachedProfile.then(data => {
+      if (!data || cancelled) return;
+      setProviderData(data);
+      setIsEditMode(true);
+      setTermsAccepted(true);
+      const firstCat = Object.keys(data.categories)[0];
+      if (firstCat) setSelectedCategory(firstCat);
+      // This only removes the blocking spinner. Supabase continues below and
+      // replaces this snapshot with the authoritative profile when it returns.
+      setLoadError(false);
+      setIsLoadingProvider(false);
+    });
+
     // If this account just came through the "claim your business" flow
     // (ClaimProviderScreen), attach it to the unclaimed row *before* loading
     // provider data below — once claimed, that same loadProviderFromSupabase
@@ -2978,8 +3001,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       })
       .catch(() => {})
       .finally(() => {
-        loadProviderFromSupabase(user.id)
+        loadProviderFromSupabase(userId)
           .then(data => {
+            if (cancelled) return;
             if (data) {
               setProviderData(data);
               setIsEditMode(true);
@@ -2996,7 +3020,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // an existing provider who never set an enquiry address saw an
               // empty field even though their business email was on file.
               if (!data.email) {
-                getUserBusinessInfo(user.id)
+                getUserBusinessInfo(userId)
                   .then(info => {
                     const businessEmail = info?.business_email;
                     if (!businessEmail) return;
@@ -3010,7 +3034,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             // what the 5-step signup already collected (users table) instead
             // of starting blank, so the provider isn't retyping their own
             // business name/contact details from scratch.
-            return getUserSignupPrefillInfo(user.id)
+            return getUserSignupPrefillInfo(userId)
               .then(prefill => {
                 if (!prefill) return;
                 const validBusinessTypes: ProviderRegistrationData['businessType'][] = BUSINESS_TYPE_OPTS.map(o => o.value);
@@ -3081,18 +3105,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           // existing provider's locked Business Name/Service Type render
           // as editable after a transient network blip. Show a retry state
           // instead of silently guessing.
-          .catch((error) => {
+          .catch(async (error) => {
+            // A cache read can finish a little after a failed network call.
+            // Wait for it before deciding the editor has no usable profile.
+            if (await cachedProfile) return;
+            if (cancelled) return;
             logger.error('InfoReg: failed to load existing provider data', error);
             setLoadError(true);
           })
-          .finally(() => setIsLoadingProvider(false));
+          .finally(() => {
+            if (!cancelled) setIsLoadingProvider(false);
+          });
       });
     // Load saved policies from Supabase, the only source of truth — the
     // device-local cache this used to fall back to was removed, because a
     // stale copy round-tripped back through a save could revert settings
     // changed on another device. Merge over defaults so fields added later
     // (e.g. bookingInstructions) are never undefined.
-    loadProviderPolicies(user.id)
+    loadProviderPolicies(userId)
       .then(saved => {
         if (!saved) { setPoliciesLoaded(true); return; }
         // Verbatim round-trip — this screen edits no policy field, so every
@@ -3113,6 +3143,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       // cancellation/deposit/refund/no-show settings with defaults —
       // handleSubmit skips that write until this flag is true.
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [user?.id, loadRetryCount]);
 
   // ── Portfolio (client work gallery shown on the public profile) ───────────
@@ -3554,8 +3585,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // Update immediately instead of waiting for momentum-end: button and
     // accessibility state must agree with the destination during the motion.
     setActivePage(idx);
+    setMountedPages(previous =>
+      previous.has(idx) ? previous : new Set([...previous, idx]),
+    );
     pagerRef.current?.scrollTo({ x: idx * screenWidth, animated: true });
   }, [screenWidth]);
+
+  const handleActivePageChange = useCallback((index: number) => {
+    setActivePage(index);
+    setMountedPages(previous =>
+      previous.has(index) ? previous : new Set([...previous, index]),
+    );
+  }, []);
 
   // Keep the current page aligned after rotation or split-view resizing.
   useEffect(() => {
@@ -3605,28 +3646,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     [providerData.serviceCategories, providerData.providerService],
   );
 
-  // Add or remove one macro type at sign-up. Two rules the DB also holds, so
-  // the UI can never propose a state the save would reject:
-  //  - the set is never empty. Deselecting your last type is a no-op rather
-  //    than a disabled-looking chip, because "none" isn't a business.
-  //  - `providerService` is always the set's first entry, matching what
-  //    sync_provider_service_categories enforces between service_category and
-  //    service_categories[1]. Drop the headline and the next type inherits it.
-  // Order follows SERVICE_CATEGORIES, not tap order, so the headline is
-  // predictable rather than a side effect of which chip was pressed first.
-  const toggleServiceType = useCallback((category: string) => {
-    setProviderData(prev => {
-      const current = prev.serviceCategories?.length
-        ? prev.serviceCategories
-        : [prev.providerService];
-      const next = current.includes(category)
-        ? current.filter(c => c !== category)
-        : SERVICE_CATEGORIES.filter(c => c === category || current.includes(c));
-      const headline = next[0];
-      // Doubles as the never-empty guard: no headline means no types left.
-      if (!headline) return prev;
-      return { ...prev, serviceCategories: next, providerService: headline };
-    });
+  // Pick the business's one service type at sign-up. serviceCategories is kept
+  // as a one-entry array (the column is a set) with `providerService` as its
+  // only member, matching what sync_provider_service_categories enforces
+  // between service_category and service_categories[1].
+  const selectServiceType = useCallback((category: string) => {
+    setProviderData(prev => ({ ...prev, serviceCategories: [category], providerService: category }));
   }, []);
 
   // Only the categories under the type currently selected in the switch —
@@ -4114,7 +4139,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               mutedText: editTheme.sub,
               onAccent: chrome.onAccent,
             }}
-            onActiveIndexChange={setActivePage}
+            onActiveIndexChange={handleActivePageChange}
             onSectionPress={(key) => {
               tapSelect();
               goToSection(key);
@@ -4126,6 +4151,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 around it. Required-field warnings live inline at the
                 offending field, with a roll-up next to Publish. */}
             <View style={{ width: screenWidth }}>
+              {mountedPages.has(0) && (
               <ScrollView
                 ref={registerSectionScroll('identity')}
                 showsVerticalScrollIndicator={false}
@@ -4235,44 +4261,31 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </Text>
                   </>
                 ) : (
-                  /* Multi-select: a provider offering hair AND nails is one
-                     business, not two profiles. Wraps rather than scrolling
-                     horizontally, because a horizontal rail hides its own
-                     options — the types past the fold went unpicked simply
-                     for being off-screen, which is the wrong reason to end up
-                     in one category. Every option is on screen at once. */
-                  <>
-                    <View style={styles.serviceCategoryGrid}>
-                      {SERVICE_TYPE_OPTS.map(({ value, label }) => {
-                        const selected = serviceTypes.includes(value);
-                        return (
-                          <TouchableOpacity
-                            key={value}
-                            activeOpacity={0.75}
+                  <View style={styles.serviceCategoryGrid}>
+                    {SERVICE_TYPE_OPTS.map(({ value, label }) => {
+                      const selected = providerData.providerService === value;
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          activeOpacity={0.75}
+                          style={[
+                            styles.serviceCategoryChip,
+                            selected && styles.serviceCategoryChipSelected,
+                          ]}
+                          onPress={() => { tapSelect(); selectServiceType(value); }}
+                        >
+                          <Text
                             style={[
-                              styles.serviceCategoryChip,
-                              selected && styles.serviceCategoryChipSelected,
+                              styles.serviceCategoryText,
+                              selected && styles.serviceCategoryTextSelected,
                             ]}
-                            onPress={() => { tapSelect(); toggleServiceType(value); }}
                           >
-                            <Text
-                              style={[
-                                styles.serviceCategoryText,
-                                selected && styles.serviceCategoryTextSelected,
-                              ]}
-                            >
-                              {label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                    <Text style={styles.inputHint}>
-                      Pick every type you offer. The first one you pick is your
-                      headline type — it's what clients see first, and what your
-                      specialty and template suggestions are built from.
-                    </Text>
-                  </>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 )}
               </View>
 
@@ -4325,10 +4338,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </View>
               </View>
               </ScrollView>
+              )}
             </View>
 
             {/* ── 02 · About & Portfolio ── */}
             <View style={{ width: screenWidth }}>
+              {mountedPages.has(1) && (
               <ScrollView
                 ref={registerSectionScroll('about')}
                 showsVerticalScrollIndicator={false}
@@ -4468,10 +4483,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </View>
               </View>
               </ScrollView>
+              )}
             </View>
 
             {/* ── 03 · Contact ── */}
             <View style={{ width: screenWidth }}>
+              {mountedPages.has(2) && (
               <ScrollView
                 ref={registerSectionScroll('contact')}
                 showsVerticalScrollIndicator={false}
@@ -4670,10 +4687,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </View>
               </View>
               </ScrollView>
+              )}
             </View>
 
             {/* ── 04 · Services ── */}
             <View style={{ width: screenWidth }}>
+              {mountedPages.has(3) && (
               <ScrollView
                 ref={registerSectionScroll('services')}
                 showsVerticalScrollIndicator={false}
@@ -5052,11 +5071,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </View>
               </View>
               </ScrollView>
+              )}
             </View>
 
             {/* ── 05 · Policies ── Full-bleed: no card wrapper, the
                 typographic break is the only separator. */}
             <View style={{ width: screenWidth }}>
+              {mountedPages.has(4) && (
               <ScrollView
                 ref={registerSectionScroll('policies')}
                 showsVerticalScrollIndicator={false}
@@ -5405,6 +5426,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               </View>
               </ScrollView>
+              )}
             </View>
           </InfoRegPager>
 

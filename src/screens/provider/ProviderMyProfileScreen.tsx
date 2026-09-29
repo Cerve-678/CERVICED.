@@ -58,6 +58,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  getCachedProviderData,
   loadProviderFromSupabase,
   uploadToStorage,
 } from '../../services/providerRegistrationService';
@@ -589,6 +590,21 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // Reload data every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      let active = true;
+
+      // Returning providers can render their saved profile before the live
+      // request finishes. Supabase still refreshes every field below; this
+      // merely removes the empty spinner from the route transition.
+      if (user?.id) {
+        getCachedProviderData(user.id)
+          .then(cached => {
+            if (!cached || !active) return;
+            setProviderData(cached);
+            setIsLoading(false);
+          })
+          .catch(() => {});
+      }
+
       const load = async () => {
         // Don't blank the screen on refocus — isLoading is only true on the
         // very first mount (useState(true)). On later focuses we keep what's
@@ -607,7 +623,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               loadProviderFromSupabase(user.id),
               getMyProviderProfile(),
             ]);
+            if (!active) return;
             parsed = loaded;
+
+            // The profile header and dashboard don't depend on the editable
+            // catalogue query. Show them as soon as the authoritative
+            // registration record is available, then fill in services below.
+            setProviderData(parsed);
+            setIsLoading(false);
 
             if (profile) {
               setProviderId(profile.id);
@@ -617,6 +640,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               // rather than fired and forgotten — everything else can arrive
               // late without the screen looking broken.
               const catalogue = await getMyServiceCatalogue(profile.id);
+              if (!active) return;
               setServices(catalogue.services);
 
               getProviderPortfolio(profile.id)
@@ -678,14 +702,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             }
           }
 
-          setProviderData(parsed);
+          if (active) setProviderData(parsed);
         } catch (e) {
           logger.error('[MyServices] load failed:', e);
         } finally {
-          setIsLoading(false);
+          if (active) setIsLoading(false);
         }
       };
-      load();
+      void load();
+      return () => { active = false; };
     }, [user?.id]),
   );
 
@@ -778,22 +803,27 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const totalReviews = reviewCount ?? reviews.length;
 
   const handleEditProfile = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('EditProfile');
   }, [navigation]);
 
   const handleEditSchedule = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('ProviderSchedule');
   }, [navigation]);
 
   const handleEditBranding = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Branding');
   }, [navigation]);
 
   const handleOpenAnalytics = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Analytics');
   }, [navigation]);
 
   const handleEditPolicies = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Policies');
   }, [navigation]);
 
@@ -882,6 +912,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch (e) {
         logger.error('[MyServices] save service failed:', e);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         Alert.alert(
           'Could not save',
           toUserMessage(e, "That didn't save. Please try again.", 'MyServices.saveService'),
@@ -906,6 +937,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         prev.map(s => (s.id === service.id ? { ...s, is_active: service.is_active } : s)),
       );
       logger.error('[MyServices] toggle service failed:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert(
         'Could not update',
         toUserMessage(e, "That didn't save. Please try again.", 'MyServices.toggleService'),
@@ -1000,6 +1032,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
           setWorkPhotos(prev => prev.filter(p => p.id !== item.id));
           try {
             await deletePortfolioItem(item.id);
@@ -1704,7 +1737,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         </View>
                         <TouchableOpacity
                           style={[styles.addChip, { borderColor: PP.border }]}
-                          onPress={handleAddPhotos}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => {});
+                            void handleAddPhotos();
+                          }}
                           disabled={photoUploading}
                           activeOpacity={0.7}
                           accessibilityRole="button"
@@ -1742,7 +1778,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                             />
                             <TouchableOpacity
                               style={styles.photoRemove}
-                              onPress={() => handleRemovePhoto(item)}
+                              onPress={() => {
+                                Haptics.selectionAsync().catch(() => {});
+                                handleRemovePhoto(item);
+                              }}
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                               accessibilityRole="button"
                               accessibilityLabel="Remove this photo"
@@ -1788,7 +1827,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           <TouchableOpacity
                             key={action.key}
                             style={[styles.quickItem, { width: (screenWidth - 76) / 5 }]}
-                            onPress={action.onPress}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              action.onPress();
+                            }}
                             activeOpacity={0.7}
                             accessibilityRole="button"
                             accessibilityLabel={action.label}

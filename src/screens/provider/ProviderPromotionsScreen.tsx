@@ -23,7 +23,7 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { useProviderDialog } from '../../components/ProviderDialog';
+import { useAppDialog } from '../../components/AppDialog';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -1364,7 +1364,7 @@ const toastSt = StyleSheet.create({
 export default function ProviderPromotionsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? CP_DARK : CP_LIGHT;
-  const { showConfirm, DialogHost } = useProviderDialog();
+  const { showConfirm, DialogHost } = useAppDialog();
   const [promos, setPromos] = useState<DbPromotion[]>([]);
   const [clients, setClients] = useState<ClienteleMember[]>([]);
   const [services, setServices] = useState<DbService[]>([]);

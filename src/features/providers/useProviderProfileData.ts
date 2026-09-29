@@ -8,6 +8,7 @@ import type {
 import {
   getProviderActivePromotions,
   getProviderBySlug,
+  getProviderProfilePreviewBySlug,
   getProviderPortfolio,
   getProviderProfileViewerContext,
   getProviderReviews,
@@ -133,7 +134,18 @@ export function useProviderProfileData(
 
     const loadProfile = async (): Promise<void> => {
       try {
-        const data = await getProviderBySlug(providerSlug);
+        // Start the catalogue request straight away, but let the compact
+        // profile response paint the hero first. A service-heavy provider no
+        // longer makes a client wait for every image and add-on before they
+        // can see whose profile they opened.
+        const fullProfileRequest = getProviderBySlug(providerSlug).catch(
+          (error: unknown) => {
+            logger.warn("Failed to load full provider catalogue:", error);
+            return null;
+          },
+        );
+        let data = await getProviderProfilePreviewBySlug(providerSlug);
+        if (!data) data = await fullProfileRequest;
         if (cancelled) return;
         if (!data) {
           const unclaimed = await getUnclaimedProviderDetail(providerSlug);
@@ -144,6 +156,15 @@ export function useProviderProfileData(
         setProvider(mapProviderProfileData(data));
         setProviderDbId(data.id);
         setLoading(false);
+
+        // Replace the lightweight first paint once the complete catalogue
+        // returns. Secondary sections below already use the provider id and
+        // can start loading from the preview without waiting for this.
+        void fullProfileRequest.then((fullProfile) => {
+          if (!cancelled && fullProfile) {
+            setProvider(mapProviderProfileData(fullProfile));
+          }
+        });
 
         void userLearningService
           .trackInteraction({
