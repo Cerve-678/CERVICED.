@@ -137,6 +137,8 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackPar
   policies: 'Policies',
   payment: 'Payments',
   logo: 'EditProfile',
+  // "Set up payouts" card lives on PaymentsScreen, same as the payment step.
+  stripe: 'Payments',
   // Terms live inside EditProfile (InfoReg)'s own "Your Terms &
   // Conditions" card. Portfolio is handled as a special case in
   // handleGoLiveStep below (it's edited inline on this screen, not a
