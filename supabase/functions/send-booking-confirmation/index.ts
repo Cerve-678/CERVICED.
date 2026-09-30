@@ -14,11 +14,13 @@
 //
 // CALLER: the service role only. The trigger authenticates with the
 // service_role key from vault, exactly as send_push_on_notification_insert()
-// already does — this is not reachable by a user session.
+// already does — this is not reachable by a user session. The gateway verifies
+// the signature (verify_jwt = true); this function checks the role claim.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
+import { isServiceRoleToken } from '../_shared/serviceRoleToken.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -62,7 +64,7 @@ serve(async (req) => {
 
   try {
     const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-    if (!jwt || jwt !== SERVICE_ROLE_KEY) {
+    if (!isServiceRoleToken(jwt)) {
       return json({ error: 'This endpoint is called by the database only.' }, 403);
     }
 
