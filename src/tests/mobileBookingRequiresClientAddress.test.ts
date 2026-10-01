@@ -65,3 +65,33 @@ describe('a mobile booking cannot be committed without a client address (server 
     expect(body).toMatch(/FOR EACH ROW/);
   });
 });
+
+// The Stripe checkout path holds via prepare_checkout() (not the claim RPC) and
+// promotes via finalize_checkout(); neither used to write the client address, so
+// a mobile booking taken through Stripe would reach the provider with no
+// destination. prepare_checkout() is where the address has to be captured -- the
+// twin of claim_cart_booking_slots() on the live route.
+describe('prepare_checkout captures the mobile client address (Stripe path)', () => {
+  const marker = 'FUNCTION public.prepare_checkout(';
+
+  it('rejects a mobile item with no client address, fail-closed like the other gates', () => {
+    const body = latestMatching(`CREATE OR REPLACE ${marker}`);
+    // business_type read from the provider row, not trusted from the client.
+    expect(body).toMatch(/v_provider\.business_type\s*=\s*'mobile'/);
+    expect(body).toMatch(/client_address.{0,80}IS NULL/s);
+    expect(body).toMatch(/RAISE EXCEPTION 'A mobile booking needs the client''s address before payment'/);
+  });
+
+  it('writes client_address / client_area onto the held row for a mobile provider', () => {
+    const body = latestMatching(`CREATE OR REPLACE ${marker}`);
+    // Both columns are in the INSERT and only populated for a mobile provider,
+    // so the on_booking_client_address_written trigger relocates the address at
+    // hold time and finalize_checkout() needs no change.
+    expect(body).toMatch(/is_emergency_request, emergency_ack_at, client_address, client_area/);
+    expect(body).toMatch(/WHEN v_provider\.business_type = 'mobile' THEN NULLIF\(btrim\(v_item->>'client_address'\), ''\)/);
+    expect(body).toMatch(/WHEN v_provider\.business_type = 'mobile' THEN NULLIF\(btrim\(v_item->>'client_area'\), ''\)/);
+    // Reproduced faithfully: the security posture is unchanged.
+    expect(body).toMatch(/SECURITY DEFINER/);
+    expect(body).toMatch(/SET search_path TO 'public', 'pg_temp'/);
+  });
+});
