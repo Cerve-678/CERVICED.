@@ -7,7 +7,9 @@ tags: [screen, client]
 **Registered route(s):** `HelpCentre`
 
 ## → Navigates to
-- _— none —_
+- [[ReportProblemScreen\|ReportProblem]]
+- [[TermsScreen\|Terms]]
+- [[AboutScreen\|About]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

@@ -5007,7 +5007,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             {/* The content sheet rises over the hero photo with its own large
                 top corners (see contentSheet.borderTopLeftRadius/Right) —
                 rises directly off the hero photo like a floating card. */}
-            <View style={[styles.contentSheet, { minHeight: screenHeight, backgroundColor: OP.bg }]}>
+            <View
+              style={[
+                styles.contentSheet,
+                { minHeight: screenHeight, backgroundColor: OP.bg },
+                // With a background image, inset the sheet so the photo shows
+                // along its sides — the content reads as a card floating over
+                // the image rather than covering it edge to edge.
+                provider.backgroundImage ? styles.contentSheetFloating : null,
+              ]}
+            >
               {/* About / Policy tabbed card */}
               <View style={styles.aboutCardShadowWrap}>
                 <BlurView
@@ -5337,6 +5346,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 6,
+  },
+  // Applied only when the provider has a background image: pulls the sheet in
+  // from both edges so the photo stays visible down its sides.
+  contentSheetFloating: {
+    marginHorizontal: 10,
   },
   loading: {
     flex: 1,
