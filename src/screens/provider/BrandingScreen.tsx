@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Alert,
   ActivityIndicator,
   StatusBar,
 } from 'react-native';
@@ -28,8 +27,9 @@ import ProviderThemePicker, { type ThemeSelection } from '../../components/Provi
 import ProviderFontPicker from '../../components/ProviderFontPicker';
 import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily } from '../../constants/providerFonts';
 import { uploadToStorage } from '../../services/providerRegistrationService';
-import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
+import { getMyProviderBranding, updateProviderBranding, removeStorageObjects } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
+import { useAppDialog } from '../../components/AppDialog';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -46,21 +46,40 @@ const DARK = {
 // (saved as [backdrop, sheetColor]) — there is no separate gradient picker.
 // All colour-set options and swatches live in components/ProviderThemePicker.
 
+const BACKGROUNDS_BUCKET = 'provider-backgrounds';
+
 async function uploadBackgroundImage(
   userId: string,
   localUri: string
 ): Promise<string> {
-  const ext = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const storagePath = `${userId}/background.${ext}`;
+  const ext = localUri.split('.').pop()?.split('?')[0]?.toLowerCase() ?? 'jpg';
+  // Versioned filename rather than a fixed `${userId}/background.${ext}`. A
+  // fixed path with upsert:true overwrites the same object, so its public URL
+  // is byte-identical across re-uploads and RN Image / expo-image / Supabase's
+  // CDN all keep serving the old cached bytes for that URL — which is why a
+  // provider's new background didn't show up immediately on the client side.
+  // This mirrors the provider-logo fix (providerRegistrationService.ts).
+  const storagePath = `${userId}/background-${Date.now()}.${ext}`;
   // fetch(localUri).blob() is unreliable for file:// URIs in React Native
   // ("Network request failed") — uploadToStorage reads via expo-file-system
   // and uploads as bytes instead, same as the provider logo upload.
-  return uploadToStorage('provider-backgrounds', storagePath, localUri);
+  return uploadToStorage(BACKGROUNDS_BUCKET, storagePath, localUri);
+}
+
+// Pull the object path out of a public background URL so a now-orphaned image
+// (versioned paths are no longer overwritten in place) can be cleaned up.
+function backgroundStoragePath(publicUrl: string): string | null {
+  try {
+    return new URL(publicUrl).pathname.split(`/${BACKGROUNDS_BUCKET}/`)[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export default function BrandingScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
+  const { showAlert, DialogHost } = useAppDialog();
 
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
@@ -114,7 +133,7 @@ export default function BrandingScreen({ navigation }: any) {
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow access to your photo library to set a background image.');
+      showAlert('Photo access needed', 'Allow access to your photo library to set a background image.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -125,19 +144,32 @@ export default function BrandingScreen({ navigation }: any) {
     });
     if (result.canceled || !result.assets[0]) return;
 
-    if (!userId) { Alert.alert('Not signed in'); return; }
+    if (!userId) { showAlert("You're signed out", 'Please sign in again and try setting your background.'); return; }
 
+    // Remember the image being replaced so its storage object can be removed
+    // once the new one is safely uploaded (versioned paths no longer overwrite
+    // in place, so the old bytes would otherwise linger forever).
+    const previousImage = backgroundImage;
     setUploadingImage(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       const url = await uploadBackgroundImage(userId, result.assets[0].uri);
       setBackgroundImage(url);
+      if (previousImage) {
+        const oldPath = backgroundStoragePath(previousImage);
+        if (oldPath) {
+          removeStorageObjects(BACKGROUNDS_BUCKET, [oldPath]).catch(() => {});
+        }
+      }
     } catch (e: any) {
-      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'BrandingScreen.upload'));
+      showAlert(
+        "We couldn't upload that image",
+        toUserMessage(e, "Your background couldn't be uploaded just now. Please try again in a moment.", 'BrandingScreen.upload'),
+      );
     } finally {
       setUploadingImage(false);
     }
-  }, [userId]);
+  }, [userId, backgroundImage, showAlert]);
 
   const removeImage = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -172,11 +204,11 @@ export default function BrandingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Save failed', toUserMessage(e, 'Could not save your changes.', 'BrandingScreen.save'));
+      showAlert("We couldn't save your changes", toUserMessage(e, 'Please try again in a moment.', 'BrandingScreen.save'));
     } finally {
       setSaving(false);
     }
-  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, brandFont, navigation]);
+  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, brandFont, navigation, showAlert]);
 
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {
@@ -337,6 +369,7 @@ export default function BrandingScreen({ navigation }: any) {
 
         </ScrollView>
       </SafeAreaView>
+      <DialogHost />
     </View>
   );
 }
