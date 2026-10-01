@@ -3027,10 +3027,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ...prev,
                   providerName: prev.providerName || prefill.business_name || prefill.name || '',
                   providerService: prev.providerService === 'HAIR' ? (prefilledService || prev.providerService) : prev.providerService,
-                  phone: prev.phone || prefill.business_phone || prefill.phone || '',
-                  email: prev.email || prefill.business_email || '',
+                  // Only the socials carry over to the PUBLIC profile from
+                  // signup. Phone, website and business email are communication
+                  // details, not something to auto-publish on Get In Touch —
+                  // they live in Business Info and the provider chooses
+                  // deliberately what (if anything) goes on the public profile.
+                  // So those three stay blank here (a fresh fill-in).
                   instagram: prev.instagram || prefill.instagram || '',
-                  website: prev.website || prefill.website || '',
                   tiktok: prev.tiktok || prefill.tiktok || '',
                   businessType: prev.businessType || prefilledBusinessType || '',
                   teamSize: prev.teamSize || prefilledTeamSize || '',
