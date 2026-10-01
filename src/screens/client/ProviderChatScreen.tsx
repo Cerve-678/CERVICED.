@@ -490,7 +490,13 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           }
         />
 
-        {addressSettings?.business_type === "mobile" && (
+        {/* Sending an address only makes sense once a booking exists to attach
+            it to (the flow is booking-scoped via getClientBookingsForAddressShare).
+            "Get In Touch" opens this chat in enquiry mode — a general pre-booking
+            question from anyone browsing — so the address affordance stays hidden
+            there and only appears in a real conversation. */}
+        {addressSettings?.business_type === "mobile" &&
+          promptMode !== "enquiry" && (
           <TouchableOpacity
             style={[
               styles.addressBtn,
