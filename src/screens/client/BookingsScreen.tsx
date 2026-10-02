@@ -1765,7 +1765,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   </>
                 ) : bookingsLoading ? (
                   <View style={styles.emptyState}>
-                    <ActivityIndicator size="small" color={P.accent} />
+                    <ActivityIndicator size="small" color={P.accent} style={{ marginBottom: 10 }} />
+                    <Text style={styles.emptyStateSubtext}>Loading your bookings…</Text>
                   </View>
                 ) : (
                   <View style={styles.emptyState}>
@@ -1891,7 +1892,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     // Still fetching (e.g. straight after sign-in, when logout
                     // has wiped the cached copy) — not "you have none".
                     <View style={styles.emptyState}>
-                      <ActivityIndicator size="small" color={P.accent} />
+                      <ActivityIndicator size="small" color={P.accent} style={{ marginBottom: 10 }} />
+                      <Text style={styles.emptyStateSubtext}>Loading your bookings…</Text>
                     </View>
                   ) : (
                     <View style={styles.emptyState}>
