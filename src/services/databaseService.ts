@@ -2238,6 +2238,18 @@ export type CheckoutIntentItem = {
   // supabase/migrations/20260821143821_emergency_booking_requests.sql.
   emergency?: boolean;
   emergency_ack?: boolean;
+  // Where a MOBILE provider should travel to. prepare_checkout() reads the
+  // provider's business_type server-side and rejects a mobile item with no
+  // client_address, then writes it onto the held row so the
+  // on_booking_client_address_written trigger relocates it into the gated
+  // booking_client_addresses table (the Stripe path's equivalent of what
+  // claim_cart_booking_slots() does for the live route). Omit for a
+  // fixed-location provider — it is ignored there. client_area is the coarse
+  // location a mobile provider judges travel by; when absent the DB derives it
+  // from the address. See
+  // supabase/migrations/20260929061000_prepare_checkout_captures_mobile_client_address.sql.
+  client_address?: string | null;
+  client_area?: string | null;
 };
 
 export type PreparedCheckout = {
