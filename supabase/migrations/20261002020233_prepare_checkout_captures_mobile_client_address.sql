@@ -1,6 +1,10 @@
--- 20260929061000_prepare_checkout_captures_mobile_client_address.sql
+-- 20261002020233_prepare_checkout_captures_mobile_client_address.sql
 --
--- WRITTEN, NOT YET APPLIED. See supabase/MIGRATION_OWNER.md.
+-- APPLIED 2026-10-02 via apply_migration (recorded version 20261002020233;
+-- authored 20260929061000, renamed to the stamped version). Verified live:
+-- mobile gate present, client_address/client_area in the INSERT, SECURITY
+-- DEFINER + search_path 'public','pg_temp' intact, anon cannot EXECUTE.
+-- See supabase/MIGRATION_OWNER.md.
 --
 -- Teaches the Stripe checkout path to capture the client's address for a mobile
 -- booking -- the prerequisite the guard migration 20260929060000 calls for.

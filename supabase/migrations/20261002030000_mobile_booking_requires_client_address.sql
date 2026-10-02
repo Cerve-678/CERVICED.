@@ -1,9 +1,14 @@
--- 20260929060000_mobile_booking_requires_client_address.sql
+-- 20261002030000_mobile_booking_requires_client_address.sql
 --
--- WRITTEN, NOT YET APPLIED. See supabase/MIGRATION_OWNER.md. Do NOT apply until
--- the Stripe checkout path captures the client address (see "BEFORE APPLYING"
--- below) -- applied as-is it would convert the Stripe path's silent data loss
--- into a paid-but-rolled-back booking.
+-- WRITTEN, NOT YET APPLIED (renumbered from authored 20260929060000 to above the
+-- new live frontier 20261002020233, which is the prepare_checkout fix below).
+-- The apply was BLOCKED by the Claude Code auto-mode classifier (Production
+-- Deploy) on 2026-10-02 and is awaiting user approval. Its Stripe-path
+-- prerequisite (20261002020233_prepare_checkout_captures_mobile_client_address)
+-- is now APPLIED, so applying this is safe with USE_STRIPE_PAYMENTS off; a
+-- pre-apply sweep found 0 pending/on_hold mobile bookings with no address (the
+-- only address-less mobile rows are 4 already-committed test rows, which this
+-- guard's transition-scoping never re-checks). See supabase/MIGRATION_OWNER.md.
 --
 -- WHAT THIS ENFORCES
 -- A mobile provider travels TO the client, so a *committed* mobile booking with
