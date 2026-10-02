@@ -117,7 +117,7 @@ export default function DailySchedulePopup({ visible, date, onClose, onNavigate 
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onClose}>
-      <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      <BlurView intensity={25} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
       <TouchableOpacity style={st.backdrop} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity
           activeOpacity={1}
