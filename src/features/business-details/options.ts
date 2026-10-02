@@ -13,15 +13,33 @@
 
 import type { BusinessType, ServiceCategory } from '../../types/database';
 
+// Specialities are the specific, often culturally-named things a provider is
+// known for — narrower than the macro service_category, broader than one
+// service. They serve two jobs at once: the chips a provider picks on
+// ServicesPricingScreen (stored in provider_specialties), AND the curated
+// option list behind the client Search "Speciality" filter. The client filter
+// matches these against a provider's specialities, per-service tags AND service
+// names via fuzzy matching (src/utils/fuzzyMatch.ts), so the labels here are
+// written as a client would recognise them — casing/spacing/spelling drift
+// between this list and what a provider typed elsewhere is tolerated at match
+// time, not something to normalise here. Each category carries its own set so
+// a nail tech is never shown hair specialities.
 export const SPECIALTIES_MAP: Record<string, string[]> = {
-  HAIR:       ['Natural & textured', 'Afro hair', 'Colour & balayage', 'Extensions & weaves', 'Locs & braids', 'Bridal & occasion', "Men's cuts", "Children's hair", 'Relaxers & perms', 'Blow-dries & styling'],
-  NAILS:      ['Nail art', 'Acrylic sets', 'Gel manicure', 'Infills', 'Gel extensions', 'Pedicures', 'SNS/dip powder', 'Gel-X'],
-  LASHES:     ['Classic lashes', 'Volume', 'Mega volume', 'Hybrid', 'Lash lifts', 'Lash tints'],
-  BROWS:      ['Threading', 'Waxing', 'Lamination', 'Microblading', 'Nano brows', 'Henna brows', 'Tinting & shaping'],
-  MUA:        ['Bridal', 'Prom & occasion', 'Editorial', 'Airbrush', 'Film & TV', 'SFX', 'All skin tones', 'Deep/dark skin specialist'],
-  AESTHETICS: ['Facials', 'Microneedling', 'Chemical peels', 'LED therapy', 'Dermaplaning', 'Injectables', 'Body treatments'],
+  HAIR:       ['Natural & textured', 'Afro hair', 'Silk press', 'Dominican blowout', 'Knotless braids', 'Box braids', 'Cornrows', 'Faux locs', 'Locs & retwists', 'Crochet', 'Wig install', 'Frontal & closure', 'Extensions & weaves', 'Colour & balayage', 'Keratin & smoothing', 'Relaxers & perms', 'Curly cuts', 'Blow-dries & styling', 'Barbering & fades', 'Bridal & occasion', "Men's cuts", "Children's hair"],
+  NAILS:      ['BIAB / builder gel', 'Gel manicure', 'Acrylic sets', 'Gel extensions', 'Gel-X', 'Infills', 'Russian manicure', 'Polygel', 'SNS/dip powder', 'Nail art', 'Freehand art', 'Chrome & cat-eye', 'Ombré & baby boomer', 'French', 'Pedicures', 'Press-ons'],
+  LASHES:     ['Classic lashes', 'Hybrid', 'Volume', 'Russian volume', 'Mega volume', 'Wispy / anime sets', 'Coloured lashes', 'Bottom lashes', 'Lash lifts', 'Lash tints', 'Cluster lashes'],
+  BROWS:      ['Threading', 'Waxing', 'Lamination', 'Microblading', 'Ombré / powder brows', 'Combination brows', 'Nano brows', 'Henna brows', 'Brow mapping', 'Brow tint & lift', 'Tinting & shaping'],
+  MUA:        ['Soft glam', 'Full glam', 'Natural / no-makeup', 'Bridal', 'South Asian bridal', 'African bridal', 'Prom & occasion', 'Editorial', 'Airbrush', 'Film & TV', 'SFX', 'Brown & Black skin specialist', 'Mature skin', 'Textured / acne-friendly skin', 'All skin tones'],
+  AESTHETICS: ['Facials', 'Hydrafacial', 'Chemical peels', 'Microneedling', 'Dermaplaning', 'LED therapy', 'Acne treatments', 'Hyperpigmentation', 'Anti-wrinkle', 'Dermal fillers', 'Skin boosters', 'Laser hair removal', 'Body sculpting', 'Body treatments'],
   OTHER:      ['Massage', 'Body waxing', 'Spray tanning', 'Body sculpting', 'Holistic therapies'],
 };
+
+/** Every curated speciality across all categories, deduped in a stable order —
+ *  the option pool for the client filter's "All" category tab, where no single
+ *  category scopes the list. Order follows SPECIALTIES_MAP's category order. */
+export const ALL_SPECIALTIES: string[] = [
+  ...new Set(Object.values(SPECIALTIES_MAP).flat()),
+];
 
 /**
  * Every macro service type the app has ever stored, in display order —
