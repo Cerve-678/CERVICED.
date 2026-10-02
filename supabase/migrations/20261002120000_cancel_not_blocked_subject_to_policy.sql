@@ -23,10 +23,11 @@ CREATE OR REPLACE FUNCTION public.cancel_own_booking(p_booking_id uuid)
  SET search_path TO 'public'
 AS $function$
 DECLARE
-  v_booking     RECORD;
-  v_notice_hrs  INT;
-  v_policies    JSONB;
-  v_hours_until NUMERIC;
+  v_booking        RECORD;
+  v_notice_hrs     INT;
+  v_policies       JSONB;
+  v_hours_until    NUMERIC;
+  v_late_threshold INT;
 BEGIN
   SELECT b.status, b.booking_date, b.booking_time, b.provider_id, b.user_id
     INTO v_booking
@@ -56,9 +57,11 @@ BEGIN
   -- The notice window no longer blocks the cancellation. Instead, a cancel made
   -- inside the provider's notice window (or inside 24h when they've set none)
   -- is recorded against the client's reliability with that provider.
+  v_late_threshold := CASE WHEN COALESCE(v_notice_hrs, 0) > 0 THEN v_notice_hrs ELSE 24 END;
+
   IF v_booking.status = 'confirmed'
      AND v_hours_until >= 0
-     AND v_hours_until < CASE WHEN COALESCE(v_notice_hrs, 0) > 0 THEN v_notice_hrs ELSE 24 END THEN
+     AND v_hours_until < v_late_threshold THEN
     INSERT INTO public.client_provider_reliability (provider_id, client_user_id, late_cancel_count, updated_at)
     VALUES (v_booking.provider_id, v_booking.user_id, 1, NOW())
     ON CONFLICT (provider_id, client_user_id)

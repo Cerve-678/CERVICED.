@@ -92,8 +92,9 @@ describe('a pending reschedule request expires before the cancellation window cl
     // provider's policy without being prevented from cancelling.
     expect(cancelBody).not.toMatch(/RAISE EXCEPTION 'This provider requires % hours notice to cancel'/);
     expect(cancelBody).toMatch(
-      /v_hours_until < CASE WHEN COALESCE\(v_notice_hrs, 0\) > 0 THEN v_notice_hrs ELSE 24 END/,
+      /v_late_threshold := CASE WHEN COALESCE\(v_notice_hrs, 0\) > 0 THEN v_notice_hrs ELSE 24 END/,
     );
+    expect(cancelBody).toMatch(/v_hours_until < v_late_threshold/);
   });
 
   it('cancel_notice_hours() maps a JSONB cancelNotice policy the same way cancel_own_booking() always has', () => {
