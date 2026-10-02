@@ -224,8 +224,8 @@ function MasonryGridInner<T>(
           <RefreshControl
             refreshing={refreshing || false}
             onRefresh={onRefresh}
-            tintColor="#a342c3ff"
-            colors={['#a342c3ff']}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
           />
         ) : undefined
       }

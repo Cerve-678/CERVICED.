@@ -1525,8 +1525,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: P.sub }]}>CLIENT</Text>
                 <View style={styles.clientHeader}>
-                  <View style={[styles.avatar, { backgroundColor: '#a342c322', borderColor: '#a342c355' }]}>
-                    <Text style={[styles.avatarText, { color: '#a342c3' }]}>{initials}</Text>
+                  <View style={[styles.avatar, { backgroundColor: `${P.accent}22`, borderColor: `${P.accent}55` }]}>
+                    <Text style={[styles.avatarText, { color: P.accent }]}>{initials}</Text>
                   </View>
                   <Text style={[styles.clientNameLarge, { color: P.text }]}>{booking.customerName || 'Unknown'}</Text>
                   {clientUserId ? (
@@ -1596,7 +1596,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       </TouchableOpacity>
                     ) : null}
                     <TouchableOpacity
-                      style={[styles.contactBtn, { backgroundColor: '#a342c3' }]}
+                      style={[styles.contactBtn, { backgroundColor: P.accent }]}
                       onPress={handleOpenChat}
                     >
                       <Text style={styles.contactBtnText}>Message</Text>
@@ -1636,8 +1636,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             </View>
                           )}
                           {providerServiceCategory ? (
-                            <View style={{ backgroundColor: '#a342c322', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#a342c3', letterSpacing: 0.4 }}>
+                            <View style={{ backgroundColor: `${P.accent}22`, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: P.accent, letterSpacing: 0.4 }}>
                                 {providerServiceCategory}
                               </Text>
                             </View>

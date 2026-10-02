@@ -1107,7 +1107,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       <ThemedBackground>
         <SafeAreaView style={styles.container} edges={['top']}>
           <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color="#a342c3" />
+            <ActivityIndicator size="large" color={PP.accent} />
           </View>
         </SafeAreaView>
       </ThemedBackground>
