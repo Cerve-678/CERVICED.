@@ -31,16 +31,27 @@ OWNER:  (none)
 |---|---|---|
 | 20261002020233 | `prepare_checkout_captures_mobile_client_address` | `prepare_checkout()` now rejects a mobile-provider item with no `client_address` (message "…address before payment") and writes `client_address`/`client_area` onto the held row for a mobile provider, reading `business_type` from the provider row. Reproduced verbatim from the pre-change live `pg_get_functiondef()`; only the gate + two INSERT columns added. Post-apply verified: gate message + logic present, `is_emergency_request, emergency_ack_at, client_address, client_area` in the INSERT, `SECURITY DEFINER` + `SET search_path TO 'public','pg_temp'` intact, `anon` EXECUTE = false. apply_migration stamped `20261002020233` (authored `20260929061000`); file renamed to match. Frontier before apply: `20260929052423`. The live claim route already captured the address at claim time and is unchanged. App-side shipped with it on `fix/mobile-booking-address-server-guard`: `CheckoutIntentItem` + CartScreen Stripe `intent` builder. |
 
-**BLOCKED, awaiting user approval — the guard trigger.**
+### Applied out-of-band 2026-10-02 (guard trigger) — LEDGER BACKFILL STILL PENDING
+
 `20261002030000_mobile_booking_requires_client_address` (the DEFERRABLE INITIALLY
 DEFERRED constraint trigger that refuses to confirm a mobile booking with no
-address) was blocked by the Claude Code auto-mode classifier (Production Deploy)
-on 2026-10-02. Its Stripe prerequisite above is now applied, and a pre-apply
-sweep found **0** pending/on_hold mobile bookings with no address (only 4
-already-committed test rows exist, which the transition-scoping never re-checks),
-so it is safe to apply while `USE_STRIPE_PAYMENTS` is off. Renumbered from
-authored `20260929060000` to above the new frontier. Apply via apply_migration,
-then rename the file to the stamped version and record it here.
+`booking_client_addresses` row) was applied by the **user in the Supabase SQL
+editor on 2026-10-02** (apply via the MCP had been blocked by the auto-mode
+classifier, and the connector then dropped). User-confirmed applied; **NOT yet
+verified against live by this session** (connector was down) and **no
+`schema_migrations` row was written** — the SQL editor does not stamp one.
+
+TODO when the Supabase connector is back (do not skip — this is exactly the
+untracked-migration gap this file keeps warning about):
+  1. Verify live: `enforce_mobile_booking_has_client_address` trigger on
+     `bookings` (AFTER INSERT OR UPDATE, DEFERRABLE INITIALLY DEFERRED) and the
+     function's `SET search_path TO 'public','pg_temp'` + SECURITY DEFINER intact.
+  2. Backfill a `schema_migrations` row for version `20261002030000` (filename
+     already matches; it was NOT run through apply_migration, so no restamp).
+  3. Re-check `has_function_privilege('anon', …)` = false.
+
+Its Stripe prerequisite (`20261002020233`) is applied and verified. Pre-apply
+sweep had found 0 at-risk rows. `USE_STRIPE_PAYMENTS` is off.
 
 ### Applied 2026-09-29 (Stripe Connect payouts — 6 migrations)
 
@@ -449,7 +460,7 @@ Written but **not applied**, in the order they must run:
 
 | Version | File | Notes |
 |---|---|---|
-| 20261002030000 | `mobile_booking_requires_client_address` | **BLOCKED pending user approval — see the "Applied 2026-10-02 … / BLOCKED" section near the top of this file for the live status.** The `DEFERRABLE INITIALLY DEFERRED` constraint trigger that refuses to confirm a mobile booking with no `booking_client_addresses` row. Its Stripe prerequisite (`20261002020233`) is applied; pre-apply sweep found 0 at-risk rows; safe to apply via apply_migration with `USE_STRIPE_PAYMENTS` off, then rename to the stamped version and record. Contract: `src/tests/mobileBookingRequiresClientAddress.test.ts`. |
+| 20261002030000 | `mobile_booking_requires_client_address` | **Applied out-of-band (SQL editor) 2026-10-02 — see the "Applied out-of-band 2026-10-02 (guard trigger)" section near the top for live status and the PENDING ledger-backfill + verify TODO.** The `DEFERRABLE INITIALLY DEFERRED` constraint trigger that refuses to confirm a mobile booking with no `booking_client_addresses` row. Contract: `src/tests/mobileBookingRequiresClientAddress.test.ts`. |
 | 20260827160000 | `cancel_window_closing_warning` | **Written 2026-08-27 by the session doing reschedule/legal work; NOT applied — the lock above is held.** New `process_cancel_window_closing_warnings()` + cron `cancel-window-closing-warnings` + the `cancel_window_closing` notification type. Numbered above the 20260827120519 frontier and above the two cart-hold files so it runs last. Touches nothing the lock holder touches (no cart-hold functions, no booking triggers). Its one shared surface is `notifications_type_check`, which it **appends to** rather than recreating from a literal list — so it is safe in either order against `20260827140000_no_show_disputes`, which also adds a type. App-side wiring (`database.ts`, `NotificationsScreen`, `notificationTapHandler`) is already committed, so the type union is ahead of the constraint until this runs. **STEP 2 BELONGS TO WHOEVER APPLIES IT:** the file adds `cancel_notice_hours(INT, JSONB)` as the single definition of the cancellation-notice mapping and calls it, but `cancel_own_booking()` still carries its own inline copy. Rewrite it to call the helper in the same pass — with `pg_get_functiondef()` output in hand so `LANGUAGE`/`SECURITY DEFINER`/`SET search_path` survive the reproduction. It was left undone because the MCP connection was down when the file was written, and reproducing a live function from memory is exactly what stripped `SET search_path` off three functions earlier the same day. |
 | 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
 
