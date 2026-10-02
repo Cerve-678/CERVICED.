@@ -1294,3 +1294,63 @@ matching are all unaffected and stay live.
 Flip `AUDIENCE_SERVICE_PHOTOS_ENABLED` to `true` in
 `src/constants/featureFlags.ts`. No other changes needed unless
 `getDiscoverServices` or `PortfolioCard` have drifted in the meantime.
+
+---
+
+## Provider "Today's Schedule" day popup (Becca-briefed) — paused 2026-10-02
+
+### What it means
+
+Pressing **View Schedule** on the provider's 07:00 `daily_recap` notification
+("Today's Schedule") would close Notifications and open a popup over the
+calendar, with a light background blur, instead of jumping to the calendar's
+list view (which is what it still does today):
+
+- A brown header with the date, "Good morning, {first name}", and a large
+  count of the day's appointments ("First at 9:00am · done by 4:30pm").
+- The day's clients on a vertical timeline (start/end times, service,
+  "Awaiting your reply" on pending requests); tapping one opens the booking.
+- A To Do checklist counted exactly like ProviderBookingHistoryScreen's To
+  Do tab (booking requests, pending reschedule requests, unread messages,
+  waitlist), each row leading to where it's dealt with.
+- An "Open in calendar" button for the old list-view destination.
+- The push tap would open the popup directly over the calendar.
+
+### What was done
+
+Built, typechecked and tested (not device-tested) on branch
+`feat/daily-recap-schedule-popup` (off main, NOT pushed or merged):
+`src/components/DailySchedulePopup.tsx`, `src/utils/daySummary.ts` (pure
+counting rules) + `src/tests/daySummary.test.ts`, wired through
+NotificationsScreen, ProviderHomeScreen (`openDaySchedule` route param) and
+notificationTapHandler. Design mockups (concepts A–D) are on the "Today's
+Schedule popup concepts" canvas.
+
+### Where it was heading — make it feel Becca-powered
+
+The user liked **D1, "Becca thinking"**: Becca's glowing mark and "Becca ·
+Your morning briefing" in the header while the popup loads, with the
+message and client rows shimmering under "Looking over your day…". That
+loading state is the part to keep.
+
+The intended next step was a real AI-written briefing (e.g. "Busy one today.
+Jade's knotless braids at 11:30 is your longest…") using `becca-ai`'s
+existing COMPOSE mode: the app builds the facts from real bookings, the
+model rewrites only the wording, `verifyComposition` rejects any rewrite
+that changes a name/time/figure, and the app's own wording is the fallback.
+
+### Open decisions before resuming
+
+- **AI for real users:** Becca's model is only enabled in dev/preview
+  (`EXPO_PUBLIC_BECCA_AI_ENABLED`). Enabling it in production is a cost
+  decision (one NVIDIA request per popup open).
+- **Privacy:** the compose request sends client names and services to NVIDIA.
+  Becca chat already does the same, but the Privacy Policy needs to name the
+  AI processor before this reaches real users — a legal call, not an
+  engineering one (see LEGAL-COMPLIANCE-NOTES.md).
+
+### To bring it back
+
+Rebase `feat/daily-recap-schedule-popup` onto main, add the D1 loading
+state (and the briefing if the decisions above are made), device-test, then
+merge.
