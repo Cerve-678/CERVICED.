@@ -407,6 +407,29 @@ export default function SearchScreen({ navigation, route }: Props) {
   // response for an old category/query from replacing the newer results.
   const providerRequestIdRef = useRef(0);
 
+  // The signed-in client's learned top tags, loaded once and passed to
+  // searchProviders as a relevance boost (personalized ranking). Best-effort:
+  // if it never loads, search still works, just un-personalized.
+  const boostTagsRef = useRef<string[]>([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [style, technique, trend] = await Promise.all([
+          userLearningService.getTopStyleTags(5),
+          userLearningService.getTopTechniqueTags(5),
+          userLearningService.getTopTrendNames(3),
+        ]);
+        if (!cancelled) {
+          boostTagsRef.current = [...new Set([...style, ...technique, ...trend])];
+        }
+      } catch (err) {
+        logger.error('[Search] loading personalization tags failed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // ── "Float up and merge" entrance — plays when arriving from an element
   // that visually looks like this screen's search bar/pills: a Home screen
   // service pill tap (route carries a `category`) or Explore's search-bar
@@ -548,7 +571,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       setProvidersError(null);
       try {
         const q = searchQuery.trim();
-        const data = q ? await searchProviders(q, catCode) : await getProviders(catCode);
+        const data = q ? await searchProviders(q, catCode, undefined, boostTagsRef.current) : await getProviders(catCode);
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData(data.map(mapDbToCardData));
         if (q) {
@@ -891,7 +914,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     const requestId = ++providerRequestIdRef.current;
     const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
     const fn = searchQuery.trim()
-      ? searchProviders(searchQuery.trim(), catCode)
+      ? searchProviders(searchQuery.trim(), catCode, undefined, boostTagsRef.current)
       : getProviders(catCode);
     fn
       .then(data => {

@@ -46,6 +46,11 @@ jest.mock('../lib/supabase', () => {
           error: null,
         }),
       },
+      // searchProviders now ranks via the search_providers_ranked RPC, then
+      // hydrates summaries for the returned ids. The ids it hydrates carry no
+      // ownership-exclusion filter (that's the point of the assertion below),
+      // so a single ranked row is enough to exercise the path.
+      rpc: async () => ({ data: [{ provider_id: 'mine-1', rank: 1 }], error: null }),
       // `select("id")` is the ownership lookup; anything else is the
       // client-facing query under test.
       from: () => ({

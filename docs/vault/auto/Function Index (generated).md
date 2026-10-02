@@ -5,7 +5,7 @@
 
 #generated
 
-**2131 functions** across **274 files**.
+**2133 functions** across **275 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -47,10 +47,11 @@
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
 
-### `src/constants/` (5)
+### `src/constants/` (6)
 - `PlatformDimensions.ts` — for
 - `providerFonts.ts` — **resolveProviderFontFamily**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · valid · **withAlpha**
+- `searchSynonyms.ts` — **expandSearchSynonyms** · normalise
 - `support.ts` — **supportMailtoUrl**
 - `waitlist.ts` — changes
 

@@ -38,6 +38,7 @@ import {
   PHONE_PENDING_PLACEHOLDER,
 } from "../types/booking";
 import { parseSearchQuery } from "../utils/searchQuery";
+import { expandSearchSynonyms } from "../constants/searchSynonyms";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 
@@ -834,105 +835,81 @@ export async function searchProviders(
   query: string,
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  // The signed-in client's learned top tags (from userLearningService), passed
+  // by the screen. Providers matching these get a small rank boost so the same
+  // query leans toward what this client tends to book. Empty = no boost.
+  boostTags: string[] = [],
 ): Promise<PublicProviderSummary[]> {
   const q = query.trim();
   if (!q) return getProviders(category, limit);
 
   const parsed = parseSearchQuery(q);
-  // Falls back to the whole query when no location preposition was found,
-  // so a bare "south london" (no "in") still gets tried as free text below.
-  const textTerms = (
-    parsed.serviceTerms.length ? parsed.serviceTerms : [q]
-  ).map(sanitizeIlikeTerm);
-  const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm);
+  // The service part drives relevance; the location part filters separately,
+  // so "nails in soho" ranks on "nails" and filters on "soho" rather than
+  // diluting the text match with the place name. Fall back to the whole query
+  // when there was no service part (a bare "soho").
+  const serviceText = parsed.serviceText.trim() || q;
+  const location = parsed.locationPhrase
+    ? sanitizeIlikeTerm(parsed.locationPhrase)
+    : null;
 
-  const serviceOr = textTerms
-    .map((t) => `name.ilike.%${t}%,description.ilike.%${t}%`)
-    .join(",");
-  // location_text is included here too (not just in the dedicated filter
-  // below) so a query with no "in/near" preposition still matches on it.
-  const nameOr = textTerms
-    .map(
-      (t) =>
-        `display_name.ilike.%${t}%,about_text.ilike.%${t}%,location_text.ilike.%${t}%`,
-    )
-    .join(",");
+  // A detected category hint only narrows when the caller hasn't already
+  // pinned one via the chip filter (that's already the narrower signal).
+  const effectiveCategory =
+    category && category !== "ALL" ? category : parsed.categoryHint ?? null;
 
-  // A detected category hint only broadens recall when the caller hasn't
-  // already pinned a category via the chip filter — that's already narrower.
-  const categoryHint =
-    parsed.categoryHint && (!category || category === "ALL")
-      ? parsed.categoryHint
-      : null;
+  // Widen with domain synonyms ("gel nails" -> biab, "LVL" -> lash lift) so
+  // the search matches providers who used the other word for the same thing.
+  const synonyms = expandSearchSynonyms(serviceText);
 
-  // None of these three lookups depend on each other's result, so run them
-  // together instead of waiting on one before starting the next.
-  const [
-    { data: serviceMatches },
-    { data: nameMatches },
-    { data: categoryMatches },
-  ] = await Promise.all([
-    // 1. Provider IDs where a service name or description matches
-    supabase
-      .from("services")
-      .select("provider_id")
-      .eq("is_active", true)
-      .or(serviceOr)
-      .limit(limit),
-    // 2. Provider IDs where display_name, about_text, or location matches
-    supabase
-      .from("providers")
-      .select("id")
-      .eq("is_active", true)
-      .or(nameOr)
-      .limit(limit),
-    // 3. Provider IDs in the detected category, if any
-    categoryHint
-      ? supabase
-          .from("providers")
-          .select("id")
-          .eq("is_active", true)
-          .eq("service_category", categoryHint)
-          .limit(limit)
-      : Promise.resolve({ data: [] as { id: string }[], error: null }),
-  ]);
+  // One round trip to the ranked/fuzzy/tag-aware search RPC, which returns
+  // provider ids already ordered by relevance (see the search_providers_ranked
+  // migration). search_providers_ranked isn't in the generated DB types until
+  // its migration is applied and types are regenerated, so the call is typed
+  // explicitly here rather than leaking `any` outward.
+  type RankedRow = { provider_id: string; rank: number };
+  const rankedSearch = supabase.rpc as unknown as (
+    fn: "search_providers_ranked",
+    args: {
+      p_query: string;
+      p_category: string | null;
+      p_location: string | null;
+      p_synonyms: string[];
+      p_boost_tags: string[];
+      p_limit: number;
+    },
+  ) => Promise<{ data: RankedRow[] | null; error: { message: string } | null }>;
 
-  const serviceIds = (serviceMatches ?? []).map(
-    (r: { provider_id: string }) => r.provider_id,
-  );
-  const nameIds = (nameMatches ?? []).map((r: { id: string }) => r.id);
-  const categoryIds = (categoryMatches ?? []).map((r: { id: string }) => r.id);
-  const allIds = [...new Set([...serviceIds, ...nameIds, ...categoryIds])];
+  const { data: ranked, error } = await rankedSearch("search_providers_ranked", {
+    p_query: serviceText,
+    p_category: effectiveCategory,
+    p_location: location,
+    p_synonyms: synonyms,
+    p_boost_tags: boostTags,
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message);
 
-  if (allIds.length === 0) return [];
+  const rankedIds = (ranked ?? []).map((r) => r.provider_id);
+  if (rankedIds.length === 0) return [];
 
-  // 4. Fetch those providers, applying the explicit location + category filters
-  let providerQuery = supabase
+  // Hydrate full summaries for the ranked ids, then restore the rank order — a
+  // plain .in() comes back in arbitrary order, which would discard the ranking
+  // the RPC just computed (the bug in the old union-then-sort-by-rating path).
+  const { data, error: fetchError } = await supabase
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
-    .in("id", allIds)
+    .in("id", rankedIds)
     .eq("is_active", true)
-    .eq("has_gone_live", true)
-    // An explicit, typed search is not a recommendation — a provider's own
-    // business is allowed to turn up when it actually matches the query
-    // (see ownProviderIdExclusion).
-    .order("is_featured", { ascending: false })
-    .order("rating", { ascending: false })
-    .limit(limit);
+    .eq("has_gone_live", true);
+  if (fetchError) throw fetchError;
 
-  if (category && category !== "ALL") {
-    providerQuery = providerQuery.eq("service_category", category);
-  }
-
-  if (locationTerms.length) {
-    providerQuery = providerQuery.or(
-      locationTerms.map((t) => `location_text.ilike.%${t}%`).join(","),
-    );
-  }
-
-  const { data, error } = await providerQuery;
-  if (error) throw error;
-  return (data ?? []) as PublicProviderSummary[];
+  const byId = new Map<string, PublicProviderSummary>(
+    ((data ?? []) as PublicProviderSummary[]).map((p) => [p.id, p]),
+  );
+  return rankedIds
+    .map((id) => byId.get(id))
+    .filter((p): p is PublicProviderSummary => p !== undefined);
 }
 
 /**
