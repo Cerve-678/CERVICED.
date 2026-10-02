@@ -38,11 +38,15 @@ interface FormErrors {
 export default function SignUpStep2Screen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
-  const { user, hatState } = useAuth();
+  const { user, hatState, pendingSocialSignup } = useAuth();
   const insets = useSafeAreaInsets();
+  // Finishing a first-time Apple sign-in: Apple has already verified the email
+  // and there is no password to set, so neither is asked for here.
+  const isSocial = pendingSocialSignup !== null;
+  const socialEmail = pendingSocialSignup?.email ?? '';
 
   const [name, setName] = useState(data.name);
-  const [email, setEmail] = useState(data.email);
+  const [email, setEmail] = useState(socialEmail || data.email);
   const [phone, setPhone] = useState(data.phone);
   const [password, setPassword] = useState(data.password);
   const [dobDay, setDobDay] = useState(data.dobDay);
@@ -62,7 +66,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     else if (!validateEmail(email)) errs.email = 'Enter a valid email';
     const phoneErr = validatePhone(phone);
     if (phoneErr) errs.phone = phoneErr;
-    if (!isClientSwitch) {
+    if (!isClientSwitch && !isSocial) {
       if (!password) errs.password = 'Password is required';
       else {
         const e = validatePassword(password);
@@ -74,7 +78,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
       if (dobErr) errs.dob = dobErr;
     }
     return errs;
-  }, [name, email, phone, password, isClientSwitch, isProvider, dobDay, dobMonth, dobYear]);
+  }, [name, email, phone, password, isClientSwitch, isSocial, isProvider, dobDay, dobMonth, dobYear]);
 
   const markTouched = (field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
@@ -126,7 +130,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     updateData({
       name, email, phone,
-      ...(isClientSwitch ? {} : { password }),
+      ...(isClientSwitch || isSocial ? {} : { password }),
       ...(isProvider ? { dobDay, dobMonth, dobYear } : {}),
     });
     navigation.navigate('SignUpStep3');
@@ -159,7 +163,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
           <StepProgressIndicator currentStep={2} totalSteps={totalSteps} />
 
           <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: t.text }]}>Create Account</Text>
+            <Text style={[styles.headerTitle, { color: t.text }]}>{isSocial ? 'Your Details' : 'Create Account'}</Text>
           </View>
 
           <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.border }]}>
@@ -183,10 +187,12 @@ export default function SignUpStep2Screen({ navigation }: Props) {
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: t.sub }]}>
                 {data.accountType === 'provider' ? 'PERSONAL EMAIL' : 'EMAIL'}
+                {socialEmail ? ' · FROM APPLE' : ''}
               </Text>
               <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('email') }]}>
                 <TextInput
-                  style={[styles.input, { color: t.text }]}
+                  style={[styles.input, { color: socialEmail ? t.sub : t.text }]}
+                  editable={!socialEmail}
                   value={email}
                   onChangeText={setEmail}
                   onBlur={() => markTouched('email')}
@@ -248,7 +254,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
             )}
 
             {/* Password */}
-            {!isClientSwitch && (
+            {!isClientSwitch && !isSocial && (
               <View style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: t.sub }]}>PASSWORD</Text>
                 <View style={[styles.inputWrap, styles.inputWrapRow, { backgroundColor: t.surface, borderColor: inputBorder('password') }]}>

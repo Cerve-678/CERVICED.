@@ -21,7 +21,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
-import { invokeSendAccountEmail, signUpWithEmail } from '../../services/databaseService';
+import { invokeSendAccountEmail, signUpWithEmail, upsertVerifiedUserProfile } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -29,6 +29,7 @@ import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS } from '../../features/business-detai
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
+import { buildSignupProfileRow, type SignupMetadata } from '../../utils/signupProfile';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep5'>;
 
@@ -87,7 +88,7 @@ const HAT_CELEBRATION = {
 export default function SignUpStep5Screen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
-  const { user, upgradeToProvider, addClientProfile } = useAuth();
+  const { user, session, upgradeToProvider, addClientProfile, pendingSocialSignup, completeSocialSignup } = useAuth();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const servicesY  = useRef(0);
@@ -325,33 +326,61 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       ? `${data.dobYear}-${data.dobMonth.padStart(2, '0')}-${data.dobDay.padStart(2, '0')}`
       : '';
 
+    const metadata: SignupMetadata = {
+      name: data.name, phone: data.phone, role: data.accountType, dob,
+      business_name: data.businessName || null, business_email: data.businessEmail || null,
+      business_type: data.businessType || null,
+      business_phone: data.businessPhone || null, instagram: data.instagram || null,
+      tiktok: data.tiktok || null, website: data.website || null,
+      hair_type: data.hairType || null, skin_type: data.skinType || null,
+      allergies: data.allergies, skin_concerns: data.skinConcerns,
+      style_vibe: data.styleVibe || null, treatment_history: data.treatmentHistory,
+      medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
+      service_interests: isProvider ? data.serviceInterests : selectedInterests,
+      service_locations: isProvider ? data.serviceLocations : selectedLocations,
+      location: isProvider ? (data.location || null) : null,
+      maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
+      gender: selectedGender || null, has_kids: hasKids,
+      price_range: isProvider ? (data.priceRange || null) : null,
+      team_size: isProvider ? (data.teamSize || null) : null,
+      preferred_contact_methods: isProvider ? data.preferredContactMethods : null,
+      accessibility_notes: isProvider ? (selectedAccessibility.join('|') || null) : null,
+      languages_spoken: isProvider ? finalLanguages : null,
+      specialties: isProvider ? finalSpecialties : null,
+      preferred_payment_methods: isProvider ? data.preferredPaymentMethods : null,
+    };
+
+    // First-time Apple sign-in: the session already exists and Apple has
+    // verified the email, so there is no auth user to create and no OTP to
+    // wait for — write the profile row now, the same row EmailVerification
+    // writes on the email path, then let AuthContext log the account in.
+    if (pendingSocialSignup && session) {
+      try {
+        await upsertVerifiedUserProfile(buildSignupProfileRow({
+          id: session.user.id,
+          email: pendingSocialSignup.email || personalEmail,
+          meta: metadata,
+          loginMethod: pendingSocialSignup.provider,
+        }));
+        invokeSendAccountEmail(isProvider ? 'provider_welcome' : 'client_welcome').catch((e) => {
+          logger.error('[email] welcome email failed to send:', e);
+        });
+        resetData();
+        // Flips isLoggedIn, which swaps RootNavigation over to MainTabs.
+        await completeSocialSignup();
+      } catch (e: any) {
+        Alert.alert('Oops!', toUserMessage(e, "We couldn't finish setting up your account. Please try again.", 'signup:socialProfile'));
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     try {
       const authData = await signUpWithEmail({
         email: personalEmail,
         password: data.password,
-        metadata: {
-            name: data.name, phone: data.phone, role: data.accountType, dob,
-            business_name: data.businessName || null, business_email: data.businessEmail || null,
-            business_type: data.businessType || null,
-            business_phone: data.businessPhone || null, instagram: data.instagram || null,
-            tiktok: data.tiktok || null, website: data.website || null,
-            hair_type: data.hairType || null, skin_type: data.skinType || null,
-            allergies: data.allergies, skin_concerns: data.skinConcerns,
-            style_vibe: data.styleVibe || null, treatment_history: data.treatmentHistory,
-            medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
-            service_interests: isProvider ? data.serviceInterests : selectedInterests,
-            service_locations: isProvider ? data.serviceLocations : selectedLocations,
-            location: isProvider ? (data.location || null) : null,
-            maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
-            gender: selectedGender || null, has_kids: hasKids,
-            price_range: isProvider ? (data.priceRange || null) : null,
-            team_size: isProvider ? (data.teamSize || null) : null,
-            preferred_contact_methods: isProvider ? data.preferredContactMethods : null,
-            accessibility_notes: isProvider ? (selectedAccessibility.join('|') || null) : null,
-            languages_spoken: isProvider ? finalLanguages : null,
-            specialties: isProvider ? finalSpecialties : null,
-            preferred_payment_methods: isProvider ? data.preferredPaymentMethods : null,
-        },
+        metadata,
       });
 
       if (!authData.hasIdentity) {

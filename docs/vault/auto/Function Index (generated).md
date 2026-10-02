@@ -5,7 +5,7 @@
 
 #generated
 
-**2131 functions** across **274 files**.
+**2137 functions** across **275 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -55,7 +55,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (7)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · cancelSocialSignup · clearStorageFolder · completeSocialSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
@@ -106,7 +106,7 @@
 
 ### `src/features/providers/` (8)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
-- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **deriveRecommendedGoLiveFields** · **fetchGoLiveStatus**
+- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus**
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **getAdaptiveAccentColor** · **hasProviderPolicyInfo**
 - `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialtiesSection** · tileHeight · venueImages
@@ -151,7 +151,7 @@
 - `NewPasswordScreen.tsx` — handleSave · NewPasswordScreen
 - `ReactivateAccountScreen.tsx` — formatDeletionDate · handleDecline · handleReactivate · ReactivateAccountScreen
 - `ResetPasswordOTPScreen.tsx` — handleKeyPress · handleOtpChange · handleResend · handleVerify · ResetPasswordOTPScreen
-- `SignUpStep1Screen.tsx` — SignUpStep1Screen
+- `SignUpStep1Screen.tsx` — handleBack · SignUpStep1Screen
 - `SignUpStep2Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep3Screen · validate
 - `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · pickTeamSize · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
@@ -256,10 +256,11 @@
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles
 
-### `src/types/` (1)
+### `src/types/` (2)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
+- `database.ts` — and
 
-### `src/utils/` (31)
+### `src/utils/` (32)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -286,6 +287,7 @@
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery**
 - `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
+- `signupProfile.ts` — **buildSignupProfileRow**
 - `slotsRowText.ts` — **resolveSlotsRow**
 - `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**
 - `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**

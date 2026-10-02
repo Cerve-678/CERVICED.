@@ -28,6 +28,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { buildSignupProfileRow, type SignupMetadata } from '../../utils/signupProfile';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
 
@@ -81,60 +82,13 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
         return;
       }
-      const meta = session.userMetadata as Record<string, any>;
-      const dob = meta['dob'] ?? '';
-
-      const profilePayload = {
+      const meta = session.userMetadata as Partial<SignupMetadata>;
+      const profilePayload = buildSignupProfileRow({
         id: session.userId,
         email: session.email ?? email,
-        name: meta['name'] ?? '',
-        phone: meta['phone'] ?? '',
-        dob: dob || null,
-        role: meta['role'] ?? 'user',
-        // Set the hat ON for a client signup — the column defaults to false, so
-        // leaving it out entirely would read as having no client profile and
-        // lose the client tab. A provider signing up starts without one until
-        // they add it (addClientProfile), which is the point of the column: it
-        // is no longer inferred from whether `dob` happens to be set.
-        //
-        // Omitted rather than written as `false` for a provider, because this
-        // is an UPSERT and an upsert only updates the columns it names. Writing
-        // false would mean any re-run of this screen against an existing row —
-        // a repeated verification, a retry — silently strips a client hat the
-        // account had already added. Omitting it lets the column DEFAULT false
-        // apply on insert while leaving an existing value untouched.
-        ...((meta['role'] ?? 'user') !== 'provider' ? { has_client_profile: true } : {}),
-        login_method: 'email',
-        service_interests:     meta['service_interests']     ?? [],
-        business_name:         meta['business_name']         ?? null,
-        business_email:        meta['business_email']        ?? null,
-        business_type:         meta['business_type']         ?? null,
-        business_phone:        meta['business_phone']        ?? null,
-        instagram:             meta['instagram']             ?? null,
-        tiktok:                meta['tiktok']                ?? null,
-        website:               meta['website']               ?? null,
-        hair_type:             meta['hair_type']             ?? null,
-        skin_type:             meta['skin_type']             ?? null,
-        allergies:             meta['allergies']             ?? [],
-        skin_concerns:         meta['skin_concerns']         ?? [],
-        style_vibe:            meta['style_vibe']            ?? null,
-        treatment_history:     meta['treatment_history']     ?? [],
-        medical_notes:         meta['medical_notes']         ?? null,
-        photography_consent:   meta['photography_consent']   ?? true,
-        service_locations:     meta['service_locations']     ?? [],
-        location_text:         meta['location']              ?? null,
-        maintenance_frequency: meta['maintenance_frequency'] ?? null,
-        referral_source:       meta['referral_source']       ?? null,
-        gender:                meta['gender']                ?? null,
-        has_kids:              meta['has_kids']               ?? false,
-        team_size:             meta['team_size']               ?? null,
-        accessibility_notes:   meta['accessibility_notes']     ?? null,
-        languages_spoken:      meta['languages_spoken']        ?? [],
-        specialties:           meta['specialties']             ?? [],
-        price_range:               meta['price_range']               ?? null,
-        preferred_contact_methods: meta['preferred_contact_methods'] ?? [],
-        preferred_payment_methods: meta['preferred_payment_methods'] ?? [],
-      };
+        meta,
+        loginMethod: 'email',
+      });
 
       try {
         await upsertVerifiedUserProfile(profilePayload);
@@ -162,7 +116,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       // stand between the user and being signed in. The template, recipient
       // and name are all resolved server-side — this only says which welcome.
       invokeSendAccountEmail(
-        meta['role'] === 'provider' ? 'provider_welcome' : 'client_welcome',
+        meta.role === 'provider' ? 'provider_welcome' : 'client_welcome',
       ).catch((e) => {
         logger.error('[email] welcome email failed to send:', e);
       });

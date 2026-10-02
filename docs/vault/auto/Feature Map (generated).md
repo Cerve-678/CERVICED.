@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **148 files**
 - … +118 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **74 files**
+Curated: [[Provider Onboarding & Go-Live]] · **76 files**
 - `src/services/databaseService.ts` _(70)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(52)_
@@ -192,7 +192,9 @@ Curated: [[Provider Onboarding & Go-Live]] · **74 files**
 - `supabase/dev_reset_provider.sql` _(8)_
 - `src/services/becca/capabilities/client.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
+- `src/screens/auth/LoginScreen.tsx` _(5)_
 - `src/screens/auth/SignUpStep5Screen.tsx` _(5)_
+- `src/screens/auth/WelcomeScreen.tsx` _(5)_
 - `src/screens/client/CartScreen.tsx` _(5)_
 - `src/services/acuityTransferService.ts` _(5)_
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
@@ -205,9 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **74 files**
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
-- `src/services/becca/aiRuntime.ts` _(3)_
-- `supabase/add_providers_availability_rpc.sql` _(3)_
-- … +44 more
+- … +46 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **54 files**
 - … +24 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **153 files**
+Curated: [[Booking Flow]] · **154 files**
 - `src/contexts/BookingContext.tsx` _(319)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(285)_
 - `src/services/databaseService.ts` _(199)_
@@ -275,41 +275,41 @@ Curated: [[Booking Flow]] · **153 files**
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_
-- … +123 more
+- … +124 more
 
 ## Auth
-Curated: [[Contexts]] · **163 files**
+Curated: [[Contexts]] · **164 files**
 - `src/services/databaseService.ts` _(237)_
+- `src/contexts/AuthContext.tsx` _(161)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(139)_
-- `src/screens/auth/LoginScreen.tsx` _(128)_
+- `src/screens/auth/LoginScreen.tsx` _(129)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_
 - `src/screens/shared/ChangeCredentialsScreen.tsx` _(54)_
 - `src/screens/auth/AuthScreen.tsx` _(42)_
 - `src/screens/auth/NewPasswordScreen.tsx` _(42)_
 - `src/screens/client/UserProfileScreen.tsx` _(40)_
+- `src/screens/auth/SignUpStep2Screen.tsx` _(39)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(38)_
-- `src/screens/auth/SignUpStep2Screen.tsx` _(37)_
-- `src/navigation/RootNavigation.tsx` _(36)_
+- `src/navigation/RootNavigation.tsx` _(37)_
 - `supabase/phase1_schema.sql` _(32)_
 - `src/services/beccaStorageService.ts` _(30)_
 - `src/screens/shared/ChangePasswordScreen.tsx` _(29)_
 - `src/services/biometricService.ts` _(29)_
-- `src/screens/auth/EmailVerificationScreen.tsx` _(23)_
+- `src/screens/auth/EmailVerificationScreen.tsx` _(22)_
 - `supabase/becca_chat_tables.sql` _(21)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
-- `src/screens/auth/WelcomeScreen.tsx` _(13)_
+- `src/screens/auth/SignUpStep5Screen.tsx` _(14)_
+- `src/screens/auth/WelcomeScreen.tsx` _(14)_
 - `src/screens/client/CartScreen.tsx` _(13)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
-- `src/screens/provider/InfoRegScreen.tsx` _(11)_
-- … +133 more
+- … +134 more
 
 ## Becca / AI
 Curated: [[Services]] · **39 files**

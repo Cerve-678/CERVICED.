@@ -31,6 +31,15 @@ export type AccountType = 'user' | 'provider';
  *  null: both leave myProviderId null, but only one of them means the account
  *  genuinely owns no provider profile. Collapsing the two would tell a provider
  *  they are not the owner of their own profile. */
+/** Someone signed in with Apple (or a future social provider) whose account
+ *  has no profile row yet. They hold a real, verified session, but have never
+ *  answered the signup questions — RootNavigation keeps them on the signup
+ *  steps instead of the app until SignUpStep5 creates the row. */
+export interface PendingSocialSignup {
+  provider: string;
+  email: string;
+}
+
 export type OwnedProviderLookupStatus = 'pending' | 'resolved' | 'failed';
 
 export interface UserData {
@@ -121,6 +130,13 @@ interface AuthContextType {
   isReactivating: boolean;
   reactivateAccount: () => Promise<void>;
   declineReactivation: () => Promise<void>;
+  pendingSocialSignup: PendingSocialSignup | null;
+  /** Re-reads the profile after SignUpStep5 has created the row for a pending
+   *  social sign-in, which logs the account in normally. */
+  completeSocialSignup: () => Promise<void>;
+  /** Abandons a pending social sign-in: signs the session out and returns to
+   *  Welcome. No profile row exists, so there is nothing else to undo. */
+  cancelSocialSignup: () => Promise<void>;
 }
 
 /** Turns a failed delete_client_profile/delete_provider_profile RPC result
@@ -225,6 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [switchingTo, setSwitchingTo] = useState<'provider' | 'client'>('client');
   const [pendingReactivation, setPendingReactivation] = useState<string | null>(null);
   const [isReactivating, setIsReactivating] = useState(false);
+  const [pendingSocialSignup, setPendingSocialSignup] = useState<PendingSocialSignup | null>(null);
   // Tracks user-initiated logouts so SIGNED_OUT doesn't show a spurious alert
   const intentionalLogoutRef = useRef(false);
   // The auth subscription is intentionally installed once. Keep the latest
@@ -302,6 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoggedIn(false);
         setSession(null);
         setPendingReactivation(null);
+        setPendingSocialSignup(null);
         setIsLoading(false);
         return;
       }
@@ -375,6 +393,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (profile) {
         logger.log('[AuthContext] profile found — role:', profile.role);
+        setPendingSocialSignup(null);
 
         // Account is mid-30-day grace period (see supabase/account_deletion_grace_period.sql)
         // — hold at ReactivateAccountScreen instead of logging in normally.
@@ -436,6 +455,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
       } else {
         // PGRST116: no profile row yet.
+        // A social sign-in (Apple) never went through the signup steps — there
+        // is no OTP screen to create the row, and nothing server-side does it
+        // either. Without this, a first-time Apple user was let straight into
+        // the app with an email-derived name, no date of birth and no
+        // client/provider choice. Hold them on the signup steps instead.
+        const authProvider = (session.user.app_metadata as { provider?: string } | undefined)?.provider;
+        if (authProvider && authProvider !== 'email') {
+          logger.log('[AuthContext] no profile row for', authProvider, 'sign-in — sending through signup');
+          setUser(null);
+          setIsLoggedIn(false);
+          setPendingSocialSignup({ provider: authProvider, email: session.user.email ?? '' });
+          return;
+        }
         // (a) New signup race — upsert in EmailVerificationScreen hasn't completed.
         //     user_metadata carries name/role from signUp call.
         // (b) Missing row for an existing account.
@@ -649,6 +681,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setIsLoggedIn(false);
     setSession(null);
+    setPendingSocialSignup(null);
     setActiveMode('client');
     // Clear all user-specific AsyncStorage keys so they don't bleed into the next account
     await AsyncStorage.multiRemove([
@@ -709,6 +742,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOutCurrentSession().catch(err => logger.warn('signOut error:', err));
   }, []);
 
+  const completeSocialSignup = useCallback(async () => {
+    if (!session) throw new Error('No session');
+    await loadUserProfile(session);
+  }, [session, loadUserProfile]);
+
+  const cancelSocialSignup = useCallback(async () => {
+    intentionalLogoutRef.current = true;
+    setPendingSocialSignup(null);
+    setSession(null);
+    await signOutCurrentSession().catch(err => logger.warn('signOut error:', err));
+  }, []);
+
   // Deletes only the CLIENT side of the account via a SECURITY DEFINER RPC
   // (RLS has no DELETE policy on bookings/notifications, and only that RPC
   // knows whether this is the user's only hat). If there's no provider
@@ -762,12 +807,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
+    pendingSocialSignup, completeSocialSignup, cancelSocialSignup,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
     myProviderId, myProviderIdStatus,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
+    pendingSocialSignup, completeSocialSignup, cancelSocialSignup,
   ]);
 
   return (

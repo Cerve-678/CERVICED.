@@ -32,7 +32,7 @@ import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
 const Stack = createStackNavigator<RootStackParamList>();
 
 export default function RootNavigation() {
-  const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
+  const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation, pendingSocialSignup } = useAuth();
   const activeMode = hatState.active;
   const { theme: colors, isDarkMode } = useTheme();
 
@@ -195,6 +195,19 @@ export default function RootNavigation() {
                 already registered above, just entered from a different
                 starting point. */}
             <Stack.Screen name="ClaimProvider">{(props) => <ErrorBoundary><ClaimProviderScreen {...props} /></ErrorBoundary>}</Stack.Screen>
+          </>
+        ) : pendingSocialSignup ? (
+          // ── Finishing a first-time Apple sign-in ────────────────────────────
+          // Signed in, but no account yet: they still answer every signup step
+          // (role, name, phone, date of birth, profile). Only the steps — no
+          // Welcome/Login behind them, and no EmailVerification, because the
+          // email is already verified by Apple. SignUpStep5 creates the row.
+          <>
+            <Stack.Screen name="SignUpStep1" options={{ gestureEnabled: false }}>{(props) => <ErrorBoundary><SignUpStep1Screen {...props} /></ErrorBoundary>}</Stack.Screen>
+            <Stack.Screen name="SignUpStep2">{(props) => <ErrorBoundary><SignUpStep2Screen {...props} /></ErrorBoundary>}</Stack.Screen>
+            <Stack.Screen name="SignUpStep3">{(props) => <ErrorBoundary><SignUpStep3Screen {...props} /></ErrorBoundary>}</Stack.Screen>
+            <Stack.Screen name="SignUpStep4">{(props) => <ErrorBoundary><SignUpStep4Screen {...props} /></ErrorBoundary>}</Stack.Screen>
+            <Stack.Screen name="SignUpStep5">{(props) => <ErrorBoundary><SignUpStep5Screen {...props} /></ErrorBoundary>}</Stack.Screen>
           </>
         ) : (
           // ── Auth screens only ───────────────────────────────────────────────

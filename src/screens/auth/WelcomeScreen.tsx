@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { signInWithAppleIdToken } from '../../services/databaseService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useRegistration } from '../../contexts/RegistrationContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -24,6 +25,7 @@ type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 export default function WelcomeScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { isLoggedIn } = useAuth();
+  const { updateData: updateRegistration } = useRegistration();
   const insets = useSafeAreaInsets();
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   // Guards re-entrant taps synchronously — `disabled={isAppleLoading}` on the
@@ -55,6 +57,12 @@ export default function WelcomeScreen({ navigation }: Props) {
         Alert.alert('Sign in failed', 'No identity token received from Apple.');
         return;
       }
+      // Apple only hands over the name on an account's first-ever sign-in —
+      // exactly when it's needed, since a new account is sent through the
+      // signup steps next. Seed it so Step 2 isn't blank.
+      const appleName = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter(Boolean).join(' ');
+      if (appleName) updateRegistration({ name: appleName });
       setIsAppleLoading(true);
       await signInWithAppleIdToken(credential.identityToken);
       setIsAppleLoading(false);

@@ -38,6 +38,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { useAuth } from '../../contexts/AuthContext';
+import { useRegistration } from '../../contexts/RegistrationContext';
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
@@ -45,6 +46,7 @@ type Props = StackScreenProps<RootStackParamList, 'Login'>;
 export default function LoginScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { isLoggedIn } = useAuth();
+  const { updateData: updateRegistration } = useRegistration();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
@@ -201,6 +203,12 @@ export default function LoginScreen({ navigation }: Props) {
         Alert.alert('Sign in failed', 'No identity token received from Apple.');
         return;
       }
+      // Apple only hands over the name on an account's first-ever sign-in —
+      // exactly when it's needed, since a new account is sent through the
+      // signup steps next. Seed it so Step 2 isn't blank.
+      const appleName = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter(Boolean).join(' ');
+      if (appleName) updateRegistration({ name: appleName });
       setIsLoading(true);
       const session = await signInWithAppleIdToken(credential.identityToken);
       setIsLoading(false);

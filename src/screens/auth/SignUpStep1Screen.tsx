@@ -1,5 +1,5 @@
 // src/screens/auth/SignUpStep1Screen.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   StatusBar,
@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
+import { useAuth } from '../../contexts/AuthContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -22,8 +23,29 @@ type Props = StackScreenProps<RootStackParamList, 'SignUpStep1'>;
 export default function SignUpStep1Screen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, totalSteps } = useRegistration();
+  const { pendingSocialSignup, cancelSocialSignup } = useAuth();
   const insets = useSafeAreaInsets();
   const isSelected = data.accountType;
+
+  // A first-time Apple sign-in lands here with a live session. The switch
+  // flags belong to the logged-in upgrade flows — a draft left over from one
+  // of those would send Step 5 down the wrong submit path.
+  useEffect(() => {
+    if (pendingSocialSignup && (data.fromClientSwitch || data.fromProviderSwitch)) {
+      updateData({ fromClientSwitch: false, fromProviderSwitch: false });
+    }
+  }, [pendingSocialSignup, data.fromClientSwitch, data.fromProviderSwitch, updateData]);
+
+  const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    // Nothing to go back to on the Apple path: backing out of signup means not
+    // creating the account, so end the session and return to Welcome.
+    if (pendingSocialSignup) {
+      cancelSocialSignup().catch(() => {});
+      return;
+    }
+    navigation.goBack();
+  };
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -33,7 +55,7 @@ export default function SignUpStep1Screen({ navigation }: Props) {
         {/* Back */}
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+          onPress={handleBack}
           activeOpacity={0.6}
         >
           <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
@@ -43,7 +65,12 @@ export default function SignUpStep1Screen({ navigation }: Props) {
         <StepProgressIndicator currentStep={1} totalSteps={totalSteps} />
 
         {/* Header */}
-        <Text style={[styles.headerTitle, { color: t.text }]}>I am a...</Text>
+        <Text style={[styles.headerTitle, { color: t.text }, pendingSocialSignup && { marginBottom: 8 }]}>I am a...</Text>
+        {pendingSocialSignup && (
+          <Text style={[styles.headerSubtitle, { color: t.sub }]}>
+            You're signed in with Apple — just a few details to finish setting up your account.
+          </Text>
+        )}
 
         {/* Selection Cards */}
         <View style={styles.cardsContainer}>
@@ -125,6 +152,12 @@ const styles = StyleSheet.create({
     fontSize: 32,
     letterSpacing: 1,
     marginBottom: 28,
+  },
+  headerSubtitle: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 24,
   },
   cardsContainer: {
     flex: 1,
