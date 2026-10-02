@@ -110,6 +110,13 @@ export default function BusinessProfileScreen({ navigation }: any) {
               P={P}
             />
             <SettingsOption
+              icon="payment"
+              title="Payments & payouts"
+              subtitle="Your money, booking payments & payment settings"
+              onPress={() => navigation.navigate('Payments')}
+              P={P}
+            />
+            <SettingsOption
               icon="chat-dots"
               title="Communications"
               subtitle="Messaging & notification preferences"

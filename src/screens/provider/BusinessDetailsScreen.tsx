@@ -10,13 +10,12 @@
  *   ServicesPricingScreen   — specialties, clientele, pricing, style
  *   AboutYouScreen          — credentials, patch test, cities covered, access
  *   SchedulingScreen        — availability, booking rules, → working hours
- *   PaymentsScreen          — payment types, the whole deposit setup
  *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
  *
  * Scheduling and Payments came later than the original three: availability had
  * spread across ServicesPricing, Automations and the calendar, and payment
- * settings across ServicesPricing and Automations. Both now have one home.
+ * settings across ServicesPricing and Automations. Payments now lives directly under Business Profile.
  * Policies came later still, moved out of InfoRegScreen's one-shot editor.
  *
  * Shared form primitives live in src/features/business-details/.
@@ -112,13 +111,6 @@ export default function BusinessDetailsScreen({ navigation }: any) {
             title="Scheduling & Availability"
             subtitle="Working hours, availability, buffers & booking rules"
             onPress={() => navigation.navigate('Scheduling')}
-            C={C}
-          />
-          <NavRow
-            icon="card-outline"
-            title="Payments"
-            subtitle="Payment types you accept & your deposit"
-            onPress={() => navigation.navigate('Payments')}
             C={C}
           />
 
