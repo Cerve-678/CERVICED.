@@ -187,6 +187,29 @@ Deposits are non-refundable purely by omission. This becomes live exposure the
 moment Stripe is enabled — see `PRE-LAUNCH-TODO.md` item 1b for the engineering
 work and the product/legal decisions it's blocked on.
 
+**Updated 2026-10-02 — notice window no longer blocks cancellation.**
+`cancel_own_booking()` used to `RAISE EXCEPTION 'This provider requires % hours
+notice to cancel'` inside the provider's notice window, hard-stopping the
+cancel. Per user direction that was removed: a client can now always cancel a
+pending/confirmed booking, and a late cancel is only recorded against the
+`client_provider_reliability` counter (now keyed to the provider's own notice
+window, 24h fallback). **The consequence is still nothing the client feels** —
+no fee, no deposit forfeit, no refund logic exists.
+The intended end-state the user described — "the client gets charged the
+cancellation fee if any, or the deposit is held, according to the provider's
+set policy; if the provider set free cancellation, it just cancels" — is **NOT
+built** and is a distinct, payment-sensitive feature:
+- Charging a cancellation fee or forfeiting/holding a deposit is real money
+  movement. It must run through the Stripe payment path (currently flag-gated
+  off / mid-integration), never the mock flow, and never as an off-app amount
+  the app attests to — that is the deliberate liability boundary in CLAUDE.md
+  and section 4 above.
+- It also needs the product/legal decision on refund rules (this section's
+  open UK-consumer-law question) resolved before it ships.
+Until then, the app reads the provider's policy only to *display* it and to
+*warn* the client they're inside the notice window — it does not act on it
+financially.
+
 ## 7. Reviews and user-generated content
 
 T&Cs already prohibit "false reviews" and fraudulent activity (good). Worth

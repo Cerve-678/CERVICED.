@@ -56,6 +56,7 @@ import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../util
 import { resolveTimelineRange } from '../../utils/dayTimelineRange';
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
+import { withTimeout } from '../../utils/withTimeout';
 import type {
   DbProviderAvailability,
   DbProviderBlockedDate,
@@ -64,12 +65,15 @@ import type {
 } from '../../types/database';
 import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes, overridesFromDate } from '../../utils/dateUtils';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
+import * as Haptics from 'expo-haptics';
+
+/** Light selection tick for every tappable on this screen. */
+const tap = () => { Haptics.selectionAsync().catch(() => {}); };
 import { formatBookingRef } from '../../features/bookings/presentation';
 import {
   buildGoLiveSteps,
   buildGoLiveHeadline,
   deriveRecommendedGoLiveFields,
-  deriveStripeGoLiveField,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
@@ -231,6 +235,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
 
   const handleExpand = (e: any) => {
     e.stopPropagation?.();
+    tap();
     Animated.sequence([
       Animated.timing(expandScale, { toValue: 0.82, duration: 70,  useNativeDriver: true }),
       Animated.spring(expandScale,  { toValue: 1,    tension: 160, friction: 7, useNativeDriver: true }),
@@ -241,7 +246,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
   return (
     <TouchableOpacity
       activeOpacity={0.88}
-      onPress={onPress}
+      onPress={() => { tap(); onPress(); }}
       style={[
         bc.wrap,
         { backgroundColor: P.card, borderColor: P.border, shadowColor: dark ? 'transparent' : '#000' },
@@ -325,8 +330,17 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
             <Text style={[bc.summaryLabel, { color: P.sub }]}>Service Total  </Text>
             <Text style={[bc.summaryVal, { color: P.text }]}>£{total}</Text>
           </View>
-          <Text style={bc.deposit}>Deposit paid – £{booking.amountPaid}</Text>
-          <Text style={bc.balance}>Total due – £{booking.remainingBalance ?? 0}</Text>
+          {booking.paymentType === 'deposit' ? (
+            // amount_paid includes CERVICED's platform fee on top of the
+            // deposit — never the provider's money, so this shows the
+            // deposit alone.
+            <>
+              <Text style={bc.deposit}>Deposit paid – £{booking.depositAmount ?? 0}</Text>
+              <Text style={bc.balance}>Balance due – £{booking.remainingBalance ?? 0}</Text>
+            </>
+          ) : (
+            <Text style={bc.deposit}>Paid in full – £{total}</Text>
+          )}
           <SummaryRow label="Payment Method" value={booking.paymentMethod || 'Card'} P={P} />
         </View>
       )}
@@ -344,7 +358,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
             <Text style={[bc.instructions, { color: P.sub }]}>“{booking.notes}”</Text>
           )}
           <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
-          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={onViewMessages}>
+          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={() => { tap(); onViewMessages(); }}>
             <Text style={[bc.msgBtnTxt, { color: '#fff' }]}>View Messages</Text>
           </TouchableOpacity>
         </View>
@@ -375,9 +389,6 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
   policies: 'Policies',
   payment: 'Payments',
   logo: 'Branding',
-  // The "Set up payouts" card lives on PaymentsScreen (same screen as the
-  // deposit/payment options step above).
-  stripe: 'Payments',
   portfolio: 'EditProfile',
   terms: 'EditProfile',
 };
@@ -651,7 +662,7 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
               <TouchableOpacity
                 key={booking.id}
                 activeOpacity={0.82}
-                onPress={() => onPress(booking)}
+                onPress={() => { tap(); onPress(booking); }}
                 style={{
                   position: 'absolute',
                   top,
@@ -810,8 +821,8 @@ function WeekView({
   const showNowLine = nowMinutes >= WK_START_HOUR * 60 && nowMinutes <= WK_END_HOUR * 60;
   const todayInWeek = weekDates.includes(TODAY_STR);
 
-  const goPrevWeek = useCallback(() => onSelectDate(shiftDateString(selectedDate, -7)), [selectedDate, onSelectDate]);
-  const goNextWeek = useCallback(() => onSelectDate(shiftDateString(selectedDate, 7)), [selectedDate, onSelectDate]);
+  const goPrevWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, -7)); }, [selectedDate, onSelectDate]);
+  const goNextWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, 7)); }, [selectedDate, onSelectDate]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -846,7 +857,7 @@ function WeekView({
               <TouchableOpacity
                 key={dateStr}
                 activeOpacity={0.75}
-                onPress={() => onSelectDate(dateStr)}
+                onPress={() => { tap(); onSelectDate(dateStr); }}
                 style={{ flex: 1, alignItems: 'center' }}
               >
                 {/* Reuses the date strip's own tile styles (s.tileDayLetter /
@@ -973,7 +984,7 @@ function WeekView({
                       <TouchableOpacity
                         key={booking.id}
                         activeOpacity={0.82}
-                        onPress={() => onPressBooking(booking)}
+                        onPress={() => { tap(); onPressBooking(booking); }}
                         style={{ position: 'absolute', top, height, left: `${left}%`, width: `${blockW}%`, paddingHorizontal: 1.5 }}
                       >
                         <View style={{
@@ -1166,7 +1177,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [showGoLiveCelebration, celebrationScale, celebrationOpacity]);
 
   // First-run coach-mark tour for brand-new providers.
-  const { user } = useAuth();
+  const { user, myProviderId } = useAuth();
+  const providerIdRef = useRef(myProviderId);
+  providerIdRef.current = myProviderId;
   const [showTour, setShowTour] = useState(false);
   // Home stays mounted as a tab; CoachMarkTour is a full-screen Modal. Gate it
   // on focus so an armed tour never spotlights over a screen pushed on top
@@ -1266,6 +1279,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const backdropOp = useRef(new Animated.Value(0)).current;
 
   const openSheet = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     sheetY.setValue(screenHeight);
     backdropOp.setValue(0);
     setShowAddSheet(true);
@@ -1276,6 +1290,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [sheetY, backdropOp]);
 
   const closeSheet = useCallback(() => {
+    tap();
     Animated.parallel([
       Animated.timing(sheetY,     { toValue: screenHeight, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(backdropOp, { toValue: 0,        duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }),
@@ -1379,7 +1394,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const loadBookings = useCallback(async (showLoad = false, providerId?: string) => {
     if (showLoad) setLoading(true);
     try {
-      const rows = await getProviderBookings(90, providerId);
+      const rows = await withTimeout(
+        getProviderBookings(90, providerId ?? providerIdRef.current ?? undefined),
+        8_000,
+        'Appointments load',
+      );
       setBookings(rows.map(mapDbBookingToConfirmed));
     } catch (err) {
       logger.error('[ProviderHome] bookings load failed:', err);
@@ -1418,6 +1437,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // duplicate round trip on every visit to the screen providers live in.
   useFocusEffect(useCallback(() => {
     let cancelled = false;
+    // Appointments need only the already-resolved provider ID. Start them
+    // immediately instead of waiting for the full setup/availability profile.
+    const knownProviderId = providerIdRef.current;
+    if (knownProviderId) {
+      const showInitialLoad = !hasLoadedBookingsRef.current;
+      hasLoadedBookingsRef.current = true;
+      void loadBookings(showInitialLoad, knownProviderId);
+    }
     getMyProviderProfile().then(profile => {
       if (cancelled) return;
       // Flipped only once we're actually about to load, not before the
@@ -1432,7 +1459,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // decoupled from availability the way it was pre-merge, but not
       // silently skipping bookings entirely just because availability can't
       // load this focus.
-      void loadBookings(showInitialLoad, profile?.id);
+      if (!knownProviderId) void loadBookings(showInitialLoad, profile?.id);
       setHasNoProviderProfile(!profile);
       if (!profile) return;
       return Promise.all([
@@ -1471,11 +1498,6 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           addressSet: goLiveAddress,
           ...deriveRecommendedGoLiveFields(profile),
           brandingSet: !!profile.logo_url,
-          // Same source and flag-gating as fetchGoLiveStatus — undefined while
-          // the payouts feature is off, so no Stripe step appears (matching the
-          // held server gate). profile is a select('*') row, so the column is
-          // present without an extra read.
-          stripeSet: deriveStripeGoLiveField(profile),
           isLive: !!profile.has_gone_live,
         });
 
@@ -1508,35 +1530,28 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // this focus with neither bookings nor availability loaded.
       const showInitialLoad = !hasLoadedBookingsRef.current;
       hasLoadedBookingsRef.current = true;
-      void loadBookings(showInitialLoad);
+      if (!knownProviderId) void loadBookings(showInitialLoad);
     });
     return () => { cancelled = true; };
   }, [loadBookings]));
 
   useEffect(() => {
-    let cancelled = false;
-    let unsubscribe: (() => void) | null = null;
-    getMyProviderProfile().then(profile => {
-      if (!profile || cancelled) return;
-      unsubscribe = subscribeToProviderBookingChanges(profile.id, () => {
-        if (realtimeReloadTimerRef.current) {
-          clearTimeout(realtimeReloadTimerRef.current);
-        }
-        realtimeReloadTimerRef.current = setTimeout(() => {
-          realtimeReloadTimerRef.current = null;
-          void loadBookings();
-        }, 150);
-      });
-    }).catch((err) => logger.error('[ProviderHome] realtime subscribe failed:', err));
+    if (!myProviderId) return;
+    const unsubscribe = subscribeToProviderBookingChanges(myProviderId, () => {
+      if (realtimeReloadTimerRef.current) clearTimeout(realtimeReloadTimerRef.current);
+      realtimeReloadTimerRef.current = setTimeout(() => {
+        realtimeReloadTimerRef.current = null;
+        void loadBookings(false, myProviderId);
+      }, 150);
+    });
     return () => {
-      cancelled = true;
-      unsubscribe?.();
+      unsubscribe();
       if (realtimeReloadTimerRef.current) {
         clearTimeout(realtimeReloadTimerRef.current);
         realtimeReloadTimerRef.current = null;
       }
     };
-  }, [loadBookings]);
+  }, [loadBookings, myProviderId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1750,12 +1765,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [navigation]);
 
   const handleDateTap = useCallback((dateStr: string) => {
+    tap();
     setSelectedDate(dateStr);
     const idx = STRIP_DATES.indexOf(dateStr);
     if (idx >= 0) stripRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.4 });
   }, []);
 
   const toggleMonth = () => {
+    tap();
     setShowMonth(v => !v);
   };
 
@@ -1788,7 +1805,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             <TouchableOpacity
               ref={viewModeBtnRef}
               // Tap order: timeline (the default) → list → week → back to timeline.
-              onPress={() => setViewMode(v => v === 'timeline' ? 'list' : v === 'list' ? 'week' : 'timeline')}
+              onPress={() => { tap(); setViewMode(v => v === 'timeline' ? 'list' : v === 'list' ? 'week' : 'timeline'); }}
               style={[s.iconBtn, { backgroundColor: P.accent }]}
             >
               <Ionicons
@@ -1799,7 +1816,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </TouchableOpacity>
             <TouchableOpacity
               ref={bellRef}
-              onPress={() => navigation.navigate('Notifications')}
+              onPress={() => { tap(); navigation.navigate('Notifications'); }}
               style={[s.iconBtn, { backgroundColor: P.iconBg }]}
             >
               <Ionicons name="notifications-outline" size={17} color={P.sub} />
@@ -1828,7 +1845,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               Add your services, schedule, and address so clients can find and book you.
             </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate('EditProfile' as never)}
+              onPress={() => { tap(); navigation.navigate('EditProfile' as never); }}
               activeOpacity={0.7}
               style={{
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -1860,7 +1877,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               </Text>
               {/* Only dismissible once bookable (schedule set) — the schedule is the hard blocker */}
               {setupStatus.scheduleSet && (
-                <TouchableOpacity onPress={() => setSetupDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity onPress={() => { tap(); setSetupDismissed(true); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="close" size={16} color={P.sub} />
                 </TouchableOpacity>
               )}
@@ -1883,7 +1900,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             {buildGoLiveSteps(setupStatus).filter(step => step.blocking).map(step => (
               <TouchableOpacity
                 key={step.key}
-                onPress={() => navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never)}
+                onPress={() => { tap(); navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never); }}
                 disabled={step.done}
                 activeOpacity={0.7}
                 style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}
@@ -1913,11 +1930,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
             {/* Nav */}
             <View style={s.monthNav}>
-              <TouchableOpacity onPress={() => setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()-1); return n; })} style={s.monthArrow}>
+              <TouchableOpacity onPress={() => { tap(); setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()-1); return n; }); }} style={s.monthArrow}>
                 <Ionicons name="chevron-back" size={20} color={P.text} />
               </TouchableOpacity>
               <Text style={[s.monthNavLabel, { color: P.text }]}>{monthLabel}</Text>
-              <TouchableOpacity onPress={() => setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()+1); return n; })} style={s.monthArrow}>
+              <TouchableOpacity onPress={() => { tap(); setCalMonth(m => { const n = new Date(m); n.setMonth(m.getMonth()+1); return n; }); }} style={s.monthArrow}>
                 <Ionicons name="chevron-forward" size={20} color={P.text} />
               </TouchableOpacity>
             </View>
@@ -2166,7 +2183,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </Text>
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={() => setShowGoLiveCelebration(false)}
+              onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); setShowGoLiveCelebration(false); }}
               style={{ marginTop: 20, backgroundColor: P.accent, paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12 }}
             >
               <Text style={{ color: P.ice, fontWeight: '700', fontSize: 15 }}>Let's go</Text>
@@ -2205,7 +2222,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             { icon: 'people-outline',          title: 'Clientele',   sub: 'View & manage your client list',    route: 'Clientele'        },
             { icon: 'document-text-outline',   title: 'Info Pack',   sub: 'Share service details with clients',route: 'InfoPacks'        },
             { icon: 'clipboard-outline',       title: 'Forms',       sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
-            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Messages and queries from clients',        route: 'ProviderInbox'    },
+            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Enquiries and client messages',        route: 'ProviderInbox'    },
           ] as const).filter(item => OFFERS_ENABLED || item.route !== 'Promotions').map((item, idx, arr) => (
             <React.Fragment key={item.title}>
               <TouchableOpacity

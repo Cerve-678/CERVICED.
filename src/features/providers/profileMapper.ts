@@ -6,15 +6,29 @@ import type { ProviderProfileData, ProviderProfileService } from './profileTypes
 export function mapProviderProfileData(provider: ProviderWithServices): ProviderProfileData {
   const categories: Record<string, ProviderProfileService[]> = {};
   const categoryDescriptions: Record<string, string> = {};
+  const categoriesByType: Record<string, Record<string, ProviderProfileService[]>> = {};
+
+  // A service written before services.service_category existed reads as the
+  // provider's headline type — which is exactly what it meant back then. The
+  // DB trigger stamps new rows, so this only covers rows in flight.
+  const typeOf = (service: ProviderWithServices['services'][number]): string =>
+    service.service_category ?? provider.service_category;
 
   provider.services.forEach((service, index) => {
     const category = service.category_name;
+    const serviceType = typeOf(service);
     if (!categories[category]) categories[category] = [];
+    if (!categoriesByType[serviceType]) categoriesByType[serviceType] = {};
+    const typeBucket = categoriesByType[serviceType] as Record<
+      string,
+      ProviderProfileService[]
+    >;
+    if (!typeBucket[category]) typeBucket[category] = [];
     if (service.category_description && !categoryDescriptions[category]) {
       categoryDescriptions[category] = service.category_description;
     }
 
-    categories[category].push({
+    const mapped: ProviderProfileService = {
       id: index,
       dbId: service.id,
       name: service.name,
@@ -33,14 +47,38 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
           price: Number(addOn.price),
           description: addOn.description ?? '',
         })),
-      isPregnancySafe: service.is_pregnancy_safe,
+      // null = never stated → treated as safe (no warning), matching the
+      // provider toggle's off-by-default meaning. Only an explicit false shows
+      // "not recommended during pregnancy".
+      isPregnancySafe: service.is_pregnancy_safe ?? true,
       patchTestRequired: service.patch_test_required,
       minAge: service.min_age,
       contraindications: service.contraindications ?? [],
       aftercareNotes: service.aftercare_notes ?? '',
+      skinTonesSuitable: service.skin_tones_suitable ?? [],
       serviceType: service.service_type ?? null,
-    });
+    };
+
+    categories[category].push(mapped);
+    (typeBucket[category] as ProviderProfileService[]).push(mapped);
   });
+
+  // Ordered by the provider's declared set, so the client sees every service
+  // type the provider chose at sign-up in that same order. A newly added type
+  // may not have a published service yet; keep an empty bucket for it so the
+  // client menu never silently drops that part of the business.
+  const declared = provider.service_categories?.length
+    ? provider.service_categories
+    : [provider.service_category];
+  declared.forEach((type) => {
+    if (!categoriesByType[type]) categoriesByType[type] = {};
+  });
+  const serviceTypes = [
+    ...declared,
+    // Defensive: a service stamped with a type missing from the declared set
+    // (a set edited after the fact) would otherwise be silently unreachable.
+    ...Object.keys(categoriesByType).filter(type => !declared.includes(type as never)),
+  ];
 
   return {
     id: provider.slug,
@@ -63,6 +101,8 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     brandFont: provider.brand_font ?? null,
     categories,
     categoryDescriptions,
+    serviceTypes,
+    categoriesByType,
     phone: provider.phone ?? '',
     email: provider.email ?? '',
     instagram: provider.instagram ?? '',

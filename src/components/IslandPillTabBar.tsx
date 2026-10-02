@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   View,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -94,7 +95,15 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
   // Composed with the scroll-hide values below (not just a second style
   // object) so this is a true no-op for every screen that never sets it.
   const focusedRouteOptions = descriptors[state.routes[state.index]?.key ?? '']?.options;
-  const forceHidden = (focusedRouteOptions?.tabBarStyle as { display?: string } | undefined)?.display === 'none';
+  // Custom tab bars must implement tabBarHideOnKeyboard themselves.
+  const [keyboardVisible, setKeyboardVisible] = useState(Keyboard.isVisible());
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  const keyboardHidden = !!focusedRouteOptions?.tabBarHideOnKeyboard && keyboardVisible;
+  const forceHidden = keyboardHidden || (focusedRouteOptions?.tabBarStyle as { display?: string } | undefined)?.display === 'none';
   const forceHideProgress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(forceHideProgress, {

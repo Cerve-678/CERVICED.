@@ -14,7 +14,6 @@ import {
   Alert,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { HomeStackParamList } from "../../navigation/types";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -32,7 +31,6 @@ import {
   getConversationMessages,
   sendProviderMessage,
   updateConversationLastMessage,
-  hasBookingHistoryWithProvider,
   DbProviderMessage,
   ProviderAddressPolicy,
   ClientBookingSummary,
@@ -54,10 +52,9 @@ interface Message {
 }
 
 export default function ProviderChatScreen({ navigation, route }: Props) {
-  const { providerDbId, providerName } = route.params;
+  const { providerDbId, providerName, promptMode = "conversation" } = route.params;
   const { palette: OP } = useTheme();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -73,10 +70,6 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   // Address-sharing (mobile providers only — client sends the address they want visited)
   const [addressSettings, setAddressSettings] =
     useState<ProviderAddressPolicy | null>(null);
-  // Gates which quick-reply pills show: a prospective client with no booking
-  // yet should see query-style prompts, not booking-management ones like
-  // "Reschedule" or "Cancel booking" that assume a booking already exists.
-  const [hasBooking, setHasBooking] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [addressBookings, setAddressBookings] = useState<
     ClientBookingSummary[]
@@ -116,13 +109,6 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     getProviderAddressPolicy(providerDbId)
       .then(setAddressSettings)
       .catch((err) => logger.error('[ProviderChat] address policy load failed:', err));
-  }, [providerDbId]);
-
-  useEffect(() => {
-    if (!providerDbId) return;
-    hasBookingHistoryWithProvider(providerDbId)
-      .then(setHasBooking)
-      .catch((err) => logger.error('[ProviderChat] booking history load failed:', err));
   }, [providerDbId]);
 
   // Get or create conversation
@@ -256,66 +242,59 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     setSending(false);
   }, [inputText, conversationId, userId, sending, postMessage]);
 
-  // Prompts go into the composer rather than sending immediately: the client
-  // can review or edit every message. Address details never appear in a
-  // template; they must be shared through the booking-scoped address flow.
-  //
-  // The set shown depends on whether this client has ever actually booked
-  // this provider (hasBooking): prompts like "Reschedule" or "Cancel
-  // booking" assume a real booking exists, so a prospective client just
-  // asking questions gets a query-oriented set instead.
+  // Prompts go into the composer rather than sending immediately, so the
+  // client can review or edit every message. Get In Touch opens with booking
+  // queries; an existing conversation opens with the everyday messages a
+  // client actually needs around an appointment. Address details never appear
+  // in a template; they use the booking-scoped address flow instead.
   const isMobileProvider = addressSettings?.business_type === "mobile";
 
-  const queryPrompts = [
+  const enquiryPrompts = [
+    {
+      label: "Service question",
+      text: `Hi ${providerName}, I have a question about one of your services. Could you help?`,
+    },
+    {
+      label: "Price & packages",
+      text: `Hi ${providerName}, could you tell me about your prices and any packages you offer?`,
+    },
     {
       label: "Availability",
-      text: `Hi ${providerName}, could you let me know about your availability?`,
+      text: `Hi ${providerName}, what availability do you have coming up?`,
     },
     {
-      label: "Price/quote",
-      text: `Hi ${providerName}, could you let me know the price for this service?`,
-    },
-    {
-      label: "First time",
-      text: `Hi ${providerName}, this is my first time booking with you — anything I should know beforehand?`,
+      label: "Before I book",
+      text: `Hi ${providerName}, is there anything I should know or do before booking?`,
     },
     {
       label: "Patch test",
-      text: `Hi ${providerName}, do I need a patch test before booking this service?`,
+      text: `Hi ${providerName}, do I need a patch test or consultation before booking?`,
     },
     {
-      label: "Do you offer...",
-      text: `Hi ${providerName}, do you offer this service, and could you tell me more about it?`,
-    },
-    {
-      label: isMobileProvider ? "Do you travel to me?" : "Parking/access",
+      label: isMobileProvider ? "Travel area" : "Location & access",
       text: isMobileProvider
-        ? `Hi ${providerName}, do you travel to clients? I'd love to know if you cover my area.`
-        : `Hi ${providerName}, is there anything I should know about parking or access at your location?`,
+        ? `Hi ${providerName}, do you cover my area and are there any travel fees?`
+        : `Hi ${providerName}, could you let me know about your location, parking, and access?`,
     },
     {
-      label: "Consultation",
-      text: `Hi ${providerName}, could we arrange a consultation before I book?`,
+      label: "Suitable for me?",
+      text: `Hi ${providerName}, could you advise whether this service would be suitable for me?`,
     },
     {
       label: "General question",
-      text: `Hi ${providerName}, I had a quick question before booking.`,
+      text: `Hi ${providerName}, I have a quick question before I book.`,
     },
   ];
 
-  const bookingPrompts = [
+  const conversationPrompts = [
     {
-      label: "Booking question",
-      text: `Hi ${providerName}, I have a question about my booking.`,
+      label: "Hello",
+      text: `Hi ${providerName}, hope you're well!`,
     },
-    ...(isMobileProvider
-      ? [
-          {
-            label: "Confirm address",
-            text: `Hi ${providerName}, could you confirm where I should send my appointment address?`,
-          },
-        ]
-      : []),
+    {
+      label: "Booking details",
+      text: `Hi ${providerName}, could you confirm the details of my appointment?`,
+    },
     {
       label: "Reschedule",
       text: `Hi ${providerName}, would it be possible to reschedule my appointment?`,
@@ -325,20 +304,26 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       text: `Hi ${providerName}, I'm running a little late — sorry about that!`,
     },
     {
-      label: "Cancel booking",
-      text: `Hi ${providerName}, I need to cancel my upcoming appointment.`,
+      label: "I've arrived",
+      text: `Hi ${providerName}, I've arrived. Please let me know when you're ready for me.`,
     },
-    ...(isMobileProvider
-      ? [
-          {
-            label: "Parking/access",
-            text: `Hi ${providerName}, is there anything I should know about parking or access at my address?`,
-          },
-        ]
-      : []),
+    {
+      label: isMobileProvider ? "Address & access" : "Location & access",
+      text: isMobileProvider
+        ? `Hi ${providerName}, is there anything you need from me about my address or access?`
+        : `Hi ${providerName}, could you confirm the location, parking, or access details for my appointment?`,
+    },
+    {
+      label: "Payment question",
+      text: `Hi ${providerName}, I have a quick question about payment for my appointment.`,
+    },
+    {
+      label: "Cancel booking",
+      text: `Hi ${providerName}, I need to cancel my appointment. Could you let me know the next steps?`,
+    },
     {
       label: "Aftercare",
-      text: `Hi ${providerName}, could you send over any aftercare advice for this service?`,
+      text: `Hi ${providerName}, could you send me the aftercare advice when you have a moment?`,
     },
     {
       label: "Thank you",
@@ -346,7 +331,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     },
   ];
 
-  const quickPrompts = hasBooking ? bookingPrompts : queryPrompts;
+  const quickPrompts = promptMode === "enquiry" ? enquiryPrompts : conversationPrompts;
 
   // A navigator can reuse this component for another provider. Never render a
   // stale thread while the next conversation is being resolved.
@@ -368,6 +353,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
         setSelectedBooking(only);
         setAddressText(only.client_address ?? "");
       }
+    } catch (err) {
+      logger.error('[ProviderChat] address bookings load failed:', err);
     } finally {
       setLoadingAddressBookings(false);
     }
@@ -465,8 +452,14 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
+      {/* This view starts below the native stack header, so it already knows
+          its screen position. Adding the header height as an extra keyboard
+          offset would lift the composer by that amount a second time. */}
       <KeyboardDismissView style={{ flex: 1 }}>
         <FlatList
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ref={flatListRef}
           data={visibleMessages}
           keyExtractor={(item) => item.id}
@@ -513,6 +506,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           ]}
         >
           <ScrollView
+            keyboardShouldPersistTaps="handled"
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.quickPromptScrollContent}
@@ -543,7 +537,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               backgroundColor: OP.bg,
               borderTopColor: OP.border,
               paddingBottom: keyboardVisible
-                ? Math.max(insets.bottom, 12)
+                ? 12
                 : FLOATING_TAB_BAR_CLEARANCE,
             },
           ]}
@@ -591,7 +585,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           animationType="fade"
           onRequestClose={closeAddressModal}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardDismissView style={styles.modalOverlay}>
             <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
               <Text style={[styles.modalTitle, { color: OP.text }]}>
                 Send your address
@@ -711,7 +705,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
                 </>
               )}
             </View>
-          </View>
+          </KeyboardDismissView>
         </Modal>
       </KeyboardDismissView>
     </ThemedBackground>

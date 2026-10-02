@@ -38,7 +38,7 @@ import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { resolveClientLocation } from '../../services/clientLocationService';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
-import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
+import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
@@ -280,6 +280,11 @@ export default function HomeScreen() {
 
   // Live providers from Supabase; starts empty until data loads
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
+  const [ownProviderIds, setOwnProviderIds] = useState<string[]>([]);
+  const recommendationCandidates = useMemo(
+    () => liveProviders.filter(p => !ownProviderIds.includes(p.id)),
+    [liveProviders, ownProviderIds],
+  );
   const [providersLoading, setProvidersLoading] = useState(true);
 
   // Device location, for the "Near You" section — null until permission is
@@ -456,7 +461,10 @@ export default function HomeScreen() {
         image: { uri: cover.url },
         caption: s.description ?? '',
         serviceName: s.name,
-        category: p.service_category as unknown as ServiceCategory,
+        // This service's own category, not the provider's headline — see
+        // ExploreScreen's mapDbServiceToCards for why that distinction
+        // matters for a multi-category provider.
+        category: s.service_category.toUpperCase() as ServiceCategory,
         aspectRatio: cover.aspect_ratio ?? 0.8,
         providerId: p.slug,
         price: `£${s.price}`,
@@ -471,7 +479,8 @@ export default function HomeScreen() {
     };
 
     // Fetch live providers — shows empty state if DB has no data
-    getProviders().then(data => {
+    Promise.all([getProviders(), getOwnProviderIds()]).then(([data, ownIds]) => {
+      setOwnProviderIds(ownIds);
       setLiveProviders(data.map(mapDbProvider));
       setProvidersLoading(false);
     }).catch(() => {
@@ -503,49 +512,33 @@ export default function HomeScreen() {
       setLocationIsCoarse(location.isCoarse);
     })();
 
-    // Fetch active promotions (skipped while OFFERS_ENABLED is off, see FUTURE_LOGIC.md)
-    if (OFFERS_ENABLED) {
-      getActivePromotions().then(data => {
-        setRawPromotions(data);
-      }).catch(() => {
-        // Silent failure — keeps empty offers list
-      });
-    }
-
-    // These provider rails are independent of each other and of the
-    // location/promotions fetches above — batched into one Promise.allSettled
-    // so their fire-and-forget requests are issued and (silently) degrade
-    // together, instead of six separate top-level promises each carrying its
-    // own individual .catch(() => {}). Behaviour is unchanged: they already
-    // ran concurrently before this, this just coordinates them.
-    void Promise.allSettled([
-      getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
-      getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
-      getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
-      // Per-service audience refinement for the Male/Kids sections — see the
-      // state declarations above. Widens qualification beyond providers whose
-      // whole business is registered as service_category MALE/KIDS.
-      //
-      // Two separate fetches on purpose: getProviderIdsByServiceAudience
-      // doesn't require a photo, so a provider whose new "Men's Cut" has no
-      // photo YET still makes their provider tile qualify. getDiscoverServices
-      // does require one (it's the same photo feed Explore uses) — that one
-      // only decides whether an actual service CARD can render, which
-      // legitimately needs a photo to show.
-      getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
-      getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
-      // Photo rail fetch skipped while AUDIENCE_SERVICE_PHOTOS_ENABLED is off,
-      // see FUTURE_LOGIC.md — the provider-tile widening above is unaffected.
-      ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
-        getDiscoverServices(undefined, 15, 'men').then(data =>
-          setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-        ),
-        getDiscoverServices(undefined, 15, 'kids').then(data =>
-          setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-        ),
-      ] : []),
-    ]);
-    return () => { locationRunCancelled = true; };
+    // Secondary rails must not compete with the first provider list and its
+    // images. Start them after the initial transition/interaction has settled.
+    const deferredRails = setTimeout(() => {
+      if (locationRunCancelled) return;
+      if (OFFERS_ENABLED) {
+        getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
+      }
+      void Promise.allSettled([
+        getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
+        getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
+        getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
+        getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
+        getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
+        ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
+          getDiscoverServices(undefined, 15, 'men').then(data =>
+            setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+          ),
+          getDiscoverServices(undefined, 15, 'kids').then(data =>
+            setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+          ),
+        ] : []),
+      ]);
+    });
+    return () => {
+      locationRunCancelled = true;
+      clearTimeout(deferredRails);
+    };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself
     // re-ran this whole block, GPS prompt and every provider list included,
@@ -554,26 +547,20 @@ export default function HomeScreen() {
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
+    let cancelled = false;
     const updateProviderData = async () => {
       try {
         // Get bookmarked providers from store — cross-reference against live providers
         const bookmarkedProviders = liveProviders.filter(p => bookmarkedIds.includes(p.id));
 
-        // Score all live providers — no limit here, slicing happens at render time
-        const personalizedRecommended = await userLearningService.getPersonalizedProviders(
-          liveProviders
-        );
-
-        // Exclude bookmarked providers from recommended (they already have their own section)
         const yourProviderIds = new Set(bookmarkedProviders.map(p => p.id));
-        const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
+        const defaultRecommended = recommendationCandidates.filter(p => !yourProviderIds.has(p.id));
 
-        // Fallback: all non-bookmarked providers in original DB order
-        const defaultRecommended = liveProviders.filter(p => !yourProviderIds.has(p.id));
-
+        // Render browse sections immediately; personalisation must not hold
+        // every category behind its storage/initialisation work.
         setProvidersData({
           yourProviders: bookmarkedProviders.length > 0 ? bookmarkedProviders : [],
-          recommended: recommendedFiltered.length > 0 ? recommendedFiltered : defaultRecommended,
+          recommended: defaultRecommended,
           hairProviders: liveProviders.filter(p => p.service === 'HAIR'),
           nailProviders: liveProviders.filter(p => p.service === 'NAILS'),
           lashProviders: liveProviders.filter(p => p.service === 'LASHES'),
@@ -587,6 +574,14 @@ export default function HomeScreen() {
           // Kids providers — same widening via audience='kids'.
           kidsProviders: liveProviders.filter(p => p.service === 'KIDS' || kidsServiceProviderIds.has(p.id)),
         });
+
+        const personalizedRecommended = await userLearningService.getPersonalizedProviders(recommendationCandidates);
+        if (cancelled) return;
+        const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
+        setProvidersData(previous => ({
+          ...previous,
+          recommended: recommendedFiltered.length > 0 ? recommendedFiltered : defaultRecommended,
+        }));
 
         // Phase 5.4 — recently viewed from userLearningService interaction log.
         // Raw window is wider than the 15 we display, since repeat views of
@@ -607,7 +602,8 @@ export default function HomeScreen() {
     };
 
     updateProviderData();
-  }, [bookmarkedIds, liveProviders, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
+    return () => { cancelled = true; };
+  }, [bookmarkedIds, liveProviders, recommendationCandidates, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
 
   // "Near You" — nearest-first, not "every active provider" in arbitrary DB
   // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
@@ -619,9 +615,9 @@ export default function HomeScreen() {
   const NEARBY_RADIUS_KM = 50;
   const MIN_NEARBY_RESULTS = 5;
   const nearbyProviders = useMemo(() => {
-    if (!userCoords) return liveProviders;
+    if (!userCoords) return recommendationCandidates;
 
-    const withDistance = liveProviders
+    const withDistance = recommendationCandidates
       .filter(p => p.latitude != null && p.longitude != null)
       .map(p => ({
         ...p,
@@ -631,7 +627,7 @@ export default function HomeScreen() {
 
     const withinRadius = withDistance.filter(p => p.distanceKm <= NEARBY_RADIUS_KM);
     return withinRadius.length >= MIN_NEARBY_RESULTS ? withinRadius : withDistance;
-  }, [liveProviders, userCoords]);
+  }, [recommendationCandidates, userCoords]);
 
   // User picked a city from LocationModal (either the first-run prompt, or
   // reopening it later to change area) — geocode it once and feed it into
@@ -656,12 +652,12 @@ export default function HomeScreen() {
     if (!viewAllProviders) return {};
 
     return {
-      HAIR: providersData.hairProviders,
-      NAILS: providersData.nailProviders,
-      LASHES: providersData.lashProviders,
-      MUA: providersData.muaProviders,
-      BROWS: providersData.browProviders,
-      AESTHETICS: providersData.aestheticsProviders,
+      'HAIR STYLISTS': providersData.hairProviders,
+      'NAIL TECHS': providersData.nailProviders,
+      'LASH TECHS': providersData.lashProviders,
+      'MAKEUP ARTISTS': providersData.muaProviders,
+      'BROW SPECIALISTS': providersData.browProviders,
+      'AESTHETIC PRACTITIONERS': providersData.aestheticsProviders,
     };
   }, [viewAllProviders, providersData]);
 
@@ -1710,7 +1706,7 @@ export default function HomeScreen() {
                 <View>
                   {providersData.hairProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR STYLISTS</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -1732,7 +1728,7 @@ export default function HomeScreen() {
 
                   {providersData.nailProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAILS</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAIL TECHS</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}

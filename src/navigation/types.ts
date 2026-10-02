@@ -35,6 +35,7 @@ export type HomeStackParamList = {
     providerId: string;
     providerDbId: string;
     providerName: string;
+    promptMode?: 'enquiry' | 'conversation';
   };
   Search: { initialQuery?: string; category?: string; morph?: boolean };
   Bookings:
@@ -64,6 +65,7 @@ export type ExploreStackParamList = {
     providerId: string;
     providerDbId: string;
     providerName: string;
+    promptMode?: 'enquiry' | 'conversation';
   };
   Search: { initialQuery?: string; category?: string; morph?: boolean };
   BookmarkedProviders: undefined;
@@ -79,6 +81,7 @@ export type BeccaStackParamList = {
     providerId: string;
     providerDbId: string;
     providerName: string;
+    promptMode?: 'enquiry' | 'conversation';
   };
   Notifications: undefined;
   Bookings:
@@ -119,7 +122,7 @@ export type ProviderBeccaStackParamList = {
   AddBooking: undefined;
   Clientele: undefined;
   ProviderInbox:
-    | { initialFilter?: "messages" | "queries" }
+    | { initialFilter?: "enquiries" | "messages" | "unread" }
     | undefined;
   ProviderConversation: {
     conversationId: string;
@@ -141,6 +144,7 @@ export type CartStackParamList = {
     providerId: string;
     providerDbId: string;
     providerName: string;
+    promptMode?: 'enquiry' | 'conversation';
   };
   Bookings:
     | {
@@ -172,6 +176,8 @@ export type ProfileStackParamList = {
   PaymentMethods: undefined;
   Subscription: undefined;
   HelpCentre: undefined;
+  TextSizing: undefined;
+  LanguageRegion: undefined;
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;
@@ -181,6 +187,7 @@ export type ProfileStackParamList = {
     providerId: string;
     providerDbId: string;
     providerName: string;
+    promptMode?: 'enquiry' | 'conversation';
   };
   Messages: undefined;
   Bookings:
@@ -211,6 +218,7 @@ export type ProviderHomeStackParamList = {
   // straight into the list view rather than whichever mode was last used.
   ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
   ProviderSchedule: undefined;
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   AddBooking: undefined;
   // Reachable from the Calendar tab's profile quick-actions. Registered here
   // (as well as on the Profile stack) so those actions PUSH instead of jumping
@@ -239,7 +247,7 @@ export type ProviderHomeStackParamList = {
     | undefined;
   Notifications: undefined;
   ProviderInbox:
-    | { initialFilter?: "messages" | "queries" }
+    | { initialFilter?: "enquiries" | "messages" | "unread" }
     | undefined;
   ProviderConversation: {
     conversationId: string;
@@ -276,6 +284,10 @@ export type ProviderServicesStackParamList = {
   // Pushed from the availability card on the provider's own profile, so the
   // schedule opens with that profile beneath it instead of at a bare tab root.
   ProviderSchedule: undefined;
+  // Pushed from the Manage section's Business info / Schedule tiles, same
+  // reasoning as ProviderSchedule above.
+  BusinessInfo: undefined;
+  Scheduling: undefined;
   // Pushed from the dashboard's Booking policies / Branding cards, for the
   // same reason ProviderSchedule is registered here rather than jumped to on
   // the Account tab.
@@ -312,7 +324,7 @@ export type ProviderAccountStackParamList = {
     | { openTerms: true }
     | undefined;
   ProviderInbox:
-    | { initialFilter?: "messages" | "queries" }
+    | { initialFilter?: "enquiries" | "messages" | "unread" }
     | undefined;
   ProviderConversation: {
     conversationId: string;
@@ -334,6 +346,12 @@ export type ProviderAccountStackParamList = {
   BusinessProfile: undefined;
   Branding: undefined;
   HelpCentre: undefined;
+  // In-app Text & Sizing / Language & Region settings (shared screens). The
+  // client ProfileStackParamList registers these too — the preference itself is
+  // device-global (DisplaySettingsContext, mounted above the hat switch), so
+  // both hats reach the same single setting.
+  TextSizing: undefined;
+  LanguageRegion: undefined;
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;

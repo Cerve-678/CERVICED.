@@ -1,3 +1,4 @@
+import { SKIN_TONES, matchesSkinTone } from '../../constants/skinTones';
 // SearchScreen.tsx
 import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect } from 'react';
 import {
@@ -16,6 +17,7 @@ import {
   TextInput,
   Platform,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -32,14 +34,16 @@ import { resolveClientLocation } from '../../services/clientLocationService';
 import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
-import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
+import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
+import { matchesAnySpeciality, normalizeTerm } from '../../utils/fuzzyMatch';
 import userLearningService from '../../services/userLearningService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
+import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { logger } from '../../utils/logger';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
   resolveProviderPriceRange,
   priceRangeMatchesBucket,
@@ -116,6 +120,7 @@ interface FilterOptions {
   // "does this provider cater to X at all" level — services.hair_types_
   // suitable is the per-service refinement shown once a service is picked.
   hairType?: string;
+  skinTone?: string;
   // Matches against the per-service services.audience column, derived from the
   // tags getProviderServiceFacets already fetched for the result set (no round
   // trip of its own) — a provider qualifies if ANY of
@@ -124,6 +129,15 @@ interface FilterOptions {
   // use. 'everyone' is deliberately not offered as a filter value here — it
   // isn't a narrowing choice, it's what an untagged service already means.
   audience?: 'women' | 'men' | 'kids';
+  // The specific specialities a client wants (e.g. "Dominican blowout"),
+  // multi-select with OR semantics — a provider matches if they offer ANY
+  // chosen one. Matched fuzzily (src/utils/fuzzyMatch.ts) against the union of
+  // their business specialities, per-service tags and service names that
+  // getProviderServiceFacets returns as specialityText, so the exact label
+  // here need not have been typed the same way by the provider. Option pool is
+  // the curated per-category SPECIALTIES_MAP, widened at render time with any
+  // real values the result set actually has (see specialityOptions).
+  specialty?: string[];
   // Straightforward provider-level boolean matches — no batched lookup
   // needed since these already ride along on the same DbProvider row
   // mapDbToCardData reads everything else from.
@@ -142,6 +156,19 @@ interface ProviderCardProps {
   onPress: () => void;
   index: number;
   P: AppTheme;
+}
+
+// A real provider tag/speciality is often stored lowercase-hyphenated
+// ("silk-press", "nail-art"); presented as a filter chip it wants to read like
+// the curated labels beside it. Normalize to words then title-case each.
+// Matching is fuzzy and case-insensitive, so this only affects display.
+function titleCaseSpeciality(raw: string): string {
+  const norm = normalizeTerm(raw);
+  if (!norm) return raw.trim();
+  return norm
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
 function specialtiesFor(service: string): string[] {
@@ -171,10 +198,15 @@ function formatPriceRange(range: { min: number; max: number }): string {
 const CATEGORY_CODE_MAP: Record<string, string> = {
   Hair: 'HAIR', Nails: 'NAILS', Makeup: 'MUA',
   Aesthetics: 'AESTHETICS', Brows: 'BROWS', Lashes: 'LASHES',
-  Other: 'OTHER',
 };
 
-const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics', 'Other']
+// No "Other" tab, matching Explore, which never had one. OTHER is retired as a
+// pickable provider type (see SERVICE_TYPE_OPTS) and it made a poor tab
+// regardless: a client browsing it learned nothing about what they'd find, and
+// the free-text custom_service_type that gave it meaning was never searchable.
+// Providers still stamped OTHER are reachable by name and by their services —
+// they just aren't offered as a category to browse.
+const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics']
   .map(c => ({ key: c, label: c }));
 
 // Price matching lives in src/utils/providerPriceMatch.ts, alongside the
@@ -188,7 +220,7 @@ const KM_TO_MILES = 0.621371;
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
 // tapping one opens just that filter's popover (Airbnb/Skyscanner style)
 // instead of one big panel covering every filter at once. ──────────────────
-type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city' | 'hairType' | 'audience' | 'practice';
+type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city' | 'hairType' | 'audience' | 'practice' | 'specialty';
 
 const SORT_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
@@ -238,6 +270,7 @@ const FILTER_PILL_LABEL: Record<FilterKey, string> = {
   hairType: 'Hair Type',
   audience: "Who It's For",
   practice: 'How They Work',
+  specialty: 'Speciality',
 };
 
 const AUDIENCE_OPTIONS: { label: string; value: 'women' | 'men' | 'kids' }[] = [
@@ -360,6 +393,13 @@ ProviderCard.displayName = 'ProviderCard';
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
+  const bottomInset = useSystemBottomInset();
+  // Concrete pixel cap for the filter sheet's scroll area. A percentage
+  // maxHeight on the sheet + flexShrink on the ScrollView left the list
+  // un-scrollable until a second layout pass (the "have to scroll down before
+  // up" bug); a definite height makes it scrollable on first render.
+  const { height: windowHeight } = useWindowDimensions();
+  const filterScrollMaxHeight = Math.round(windowHeight * 0.55);
   const { isDarkMode, palette: P } = useTheme();
   const { user } = useAuth();
 
@@ -424,8 +464,12 @@ export default function SearchScreen({ navigation, route }: Props) {
   const barOpacity = useSharedValue(isMorphEntry ? 0 : 1);
   const barTranslateY = useSharedValue(isMorphEntry ? 10 : 0);
   const barScale = useSharedValue(isMorphEntry ? 0.97 : 1);
-  const chipsOpacity = useSharedValue(isMorphEntry ? 0 : 1);
-  const chipsTranslateY = useSharedValue(isMorphEntry ? 8 : 0);
+  // Category pills always animate in on mount, not just on a morph entry —
+  // previously these matched the bar/results (skipped entirely on a plain
+  // tab open), which meant the pill row just popped in at rest most of the
+  // time instead of ever showing the fade+slide.
+  const chipsOpacity = useSharedValue(0);
+  const chipsTranslateY = useSharedValue(8);
   const resultsOpacity = useSharedValue(isMorphEntry ? 0 : 1);
   const resultsTranslateY = useSharedValue(isMorphEntry ? 8 : 0);
 
@@ -435,12 +479,16 @@ export default function SearchScreen({ navigation, route }: Props) {
   const mergeEasing = Easing.out(Easing.cubic);
 
   React.useEffect(() => {
+    chipsOpacity.value = withDelay(40, withTiming(1, { duration: 190, easing: mergeEasing }));
+    chipsTranslateY.value = withDelay(40, withTiming(0, { duration: 210, easing: mergeEasing }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
     if (!isMorphEntry) return;
     barOpacity.value = withTiming(1, { duration: 200, easing: mergeEasing });
     barTranslateY.value = withTiming(0, { duration: 220, easing: mergeEasing });
     barScale.value = withTiming(1, { duration: 220, easing: mergeEasing });
-    chipsOpacity.value = withDelay(40, withTiming(1, { duration: 190, easing: mergeEasing }));
-    chipsTranslateY.value = withDelay(40, withTiming(0, { duration: 210, easing: mergeEasing }));
     resultsOpacity.value = withDelay(80, withTiming(1, { duration: 190, easing: mergeEasing }));
     resultsTranslateY.value = withDelay(80, withTiming(0, { duration: 210, easing: mergeEasing }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -543,6 +591,9 @@ export default function SearchScreen({ navigation, route }: Props) {
     const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
 
     const requestId = ++providerRequestIdRef.current;
+    setProvidersLoading(true);
+    setProvidersError(null);
+    setRefreshing(false);
     const run = async () => {
       setProvidersLoading(true);
       setProvidersError(null);
@@ -580,6 +631,7 @@ export default function SearchScreen({ navigation, route }: Props) {
 
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      ++providerRequestIdRef.current;
     };
   }, [searchQuery, selectedFilter, mapDbToCardData, user?.id]);
 
@@ -677,7 +729,13 @@ export default function SearchScreen({ navigation, route }: Props) {
   // "Price on request" fallback with real data (or nothing, while
   // unresolved/absent) on the card.
   const [priceRangeByProviderId, setPriceRangeByProviderId] = useState<Map<string, { min: number; max: number }>>(new Map());
+  const [skinTonesByProviderId, setSkinTonesByProviderId] = useState<Map<string, Set<string>>>(new Map());
   const [audiencesByProviderId, setAudiencesByProviderId] = useState<Map<string, Set<string>>>(new Map());
+  // Speciality haystack per provider (business specialities + service tags +
+  // service names) — the Speciality filter matches its chosen labels against
+  // this, fuzzily. Comes off the same getProviderServiceFacets call as the maps
+  // above, so it costs no extra round trip.
+  const [specialityTextByProviderId, setSpecialityTextByProviderId] = useState<Map<string, Set<string>>>(new Map());
   // Whether the facets query has answered for the CURRENT result set. Keeps
   // the audience filter's "don't claim a match until the lookup has answered"
   // rule meaningful now that the match set is derived rather than fetched —
@@ -695,6 +753,8 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (ids.length === 0) {
       setPriceRangeByProviderId(new Map());
       setAudiencesByProviderId(new Map());
+      setSkinTonesByProviderId(new Map());
+      setSpecialityTextByProviderId(new Map());
       setFacetsLoaded(true);
       setPriceRangeLoading(false);
       return;
@@ -707,11 +767,15 @@ export default function SearchScreen({ navigation, route }: Props) {
         if (cancelled) return;
         setPriceRangeByProviderId(facets.priceRanges);
         setAudiencesByProviderId(facets.audiences);
+        setSkinTonesByProviderId(facets.skinTones ?? new Map());
+        setSpecialityTextByProviderId(facets.specialityText ?? new Map());
       })
       .catch(() => {
         if (cancelled) return;
         setPriceRangeByProviderId(new Map());
         setAudiencesByProviderId(new Map());
+      setSkinTonesByProviderId(new Map());
+      setSpecialityTextByProviderId(new Map());
       })
       .finally(() => {
         if (cancelled) return;
@@ -745,6 +809,70 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
     return matches;
   }, [audiencesByProviderId, facetsLoaded, activeFilters.audience]);
+
+  // Speciality matches, derived from the same facet data. null = filter off
+  // (don't narrow); a Set (possibly empty) once the facets have answered. Same
+  // "don't claim matches before the lookup lands" rule as audience/hairType.
+  // The fuzzy match runs per provider over their whole speciality haystack, so
+  // it's kept here (memoised on the selection + data) rather than in the hot
+  // filteredProviders pass.
+  const specialityMatchIds = useMemo(() => {
+    const selected = activeFilters.specialty;
+    if (!selected || selected.length === 0) return null;
+    if (!facetsLoaded) return null;
+    const matches = new Set<string>();
+    for (const [providerId, haystack] of specialityTextByProviderId) {
+      if (matchesAnySpeciality([...haystack], selected)) matches.add(providerId);
+    }
+    return matches;
+  }, [specialityTextByProviderId, facetsLoaded, activeFilters.specialty]);
+
+  // The chips shown in the Speciality section. Starts from the curated list
+  // for the active category tab (the whole cross-category set on "All"), then
+  // widens with any SHORT real values the current result set actually has —
+  // so a provider's own tag/speciality that isn't in the curated list still
+  // becomes filterable — while excluding long strings (whole service names)
+  // that would read as noise rather than a speciality. A value already
+  // selected is always kept present so it stays toggle-off-able even after the
+  // category tab changes. Dedupe is by normalized form (see fuzzyMatch), so
+  // "nail-art" and "Nail art" collapse to one chip.
+  const specialityOptions = useMemo(() => {
+    const code = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
+    const curated = code ? (SPECIALTIES_MAP[code] ?? ALL_SPECIALTIES) : ALL_SPECIALTIES;
+
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const add = (label: string) => {
+      const norm = normalizeTerm(label);
+      if (!norm || seen.has(norm)) return;
+      seen.add(norm);
+      out.push(label);
+    };
+
+    curated.forEach(add);
+
+    // Widen with real short values from the result set (tags / specialities,
+    // not whole service names), capped so the sheet stays scannable.
+    let extras = 0;
+    const EXTRA_CAP = 24;
+    for (const haystack of specialityTextByProviderId.values()) {
+      if (extras >= EXTRA_CAP) break;
+      for (const raw of haystack) {
+        if (extras >= EXTRA_CAP) break;
+        const tokenCount = normalizeTerm(raw).split(' ').filter(Boolean).length;
+        if (tokenCount === 0 || tokenCount > 3) continue; // skip empty + full names
+        const label = titleCaseSpeciality(raw);
+        if (seen.has(normalizeTerm(label))) continue;
+        add(label);
+        extras += 1;
+      }
+    }
+
+    // Keep any current selection visible even if it fell outside the list.
+    (activeFilters.specialty ?? []).forEach(add);
+
+    return out;
+  }, [selectedFilter, specialityTextByProviderId, activeFilters.specialty]);
 
   // ── Client-side filter/sort on top of the server-searched set — category
   // and text query are already applied server-side (see the debounced effect
@@ -785,6 +913,10 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.city?.length) {
       list = list.filter(p => activeFilters.city!.some(c => p.serviceLocations.includes(c)));
     }
+    if (activeFilters.skinTone) {
+      if (!facetsLoaded) return [];
+      list = list.filter(p => matchesSkinTone([...skinTonesByProviderId.get(p.providerId) ?? []], activeFilters.skinTone!));
+    }
     if (activeFilters.hairType) {
       // Same "don't claim a match until the batched lookup has answered" rule
       // as Available Now above — hairTypeMatchIds is null while unresolved.
@@ -796,6 +928,12 @@ export default function SearchScreen({ navigation, route }: Props) {
       // yet — same rule as hairType above, don't claim matches prematurely.
       if (!audienceMatchIds) return [];
       list = list.filter(p => audienceMatchIds.has(p.providerId));
+    }
+    if (activeFilters.specialty?.length) {
+      // Same "don't claim a match until the batched facets have answered" rule
+      // — specialityMatchIds is null while unresolved.
+      if (!specialityMatchIds) return [];
+      list = list.filter(p => specialityMatchIds.has(p.providerId));
     }
     if (activeFilters.walkInsWelcome) {
       list = list.filter(p => p.walkInsWelcome);
@@ -829,7 +967,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds]);
+  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
@@ -854,6 +992,18 @@ export default function SearchScreen({ navigation, route }: Props) {
     setActiveFilters(prev => {
       const { city: _city, ...rest } = prev;
       return next.length ? { ...rest, city: next } : rest;
+    });
+  }, []);
+
+  // Speciality is multi-select (OR). SpecialityMultiSelect owns the toggle UI
+  // and hands back the full next array, so this just stores it and drops the
+  // key entirely when empty (back to no filter) — same shape as
+  // updateCityFilter, not the single-value reselect-to-clear in updateFilter.
+  const updateSpecialtyFilter = useCallback((next: string[]) => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveFilters(prev => {
+      const { specialty: _specialty, ...rest } = prev;
+      return next.length ? { ...rest, specialty: next } : rest;
     });
   }, []);
 
@@ -887,6 +1037,9 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleRefresh = useCallback(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    setProvidersLoading(true);
+    setProvidersError(null);
     setRefreshing(true);
     const requestId = ++providerRequestIdRef.current;
     const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
@@ -904,7 +1057,12 @@ export default function SearchScreen({ navigation, route }: Props) {
         setProviderData([]);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       })
-      .finally(() => { if (requestId === providerRequestIdRef.current) setRefreshing(false); });
+      .finally(() => {
+        if (requestId === providerRequestIdRef.current) {
+          setRefreshing(false);
+          setProvidersLoading(false);
+        }
+      });
   }, [searchQuery, selectedFilter, mapDbToCardData]);
 
   const handleProviderPress = useCallback((provider: ProviderCardData) => {
@@ -949,6 +1107,12 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
     if (activeFilters.city?.length) {
       chips.push({ key: 'city', label: activeFilters.city.join(', ') });
+    }
+    if (activeFilters.specialty?.length) {
+      chips.push({ key: 'specialty', label: activeFilters.specialty.join(', ') });
+    }
+    if (activeFilters.skinTone) {
+      chips.push({ key: 'skinTone', label: `${activeFilters.skinTone} skin tone` });
     }
     if (activeFilters.hairType) {
       chips.push({ key: 'hairType', label: activeFilters.hairType });
@@ -1037,10 +1201,10 @@ export default function SearchScreen({ navigation, route }: Props) {
   const renderHeader = useCallback(() => (
     <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
       <Text style={[styles.countText, { color: P.sub }]}>
-        {filteredProviders.length} {filteredProviders.length === 1 ? 'provider' : 'providers'}
+        {providersLoading ? 'Searching…' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
       </Text>
     </View>
-  ), [filteredProviders.length, P]);
+  ), [filteredProviders.length, providersLoading, P]);
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1052,7 +1216,8 @@ export default function SearchScreen({ navigation, route }: Props) {
           <TabIcon name="magnifying-glass" size={16} color={P.sub} />
           <TextInput
             style={[styles.searchInput, { color: P.text, fontFamily: 'Jura-VariableFont_wght' }]}
-            placeholder="Try 'nail art in east manchester'"
+            placeholder="Try 'nail art in Manchester'"
+            accessibilityLabel="Search providers, services or places"
             placeholderTextColor={P.sub}
             value={searchQuery}
             onChangeText={handleSearchChange}
@@ -1123,8 +1288,19 @@ export default function SearchScreen({ navigation, route }: Props) {
         animationType="slide"
         onRequestClose={() => setFilterModalVisible(false)}
       >
-        <Pressable style={styles.filterModalBackdrop} onPress={() => setFilterModalVisible(false)}>
-          <Pressable style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border }]} onPress={() => {}}>
+        {/* Tap-to-dismiss is a SIBLING overlay, never a parent of the sheet. A
+            Pressable owns a press-vs-move gesture responder, so wrapping the
+            ScrollView in one made every drag wrestle it back mid-touch — the
+            stiff sheet that doesn't grab on the first drag. Nothing above the
+            list owns the gesture now, so it scrolls immediately. Same
+            arrangement the schedule time picker and ImageDetailModal use. */}
+        <View style={styles.filterModalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setFilterModalVisible(false)}
+            accessibilityLabel="Close filters"
+          />
+          <View style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(20, bottomInset + 16) }]}>
             <View style={styles.filterModalHeader}>
               <Text style={[styles.filterModalTitle, { color: P.text }]}>FILTERS</Text>
               {hasActiveFilters && (
@@ -1133,7 +1309,14 @@ export default function SearchScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               )}
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ maxHeight: filterScrollMaxHeight }}
+              contentContainerStyle={{ paddingBottom: 16 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              bounces
+            >
               {/* Availability — surfaced first, above Sort: it's the
                   single most decision-relevant signal in this marketplace
                   (can I actually book this provider soon), and a lone
@@ -1294,6 +1477,48 @@ export default function SearchScreen({ navigation, route }: Props) {
                 })}
               </View>
 
+              {/* Speciality — multi-select, OR semantics, in a searchable
+                  sheet (SpecialityMultiSelect) rather than a flat pill dump:
+                  the per-category option pool is long, so the client searches
+                  ("domin" → Dominican blowout) instead of scanning a grid.
+                  Options are scoped to the active category tab and widened with
+                  real values the result set has (see specialityOptions);
+                  matched fuzzily against each provider's specialities, service
+                  tags AND service names. */}
+              {specialityOptions.length > 0 && (
+                <>
+                  <View style={styles.filterSectionHead}>
+                    <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.specialty}</Text>
+                  </View>
+                  <View style={styles.pillGrid}>
+                    <SpecialityMultiSelect
+                      selected={activeFilters.specialty ?? []}
+                      onChange={updateSpecialtyFilter}
+                      options={specialityOptions}
+                      palette={P}
+                      placeholder="Any speciality"
+                    />
+                  </View>
+                </>
+              )}
+
+              <View style={styles.filterSectionHead}>
+                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>Skin Tone</Text>
+              </View>
+              <View style={styles.pillGrid}>
+                {SKIN_TONES.map(tone => {
+                  const isActive = activeFilters.skinTone === tone;
+                  return (
+                    <TouchableOpacity key={tone}
+                      style={[styles.filterPill, { borderColor: P.border, backgroundColor: P.surface }, isActive && { backgroundColor: P.accent, borderColor: P.accent }]}
+                      onPress={() => updateFilter('skinTone', tone)} activeOpacity={0.75}
+                      accessibilityRole="button" accessibilityState={{ selected: isActive }}>
+                      <Text style={[styles.filterPillText, { color: isActive ? P.onAccent : P.text }]}>{tone}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               <View style={styles.filterSectionHead}>
                 <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.audience}</Text>
               </View>
@@ -1369,8 +1594,8 @@ export default function SearchScreen({ navigation, route }: Props) {
                 Show {filteredProviders.length} {filteredProviders.length === 1 ? 'result' : 'results'}
               </Text>
             </TouchableOpacity>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* ── Results area — wraps the FlatList. ── */}
@@ -1379,7 +1604,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       {/* ── Provider grid — two columns, matches the provider-grid layout used
           on the bookmarked-providers screen ── */}
       <FlatList
-        data={filteredProviders}
+        data={providersLoading ? [] : filteredProviders}
         renderItem={renderCard}
         keyExtractor={item => item.id}
         numColumns={2}
@@ -1419,6 +1644,11 @@ export default function SearchScreen({ navigation, route }: Props) {
                       ? `No one matches ${activeFilterChips.map(c => c.label).join(' · ')}`
                       : 'Try a different search term or category')}
                 </Text>
+                {providersError && (
+                  <TouchableOpacity accessibilityRole="button" onPress={handleRefresh} style={styles.emptyClearBtn}>
+                    <Text style={[styles.emptyClearText, { color: P.accent }]}>Try again</Text>
+                  </TouchableOpacity>
+                )}
                 {!providersError && activeFilterChips.length > 0 && (
                   <TouchableOpacity onPress={resetFilters} activeOpacity={0.7} style={styles.emptyClearBtn}>
                     <Text style={[styles.emptyClearText, { color: P.accent }]}>
@@ -1525,10 +1755,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
     // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
+
   },
   filterModalSheet: {
-    maxHeight: '75%',
+    // No percentage maxHeight here — the scroll area itself carries a concrete
+    // pixel cap (filterScrollMaxHeight), so the sheet sizes to its content and
+    // the list is scrollable on first render. A percentage cap here plus
+    // flexShrink on the list was the "scroll down before it scrolls up" bug.
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1538,6 +1771,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   filterModalHeader: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1599,6 +1833,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   filterModalDone: {
+    flexShrink: 0,
     marginTop: 14,
     minHeight: 46,
     borderRadius: 23,

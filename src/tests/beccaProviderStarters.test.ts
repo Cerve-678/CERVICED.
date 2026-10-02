@@ -1,3 +1,4 @@
+import { normalizeAsk } from "../services/becca/askNormaliser";
 import { understand } from "../services/becca/matcher";
 
 // The provider hat's welcome chips send these messages. If a rename in the
@@ -10,7 +11,7 @@ describe("Becca's provider starter chips are answered in the chat", () => {
     ["Any unread messages?", "pv.inbox"],
     ["How am I doing?", "pv.analytics"],
   ])("routes %p to %s", (message, capabilityId) => {
-    expect(understand(message, {}, "provider").capabilityId).toBe(capabilityId);
+    expect(understand(normalizeAsk(message), {}, "provider").capabilityId).toBe(capabilityId);
   });
 });
 
@@ -27,6 +28,6 @@ describe("Becca's provider follow-up chips are answered in the chat", () => {
     ["What are clients saying?", "pv.reviews"],
     ["How many followers have I got?", "pv.reach"],
   ])("routes %p to %s", (message, capabilityId) => {
-    expect(understand(message, {}, "provider").capabilityId).toBe(capabilityId);
+    expect(understand(normalizeAsk(message), {}, "provider").capabilityId).toBe(capabilityId);
   });
 });

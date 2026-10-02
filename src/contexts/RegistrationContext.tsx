@@ -47,6 +47,11 @@ export interface RegistrationData {
   // logistics needed for booking + the business profile. Mirrors columns
   // added in supabase/provider_signup_business_fields.sql.
   location: string;
+  // Optional at signup (a brand-new provider can have 0 years). Kept as the raw
+  // string the field types; parsed to an INT at the save boundary. Staged on
+  // users.years_experience, then copied to providers.years_experience by
+  // InfoRegScreen's first-save prefill — same route as team_size/price_range.
+  yearsExperience: string;
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
   teamSize: 'solo' | 'small_team' | 'large_team' | '';
   preferredContactMethods: string[];
@@ -108,6 +113,7 @@ const initialData: RegistrationData = {
   has_kids: null,
   // Provider "About your business"
   location: '',
+  yearsExperience: '',
   priceRange: '',
   teamSize: '',
   preferredContactMethods: [],

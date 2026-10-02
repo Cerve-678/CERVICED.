@@ -13,21 +13,42 @@
 
 import type { BusinessType, ServiceCategory } from '../../types/database';
 
+// Specialities are the specific, often culturally-named things a provider is
+// known for — narrower than the macro service_category, broader than one
+// service. They serve two jobs at once: the chips a provider picks on
+// ServicesPricingScreen (stored in provider_specialties), AND the curated
+// option list behind the client Search "Speciality" filter. The client filter
+// matches these against a provider's specialities, per-service tags AND service
+// names via fuzzy matching (src/utils/fuzzyMatch.ts), so the labels here are
+// written as a client would recognise them — casing/spacing/spelling drift
+// between this list and what a provider typed elsewhere is tolerated at match
+// time, not something to normalise here. Each category carries its own set so
+// a nail tech is never shown hair specialities.
 export const SPECIALTIES_MAP: Record<string, string[]> = {
-  HAIR:       ['Natural & textured', 'Afro hair', 'Colour & balayage', 'Extensions & weaves', 'Locs & braids', 'Bridal & occasion', "Men's cuts", "Children's hair", 'Relaxers & perms', 'Blow-dries & styling'],
-  NAILS:      ['Nail art', 'Acrylic sets', 'Gel manicure', 'Infills', 'Gel extensions', 'Pedicures', 'SNS/dip powder', 'Gel-X'],
-  LASHES:     ['Classic lashes', 'Volume', 'Mega volume', 'Hybrid', 'Lash lifts', 'Lash tints'],
-  BROWS:      ['Threading', 'Waxing', 'Lamination', 'Microblading', 'Nano brows', 'Henna brows', 'Tinting & shaping'],
-  MUA:        ['Bridal', 'Prom & occasion', 'Editorial', 'Airbrush', 'Film & TV', 'SFX', 'All skin tones', 'Deep/dark skin specialist'],
-  AESTHETICS: ['Facials', 'Microneedling', 'Chemical peels', 'LED therapy', 'Dermaplaning', 'Injectables', 'Body treatments'],
+  HAIR:       ['Natural & textured', 'Afro hair', 'Silk press', 'Dominican blowout', 'Knotless braids', 'Box braids', 'Cornrows', 'Faux locs', 'Locs & retwists', 'Crochet', 'Wig install', 'Frontal & closure', 'Extensions & weaves', 'Colour & balayage', 'Keratin & smoothing', 'Relaxers & perms', 'Curly cuts', 'Blow-dries & styling', 'Barbering & fades', 'Bridal & occasion', "Men's cuts", "Children's hair"],
+  NAILS:      ['BIAB / builder gel', 'Gel manicure', 'Acrylic sets', 'Gel extensions', 'Gel-X', 'Infills', 'Russian manicure', 'Polygel', 'SNS/dip powder', 'Nail art', 'Freehand art', 'Chrome & cat-eye', 'Ombré & baby boomer', 'French', 'Pedicures', 'Press-ons'],
+  LASHES:     ['Classic lashes', 'Hybrid', 'Volume', 'Russian volume', 'Mega volume', 'Wispy / anime sets', 'Coloured lashes', 'Bottom lashes', 'Lash lifts', 'Lash tints', 'Cluster lashes'],
+  BROWS:      ['Threading', 'Waxing', 'Lamination', 'Microblading', 'Ombré / powder brows', 'Combination brows', 'Nano brows', 'Henna brows', 'Brow mapping', 'Brow tint & lift', 'Tinting & shaping'],
+  MUA:        ['Soft glam', 'Full glam', 'Natural / no-makeup', 'Bridal', 'South Asian bridal', 'African bridal', 'Prom & occasion', 'Editorial', 'Airbrush', 'Film & TV', 'SFX', 'Brown & Black skin specialist', 'Mature skin', 'Textured / acne-friendly skin', 'All skin tones'],
+  AESTHETICS: ['Facials', 'Hydrafacial', 'Chemical peels', 'Microneedling', 'Dermaplaning', 'LED therapy', 'Acne treatments', 'Hyperpigmentation', 'Anti-wrinkle', 'Dermal fillers', 'Skin boosters', 'Laser hair removal', 'Body sculpting', 'Body treatments'],
   OTHER:      ['Massage', 'Body waxing', 'Spray tanning', 'Body sculpting', 'Holistic therapies'],
 };
 
+/** Every curated speciality across all categories, deduped in a stable order —
+ *  the option pool for the client filter's "All" category tab, where no single
+ *  category scopes the list. Order follows SPECIALTIES_MAP's category order. */
+export const ALL_SPECIALTIES: string[] = [
+  ...new Set(Object.values(SPECIALTIES_MAP).flat()),
+];
+
 /**
- * The provider's headline service type — `providers.service_category`.
+ * Every macro service type the app has ever stored, in display order —
+ * `providers.service_category` / `providers.service_categories`.
  *
- * The same seven values InfoRegScreen offers at sign-up, in the same order.
- * The live CHECK constraint providers_service_category_check also permits
+ * This list is for RENDERING a stored value, so it still carries retired types
+ * (see SERVICE_TYPE_OPTS below for what can actually be picked). A provider
+ * stamped with a retired type must still see its proper label rather than the
+ * raw DB code. The live CHECK constraint providers_service_category_check also permits
  * MALE and KIDS, which are deliberately NOT offered here: those describe an
  * audience, not a trade, and are set per-service (`services.audience`) and
  * per-promotion rather than as a whole business's type.
@@ -36,7 +57,7 @@ export const SPECIALTIES_MAP: Record<string, string[]> = {
  * pool on ServicesPricingScreen is looked up by service_category, so a type
  * with no entry there would show a provider an empty specialty list.
  */
-export const SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: string }[] = [
+export const ALL_SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: string }[] = [
   { value: 'HAIR',       label: 'Hair',       sub: 'Cuts, colour, braids, extensions, styling' },
   { value: 'NAILS',      label: 'Nails',      sub: 'Manicures, pedicures, extensions, nail art' },
   { value: 'LASHES',     label: 'Lashes',     sub: 'Extensions, lifts, tints' },
@@ -46,14 +67,32 @@ export const SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: st
   { value: 'OTHER',      label: 'Other',      sub: 'Massage, waxing, tanning, holistic therapies' },
 ];
 
-// The same seven values as bare strings, for InfoRegScreen's sign-up picker,
-// which renders its own cards and needs only the ordered values. Derived from
+/**
+ * What a provider may actually pick — ALL_SERVICE_TYPE_OPTS minus the retired
+ * ones. Use this for any picker; use ALL_SERVICE_TYPE_OPTS to render a value
+ * that already exists.
+ *
+ * OTHER is retired. It was a catch-all that told a client nothing, put its
+ * providers in a bucket no one browses, and forced a free-text
+ * `custom_service_type` alongside it that no filter, tab or search could read.
+ * Providers already stamped OTHER keep the value and still render (that's what
+ * ALL_SERVICE_TYPE_OPTS is for) — it simply can't be chosen again. Anything
+ * reading `custom_service_type` is legacy display for exactly those rows.
+ */
+export const SERVICE_TYPE_OPTS = ALL_SERVICE_TYPE_OPTS.filter(
+  option => option.value !== 'OTHER',
+);
+
+// The pickable values as bare strings, for InfoRegScreen's sign-up picker,
+// which renders its own chips and needs only the ordered values. Derived from
 // SERVICE_TYPE_OPTS rather than written out a second time: these two lists
 // must offer the same types in the same order, and the surest way to keep
-// them in step is for there to be only one of them. Locked in InfoRegScreen
-// once a profile exists — BusinessInfoScreen is the only place the type can
-// be changed afterwards (with a 90-day cooldown) — because subcategory
-// suggestions, tag pools and templates are all scoped off this choice.
+// them in step is for there to be only one of them. Deriving it from the
+// PICKABLE list, not ALL_SERVICE_TYPE_OPTS, is what retires OTHER from sign-up
+// as well as from Business Info without either screen naming it. Locked in
+// InfoRegScreen once a profile exists — BusinessInfoScreen is the only place
+// the set can be changed afterwards (with a 90-day cooldown) — because
+// subcategory suggestions, tag pools and templates are all scoped off it.
 export const SERVICE_CATEGORY_OPTS: readonly ServiceCategory[] =
   SERVICE_TYPE_OPTS.map(option => option.value);
 
@@ -71,7 +110,60 @@ export const AVAILABILITY_OPTS  = ['Weekday mornings', 'Weekday afternoons', 'We
 // value as an extra chip rather than silently discarding it — never assume
 // every stored language appears here.
 export const LANGUAGE_OPTS      = ['English', 'Urdu', 'Punjabi', 'Polish', 'Arabic', 'French', 'Spanish', 'BSL', 'Bengali', 'Gujarati', 'Yoruba', 'Igbo', 'Twi/Akan', 'Somali', 'Portuguese', 'Mandarin', 'Hindi', 'Tamil', 'Turkish'];
+// The generic fallback list, also used for OTHER-category providers. Kept as
+// the base so anything importing STYLE_OPTS still resolves; the per-category
+// lists below are what ServicesPricingScreen actually renders.
 export const STYLE_OPTS         = ['Natural & minimal', 'Full glam', 'Edgy & creative', 'Classic & timeless', 'Bohemian', 'Bridal & romantic', 'Editorial & high-fashion'];
+
+/**
+ * Provider-level "style aesthetic" choices (providers.style_tags), tailored to
+ * the provider's service_category rather than one hair/makeup-flavoured list
+ * shown to every trade — a nail tech has no use for "Bohemian", and a lash
+ * artist thinks in "wispy / doll / cat-eye", not "Full glam".
+ *
+ * These are capitalized, client-facing labels stored whole in providers.style_tags
+ * (the provider-level claim). They are deliberately distinct from InfoRegScreen's
+ * lowercase per-SERVICE STYLE_TAGS_BY_CATEGORY — that vocabulary tags an
+ * individual service, this one describes the whole business. Modelled on the
+ * same category shapes so the two read as one product, not two taxonomies.
+ *
+ * A category with no entry (or an unknown/legacy value) falls back to STYLE_OPTS.
+ * ServicesPricingScreen additionally unions in any already-stored value so a
+ * provider never loses a tag chosen under the old generic list.
+ */
+export const STYLE_AESTHETIC_MAP: Record<string, string[]> = {
+  HAIR:       ['Natural & minimal', 'Sleek & polished', 'Lived-in & undone', 'Bohemian', 'Edgy & creative', 'Classic & timeless', 'Bridal & romantic', 'Editorial & high-fashion', 'Colour specialist'],
+  NAILS:      ['Natural & minimal', 'Intricate nail art', 'Bold & statement', 'Trend-led', 'Chrome & metallics', 'French-inspired', 'Classic & timeless', 'Bridal & occasion', 'Editorial & high-fashion'],
+  LASHES:     ['Natural & subtle', 'Wispy & textured', 'Full & dramatic', 'Doll & cat-eye', 'Classic & timeless', 'Bridal & occasion', 'Editorial & high-fashion'],
+  BROWS:      ['Natural & fluffy', 'Soft & feathered', 'Bold & defined', 'Sculpted & arched', 'Classic & timeless', 'Bridal & occasion', 'Editorial & high-fashion'],
+  MUA:        ['Natural & minimal', 'Full glam', 'Soft glam', 'Dewy & fresh', 'Bold & creative', 'Classic & timeless', 'Bridal & romantic', 'Editorial & high-fashion', 'SFX & character'],
+  AESTHETICS: ['Natural enhancement', 'Results-driven', 'Preventative & anti-ageing', 'Relaxing & restorative', 'Clinical & advanced', 'Holistic', 'Glow-up & event prep'],
+  OTHER:      STYLE_OPTS,
+};
+
+/** The generic products hint, used for OTHER-category and unknown values. */
+export const PRODUCTS_PLACEHOLDER_DEFAULT = 'e.g. the brands and products you work with...';
+
+/** Category-tailored hint for the free-text "Products & brands you use" field. */
+export const PRODUCTS_PLACEHOLDER_MAP: Record<string, string> = {
+  HAIR:       "e.g. Olaplex, KÉRASTASE, Redken, Wella, L'Oréal...",
+  NAILS:      'e.g. The GelBottle, Mylee, OPI, Gelish, CND...',
+  LASHES:     'e.g. Lash FX, London Lash, SL Lashes, Sugarlash...',
+  BROWS:      'e.g. Brow Code, HD Brows, Everlasting Brows, henna...',
+  MUA:        'e.g. Charlotte Tilbury, MAC, NARS, Huda Beauty...',
+  AESTHETICS: 'e.g. Dermalogica, ZO Skin Health, Environ, Obagi...',
+  OTHER:      PRODUCTS_PLACEHOLDER_DEFAULT,
+};
+
+/** Style-aesthetic options for a category, falling back to the generic list. */
+export function styleAestheticOptions(serviceCategory: string | null | undefined): string[] {
+  return (serviceCategory ? STYLE_AESTHETIC_MAP[serviceCategory] : undefined) ?? STYLE_OPTS;
+}
+
+/** Products placeholder for a category, falling back to the generic hint. */
+export function productsPlaceholder(serviceCategory: string | null | undefined): string {
+  return (serviceCategory ? PRODUCTS_PLACEHOLDER_MAP[serviceCategory] : undefined) ?? PRODUCTS_PLACEHOLDER_DEFAULT;
+}
 export const ACCESSIBILITY_OPTS = ['Wheelchair accessible', 'Parking available', 'Ground floor access', 'Home visits for mobility', 'Step-free entrance'];
 
 // NOTE: there is no SETTING_OPTS list here on purpose. The old "Where You

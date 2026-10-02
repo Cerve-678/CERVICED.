@@ -1,8 +1,9 @@
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
-  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,15 +12,6 @@ import {
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
-import { tabBarClearance } from '../utils/tabBarGeometry';
-
-// The toast is anchored to the bottom edge, and the floating tab bar is an
-// overlay the Tab.Navigator draws on top of every nested screen — so a toast
-// seated near the bottom lands *behind* the bar and is clipped. Seat it above
-// the bar's footprint (its own value, not the component's, to avoid importing
-// the whole tab-bar component here). Screens with no tab bar just show it a
-// little higher, which reads fine.
-const TOAST_BOTTOM = tabBarClearance(Platform.OS === 'android');
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -78,7 +70,7 @@ function Toast({ message, type, visible, isDarkMode, accent, text }: ToastState 
 const toastSt = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    bottom: TOAST_BOTTOM,
+    bottom: 36,
     left: 20,
     right: 20,
     zIndex: 9999,
@@ -142,6 +134,7 @@ function ConfirmDialog({
   cardBackground: string;
   border: string;
 }) {
+  const bottomInset = useSystemBottomInset();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -172,7 +165,7 @@ function ConfirmDialog({
       pointerEvents={visible ? 'auto' : 'none'}
     >
       <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      <View style={[dlgSt.content, isCentered && dlgSt.contentCentered, { backgroundColor: cardBackground }]}>
+      <ScrollView bounces={false} contentContainerStyle={[dlgSt.content, { paddingBottom: bottomInset + 20 }, isCentered && dlgSt.contentCentered, { backgroundColor: cardBackground }]}>
         {/* Grabber only on the sheet — it's an affordance for dragging a panel
             back to an edge, and a floating box has no edge to drag to. */}
         {!isCentered && <View style={[dlgSt.handle, { backgroundColor: border }]} />}
@@ -208,7 +201,7 @@ function ConfirmDialog({
             );
           })}
         </View>
-      </View>
+      </ScrollView>
     </Animated.View>
   );
 
@@ -234,6 +227,7 @@ const dlgSt = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
+    maxHeight: '85%',
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -249,6 +243,7 @@ const dlgSt = StyleSheet.create({
     padding: 32,
   },
   centerCard: {
+    maxHeight: '100%',
     width: '100%',
     maxWidth: 340,
     borderRadius: 20,

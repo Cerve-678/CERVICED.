@@ -4,6 +4,7 @@ import { AvailabilityService } from "../services/AvailabilityService";
 import {
   getProviderActivePromotions,
   getProviderBySlug,
+  getProviderProfilePreviewBySlug,
   getProviderPortfolio,
   getProviderProfileViewerContext,
   getProviderReviews,
@@ -20,6 +21,7 @@ import {
 jest.mock("../services/databaseService", () => ({
   getProviderActivePromotions: jest.fn(),
   getProviderBySlug: jest.fn(),
+  getProviderProfilePreviewBySlug: jest.fn(),
   getProviderPortfolio: jest.fn(),
   getProviderProfileViewerContext: jest.fn(),
   getProviderReviews: jest.fn(),
@@ -58,6 +60,9 @@ const deferred = <T>() => {
 describe("useProviderProfileData", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (getProviderProfilePreviewBySlug as jest.Mock).mockImplementation(
+      (slug: string) => getProviderBySlug(slug),
+    );
     (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(null);
     (userLearningService.trackInteraction as jest.Mock).mockResolvedValue(
       undefined,
@@ -96,6 +101,42 @@ describe("useProviderProfileData", () => {
     expect(AvailabilityService.getAvailabilitySummary).toHaveBeenCalledWith(
       "provider-1",
       { includeExtendedSearch: false },
+    );
+  });
+
+  it("paints the lightweight profile before its full catalogue arrives", async () => {
+    const fullProfile = deferred<Record<string, unknown>>();
+    (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue({
+      id: "provider-1",
+      slug: "studio-a",
+      display_name: "Studio A",
+      service_category: "HAIR",
+      services: [],
+    });
+    (getProviderBySlug as jest.Mock).mockReturnValue(fullProfile.promise);
+    (mapProviderProfileData as jest.Mock).mockImplementation(
+      (row: { slug: string; services?: unknown[] }) => ({
+        id: row.slug,
+        serviceCount: row.services?.length ?? 0,
+      }),
+    );
+
+    const { result } = renderHook(() => useProviderProfileData("studio-a"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.provider).toEqual({ id: "studio-a", serviceCount: 0 });
+
+    await act(async () =>
+      fullProfile.resolve({
+        id: "provider-1",
+        slug: "studio-a",
+        display_name: "Studio A",
+        service_category: "HAIR",
+        services: [{ id: "service-1" }],
+      }),
+    );
+    await waitFor(() =>
+      expect(result.current.provider).toEqual({ id: "studio-a", serviceCount: 1 }),
     );
   });
 

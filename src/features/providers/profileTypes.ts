@@ -22,6 +22,8 @@ export interface ProviderProfileService {
   minAge?: number | null;
   contraindications?: string[];
   aftercareNotes?: string;
+  /** Explicit provider selection. Empty or absent means not stated. */
+  skinTonesSuitable?: string[];
   serviceType?: string | null;
 }
 
@@ -41,8 +43,25 @@ export interface ProviderProfileData {
    *  actual release cadence. */
   scheduleReleaseDay: number | null;
   aboutText: string;
+  /** Flattened across every service type — the "all services" view. Kept as
+   *  the shape it has always been so callers that don't care about types
+   *  (promo eligibility, the Show All sheet, Becca) need no change. Two types
+   *  sharing a category name merge here; use categoriesByType when that
+   *  distinction matters. */
   categories: Record<string, ProviderProfileService[]>;
   categoryDescriptions: Record<string, string>;
+  /** The macro service types this provider declared, in their chosen order.
+   *  Drives the client service-type switch above the category tabs. A declared
+   *  type can have no published services yet; that tab explains this instead
+   *  of hiding part of the provider's offering. Length <= 1 means no switch
+   *  is shown. */
+  serviceTypes: string[];
+  /** serviceType -> categoryName -> services. The switch picks the outer key,
+   *  the existing category tabs the inner one. Kept separate from
+   *  `categories` because the same category name can legitimately exist under
+   *  two types (a "Tint" under both LASHES and BROWS), which the flat map
+   *  cannot represent. */
+  categoriesByType: Record<string, Record<string, ProviderProfileService[]>>;
   gradient: [string, string, ...string[]];
   hasCustomGradient: boolean;
   accentColor: string | null;

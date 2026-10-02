@@ -106,6 +106,18 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
   const [providerIdsWithOffers, setProviderIdsWithOffers] = useState<Set<string>>(new Set());
 
+  // Category-pill (service tabs) entrance — matches the fade+slide-up every
+  // other card/pill row in the app already does on mount.
+  const tabsFadeAnim = useRef(new Animated.Value(0)).current;
+  const tabsSlideAnim = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(tabsFadeAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(tabsSlideAnim, { toValue: 0, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // How many completed appointments the client has had with each provider —
   // powers the "X appointments" badge on the card.
   const appointmentCounts = useMemo(() => {
@@ -265,7 +277,13 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       <SafeAreaView style={styles.container} edges={['bottom']}>
 
         {/* ── Header (tabs only — title now lives in the nav bar) ── */}
-        <View style={[styles.screenHeader, { paddingTop: insets.top + 64, borderBottomColor: P.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+        <Animated.View
+          style={[
+            styles.screenHeader,
+            { paddingTop: insets.top + 64, borderBottomColor: P.sep, borderBottomWidth: StyleSheet.hairlineWidth },
+            { opacity: tabsFadeAnim, transform: [{ translateY: tabsSlideAnim }] },
+          ]}
+        >
           {liveProviders.length > 0 && (
             <SlidingTabs
               tabs={SERVICE_TABS}
@@ -277,7 +295,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
               containerStyle={styles.tabsContent}
             />
           )}
-        </View>
+        </Animated.View>
 
         {/* ── Gallery grid ── */}
         <FlatList

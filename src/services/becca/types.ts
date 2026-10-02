@@ -400,7 +400,25 @@ export const SUGGESTION_MEMORY = 12;
 export interface CapabilityContext {
   entities: EntityBag;
   hat: BeccaHat;
+  /**
+   * The message as Becca parsed it — typos repaired, split words joined
+   * (see askNormaliser). This is what the matcher scored, so a capability
+   * testing its own modifiers reads the same text that routed the message
+   * here. Case is preserved, but a repaired token is not: "BALAYAGE" is
+   * corrected to lowercase "balayage" like any other spelling of the word.
+   */
   rawMessage: string;
+  /**
+   * The user's keystrokes, untouched.
+   *
+   * Only for a capability that reads SHAPE rather than meaning — today that
+   * is `discover.promocode`, which identifies a code by it being uppercase.
+   * Normalisation is case-insensitive and substitutes lowercase, so a code
+   * that happens to spell a beauty word ("BALAYAGE", "SHELLAC", "KERATIN")
+   * arrives lowercased in `rawMessage` and stops looking like a code at all.
+   * Prefer `rawMessage` everywhere else: it is the text Becca understood.
+   */
+  verbatimMessage: string;
   /** Bookings from BookingContext — already loaded, no refetch. */
   bookings: ConfirmedBooking[];
   /** Signed-in user id, when available. */

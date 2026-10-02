@@ -214,7 +214,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const { hatState } = useAuth();
   const activeMode = hatState.active;
   const [themePreference, setThemePref] = useState<ThemePreference>('auto');
-  const [isLoading, setIsLoading] = useState(true);
 
   // Calculate actual dark mode state based on preference and system
   const isDarkMode = themePreference === 'auto'
@@ -256,8 +255,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       logger.error('Failed to load theme preference:', error);
       setThemePref('auto');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -302,10 +299,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }),
     [isDarkMode, legacyTheme, enterpriseTheme, themePreference, activeMode, toggleTheme, setDarkMode, setThemePreference]
   );
-
-  if (isLoading) {
-    return null; // Or a loading screen
-  }
 
   return (
     <ThemeContext.Provider value={contextValue}>

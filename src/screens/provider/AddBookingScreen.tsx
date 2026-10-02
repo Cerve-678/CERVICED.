@@ -747,8 +747,12 @@ export default function AddBookingScreen() {
                   {/* Informational, not a hard stop — going outside the
                       provider's usual hours is exactly what Custom time is
                       for (the squeeze-in case). Just makes it visible that
-                      it's happening rather than a silent, surprising choice. */}
-                  {!isBlockedDate && isOutsideWorkingHours && (
+                      it's happening rather than a silent, surprising choice.
+                      Suppressed once the time has already passed — that's
+                      the real, hard-stop reason (banner below), and showing
+                      both together makes it look like there are two separate
+                      problems with the same picked time. */}
+                  {!isBlockedDate && isOutsideWorkingHours && !isTimeAlreadyPassed && (
                     <View style={[s.conflict, { borderColor: P.accent + '55', backgroundColor: P.accent + '14' }]}>
                       <Ionicons name="information-circle-outline" size={16} color={P.accent} />
                       <View style={{ flex: 1 }}>

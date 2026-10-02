@@ -6,17 +6,16 @@ import {
   TouchableWithoutFeedback,
   StyleProp,
   ViewStyle,
+  View,
+  StyleSheet,
 } from 'react-native';
 
 interface KeyboardDismissViewProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  // Height of anything rendered ABOVE this component that KeyboardAvoidingView
-  // itself doesn't know about — a custom header, safe-area inset, etc. On iOS,
-  // `padding` behavior offsets from this component's own top, so omitting this
-  // is what caused the extra-gap-above-input bug on screens with a header
-  // rendered outside the KeyboardAvoidingView (see ProviderConversationScreen's
-  // pre-existing correct `insets.top + headerHeight` for the shape to pass in).
+  // Distance from the screen top to this component's parent coordinate
+  // system (e.g. a native navigation header). Sibling custom headers already
+  // contribute to its measured y position and must not be counted twice.
   extraOffset?: number;
   // Tap-outside-to-dismiss. Off by default because a ScrollView ancestor with
   // keyboardShouldPersistTaps="handled" (the app's existing convention on
@@ -39,6 +38,13 @@ export function KeyboardDismissView({
   extraOffset = 0,
   dismissOnTap = false,
 }: KeyboardDismissViewProps) {
+  const layout = StyleSheet.flatten(style);
+  // iOS KeyboardAvoidingView replaces paddingBottom with the keyboard height,
+  // including zero when closed. Keep the caller's safe gap in normal layout
+  // so sheets and their footers retain it in both keyboard states.
+  const bottomPadding = Platform.OS === 'ios'
+    ? layout?.paddingBottom ?? layout?.paddingVertical ?? layout?.padding ?? 0
+    : 0;
   const content = (
     <KeyboardAvoidingView
       style={style ?? { flex: 1 }}
@@ -46,6 +52,9 @@ export function KeyboardDismissView({
       keyboardVerticalOffset={Platform.OS === 'ios' ? extraOffset : 0}
     >
       {children}
+      {bottomPadding !== 0 && (
+        <View pointerEvents="none" style={{ height: bottomPadding, flexShrink: 0 }} />
+      )}
     </KeyboardAvoidingView>
   );
 

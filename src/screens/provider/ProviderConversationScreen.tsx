@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ProviderHomeStackParamList } from '../../navigation/types';
@@ -53,7 +53,6 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   const { user } = useAuth();
   const { showToast, DialogHost } = useAppDialog();
 
-  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -225,8 +224,8 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
     );
   }, [messages, OP]);
 
-  const headerHeight = 56;
-  const kvOffset = Platform.OS === 'ios' ? insets.top + headerHeight : 0;
+  // The custom header is inside this root; its height is already in the
+  // avoiding view's measured y position. Adding it again doubles the gap.
 
   if (loading) {
     return (
@@ -262,9 +261,11 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
 
       <KeyboardDismissView
         style={{ flex: 1 }}
-        extraOffset={kvOffset}
       >
         <FlatList
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ref={flatListRef}
           data={visibleMessages}
           keyExtractor={item => item.id}
@@ -281,6 +282,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
 
         <View style={[styles.quickPromptRow, { borderTopColor: OP.border, backgroundColor: OP.bg }]}>
           <ScrollView
+            keyboardShouldPersistTaps="handled"
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.quickPromptScrollContent}
@@ -303,7 +305,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         <View style={[styles.inputRow, {
           backgroundColor: OP.bg,
           borderTopColor: OP.border,
-          paddingBottom: keyboardVisible ? Math.max(insets.bottom, 10) : FLOATING_TAB_BAR_CLEARANCE,
+          paddingBottom: keyboardVisible ? 10 : FLOATING_TAB_BAR_CLEARANCE,
         }]}>
           <TextInput
             style={[styles.input, { backgroundColor: OP.surface, color: OP.text, borderColor: OP.border }]}

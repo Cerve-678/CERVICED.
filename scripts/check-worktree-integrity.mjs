@@ -42,10 +42,16 @@ if (collisions.length) {
 }
 
 valid = await requireSourceContracts('src/screens/provider/InfoRegScreen.tsx', [
-  { label: 'top waypoint timeline', pattern: /waypointRow/ },
-  { label: 'sideways pager ref', pattern: /ref=\{pagerRef\}/ },
-  { label: 'horizontal paging', pattern: /horizontal[\s\S]{0,250}pagingEnabled|pagingEnabled[\s\S]{0,250}horizontal/ },
+  { label: 'dedicated pager component', pattern: /<InfoRegPager/ },
+  { label: 'canonical section model', pattern: /INFO_REG_SECTIONS as EDITOR_SECTIONS/ },
   { label: 'section navigation', pattern: /goToSection/ },
+]) && valid;
+
+valid = await requireSourceContracts('src/features/provider-registration/InfoRegPager.tsx', [
+  { label: 'top waypoint timeline', pattern: /waypointRow/ },
+  { label: 'horizontal paging', pattern: /horizontal[\s\S]{0,250}pagingEnabled|pagingEnabled[\s\S]{0,250}horizontal/ },
+  { label: 'accessible timeline tabs', pattern: /accessibilityRole="tab"/ },
+  { label: 'bounded page index', pattern: /Math\.max\(0, Math\.min\(/ },
 ]) && valid;
 
 valid = await requireSourceContracts('src/features/providers/goLiveStatus.ts', [

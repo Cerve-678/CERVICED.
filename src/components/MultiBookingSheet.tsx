@@ -58,7 +58,7 @@ import * as Haptics from 'expo-haptics';
 import type { BookingSheetService } from './BookingSheet';
 import { StepProgress } from './BookingSheet';
 import { AddOnPickerModal } from './AddOnPickerModal';
-import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 
 /** Mirrors the single-service sheet's three shared steps. Add-ons are no
  *  longer a step here at all — they're decided per-service at selection
@@ -179,6 +179,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   onSubmit,
 }) => {
   const sheetBackground = backgroundColor;
+  const bottomInset = useSystemBottomInset();
   const tokens = useMemo(
     () => buildThemeTokens(sheetBackground, sheetBackground, adaptiveAccentColor, sheetBackground),
     [sheetBackground, adaptiveAccentColor]
@@ -645,7 +646,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   return (
     <Modal visible={isVisible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent={true} onRequestClose={onClose}>
       <KeyboardDismissView style={styles.overlay}>
-        <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
+        <View style={[styles.sheet, { backgroundColor: sheetBackground, paddingBottom: bottomInset + 16 }]}>
           <SafeAreaView style={styles.container}>
             <View style={[styles.header, { borderBottomColor: tokens.border }]}>
               {!isFirstStep && (
@@ -1243,7 +1244,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
         onRequestClose={() => setShowProviderTerms(false)}
       >
         <View style={styles.termsOverlay}>
-          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground, paddingBottom: bottomInset + 16 }]}>
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
@@ -1281,7 +1282,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
         onRequestClose={() => setShowEmergencyPolicy(false)}
       >
         <View style={styles.termsOverlay}>
-          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground, paddingBottom: bottomInset + 16 }]}>
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
@@ -1313,7 +1314,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
@@ -1361,7 +1362,7 @@ const styles = StyleSheet.create({
   providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
-  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

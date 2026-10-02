@@ -321,13 +321,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
   return (
     <View style={[styles.row, styles.assistantRow]}>
       <Mark size={22} />
-      <View
-        style={[
-          styles.assistantMessage,
-          isEditorial && styles.editorialCard,
-          { backgroundColor: P.card, borderColor: P.border },
-        ]}
-      >
+      <View style={[styles.assistantMessage, isEditorial && styles.editorialCard]}>
         {message.imageUri && (
           <Image source={{ uri: message.imageUri }} style={styles.messageImage} contentFit="cover" transition={0} />
         )}
@@ -783,6 +777,16 @@ const styles = StyleSheet.create({
   },
   assistantRow: {
     justifyContent: 'flex-start',
+    // `row` bottom-aligns, which is the right call for a bubble: the avatar
+    // sits in the bubble's bottom corner, iMessage-style. With no bubble to
+    // corner against, that left the mark floating beside the LAST line of a
+    // long answer. Top-aligned, it reads as the speaker of the paragraph it
+    // introduces. (`assistantMessage`'s paddingTop is the optical nudge that
+    // settles the 22px mark against a 21px first line.)
+    alignItems: 'flex-start',
+    // Replaces the vertical breathing room the card's own padding used to
+    // provide. Without it, unboxed turns run together as one block of text.
+    marginBottom: 14,
   },
 
   card: {
@@ -799,25 +803,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  // Becca's copy is deliberately unboxed: the mark, typography and attached
-  // actions already identify the speaker, while a white card made every
-  // answer feel like a heavy system notice rather than a conversation.
+  // Becca's copy is unboxed: the mark, typography and attached actions
+  // already identify the speaker, while a card made every answer feel like a
+  // heavy system notice rather than a conversation. The comment said this
+  // long before the style did — a fill, hairline border and 13px padding
+  // were still drawing a bubble until 2026-09-07.
+  //
+  // Only the user's turn is a bubble now, which is what carries the
+  // conversation's alternation. Dropping the padding also puts Becca's first
+  // character at exactly 30px (Mark 22 + 8 gap) — the same inset
+  // `sectionWrapIndented` uses — so her chips and provider cards finally
+  // line up with her own copy instead of sitting 13px to its left.
   assistantMessage: {
-    maxWidth: '78%',
-    borderRadius: 18,
-    borderBottomLeftRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 13,
-    paddingTop: 11,
-    paddingBottom: 9,
+    maxWidth: '92%',
+    paddingTop: 2,
   },
   editorialCard: {
-    maxWidth: '82%',
-    paddingHorizontal: 15,
-    paddingTop: 14,
-    paddingBottom: 11,
-    shadowOpacity: 0,
-    elevation: 0,
+    maxWidth: '96%',
   },
   editorialTakeaway: {
     fontFamily: 'BakbakOne-Regular',

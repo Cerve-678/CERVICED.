@@ -132,6 +132,9 @@ export default function ProviderScheduleScreen() {
   const [tab, setTab] = useState<'hours' | 'blocked'>('hours');
   const [providerId, setProviderId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Hours tab opens as a read-only summary; the header Edit button flips it
+  // into the editable state (tappable chips, day toggles, Add break, Save).
+  const [editing, setEditing] = useState(false);
 
   // Hours tab state
   const [days, setDays] = useState<DayRow[]>(makeDefault());
@@ -301,6 +304,7 @@ export default function ProviderScheduleScreen() {
         allWindows,
       );
       setDays(prev => prev.map(d => ({ ...d, dirty: false })));
+      setEditing(false);
       navigation.goBack();
     } catch {
       showToast('Could not save hours. Please try again.', 'error');
@@ -458,56 +462,73 @@ export default function ProviderScheduleScreen() {
                     {!day.isOpen && <Text style={[s.closedTag, { color: P.sub }]}>Closed</Text>}
                   </View>
                   <View style={s.dayRight}>
-                    {day.isOpen && (
-                      <View style={s.periodStack}>
-                        <View style={s.timeRow}>
-                          <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open')}>
-                            <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.openTime)}</Text>
-                          </TouchableOpacity>
-                          <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
-                          <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close')}>
-                            <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.closeTime)}</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {(extraPeriods[day.dow] ?? []).map((period, periodIndex) => (
-                          <View key={`${day.dow}-${periodIndex}`} style={s.timeRow}>
-                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open', periodIndex)}>
-                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.openTime)}</Text>
-                            </TouchableOpacity>
-                            <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
-                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close', periodIndex)}>
-                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.closeTime)}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => removeExtraPeriod(day.dow, periodIndex)} hitSlop={8}>
-                              <Ionicons name="close-circle-outline" size={17} color={P.sub} />
+                    {editing ? (
+                      <>
+                        {day.isOpen && (
+                          <View style={s.periodStack}>
+                            <View style={s.timeRow}>
+                              <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open')}>
+                                <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.openTime)}</Text>
+                              </TouchableOpacity>
+                              <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
+                              <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close')}>
+                                <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.closeTime)}</Text>
+                              </TouchableOpacity>
+                            </View>
+                            {(extraPeriods[day.dow] ?? []).map((period, periodIndex) => (
+                              <View key={`${day.dow}-${periodIndex}`} style={s.timeRow}>
+                                <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open', periodIndex)}>
+                                  <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.openTime)}</Text>
+                                </TouchableOpacity>
+                                <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
+                                <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close', periodIndex)}>
+                                  <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.closeTime)}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => removeExtraPeriod(day.dow, periodIndex)} hitSlop={8}>
+                                  <Ionicons name="close-circle-outline" size={17} color={P.sub} />
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                            <TouchableOpacity style={s.breakBtn} onPress={() => addSplitPeriod(day.dow)}>
+                              <Ionicons name="add" size={14} color={P.accent} />
+                              <Text style={[s.breakTxt, { color: P.accent }]}>Add break</Text>
                             </TouchableOpacity>
                           </View>
-                        ))}
-                        <TouchableOpacity style={s.breakBtn} onPress={() => addSplitPeriod(day.dow)}>
-                          <Ionicons name="add" size={14} color={P.accent} />
-                          <Text style={[s.breakTxt, { color: P.accent }]}>Add break</Text>
-                        </TouchableOpacity>
-                      </View>
+                        )}
+                        <Switch
+                          value={day.isOpen}
+                          onValueChange={() => toggleDay(day.dow)}
+                          trackColor={{ false: P.surface, true: P.accent }}
+                          thumbColor={day.isOpen ? P.ice : P.sub}
+                        />
+                      </>
+                    ) : (
+                      day.isOpen && (
+                        <View style={s.periodStack}>
+                          <Text style={[s.roTime, { color: P.text }]}>{formatTime(day.openTime)} → {formatTime(day.closeTime)}</Text>
+                          {(extraPeriods[day.dow] ?? []).map((period, periodIndex) => (
+                            <Text key={`${day.dow}-ro-${periodIndex}`} style={[s.roTime, { color: P.sub }]}>
+                              {formatTime(period.openTime)} → {formatTime(period.closeTime)}
+                            </Text>
+                          ))}
+                        </View>
+                      )
                     )}
-                    <Switch
-                      value={day.isOpen}
-                      onValueChange={() => toggleDay(day.dow)}
-                      trackColor={{ false: P.surface, true: P.accent }}
-                      thumbColor={day.isOpen ? P.ice : P.sub}
-                    />
                   </View>
                 </View>
               ))}
 
-              {/* Save button inside scroll so it's always reachable */}
+              {/* One interchangeable button, inside the scroll so it's always
+                  reachable: "Edit Hours" while read-only, "Save Hours" once
+                  editing — same button, same spot. */}
               <TouchableOpacity
                 style={[s.saveBtn, { backgroundColor: P.accent, borderColor: P.ice + '30', marginTop: 16, marginBottom: Math.max(16, insets.bottom) }, saving && s.saveBtnDim]}
-                onPress={handleSaveHours}
+                onPress={editing ? handleSaveHours : () => setEditing(true)}
                 disabled={saving}
               >
                 {saving
                   ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Save Hours</Text>
+                  : <Text style={[s.saveTxt, { color: P.ice }]}>{editing ? 'Save Hours' : 'Edit Hours'}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -806,6 +827,7 @@ const s = StyleSheet.create({
   periodStack:  { gap: 5, alignItems: 'flex-end' },
   timeBtn:      { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   timeTxt:      { fontSize: 13, fontWeight: '600' },
+  roTime:       { fontSize: 14, fontWeight: '600' },
   timeSep:      { fontSize: 12 },
   breakBtn:     { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-end', paddingVertical: 2 },
   breakTxt:     { fontSize: 11, fontWeight: '700' },

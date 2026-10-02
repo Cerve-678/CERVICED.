@@ -8,6 +8,8 @@ import type { ChatSuggestion } from "../types";
 import type { Provider } from "../../ProviderDataService";
 import type { DbProvider } from "../../../types/database";
 import { getProviderIdByDisplayName } from "../../databaseService";
+import { resolveClientLocation } from "../../clientLocationService";
+import { getDistanceKm } from "../../../utils/distance";
 
 /** GBP. This app is £ — never format money any other way. */
 export function money(amount: number): string {
@@ -90,6 +92,101 @@ export function providerFromDb(
     service: p.service_category as Provider["service"],
     logo: p.logo_url ? { uri: p.logo_url } : null,
     ...(p.location_text != null ? { location: p.location_text } : {}),
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Proximity
+//
+// "who's near me", "any good nail techs nearby", "see who is near me top
+// rated" — a location clause is a MODIFIER on an existing question, not a
+// question of its own, so it lives here rather than being duplicated into
+// every capability that can return a list of people.
+
+/**
+ * A request to rank by distance.
+ *
+ * Deliberately excludes a bare "local" and a bare "close" — "a local salon"
+ * reads the same way, but "close" alone collides with closing times and
+ * closed days, which providers and clients both ask about.
+ */
+export const NEAR_ME_RE =
+  /\b(?:near(?:est)? me|near me|nearby|near by|closest(?: to me)?|close to me|close by|around me|in my area|local to me|my area)\b/i;
+
+export interface ProximityResult<T> {
+  /** Nearest first when `ranked`; otherwise the input order, untouched. */
+  providers: T[];
+  /** Distance was actually applied. False means we don't know where they are. */
+  ranked: boolean;
+  /**
+   * One clause naming what the ranking is based on, to be stated in the
+   * answer. Never null when the user asked to be near something: saying
+   * nothing would let a plain list pass as a proximity-sorted one.
+   */
+  note: string;
+}
+
+/**
+ * Ranks providers by how far they are from the client.
+ *
+ * Honest by construction, because there are three different answers here and
+ * only one of them is "sorted by where you are":
+ *
+ *   • GPS         — a real position, so a real ranking.
+ *   • saved city  — a centroid. Useful, and NOT where the client is standing,
+ *                   so the reply says which city it used.
+ *   • unknown     — permission refused or nothing saved. The list is returned
+ *                   unranked and the reply says so, rather than presenting an
+ *                   arbitrary order as "nearest".
+ *
+ * Providers with no geocoded position are kept, at the end. Dropping them
+ * would silently hide live providers from a search that never promised to
+ * exclude anyone — an empty-looking result the client cannot explain.
+ */
+export async function sortByProximity<
+  T extends { latitude: number | null; longitude: number | null },
+>(providers: T[]): Promise<ProximityResult<T>> {
+  const location = await resolveClientLocation();
+  const here = location.coords;
+
+  if (!here) {
+    return {
+      providers,
+      ranked: false,
+      // Names where the city actually gets set: the location picker on Home
+      // (HomeScreen's LocationModal, which writes STORAGE_KEYS.MANUAL_LOCATION
+      // — the same value this resolver reads back). Not "in your profile":
+      // there is no such control there, and sending someone to look for one
+      // is worse than not offering a fix at all.
+      note:
+        "I don't know where you are yet — turn on location access, or pick your area from the location button on Home, and I can sort by distance.",
+    };
+  }
+
+  const withDistance = providers
+    .map((p) => ({
+      p,
+      km:
+        p.latitude != null && p.longitude != null
+          ? getDistanceKm(here.latitude, here.longitude, p.latitude, p.longitude)
+          : null,
+    }))
+    // A provider with no position sorts last rather than being excluded.
+    .sort((a, b) => {
+      if (a.km == null) return b.km == null ? 0 : 1;
+      if (b.km == null) return -1;
+      return a.km - b.km;
+    });
+
+  return {
+    providers: withDistance.map((entry) => entry.p),
+    ranked: true,
+    note:
+      location.source === "saved-city" && location.cityLabel
+        ? `Sorted by distance from **${location.cityLabel}**, the city on your profile.`
+        : location.isCoarse
+          ? "Sorted by distance, though your location is only approximate right now."
+          : "Sorted by distance from you.",
   };
 }
 

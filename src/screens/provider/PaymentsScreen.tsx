@@ -45,6 +45,7 @@
  * (legacy fallback) plus the `providers` row (what clients and cron jobs
  * actually read). A setting written to only one of the two silently misbehaves.
  */
+import ProviderStripePayments from '../../components/ProviderStripePayments';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -79,7 +80,7 @@ const DEPOSIT_MODE_OPTS: { value: DepositMode; label: string; sub: string }[] = 
   { value: 'deposit_required', label: 'Deposit required',  sub: 'Clients must pay the deposit to book \u2014 paying in full isn\u2019t offered.' },
 ];
 
-export default function PaymentsScreen({ navigation }: any) {
+export default function PaymentsScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
@@ -252,31 +253,22 @@ export default function PaymentsScreen({ navigation }: any) {
       ]);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      navigation.goBack();
+      flash('Payment settings saved', 'success');
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       flash(toUserMessage(e, 'Could not save your changes.', 'PaymentsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed, navigation]);
+  }, [providerId, userId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed]);
 
-  if (loading) {
-    return (
-      <View style={[s.root, { backgroundColor: C.bg }]}>
-        <SafeAreaView style={s.center}>
-          <ActivityIndicator color={C.accent} size="large" />
-        </SafeAreaView>
-      </View>
-    );
-  }
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={[s.header, { borderBottomColor: C.border }]}>
-          <Text style={[s.headerTitle, { color: C.text }]}>Payments</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>Payments & payouts</Text>
           <TouchableOpacity
             style={[s.closeBtn, { backgroundColor: C.surface }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -293,6 +285,10 @@ export default function PaymentsScreen({ navigation }: any) {
           keyboardShouldPersistTaps="handled"
         >
           {toast && <Toast message={toast.message} type={toast.type} />}
+
+          <ProviderStripePayments stripeReturn={route?.params?.stripeReturn}>
+          {loading ? <ActivityIndicator color={C.accent} size="large" /> : <>
+          {loadFailed && <Toast message="Payment settings could not load. Reopen this screen before saving." type="error" />}
 
           <Card
             title="How You Take Payment"
@@ -475,7 +471,9 @@ export default function PaymentsScreen({ navigation }: any) {
             </Text>
           </Card>
 
-          <SaveButton saving={saving} onPress={handleSave} />
+          {!loadFailed && <SaveButton saving={saving} onPress={handleSave} />}
+          </>}
+          </ProviderStripePayments>
         </ScrollView>
       </SafeAreaView>
     </View>

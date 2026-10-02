@@ -22,7 +22,7 @@ import { View, Text, TouchableOpacity, ScrollView, Modal, StyleSheet } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../constants/providerThemes';
-import { BOTTOM_SAFE_GAP } from '../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../utils/bottomSafeGap';
 
 export interface AddOnPickerAddOn {
   id: string | number;
@@ -64,6 +64,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
   asOverlay = false,
 }) => {
   const [selected, setSelected] = useState<AddOnPickerResult[]>(initialSelected);
+  const bottomInset = useSystemBottomInset();
   // Text/icons on a solid accentColor fill (close button, checkmark, Done
   // button) can't assume white — a pale accent (e.g. client dark-mode
   // blue-grey #E5ECF4) makes hardcoded white text unreadable. Same fix as
@@ -91,7 +92,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
 
   const content = (
     <View style={styles.overlay}>
-      <View style={[styles.sheet, { backgroundColor: tokens.bg }]}>
+      <View style={[styles.sheet, { backgroundColor: tokens.bg, paddingBottom: bottomInset + 16 }]}>
         <SafeAreaView style={styles.container}>
           <View style={[styles.header, { borderBottomColor: tokens.border }]}>
             <View style={{ flex: 1 }}>
@@ -171,7 +172,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {

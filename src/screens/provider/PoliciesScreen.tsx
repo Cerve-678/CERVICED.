@@ -315,7 +315,7 @@ export default function PoliciesScreen({ navigation }: any) {
               <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
             </Card>
 
-            {/* Deposits live on Business Details → Payments now, not here. */}
+            {/* Deposits live on Business Profile → Payments now, not here. */}
             <Card title="No-show">
               <SectionLabel text="Action" />
               <Pills

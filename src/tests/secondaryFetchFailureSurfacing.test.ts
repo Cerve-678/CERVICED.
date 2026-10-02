@@ -35,8 +35,8 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
 
       expect(source).not.toContain("logger.error('[ProviderInbox] load conversations failed:', err)");
       expect(source).toContain('const [loadError,     setLoadError]     = useState<string | null>(null)');
-      // A failed load raises the banner instead of rendering as an empty list.
-      expect(source).toContain("'[ProviderInbox] load failed'");
+      // Classification failures must surface rather than misfiling clients.
+      expect(source).toContain('setLoadError(toUserMessage(error,');
       expect(source).toContain("Couldn't load your inbox");
     });
   });

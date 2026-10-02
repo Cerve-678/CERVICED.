@@ -26,7 +26,6 @@ import {
   providerHatAddedEmail,
   generalWelcomeEmail,
 } from '../_shared/emailTemplates.ts';
-import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
@@ -116,22 +115,25 @@ serve(async (req) => {
 
     if (!to) return json({ error: 'No address on file for this account.' }, 422);
 
-    const escapedProviderParams = {
-      name: escapeHtml(name),
-      ...(businessName ? { businessName: escapeHtml(businessName) } : {}),
+    // Raw, not escaped: the templates escape their own HTML interpolations and
+    // keep the subject line as plain text. Escaping here escaped the subject
+    // too, so a business with "&" in its name got "&amp;" in the inbox.
+    const providerParams = {
+      name,
+      ...(businessName ? { businessName } : {}),
     };
 
     const { subject, html } = kind === 'provider_welcome'
-      ? providerWelcomeEmail(escapedProviderParams)
+      ? providerWelcomeEmail(providerParams)
       : kind === 'provider_hat_added'
-      ? providerHatAddedEmail(escapedProviderParams)
+      ? providerHatAddedEmail(providerParams)
       : kind === 'password_changed'
-      ? passwordChangedEmail({ name: escapeHtml(name) })
+      ? passwordChangedEmail({ name })
       : kind === 'client_hat_added'
-      ? clientHatAddedEmail({ name: escapeHtml(name) })
+      ? clientHatAddedEmail({ name })
       : kind === 'general_welcome'
-      ? generalWelcomeEmail({ name: escapeHtml(name) })
-      : clientWelcomeEmail({ name: escapeHtml(name) });
+      ? generalWelcomeEmail({ name })
+      : clientWelcomeEmail({ name });
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',

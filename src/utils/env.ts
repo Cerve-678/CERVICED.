@@ -7,6 +7,9 @@ export interface EnvConfig {
   DEBUG_MODE: boolean;
   STRIPE_PAYMENTS_ENABLED: boolean;
   BECCA_AI_ENABLED: boolean;
+  TRANSLATION_ENABLED: boolean;
+  TRANSLATION_API_KEY: string;
+  TRANSLATION_API_URL: string;
   APP_VERSION: string;
   BUILD_NUMBER: string;
 }
@@ -28,6 +31,19 @@ class EnvironmentService {
       // model secret in the bundle: the key stays an Edge Function secret and
       // the app only ever calls `becca-ai`. See BECCA_AI_INTEGRATION.md.
       BECCA_AI_ENABLED: process.env['EXPO_PUBLIC_BECCA_AI_ENABLED'] === 'true',
+      // Live translation of provider-WRITTEN content (bios, service names,
+      // notes) via a paid, metered external API. Opt-in per build AND requires
+      // a key — both must be present or the app degrades to showing the
+      // original text with no network call. SECURITY: an EXPO_PUBLIC_* key is
+      // inlined into the client bundle and is therefore extractable; before
+      // this handles real traffic the key should move behind an Edge Function
+      // (exactly how becca-ai / the Stripe functions keep their secrets
+      // server-side). See src/services/dynamicTranslationService.ts.
+      TRANSLATION_ENABLED: process.env['EXPO_PUBLIC_TRANSLATION_ENABLED'] === 'true',
+      TRANSLATION_API_KEY: process.env['EXPO_PUBLIC_TRANSLATION_API_KEY'] || '',
+      TRANSLATION_API_URL:
+        process.env['EXPO_PUBLIC_TRANSLATION_API_URL'] ||
+        'https://translation.googleapis.com/language/translate/v2',
       APP_VERSION: Constants.expoConfig?.version || '1.0.0',
       BUILD_NUMBER: Constants.expoConfig?.android?.versionCode?.toString() || 
                    Constants.expoConfig?.ios?.buildNumber || '1',
@@ -52,6 +68,21 @@ class EnvironmentService {
 
   get beccaAiEnabled(): boolean {
     return this.config.BECCA_AI_ENABLED;
+  }
+
+  /** True only when provider-content live translation is both flagged on and
+   *  configured with an API key. Callers still receive the original text when
+   *  this is false — see dynamicTranslationService.translateDynamic. */
+  get dynamicTranslationEnabled(): boolean {
+    return this.config.TRANSLATION_ENABLED && this.config.TRANSLATION_API_KEY.length > 0;
+  }
+
+  get translationApiKey(): string {
+    return this.config.TRANSLATION_API_KEY;
+  }
+
+  get translationApiUrl(): string {
+    return this.config.TRANSLATION_API_URL;
   }
 
   get isDevelopment(): boolean {

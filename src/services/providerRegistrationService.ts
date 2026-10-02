@@ -76,6 +76,7 @@ export interface ServiceData {
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
+  skinTonesSuitable?: string[];
   // Who this specific service is for. '' = not stated, read as "everyone" —
   // mirrors the live services_audience_check constraint.
   audience: 'women' | 'men' | 'kids' | 'everyone' | '';
@@ -112,6 +113,15 @@ export interface ProviderRegistrationData {
   // as `categories`, but optional per key since older/imported categories
   // may not have one yet.
   categoryDescriptions: Record<string, string>;
+  /** Every macro service type this provider offers, locked from what they
+   *  ticked at sign-up. `providerService` above stays the headline/primary
+   *  and is always the first entry. */
+  serviceCategories: string[];
+  /** categoryName -> which macro service type that category sits under, so
+   *  the Business Profile can group the menu by type. Keyed the same as
+   *  `categories`. A key missing here belongs to the headline type, which is
+   *  what every category meant before types were plural. */
+  categoryServiceTypes: Record<string, string>;
   // Contact info displayed to clients
   phone: string;
   email: string;
@@ -526,6 +536,12 @@ export async function saveProviderToSupabase(
         // that back after the provider changed it elsewhere would revert the
         // change, and, because reverting IS a change, the trigger would
         // refuse it and fail this whole unrelated profile save.
+        // service_categories is the editable plural set and is guarded by the
+        // same cooldown in the database. It is safe to update intentionally;
+        // the sync trigger keeps its first entry as the headline scalar.
+        service_categories: data.serviceCategories?.length
+          ? data.serviceCategories
+          : [data.providerService],
         location_text: data.location,
         latitude,
         longitude,
@@ -579,6 +595,11 @@ export async function saveProviderToSupabase(
         slug,
         display_name: data.providerName,
         service_category: data.providerService,
+        // The DB trigger keeps service_category == service_categories[0], so
+        // these can never desync even if a caller writes only one of them.
+        service_categories: data.serviceCategories?.length
+          ? data.serviceCategories
+          : [data.providerService],
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
         latitude,
@@ -708,6 +729,10 @@ export async function saveProviderToSupabase(
       servicesPayload.push({
         id: svc.dbId ?? null,
         category_name: categoryName,
+        // Falls back to the headline type, which is what every service meant
+        // before a provider could have more than one.
+        service_category:
+          data.categoryServiceTypes?.[categoryName] || data.providerService,
         category_description: data.categoryDescriptions?.[categoryName] || null,
         name: svc.name,
         description: svc.description || null,
@@ -721,13 +746,14 @@ export async function saveProviderToSupabase(
         outcome_tags: svc.outcomeTags?.length ? svc.outcomeTags : null,
         occasion_tags: svc.occasionTags?.length ? svc.occasionTags : null,
         trend_names: svc.trendNames?.length ? svc.trendNames : null,
-        is_pregnancy_safe: svc.isPregnancySafe ?? false,
+        is_pregnancy_safe: svc.isPregnancySafe ?? true,
         patch_test_required: svc.patchTestRequired ?? false,
         min_age: svc.minAge ?? null,
         contraindications: svc.contraindications?.length ? svc.contraindications : null,
         aftercare_notes: svc.aftercareNotes || null,
         service_type: svc.serviceType || null,
         hair_types_suitable: svc.hairTypesSuitable?.length ? svc.hairTypesSuitable : null,
+        skin_tones_suitable: svc.skinTonesSuitable ?? null,
         audience: svc.audience || null,
         images,
         add_ons: svc.addOns.map((a) => ({ id: a.dbId ?? null, name: a.name, price: a.price })),
@@ -822,6 +848,7 @@ export async function loadProviderFromSupabase(
   // Reconstruct categories
   const categories: Record<string, ServiceData[]> = {};
   const categoryDescriptions: Record<string, string> = {};
+  const categoryServiceTypes: Record<string, string> = {};
   let localId = 1;
 
   for (const svc of (services || [])) {
@@ -830,6 +857,9 @@ export async function loadProviderFromSupabase(
     }
     if (svc.category_description && !categoryDescriptions[svc.category_name]) {
       categoryDescriptions[svc.category_name] = svc.category_description;
+    }
+    if (svc.service_category && !categoryServiceTypes[svc.category_name]) {
+      categoryServiceTypes[svc.category_name] = svc.service_category;
     }
 
     const images: ServiceImageDraft[] = [...(svc.service_images || [])]
@@ -862,13 +892,16 @@ export async function loadProviderFromSupabase(
       outcomeTags: svc.outcome_tags || [],
       occasionTags: svc.occasion_tags || [],
       trendNames: svc.trend_names || [],
-      isPregnancySafe: svc.is_pregnancy_safe ?? false,
+      // null (never stated) reads as safe/off — same as the toggle's default —
+      // so a service isn't shown flagged unless is_pregnancy_safe is explicitly false.
+      isPregnancySafe: svc.is_pregnancy_safe ?? true,
       patchTestRequired: svc.patch_test_required ?? false,
       minAge: svc.min_age ?? null,
       contraindications: svc.contraindications || [],
       aftercareNotes: svc.aftercare_notes || '',
       serviceType: svc.service_type || '',
       hairTypesSuitable: svc.hair_types_suitable || [],
+      skinTonesSuitable: svc.skin_tones_suitable || [],
       audience: svc.audience || '',
     });
   }
@@ -876,6 +909,10 @@ export async function loadProviderFromSupabase(
   return {
     providerName: provider.display_name,
     providerService: provider.service_category,
+    serviceCategories: provider.service_categories?.length
+      ? provider.service_categories
+      : [provider.service_category],
+    categoryServiceTypes,
     customServiceType: provider.custom_service_type || '',
     location: provider.location_text || '',
     aboutText: provider.about_text || '',
@@ -981,4 +1018,40 @@ export async function getCachedProviderData(userId: string): Promise<ProviderReg
     logger.warn('getCachedProviderData error:', e);
   }
   return null;
+}
+
+// Merge just the branding fields into the cached provider record. The Branding
+// screen writes these straight to the DB, but My Profile renders the cache
+// first (getCachedProviderData) before the live row arrives — so without this
+// the cache stays stale and the hero flashes the OLD colours/photo for a frame
+// before snapping to the new ones. Keep it best-effort: a cache miss or write
+// failure must never fail a save that already landed in the DB.
+export async function patchCachedProviderBranding(
+  userId: string,
+  branding: {
+    gradient: [string, string, ...string[]];
+    accentColor: string;
+    backgroundImage: string | null;
+    profileTheme: string;
+  },
+): Promise<void> {
+  try {
+    const cached = await getCachedProviderData(userId);
+    // Nothing cached yet means My Profile has no stale frame to show — it will
+    // simply load the live row, so there is nothing to patch.
+    if (!cached) return;
+    const updated: ProviderRegistrationData = {
+      ...cached,
+      gradient: branding.gradient,
+      // Mirror the live read's rule (see loadProviderFromSupabase): a saved
+      // gradient is always a real 2-tuple here, so it counts as custom.
+      hasCustomGradient: branding.gradient.length >= 2,
+      accentColor: branding.accentColor,
+      backgroundImage: branding.backgroundImage,
+      profileTheme: branding.profileTheme,
+    };
+    await AsyncStorage.setItem(`@provider_reg_data_${userId}`, JSON.stringify(updated));
+  } catch (e) {
+    logger.warn('patchCachedProviderBranding error:', e);
+  }
 }

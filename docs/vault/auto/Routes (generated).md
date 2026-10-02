@@ -54,6 +54,8 @@ Curated overview: [[Screens & Navigation]].
 - `PaymentMethods`
 - `Subscription`
 - `HelpCentre`
+- `TextSizing`
+- `LanguageRegion`
 - `About`
 - `Terms`
 - `ReportProblem`
@@ -67,10 +69,10 @@ Curated overview: [[Screens & Navigation]].
 - `Payments`
 - `ProviderIntakeForm`
 - `ProviderServicesMain`
+- `BusinessInfo`
 - `ProviderAccountMain`
 - `AccountInfo`
 - `BusinessDetails`
-- `BusinessInfo`
 - `ServicesPricing`
 - `AboutYou`
 - `Communications`

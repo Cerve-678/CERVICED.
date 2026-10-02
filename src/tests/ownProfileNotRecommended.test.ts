@@ -1,7 +1,7 @@
 /**
  * A provider wearing their client hat is a normal client everywhere else in
- * the app, which is exactly why the passive recommendation surfaces (Home's
- * New/Top Rated/Trending rails, Explore's discovery feed, offers) happily
+ * the app, which is exactly why the passive recommendation surfaces (Home recommendations,
+ * Explore's discovery feed, offers) happily
  * recommended them their own business — a result they can neither book nor
  * usefully browse. These pin the exclusion, and the two ways it is easy to
  * get wrong: dropping only the canonical provider row when an account owns
@@ -25,7 +25,7 @@ const mockState: {
 jest.mock('../lib/supabase', () => {
   const chain = (result: () => unknown, record: boolean) => {
     const self: Record<string, unknown> = {};
-    for (const method of ['eq', 'not', 'in', 'or', 'gte', 'order', 'limit']) {
+    for (const method of ['eq', 'not', 'in', 'or', 'gte', 'order', 'limit', 'overlaps']) {
       self[method] = (...args: unknown[]) => {
         if (record) mockState.filters.push({ method, args });
         return self;
@@ -67,6 +67,7 @@ jest.mock('../lib/supabase', () => {
 import {
   getProviders,
   getNewProviders,
+  getTopRatedProviders,
   getPortfolioItems,
   searchProviders,
   searchPortfolio,
@@ -95,12 +96,15 @@ describe('own profile is never recommended back to its owner', () => {
     mockState.userId = `user-${Math.random().toString(36).slice(2)}`;
   });
 
-  it('excludes the signed-in provider from a recommendation rail', async () => {
+  it('excludes the signed-in provider from the discovery feed', async () => {
+    // Filtered on portfolio_items.provider_id rather than the joined row —
+    // the column is NOT NULL, so this needs no foreign-table filter and loses
+    // no rows to `NULL NOT IN (…)` evaluating to NULL.
     mockState.ownRows = [{ id: 'mine-1' }];
 
-    await getNewProviders();
+    await getPortfolioItems();
 
-    expect(exclusion()).toEqual({ column: 'id', value: '(mine-1)' });
+    expect(exclusion()).toEqual({ column: 'provider_id', value: '(mine-1)' });
   });
 
   it('excludes every provider row the account owns, not just the first', async () => {
@@ -109,13 +113,13 @@ describe('own profile is never recommended back to its owner', () => {
     // canonical row would leave the duplicate sitting in the feed.
     mockState.ownRows = [{ id: 'mine-1' }, { id: 'mine-dupe' }];
 
-    await getNewProviders();
+    await getPortfolioItems();
 
     expect(exclusion()?.value).toBe('(mine-1,mine-dupe)');
   });
 
   it('excludes nothing real for a client with no provider profile', async () => {
-    await getNewProviders();
+    await getPortfolioItems();
 
     expect(exclusion()?.value).toBe(NO_SUCH_PROVIDER);
   });
@@ -123,19 +127,9 @@ describe('own profile is never recommended back to its owner', () => {
   it('excludes nothing real when signed out', async () => {
     mockState.userId = null;
 
-    await getNewProviders();
-
-    expect(exclusion()?.value).toBe(NO_SUCH_PROVIDER);
-  });
-
-  it('filters portfolio discovery on provider_id, not the joined row', async () => {
-    // portfolio_items.provider_id is NOT NULL, so this needs no foreign-table
-    // filter and loses no rows to `NULL NOT IN (…)` evaluating to NULL.
-    mockState.ownRows = [{ id: 'mine-1' }];
-
     await getPortfolioItems();
 
-    expect(exclusion()).toEqual({ column: 'provider_id', value: '(mine-1)' });
+    expect(exclusion()?.value).toBe(NO_SUCH_PROVIDER);
   });
 
   it('still returns the feed when the ownership lookup fails', async () => {
@@ -144,7 +138,7 @@ describe('own profile is never recommended back to its owner', () => {
     // seeing your own card once.
     mockState.ownError = { message: 'network' };
 
-    await expect(getNewProviders()).resolves.toEqual([]);
+    await expect(getPortfolioItems()).resolves.toEqual([]);
     expect(exclusion()?.value).toBe(NO_SUCH_PROVIDER);
   });
 });
@@ -173,5 +167,23 @@ describe('own profile is allowed to show up outside recommendations', () => {
     await searchPortfolio('nails');
 
     expect(exclusion()).toBeNull();
+  });
+});
+
+ describe('own profile can qualify for Home editorial lists', () => {
+  beforeEach(() => {
+    mockState.ownRows = [{ id: 'mine-1' }];
+    mockState.filters = [];
+  });
+  it('includes own profile in New and retains the 30-day creation cutoff', async () => {
+    await getNewProviders();
+    expect(exclusion()).toBeNull();
+    expect(mockState.filters).toContainEqual({ method: 'gte', args: ['created_at', expect.any(String)] });
+  });
+  it('includes own profile in Top Rated and retains the rating criteria', async () => {
+    await getTopRatedProviders();
+    expect(exclusion()).toBeNull();
+    expect(mockState.filters).toContainEqual({ method: 'gte', args: ['review_count', 3] });
+    expect(mockState.filters).toContainEqual({ method: 'gte', args: ['rating', 4] });
   });
 });

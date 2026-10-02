@@ -15,6 +15,29 @@ describe('client screen performance contracts', () => {
     expect(source).not.toContain('prefetchRemaining');
   });
 
+  it('bounds the initial Explore queries and never keeps the feed spinner forever', () => {
+    const source = readScreen('ExploreScreen');
+
+    expect(source).toContain('DISCOVER_PORTFOLIO_LIMIT = 60');
+    expect(source).toContain("withTimeout(");
+    expect(source).toContain("'Explore feed'");
+  });
+
+  it('progressively mounts Explore cards and only measures fallback ratios', () => {
+    const source = readScreen('ExploreScreen');
+    const cardSource = fs.readFileSync(
+      path.join(__dirname, '..', 'components', 'PortfolioCard.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('const INITIAL_EXPLORE_ITEMS = 24');
+    expect(source).toContain('portfolioItems.slice(0, discoverVisibleCount)');
+    expect(source).toContain('favouriteItems.slice(0, favouritesVisibleCount)');
+    expect(source).toContain('.filter(i => i.aspectRatioIsFallback)');
+    expect(source).toContain('data={visiblePortfolioItems}');
+    expect(cardSource).toContain('const shouldAnimate = index < 10');
+  });
+
   it('records only a settled Search query, not every keystroke', () => {
     const source = readScreen('SearchScreen');
     const inputHandler = source.slice(
@@ -43,6 +66,15 @@ describe('client screen performance contracts', () => {
     expect(source).toContain('ListHeaderComponent={(');
     expect(source).not.toContain('data={listItems}');
     expect(source).not.toContain('{waitlistEntries.map(entry => (');
+  });
+
+  it('opens appointment details from client booking cards and labels in-progress clearly', () => {
+    const source = readScreen('BookingsScreen');
+
+    expect(source).toContain("currentBooking.status === BookingStatus.IN_PROGRESS ? 'IN PROGRESS' : 'UPCOMING'");
+    expect(source).toContain("const IN_PROGRESS_PURPLE = '#7B2FBE'");
+    expect(source).toContain('onPress={() => handleBookingPress(currentBooking)}');
+    expect(source).not.toContain('onPress={() => focusMapOnLocation(currentBooking.coordinates)}');
   });
 
   it('loads cart provider checkout metadata in one request', () => {

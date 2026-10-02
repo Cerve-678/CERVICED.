@@ -12,10 +12,12 @@ import {
   NativeScrollEvent,
   PanResponder,
   Platform,
+  AccessibilityInfo,
 } from 'react-native';
 // expo-image instead of RN's Image — see PortfolioCard.tsx for why (Explore's
 // masonry grid is unvirtualized, so caching matters more here than elsewhere).
 import { Image } from 'expo-image';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import {
@@ -28,6 +30,9 @@ import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import Icon from './IconLibrary';
 import { fonts, spacing } from '../constants/PlatformDimensions';
+import { buildMoreLikeThis } from '../features/explore/moreLikeThis';
+import { savedCarouselImageId } from '../utils/savedCarouselImageId';
+
 
 
 interface ImageDetailModalProps {
@@ -96,41 +101,9 @@ export const ImageDetailModal = ({
   const { items: moreLikeThis, isFallback: moreLikeThisIsFallback } =
     useMemo(() => {
       const anchor = anchorItem ?? item;
-      if (!anchor || !similarItems || similarItems.length === 0)
-        return { items: [], isFallback: false };
-
-      const eligibleKind = (si: PortfolioItem) =>
-        si.kind == null || si.kind === 'portfolio' || si.kind === 'service';
-      const currentTags = new Set(anchor.tags ?? []);
-      const rank = (pool: PortfolioItem[]) =>
-        pool
-          .map((si) => {
-            const sharedTags = (si.tags ?? []).filter((t) =>
-              currentTags.has(t),
-            ).length;
-            const differentProvider =
-              si.providerId !== anchor.providerId ? 1 : 0;
-            return { si, score: sharedTags * 2 + differentProvider };
-          })
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 12)
-          .map((s) => s.si);
-
-      const sameCategory = similarItems.filter(
-        (si) =>
-          si.id !== anchor.id &&
-          si.category === anchor.category &&
-          eligibleKind(si),
-      );
-      if (sameCategory.length > 0) {
-        return { items: rank(sameCategory), isFallback: false };
-      }
-      // Nothing in this category — fall back to a broader pool under a
-      // different heading rather than hiding the section outright.
-      const anyCategory = similarItems.filter(
-        (si) => si.id !== anchor.id && eligibleKind(si),
-      );
-      return { items: rank(anyCategory), isFallback: true };
+      return anchor && similarItems
+        ? buildMoreLikeThis(anchor, similarItems)
+        : { items: [], isFallback: false };
     }, [anchorItem, item, similarItems]);
 
   // Jumping to a different photo (via a "More Like This" tap) swaps `item`
@@ -172,17 +145,16 @@ export const ImageDetailModal = ({
 
   const hasProvider = !!item.providerName;
 
-  const isSaved = isPortfolioSaved(item.id);
   // A specific bookable service (has its own serviceId) goes straight to
   // Book Now; a bare portfolio/provider photo has nothing specific to book,
   // so its primary action is viewing the provider instead.
   const isBookableService = item.kind === 'service';
 
-  const handleBookmark = () => {
-    if (isSaved) {
-      unsavePortfolioItem(item.id);
+  const handleBookmark = (savedItemId: string) => {
+    if (isPortfolioSaved(savedItemId)) {
+      unsavePortfolioItem(savedItemId);
     } else {
-      savePortfolioItem(item.id);
+      savePortfolioItem(savedItemId);
     }
   };
 
@@ -239,7 +211,6 @@ export const ImageDetailModal = ({
           palette={P}
           isDarkMode={isDarkMode}
           hasProvider={hasProvider}
-          isSaved={isSaved}
           isBookableService={isBookableService}
           moreLikeThis={moreLikeThis}
           moreLikeThisIsFallback={moreLikeThisIsFallback}
@@ -268,7 +239,7 @@ interface CarouselController {
 
 const ImageCarousel: React.FC<{
   images: PortfolioItem['image'][];
-  height: number;
+  height: SharedValue<number>;
   backgroundColor: string;
   itemKey: string;
   initialIndex: number;
@@ -286,6 +257,7 @@ const ImageCarousel: React.FC<{
   onImageAspectRatio,
 }) => {
   const listRef = useRef<FlatList<PortfolioItem['image']>>(null);
+  const animatedHeightStyle = useAnimatedStyle(() => ({ height: height.value }));
   const activeIndexRef = useRef(initialIndex);
   // Page width is measured per render, not captured at module load: every
   // offset below is a multiple of it, so a stale value lands the carousel
@@ -320,6 +292,7 @@ const ImageCarousel: React.FC<{
   }, [controllerRef]);
 
   return (
+    <Animated.View style={[{ width: screenWidth }, animatedHeightStyle]}>
     <FlatList
         ref={listRef}
         data={images}
@@ -330,7 +303,7 @@ const ImageCarousel: React.FC<{
         scrollEventThrottle={16}
         onMomentumScrollEnd={onMomentumScrollEnd}
         keyExtractor={(_, i) => `${itemKey}-${i}`}
-        style={{ width: screenWidth, height }}
+        style={{ width: screenWidth, flex: 1 }}
         getItemLayout={(_, i) => ({
           length: screenWidth,
           offset: screenWidth * i,
@@ -351,9 +324,10 @@ const ImageCarousel: React.FC<{
         // source is PortfolioItem['image'] (RN's broad ImageSourcePropType)
         // but always constructed as { uri: string } — see PortfolioCard.tsx
         // for why this narrowing is needed for expo-image's stricter type.
+        <Animated.View style={[{ width: screenWidth, backgroundColor }, animatedHeightStyle]}>
         <Image
           source={{ uri: (source as { uri: string }).uri }}
-          style={{ width: screenWidth, height, backgroundColor }}
+          style={StyleSheet.absoluteFill}
           // The detail view must always show the complete image. Unlike the
           // grid, it is not a thumbnail, so cropping it with `cover` makes
           // the photo appear to end underneath the information sheet.
@@ -365,8 +339,10 @@ const ImageCarousel: React.FC<{
             }
           }}
         />
+        </Animated.View>
         )}
     />
+    </Animated.View>
   );
 };
 
@@ -375,14 +351,13 @@ interface ModalBodyProps {
   palette: ReturnType<typeof useTheme>['palette'];
   isDarkMode: boolean;
   hasProvider: boolean;
-  isSaved: boolean;
   isBookableService: boolean;
   moreLikeThis: PortfolioItem[];
   moreLikeThisIsFallback: boolean;
   scrollRef: React.RefObject<ScrollView | null>;
   onClose: () => void;
   onSelectItem?: ((item: PortfolioItem) => void) | undefined;
-  handleBookmark: () => void;
+  handleBookmark: (savedItemId: string) => void;
   handleViewProfile: () => void;
   handleBookNow: () => void;
 }
@@ -392,7 +367,6 @@ function ModalBody({
   palette: P,
   isDarkMode,
   hasProvider,
-  isSaved,
   isBookableService,
   moreLikeThis,
   moreLikeThisIsFallback,
@@ -420,11 +394,27 @@ function ModalBody({
     return idx >= 0 && idx < images.length ? idx : 0;
   }, [item.id, images.length]);
   const [activeImageIndex, setActiveImageIndex] = useState(initialImageIndex);
+  const { isPortfolioSaved } = useBookmarkStore();
   const [isSheetAtImageEdge, setIsSheetAtImageEdge] = useState(true);
   const [loadedImageRatios, setLoadedImageRatios] = useState<
     Record<string, number>
   >({});
   const activeImageIndexRef = useRef(initialImageIndex);
+  const reduceMotionRef = useRef(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
+      if (mounted) reduceMotionRef.current = enabled;
+    });
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      enabled => { reduceMotionRef.current = enabled; },
+    );
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
   // Size the box from the currently visible photo, rather than from a median
   // of the whole carousel. That lets each image meet the horizontal edges
   // exactly without cropping or leaving a thin band above the details sheet.
@@ -435,22 +425,34 @@ function ModalBody({
       ? (loadedImageRatio as number)
       : Number.isFinite(activeImageRatio) && (activeImageRatio ?? 0) > 0
       ? (activeImageRatio as number)
-      : item.aspectRatio;
+      : Number.isFinite(item.aspectRatio) && item.aspectRatio > 0
+        ? item.aspectRatio
+        : 0.8;
   // A very tall portrait is capped to keep its full image view usable; it is
   // still shown with `contain`, never cropped.
-  const imageHeight = Math.min(screenHeight * 0.85, screenWidth / imageRatio);
-  // An 8 px join visually seats the sheet on the image edge without covering
-  // any meaningful part of the photo.
-  const CARD_OVERLAP = 8;
+  const imageHeight = Math.min(screenHeight * 0.82, screenWidth / imageRatio);
+  // Lift the sheet slightly into the image so it feels attached rather than
+  // following it with a visible seam.
+  const CARD_OVERLAP = 16;
+  // One animated height drives the image, hit area and sheet spacer together.
+  // This covers cached-photo switches as well as dimensions arriving on load.
+  const animatedImageHeight = useSharedValue(imageHeight);
+  useEffect(() => {
+    animatedImageHeight.value = reduceMotionRef.current
+      ? imageHeight
+      : withTiming(imageHeight, { duration: 280, easing: Easing.inOut(Easing.cubic) });
+  }, [imageHeight, animatedImageHeight]);
+  const imageHeightStyle = useAnimatedStyle(() => ({ height: animatedImageHeight.value }));
+  const exposedImageStyle = useAnimatedStyle(() => ({ height: Math.max(0, animatedImageHeight.value - CARD_OVERLAP) }));
+
   const handleImageAspectRatio = useCallback(
     (index: number, aspectRatio: number) => {
       if (!Number.isFinite(aspectRatio) || aspectRatio <= 0) return;
       const key = `${item.id}:${index}`;
-      setLoadedImageRatios((current) =>
-        Math.abs((current[key] ?? 0) - aspectRatio) < 0.001
-          ? current
-          : { ...current, [key]: aspectRatio },
-      );
+      setLoadedImageRatios((current) => {
+        if (Math.abs((current[key] ?? 0) - aspectRatio) < 0.001) return current;
+        return { ...current, [key]: aspectRatio };
+      });
     },
     [item.id],
   );
@@ -487,7 +489,18 @@ function ModalBody({
 
   useEffect(() => {
     activeImageIndexRef.current = initialImageIndex;
+    setActiveImageIndex(initialImageIndex);
   }, [initialImageIndex]);
+
+  const selectImageIndex = useCallback((index: number) => {
+    if (activeImageIndexRef.current === index) return;
+    activeImageIndexRef.current = index;
+    setActiveImageIndex(index);
+    Haptics.selectionAsync().catch(() => {});
+  }, []);
+
+  const activeSavedItemId = savedCarouselImageId(item, activeImageIndex);
+  const isSaved = isPortfolioSaved(activeSavedItemId);
 
   const handleSheetScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -540,8 +553,7 @@ function ModalBody({
               ? startIndex + (gesture.dx < 0 ? 1 : -1)
               : startIndex;
           const nextIndex = Math.max(0, Math.min(maxIndex, rawIndex));
-          activeImageIndexRef.current = nextIndex;
-          setActiveImageIndex(nextIndex);
+          selectImageIndex(nextIndex);
           carouselRef.current?.scrollToOffset(nextIndex * screenWidth, true);
         },
         onPanResponderTerminate: () => {
@@ -552,7 +564,7 @@ function ModalBody({
           );
         },
       }),
-    [cancelPendingCarouselFrame, images.length, trackCarouselOffset, screenWidth],
+    [cancelPendingCarouselFrame, images.length, selectImageIndex, trackCarouselOffset, screenWidth],
   );
 
   return (
@@ -583,7 +595,7 @@ function ModalBody({
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
             () => {},
           );
-          handleBookmark();
+          handleBookmark(activeSavedItemId);
         }}
         activeOpacity={0.65}
       >
@@ -633,38 +645,35 @@ function ModalBody({
       {/* The image stays fixed behind the scrollable details sheet. `box-none`
           lets the exposed photo area pass touches through to the carousel,
           while the sheet remains a normal vertical ScrollView. */}
-      <View style={[styles.imageLayer, { height: imageHeight }]}>
+      <Animated.View style={[styles.imageLayer, imageHeightStyle]}>
         <ImageCarousel
           images={images}
-          height={imageHeight}
+          height={animatedImageHeight}
           backgroundColor={P.surface}
           itemKey={item.id}
           initialIndex={initialImageIndex}
           controllerRef={carouselRef}
           onImageAspectRatio={handleImageAspectRatio}
-          onIndexChange={(index) => {
-            activeImageIndexRef.current = index;
-            setActiveImageIndex(index);
-          }}
+          onIndexChange={selectImageIndex}
         />
-      </View>
+      </Animated.View>
       {images.length > 1 && (
         <>
-          <View
+          <Animated.View
             style={[
               styles.carouselTapZones,
-              { height: imageHeight - CARD_OVERLAP },
+              exposedImageStyle,
             ]}
             pointerEvents={isSheetAtImageEdge ? 'auto' : 'none'}
             {...carouselPanResponder.panHandlers}
           />
           {/* Visual cue only — the full exposed image remains the swipe/tap
               target, so these never steal the gesture. */}
-          <View
+          <Animated.View
             pointerEvents="none"
             style={[
               styles.carouselArrowRow,
-              { height: imageHeight - CARD_OVERLAP },
+              exposedImageStyle,
             ]}
           >
             <View style={styles.carouselArrow}>
@@ -678,7 +687,7 @@ function ModalBody({
             <View style={styles.carouselArrow}>
               <Icon name="chevron-right" size={22} color="#FFFFFF" />
             </View>
-          </View>
+          </Animated.View>
         </>
       )}
       <ScrollView
@@ -688,13 +697,11 @@ function ModalBody({
         showsVerticalScrollIndicator={false}
         onScroll={handleSheetScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={[
-          styles.contentContainer,
-          { paddingTop: imageHeight - CARD_OVERLAP },
-        ]}
+        contentContainerStyle={styles.contentContainer}
         bounces
         alwaysBounceVertical
       >
+        <Animated.View pointerEvents="none" style={exposedImageStyle} />
         {/* paddingBottom lives on the card itself (not the ScrollView's
             content container) so the card's own background extends all the
             way to the bottom of the safe area. */}
@@ -814,11 +821,7 @@ function ModalBody({
                     color={P.onAccent}
                   />
                   <Text style={[styles.bookNowText, { color: P.onAccent }]}>
-                    {isBookableService
-                      ? 'Book Now'
-                      : item.isUnclaimed
-                        ? 'View & Claim'
-                        : 'View Profile'}
+                    {isBookableService ? 'Book Now' : 'View Profile'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -878,10 +881,8 @@ function ModalBody({
 
           {/* More Like This — after the service's own details rather than
               before them, so the thing the user actually opened is
-              described first. Heading swaps to "You Might Also Like" when
-              there's nothing in the same category (moreLikeThisIsFallback),
-              so the section doesn't claim to be "more like this" when it
-              isn't actually category-matched. */}
+              described first. Recommendations are category-strict and
+              provider-balanced; service names make exact matches clear. */}
           {moreLikeThis.length > 0 && (
             <>
               <Text
@@ -929,6 +930,14 @@ function ModalBody({
                         numberOfLines={1}
                       >
                         {si.providerName}
+                      </Text>
+                    )}
+                    {si.serviceName && (
+                      <Text
+                        style={[styles.moreLikeThisService, { color: P.text }]}
+                        numberOfLines={1}
+                      >
+                        {si.serviceName}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -1190,6 +1199,11 @@ const styles = StyleSheet.create({
   moreLikeThisProvider: {
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  moreLikeThisService: {
+    fontSize: 10,
+    fontWeight: '600',
     fontFamily: 'Jura-VariableFont_wght',
   },
 });

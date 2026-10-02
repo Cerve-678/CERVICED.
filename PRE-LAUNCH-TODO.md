@@ -987,3 +987,90 @@ refactored sweep, *then* rewire `cancel_own_booking()` to call it. Do it with
 **Blocked on the migration lock** — held by the client-area session as of
 2026-08-27, and that is live work, not an abandoned claim. Do not apply
 around it; see `supabase/MIGRATION_OWNER.md`.
+
+## 20. LAUNCH FEATURE — Instagram-ready profile links (`cerviced.co/@handle`) (2026-10-02)
+
+Not built yet; parked on purpose to ship with the public App Store launch.
+Goal: a link a provider pastes into their Instagram bio that opens their
+CERVICED profile.
+
+**Decisions already made:**
+- URL shape: `cerviced.co/@<handle>`, which can't collide with site pages.
+- Handle = the existing `providers.slug`. It's unique (`providers_slug_key`),
+  every provider has one, and `ProviderProfile` already opens by slug. Not
+  editable for v1. Known wart: some slugs don't match a renamed business
+  (Aestheticsby N is `glo-installs`); editable handles + old-handle redirects
+  would be a separate follow-up.
+
+**Still to decide:** what a visitor without the app sees. The recommended
+option is a web preview page (name, logo, category, rating, plus "Open in
+CERVICED" / "Get the app"); the alternatives are a waitlist redirect or a full
+web profile.
+
+**Why the web page matters:** Instagram opens bio links in its in-app browser,
+which usually does NOT hand off to an installed app via universal links. The
+web page has to work on its own, with the app hand-off layered on top.
+
+**Build pieces:**
+1. Web: `/@:handle` route on the cerviced.co Vercel site (`waitlist/`, deploys
+   from `main`). Reads only `has_gone_live = true` public fields, never
+   private/address data.
+2. Universal links: `ios.associatedDomains` + Android `intentFilters` in
+   `app.json`; `apple-app-site-association` and `assetlinks.json` served
+   from cerviced.co. **Needs the Apple Team ID** and the Android signing
+   SHA-256, plus a native rebuild. This works on TestFlight too, so it can be
+   tested before launch.
+3. App: route `https://cerviced.co/@x` and `cerviced://@x` to
+   `ProviderProfile { providerId: slug }` (`RootNavigation.tsx` already
+   listens for URLs, but only for Stripe returns).
+4. Provider side: a "Your CERVICED link" card on Business Profile, with Copy
+   and Share.
+5. Fix the client Share button in `ProviderProfileScreen.tsx` `handleShare`,
+   which currently shares the placeholder `https://app.yourapp.com/provider/<id>`.
+6. At launch: point "Get the app" at the App Store / Play Store listing
+   (waitlist until then).
+
+Build on its own branch (`feat/profile-links`), branched off `main`.
+
+## 21. LAUNCH FEATURE — home-screen widgets, iOS + Android (2026-10-02)
+
+Not built yet; parked to ship with the public App Store launch, alongside §20.
+
+**Widgets (decided):**
+1. **Provider: Today's schedule.** Next client's first name, time and service,
+   plus today's booking count. Tap opens the booking.
+2. **Client: Next appointment.** Provider, service, date/time, countdown. Tap
+   opens the booking.
+3. **Client: Rebook favourite.** Logo of a saved provider; tap opens their
+   profile ready to book. Needs the in-app URL routing from §20 step 3, so
+   build that piece here if §20 hasn't landed.
+
+**Libraries (checked 2026-10-02, both TypeScript, no Swift/Kotlin):**
+- iOS: `expo-widgets` (Expo's own library, v57 matching SDK 57). It needs an
+  App Group (`group.com.cerviced.app`).
+- Android: `react-native-android-widget` (v0.22, peer `expo >= 54`).
+
+Both are native changes: they need a dev-client/EAS build, not Expo Go.
+
+**Architecture constraint:** widgets can't fetch or authenticate. All data
+arrives as props the app writes (`updateSnapshot`/`updateTimeline`, then
+`reload` on iOS). So:
+- The snapshot is refreshed whenever bookings load or change in the app.
+  Bookings made while the app is closed won't appear until it's next opened;
+  silent push is a possible later step.
+- Use a timeline so "next appointment" rolls forward without the app open.
+- **Sign-out (and account deletion) must clear widget data.** Widgets come
+  from account data, not the active hat: the provider widget fills only if
+  the account has a provider profile, client widgets only if it has a client
+  profile.
+- Snapshot only `has_gone_live` providers for "rebook favourite".
+
+**Privacy, flag before shipping:** the user chose to show the client's first
+name, time AND service on the provider widget. Services can be
+health-adjacent (aesthetics etc.), and widgets are visible on the home and
+lock screen to anyone holding the phone. Mitigation to raise: on iOS, mark
+the service text as privacy-sensitive so it's redacted while the phone is
+locked. Run `cerviced-legal-flagger` / `cerviced-security-review` on it, and
+consider a note in `LEGAL-COMPLIANCE-NOTES.md`.
+
+Build on its own branch (`feat/home-screen-widgets`) off `main`.

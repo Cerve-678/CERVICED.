@@ -11,6 +11,8 @@ import NotificationsSettingsScreen from '../../../screens/client/NotificationsSe
 import PaymentMethodsScreen from '../../../screens/client/PaymentMethodsScreen';
 import SubscriptionScreen from '../../../screens/client/SubscriptionScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
+import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
+import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
 import AboutScreen from '../../../screens/shared/AboutScreen';
 import TermsScreen from '../../../screens/shared/TermsScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
@@ -72,6 +74,16 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="HelpCentre"
         component={HelpCentreScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="TextSizing"
+        component={TextSizingScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="LanguageRegion"
+        component={LanguageRegionScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen

@@ -1,3 +1,4 @@
+import { getPaymentRequestError } from '../utils/paymentRequestError';
 import { supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
@@ -32,7 +33,7 @@ import type {
   ServiceCategory,
 } from "../types/database";
 import type { AddressReleasePolicy } from "../features/business-details/options";
-import { logger } from "../utils/logger";
+import { logger, reportError } from "../utils/logger";
 import {
   ADDRESS_PENDING_PLACEHOLDER,
   PHONE_PENDING_PLACEHOLDER,
@@ -76,8 +77,24 @@ export function setAuthAutoRefresh(active: boolean): void {
 export function subscribeToAuthStateChanges(
   onChange: (event: AuthChangeEvent, session: Session | null) => void | Promise<void>,
 ): () => void {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(onChange);
-  return () => subscription.unsubscribe();
+  // Auth invokes listeners while holding its session lock. Profile queries
+  // need that same lock to obtain a token, so awaiting them here deadlocks
+  // login/restore and subsequent requests throughout the app.
+  const pending = new Set<ReturnType<typeof setTimeout>>();
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const timer = setTimeout(() => {
+      pending.delete(timer);
+      void Promise.resolve().then(() => onChange(event, session)).catch(error => {
+        reportError(error, 'auth:state-change');
+      });
+    }, 0);
+    pending.add(timer);
+  });
+  return () => {
+    subscription.unsubscribe();
+    pending.forEach(clearTimeout);
+    pending.clear();
+  };
 }
 
 export async function signOutCurrentSession(): Promise<void> {
@@ -284,7 +301,7 @@ export async function runDevReset(
 // separates conditions, parens group them) so a term containing one can't
 // break out of its intended ilike condition.
 function sanitizeIlikeTerm(term: string): string {
-  return term.replace(/[(),]/g, " ").trim();
+  return term.replace(/[(),%_*"\\]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 /** Creates or completes the app profile after Supabase has verified the
@@ -429,7 +446,7 @@ function invalidateOwnProviderIds(): void {
   ownProviderIdsCache = null;
 }
 
-async function getOwnProviderIds(): Promise<string[]> {
+export async function getOwnProviderIds(): Promise<string[]> {
   // getSession() reads the locally cached session; getUser() (used elsewhere
   // in this file where the answer must be authoritative) costs a network
   // round trip, which is not worth paying on every discovery query.
@@ -472,8 +489,8 @@ const NO_SUCH_PROVIDER_ID = "00000000-0000-0000-0000-000000000000";
 
 /**
  * PostgREST value for `.not(column, "in", …)` — the provider rows the
- * signed-in user owns, so a client-facing list never returns them their own
- * business. Matches nothing for an account with no provider profile.
+ * signed-in user owns, for recommendation queries only. Plain browse and
+ * explicit searches allow the owner’s business. Matches nothing for an account with no provider profile.
  */
 async function ownProviderIdExclusion(): Promise<string> {
   const ids = await getOwnProviderIds();
@@ -486,7 +503,7 @@ async function ownProviderIdExclusion(): Promise<string> {
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
+  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -497,9 +514,6 @@ export async function getNewProviders(limit = 10): Promise<PublicProviderSummary
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
     .gte("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -514,9 +528,6 @@ export async function getTopRatedProviders(limit = 10): Promise<PublicProviderSu
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
     .gte("review_count", 3)
     .gte("rating", 4.0)
     .order("rating", { ascending: false })
@@ -548,9 +559,6 @@ export async function getTrendingProviders(limit = 10): Promise<PublicProviderSu
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .in("id", rankedIds)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
     .eq("has_gone_live", true)
     .eq("is_active", true);
   if (error) throw new Error(error.message);
@@ -592,7 +600,7 @@ export async function getProviders(
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("is_active", true)
     .eq("has_gone_live", true)
-    // Unlike the New/Top Rated/Trending rails and Explore's discovery feed,
+    // Unlike Explore's recommendation feed,
     // this is a plain browse/list, not a recommendation — a provider's own
     // business is allowed to appear here (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
@@ -600,7 +608,10 @@ export async function getProviders(
     .limit(limit);
 
   if (category && category !== "ALL") {
-    query = query.eq("service_category", category);
+    // ANY of the provider's declared types, not just the headline one — a
+    // lashes-and-brows business must appear under BROWS too. GIN-indexed
+    // (providers_service_categories_gin), so this stays an index scan.
+    query = query.overlaps("service_categories", [category]);
   }
 
   const { data, error } = await query;
@@ -693,6 +704,16 @@ export interface ProviderServiceFacets {
    *  Absent/empty means nothing tagged — the same providers `.eq('audience',
    *  …)` would simply not have returned. */
   audiences: Map<string, Set<string>>;
+  skinTones: Map<string, Set<string>>;
+  /** Free-text "speciality" haystack per provider, for the client Speciality
+   *  filter's fuzzy match (src/utils/fuzzyMatch.ts). Unions three sources that
+   *  each name what a provider is known for: their chosen business
+   *  specialities (`provider_specialties`), every tag on their active services
+   *  (`tags`/`technique_tags`/`outcome_tags`/`occasion_tags`/`trend_names`),
+   *  and the service names themselves. The filter matches its chosen label
+   *  against this set, so casing/spacing/spelling need not agree across the
+   *  three. Absent means nothing to match. */
+  specialityText: Map<string, Set<string>>;
 }
 
 /**
@@ -715,23 +736,47 @@ export async function getProviderServiceFacets(
 ): Promise<ProviderServiceFacets> {
   const priceRanges = new Map<string, { min: number; max: number }>();
   const audiences = new Map<string, Set<string>>();
-  if (providerIds.length === 0) return { priceRanges, audiences };
+  const skinTones = new Map<string, Set<string>>();
+  const specialityText = new Map<string, Set<string>>();
+  if (providerIds.length === 0) {
+    return { priceRanges, audiences, skinTones, specialityText };
+  }
 
-  // Same provider-visibility gate as the two functions this replaces — see
-  // getProviderPriceRanges for why it lives here rather than being left to
-  // each caller to remember.
-  const { data, error } = await supabase
-    .from("services")
-    .select(
-      "provider_id, price, price_max, audience, providers!inner(has_gone_live, is_active)",
-    )
-    .eq("is_active", true)
-    .eq("providers.has_gone_live", true)
-    .eq("providers.is_active", true)
-    .in("provider_id", providerIds);
-  if (error) throw error;
+  const addSpeciality = (providerId: string, value: string | null | undefined) => {
+    if (!value) return;
+    const set = specialityText.get(providerId) ?? new Set<string>();
+    set.add(value);
+    specialityText.set(providerId, set);
+  };
 
-  for (const row of data ?? []) {
+  // The services scan and the provider_specialties scan are independent reads
+  // over the same already-visibility-gated id set — run them together rather
+  // than one after the other (see the Scalability "no sequential awaits" rule).
+  // Both carry the same has_gone_live/is_active gate as the price/audience
+  // functions this consolidates: the ids passed in are already the current
+  // result set, but re-gating here keeps a hidden provider's data out even if a
+  // caller ever passes an unfiltered id.
+  const [servicesRes, specialtiesRes] = await Promise.all([
+    supabase
+      .from("services")
+      .select(
+        "provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
+      )
+      .eq("is_active", true)
+      .eq("providers.has_gone_live", true)
+      .eq("providers.is_active", true)
+      .in("provider_id", providerIds),
+    supabase
+      .from("provider_specialties")
+      .select("provider_id, specialty, providers!inner(has_gone_live, is_active)")
+      .eq("providers.has_gone_live", true)
+      .eq("providers.is_active", true)
+      .in("provider_id", providerIds),
+  ]);
+  if (servicesRes.error) throw servicesRes.error;
+  if (specialtiesRes.error) throw specialtiesRes.error;
+
+  for (const row of servicesRes.data ?? []) {
     const providerId = row.provider_id as string;
 
     // A service with no price at all contributes an audience tag but must not
@@ -748,13 +793,36 @@ export async function getProviderServiceFacets(
       }
     }
 
+    for (const tone of row.skin_tones_suitable ?? []) {
+      const set = skinTones.get(providerId) ?? new Set<string>();
+      set.add(tone);
+      skinTones.set(providerId, set);
+    }
+
     if (row.audience) {
       const set = audiences.get(providerId) ?? new Set<string>();
       set.add(row.audience as string);
       audiences.set(providerId, set);
     }
+
+    // The service name plus every tag column feed the Speciality haystack.
+    addSpeciality(providerId, row.name as string | null);
+    for (const tag of [
+      ...(row.tags ?? []),
+      ...(row.technique_tags ?? []),
+      ...(row.outcome_tags ?? []),
+      ...(row.occasion_tags ?? []),
+      ...(row.trend_names ?? []),
+    ]) {
+      addSpeciality(providerId, tag as string);
+    }
   }
-  return { priceRanges, audiences };
+
+  for (const row of specialtiesRes.data ?? []) {
+    addSpeciality(row.provider_id as string, row.specialty as string | null);
+  }
+
+  return { priceRanges, audiences, skinTones, specialityText };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -842,9 +910,10 @@ export async function searchProviders(
   // Falls back to the whole query when no location preposition was found,
   // so a bare "south london" (no "in") still gets tried as free text below.
   const textTerms = (
-    parsed.serviceTerms.length ? parsed.serviceTerms : [q]
-  ).map(sanitizeIlikeTerm);
-  const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm);
+    parsed.serviceTerms.length ? parsed.serviceTerms : (parsed.locationTerms.length ? parsed.locationTerms : [q])
+  ).map(sanitizeIlikeTerm).filter(Boolean);
+  const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm).filter(Boolean);
+  if (!textTerms.length) return [];
 
   const serviceOr = textTerms
     .map((t) => `name.ilike.%${t}%,description.ilike.%${t}%`)
@@ -868,9 +937,9 @@ export async function searchProviders(
   // None of these three lookups depend on each other's result, so run them
   // together instead of waiting on one before starting the next.
   const [
-    { data: serviceMatches },
-    { data: nameMatches },
-    { data: categoryMatches },
+    { data: serviceMatches, error: serviceError },
+    { data: nameMatches, error: nameError },
+    { data: categoryMatches, error: categoryError },
   ] = await Promise.all([
     // 1. Provider IDs where a service name or description matches
     supabase
@@ -892,10 +961,14 @@ export async function searchProviders(
           .from("providers")
           .select("id")
           .eq("is_active", true)
-          .eq("service_category", categoryHint)
+          .overlaps("service_categories", [categoryHint])
           .limit(limit)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
   ]);
+
+  if (serviceError || nameError || categoryError) {
+    throw serviceError || nameError || categoryError;
+  }
 
   const serviceIds = (serviceMatches ?? []).map(
     (r: { provider_id: string }) => r.provider_id,
@@ -918,10 +991,10 @@ export async function searchProviders(
     // (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
-    .limit(limit);
+    .limit(allIds.length);
 
   if (category && category !== "ALL") {
-    providerQuery = providerQuery.eq("service_category", category);
+    providerQuery = providerQuery.overlaps("service_categories", [category]);
   }
 
   if (locationTerms.length) {
@@ -932,7 +1005,22 @@ export async function searchProviders(
 
   const { data, error } = await providerQuery;
   if (error) throw error;
-  return (data ?? []) as PublicProviderSummary[];
+  // Exact business names and matching services precede broad category recall.
+  // Keep the server's featured/rating order as the tie-breaker.
+  const serviceIdSet = new Set(serviceIds);
+  const nameIdSet = new Set(nameIds);
+  const normalizedQuery = parsed.serviceText.toLowerCase();
+  const relevance = (provider: PublicProviderSummary): number => {
+    const name = provider.display_name.toLowerCase();
+    if (normalizedQuery && name === normalizedQuery) return 4;
+    if (normalizedQuery && name.includes(normalizedQuery)) return 3;
+    if (serviceIdSet.has(provider.id)) return 2;
+    if (nameIdSet.has(provider.id)) return 1;
+    return 0;
+  };
+  return ((data ?? []) as PublicProviderSummary[])
+    .sort((a, b) => relevance(b) - relevance(a))
+    .slice(0, limit);
 }
 
 /**
@@ -976,6 +1064,59 @@ type ProviderProfileJoinRow = Omit<
   provider_specialties: ProviderWithServices["specialties"] | null;
 };
 
+type ProviderProfileCoreJoinRow = Omit<
+  ProviderProfileJoinRow,
+  "services" | "provider_specialties"
+>;
+
+// Kept separate from the nested catalogue selection so Provider Profile can
+// paint its hero and business information without waiting for every service,
+// image and add-on to cross the network.
+const PROVIDER_PROFILE_PUBLIC_FIELDS = `
+  id,
+  slug,
+  display_name,
+  service_category,
+  service_categories,
+  custom_service_type,
+  location_text,
+  about_text,
+  logo_url,
+  gradient,
+  accent_color,
+  background_image_url,
+  profile_theme,
+  brand_font,
+  phone,
+  email,
+  instagram,
+  website,
+  tiktok,
+  preferred_contact_methods,
+  whatsapp_number,
+  external_booking_url,
+  rating,
+  years_experience,
+  is_verified,
+  booking_policies,
+  business_type,
+  online_consultations_available,
+  cancellation_notice_hours,
+  automation_schedule_release_day:automation_settings->scheduleReleaseDay,
+  automation_waitlist_enabled:automation_settings->waitlistEnabled,
+  accessibility_notes,
+  languages_spoken,
+  qualifications,
+  is_insured_self_declared,
+  dbs_checked_self_declared,
+  team_size,
+  walk_ins_welcome,
+  group_bookings_available,
+  vegan_cruelty_free,
+  travel_radius,
+  products_used
+`;
+
 const PROVIDER_PROFILE_CACHE_TTL_MS = 60_000;
 const PROVIDER_PROFILE_CACHE_MAX_ENTRIES = 50;
 const PROVIDER_PROFILE_SERVICES_LIMIT = 200;
@@ -986,11 +1127,112 @@ const providerProfileCache = new BoundedTtlCache<
   string,
   ProviderWithServices | null
 >(PROVIDER_PROFILE_CACHE_TTL_MS, PROVIDER_PROFILE_CACHE_MAX_ENTRIES);
+const providerProfilePreviewCache = new BoundedTtlCache<
+  string,
+  ProviderWithServices | null
+>(PROVIDER_PROFILE_CACHE_TTL_MS, PROVIDER_PROFILE_CACHE_MAX_ENTRIES);
 const providerProfileRequests = new Map<
   string,
   Promise<ProviderWithServices | null>
 >();
+const providerProfilePreviewRequests = new Map<
+  string,
+  Promise<ProviderWithServices | null>
+>();
 const providerProfileRequestTokens = new Map<string, symbol>();
+
+function mapProviderProfileJoinRow(row: ProviderProfileJoinRow): ProviderWithServices {
+  const {
+    automation_schedule_release_day: scheduleReleaseDay,
+    automation_waitlist_enabled: waitlistEnabled,
+    services: joinedServices,
+    provider_specialties: providerSpecialties,
+    ...publicProvider
+  } = row;
+  const publicAutomationSettings =
+    scheduleReleaseDay !== null || waitlistEnabled !== null
+      ? {
+          ...(scheduleReleaseDay !== null ? { scheduleReleaseDay } : {}),
+          ...(waitlistEnabled !== null ? { waitlistEnabled } : {}),
+        }
+      : null;
+  return {
+    ...publicProvider,
+    // Do not retain unrelated operational automation settings in the
+    // process-wide public profile cache or expose them to client features.
+    automation_settings: publicAutomationSettings,
+    services: (joinedServices ?? [])
+      .filter((service) => service.is_active)
+      .sort((left, right) => left.sort_order - right.sort_order)
+      .map(({ service_images, service_add_ons, ...service }) => ({
+        ...service,
+        images: service_images ?? [],
+        // Cache only the public/active child shape. Owner RLS can return
+        // inactive add-ons; allowing those into this process-wide cache
+        // could expose them after an account switch even if the screen
+        // mapper currently filters them again.
+        add_ons: (service_add_ons ?? []).filter((addOn) => addOn.is_active),
+      })),
+    specialties: providerSpecialties ?? [],
+  };
+}
+
+/**
+ * Fetch the lightweight, public part of a provider profile. The full
+ * catalogue remains a separate request so a client can see who they opened
+ * before every service image and add-on has loaded.
+ */
+export async function getProviderProfilePreviewBySlug(
+  slug: string,
+  options: { forceRefresh?: boolean } = {},
+): Promise<ProviderWithServices | null> {
+  const normalizedSlug = slug.trim();
+  if (!normalizedSlug) return null;
+
+  if (!options.forceRefresh) {
+    const fullProfile = providerProfileCache.get(normalizedSlug);
+    if (fullProfile !== undefined) return fullProfile;
+    const cached = providerProfilePreviewCache.get(normalizedSlug);
+    if (cached !== undefined) return cached;
+    const inFlight = providerProfilePreviewRequests.get(normalizedSlug);
+    if (inFlight) return inFlight;
+  }
+
+  const request = (async (): Promise<ProviderWithServices | null> => {
+    const { data, error } = await supabase
+      .from("providers")
+      .select(`${PROVIDER_PROFILE_PUBLIC_FIELDS}, hair_types_catered`)
+      .eq("slug", normalizedSlug)
+      .eq("is_active", true)
+      .eq("has_gone_live", true)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        providerProfilePreviewCache.set(normalizedSlug, null);
+        return null;
+      }
+      throw error;
+    }
+
+    const profile = mapProviderProfileJoinRow({
+      ...(data as ProviderProfileCoreJoinRow),
+      services: [],
+      provider_specialties: [],
+    });
+    providerProfilePreviewCache.set(normalizedSlug, profile);
+    return profile;
+  })();
+
+  providerProfilePreviewRequests.set(normalizedSlug, request);
+  try {
+    return await request;
+  } finally {
+    if (providerProfilePreviewRequests.get(normalizedSlug) === request) {
+      providerProfilePreviewRequests.delete(normalizedSlug);
+    }
+  }
+}
 
 /**
  * Fetch a single public provider profile by slug.
@@ -1021,50 +1263,11 @@ export async function getProviderBySlug(
       .from("providers")
       .select(
         `
-        id,
-        slug,
-        display_name,
-        service_category,
-        custom_service_type,
-        location_text,
-        about_text,
-        logo_url,
-        gradient,
-        accent_color,
-        background_image_url,
-        profile_theme,
-        brand_font,
-        phone,
-        email,
-        instagram,
-        website,
-        tiktok,
-        preferred_contact_methods,
-        whatsapp_number,
-        external_booking_url,
-        rating,
-        years_experience,
-        is_verified,
-        booking_policies,
-        business_type,
-        online_consultations_available,
-        cancellation_notice_hours,
-        automation_schedule_release_day:automation_settings->scheduleReleaseDay,
-        automation_waitlist_enabled:automation_settings->waitlistEnabled,
-        accessibility_notes,
-        languages_spoken,
-        qualifications,
-        is_insured_self_declared,
-        dbs_checked_self_declared,
-        team_size,
-        walk_ins_welcome,
-        group_bookings_available,
-        vegan_cruelty_free,
-        travel_radius,
-        products_used,
+        ${PROVIDER_PROFILE_PUBLIC_FIELDS},
         hair_types_catered,
         services (
           id,
+          service_category,
           category_name,
           category_description,
           name,
@@ -1078,6 +1281,7 @@ export async function getProviderBySlug(
           min_age,
           contraindications,
           aftercare_notes,
+          skin_tones_suitable,
           service_type,
           service_images ( id, url, sort_order, aspect_ratio ),
           service_add_ons ( id, name, price, description, is_active )
@@ -1106,48 +1310,19 @@ export async function getProviderBySlug(
       if (error.code === "PGRST116") {
         if (providerProfileRequestTokens.get(normalizedSlug) === requestToken) {
           providerProfileCache.set(normalizedSlug, null);
+          providerProfilePreviewCache.set(normalizedSlug, null);
         }
         return null;
       }
       throw error;
     }
 
-    const row = data as unknown as ProviderProfileJoinRow;
-    const {
-      automation_schedule_release_day: scheduleReleaseDay,
-      automation_waitlist_enabled: waitlistEnabled,
-      services: joinedServices,
-      provider_specialties: providerSpecialties,
-      ...publicProvider
-    } = row;
-    const publicAutomationSettings =
-      scheduleReleaseDay !== null || waitlistEnabled !== null
-        ? {
-            ...(scheduleReleaseDay !== null ? { scheduleReleaseDay } : {}),
-            ...(waitlistEnabled !== null ? { waitlistEnabled } : {}),
-          }
-        : null;
-    const profile: ProviderWithServices = {
-      ...publicProvider,
-      // Do not retain unrelated operational automation settings in the
-      // process-wide public profile cache or expose them to client features.
-      automation_settings: publicAutomationSettings,
-      services: (joinedServices ?? [])
-        .filter((service) => service.is_active)
-        .sort((left, right) => left.sort_order - right.sort_order)
-        .map(({ service_images, service_add_ons, ...service }) => ({
-          ...service,
-          images: service_images ?? [],
-          // Cache only the public/active child shape. Owner RLS can return
-          // inactive add-ons; allowing those into this process-wide cache
-          // could expose them after an account switch even if the screen
-          // mapper currently filters them again.
-          add_ons: (service_add_ons ?? []).filter((addOn) => addOn.is_active),
-        })),
-      specialties: providerSpecialties ?? [],
-    };
+    const profile = mapProviderProfileJoinRow(
+      data as unknown as ProviderProfileJoinRow,
+    );
     if (providerProfileRequestTokens.get(normalizedSlug) === requestToken) {
       providerProfileCache.set(normalizedSlug, profile);
+      providerProfilePreviewCache.set(normalizedSlug, profile);
     }
     return profile;
   })();
@@ -1165,9 +1340,9 @@ export async function getProviderBySlug(
   }
 }
 
-/** Warm the bounded profile cache before a navigation transition completes. */
+/** Warm the fast first-paint cache before a navigation transition completes. */
 export function prefetchProviderBySlug(slug: string): void {
-  void getProviderBySlug(slug).catch((error: unknown) => {
+  void getProviderProfilePreviewBySlug(slug).catch((error: unknown) => {
     logger.warn("Provider profile prefetch failed:", error);
   });
 }
@@ -1404,6 +1579,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1437,7 +1613,7 @@ export async function getPortfolioItems(
     query = query.eq("category", category.toUpperCase());
   }
 
-  const { data, error } = await query.limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  const { data, error } = await query.limit(limit);
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
 }
@@ -1469,83 +1645,6 @@ export async function searchPortfolio(
 }
 
 /**
- * Fetch providers that have a cover photo, for the mixed Explore discovery
- * feed — mirrors getProviders' has_gone_live/is_active gating but requires
- * an image, since this powers a visual grid rather than a list.
- */
-export async function getDiscoverProviders(
-  category?: string,
-  limit = 40,
-): Promise<DbProvider[]> {
-  let query = supabase
-    .from("providers")
-    .select("*")
-    .eq("is_active", true)
-    .eq("has_gone_live", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
-    .not("background_image_url", "is", null)
-    .order("is_featured", { ascending: false })
-    .order("rating", { ascending: false })
-    .limit(limit);
-
-  if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
-}
-
-/**
- * Fetch unclaimed (is_claimed = false, source = 'scraped') provider rows for
- * the mixed Explore discovery feed, so a "ready to claim" business can be
- * discovered by browsing rather than only via the pre-signup claim search
- * (searchUnclaimedProviders). Deliberately bypasses has_gone_live/is_active —
- * unclaimed rows are always has_gone_live = false by construction (never
- * onboarded) — same is_claimed = false gate as searchUnclaimedProviders,
- * see that function's comment for why that's the correct safety boundary
- * here, not RLS. Narrow select: unclaimed rows have no services/availability/
- * rating/theme, so callers must render a reduced card/profile, never the
- * full live-provider UI.
- */
-export interface DiscoverUnclaimedProvider {
-  id: string;
-  slug: string;
-  display_name: string;
-  service_category: string;
-  location_text: string | null;
-  logo_url: string | null;
-  about_text: string | null;
-  instagram: string | null;
-  website: string | null;
-}
-
-export async function getDiscoverUnclaimedProviders(
-  category?: string,
-  limit = 20,
-): Promise<DiscoverUnclaimedProvider[]> {
-  let query = supabase
-    .from("providers")
-    .select(
-      "id, slug, display_name, service_category, location_text, logo_url, about_text, instagram, website",
-    )
-    .eq("is_claimed", false)
-    .order("scraped_at", { ascending: false })
-    .limit(limit);
-
-  if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
-}
-
-/**
  * Fetch services that have at least one photo, with provider info, for the
  * mixed Explore discovery feed. The !inner join on service_images excludes
  * services with no photo.
@@ -1565,7 +1664,7 @@ export async function getDiscoverServices(
     .from("services")
     .select(
       `
-      id, provider_id, name, description, price,
+      id, provider_id, name, description, price, service_category,
       service_images!inner ( url, sort_order, aspect_ratio, fit ),
       provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
     `,
@@ -1578,8 +1677,15 @@ export async function getDiscoverServices(
     .not("provider_id", "in", await ownProviderIdExclusion())
     .limit(limit);
 
+  // Filtered on the SERVICE's own category, not the provider's whole
+  // service_categories array — a provider who offers both Hair and Makeup
+  // overlaps both, so array-overlap put their Makeup services in the Hair
+  // section (and vice versa) just because the provider also does Hair.
+  // Each service row already carries its own real category (stamped at
+  // save time in providerRegistrationService.ts), so a client browsing
+  // "Hair" should see only services actually filed under Hair.
   if (category && category !== "All") {
-    query = query.eq("provider.service_category", category.toUpperCase());
+    query = query.eq("service_category", category.toUpperCase());
   }
   if (audience) {
     query = query.eq("audience", audience);
@@ -1619,18 +1725,18 @@ export async function getProviderIdsByServiceAudience(
 
 /**
  * Resolve the user's saved/"hearted" IDs (from `useBookmarkStore.savedPortfolioIds`,
- * a mix of raw portfolio_item ids and `provider-<id>`/`service-<id>` prefixed ids
- * from the mixed discovery feed) into full rows, batched by kind — no N+1.
+ * a mix of raw portfolio_item ids and `service-<id>` prefixed ids from the
+ * mixed discovery feed) into full rows, batched by kind — no N+1.
  * Powers the Explore screen's Favourites tab.
+ *
+ * Legacy `provider-<id>` ids (Explore used to show provider cover-photo cards,
+ * built from the Branding backdrop) are skipped rather than hydrated, so an
+ * old heart can't put a provider's profile backdrop back into Favourites.
  */
 export async function getSavedPortfolioDetails(ids: string[]): Promise<{
   portfolioItems: PortfolioItemWithProvider[];
-  providers: DbProvider[];
   services: DiscoverServiceWithProvider[];
 }> {
-  const providerIds = ids
-    .filter((id) => id.startsWith("provider-"))
-    .map((id) => id.slice("provider-".length));
   // service ids carry a per-image suffix (`service-<id>__<imageIndex>`, one
   // id per carousel photo — see mapDbServiceToCards) so multiple saved ids
   // can point at the same underlying service; strip the suffix and dedupe
@@ -1647,7 +1753,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
     (id) => !id.startsWith("provider-") && !id.startsWith("service-"),
   );
 
-  const [portfolioResult, providerResult, serviceResult] = await Promise.all([
+  const [portfolioResult, serviceResult] = await Promise.all([
     portfolioIds.length > 0
       ? supabase
           .from("portfolio_items")
@@ -1665,14 +1771,6 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
           // venue shot must not put one back into a browse surface it can no
           // longer be discovered in.
           .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
-      : Promise.resolve({ data: [], error: null }),
-    providerIds.length > 0
-      ? supabase
-          .from("providers")
-          .select("*")
-          .in("id", providerIds)
-          .eq("is_active", true)
-          .eq("has_gone_live", true)
       : Promise.resolve({ data: [], error: null }),
     serviceIds.length > 0
       ? supabase
@@ -1692,12 +1790,10 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
   ]);
 
   if (portfolioResult.error) throw portfolioResult.error;
-  if (providerResult.error) throw providerResult.error;
   if (serviceResult.error) throw serviceResult.error;
 
   return {
     portfolioItems: (portfolioResult.data ?? []) as PortfolioItemWithProvider[],
-    providers: (providerResult.data ?? []) as DbProvider[],
     services: (serviceResult.data ??
       []) as unknown as DiscoverServiceWithProvider[],
   };
@@ -1781,9 +1877,6 @@ export async function getMyPromotions(): Promise<DbPromotion[]> {
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -1832,9 +1925,6 @@ export async function upsertPromotion(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) throw new Error("No provider profile found");
@@ -1898,9 +1988,6 @@ export async function getMyProviderServices(): Promise<
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -1908,7 +1995,7 @@ export async function getMyProviderServices(): Promise<
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
     )
     .eq("provider_id", provider.id)
     .eq("is_active", true)
@@ -1964,9 +2051,6 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
       .from("providers")
       .select("id")
       .eq("user_id", user.id)
-      .order("is_active", { ascending: false })
-      .order("created_at", { ascending: true })
-      .limit(1)
       .maybeSingle();
     if (providerError) throw providerError;
     if (!provider) return { providerId: null, services: [] };
@@ -1976,7 +2060,7 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type",
     )
     .eq("provider_id", providerId)
     .order("category_name", { ascending: true })
@@ -2031,7 +2115,7 @@ export async function createMyService(
       sort_order: ((last?.sort_order as number | undefined) ?? -1) + 1,
       is_active: true,
     })
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -2051,7 +2135,7 @@ export async function updateMyService(
       ...(draft.isActive === undefined ? {} : { is_active: draft.isActive }),
     })
     .eq("id", serviceId)
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -2093,9 +2177,6 @@ export async function getMyPromotionManagerCore(): Promise<{
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (providerError) throw providerError;
   if (!provider) return { promotions: [], services: [] };
@@ -2112,7 +2193,7 @@ export async function getMyPromotionManagerCore(): Promise<{
     supabase
       .from("services")
       .select(
-        "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+        "id, provider_id, service_category, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
       )
       .eq("provider_id", provider.id)
       .eq("is_active", true)
@@ -2157,18 +2238,6 @@ export type CheckoutIntentItem = {
   // supabase/migrations/20260821143821_emergency_booking_requests.sql.
   emergency?: boolean;
   emergency_ack?: boolean;
-  // Where a MOBILE provider should travel to. prepare_checkout() reads the
-  // provider's business_type server-side and rejects a mobile item with no
-  // client_address, then writes it onto the held row so the
-  // on_booking_client_address_written trigger relocates it into the gated
-  // booking_client_addresses table (the Stripe path's equivalent of what
-  // claim_cart_booking_slots() does for the live route). Omit for a
-  // fixed-location provider — it is ignored there. client_area is the coarse
-  // location a mobile provider judges travel by; when absent the DB derives it
-  // from the address. See
-  // supabase/migrations/20260929061000_prepare_checkout_captures_mobile_client_address.sql.
-  client_address?: string | null;
-  client_area?: string | null;
 };
 
 export type PreparedCheckout = {
@@ -2286,9 +2355,6 @@ export async function getProviderClientele(): Promise<
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -2354,9 +2420,6 @@ export async function getClientBookingHistory(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) return [];
@@ -2402,9 +2465,6 @@ export async function getClientReliabilityStats(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) return { noShowCount: 0, lateCancelCount: 0 };
@@ -2443,9 +2503,6 @@ export async function getClientReliabilityStatsBatch(
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) return {};
@@ -2529,9 +2586,6 @@ export async function sendPromotionNotificationsToClients(
     .from("providers")
     .select("id, display_name")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) throw new Error("No provider profile");
@@ -2640,9 +2694,6 @@ export async function sendAnnouncement(
     .from("providers")
     .select("id, display_name")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
 
   if (!provider) throw new Error("No provider profile");
@@ -2717,6 +2768,19 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (id: string) => UUID_RE.test(id);
 
+/** Fresh ownership check for viewer actions; never trust a delayed UI lookup
+ * or the session ownership cache when writing a bookmark/follow. */
+async function assertNotOwnProvider(providerId: string, userId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id")
+    .eq("id", providerId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) throw new Error("You can't bookmark or follow your own profile.");
+}
+
 /** Add a bookmark */
 export async function addBookmark(providerId: string): Promise<void> {
   if (!isUuid(providerId)) return; // static/demo provider — local store only
@@ -2725,6 +2789,7 @@ export async function addBookmark(providerId: string): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+  await assertNotOwnProvider(providerId, user.id);
 
   const { error } = await supabase
     .from("bookmarks")
@@ -3497,13 +3562,30 @@ export interface ProviderConversationWithClient {
   unread_count_provider: number;
   created_at: string;
   updated_at: string;
+  has_booking: boolean;
   client: { id: string; name: string; avatar_url: string | null } | null;
-  /**
-   * True when this person holds (or has held) a booking with the provider.
-   * False means the thread came from Get In Touch on the public profile — a
-   * general enquiry from someone who hasn't booked.
-   */
-  has_booked: boolean;
+}
+
+/** Classify by the same non-cancelled booking history used in client chat.
+ * Page lightweight rows so old clients are not lost to the diary date window
+ * or the API row limit. Provider scope and RLS apply to every page.
+ */
+async function getBookedConversationUserIds(providerId: string, userIds: string[]): Promise<Set<string>> {
+  const booked = new Set<string>();
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("id, user_id")
+      .eq("provider_id", providerId)
+      .in("user_id", userIds)
+      .neq("status", "cancelled")
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    for (const booking of data ?? []) booked.add(booking.user_id);
+    if ((data?.length ?? 0) < pageSize || booked.size === userIds.length) return booked;
+  }
 }
 
 /** Fetch all conversations for the current provider, most recently updated first */
@@ -3525,32 +3607,19 @@ export async function getProviderConversations(): Promise<
   if (error) throw error;
   const conversations = (data ?? []) as Omit<
     ProviderConversationWithClient,
-    "client" | "has_booked"
+    "client" | "has_booking"
   >[];
   if (conversations.length === 0) return [];
 
   // Client name/avatar via the same batched RPC as getProviderReviews — see
   // fix_users_table_pii_leak.sql for why this isn't an embedded users join.
   const userIds = [...new Set(conversations.map((c) => c.user_id))];
-  // A held slot (on_hold) isn't a booking yet, same as getProviderBookings.
-  const [
-    { data: profiles, error: profilesError },
-    { data: bookedRows, error: bookedError },
-  ] = await Promise.all([
+  const [profileResult, bookedUserIds] = await Promise.all([
     supabase.rpc("get_user_public_profiles", { p_user_ids: userIds }),
-    supabase
-      .from("bookings")
-      .select("user_id")
-      .eq("provider_id", provider.id)
-      .in("user_id", userIds)
-      .neq("status", "on_hold")
-      .limit(DEFAULT_PROVIDER_QUERY_LIMIT * 10),
+    getBookedConversationUserIds(provider.id, userIds),
   ]);
+  const { data: profiles, error: profilesError } = profileResult;
   if (profilesError) throw profilesError;
-  if (bookedError) throw bookedError;
-  const bookedUserIds = new Set(
-    (bookedRows ?? []).map((b: { user_id: string }) => b.user_id),
-  );
   const profileById = new Map<
     string,
     { id: string; name: string; avatar_url: string | null }
@@ -3565,7 +3634,7 @@ export async function getProviderConversations(): Promise<
     (c): ProviderConversationWithClient => ({
       ...c,
       client: profileById.get(c.user_id) ?? null,
-      has_booked: bookedUserIds.has(c.user_id),
+      has_booking: bookedUserIds.has(c.user_id),
     }),
   );
 }
@@ -6495,8 +6564,9 @@ export async function getClientBookingsForAddressShare(
     // client's side.
     .in("status", ["pending", "confirmed", "in_progress"])
     .order("booking_date", { ascending: true })
-    .order("booking_time", { ascending: true });
-  if (error) return [];
+    .order("booking_time", { ascending: true })
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
   // booking_id is that table's PRIMARY KEY so PostgREST returns one object,
   // but a to-one embed is indistinguishable from to-many by the foreign key
   // alone -- handle both rather than guess, exactly as bookingService does.
@@ -6710,6 +6780,7 @@ export async function setProviderFollowNotify(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+  await assertNotOwnProvider(providerId, user.id);
   const { error } = await supabase
     .from("provider_follows")
     .upsert(
@@ -6741,9 +6812,6 @@ export async function getMyFollowerCount(): Promise<number> {
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (!providerRow) return 0;
   return getProviderFollowerCount(providerRow.id);
@@ -6857,9 +6925,6 @@ export async function getMyBookmarkCount(): Promise<number> {
     .from("providers")
     .select("id")
     .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (!providerRow) return 0;
   const { count, error } = await supabase
@@ -7332,6 +7397,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   service_interests: string[] | null;
   service_locations: string[] | null;
   location_text: string | null;
+  years_experience: number | null;
   team_size: string | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
@@ -7344,7 +7410,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     .from("users")
     .select(
       "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
-        "service_interests, service_locations, location_text, team_size, accessibility_notes, languages_spoken, specialties, " +
+        "service_interests, service_locations, location_text, years_experience, team_size, accessibility_notes, languages_spoken, specialties, " +
         "price_range, preferred_contact_methods, preferred_payment_methods",
     )
     .eq("id", userId)
@@ -7366,6 +7432,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     service_interests: string[] | null;
     service_locations: string[] | null;
     location_text: string | null;
+    years_experience: number | null;
     team_size: string | null;
     accessibility_notes: string | null;
     languages_spoken: string[] | null;
@@ -7408,6 +7475,7 @@ export async function upgradeUserToProvider(
     dobYear?: string;
     serviceInterests?: string[];
     serviceLocations?: string[];
+    yearsExperience?: string;
     priceRange?: string;
     teamSize?: string;
     preferredContactMethods?: string[];
@@ -7441,6 +7509,11 @@ export async function upgradeUserToProvider(
         : {}),
       ...(extras?.serviceLocations?.length
         ? { service_locations: extras.serviceLocations }
+        : {}),
+      // Parsed to an INT — the users staging column is INT (mirrors
+      // providers.years_experience). A blank/NaN answer is left unstaged.
+      ...(extras?.yearsExperience && !Number.isNaN(parseInt(extras.yearsExperience, 10))
+        ? { years_experience: parseInt(extras.yearsExperience, 10) }
         : {}),
       ...(extras?.teamSize ? { team_size: extras.teamSize } : {}),
       ...(extras?.accessibilityNotes
@@ -7731,23 +7804,9 @@ export async function upsertUserAfterVerification(data: {
 // PROVIDERS — additional reads
 // ─────────────────────────────────────────────────────────
 
-/** Fetch the provider's DB id for a given auth user id, or null if this user
- * owns no provider profile.
- *
- * No has_gone_live filter — provider reading their own record.
- *
- * Ordered and limited to exactly one row, matching getProviderProfileForUserId:
- * a user should own one provider profile, but duplicates have crept in during
- * the account churn, and a bare .maybeSingle() errors outright on more than one
- * row rather than picking. Both functions must resolve to the same row (active
- * first, then the oldest/original) or ownership checks disagree with the
- * profile actually loaded.
- *
- * The error is thrown rather than swallowed into a null. Silently reporting
- * "owns no provider profile" when the query in fact failed is indistinguishable
- * to every caller from the truth, and this answer now gates whether an account
- * is offered a Book button on its own profile.
- */
+/** Fetch the provider DB id owned by an auth user. No go-live filter: this is
+ * identity resolution. Order deterministically because legacy duplicate rows
+ * exist; never turn a query failure into the unsafe answer "owns none". */
 export async function getProviderIdForUserId(
   userId: string,
 ): Promise<string | null> {
@@ -7778,9 +7837,6 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
     .from("providers")
     .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .single();
   if (error) return null;
   return data as {
@@ -7857,9 +7913,6 @@ export async function getProviderDisplayNameByUserId(
     .from("providers")
     .select("display_name")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   return (data as any)?.display_name ?? null;
 }
@@ -7886,9 +7939,6 @@ export async function getProviderServiceCategoryByUserId(
     .from("providers")
     .select("service_category")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   return (data as any)?.service_category ?? null;
 }
@@ -8311,7 +8361,13 @@ export async function getServiceSafetyFlags(
   for (const row of data ?? []) {
     map.set(row.id, {
       patchTestRequired: !!row.patch_test_required,
-      isPregnancySafe: row.is_pregnancy_safe === true,
+      // Only an EXPLICIT false is "unsafe in pregnancy" — a null (never-set)
+      // service is treated as safe, matching prepare_checkout's own gate
+      // (`is_pregnancy_safe = false`), the profile mapper, and the
+      // registration service (both `?? true`). Reading `=== true` here made
+      // the cart the one surface that flagged null services nothing else
+      // considers unsafe and the server never requires an ack for.
+      isPregnancySafe: row.is_pregnancy_safe !== false,
     });
   }
   return map;
@@ -8987,9 +9043,13 @@ export async function createCheckoutPaymentIntent(
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
   });
-  if (error) throw error;
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Payment could not be started. Please try again.');
   if (typeof data?.clientSecret !== 'string' || typeof data?.paymentIntentId !== 'string') {
     throw new Error('Payment could not be started. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
   }
   return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId };
 }
@@ -8999,81 +9059,21 @@ export async function finalizeCheckoutPaymentIntent(
   paymentIntentId: string,
   action: 'capture' | 'cancel',
 ): Promise<void> {
-  const { error } = await supabase.functions.invoke('finalize-payment-intent', {
+  const { data, error } = await supabase.functions.invoke('finalize-payment-intent', {
     body: { checkoutBatchId, paymentIntentId, action },
   });
   if (error) throw error;
+  if (action === 'capture' && data?.status !== 'succeeded') {
+    throw new Error(data?.status === 'refunded'
+      ? 'Your reservation expired. Your payment is being refunded.'
+      : 'Payment has not been confirmed. Check your bookings before trying again.');
+  }
 }
 
 export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke("becca-ai", { body });
   if (error) throw error;
   return data;
-}
-
-// ─── Stripe Connect payouts ─────────────────────────────────────────────────
-// The provider side of getting paid THROUGH Cerviced (as opposed to in-person
-// payments, which the app never touches). Gated in the UI behind
-// STRIPE_CONNECT_PAYOUTS_ENABLED — these read the providers.stripe_* columns
-// (DRAFT_stripe_connect_account_columns.sql) and call the create-connect-account
-// edge function, neither of which is live until that migration is applied and
-// the function deployed, so nothing calls these while the flag is off.
-
-/** A provider's Stripe Connect onboarding/eligibility state, as mirrored from
- *  Stripe onto their provider row by the stripe-webhook function. */
-export interface StripeConnectStatus {
-  /** The connected-account id (acct_...), or null before onboarding starts. */
-  accountId: string | null;
-  /** Stripe says this account may take money / be paid out (KYC complete). */
-  chargesEnabled: boolean;
-  payoutsEnabled: boolean;
-  /** They finished the hosted onboarding form (may still be under review). */
-  detailsSubmitted: boolean;
-}
-
-/** Read the signed-in provider's own payout status. Own-record read, so it is
- *  allowed to see these server-managed columns (RLS scopes it to the caller). */
-export async function getMyProviderPayoutStatus(): Promise<StripeConnectStatus | null> {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from('providers')
-    .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
-    .eq('user_id', user.id)
-    .single();
-  if (error) throw error;
-
-  const row = data as {
-    stripe_account_id: string | null;
-    stripe_charges_enabled: boolean | null;
-    stripe_payouts_enabled: boolean | null;
-    stripe_details_submitted: boolean | null;
-  };
-  return {
-    accountId: row.stripe_account_id ?? null,
-    chargesEnabled: row.stripe_charges_enabled === true,
-    payoutsEnabled: row.stripe_payouts_enabled === true,
-    detailsSubmitted: row.stripe_details_submitted === true,
-  };
-}
-
-/** Start (or resume) Express onboarding: the edge function creates/reuses the
- *  provider's connected account and returns a short-lived hosted Account Link
- *  URL for the app to open. The account id is written server-side only. */
-export async function startProviderPayoutOnboarding(
-  refreshUrl: string,
-  returnUrl: string,
-): Promise<{ url: string; accountId: string }> {
-  const { data, error } = await supabase.functions.invoke('create-connect-account', {
-    body: { refreshUrl, returnUrl },
-  });
-  if (error) throw error;
-  if (typeof data?.url !== 'string' || typeof data?.accountId !== 'string') {
-    throw new Error('Could not start payout setup. Please try again.');
-  }
-  return { url: data.url, accountId: data.accountId };
 }
 
 export async function extractProviderProfileFromUrl(
@@ -9134,9 +9134,6 @@ export async function getProviderLogoUrlByUserId(userId: string): Promise<string
     .from("providers")
     .select("logo_url")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data?.logo_url ?? null;
@@ -9150,9 +9147,6 @@ export async function getProviderRegistrationCore(userId: string): Promise<{
     .from("providers")
     .select("id, automation_settings")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data as { id: string; automation_settings: DbProvider["automation_settings"] } | null;
@@ -9207,30 +9201,11 @@ export async function replaceProviderServiceCatalog(
   if (error) throw error;
 }
 
-/**
- * The provider row a user owns, for the registration/business-profile screens.
- *
- * The ordering is load-bearing, not decoration. This used to be a bare
- * .maybeSingle() on user_id, which does not pick a row when there is more than
- * one — it errors. Duplicate provider rows exist in this database (see
- * getProviderProfileForUserId), and loadProviderFromSupabase catches that error
- * by falling back to the device-local AsyncStorage cache. Two devices therefore
- * fell back to two independently-written local snapshots and showed two
- * different logos for the same business, indefinitely and across reloads,
- * because nothing ever re-read the server successfully.
- *
- * Every "which provider row is mine" lookup in this file now orders the same
- * way — active first, then the oldest (the original) — so they cannot disagree
- * about which row is the provider's real profile.
- */
 export async function getProviderRegistrationRecord(userId: string): Promise<DbProvider | null> {
   const { data, error } = await supabase
     .from("providers")
     .select("*")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -9250,6 +9225,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
       .from("services")
       .select(`
         id,
+        service_category,
         category_name,
         category_description,
         name,
@@ -9270,7 +9246,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
         contraindications,
         aftercare_notes,
         service_type,
-        hair_types_suitable,
+        hair_types_suitable, skin_tones_suitable,
         audience,
         service_images ( url, sort_order, fit ),
         service_add_ons ( name, price )
@@ -9295,9 +9271,6 @@ export async function saveProviderBookingPolicies(
     .from("providers")
     .select("id")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (selectError) throw selectError;
   if (!data) return false;
@@ -9316,10 +9289,108 @@ export async function getProviderBookingPolicies(
     .from("providers")
     .select("booking_policies")
     .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return (data?.booking_policies as Record<string, unknown> | null) ?? null;
+}
+
+
+export interface ConnectStatus {
+  connected: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  requirementsDue?: number;
+}
+export interface ProviderFinance {
+  connected: boolean;
+  livemode: boolean;
+  available: { amount: number; currency: string }[];
+  pending: { amount: number; currency: string }[];
+  payouts: { id: string; amount: number; currency: string; status: string; arrivalDate: number; created: number; automatic: boolean }[];
+  hasMore: boolean;
+}
+export async function getProviderFinance(cursor?: string): Promise<ProviderFinance> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'finance', ...(cursor ? { cursor } : {}) } });
+  if (error || !data || !Array.isArray(data.available) || !Array.isArray(data.pending) || !Array.isArray(data.payouts)) {
+    throw new Error('Could not load your balances and bank payouts.');
+  }
+  return data;
+}
+export interface ProviderPayout {
+  id: string;
+  booking_id: string;
+  payout_amount: number;
+  gross_amount: number;
+  booking?: { service_name_snapshot: string | null; customer_name: string | null; booking_date: string } | undefined;
+  platform_fee: number;
+  currency: string;
+  status: 'held' | 'transferred' | 'failed' | 'cancelled' | 'reversed';
+  release_after: string;
+  created_at: string;
+}
+
+async function connectAction(action: 'status' | 'onboard' | 'dashboard') {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not connect to Stripe. Please try again.');
+  return data;
+}
+export async function getConnectStatus(): Promise<ConnectStatus> {
+  const data = await connectAction('status');
+  if (typeof data?.connected !== 'boolean' || typeof data?.payoutsEnabled !== 'boolean') {
+    throw new Error('Could not load your Stripe account status.');
+  }
+  return data;
+}
+export async function getConnectLink(action: 'onboard' | 'dashboard'): Promise<string> {
+  const data = await connectAction(action);
+  const url = new URL(data?.url);
+  if (url.protocol !== 'https:' || !(url.hostname === 'stripe.com' || url.hostname.endsWith('.stripe.com'))) {
+    throw new Error('Stripe returned an invalid account link.');
+  }
+  return url.toString();
+}
+export async function getProviderPayouts(): Promise<ProviderPayout[]> {
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error('Please sign in again.');
+  const { data: provider, error: providerError } = await supabase.from('providers')
+    .select('id').eq('user_id', user.id).single();
+  if (providerError) throw providerError;
+  const { data, error } = await supabase.from('provider_payouts')
+    .select('id, booking_id, payout_amount, gross_amount, platform_fee, currency, status, release_after, created_at')
+    .eq('provider_id', provider.id).order('created_at', { ascending: false }).limit(50);
+  if (error) throw error;
+  if (!data?.length) return [];
+  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
+    .select('id, service_name_snapshot, customer_name, booking_date')
+    .eq('provider_id', provider.id).in('id', data.map(row => row.booking_id));
+  if (bookingsError) throw bookingsError;
+  return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
+}
+
+export async function refundProviderBooking(bookingId: string, reason?: string): Promise<boolean> {
+  // `reason` is recorded on the Stripe refund's metadata (see the refund-payment
+  // edge function) so a refund can be traced back to why it was issued —
+  // cancellation, dispute, service issue — especially on completed bookings.
+  const { data, error } = await supabase.functions.invoke('refund-payment', { body: { bookingId, reason } });
+  if (error || data?.error || !['refunded', 'already_refunded', 'pending', 'requires_action'].includes(data?.status)) {
+    throw new Error('The refund could not be confirmed. Refresh before trying again.');
+  }
+  return data?.status === 'refunded' || data?.status === 'already_refunded';
+}
+
+/** The money half of a CLIENT cancellation: applies the provider's cancellation
+ *  policy (keep the deposit / their share, or a full refund) through Stripe,
+ *  computed entirely server-side. Call it right AFTER cancel_own_booking() has
+ *  cancelled the booking. Idempotent and a safe no-op when nothing was captured
+ *  (e.g. Stripe not live) — it then just reports 'no_payment'. Throws on a hard
+ *  failure so the caller can surface/log it; the cancel itself has already
+ *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
+export async function applyCancellationRefund(
+  bookingId: string,
+): Promise<'settled' | 'already_settled' | 'no_payment'> {
+  const { data, error } = await supabase.functions.invoke('apply-cancellation-refund', { body: { bookingId } });
+  if (error || data?.error || !['settled', 'already_settled', 'no_payment'].includes(data?.status)) {
+    throw new Error('The cancellation refund could not be confirmed.');
+  }
+  return data.status;
 }

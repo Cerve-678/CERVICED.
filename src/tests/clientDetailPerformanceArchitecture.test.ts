@@ -33,6 +33,19 @@ describe('client detail screen performance and safety contracts', () => {
     expect(source).not.toContain("navigation.addListener('focus'");
   });
 
+  it('reserves the client booking-detail To Do area while tasks load', () => {
+    const source = read('screens', 'client', 'BookingDetailScreen.tsx');
+
+    // The To Do area is hidden for past bookings (nothing left to act on),
+    // so the skeleton is gated on !isPast as well as !todoLoaded.
+    expect(source).toContain('{!isPast && !todoLoaded && (');
+    expect(source).toContain('accessibilityLabel="Loading appointment tasks"');
+    expect(source).toContain('st.todoLoadingCard');
+    expect(source.indexOf('{!isPast && !todoLoaded && (')).toBeLessThan(
+      source.indexOf('{!isPast && todoLoaded && todoLoadError && ('),
+    );
+  });
+
   it('uses the users row as the single beauty-profile source of truth', () => {
     const source = read('screens', 'client', 'BeautyProfileScreen.tsx');
 

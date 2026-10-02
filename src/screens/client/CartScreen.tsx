@@ -1,3 +1,4 @@
+import { PaymentRequestError } from '../../utils/paymentRequestError';
 // src/screens/CartScreen.tsx - COMPLETELY FIXED
 import React, { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
@@ -14,11 +15,13 @@ import {
   RefreshControl,
   Keyboard,
   TouchableWithoutFeedback,
+  Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
 import type { EmergencyRequest } from '../../contexts/CartContext';
@@ -48,28 +51,24 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
-import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
+import { toArgbHex } from '../../utils/color';
+import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
+import { newestAddedItem } from '../../utils/newestAddedItem';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
-import { BOTTOM_SAFE_GAP, useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
-// Keep real payments opt-in until Stripe is explicitly switched on for a
-// release. Expo Go can never use this native module.
-const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled && !env.isExpoGo;
+// Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
+// includes the SDK-compatible Stripe module, so it can show the card
+// PaymentSheet; wallet payments still require a development build.
+const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
 
-// Real useStripe() throws at import time under Expo Go (TurboModuleRegistry.
-// getEnforcing has no native module to find there). StripePaymentModal below
-// is only ever rendered when USE_STRIPE_PAYMENTS is true, which is forced
-// off under Expo Go, so this stub's return value never actually gets called
-// — it only needs to exist so the module loads and the hook-call shape below
-// stays valid.
+// Expo SDK 57 ships a compatible Stripe module in Expo Go, so use the real
+// hook in both Expo Go and custom native builds.
 const useStripe: () => { initPaymentSheet: (...args: any[]) => Promise<any>; presentPaymentSheet: (...args: any[]) => Promise<any> } =
-  env.isExpoGo
-    ? () => ({ initPaymentSheet: async () => ({}), presentPaymentSheet: async () => ({}) })
-    // The native module cannot be statically imported in Expo Go.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    : require('@stripe/stripe-react-native').useStripe;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
@@ -107,6 +106,7 @@ function toCartIssue(serviceMessage: string): string {
     case "This time is outside the provider's working hours.":         return CART_ISSUE.outsideHours;
     case 'This time is outside the provider\u2019s working hours.':        return CART_ISSUE.outsideHours;
     case 'Provider is not available on this date.':                    return CART_ISSUE.dayUnavailable;
+    case 'That time has already passed — please pick a new slot.':      return CART_ISSUE.timePassed;
     case "This provider isn't set up for booking yet.":                return CART_ISSUE.providerUnbookable;
     case 'This service is no longer available from this provider. Please remove it to continue.':
                                                                        return CART_ISSUE.serviceUnavailable;
@@ -120,6 +120,13 @@ function toCartIssue(serviceMessage: string): string {
 // remounts this screen), short enough that reopening the cart later still
 // gets the fully-collapsed scannable list.
 const JUST_ADDED_WINDOW_MS = 60_000;
+
+// Breathing room above a newly added card when the cart scrolls to it, so it
+// lands with a little of the card above visible rather than flush to the edge.
+const SCROLL_TO_NEW_ITEM_MARGIN = 16;
+
+/** The cart item that was just added, and the provider section it sits in. */
+type CartScrollTarget = { providerName: string; itemId: string };
 
 /** "Ana", "Ana and Bea", "Ana, Bea and Cleo" — for naming the mobile
  *  providers in a sentence rather than saying "your provider" and leaving a
@@ -287,6 +294,7 @@ interface PaymentModalProps {
   // on the booking stays null, same as before either modal existed.
   onPaymentSuccess: (paymentMethod: string, paymentIntentId?: string) => Promise<void>;
   onPaymentComplete: () => void;
+  onPaymentPending?: () => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -593,21 +601,10 @@ const handlePayment = useCallback(async () => {
 
 PaymentModal.displayName = 'PaymentModal';
 
-// Real Stripe payment flow — card, Apple Pay, and Google Pay via Stripe's
-// own Payment Sheet (PayPal shows up automatically too, once PayPal is
-// turned on for the Stripe account under Settings > Payment methods —
-// nothing here needs to change for that, it rides on
-// automatic_payment_methods). Not wired into the active checkout yet; see
-// USE_STRIPE_PAYMENTS below CartScreen's imports. Swap PaymentModal for this
-// at the render site when ready to go live with real payment.
-//
-// capture_method: 'manual' on the PaymentIntent (create-payment-intent Edge
-// Function) means presentPaymentSheet() only authorises the card — the
-// booking is created first, and only a successful booking triggers the
-// actual capture (finalize-payment-intent). A failed booking cancels the
-// authorisation instead, so a client is never left charged with nothing
-// booked. See the CartScreen conversation history / commit messages for the
-// full reasoning — this preserves that behaviour exactly.
+// Stripe card checkout, including supported Apple Pay / Google Pay wallets.
+// The sheet authorises a server-priced reservation. The authenticated endpoint
+// and signed webhook share capture/finalisation logic, including recovery when
+// the app closes and refunds if the reservation can no longer be fulfilled.
 const StripePaymentModal: React.FC<PaymentModalProps> = memo(
   ({
     isVisible,
@@ -617,9 +614,10 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     checkoutBatchId,
     onPaymentSuccess,
     onPaymentComplete,
+    onPaymentPending,
     onBookingFailed,
   }) => {
-    const { theme, isDarkMode, palette: P } = useTheme();
+    const { theme, palette: P } = useTheme();
     // See the mock PaymentModal above — same reason, same fix.
     const bottomInset = useSystemBottomInset();
     const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -636,38 +634,52 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       processingRef.current = true;
       setIsProcessing(true);
 
+      let paymentStarted = false;
+      let createdIntentId: string | undefined;
       try {
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
         }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
         const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
+        createdIntentId = paymentIntentId;
 
-        // Theme the sheet to match the app's own palette (bound to the
-        // app's own isDarkMode, not the OS setting Stripe would otherwise
-        // auto-detect) instead of Stripe's generic default.
+        // Theme the sheet to match the app's own palette instead of Stripe's
+        // generic default. These are flat colours rather than Stripe's
+        // light/dark pair on purpose: the palette already resolves to the
+        // app's own dark mode, which is not necessarily the OS setting Stripe
+        // would otherwise auto-detect.
+        // Every value goes through toArgbHex: the palette's translucent tokens
+        // (sub, border) are CSS rgba() strings, which Stripe rejects outright
+        // rather than falling back on.
         const stripeColors = {
-          primary: P.accent,
-          background: P.bg,
-          componentBackground: P.surface,
-          componentBorder: isDarkMode ? '#2E7E6667' : '#247E6667', // P.border, as #AARRGGBB
-          componentDivider: isDarkMode ? '#2E7E6667' : '#247E6667',
-          primaryText: theme.text,
-          secondaryText: P.sub,
-          componentText: theme.text,
-          placeholderText: P.sub,
-          icon: P.sub,
-          error: '#FF3B30',
+          primary: toArgbHex(P.accent),
+          background: toArgbHex(P.bg),
+          componentBackground: toArgbHex(P.surface),
+          componentBorder: toArgbHex(P.border),
+          componentDivider: toArgbHex(P.border),
+          primaryText: toArgbHex(theme.text),
+          secondaryText: toArgbHex(P.sub),
+          componentText: toArgbHex(theme.text),
+          placeholderText: toArgbHex(P.sub),
+          icon: toArgbHex(P.sub),
+          error: '#FFFF3B30',
         };
 
         const { error: initError } = await initPaymentSheet({
           merchantDisplayName: 'Cerviced',
+          returnURL: 'cerviced://stripe-redirect',
+          allowsDelayedPaymentMethods: false,
           paymentIntentClientSecret: clientSecret,
           appearance: {
             colors: stripeColors,
             shapes: { borderRadius: 20, borderWidth: 1 },
             primaryButton: {
-              colors: { background: P.accent, text: P.onAccent, border: P.accent },
+              colors: {
+                background: toArgbHex(P.accent),
+                text: toArgbHex(P.onAccent),
+                border: toArgbHex(P.accent),
+              },
               shapes: { borderRadius: 20 },
             },
           },
@@ -676,11 +688,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           // placeholder in app.json's plugin config ("merchant.com.cerviced")
           // unblocks the build but Apple Pay won't actually appear/function
           // until that registration is real.
-          applePay: { merchantCountryCode: 'GB' },
+          ...(!env.isExpoGo ? { applePay: { merchantCountryCode: 'GB' } } : {}),
           // Works in Stripe test mode. app.json enables Google Pay for
           // Android; production still requires a fully configured Stripe
           // account and release signing.
-          googlePay: { merchantCountryCode: 'GB', testEnv: __DEV__ },
+          ...(!env.isExpoGo ? { googlePay: { merchantCountryCode: 'GB', testEnv: process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_test_') === true } } : {}),
         });
         if (initError) {
           throw new Error(initError.message || 'Could not start payment.');
@@ -694,6 +706,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             // path entirely — call onClose explicitly so CartScreen's
             // release-the-hold-batch logic (wired into onClose) still runs
             // instead of leaving the slot reserved until the TTL sweep.
+            await cancelPaymentIntent(checkoutBatchId, paymentIntentId);
             onClose();
             return;
           }
@@ -701,42 +714,31 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         }
 
         if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
-        try {
-          // This Edge call converts the database hold to bookings and captures
-          // the exact server-calculated amount. It is intentionally one
-          // operation: this screen never writes bookings or chooses a charge.
-          await capturePaymentIntent(checkoutBatchId, paymentIntentId);
-          await onPaymentSuccess('card', paymentIntentId);
-        } catch (bookingError) {
-          logger.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED:`, bookingError);
-          // If finalisation failed before capture, release the Stripe hold and
-          // the database reservation. A successfully captured payment is not
-          // cancelled by this best-effort cleanup.
-          try { await cancelPaymentIntent(checkoutBatchId, paymentIntentId); } catch (cancelError) {
-            logger.error(`💰 [${timestamp()}] Failed to release payment hold:`, paymentIntentId, cancelError);
-          }
-          throw bookingError;
-        }
+        paymentStarted = true;
+        await capturePaymentIntent(checkoutBatchId, paymentIntentId);
+        await onPaymentSuccess('card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
         onPaymentComplete();
       } catch (error) {
         logger.error(`❌ [${timestamp()}] PAYMENT ERROR:`, error);
+        if (paymentStarted) {
+          // Do not cancel a reservation after an ambiguous capture response.
+          // The signed webhook finishes it, including after the app closes.
+          onPaymentPending?.();
+          return;
+        }
+        if (createdIntentId && checkoutBatchId) {
+          try { await cancelPaymentIntent(checkoutBatchId, createdIntentId); }
+          catch { onPaymentPending?.(); return; }
+        }
         onClose();
-        const partiallySucceeded = error instanceof BookingError && error.succeededAmountPaid > 0;
-        onBookingFailed(
-          (error instanceof BookingError
-            ? error.message
-            : "We couldn't complete this booking. Please try again.")
-          + (partiallySucceeded
-              ? " You were only charged for the services that were booked."
-              : " You have not been charged.")
-        );
+        onBookingFailed(error instanceof PaymentRequestError ? error.message : 'Payment could not be completed. Please review your booking and try again.');
       } finally {
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme, isDarkMode]);
+    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, P, theme]);
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
@@ -747,6 +749,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
                   style={styles.paymentCloseButton}
+                  disabled={isProcessing}
+                  accessibilityLabel="Close payment"
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     onClose();
@@ -782,7 +786,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 <View style={styles.paymentMethods}>
                   <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Payment</Text>
                   <Text style={[styles.paymentMethodName, { color: P.sub }]}>
-                    Card, Apple Pay, or Google Pay — you'll enter your details securely on the next screen.
+                    Enter your card details securely with Stripe. Available wallet options appear on the next screen.
                   </Text>
                 </View>
               </ScrollView>
@@ -845,6 +849,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const { palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
+    const swipeRef = useRef<Swipeable>(null);
 
     const totalPrice = useMemo(() => getCartItemFullPrice(item), [item]);
 
@@ -888,6 +893,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     }, [item.id, item.serviceName, onRemove, showConfirm]);
 
     const isScheduled = Boolean(bookingInfo?.selectedDate && bookingInfo?.selectedTime);
+    const whenColor = !isScheduled ? '#D32F2F' : bookingInfo?.emergencyRequest ? '#FF9500' : P.accentText;
 
     const serviceName = item?.serviceName || 'Unknown Service';
     const serviceInstanceIndex = item?.serviceInstanceIndex || 1;
@@ -912,114 +918,147 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           </View>
         )}
       >
-        <View style={[
-          styles.serviceCard,
-          styles.serviceCardShadow,
-          { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
-        ]}>
-          {issue && (
-            <View style={styles.conflictBanner}>
-              <Ionicons name="alert-circle" size={14} color="#F44336" />
-              <Text style={styles.conflictBannerText}>{issue}</Text>
-            </View>
-          )}
-          {/* An out-of-hours time looks exactly like an ordinary one once it
-              reaches the cart, and it isn't: the client is about to pay for
-              something the provider can still decline. Deliberately amber
-              rather than the by-request red used in the picker — in THIS
-              screen red already means "this item has a conflict, fix it", and
-              a request is not a fault. */}
-          {bookingInfo?.emergencyRequest && (
-            <View style={styles.requestBanner}>
-              <Ionicons name="time-outline" size={14} color="#FF9500" />
-              <Text style={styles.requestBannerText}>
-                Outside their usual hours — they have to accept this before it's booked.
-              </Text>
-            </View>
-          )}
-          {/* Header binds the service to its price on one line, with the
-              duration tucked directly under the name. Colours read from `P`
-              (the hat-aware palette), never `theme`: this card only ever
-              renders on the client cart, and `theme` is scoped to whichever
-              hat last set it, not necessarily the client palette — the same
-              class of bug DESIGN_SYSTEM.md flags for AppDialog. */}
-          <View style={styles.serviceHeader}>
-            <View style={styles.serviceInfo}>
-              <Text style={[styles.serviceName, { color: P.text }]} numberOfLines={2}>
-                {serviceName}
-                {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
-                {bookingInfo.isDepositOnly && ' (Deposit)'}
-              </Text>
-              <Text style={[styles.priceSummaryText, { color: P.sub }]} numberOfLines={1}>
-                {duration}
-              </Text>
-            </View>
-            <Text style={[styles.priceSummaryValue, { color: P.accentText }]}>
-              £{effectivePrice.toFixed(2)}
-            </Text>
-            <TouchableOpacity
-              style={[styles.removeButton, { backgroundColor: P.accentDim, borderColor: P.border }, isLoading && styles.disabledButton]}
-              onPress={handleRemove}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color={P.text} />
-              ) : (
-                <Text style={[styles.removeText, { color: P.text }]}>×</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+        <View style={styles.swipeRowWrap}>
+          <Swipeable
+            ref={swipeRef}
+            overshootRight={false}
+            friction={2}
+            rightThreshold={40}
+            renderRightActions={(progress: Animated.AnimatedInterpolation<number>) => {
+              const scale = progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.6, 1],
+                extrapolate: 'clamp',
+              });
+              return (
+                <Animated.View style={[styles.swipeDeleteAction, { transform: [{ scale }] }]}>
+                  <TouchableOpacity
+                    style={[styles.swipeDeleteButton, isLoading && styles.disabledButton]}
+                    onPress={() => {
+                      swipeRef.current?.close();
+                      handleRemove();
+                    }}
+                    disabled={isLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Ionicons name="trash" size={20} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            }}
+          >
+            {/* The card answers "what and when" first: a tappable date/time
+                chip (tapping it is how you change the time), the service
+                name, one small meta line. Everything else is inline and
+                small — no drop-down. Issue and out-of-hours state stay
+                visible: a flag the client can't see is the same as no flag.
+                Colours read from `P` (hat-aware palette), never `theme` —
+                see DESIGN_SYSTEM.md's AppDialog note. */}
+            <View style={[
+              styles.nodeCard,
+              { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : 0 },
+            ]}>
+              <View style={styles.nodeTopRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.nodeWhenChip,
+                    { backgroundColor: !isScheduled ? 'rgba(244, 67, 54, 0.09)' : bookingInfo?.emergencyRequest ? 'rgba(255, 149, 0, 0.12)' : P.accentDim },
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    onEdit(item);
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={isScheduled
+                    ? `Change time, currently ${formatShortDayDate(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
+                    : 'Pick a date and time'}
+                >
+                  <Ionicons name="calendar-outline" size={13} color={whenColor} />
+                  <Text style={[styles.nodeWhenText, { color: whenColor }]} numberOfLines={1}>
+                    {isScheduled
+                      ? `${formatShortDayDate(bookingInfo.selectedDate)} · ${formatTime12(bookingInfo.selectedTime)}`
+                      : 'No time picked'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={12} color={whenColor} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.nodeRemove, { borderColor: P.border }]}
+                  onPress={handleRemove}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${serviceName}`}
+                >
+                  <Ionicons name="close" size={16} color={P.sub} />
+                </TouchableOpacity>
+              </View>
 
-          {/* Secondary detail — add-ons, deposit note, notes — sits tight
-              together as one block instead of each line carrying its own
-              margin. Cart is for review + payment, not a full pricing
-              ledger, so add-ons stay on one compact labelled line; detailed
-              per-add-on pricing is in BookingSheet via Edit. */}
-          {(addOnsSummary || bookingInfo.isDepositOnly || !!bookingInfo.notes) && (
-            <View style={styles.serviceMetaBlock}>
+              <View style={styles.nodeNameRow}>
+                <Text style={[styles.nodeServiceName, { color: P.text }]} numberOfLines={2}>
+                  {serviceName}
+                  {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
+                </Text>
+                <Text style={[styles.nodePrice, { color: P.sub }]}>£{effectivePrice.toFixed(2)}</Text>
+              </View>
+
+              <View style={styles.nodeMetaRow}>
+                <Text style={[styles.nodeMeta, { color: P.sub }]} numberOfLines={1}>{duration}</Text>
+                {bookingInfo.isDepositOnly && (
+                  <View style={[styles.nodeTag, { backgroundColor: P.accentDim }]}>
+                    <Text style={[styles.nodeTagText, { color: P.accentText }]}>Deposit</Text>
+                  </View>
+                )}
+              </View>
+
+              {issue && (
+                <View style={styles.nodeBanner}>
+                  <Ionicons name="alert-circle" size={12} color="#F44336" />
+                  <Text style={styles.nodeBannerText}>{issue}</Text>
+                  <TouchableOpacity onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    onEdit(item);
+                  }}>
+                    <Text style={styles.nodeBannerFix}>Fix</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {/* An out-of-hours time looks exactly like an ordinary one
+                  once it reaches the cart, and it isn't: the client is
+                  about to pay for something the provider can still
+                  decline. Amber rather than red — red means "this item has
+                  a conflict, fix it", and a request is not a fault. */}
+              {bookingInfo?.emergencyRequest && (
+                <View style={[styles.nodeBanner, styles.nodeBannerWarn]}>
+                  <Ionicons name="time-outline" size={12} color="#FF9500" />
+                  <Text style={[styles.nodeBannerText, { color: '#FF9500' }]}>
+                    Outside their usual hours — they have to accept this before it's booked.
+                  </Text>
+                </View>
+              )}
+
               {addOnsSummary && (
-                <Text style={[styles.priceSummaryAddOns, { color: P.text }]} numberOfLines={2}>
+                <Text style={[styles.nodeNote, { color: P.sub }]} numberOfLines={2}>
                   + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
                   {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
                 </Text>
               )}
               {bookingInfo.isDepositOnly && (
-                <Text style={[styles.depositNote, { color: P.sub }]}>
+                <Text style={[styles.nodeNote, { color: P.sub }]}>
                   Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
                 </Text>
               )}
               {!!bookingInfo.notes && (
-                <Text style={[styles.notesPreview, { color: P.sub }]} numberOfLines={2}>
-                  Notes: {bookingInfo.notes}
+                <Text style={[styles.nodeNote, { color: P.sub }]} numberOfLines={2}>
+                  Note: {bookingInfo.notes}
                 </Text>
               )}
             </View>
-          )}
-
-          {/* Footer: date/time + Edit, separated by a rule so the card ends
-              on a deliberate band rather than trailing off. A standalone
-              service edits directly, no chooser in between. */}
-          <View style={[styles.dateRow, { borderTopColor: P.border }]}>
-            <Text
-              style={[styles.dateText, { color: P.sub }, !isScheduled && styles.dateTextWarning]}
-              numberOfLines={2}
-            >
-              {isScheduled
-                ? `${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
-                : 'Unscheduled'}
-            </Text>
-            <TouchableOpacity
-              style={[styles.itemEditButton, { borderColor: P.accent }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                onEdit(item);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="pencil-outline" size={12} color={P.accentText} />
-              <Text style={[styles.itemEditButtonText, { color: P.accentText }]}>Edit</Text>
-            </TouchableOpacity>
-          </View>
+          </Swipeable>
         </View>
         <DialogHost />
       </ErrorBoundary>
@@ -1106,14 +1145,13 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     const isScheduled = Boolean(firstBooking.selectedDate && firstBooking.selectedTime);
     const spanKnown = isScheduled && startMinutes !== Number.MAX_SAFE_INTEGER && endMinutes > startMinutes;
     // Every flagged service in this group, in render order, so the banner can
-    // name them rather than the client having to guess which of four rows the
-    // red border is about.
+    // name them rather than the client having to guess which of four chips
+    // it's about.
     const flagged = useMemo(
       () => items.map(i => ({ item: i, issue: issuesByItemId.get(i.id) }))
                  .filter((f): f is { item: CartItem; issue: string } => Boolean(f.issue)),
       [items, issuesByItemId],
     );
-    const hasConflict = flagged.length > 0;
 
     const handleRemoveOne = useCallback((item: CartItem) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1135,15 +1173,11 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     }, [onRemove, showConfirm]);
 
     return (
-      <View style={[
-        styles.serviceCard,
-        styles.serviceCardShadow,
-        { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
-      ]}>
+      <View style={[styles.groupNodeCard, { backgroundColor: P.accentDim }]}>
         {flagged.length > 0 && (
-          <View style={styles.conflictBanner}>
-            <Ionicons name="alert-circle" size={14} color="#F44336" />
-            <Text style={styles.conflictBannerText}>
+          <View style={styles.nodeBanner}>
+            <Ionicons name="alert-circle" size={12} color="#F44336" />
+            <Text style={styles.nodeBannerText}>
               {flagged.length === 1
                 ? `${flagged[0]!.item.serviceName}: ${flagged[0]!.issue}`
                 : `${flagged.length} services in this appointment need attention`}
@@ -1151,20 +1185,16 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           </View>
         )}
 
-        {/* Shared header: a filled badge (not a bare icon) so a group card is
-            obviously different from a single one at a glance, plus this
-            card's Edit — which opens the chooser rather than editing
-            straight through. */}
-        <View style={styles.groupHeader}>
-          <View style={[styles.groupBadge, { backgroundColor: P.accent }]}>
-            <Ionicons name="link" size={11} color={P.onAccent} />
-            <Text style={[styles.groupBadgeText, { color: P.onAccent }]}>
-              GROUP BOOKING · {items.length}
-            </Text>
-          </View>
-          <View style={styles.groupHeaderSpacer} />
+        {/* Plain tag + span (not a filled badge) plus a pencil-only edit —
+            same quiet-chrome language as ServiceCard's own top row, since
+            provider identity here is also already owned by the wrapping
+            CartProviderSection header. */}
+        <View style={styles.groupHead}>
+          <Text style={[styles.groupTag, { color: P.accentText }]}>GROUP BOOKING</Text>
+          <Text style={[styles.groupTagSpan, { color: P.sub }]}>{items.length} services</Text>
+          <View style={{ flex: 1 }} />
           <TouchableOpacity
-            style={[styles.itemEditButton, { borderColor: P.accent }]}
+            style={[styles.nodePencil, { borderColor: P.border, backgroundColor: P.card }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onEditGroup(items);
@@ -1172,7 +1202,6 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
             activeOpacity={0.8}
           >
             <Ionicons name="pencil-outline" size={12} color={P.accentText} />
-            <Text style={[styles.itemEditButtonText, { color: P.accentText }]}>Edit</Text>
           </TouchableOpacity>
         </View>
         <Text
@@ -1187,18 +1216,18 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           </Text>
         )}
 
-        {/* One row per service — no per-row date, the header owns it */}
-        <View style={styles.groupRows}>
+        {/* One chip per service — no per-row date, the header owns it */}
+        <View style={styles.gchipList}>
           {items.map(item => {
             const b = getBooking(item.id);
             return (
-              <View key={item.id} style={[styles.groupRow, { borderTopColor: P.border }]}>
-                <View style={styles.groupRowInfo}>
-                  <Text style={[styles.groupRowName, { color: theme.text }]} numberOfLines={1}>
+              <View key={item.id} style={[styles.gchip, { backgroundColor: P.card }]}>
+                <View style={styles.gchipInfo}>
+                  <Text style={[styles.gchipName, { color: theme.text }]} numberOfLines={1}>
                     {item.serviceName}
                     {b.isDepositOnly ? ' (Deposit)' : ''}
                   </Text>
-                  <Text style={[styles.groupRowMeta, { color: theme.secondaryText }]} numberOfLines={1}>
+                  <Text style={[styles.gchipMeta, { color: theme.secondaryText }]} numberOfLines={1}>
                     {item.duration}
                   </Text>
                   {issuesByItemId.get(item.id) && (
@@ -1227,7 +1256,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                     </Text>
                   )}
                 </View>
-                <Text style={[styles.groupRowPrice, { color: P.accentText }]}>
+                <Text style={[styles.gchipPrice, { color: P.accentText }]}>
                   £{priceOf(item).toFixed(2)}
                 </Text>
                 <TouchableOpacity
@@ -1242,44 +1271,26 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           })}
         </View>
 
-        {/* Group footer — on a deposit group the service total and remainder
-            sit above the amount actually charged now, so all three
-            reconcile; otherwise it stays a single total. */}
-        <View style={[styles.groupFooter, { borderTopColor: P.border }]}>
+        {/* Group footer — a single due-now line (with a small service-total
+            note under the label) rather than a 3-row breakdown, matching
+            the chip list's compact language; only the deposit case needs
+            the extra note at all. */}
+        <View style={styles.gfoot}>
           {hasDeposit ? (
-            <View style={styles.groupFooterBreakdown}>
-              <View style={styles.groupFooterRow}>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  {items.length} services
-                </Text>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  £{groupServiceTotal.toFixed(2)}
+            <>
+              <View>
+                <Text style={[styles.gfootLabel, { color: theme.text }]}>Deposit due now</Text>
+                <Text style={[styles.gfootSubnote, { color: theme.secondaryText }]}>
+                  £{groupServiceTotal.toFixed(2)} service total · £{groupRemaining.toFixed(2)} at appointment
                 </Text>
               </View>
-              <View style={styles.groupFooterRow}>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  Remaining at appointment
-                </Text>
-                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                  £{groupRemaining.toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.groupFooterRow}>
-                <Text style={[styles.groupFooterTotalLabel, { color: theme.text }]}>Deposit due now</Text>
-                <Text style={[styles.groupFooterValue, { color: P.accentText }]}>
-                  £{groupTotal.toFixed(2)}
-                </Text>
-              </View>
-            </View>
+              <Text style={[styles.gfootAmt, { color: P.accentText }]}>£{groupTotal.toFixed(2)}</Text>
+            </>
           ) : (
-            <View style={styles.groupFooterRow}>
-              <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
-                {items.length} services
-              </Text>
-              <Text style={[styles.groupFooterValue, { color: P.accentText }]}>
-                £{groupTotal.toFixed(2)}
-              </Text>
-            </View>
+            <>
+              <Text style={[styles.gfootLabel, { color: theme.text }]}>{items.length} services</Text>
+              <Text style={[styles.gfootAmt, { color: P.accentText }]}>£{groupTotal.toFixed(2)}</Text>
+            </>
           )}
         </View>
         <DialogHost />
@@ -1295,6 +1306,10 @@ interface CartProviderSectionProps {
   providerItems: CartItem[];
   providerData: { instanceCount: number; total: number };
   renderUnits: CartRenderUnit[];
+  /** True only when the basket holds more than one provider. A lone
+   *  provider's section has nothing to collapse against, so it gets no
+   *  Hide/Show handle and is always open. */
+  collapsible: boolean;
   isCollapsed: boolean;
   issuesByItemId: ReadonlyMap<string, string>;
   depositPolicy?: ProviderDepositPolicy;
@@ -1305,6 +1320,10 @@ interface CartProviderSectionProps {
   onEdit: (item: CartItem) => void;
   onEditGroup: (items: CartItem[]) => void;
   onToggleCollapsed: (providerName: string) => void;
+  /** Set only on the section holding a just-added item: which item. */
+  scrollTargetItemId: string | null;
+  /** Reports how far down this section that item's card sits, once laid out. */
+  onScrollTargetLaidOut: (offsetInSection: number) => void;
 }
 
 const CartProviderSection = memo(function CartProviderSection({
@@ -1312,6 +1331,7 @@ const CartProviderSection = memo(function CartProviderSection({
   providerItems,
   providerData,
   renderUnits,
+  collapsible,
   isCollapsed,
   issuesByItemId,
   depositPolicy,
@@ -1322,8 +1342,19 @@ const CartProviderSection = memo(function CartProviderSection({
   onEdit,
   onEditGroup,
   onToggleCollapsed,
+  scrollTargetItemId,
+  onScrollTargetLaidOut,
 }: CartProviderSectionProps) {
   const { palette: P } = useTheme();
+  // Layout arrives from two places (the list, then the card inside it), in
+  // either order — remember each and report once both are known.
+  const servicesListYRef = useRef<number | null>(null);
+  const targetUnitRef = useRef<{ itemId: string; y: number } | null>(null);
+  const reportTargetOffset = useCallback(() => {
+    const unit = targetUnitRef.current;
+    if (!scrollTargetItemId || servicesListYRef.current === null || unit?.itemId !== scrollTargetItemId) return;
+    onScrollTargetLaidOut(servicesListYRef.current + unit.y);
+  }, [scrollTargetItemId, onScrollTargetLaidOut]);
   const flaggedCount = providerItems.filter(item => issuesByItemId.has(item.id)).length;
   const displayName = providerItems[0]?.providerDisplayName ?? providerName;
 
@@ -1332,7 +1363,7 @@ const CartProviderSection = memo(function CartProviderSection({
       backgroundColor: P.card,
       borderColor: flaggedCount > 0 ? '#F44336' : P.border,
       borderWidth: flaggedCount > 0 ? 1.5 : StyleSheet.hairlineWidth,
-    }]}>
+    }, !collapsible && styles.providerSectionSolo]}>
       <View style={styles.providerHeader}>
         <TouchableOpacity onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1365,9 +1396,24 @@ const CartProviderSection = memo(function CartProviderSection({
       </View>
 
       {!isCollapsed ? (
-        <View style={styles.servicesList}>
+        <View
+          style={styles.servicesList}
+          onLayout={scrollTargetItemId ? e => {
+            servicesListYRef.current = e.nativeEvent.layout.y;
+            reportTargetOffset();
+          } : undefined}
+        >
           {renderUnits.map((unit, index) => (
-            <View key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id} style={styles.serviceItemWrapper}>
+            <View
+              key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id}
+              style={styles.serviceItemWrapper}
+              onLayout={scrollTargetItemId && (unit.kind === 'group'
+                ? unit.items.some(i => i.id === scrollTargetItemId)
+                : unit.item.id === scrollTargetItemId) ? e => {
+                targetUnitRef.current = { itemId: scrollTargetItemId, y: e.nativeEvent.layout.y };
+                reportTargetOffset();
+              } : undefined}
+            >
               {unit.kind === 'group' ? (
                 <GroupedServiceCard
                   items={unit.items}
@@ -1391,24 +1437,27 @@ const CartProviderSection = memo(function CartProviderSection({
               {index < renderUnits.length - 1 ? <View style={[styles.serviceSeparator, { backgroundColor: P.accentDim }]} /> : null}
             </View>
           ))}
+
         </View>
       ) : null}
 
-      <TouchableOpacity
-        style={[styles.collapseHandle, { borderTopColor: P.border }]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-          onToggleCollapsed(providerName);
-        }}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.collapseHandleText, { color: P.sub }]}>
-          {isCollapsed
-            ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
-            : 'Hide'}
-        </Text>
-        <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={P.sub} />
-      </TouchableOpacity>
+      {collapsible ? (
+        <TouchableOpacity
+          style={[styles.collapseHandle, { borderTopColor: P.border }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            onToggleCollapsed(providerName);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.collapseHandleText, { color: P.sub }]}>
+            {isCollapsed
+              ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
+              : 'Hide'}
+          </Text>
+          <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={P.sub} />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 });
@@ -1523,6 +1572,7 @@ const CartCheckoutFooter = memo(function CartCheckoutFooter({
 
 // Main Cart Screen Component
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
+  const groupSheetBottomInset = useSystemBottomInset();
   const { theme, isDarkMode, palette: P } = useTheme();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   // A SECOND host, rendered inside the "Confirm Your Details" <Modal> rather
@@ -1580,11 +1630,65 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Providers whose section is collapsed to just its header. Collapsed-by-key
   // rather than expanded-by-key so a newly added provider defaults to open.
   const [collapsedProviders, setCollapsedProviders] = useState<Set<string>>(new Set());
+  // The card the cart should scroll to after something is added. Set by the
+  // add-detection effect below, cleared once the scroll has happened.
+  const [scrollTarget, setScrollTarget] = useState<CartScrollTarget | null>(null);
+  const listRef = useRef<FlatList<[string, CartItem[]]>>(null);
+  // Where the last requested scroll was headed, so onScrollToIndexFailed can
+  // retry the same jump once FlatList has measured enough rows.
+  const pendingScrollRef = useRef<{ index: number; viewOffset: number; animated: boolean } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
+
+  // Mirrors of the two outstanding-checkout ids, for the abandon path below:
+  // it runs from a navigation listener and on unmount, neither of which can
+  // read the state values a render closed over.
+  const holdBatchIdRef = useRef<string | null>(null);
+  const serverCheckoutBatchIdRef = useRef<string | null>(null);
+  // True only while handlePaymentSuccess is converting the held rows into
+  // real bookings. Releasing during that window would DELETE the very rows
+  // claim_cart_booking_slots is mid-way through claiming, and the claim's
+  // fallback (a fresh client-side insert) has been RLS-blocked since
+  // 20260810180302 — so the booking wouldn't be re-created, it would just
+  // fail. Abandoning is therefore skipped while this is set.
+  const isClaimingRef = useRef(false);
+
+  /**
+   * Give back the slots this checkout is holding.
+   *
+   * The hold placed at "Confirm & Pay" is a real `on_hold` row on the
+   * provider's diary, and until 2026-09-07 the ONLY thing that handed it
+   * back early was the payment sheet's own × button. Every other way out of
+   * a checkout — switching tabs, a tapped notification, the screen
+   * unmounting, a dev reload — left the row sitting there for the full
+   * 10-minute TTL, and since get_provider_busy_spans counts held slots as
+   * busy, the client who placed the hold was then told their own slot was
+   * unavailable when they went back to pick it again. That is the bug this
+   * closes: two abandoned holds were reproduced live on 2026-09-07
+   * (11:30 and 12:30 on the same provider, neither ever released).
+   *
+   * Best-effort by design: releaseCartCheckoutSlots never throws, and the
+   * expire_cart_holds() cron sweep remains the real backstop for the routes
+   * no client-side signal can reach (a crash, a force-quit, a dead network).
+   */
+  const abandonOutstandingCheckout = useCallback(() => {
+    if (isClaimingRef.current) return;
+    const heldBatch = holdBatchIdRef.current;
+    if (heldBatch) {
+      holdBatchIdRef.current = null;
+      setHoldBatchId(null);
+      releaseCartCheckoutSlots(heldBatch);
+    }
+    const serverBatch = serverCheckoutBatchIdRef.current;
+    if (serverBatch) {
+      serverCheckoutBatchIdRef.current = null;
+      setServerCheckoutBatchId(null);
+      cancelCheckout(serverBatch).catch(error => logger.error('Could not release secure checkout:', error));
+    }
+  }, [releaseCartCheckoutSlots]);
 
   // An RN Modal renders in a native overlay above whatever screen is
   // focused — it isn't scoped to "Cart is the visible screen," just to this
@@ -1595,9 +1699,24 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
       setShowPaymentSuccessModal(false);
+      // Leaving Cart abandons an in-progress checkout: hand the slots back
+      // rather than making the client (and everyone else) wait out the TTL.
+      // The payment sheet goes with them — it's the same native-overlay
+      // problem as the success modal above, and leaving it up over another
+      // screen would let the client pay for a hold that no longer exists.
+      setShowPaymentModal(false);
+      abandonOutstandingCheckout();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, abandonOutstandingCheckout]);
+
+  // Same handover for the screen going away entirely, which fires no 'blur'.
+  // Routed through a ref with an empty dep array on purpose: depending on the
+  // callback directly would re-run this effect — and so RELEASE a live hold
+  // mid-checkout — every time its identity changed.
+  const abandonRef = useRef(abandonOutstandingCheckout);
+  useEffect(() => { abandonRef.current = abandonOutstandingCheckout; }, [abandonOutstandingCheckout]);
+  useEffect(() => () => abandonRef.current(), []);
 
   const [checkoutSnapshot, setCheckoutSnapshot] = useState<{
   items: CartItem[];
@@ -1862,6 +1981,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // the legacy hold batch while the mock checkout remains available in Expo
   // Go and during the staged release.
   const [serverCheckoutBatchId, setServerCheckoutBatchId] = useState<string | null>(null);
+  // Kept in step with the refs abandonOutstandingCheckout reads. Mirrored
+  // rather than assigned at each setState call site so a future one can't
+  // quietly forget to, and leave a hold nothing knows how to release.
+  useEffect(() => { holdBatchIdRef.current = holdBatchId; }, [holdBatchId]);
+  useEffect(() => { serverCheckoutBatchIdRef.current = serverCheckoutBatchId; }, [serverCheckoutBatchId]);
   // True only while the "Confirm & Pay" tap's holdCartCheckoutSlots call is
   // in flight — guards against a double-tap firing two hold batches for
   // the same cart.
@@ -1982,6 +2106,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // proceeding on guessed data (every provider treated as non-mobile, every
   // deposit falling back to the generic 20%).
   const [checkoutMetadataError, setCheckoutMetadataError] = useState(false);
+  // True while that same fetch is in flight. The cart hydrates from
+  // AsyncStorage and renders instantly, well before this network round trip
+  // lands, so an eager tap on Checkout is an ordinary race — and it used to
+  // be answered with a "Still confirming your cart, try again in a few
+  // seconds" alert, i.e. the client was told off for tapping a button the
+  // app had left enabled. The button shows its own spinner instead, and the
+  // alert below stays only as the belt-and-braces case.
+  const [isCheckoutMetadataLoading, setIsCheckoutMetadataLoading] = useState(false);
   // The provider names covered by the last COMPLETED (successful) metadata
   // fetch — lets handleCheckout tell "this provider's fetch just hasn't
   // landed yet" (name absent here, self-resolves in a moment) apart from
@@ -2080,6 +2212,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Tracked by item id (not just provider key) so adding a second service to
   // a provider already in the cart counts as an add too, not only a
   // brand-new provider.
+  //
+  // This only ever takes effect with more than one provider in the basket —
+  // a lone provider's section has no Hide/Show handle and is always open
+  // (see `collapsible` on CartProviderSection).
   const knownItemIdsRef = useRef<Set<string> | null>(null);
   useEffect(() => {
     const providerKeys = Object.keys(itemsByProvider);
@@ -2109,6 +2245,16 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           new Set(providerKeys.filter(k => !recentlyAddedProviders.has(k))),
         );
       }
+      // Land on the booking that was just added, not the top of the list.
+      const justAdded = newestAddedItem(
+        items.filter(i => {
+          const addedAt = Date.parse(i.addedAt ?? '');
+          return Number.isFinite(addedAt) && addedAt >= justAddedCutoff;
+        }),
+      );
+      if (justAdded) {
+        setScrollTarget({ providerName: justAdded.providerName || 'Unknown Provider', itemId: justAdded.id });
+      }
       return;
     }
 
@@ -2130,6 +2276,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setCollapsedProviders(
       new Set(providerKeys.filter(k => !providersWithNewItems.has(k))),
     );
+
+    // A long cart puts the new card off screen, so scroll to it.
+    const added = newestAddedItem(items.filter(i => !previousItemIds.has(i.id)));
+    if (added) {
+      setScrollTarget({ providerName: added.providerName || 'Unknown Provider', itemId: added.id });
+    }
   }, [items, itemsByProvider]);
 
   // Keyed on the sorted, deduped provider-name SET rather than `items`
@@ -2152,9 +2304,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       setMobileProviderNames([]);
       setCheckoutMetadataError(false);
       setResolvedProviderNames(new Set());
+      setIsCheckoutMetadataLoading(false);
       return;
     }
     let cancelled = false;
+    setIsCheckoutMetadataLoading(true);
     getProviderCheckoutMetadata(names)
       .then(({ depositPolicies, mobileProviderNames }) => {
         if (cancelled) return;
@@ -2162,6 +2316,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         setMobileProviderNames(names.filter(name => mobileProviderNames.has(name)));
         setCheckoutMetadataError(false);
         setResolvedProviderNames(new Set(names));
+        setIsCheckoutMetadataLoading(false);
       })
       .catch(error => {
         if (cancelled) return;
@@ -2178,6 +2333,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         // (nothing fetched yet) can't reach checkout on defaults either.
         logger.error('Could not fetch checkout metadata (deposit policies / mobile providers):', error);
         setCheckoutMetadataError(true);
+        setIsCheckoutMetadataLoading(false);
       });
     return () => { cancelled = true; };
   }, [providerNamesKey]);
@@ -3078,6 +3234,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     logger.log('═══════════════════════════════════════');
   }
 
+  // Claiming has started: the held rows are about to become real bookings,
+  // so nothing may release them from under it. Cleared in the finally below,
+  // by which point the batch has either been claimed or reported as failed.
+  isClaimingRef.current = true;
   try {
     // The secure Stripe route has already finalised its server-owned holds in
     // the Edge Function. Do not fall through to the legacy client insert
@@ -3299,6 +3459,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     // "Booking Failed" alert and closing the payment sheet — this only needs
     // to propagate the error up to it (after the diagnostics above).
     throw error;
+  } finally {
+    isClaimingRef.current = false;
   }
 }, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, paymentTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress]);
 
@@ -3374,6 +3536,60 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     [bookingSummary.providers, itemsByProvider],
   );
 
+  const scrollTargetRef = useRef<CartScrollTarget | null>(null);
+  scrollTargetRef.current = scrollTarget;
+
+  const jumpToRow = useCallback((index: number, viewOffset: number, animated: boolean) => {
+    pendingScrollRef.current = { index, viewOffset, animated };
+    listRef.current?.scrollToIndex({ index, viewPosition: 0, viewOffset, animated });
+  }, []);
+
+  // Second stage, fired by the target's own section once its card has been
+  // laid out: `offsetInSection` is how far down the section the card sits, so
+  // a provider with a tall list still lands on the new card rather than on
+  // that provider's header. Only ever runs once per target.
+  const handleScrollTargetLaidOut = useCallback((offsetInSection: number) => {
+    const target = scrollTargetRef.current;
+    if (!target) return;
+    const index = cartProviderRows.findIndex(([name]) => name === target.providerName);
+    if (index < 0) return;
+    setScrollTarget(null);
+    jumpToRow(index, -Math.max(0, offsetInSection - SCROLL_TO_NEW_ITEM_MARGIN), true);
+  }, [cartProviderRows, jumpToRow]);
+
+  // First stage: if the target's section hasn't rendered (FlatList is
+  // virtualised, so a long cart leaves it unmounted and unmeasured), jump to
+  // the section so it mounts — its card then reports back to
+  // handleScrollTargetLaidOut above. The short delay lets an already-mounted
+  // section report first, so the common case is one smooth scroll, not two.
+  // The second timer gives up so a target that never lays out can't linger.
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const index = cartProviderRows.findIndex(([name]) => name === scrollTarget.providerName);
+    if (index < 0) {
+      setScrollTarget(null);
+      return;
+    }
+    const jump = setTimeout(() => jumpToRow(index, 0, false), 300);
+    const giveUp = setTimeout(() => setScrollTarget(null), 4000);
+    return () => {
+      clearTimeout(jump);
+      clearTimeout(giveUp);
+    };
+    // cartProviderRows is deliberately not a dependency: re-arming the timers
+    // on every cart edit would push the scroll back indefinitely.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollTarget, jumpToRow]);
+
+  const handleScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+    const pending = pendingScrollRef.current;
+    if (!pending) return;
+    // Rows this far down haven't been measured yet. Get close by estimate so
+    // FlatList renders them, then repeat the same jump.
+    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    setTimeout(() => jumpToRow(pending.index, pending.viewOffset, pending.animated), 120);
+  }, [jumpToRow]);
+
   const renderCartProviderRow = useCallback(({
     item: [providerName, providerItems],
   }: {
@@ -3389,7 +3605,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
         providerItems={providerItems}
         providerData={providerData}
         renderUnits={buildRenderUnits(providerItems)}
-        isCollapsed={collapsedProviders.has(providerName)}
+        collapsible={cartProviderRows.length > 1}
+        isCollapsed={cartProviderRows.length > 1 && collapsedProviders.has(providerName)}
         issuesByItemId={displayedItemIssues}
         allCartItems={items}
         getBooking={getServiceBooking}
@@ -3398,16 +3615,21 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
         onEdit={handleEditItem}
         onEditGroup={setPickerItems}
         onToggleCollapsed={toggleProviderCollapsed}
+        scrollTargetItemId={scrollTarget?.providerName === providerName ? scrollTarget.itemId : null}
+        onScrollTargetLaidOut={handleScrollTargetLaidOut}
         {...(policy !== undefined ? { depositPolicy: policy } : {})}
       />
     );
   }, [
     bookingSummary.providers,
     buildRenderUnits,
+    cartProviderRows.length,
     collapsedProviders,
     displayedItemIssues,
     getServiceBooking,
     handleEditItem,
+    handleScrollTargetLaidOut,
+    scrollTarget,
     handleRemoveFromCart,
     items,
     navigateToProvider,
@@ -3753,12 +3975,6 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                             if (!item.providerId || !booking?.selectedDate || !booking.selectedTime) {
                               throw new Error('Every service needs a provider, date and time before payment.');
                             }
-                            // Reads the FROZEN snapshot, like the claim path — a
-                            // metadata refetch between "Confirm & Pay" and here
-                            // must not change which items carry the address.
-                            const isMobileItem = checkoutSnapshot.mobileProviderNames.includes(
-                              item.providerDisplayName ?? item.providerName,
-                            );
                             return {
                               provider_id: item.providerId,
                               service_id: item.serviceId,
@@ -3767,15 +3983,6 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               add_on_ids: (item.addOns ?? []).map(addOn => String(addOn.id)),
                               use_deposit: Boolean(booking.isDepositOnly),
                               notes: booking.notes,
-                              // Only a mobile provider's item carries the client's
-                              // address. prepare_checkout rejects a mobile item
-                              // without one and writes it onto the held row, so it
-                              // reaches the provider after accept exactly as on the
-                              // live route. The area is the account's chosen one,
-                              // like the claim path; the DB derives it if absent.
-                              ...(isMobileItem && clientAddress.trim()
-                                ? { client_address: clientAddress.trim(), client_area: user?.clientArea ?? null }
-                                : {}),
                               // The single Terms checkbox above folds in
                               // safety acknowledgement when relevant — it
                               // can't be checked while it's required and
@@ -4036,6 +4243,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 totalAmount={paymentTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
+                onPaymentPending={() => {
+                  setShowPaymentModal(false);
+                  setServerCheckoutBatchId(null);
+                  showAlert('Checking your payment', 'Your payment may have completed. Check your bookings before paying again. If the reservation expired, the payment will be refunded.');
+                }}
                 onPaymentComplete={() => {
                   clearCart(); // Clear cart immediately after payment simulation
                   setShowPaymentModal(false);
@@ -4068,9 +4280,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
               <View style={styles.modalOverlayNoBlur}>
                 <View style={[styles.liquidGlassSuccessModalNoBlur, { backgroundColor: P.card }]}>
                   <View style={styles.liquidGlassSuccessContent}>
-                    {/* Success Icon */}
-                    <View style={styles.liquidGlassSuccessIcon}>
-                      <Text style={[styles.liquidGlassSuccessCheckmark, { color: '#34C759' }]}>✓</Text>
+                    {/* Success Icon — double concentric ring (Direction A) */}
+                    <View style={styles.liquidGlassSuccessIconRing}>
+                      <View style={styles.liquidGlassSuccessIcon}>
+                        <Text style={[styles.liquidGlassSuccessCheckmark, { color: '#34C759' }]}>✓</Text>
+                      </View>
                     </View>
 
                     <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>Success!</Text>
@@ -4082,20 +4296,25 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     </Text>
 
                     <View style={styles.successButtonsContainer}>
+                      {/* Primary — filled accent, the action we want most clients to take */}
                       <TouchableOpacity
-                        style={[styles.liquidGlassSuccessButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
+                        style={[styles.liquidGlassSuccessButtonPrimary, { backgroundColor: P.accent }]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setShowPaymentSuccessModal(false);
-                          navigation.navigate('Bookings'); // ✅ JUST NAVIGATE - bookings already created
+                          // Land on the Upcoming tab — the client just booked, so
+                          // the just-created appointments are what they want to see,
+                          // not the default (which can open on Past/other state).
+                          navigation.navigate('Bookings', { initialTab: 'all' }); // bookings already created
                         }}
-                        activeOpacity={0.7}
+                        activeOpacity={0.85}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accentText }]}>View Bookings</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.onAccent }]}>View Bookings</Text>
                       </TouchableOpacity>
 
+                      {/* Secondary — outlined ghost, quieter than the primary */}
                       <TouchableOpacity
-                        style={[styles.liquidGlassSuccessButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
+                        style={[styles.liquidGlassSuccessButtonGhost, { borderColor: P.border }]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setShowPaymentSuccessModal(false);
@@ -4241,7 +4460,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             onRequestClose={() => setGroupRescheduleItems(null)}
           >
             <View style={styles.groupSheetOverlay}>
-              <View style={[styles.groupSheet, { backgroundColor: P.card, borderColor: P.border }]}>
+              <View style={[styles.groupSheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(spacing.xl, groupSheetBottomInset + 16) }]}>
                 <View style={styles.groupSheetHeader}>
                   <View style={styles.groupSheetHeaderText}>
                     <Text style={[styles.pickerTitle, { color: theme.text }]}>
@@ -4377,6 +4596,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
           )}
 
           <FlatList
+            ref={listRef}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
             style={styles.content}
             data={items.length > 0 ? cartProviderRows : []}
             keyExtractor={([providerName]) => providerName}
@@ -4405,7 +4626,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 promoSavings={promoSavingsShown}
                 platformFee={platformFee}
                 finalTotal={effectiveFinalTotal}
-                isLoading={isLoading}
+                isLoading={isLoading || isCheckoutMetadataLoading}
                 bottomInset={insets.bottom}
                 showGuide={hasUnscheduledItems}
                 onCheckout={handleCheckout}
@@ -4543,28 +4764,16 @@ const styles = StyleSheet.create({
     // its shadow via shadow* above.
     elevation: 0,
   },
+  // Only provider in the basket: no Hide/Show handle at the foot, so the
+  // section supplies its own bottom padding.
+  providerSectionSolo: {
+    paddingBottom: spacing.md,
+  },
   providerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: spacing.md,
   },
-  // Per-card Edit pill — used by both a single service card (edits it
-  // directly) and a group card (opens the chooser).
-  itemEditButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1.5,
-  },
-  itemEditButtonText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'BakbakOne-Regular',
-    fontWeight: 'bold',
-  },
-
   // Collapse/expand control at the foot of each provider section.
   collapseHandle: {
     flexDirection: 'row',
@@ -4579,9 +4788,9 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
   },
   providerLogo: {
-    width: dimensions.providerLogo.size + 10,
-    height: dimensions.providerLogo.size + 10,
-    borderRadius: (dimensions.providerLogo.size + 10) / 2,
+    width: dimensions.providerLogo.size,
+    height: dimensions.providerLogo.size,
+    borderRadius: dimensions.providerLogo.size / 2,
     borderWidth: dimensions.providerLogo.borderWidth,
   },
   providerLogoContainer: {
@@ -4605,7 +4814,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   providerName: {
-    fontSize: fonts.providerName + 3,
+    fontSize: fonts.providerName,
     fontFamily: 'BakbakOne-Regular',
     color: '#000',
     marginBottom: spacing.xs,
@@ -4634,125 +4843,161 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
 
-  // Service Card
-  serviceCard: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    overflow: 'hidden',
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  serviceCardShadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
   summaryItemRequestNote: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FF9500', marginTop: 2 },
-  conflictBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(244, 67, 54, 0.12)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: spacing.sm,
-  },
-  conflictBannerText: {
-    color: '#F44336',
-    fontSize: 12,
-    fontWeight: '600',
-    flex: 1,
-  },
-  requestBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 149, 0, 0.12)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: spacing.sm,
-  },
-  requestBannerText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '600', color: '#FF9500' },
-  serviceHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  serviceInfo: {
-    flex: 1,
-  },
-  serviceName: {
-    fontSize: fonts.serviceText,
-    fontFamily: 'BakbakOne-Regular',
-    marginBottom: 1,
-  },
-  // Duration, directly under the service name in the header.
-  priceSummaryText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-  },
-  // Add-ons/deposit/notes as one tight block under the header, rather than
-  // three separately-margined full-width rows.
-  serviceMetaBlock: {
-    marginTop: spacing.xs,
-    gap: 2,
-  },
-  // Bold/darker so add-ons read as labelled paid extras rather than blending
-  // into the plain secondary-text lines around them. Spacing is owned by the
-  // serviceMetaBlock wrapper, not this line.
-  priceSummaryAddOns: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-  },
-  priceSummaryValue: {
-    fontSize: fonts.body.small,
-    fontFamily: 'BakbakOne-Regular',
-    fontWeight: '700',
-  },
-  depositNote: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-  },
-  removeButton: {
-    width: dimensions.button.small.width,
-    height: dimensions.button.small.height,
-    borderRadius: dimensions.button.small.borderRadius,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   removeText: {
     fontSize: fonts.title.medium,
     fontWeight: 'bold',
-  },
-
-  // Schedule row — plain long-form date/time text. Not interactive: editing
-  // is reached from the provider header's Edit button.
-  dateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  dateText: {
-    fontSize: fonts.body.small,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    flexShrink: 1,
-    marginRight: spacing.sm,
   },
   dateTextWarning: {
     color: '#D32F2F',
     fontWeight: 'bold',
   },
+
+  // ServiceCard's shopping-cart-style row (GroupedServiceCard keeps the
+  // three-band layout above — serviceCard/serviceCardShadow/conflictBanner/
+  // itemEditButton/dateTextWarning stay shared with it, untouched).
+  swipeRowWrap: {
+    marginBottom: spacing.sm,
+    borderRadius: dimensions.card.smallBorderRadius,
+    overflow: 'hidden',
+  },
+  // Native-style circular delete button (like iOS Mail's swipe action)
+  // rather than a full-height red rectangle — renderRightActions scales it
+  // in from progress, so it doesn't just snap into place.
+  swipeDeleteAction: {
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swipeDeleteButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F44336',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // "Node card" look for ServiceCard (from the Concept B mockup, minus its
+  // rail/time-column and provider-identity row — provider identity and
+  // ordering both stay owned by CartProviderSection, unchanged; only the
+  // card's own internals were restyled). A surface tint (not the section's
+  // own card colour) separates this card from CartProviderSection around it
+  // — a hairline border alone read as invisible. GroupedServiceCard's
+  // node-* reuse below shares these same styles for visual consistency
+  // between the two card types.
+  nodeCard: {
+    borderRadius: 12,
+    padding: spacing.sm,
+  },
+  nodePencil: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  // Tapping the date/time is how the time is changed — regular weight on
+  // purpose (the display face reads as bold already, so this uses Jura).
+  nodeWhenChip: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  nodeWhenText: {
+    flexShrink: 1,
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '500',
+  },
+  nodeRemove: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+    marginTop: 8,
+  },
+  // Name and price share one size, a step up from the app's usual
+  // serviceText — the date/time chip above is what leads the card.
+  nodeServiceName: {
+    flex: 1,
+    fontSize: fonts.serviceText + 1,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  nodePrice: {
+    fontSize: fonts.serviceText + 1,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  nodeMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 3,
+  },
+  nodeMeta: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+  },
+  nodeTag: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  nodeTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  nodeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(244, 67, 54, 0.09)',
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    marginTop: 8,
+  },
+  nodeBannerWarn: {
+    backgroundColor: 'rgba(255, 149, 0, 0.09)',
+  },
+  nodeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F44336',
+  },
+  nodeBannerFix: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#F44336',
+    textDecorationLine: 'underline',
+  },
+  nodeNote: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 6,
+  },
+
   // "Which service?" chooser, opened from a provider header with >1 service.
   pickerOverlay: {
     flex: 1,
@@ -4808,8 +5053,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   groupSheet: {
     maxHeight: '88%',
@@ -4879,28 +5122,31 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
   },
 
-  // Grouped card — services scheduled back-to-back, shown as one appointment.
-  groupHeader: {
+  // Grouped card — services scheduled back-to-back, shown as one appointment,
+  // restyled as a tinted "node card" (from the Concept B mockup): a plain
+  // tag+span header instead of a filled badge, chip rows instead of
+  // hairline-divided ones, and a single due-now footer line.
+  groupNodeCard: {
+    borderRadius: 12,
+    padding: spacing.sm,
+  },
+  groupHead: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     marginBottom: spacing.sm,
   },
-  groupHeaderSpacer: {
-    flex: 1,
-  },
-  groupBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  groupBadgeText: {
+  groupTag: {
     fontSize: 9,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
     letterSpacing: 0.5,
-    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  groupTagSpan: {
+    fontSize: 9,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupHeaderDate: {
     fontSize: fonts.body.medium,
@@ -4912,38 +5158,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 1,
   },
-  groupRows: {
+  gchipList: {
     marginTop: spacing.md,
+    gap: 7,
   },
-  groupRow: {
+  gchip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderRadius: 9,
+    padding: spacing.sm,
   },
-  groupRowInfo: {
+  gchipInfo: {
     flex: 1,
   },
-  groupRowName: {
+  gchipName: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
     marginBottom: 1,
   },
-  groupRowMeta: {
+  gchipMeta: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
-  providerIssueCount: {
-    color: '#F44336',
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  // Same red as the card banner and border, so a flagged row reads as part of
-  // the same signal rather than a second, unrelated warning colour.
+  // Same red as the card banner, so a flagged chip reads as part of the
+  // same signal rather than a second, unrelated warning colour.
   groupRowIssue: {
     color: '#F44336',
     fontSize: fonts.body.xsmall,
@@ -4963,7 +5203,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 1,
   },
-  groupRowPrice: {
+  gchipPrice: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
   },
@@ -4971,31 +5211,32 @@ const styles = StyleSheet.create({
     paddingLeft: 2,
     marginTop: -2,
   },
-  groupFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  groupFooterBreakdown: {
-    gap: 2,
-  },
-  groupFooterRow: {
+  gfoot: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: spacing.md,
   },
-  groupFooterLabel: {
+  gfootLabel: {
     fontSize: fonts.body.xsmall,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  gfootSubnote: {
+    fontSize: 9,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
+    marginTop: 1,
   },
-  groupFooterTotalLabel: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'BakbakOne-Regular',
-  },
-  groupFooterValue: {
+  gfootAmt: {
     fontSize: fonts.body.medium,
     fontFamily: 'BakbakOne-Regular',
+  },
+  providerIssueCount: {
+    color: '#F44336',
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    marginTop: 4,
   },
   pickerRowInfo: {
     flex: 1,
@@ -5381,16 +5622,29 @@ const styles = StyleSheet.create({
     borderRadius: dimensions.card.largeBorderRadius,
     width: '88%',
     maxWidth: 360,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
+    // Accent-tinted shadow (plum) rather than flat black — same signature as
+    // ProviderProfileScreen's tinted card shadow, adapted to the client hat.
+    shadowColor: '#3F1E36',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
     elevation: 10,
   },
   liquidGlassSuccessContent: {
     padding: spacing.xxl,
     alignItems: 'center',
     width: '100%',
+  },
+  // Outer faint ring wrapping the icon — the double-ring treatment.
+  liquidGlassSuccessIconRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(52,199,89,0.18)',
   },
   liquidGlassSuccessIcon: {
     width: 72,
@@ -5399,7 +5653,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(52,199,89,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xxl,
     borderWidth: 1,
     borderColor: 'rgba(52,199,89,0.25)',
   },
@@ -5429,12 +5682,20 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.md,
   },
-  liquidGlassSuccessButton: {
+  liquidGlassSuccessButtonPrimary: {
     borderRadius: dimensions.card.smallBorderRadius,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     width: '100%',
     alignItems: 'center',
+  },
+  liquidGlassSuccessButtonGhost: {
+    borderRadius: dimensions.card.smallBorderRadius,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
   },
   liquidGlassSuccessButtonText: {

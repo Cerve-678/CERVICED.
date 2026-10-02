@@ -140,9 +140,14 @@ export default function SlidingTabs<K extends string = string>({
       // shared max, a container resize or a late font load shifts them too.
       // handleLayout used to bail out here, leaving the indicator stuck at the
       // first-pass geometry, so the accent fill ended up narrower than the tab
-      // it's meant to sit behind ("doesn't fill properly"). Re-snap it (no
-      // animation — this is a layout correction, not a user action).
-      if (moved && key === activeKey) slideTo(key, false);
+      // it's meant to sit behind ("doesn't fill properly"). Re-snap it —
+      // animated, not instant: tapping a tab makes its own label switch to
+      // bold (see tabText's fontWeight below), which measures wider and
+      // fires this exact correction a beat after the tap's own
+      // slideTo(key, true) spring already started. An instant snap here
+      // was overriding that in-flight spring with a hard jump, which is
+      // what made every tab switch look unanimated no matter the screen.
+      if (moved && key === activeKey) slideTo(key, true);
       return;
     }
 

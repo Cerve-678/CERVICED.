@@ -38,6 +38,8 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Alert,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 // Gesture-handler's TouchableOpacity rather than react-native's, for the same
@@ -56,6 +58,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  getCachedProviderData,
   loadProviderFromSupabase,
   uploadToStorage,
 } from '../../services/providerRegistrationService';
@@ -589,6 +592,21 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // Reload data every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      let active = true;
+
+      // Returning providers can render their saved profile before the live
+      // request finishes. Supabase still refreshes every field below; this
+      // merely removes the empty spinner from the route transition.
+      if (user?.id) {
+        getCachedProviderData(user.id)
+          .then(cached => {
+            if (!cached || !active) return;
+            setProviderData(cached);
+            setIsLoading(false);
+          })
+          .catch(() => {});
+      }
+
       const load = async () => {
         // Don't blank the screen on refocus — isLoading is only true on the
         // very first mount (useState(true)). On later focuses we keep what's
@@ -607,7 +625,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               loadProviderFromSupabase(user.id),
               getMyProviderProfile(),
             ]);
+            if (!active) return;
             parsed = loaded;
+
+            // The profile header and dashboard don't depend on the editable
+            // catalogue query. Show them as soon as the authoritative
+            // registration record is available, then fill in services below.
+            setProviderData(parsed);
+            setIsLoading(false);
 
             if (profile) {
               setProviderId(profile.id);
@@ -617,6 +642,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               // rather than fired and forgotten — everything else can arrive
               // late without the screen looking broken.
               const catalogue = await getMyServiceCatalogue(profile.id);
+              if (!active) return;
               setServices(catalogue.services);
 
               getProviderPortfolio(profile.id)
@@ -678,14 +704,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             }
           }
 
-          setProviderData(parsed);
+          if (active) setProviderData(parsed);
         } catch (e) {
           logger.error('[MyServices] load failed:', e);
         } finally {
-          setIsLoading(false);
+          if (active) setIsLoading(false);
         }
       };
-      load();
+      void load();
+      return () => { active = false; };
     }, [user?.id]),
   );
 
@@ -778,22 +805,27 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const totalReviews = reviewCount ?? reviews.length;
 
   const handleEditProfile = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('EditProfile');
   }, [navigation]);
 
   const handleEditSchedule = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('ProviderSchedule');
   }, [navigation]);
 
   const handleEditBranding = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Branding');
   }, [navigation]);
 
   const handleOpenAnalytics = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Analytics');
   }, [navigation]);
 
   const handleEditPolicies = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Policies');
   }, [navigation]);
 
@@ -814,28 +846,22 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   >(
     () => [
       {
-        key: 'services',
-        label: 'Services',
-        icon: 'sparkles-outline',
-        onPress: () => handleSelectTab('services'),
+        key: 'business-info',
+        label: 'Business info',
+        icon: 'business-outline',
+        onPress: () => navigation.navigate('BusinessInfo'),
+      },
+      {
+        key: 'payments',
+        label: 'Payments',
+        icon: 'card-outline',
+        onPress: () => navigation.navigate('Payments'),
       },
       {
         key: 'schedule',
         label: 'Schedule',
         icon: 'calendar-outline',
-        onPress: () => navigation.navigate('ProviderSchedule'),
-      },
-      {
-        key: 'clients',
-        label: 'Clients',
-        icon: 'people-outline',
-        onPress: () => navigation.navigate('Clientele'),
-      },
-      {
-        key: 'offers',
-        label: 'Offers',
-        icon: 'gift-outline',
-        onPress: () => navigation.navigate('Promotions'),
+        onPress: () => navigation.navigate('Scheduling'),
       },
       {
         key: 'packs',
@@ -843,8 +869,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         icon: 'documents-outline',
         onPress: () => navigation.navigate('InfoPacks'),
       },
+      {
+        key: 'clientele',
+        label: 'Clientele',
+        icon: 'people-outline',
+        onPress: () => navigation.navigate('Clientele'),
+      },
     ],
-    [handleSelectTab, navigation],
+    [navigation],
   );
 
   // ── Service editing ─────────────────────────────────────────────────────
@@ -882,6 +914,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch (e) {
         logger.error('[MyServices] save service failed:', e);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         Alert.alert(
           'Could not save',
           toUserMessage(e, "That didn't save. Please try again.", 'MyServices.saveService'),
@@ -906,6 +939,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         prev.map(s => (s.id === service.id ? { ...s, is_active: service.is_active } : s)),
       );
       logger.error('[MyServices] toggle service failed:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert(
         'Could not update',
         toUserMessage(e, "That didn't save. Please try again.", 'MyServices.toggleService'),
@@ -1000,6 +1034,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
           setWorkPhotos(prev => prev.filter(p => p.id !== item.id));
           try {
             await deletePortfolioItem(item.id);
@@ -1101,6 +1136,35 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // would otherwise flash a dark strip over them.
   useDarkTopArea(!isLoading && !!providerData && heroIsDark);
   const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
+
+  // Threshold, not per-frame state: this flips at most once per direction, so
+  // scrolling never re-renders the screen on every event. The value is where
+  // the scrolling cards first cover the status bar — worth confirming on a
+  // device, since it depends on the identity header's rendered height.
+  const [paleContentUnderStatusBar, setPaleContentUnderStatusBar] =
+    useState(false);
+  const pastHeroRef = useRef(false);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const past = e.nativeEvent.contentOffset.y > 100;
+    if (past === pastHeroRef.current) return;
+    pastHeroRef.current = past;
+    setPaleContentUnderStatusBar(past);
+  }, []);
+
+  // The hero runs under the safe area, so the status bar has to follow it
+  // rather than the theme's isDark token — Black pairs a true-black hero with
+  // a pale card, so isDark is false there.
+  //
+  // Only while the hero is what's actually behind the clock, though. The hero
+  // is a fixed full-screen backdrop, but the content scrolling over it is pale
+  // cards, so once they reach the top the clock needs to go back to dark or it
+  // disappears into them. Gated on the profile rendering too: the loading and
+  // empty states fall back to the pale ThemedBackground, and heroIsDark
+  // defaults to true with no data.
+  useDarkTopArea(
+    !isLoading && !!providerData && heroIsDark && !paleContentUnderStatusBar,
+  );
+
 
   if (isLoading) {
     return (
@@ -1333,6 +1397,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
           {/* Identity header. Scrolls with the content rather than being
               pinned: it carries stats and actions now, so holding it on screen
@@ -1680,7 +1746,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         </View>
                         <TouchableOpacity
                           style={[styles.addChip, { borderColor: PP.border }]}
-                          onPress={handleAddPhotos}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => {});
+                            void handleAddPhotos();
+                          }}
                           disabled={photoUploading}
                           activeOpacity={0.7}
                           accessibilityRole="button"
@@ -1718,7 +1787,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                             />
                             <TouchableOpacity
                               style={styles.photoRemove}
-                              onPress={() => handleRemovePhoto(item)}
+                              onPress={() => {
+                                Haptics.selectionAsync().catch(() => {});
+                                handleRemovePhoto(item);
+                              }}
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                               accessibilityRole="button"
                               accessibilityLabel="Remove this photo"
@@ -1764,7 +1836,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           <TouchableOpacity
                             key={action.key}
                             style={[styles.quickItem, { width: (screenWidth - 76) / 5 }]}
-                            onPress={action.onPress}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              action.onPress();
+                            }}
                             activeOpacity={0.7}
                             accessibilityRole="button"
                             accessibilityLabel={action.label}

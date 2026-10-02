@@ -7,8 +7,10 @@ import {
   TouchableOpacity,
   StatusBar,
   Animated,
+  Easing,
   useWindowDimensions,
 } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useFocusEffect, useIsFocused, NavigationProp } from '@react-navigation/native';
@@ -18,6 +20,7 @@ import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
 import { shuffle } from '../../utils/shuffle';
 import { pickTourCardId } from '../../utils/coachMarkTargets';
+import { mergeSavedExploreCards } from '../../utils/mergeSavedExploreCards';
 import { ExploreStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,19 +34,17 @@ import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { MasonryGrid, MasonryGridHandle, masonryColumnsForWidth } from '../../components/MasonryGrid';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import { ImageDetailModal } from '../../components/ImageDetailModal';
+import { withTimeout } from '../../utils/withTimeout';
 
 // Data types
 import { PortfolioItem, ServiceCategory } from '../../types/providers';
 import {
   getPortfolioItems,
-  getDiscoverProviders,
   getDiscoverServices,
-  getDiscoverUnclaimedProviders,
   getSavedPortfolioDetails,
   prefetchProviderBySlug,
 } from '../../services/databaseService';
-import type { DiscoverUnclaimedProvider } from '../../services/databaseService';
-import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider } from '../../types/database';
+import type { PortfolioItemWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 
 // Stores
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
@@ -52,33 +53,50 @@ import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
 
 
-// Mixes portfolio photos with provider and service ("bookable") cards for a
+// Mixes portfolio photos with service ("bookable") cards for a
 // Pinterest-style feed, instead of stacking every source back-to-back or
 // front-loading bookable cards near the top. Portfolio cards vastly
 // outnumber bookable ones, so a random weighted draw exhausts the bookable
 // pool early and leaves the rest of the scroll portfolio-only — instead,
 // bookable cards are spread at even intervals across the FULL feed length
 // (see interleaveDiscoverFeed), so every stretch of scrolling has some.
+//
+// There are deliberately no provider "cover" cards. The only image a provider
+// row has for one is providers.background_image_url — the backdrop a provider
+// picks on the Branding screen to theme their own profile page. That's
+// profile decoration, not work they've posted for discovery, and it read as
+// a stray photo leaking into the feed.
 
-// The four discover sources are queried independently and share no dedupe,
-// so the same photo file can legitimately arrive from more than one of them:
-// a provider's cover photo (providers.background_image_url) is very often
-// also one of their own portfolio_items rows, and a service_images row can
-// be the same upload as a portfolio photo. The card ids differ
-// (`provider-<id>` vs the portfolio row's own id), so nothing errors and
-// React keys stay unique — it just reads as the same picture appearing twice
-// in the feed. Dedupe on the image URL, which is the thing the user actually
-// perceives as duplicated.
+// The discover sources are queried independently and share no dedupe, so the
+// same photo file can legitimately arrive from both: a service_images row can
+// be the same upload as a portfolio photo. The card ids differ, so nothing
+// errors and React keys stay unique — it just reads as the same picture
+// appearing twice in the feed. Dedupe on the image URL, which is the thing
+// the user actually perceives as duplicated.
 //
 // Keeps the FIRST occurrence in the order given, so callers control which
 // source wins by argument order: portfolio photos (the richest cards — real
-// aspect ratio, caption, tags) are passed first and therefore beat a
-// provider cover or service photo pointing at the same file.
-// A card with no image file behind it has nothing to show in a masonry feed
-// — it renders as an empty box. Filtered out rather than papered over with a
-// placeholder, so the feed only ever contains real photographs.
-function hasFeedImage(card: PortfolioItem): boolean {
-  return !!(card.image as { uri?: string } | undefined)?.uri;
+// aspect ratio, caption, tags) are passed first and therefore beat a service
+// photo pointing at the same file.
+
+// MasonryGrid intentionally owns one stable ScrollView, but unlike a native
+// virtualized list it mounts every item it receives. Feed it a window that
+// grows near the end so opening Explore does not decode and render an entire
+// discovery catalogue before the first frame is useful.
+const INITIAL_EXPLORE_ITEMS = 24;
+const EXPLORE_BATCH_SIZE = 18;
+const LOAD_MORE_THRESHOLD = 900;
+const LOAD_MORE_COOLDOWN_MS = 300;
+// Explore combines two sources before deduplicating. Keeping each source
+// bounded avoids fetching the full catalogue (portfolio used to request 200
+// rows) just to paint the first 24 cards. The already-present load-more flow
+// progressively mounts the resulting feed as the person browses.
+const DISCOVER_PORTFOLIO_LIMIT = 60;
+const DISCOVER_SERVICE_LIMIT = 30;
+
+function isNearGridEnd(event: NativeSyntheticEvent<NativeScrollEvent>): boolean {
+  const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+  return contentOffset.y + layoutMeasurement.height >= contentSize.height - LOAD_MORE_THRESHOLD;
 }
 
 function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
@@ -97,11 +115,8 @@ function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
 function interleaveDiscoverFeed(
   portfolioCards: PortfolioItem[],
   serviceCards: PortfolioItem[],
-  providerCards: PortfolioItem[]
 ): PortfolioItem[] {
-  // Service and provider cards are both "bookable" — merged and reshuffled
-  // together so neither type clusters ahead of the other within this pool.
-  const bookable = shuffle([...serviceCards, ...providerCards]);
+  const bookable = shuffle(serviceCards);
   const total = portfolioCards.length + bookable.length;
   if (total === 0) return [];
 
@@ -296,15 +311,43 @@ const ExploreScreen = memo(() => {
   const tourFavouritesRef = useRef<View>(null);
   const tourSavedRef = useRef<View>(null);
 
+  // Category-pill (filter chips) entrance — matches the fade+slide-up every
+  // other card/pill row in the app already does on mount.
+  const filterFadeAnim = useRef(new Animated.Value(0)).current;
+  const filterSlideAnim = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(filterFadeAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(filterSlideAnim, { toValue: 0, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Favourites — anything the user hearted, resolved from useBookmarkStore's
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
   const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
   const [favouritesLoading, setFavouritesLoading] = useState(false);
+  const [favouritesVisibleCount, setFavouritesVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
 
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
+  const [discoverVisibleCount, setDiscoverVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
+  const discoverLoadMoreAtRef = useRef(0);
+  const favouritesLoadMoreAtRef = useRef(0);
+
+  useEffect(() => {
+    setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
+    discoverLoadMoreAtRef.current = 0;
+  }, [selectedFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'favourites') {
+      setFavouritesVisibleCount(INITIAL_EXPLORE_ITEMS);
+      favouritesLoadMoreAtRef.current = 0;
+    }
+  }, [activeTab]);
 
   // The discover feed is shuffled client-side (see interleaveDiscoverFeed)
   // since every source query is deterministically ordered. Without caching
@@ -330,7 +373,8 @@ const ExploreScreen = memo(() => {
       // category = NULL should read as whatever its provider's real
       // category is, not silently masquerade as Nails.
       category: (item.category?.toUpperCase() as ServiceCategory) ?? (p.service_category as unknown as ServiceCategory),
-      aspectRatio: item.aspect_ratio,
+      aspectRatio: item.aspect_ratio ?? 0.8,
+      aspectRatioIsFallback: item.aspect_ratio == null,
       providerId: p?.slug ?? item.provider_id,
       tags: item.tags ?? [],
       imageUri: item.image_url,
@@ -343,56 +387,6 @@ const ExploreScreen = memo(() => {
       ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
     };
   }, []);
-
-  // Map a provider row to a cover-photo card for the mixed discovery feed.
-  // No real dimensions for a cover photo, so a portrait 4:5 default keeps it
-  // in line with typical portfolio photos rather than defaulting to square.
-  const mapDbProviderToCard = useCallback((p: DbProvider): PortfolioItem => ({
-    id: `provider-${p.id}`,
-    // Cover photo ONLY — never the logo. A logo is a brand mark sized for a
-    // 40px avatar; stretched into a feed tile it reads as a mistake, and it
-    // also duplicates the avatar already drawn on the same card. Rows with no
-    // cover are dropped from the feed by hasFeedImage below rather than
-    // falling back to one.
-    image: { uri: p.background_image_url ?? '' },
-    caption: p.about_text ?? '',
-    category: p.service_category as unknown as ServiceCategory,
-    aspectRatio: 0.8,
-    providerId: p.slug,
-    providerName: p.display_name,
-    providerSlug: p.slug,
-    providerRating: p.rating,
-    providerReviewCount: p.review_count,
-    kind: 'provider',
-    ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
-  }), []);
-
-  // Map an unclaimed/scraped provider row to a "ready to claim" card. No
-  // rating/review data exists for these (never onboarded), so those fields
-  // are simply omitted rather than faked as 0 — PortfolioCard already
-  // treats them as optional. providerId uses the real id, and providerSlug
-  // is deliberately omitted: ImageDetailModal navigates via
-  // `item.providerSlug ?? item.providerId`, and getProviderBySlug requires
-  // has_gone_live = true, which no unclaimed row ever has — so resolving by
-  // slug would 404. Leaving providerSlug unset makes that fallback resolve
-  // to the real id, which ProviderProfileScreen's unclaimed-fallback lookup
-  // (getUnclaimedProviderDetail) expects.
-  const mapDbUnclaimedProviderToCard = useCallback((p: DiscoverUnclaimedProvider): PortfolioItem => ({
-    id: `provider-${p.id}`,
-    // Same rule as claimed providers: no logo-as-feed-image. A scraped row
-    // has no cover photo column at all, so these always fall out of the
-    // discovery feed via hasFeedImage — the claim directory is where they're
-    // meant to be browsed, not as logo tiles between real work photos.
-    image: { uri: '' },
-    caption: p.about_text ?? '',
-    category: p.service_category as unknown as ServiceCategory,
-    aspectRatio: 0.8,
-    providerId: p.id,
-    providerName: p.display_name,
-    kind: 'provider',
-    isUnclaimed: true,
-    ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
-  }), []);
 
   // Map a service to one card PER photo in its carousel (not just the cover
   // shot) — each carries the same serviceId/price/provider so tapping any of
@@ -421,12 +415,16 @@ const ExploreScreen = memo(() => {
       imageFits,
       caption: s.description ?? '',
       serviceName: s.name,
-      category: p.service_category as unknown as ServiceCategory,
+      // This service's own category, not the provider's headline
+      // (p.service_category) — a Makeup+Hair provider's Hair service must
+      // read as Hair even though the provider's own headline is Makeup.
+      category: s.service_category.toUpperCase() as ServiceCategory,
       // Real stored ratio where the upload measured one (see
       // service_images.aspect_ratio). Older rows predate that column and
       // come back null — those fall back to 0.8 for the first paint only,
       // then get corrected by useMeasuredAspectRatios measuring the file.
       aspectRatio: img.aspect_ratio ?? 0.8,
+      aspectRatioIsFallback: img.aspect_ratio == null,
       providerId: p.slug,
       price: `£${s.price}`,
       providerName: p.display_name,
@@ -463,47 +461,40 @@ const ExploreScreen = memo(() => {
   // was cached for the current filter).
   const loadDiscoverFeed = useCallback(async (filter: string): Promise<PortfolioItem[]> => {
     const category = filter !== 'All' ? filterMap[filter] : undefined;
-    const [portfolioData, providerData, serviceData, unclaimedData] = await Promise.all([
-      getPortfolioItems(category),
-      getDiscoverProviders(category),
-      getDiscoverServices(category),
-      getDiscoverUnclaimedProviders(category),
-    ]);
+    const [portfolioData, serviceData] = await withTimeout(
+      Promise.all([
+        getPortfolioItems(category, DISCOVER_PORTFOLIO_LIMIT),
+        getDiscoverServices(category, DISCOVER_SERVICE_LIMIT),
+      ]),
+      8_000,
+      'Explore feed',
+    );
 
     // Every getDiscover*/getPortfolioItems query is deterministically
     // ordered (created_at, rating, scraped_at — see databaseService.ts) so
     // the DB always returns rows in the same order. Shuffling each source's
-    // own rows here, before interleaveDiscoverFeed mixes the three types
+    // own rows here, before interleaveDiscoverFeed mixes the two types
     // together, is what actually randomizes the feed — without it the same
     // provider's photos (or the same top-rated providers) reliably cluster/
     // repeat in the same run every load. Shuffled at the row level (before
     // serviceData's flatMap), not after, so a single service's own carousel
     // photos stay adjacent to each other instead of scattering across the
     // feed.
-    // Deduped across all four sources before interleaving — the same photo
-    // file can arrive from more than one source (see dedupeByImageUri).
-    // Order matters: portfolio cards are passed first so they win over a
-    // provider cover or service photo pointing at the same upload.
+    // Deduped across both sources before interleaving — the same photo
+    // file can arrive from both (see dedupeByImageUri). Order matters:
+    // portfolio cards are passed first so they win over a service photo
+    // pointing at the same upload.
     const portfolioCards = shuffle(portfolioData).map(mapDbPortfolioItem);
     const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
-    const providerCards = shuffle([
-      ...providerData.map(mapDbProviderToCard),
-      ...unclaimedData.map(mapDbUnclaimedProviderToCard),
-    ]).filter(hasFeedImage);
-    const deduped = dedupeByImageUri([
-      ...portfolioCards,
-      ...serviceCards,
-      ...providerCards,
-    ]);
+    const deduped = dedupeByImageUri([...portfolioCards, ...serviceCards]);
     const keep = new Set(deduped.map(c => c.id));
     const feed = interleaveDiscoverFeed(
       portfolioCards.filter(c => keep.has(c.id)),
       serviceCards.filter(c => keep.has(c.id)),
-      providerCards.filter(c => keep.has(c.id))
     );
     discoverFeedCache.current.set(filter, feed);
     return feed;
-  }, [filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbUnclaimedProviderToCard, mapDbServiceToCards]);
+  }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
 
   // Fetch the mixed discovery feed whenever the category filter changes —
   // but only if this filter hasn't been shuffled yet this session. Revisiting
@@ -546,6 +537,11 @@ const ExploreScreen = memo(() => {
   // and re-fetches, leaving every other filter's cached order untouched.
   const handleRefreshDiscover = useCallback(() => {
     discoverFeedCache.current.delete(selectedFilter);
+    // A refresh replaces the feed rather than extending the current one.
+    // Return to the lightweight initial window so a deeply-scrolled session
+    // does not mount the same large card count against all-new image URLs.
+    setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
+    discoverLoadMoreAtRef.current = 0;
     setPortfolioRefreshing(true);
     loadDiscoverFeed(selectedFilter)
       .then(feed => setPortfolioItems(feed))
@@ -563,11 +559,17 @@ const ExploreScreen = memo(() => {
     }
 
     let cancelled = false;
-    setFavouritesLoading(true);
+    const localSavedCards = portfolioItems.filter((card) =>
+      savedPortfolioIds.includes(card.id),
+    );
+    // A card just hearted in Discover is already complete and visible. Put it
+    // in Favourites now; the database fetch fills in older saves afterwards.
+    setFavouriteItems(localSavedCards);
+    setFavouritesLoading(localSavedCards.length === 0);
 
     const load = async () => {
       try {
-        const { portfolioItems: savedPortfolio, providers, services } =
+        const { portfolioItems: savedPortfolio, services } =
           await getSavedPortfolioDetails(savedPortfolioIds);
         if (cancelled) return;
 
@@ -576,24 +578,24 @@ const ExploreScreen = memo(() => {
         // were actually saved — so the flat-mapped cards need filtering back
         // down to exactly the saved ids before they're shown as favourites.
         const savedIdSet = new Set(savedPortfolioIds);
-        const cards = [
+        const hydratedCards = [
           ...savedPortfolio.map(mapDbPortfolioItem),
-          ...providers.map(mapDbProviderToCard),
           ...services.flatMap(mapDbServiceToCards).filter(c => savedIdSet.has(c.id)),
         ];
-        // Most-recently-saved first, matching save order in savedPortfolioIds.
-        const order = new Map(savedPortfolioIds.map((id, i) => [id, i]));
-        cards.sort((a, b) => (order.get(b.id) ?? 0) - (order.get(a.id) ?? 0));
-        setFavouriteItems(cards);
+        setFavouriteItems(
+          mergeSavedExploreCards(savedPortfolioIds, localSavedCards, hydratedCards),
+        );
       } catch {
-        if (!cancelled) setFavouriteItems([]);
+        // Retain current-session saves when the background hydration fails.
+        // An empty state would falsely imply that a heart did not work.
+        if (!cancelled) setFavouriteItems(localSavedCards);
       } finally {
         if (!cancelled) setFavouritesLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
+  }, [activeTab, savedPortfolioIds, portfolioItems, mapDbPortfolioItem, mapDbServiceToCards]);
 
   // Column width for masonry
   // Must match MasonryGrid's own column maths exactly — it lays the cards out,
@@ -603,17 +605,24 @@ const ExploreScreen = memo(() => {
     return (screenWidth - spacing.lg * 2 - spacing.sm * (columns - 1)) / columns;
   }, [screenWidth]);
 
-  // Measure the true dimensions of every photo in both feeds. Only portfolio
-  // cards carry a real aspect_ratio from the DB; service/provider/unclaimed
-  // cards are mapped with a hardcoded 0.8 above because nothing stores their
-  // dimensions, so without this a landscape service photo would be packed
-  // and rendered as a portrait card and cropped to fit.
+  const visiblePortfolioItems = useMemo(
+    () => portfolioItems.slice(0, discoverVisibleCount),
+    [portfolioItems, discoverVisibleCount],
+  );
+  const visibleFavouriteItems = useMemo(
+    () => favouriteItems.slice(0, favouritesVisibleCount),
+    [favouriteItems, favouritesVisibleCount],
+  );
+
+  // Only measure visible cards whose ratio is a fallback. Upload-time ratios
+  // are already trustworthy, and probing every offscreen URL on mount was
+  // competing with the images needed for the first viewport.
   const measuredUris = useMemo(
     () =>
-      [...portfolioItems, ...favouriteItems].map(
-        i => (i.image as { uri?: string } | undefined)?.uri,
-      ),
-    [portfolioItems, favouriteItems],
+      (activeTab === 'discover' ? visiblePortfolioItems : visibleFavouriteItems)
+        .filter(i => i.aspectRatioIsFallback)
+        .map(i => (i.image as { uri?: string } | undefined)?.uri),
+    [activeTab, visiblePortfolioItems, visibleFavouriteItems],
   );
   const { resolveRatio } = useMeasuredAspectRatios(measuredUris);
 
@@ -646,11 +655,26 @@ const ExploreScreen = memo(() => {
     navigation.navigate('Search', { morph: true });
   }, [navigation]);
 
+  const prepareDetailItem = useCallback((item: PortfolioItem): PortfolioItem => {
+    const uri = (item.image as { uri?: string } | undefined)?.uri;
+    return {
+      ...item,
+      // The masonry grid has usually measured this image already. Carry that
+      // result into the modal instead of reverting to the legacy 4:5 fallback
+      // and making the sheet jump when the same file decodes a second time.
+      aspectRatio: resolveRatio(uri, item.aspectRatio),
+    };
+  }, [resolveRatio]);
+
   const handleImagePress = useCallback((item: PortfolioItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setSelectedImage(item);
+    setSelectedImage(prepareDetailItem(item));
     setIsDetailVisible(true);
-  }, []);
+  }, [prepareDetailItem]);
+
+  const handleSelectSimilarItem = useCallback((item: PortfolioItem) => {
+    setSelectedImage(prepareDetailItem(item));
+  }, [prepareDetailItem]);
 
   const handleCloseDetail = useCallback(() => {
     // Deliberately does NOT clear selectedImage. ImageDetailModal returns
@@ -662,6 +686,34 @@ const ExploreScreen = memo(() => {
     // never seen, and the next open overwrites it.
     setIsDetailVisible(false);
   }, []);
+
+  const handleDiscoverScrollSettled = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      settleExplorePillTracking(event);
+      if (discoverVisibleCount >= portfolioItems.length || !isNearGridEnd(event)) return;
+      const now = Date.now();
+      if (now - discoverLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
+      discoverLoadMoreAtRef.current = now;
+      setDiscoverVisibleCount(current =>
+        Math.min(portfolioItems.length, current + EXPLORE_BATCH_SIZE),
+      );
+    },
+    [discoverVisibleCount, portfolioItems.length],
+  );
+
+  const handleFavouritesScrollSettled = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      settleExplorePillTracking(event);
+      if (favouritesVisibleCount >= favouriteItems.length || !isNearGridEnd(event)) return;
+      const now = Date.now();
+      if (now - favouritesLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
+      favouritesLoadMoreAtRef.current = now;
+      setFavouritesVisibleCount(current =>
+        Math.min(favouriteItems.length, current + EXPLORE_BATCH_SIZE),
+      );
+    },
+    [favouriteItems.length, favouritesVisibleCount],
+  );
 
   const handleViewProfile = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any) => {
@@ -825,7 +877,12 @@ const ExploreScreen = memo(() => {
             </View>
 
             {/* Filter Chips */}
-            <View style={[styles.filterSection, { backgroundColor: P.bg, borderBottomColor: P.sep }]}>
+            <Animated.View
+              style={[
+                styles.filterSection,
+                { backgroundColor: P.bg, borderBottomColor: P.sep, opacity: filterFadeAnim, transform: [{ translateY: filterSlideAnim }] },
+              ]}
+            >
               <SlidingTabs
                 tabs={filterTabs}
                 activeKey={selectedFilter}
@@ -838,7 +895,7 @@ const ExploreScreen = memo(() => {
                 inactiveTextColor={P.sub}
                 containerStyle={styles.filterScrollContent}
               />
-            </View>
+            </Animated.View>
 
             {/* Masonry Grid */}
             {portfolioLoading ? (
@@ -846,13 +903,13 @@ const ExploreScreen = memo(() => {
             ) : (
               <MasonryGrid
                 ref={discoverGridRef}
-                data={portfolioItems}
+                data={visiblePortfolioItems}
                 renderItem={renderPortfolioCard}
                 getItemHeight={getItemHeight}
                 keyExtractor={item => item.id}
                 onScroll={exploreScrollHandler}
-                onScrollEndDrag={settleExplorePillTracking}
-                onMomentumScrollEnd={settleExplorePillTracking}
+                onScrollEndDrag={handleDiscoverScrollSettled}
+                onMomentumScrollEnd={handleDiscoverScrollSettled}
                 refreshing={portfolioRefreshing}
                 onRefresh={handleRefreshDiscover}
                 ListHeaderComponent={
@@ -882,13 +939,13 @@ const ExploreScreen = memo(() => {
             <SkeletonMasonryGrid />
           ) : (
             <MasonryGrid
-              data={favouriteItems}
+              data={visibleFavouriteItems}
               renderItem={renderPortfolioCard}
               getItemHeight={getItemHeight}
               keyExtractor={item => item.id}
               onScroll={exploreScrollHandler}
-              onScrollEndDrag={settleExplorePillTracking}
-              onMomentumScrollEnd={settleExplorePillTracking}
+              onScrollEndDrag={handleFavouritesScrollSettled}
+              onMomentumScrollEnd={handleFavouritesScrollSettled}
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridCount, { color: P.sub }]}>
@@ -918,7 +975,7 @@ const ExploreScreen = memo(() => {
         onViewProfile={handleViewProfile}
         onBookNow={handleBookNow}
         similarItems={portfolioItems}
-        onSelectItem={setSelectedImage}
+        onSelectItem={handleSelectSimilarItem}
       />
 
       {/* First-visit walkthrough of the grid's own affordances. Rendered

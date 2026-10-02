@@ -8,6 +8,10 @@ export interface PortfolioItem {
   caption: string;
   category: ServiceCategory;
   aspectRatio: number;
+  // Marks a placeholder ratio rather than dimensions captured at upload.
+  // Explore only probes the remote image when this is true, avoiding a
+  // second decode/request for the majority of cards with stored dimensions.
+  aspectRatioIsFallback?: boolean;
   providerId: string;
   tags?: string[] | undefined;
   price?: string | undefined;
@@ -19,10 +23,9 @@ export interface PortfolioItem {
   providerRating?: number;
   providerReviewCount?: number;
   // Card source in the mixed Explore feed — absent/'portfolio' for a client-work
-  // photo, 'provider' for a provider cover-photo card, 'service' for a service
-  // photo card. Same shape either way so PortfolioCard/ImageDetailModal don't
-  // need to branch on it.
-  kind?: 'portfolio' | 'provider' | 'service';
+  // photo, 'service' for a service photo card. Same shape either way so
+  // PortfolioCard/ImageDetailModal don't need to branch on it.
+  kind?: 'portfolio' | 'service';
   // Real services.id UUID — only present when kind === 'service'. Lets
   // "Book Now" jump straight to that exact service's booking modal instead
   // of just the provider's profile.
@@ -47,11 +50,6 @@ export interface PortfolioItem {
   // (service_images.fit), so the client-facing carousel can honour it
   // instead of always cropping to cover.
   imageFits?: ('cover' | 'contain')[];
-  // True only for kind === 'provider' cards backed by an unclaimed/scraped
-  // provider row (is_claimed = false) — see getDiscoverUnclaimedProviders.
-  // Card UI must show an "Unclaimed" badge and route to the claim flow
-  // instead of a normal profile/booking view.
-  isUnclaimed?: boolean;
 }
 
 export interface Service {

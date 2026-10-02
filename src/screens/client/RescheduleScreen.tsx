@@ -1,6 +1,7 @@
 // RescheduleScreen.tsx
 // Reschedule flow extracted from BookingsScreen. Receives { bookingId } route param.
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Platform, Modal,
@@ -13,7 +14,6 @@ import { useFont } from '../../contexts/FontContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAppDialog } from '../../components/AppDialog';
-import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useBooking, AvailableDate } from '../../contexts/BookingContext';
 import {
   getProviderReschedulePolicyById,
@@ -27,7 +27,7 @@ import {
   RESCHEDULE_MAX_DATES,
 } from '../../utils/rescheduleWindow';
 import { logger, reportError } from '../../utils/logger';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -103,6 +103,7 @@ async function fetchRealRescheduleDates(
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function RescheduleScreen({ navigation, route }: Props) {
+  const bottomInset = useSystemBottomInset();
   useFont();
   const { bookingId } = route.params;
   const { palette: C, isDarkMode } = useTheme();
@@ -134,6 +135,18 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       headerBackButtonDisplayMode: 'minimal',
     });
   }, [navigation, C]);
+
+  // Same mechanism as InfoRegScreen/ProviderProfileScreen: IslandPillTabBar
+  // reads tabBarStyle off the focused tab's route options. Cleanup restores
+  // the pill on blur so this screen's hidden state never leaks onto the next.
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (!isFocused) return;
+    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
+    return () => {
+      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
+    };
+  }, [isFocused, navigation]);
 
   // A group reschedule proposal (see supabase/fix_group_booking_reschedule.sql)
   // stamps EVERY sibling's request row with the same groupRescheduleBatchId —
@@ -653,9 +666,10 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   return (
     <ThemedBackground>
       {/* No bottom edge here — the footer below owns its own bottom
-          clearance via FLOATING_TAB_BAR_CLEARANCE (this screen sits under
-          IslandPillTabBar's floating pill), so a safe-area bottom inset here
-          on top of that would stack and make the footer needlessly tall. */}
+          clearance via useSystemBottomInset (this screen hides
+          IslandPillTabBar while focused, so it sits directly on the device
+          edge), so a safe-area bottom inset here on top of that would stack
+          and make the footer needlessly tall. */}
       <SafeAreaView style={{ flex: 1 }} edges={['left', 'right']}>
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
           {/* Header info */}
@@ -803,7 +817,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible onRequestClose={() => setCustomPickerStep(null)}>
               <View style={st.pickerModalWrap}>
                 <TouchableOpacity style={st.pickerDismiss} activeOpacity={1} onPress={() => setCustomPickerStep(null)} />
-                <View style={[st.pickerSheet, { backgroundColor: C.card }]}>
+                <View style={[st.pickerSheet, { backgroundColor: C.card, paddingBottom: Math.max(20, bottomInset + 16) }]}>
                   <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
                     <Text style={[st.pickerHeaderLabel, { color: C.text }]}>
                       {customPickerStep === 'date' ? 'Select Date' : 'Select Time'}
@@ -929,7 +943,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         </ScrollView>
 
         {/* Submit button */}
-        <View style={[st.footer, { borderTopColor: C.border, backgroundColor: C.bg }]}>
+        <View style={[st.footer, { borderTopColor: C.border, backgroundColor: C.bg, paddingBottom: Math.max(12, bottomInset) }]}>
           <TouchableOpacity
             style={[st.primaryBtn, { backgroundColor: selectedDate && selectedTime ? C.accent : C.border }]}
             disabled={!selectedDate || !selectedTime || isSubmitting || isDeclining}
@@ -976,7 +990,7 @@ const st = StyleSheet.create({
   customTimeBtnText: { fontSize: 10, fontWeight: '700' },
   customTimeConfirm: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 10 },
   customTimeConfirmText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: BOTTOM_SAFE_GAP },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -992,7 +1006,7 @@ const st = StyleSheet.create({
   // nested in a tab's stack) — it used to be a flat 28/16, which is roughly
   // home-indicator clearance only, so the pill sat right on top of the
   // Confirm/Request button.
-  footer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: FLOATING_TAB_BAR_CLEARANCE, borderTopWidth: StyleSheet.hairlineWidth },
+  footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   primaryBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   primaryBtnText: { fontSize: 16, fontWeight: '700' },
 });

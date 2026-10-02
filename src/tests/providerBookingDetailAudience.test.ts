@@ -62,7 +62,7 @@ describe("provider booking surfaces show the client's side, not their own copy",
     // claim_cart_booking_slots() stamps with the provider's OWN private street
     // address on every row, mobile included. It flashed up as the
     // appointment's Location and vanished when the policy landed.
-    const guard = detail.indexOf("{!addressKnown ? (");
+    const guard = detail.indexOf("!addressKnown ? (");
     const mobileBranch = detail.indexOf(") : isMobileProvider ? (");
     const ownAddressFallback = detail.indexOf("value={booking.address}");
     expect(guard).toBeGreaterThan(-1);
@@ -73,5 +73,15 @@ describe("provider booking surfaces show the client's side, not their own copy",
     // Loaded is tracked separately from the value: `addressSettings === null`
     // cannot tell "not back yet" from "no policy set".
     expect(detail).toContain("const [addressSettingsLoaded, setAddressSettingsLoaded]");
+  });
+
+  it("shows no venue at all for a cancelled booking, ahead of every other Location guard", () => {
+    // A cancelled booking never happened, so there's no address-release state
+    // (mobile or otherwise) worth reporting — the row should read "—" the same
+    // way it does before business_type has loaded.
+    const cancelledGuard = detail.indexOf("booking.status === BookingStatus.CANCELLED ? (");
+    const addressKnownGuard = detail.indexOf("!addressKnown ? (");
+    expect(cancelledGuard).toBeGreaterThan(-1);
+    expect(cancelledGuard).toBeLessThan(addressKnownGuard);
   });
 });

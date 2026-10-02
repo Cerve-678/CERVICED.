@@ -542,11 +542,11 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               <View style={s.serviceChipsWrap}>
                 {myServices.length === 0 ? (
                   <Text style={[s.fieldHint, { color: P.sub }]}>No services on your profile yet — the pack will attach to all bookings.</Text>
-                ) : myServices.map((name, index) => {
+                ) : myServices.map((name) => {
                   const selected = selectedServices.includes(name);
                   return (
                     <TouchableOpacity
-                      key={`${name}-${index}`}
+                      key={name}
                       style={[s.serviceChip, {
                         borderColor: selected ? P.accent : P.border,
                         backgroundColor: selected ? P.accent + '18' : P.card,

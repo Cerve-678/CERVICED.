@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   FlatList,
   Keyboard,
   Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,19 +27,23 @@ import {
   ProviderConversationWithClient,
   markConversationReadByProvider,
   sendConversationQuickReply,
+  getMyProviderMessageTemplates,
+  replaceMyProviderMessageTemplates,
+  ProviderMessageTemplate,
 } from '../../services/databaseService';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterKey = 'messages' | 'queries';
+type FilterKey = 'enquiries' | 'messages';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'enquiries', label: 'General enquiries' },
   { key: 'messages', label: 'Messages' },
-  { key: 'queries',  label: 'Queries'  },
 ];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function timeAgoISO(iso: string | null): string {
   if (!iso) return '';
@@ -108,7 +114,6 @@ const row = StyleSheet.create({
   name:        { fontSize: 15, flex: 1, marginRight: 8, letterSpacing: -0.2 },
   timestamp:   { fontSize: 12 },
   service:     { fontSize: 13 },
-
   swipeActions: { flexDirection: 'row', height: '100%' },
   swipeBtn:     { width: 76, alignItems: 'center', justifyContent: 'center', gap: 2 },
   swipeBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
@@ -208,6 +213,9 @@ function ConversationRow({
   );
 }
 
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
+// ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT_P = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
@@ -234,53 +242,59 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const { isDarkMode: dark } = useTheme();
   const { user } = useAuth();
   const P = dark ? DARK_P : LIGHT_P;
+  const bottomInset = useSystemBottomInset();
 
   const [conversations, setConversations] = useState<ProviderConversationWithClient[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
-  const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter ?? 'messages');
+  const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter === 'enquiries' ? 'enquiries' : 'messages');
 
-  // The fetch used to log and swallow, so a failed load rendered as the empty
-  // state — the single most misleading thing an inbox can say to a provider
-  // who actually has unread messages waiting on them.
   const [loadError,     setLoadError]     = useState<string | null>(null);
 
   const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
   const [replyText,    setReplyText]    = useState('');
   const [replySending, setReplySending] = useState(false);
 
+  // Message templates — the reusable replies that fill the composer in a
+  // conversation. Managed here (where they're used) rather than buried under
+  // Account → Contact Preferences. Loaded lazily when the editor is opened.
+  const [templatesOpen,    setTemplatesOpen]    = useState(false);
+  const [templates,        setTemplates]        = useState<Pick<ProviderMessageTemplate, 'label' | 'content'>[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesSaving,  setTemplatesSaving]  = useState(false);
+
   // Apply initialFilter on re-navigation too — navigate() to an already-mounted
   // inbox only updates params, so the useState initializer never re-runs
   useEffect(() => {
     const f = route?.params?.initialFilter as FilterKey | undefined;
-    if (f) setFilter(f);
+    if (f === 'enquiries' || f === 'messages') setFilter(f);
   }, [route?.params?.initialFilter]);
 
-  const fetchConversations = useCallback(async () => {
-    setConversations(await getProviderConversations());
-  }, []);
-
+  const loadSequence = useRef(0);
   const loadInbox = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     try {
-      await fetchConversations();
+      const data = await getProviderConversations();
+      if (sequence !== loadSequence.current) return;
+      setConversations(data);
       setLoadError(null);
-    } catch (err) {
-      setLoadError(
-        toUserMessage(
-          err,
-          "We couldn't refresh your inbox just now.",
-          '[ProviderInbox] load failed',
-        ),
-      );
+      // A generic message notification can belong to either section.
+      if (route?.params?.initialFilter === 'unread') {
+        const latestUnread = data.find(c => c.unread_count_provider > 0);
+        if (latestUnread) setFilter(latestUnread.has_booking ? 'messages' : 'enquiries');
+      }
+    } catch (error) {
+      if (sequence !== loadSequence.current) return;
+      setLoadError(toUserMessage(error, "We couldn't refresh your inbox just now.", '[ProviderInbox] load failed'));
     }
-  }, [fetchConversations]);
+  }, [route?.params?.initialFilter]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     void loadInbox().finally(() => {
       if (active) setLoading(false);
     });
-    return () => { active = false; };
+    return () => { active = false; loadSequence.current += 1; };
   }, [loadInbox]));
 
   const onRefresh = useCallback(async () => {
@@ -319,32 +333,60 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     setReplySending(false);
   }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast]);
 
-  const unreadConversationCount = useMemo(
-    () => conversations.filter(c => c.unread_count_provider > 0).length,
-    [conversations],
-  );
-  // Messages are from clients who have booked; Queries are Get In Touch
-  // enquiries from people who haven't.
-  const messageConversations = useMemo(() => conversations.filter(c => c.has_booked), [conversations]);
-  const queryConversations   = useMemo(() => conversations.filter(c => !c.has_booked), [conversations]);
-  const unreadMessageCount = useMemo(() => messageConversations.filter(c => c.unread_count_provider > 0).length, [messageConversations]);
-  const unreadQueryCount   = useMemo(() => queryConversations.filter(c => c.unread_count_provider > 0).length, [queryConversations]);
-
-  // Every "you have a new chat" deep link asks for the Messages tab without
-  // knowing which kind it was. If the only unread thread is an enquiry, land
-  // on Queries instead of an apparently-empty Messages tab. Once per arrival —
-  // never fights a tab the provider picked themselves.
-  const deepLinkSettled = useRef(false);
-  useEffect(() => { deepLinkSettled.current = false; }, [route?.params?.initialFilter]);
-  useEffect(() => {
-    if (deepLinkSettled.current || conversations.length === 0) return;
-    deepLinkSettled.current = true;
-    if (route?.params?.initialFilter === 'messages' && unreadMessageCount === 0 && unreadQueryCount > 0) {
-      setFilter('queries');
+  const openTemplates = useCallback(async () => {
+    setTemplatesOpen(true);
+    setTemplatesLoading(true);
+    try {
+      const data = await getMyProviderMessageTemplates();
+      setTemplates(data.map(({ label, content }) => ({ label, content })));
+    } catch (err) {
+      logger.error('[ProviderInbox] load templates failed:', err);
+      showToast(toUserMessage(err, "We couldn't load your templates just now.", '[ProviderInbox] templates load'), 'error');
+      setTemplatesOpen(false);
+    } finally {
+      setTemplatesLoading(false);
     }
-  }, [conversations, unreadMessageCount, unreadQueryCount, route?.params?.initialFilter]);
+  }, [showToast]);
 
-  const visibleConversations = filter === 'messages' ? messageConversations : queryConversations;
+  const handleSaveTemplates = useCallback(async () => {
+    if (templatesSaving) return;
+    // Drop rows the provider left blank rather than persisting empty templates.
+    const cleaned = templates.filter(t => t.label.trim() || t.content.trim());
+    setTemplatesSaving(true);
+    try {
+      await replaceMyProviderMessageTemplates(cleaned);
+      setTemplates(cleaned);
+      setTemplatesOpen(false);
+      Keyboard.dismiss();
+      showToast('Templates saved.', 'success');
+    } catch (err) {
+      logger.error('[ProviderInbox] save templates failed:', err);
+      showToast(toUserMessage(err, "We couldn't save your templates just now.", '[ProviderInbox] templates save'), 'error');
+    }
+    setTemplatesSaving(false);
+  }, [templates, templatesSaving, showToast]);
+
+  const updateTemplate = useCallback((index: number, field: 'label' | 'content', value: string) => {
+    setTemplates(prev => prev.map((t, i) => (i === index ? { ...t, [field]: value } : t)));
+  }, []);
+
+  const addTemplate = useCallback(() => {
+    setTemplates(prev => (prev.length >= 12 ? prev : [...prev, { label: '', content: '' }]));
+  }, []);
+
+  const removeTemplate = useCallback((index: number) => {
+    setTemplates(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const unreadCounts = useMemo(() => ({
+    enquiries: conversations.filter(c => !c.has_booking && c.unread_count_provider > 0).length,
+    messages: conversations.filter(c => c.has_booking && c.unread_count_provider > 0).length,
+  }), [conversations]);
+  const outstandingCount = unreadCounts.enquiries + unreadCounts.messages;
+  const flatItems = useMemo(
+    () => conversations.filter(c => filter === 'messages' ? c.has_booking : !c.has_booking),
+    [conversations, filter],
+  );
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -371,26 +413,39 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
 
           <View style={s.headerCenter}>
             <Text style={[s.title, { color: P.text }]}>Inbox</Text>
-            {unreadConversationCount > 0 && (
+            {outstandingCount > 0 && (
               <View style={[s.badge, { backgroundColor: '#FF3B30' }]}>
-                <Text style={s.badgeText}>{unreadConversationCount}</Text>
+                <Text style={s.badgeText}>{outstandingCount}</Text>
               </View>
             )}
           </View>
 
-          <View style={[s.iconBtn, { backgroundColor: 'transparent' }]} />
+          <TouchableOpacity
+            onPress={openTemplates}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={[s.iconBtn, { backgroundColor: P.iconBg }]}
+            accessibilityLabel="Message templates"
+          >
+            <Ionicons name="documents-outline" size={18} color={P.text} />
+          </TouchableOpacity>
         </Animated.View>
 
         {/* ── Filter tabs ─────────────────────────────────────────── */}
         <View style={[s.filterRow, { backgroundColor: P.card, borderBottomColor: P.border }]}>
           {FILTERS.map(f => {
             const active = filter === f.key;
-            const badgeCount = f.key === 'messages' ? unreadMessageCount : unreadQueryCount;
+            const badgeCount = unreadCounts[f.key];
             const isNew  = badgeCount > 0;
             return (
               <TouchableOpacity
                 key={f.key}
-                onPress={() => setFilter(f.key)}
+                onPress={() => {
+                  setFilter(f.key);
+                  navigation.setParams({ initialFilter: f.key });
+                }}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${f.label}, ${badgeCount} unread conversations`}
                 style={[s.filterChip, active && { borderBottomColor: P.accent, borderBottomWidth: 2 }]}
               >
                 <Text style={[s.filterLabel, { color: active ? P.accent : P.sub }]}>{f.label}</Text>
@@ -411,14 +466,14 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           </View>
         ) : (
           <FlatList
-            data={visibleConversations}
+            data={flatItems}
             keyExtractor={item => item.id}
             style={{ backgroundColor: P.card, flex: 1 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />
             }
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 60 }}
+            contentContainerStyle={{ paddingBottom: FLOATING_TAB_BAR_CLEARANCE }}
             renderItem={({ item, index }) => (
               <ConversationRow
                 conversation={item}
@@ -432,15 +487,14 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   clientUserId: item.user_id,
                   clientName: item.client?.name ?? 'Client',
                 })}
-                onReply={() => setReplyTarget(item)}
+                onReply={() => { setReplyText(''); setReplyTarget(item); }}
                 onMarkRead={() => handleMarkConversationRead(item)}
               />
             )}
             ListHeaderComponent={
               // With rows on screen the banner sits above them; with none, the
-              // empty state below takes over, so "All clear" is never shown
-              // for an inbox we simply failed to read.
-              loadError && visibleConversations.length > 0 ? (
+              // empty state below shows the failure instead of an empty inbox.
+              loadError && flatItems.length > 0 ? (
                 <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
                   <Text style={[s.errorBannerText, { color: P.text }]}>
                     {loadError} This list may be out of date.
@@ -469,13 +523,11 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               ) : (
                 <View style={s.empty}>
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
-                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'help-circle-outline'} size={36} color={P.sub} />
+                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'mail-open-outline'} size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>{filter === 'messages' ? 'No messages' : 'No queries'}</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{filter === 'enquiries' ? 'No general enquiries yet' : 'No client messages yet'}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
-                    {filter === 'messages'
-                      ? 'No messages from clients yet'
-                      : 'No queries yet. They land here when someone taps Get In Touch on your profile.'}
+                    {filter === 'messages' ? 'Conversations with clients who have booked with you appear here.' : 'Questions sent through Get In Touch appear here until the person books with you.'}
                   </Text>
                 </View>
               )
@@ -496,7 +548,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             onPress={() => { setReplyTarget(null); setReplyText(''); Keyboard.dismiss(); }}
           />
           {replyTarget && (
-            <View style={m.positioner} pointerEvents="box-none">
+            <KeyboardDismissView style={m.positioner}>
               <View style={[m.replyDialog, { backgroundColor: P.card }]}>
                 <Text style={[m.dialogTitle, { color: P.text }]}>
                   Reply to {replyTarget.client?.name ?? 'client'}
@@ -529,9 +581,118 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            </KeyboardDismissView>
           )}
         </Modal>
+
+        {/* ── Message templates editor ───────────────────────────────── */}
+        <Modal
+          visible={templatesOpen}
+          transparent statusBarTranslucent navigationBarTranslucent
+          animationType="slide"
+          onRequestClose={() => { setTemplatesOpen(false); Keyboard.dismiss(); }}
+        >
+          <View style={t.overlay}>
+            <TouchableOpacity
+              style={t.overlayTap}
+              activeOpacity={1}
+              onPress={() => { setTemplatesOpen(false); Keyboard.dismiss(); }}
+            />
+            <View style={[t.sheet, { backgroundColor: P.bg }]}>
+              <View style={[t.sheetHeader, { borderBottomColor: P.border }]}>
+                <Text style={[t.sheetTitle, { color: P.text }]}>Message Templates</Text>
+                <TouchableOpacity
+                  onPress={() => { setTemplatesOpen(false); Keyboard.dismiss(); }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={[s.iconBtn, { backgroundColor: P.iconBg }]}
+                >
+                  <Ionicons name="close" size={20} color={P.sub} />
+                </TouchableOpacity>
+              </View>
+
+              {templatesLoading ? (
+                <View style={t.loading}>
+                  <ActivityIndicator color={P.accent} size="large" />
+                </View>
+              ) : (
+                <KeyboardDismissView style={{ flex: 1 }}>
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={t.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="interactive"
+                  >
+                    <Text style={[t.intro, { color: P.sub }]}>
+                      Private to you. Tapping a template fills the message box in a
+                      conversation — you can always edit it before sending.
+                    </Text>
+
+                    {templates.length === 0 ? (
+                      <Text style={[t.empty, { color: P.sub }]}>
+                        No templates yet. Create reusable replies for confirming an
+                        address, availability, or booking details.
+                      </Text>
+                    ) : templates.map((template, index) => (
+                      <View key={index} style={[t.item, { backgroundColor: P.card, borderColor: P.border }]}>
+                        <View style={t.itemHeader}>
+                          <TextInput
+                            style={[t.labelInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                            value={template.label}
+                            onChangeText={value => updateTemplate(index, 'label', value)}
+                            placeholder="Template name"
+                            placeholderTextColor={P.sub}
+                            maxLength={60}
+                          />
+                          <TouchableOpacity onPress={() => removeTemplate(index)} hitSlop={10}>
+                            <Ionicons name="trash-outline" size={18} color="#FF6868" />
+                          </TouchableOpacity>
+                        </View>
+                        <TextInput
+                          style={[t.contentInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                          value={template.content}
+                          onChangeText={value => updateTemplate(index, 'content', value)}
+                          placeholder="Message text"
+                          placeholderTextColor={P.sub}
+                          maxLength={1000}
+                          multiline
+                          scrollEnabled
+                          textAlignVertical="top"
+                        />
+                      </View>
+                    ))}
+
+                    <TouchableOpacity
+                      style={[t.addBtn, { borderColor: P.accent, opacity: templates.length >= 12 ? 0.4 : 1 }]}
+                      onPress={addTemplate}
+                      disabled={templates.length >= 12}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add" size={18} color={P.accent} />
+                      <Text style={[t.addText, { color: P.accent }]}>
+                        {templates.length >= 12 ? 'Template limit reached' : 'Add template'}
+                      </Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+
+                  <View style={[t.footer, { borderTopColor: P.border, backgroundColor: P.bg, paddingBottom: 14 + bottomInset }]}>
+                    <TouchableOpacity
+                      style={[t.saveBtn, { backgroundColor: P.accent, opacity: templatesSaving ? 0.6 : 1 }]}
+                      onPress={handleSaveTemplates}
+                      disabled={templatesSaving}
+                      activeOpacity={0.8}
+                    >
+                      {templatesSaving
+                        ? <ActivityIndicator color="#FFFFFF" size="small" />
+                        : <Text style={t.saveText}>Save Templates</Text>}
+                    </TouchableOpacity>
+                  </View>
+                </KeyboardDismissView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         <DialogHost />
       </SafeAreaView>
     </View>
@@ -552,9 +713,9 @@ const s = StyleSheet.create({
   badgeText:    { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   filterRow:    { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth },
-  filterChip:   { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent', position: 'relative' },
+  filterChip:   { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   filterLabel:  { fontSize: 13, fontWeight: '600' },
-  filterBadge:  { position: 'absolute', top: 7, right: 8, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
+  filterBadge:  { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
 
   empty:      { alignItems: 'center', paddingTop: 80, gap: 12 },
@@ -601,4 +762,32 @@ const m = StyleSheet.create({
   replyCancelBtn: { paddingVertical: 10, paddingHorizontal: 14 },
   replySendBtn:   { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10 },
   replySendText:  { color: '#fff', fontSize: 14, fontWeight: '700' },
+});
+
+// ─── Templates editor styles ────────────────────────────────────────────────────
+
+const t = StyleSheet.create({
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  overlayTap:  { flex: 1 },
+  sheet:       { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  sheetTitle:  { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+
+  loading:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  scrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20 },
+  intro:       { fontSize: 13, lineHeight: 18, marginBottom: 16 },
+  empty:       { fontSize: 13, lineHeight: 18, marginBottom: 16 },
+
+  item:        { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 12, marginBottom: 12 },
+  itemHeader:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  labelInput:  { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13, fontWeight: '600' },
+  contentInput:{ borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 10, marginTop: 8, minHeight: 68, fontSize: 13, textAlignVertical: 'top' },
+
+  addBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderWidth: 1, borderRadius: 12, paddingVertical: 12, marginTop: 2 },
+  addText:     { fontSize: 14, fontWeight: '700' },
+
+  footer:      { paddingHorizontal: 16, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  saveBtn:     { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  saveText:    { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });

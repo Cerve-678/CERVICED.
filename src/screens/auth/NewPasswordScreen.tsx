@@ -70,10 +70,6 @@ export default function NewPasswordScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
 
-            <View style={[styles.iconCircle, { backgroundColor: t.surface }]}>
-              <Text style={[styles.iconGlyph, { color: t.accent }]}>🛡️</Text>
-            </View>
-
             <Text style={[styles.title, { color: t.text }]}>New password</Text>
             <Text style={[styles.subtitle, { color: t.sub }]}>
               Choose a strong password for your account.
@@ -149,15 +145,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  iconGlyph: { fontSize: 36 },
   title: {
     fontSize: 28,
     fontFamily: 'BakbakOne-Regular',

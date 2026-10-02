@@ -128,6 +128,13 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         gender:                meta['gender']                ?? null,
         has_kids:              meta['has_kids']               ?? false,
         team_size:             meta['team_size']               ?? null,
+        // Staged on users (INT), copied to providers.years_experience by
+        // InfoRegScreen's first-save prefill. Signup sends it as a numeric
+        // string; coerce and drop anything non-numeric rather than upserting a
+        // bad value into an INT column.
+        years_experience:      meta['years_experience'] != null && !Number.isNaN(parseInt(String(meta['years_experience']), 10))
+                                 ? parseInt(String(meta['years_experience']), 10)
+                                 : null,
         accessibility_notes:   meta['accessibility_notes']     ?? null,
         languages_spoken:      meta['languages_spoken']        ?? [],
         specialties:           meta['specialties']             ?? [],

@@ -8,6 +8,7 @@ import type {
 import {
   getProviderActivePromotions,
   getProviderBySlug,
+  getProviderProfilePreviewBySlug,
   getProviderPortfolio,
   getProviderProfileViewerContext,
   getProviderReviews,
@@ -111,6 +112,7 @@ export function useProviderProfileData(
   useEffect(() => {
     profileGenerationRef.current += 1;
     let cancelled = false;
+    let viewerCheckTimeout: ReturnType<typeof setTimeout> | null = null;
     setLoading(true);
     setLoadFailed(false);
     setProvider(null);
@@ -132,7 +134,18 @@ export function useProviderProfileData(
 
     const loadProfile = async (): Promise<void> => {
       try {
-        const data = await getProviderBySlug(providerSlug);
+        // Start the catalogue request straight away, but let the compact
+        // profile response paint the hero first. A service-heavy provider no
+        // longer makes a client wait for every image and add-on before they
+        // can see whose profile they opened.
+        const fullProfileRequest = getProviderBySlug(providerSlug).catch(
+          (error: unknown) => {
+            logger.warn("Failed to load full provider catalogue:", error);
+            return null;
+          },
+        );
+        let data = await getProviderProfilePreviewBySlug(providerSlug);
+        if (!data) data = await fullProfileRequest;
         if (cancelled) return;
         if (!data) {
           const unclaimed = await getUnclaimedProviderDetail(providerSlug);
@@ -143,6 +156,15 @@ export function useProviderProfileData(
         setProvider(mapProviderProfileData(data));
         setProviderDbId(data.id);
         setLoading(false);
+
+        // Replace the lightweight first paint once the complete catalogue
+        // returns. Secondary sections below already use the provider id and
+        // can start loading from the preview without waiting for this.
+        void fullProfileRequest.then((fullProfile) => {
+          if (!cancelled && fullProfile) {
+            setProvider(mapProviderProfileData(fullProfile));
+          }
+        });
 
         void userLearningService
           .trackInteraction({
@@ -216,6 +238,15 @@ export function useProviderProfileData(
             logger.warn("Failed to load provider opening hours:", error);
           });
 
+        // Ownership is secondary viewer context, not profile content. Never
+        // let a stalled auth/follow query hold a Book-intent entrance forever:
+        // fail open after a short bound and keep the database self-booking
+        // guard as the final authority. If the request eventually resolves,
+        // it can still correct isOwnProvider for the visible screen.
+        viewerCheckTimeout = setTimeout(() => {
+          if (!cancelled) setViewerChecked(true);
+        }, 1500);
+
         void getProviderProfileViewerContext(data.id)
           .then((viewer) => {
             if (cancelled) return;
@@ -233,6 +264,10 @@ export function useProviderProfileData(
             // prevents self-booking, while a transient viewer-state failure
             // must not freeze every legitimate client's booking entry point.
             if (!cancelled) setViewerChecked(true);
+          })
+          .finally(() => {
+            if (viewerCheckTimeout) clearTimeout(viewerCheckTimeout);
+            viewerCheckTimeout = null;
           });
       } catch (error: unknown) {
         if (!cancelled) setLoadFailed(true);
@@ -245,6 +280,7 @@ export function useProviderProfileData(
     void loadProfile();
     return () => {
       cancelled = true;
+      if (viewerCheckTimeout) clearTimeout(viewerCheckTimeout);
       profileGenerationRef.current += 1;
     };
   }, [providerSlug]);

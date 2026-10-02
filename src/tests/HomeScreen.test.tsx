@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, waitFor } from '@testing-library/react-native';
 import HomeScreen from '../screens/client/HomeScreen';
 
 jest.mock('@react-navigation/native', () => ({
@@ -23,12 +23,19 @@ jest.mock('../contexts/ThemeContext', () => ({
   }),
 }));
 jest.mock('../components/LocationModal', () => () => null);
+jest.mock('../services/clientLocationService', () => ({
+  resolveClientLocation: jest.fn(async () => ({ coords: null })),
+}));
 
 jest.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: null }) }));
-jest.mock('../contexts/BookingContext', () => ({ useBooking: () => ({ bookings: [] }) }));
-jest.mock('../stores/useBookmarkStore', () => ({
-  useBookmarkStore: () => ({ bookmarkedIds: [], loadBookmarks: jest.fn(() => new Promise(() => {})) }),
-}));
+jest.mock('../contexts/BookingContext', () => {
+  const value = { bookings: [] };
+  return { useBooking: () => value };
+});
+jest.mock('../stores/useBookmarkStore', () => {
+  const value = { bookmarkedIds: [], loadBookmarks: jest.fn(() => new Promise(() => {})) };
+  return { useBookmarkStore: () => value };
+});
 jest.mock('../services/userLearningService', () => ({
   __esModule: true,
   default: {
@@ -41,7 +48,8 @@ jest.mock('../services/userLearningService', () => ({
 jest.mock('../services/databaseService', () => ({
   getActivePromotions: jest.fn(() => new Promise(() => {})),
   getNewProviders: jest.fn(() => new Promise(() => {})),
-  getProviders: jest.fn(() => new Promise(() => {})),
+  getOwnProviderIds: jest.fn(async () => []),
+  getProviders: jest.fn(async () => [{ id: 'salon-1', slug: 'test-salon', display_name: 'Test Salon', service_category: 'HAIR' }]),
   getTopRatedProviders: jest.fn(() => new Promise(() => {})),
   getTrendingProviders: jest.fn(() => new Promise(() => {})),
   getDiscoverServices: jest.fn(() => new Promise(() => {})),
@@ -51,10 +59,12 @@ jest.mock('../services/databaseService', () => ({
 }));
 
 describe('HomeScreen', () => {
-  it('renders the client home entry point', () => {
+  it('renders the client home entry point', async () => {
     render(<HomeScreen />);
 
     expect(screen.getByText('CERVICED')).toBeTruthy();
     expect(screen.getByText('CHOOSE YOUR SERVICE')).toBeTruthy();
+    // Personalisation stays pending; the provider rails must still populate.
+    await waitFor(() => expect(screen.getAllByText('Test Salon').length).toBeGreaterThan(0));
   });
 });

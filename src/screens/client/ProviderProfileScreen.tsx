@@ -50,7 +50,6 @@ import {
 } from "../../components/IconLibrary";
 import { useCart } from "../../contexts/CartContext";
 import { useAuth } from "../../contexts/AuthContext";
-import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 
 // Navigation types
 import { HomeStackParamList } from "../../navigation/types";
@@ -60,6 +59,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 import { useTheme } from "../../contexts/ThemeContext";
 import { resolveProviderFontFamily } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
+import { DynamicText } from "../../components/DynamicText";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
@@ -91,6 +91,7 @@ import { resolveSlotsRow } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
+import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 import {
   ProviderAdditionalInfoSection,
@@ -523,11 +524,12 @@ interface NotificationAlertProps {
   message: string;
   onHide: () => void;
   slideAnimation: Animated.Value;
-  isNotificationsEnabled: boolean; // Add this prop
+  isActive: boolean;
+  isBookmark: boolean;
 }
 
 const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
-  ({ isVisible, message, onHide, slideAnimation, isNotificationsEnabled }) => {
+  ({ isVisible, message, onHide, slideAnimation, isActive, isBookmark }) => {
     const { width: screenWidth } = useWindowDimensions();
     const slideStyle = useMemo(
       () => ({
@@ -543,9 +545,9 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
       [slideAnimation, screenWidth],
     );
 
-    // Dynamic colors based on notification state
+    // Match the state of the action that triggered this toast.
     const notificationColors = useMemo(() => {
-      if (isNotificationsEnabled) {
+      if (isActive) {
         return {
           gradient: ["rgba(76, 175, 80, 0.9)", "rgba(76, 175, 80, 0.7)"], // Green when enabled
           iconColor: "#fff",
@@ -558,12 +560,12 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
           textColor: "#fff",
         };
       }
-    }, [isNotificationsEnabled]);
+    }, [isActive]);
 
     if (!isVisible) return null;
 
     return (
-      <Animated.View style={[styles.notificationAlert, { maxWidth: screenWidth - 24 }, slideStyle]}>
+      <Animated.View style={[styles.notificationAlert, { width: Math.min(screenWidth - 24, isBookmark ? 260 : 420) }, slideStyle]}>
         <BlurView intensity={20} tint="light" style={styles.notificationBlur}>
           <LinearGradient
             colors={notificationColors.gradient as [string, string]}
@@ -1366,17 +1368,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     setIsNotificationsEnabled,
     loadAllReviews,
   } = useProviderProfileData(providerId);
-  // Ownership is answered twice, on purpose. AuthContext resolves which
-  // provider profile this account owns once per session; useProviderProfileData
-  // confirms it again for this specific profile. The session-level answer is
-  // what lets the Book button paint together with the rest of the service card
-  // — waiting on the per-profile check meant a whole extra round trip between
-  // the profile appearing and its booking controls appearing, which read as
-  // the buttons popping in late. The per-profile check stays the authority and
-  // can still take the controls away if the two ever disagree.
+  // AuthContext normally knows ownership before this screen mounts, allowing
+  // Book to paint with the service card. The slower per-profile result stays
+  // authoritative and can withdraw it if session state is stale.
   const { myProviderId, myProviderIdStatus } = useAuth();
-  // See shouldShowBookingCta for why this takes two answers to the same
-  // question: one fast enough to paint with the card, one authoritative.
   const canBookProvider = shouldShowBookingCta({
     providerDbId,
     myProviderId,
@@ -1384,6 +1379,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isOwnProvider,
     viewerChecked,
   });
+
+  const canSaveProvider = viewerChecked && canBookProvider && providerDbId !== null;
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
@@ -1431,8 +1428,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     };
   }, [isFocused, addedThisVisit, navigation]);
 
+  // The macro service type (LASHES / BROWS / ...) whose menu is on screen.
+  // A provider with one type never sees the switch, so this just stays on it.
+  const [selectedServiceType, setSelectedServiceType] = useState(() =>
+    provider ? provider.serviceTypes[0] ?? "" : "",
+  );
+
   const [selectedCategory, setSelectedCategory] = useState(() =>
-    provider ? Object.keys(provider.categories)[0] || "" : "",
+    provider
+      ? Object.keys(
+          provider.categoriesByType[provider.serviceTypes[0] ?? ""] ??
+            provider.categories,
+        )[0] || ""
+      : "",
   );
 
   // Long service lists (20+ in one category) used to just keep un-collapsing
@@ -1442,14 +1450,44 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const SERVICES_COLLAPSED_LIMIT = 6;
   const [showAllServicesModal, setShowAllServicesModal] = useState(false);
 
-  // When Supabase data loads and updates provider, reset to first available category
+  // When Supabase data loads and updates provider, reset to the first
+  // available service type, then the first category WITHIN it. Both are kept
+  // rather than reset outright so a re-fetch (a save, a pull-to-refresh)
+  // doesn't yank the client back to the top of the menu they were reading.
   useEffect(() => {
     if (!provider) return;
-    const firstCat = Object.keys(provider.categories)[0] || "";
-    setSelectedCategory((prev) =>
-      prev && provider.categories[prev] ? prev : firstCat,
+    const firstType = provider.serviceTypes[0] ?? "";
+    setSelectedServiceType((prev) =>
+      prev && provider.categoriesByType[prev] ? prev : firstType,
     );
   }, [provider]);
+
+  // Counted once per data change rather than on every render — this screen
+  // re-renders on plenty of state unrelated to the menu (select mode,
+  // expanded rows, add-on picks).
+  const serviceCountsByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [serviceType, byCategory] of Object.entries(
+      provider?.categoriesByType ?? {},
+    )) {
+      counts[serviceType] = Object.values(byCategory).reduce(
+        (total, list) => total + list.length,
+        0,
+      );
+    }
+    return counts;
+  }, [provider?.categoriesByType]);
+
+  // Category is scoped to the selected type, so it has to be re-validated
+  // whenever EITHER changes — a category name valid under Lashes may not
+  // exist under Brows, and would otherwise leave the list empty.
+  useEffect(() => {
+    if (!provider) return;
+    const withinType =
+      provider.categoriesByType[selectedServiceType] ?? provider.categories;
+    const firstCat = Object.keys(withinType)[0] || "";
+    setSelectedCategory((prev) => (prev && withinType[prev] ? prev : firstCat));
+  }, [provider, selectedServiceType]);
   // Ref, not state — scrolling must NOT re-render this large screen (that full
   // re-render on the first scroll hung the UI thread). The header reacts to it
   // imperatively via setOptions in handleScroll.
@@ -1828,7 +1866,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         tension: 120,
         friction: 8,
       }),
-      Animated.delay(2500),
+      Animated.delay(2800),
       Animated.timing(slideRightAnimation, {
         toValue: 100,
         duration: 300,
@@ -1839,26 +1877,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   }, [slideRightAnimation]);
 
-  // Notification toggle handler
-  const handleNotificationToggle = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const [isNotificationLoading, setIsNotificationLoading] = useState(false);
+  const handleNotificationToggle = useCallback(async () => {
+    if (!canSaveProvider || !providerDbId || isNotificationLoading) return;
     const newState = !isNotificationsEnabled;
-    // Optimistic — the toast fires immediately either way; roll back only
-    // if the write actually fails.
-    setIsNotificationsEnabled(newState);
-    setNotificationMessageType("bell"); // SET TO BELL
-    showRightNotification();
-    if (!providerDbId) return;
-    setProviderFollowNotify(providerDbId, newState).catch((error) => {
+    setIsNotificationLoading(true);
+    try {
+      // Verify ownership and save before displaying a successful subscription.
+      await setProviderFollowNotify(providerDbId, newState);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setIsNotificationsEnabled(newState);
+      setNotificationMessageType("bell");
+      showRightNotification();
+    } catch (error) {
       logger.error("Error updating follow notifications:", error);
-      setIsNotificationsEnabled(!newState);
-    });
-  }, [
-    isNotificationsEnabled,
-    showRightNotification,
-    providerDbId,
-    setIsNotificationsEnabled,
-  ]);
+    } finally {
+      setIsNotificationLoading(false);
+    }
+  }, [canSaveProvider, providerDbId, isNotificationLoading, isNotificationsEnabled,
+    setIsNotificationsEnabled, showRightNotification]);
 
   // Bookmark toggle handler
   const {
@@ -1970,7 +2007,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const providerIsBookmarked = isBookmarkedFn(providerDbId ?? providerId);
 
   const handleBookmarkToggle = useCallback(async () => {
-    if (isBookmarkLoading) return;
+    if (isBookmarkLoading || !canSaveProvider) return;
     // Saving yourself to "Your Providers" is the bookmark equivalent of
     // booking yourself — the list is for providers you want to come back to
     // as a client, and your own profile is always one tap away in provider
@@ -2051,6 +2088,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [
     providerIsBookmarked,
     isBookmarkLoading,
+    canSaveProvider,
     providerId,
     providerDbId,
     addBookmark,
@@ -2263,6 +2301,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       providerId: provider.id,
       providerDbId,
       providerName: provider.displayName,
+      promptMode: "enquiry",
     });
   }, [provider, providerDbId, navigation, isOwnProvider]);
 
@@ -2378,7 +2417,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             ]}
             onPress={handleBookmarkToggle}
             activeOpacity={0.7}
-            disabled={isBookmarkLoading}
+            disabled={isBookmarkLoading || !canSaveProvider}
             accessibilityLabel={
               providerIsBookmarked ? "Remove bookmark" : "Bookmark provider"
             }
@@ -2437,6 +2476,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isBookmarkLoading,
     adaptiveAccentColor,
     handleBookmarkToggle,
+    canSaveProvider,
     handleShare,
     OP.bg,
     OP.text,
@@ -2447,6 +2487,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       const scrolled = event.nativeEvent.contentOffset.y > 100;
       if (scrolled === isScrolledRef.current) return; // only act on threshold cross
       isScrolledRef.current = scrolled;
+      // Scrolled: the pale header background (OP.bg) is what sits behind the
+      // clock, so it has to be dark whatever the hero is. At the top the hero
+      // is back, so it returns to the hero's answer.
+      StatusBar.setBarStyle(
+        scrolled || !heroIsDark ? "dark-content" : "light-content",
+        true,
+      );
       // Update ONLY the header — no parent state, so scrolling never re-renders
       // this large screen (the fix for the first-scroll freeze).
       navigation.setOptions({
@@ -2462,7 +2509,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           ) : null,
       });
     },
-    [navigation, provider, OP.bg],
+    [navigation, provider, OP.bg, heroIsDark],
   );
 
   // Show success message with animation
@@ -3215,8 +3262,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         : `We'll tell you when ${fullName} releases new slots`;
     } else {
       return providerIsBookmarked
-        ? `Added to your providers list`
-        : `Removed from your providers list`;
+        ? `Added to Your Providers`
+        : `Removed from Your Providers`;
     }
   }, [
     notificationMessageType,
@@ -3267,7 +3314,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     return <ProviderProfileSkeleton />;
   }
 
-  const selectedCategoryServices = provider.categories[selectedCategory] ?? [];
+  // Categories belonging to the type currently selected in the switch. Falls
+  // back to the flat all-types map for a provider whose services predate
+  // service_category entirely.
+  const categoriesForType =
+    provider.categoriesByType[selectedServiceType] ?? provider.categories;
+  const categoryNamesForType = Object.keys(categoriesForType);
+  const selectedCategoryServices = categoriesForType[selectedCategory] ?? [];
   const visibleServices = selectedCategoryServices.slice(
     0,
     SERVICES_COLLAPSED_LIMIT,
@@ -3326,39 +3379,93 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // modals). React Native doesn't reliably support one Modal opening on
     // top of another — on Android especially, the new one can render behind
     // or eat no touches at all. When this block is rendered inside the "All
-    // Services" sheet, onBeforeAction closes that sheet first so the next
-    // modal is never stacked on it. Image taps deliberately don't use this —
+    // Services" sheet, runAction closes that sheet and waits for its slide-out
+    // before opening the next modal. Closing and opening in the same frame can
+    // leave BookingSheet behind the dismissing sheet (or make Book look dead),
+    // especially in Expo Go. Image taps deliberately don't use this —
     // the viewer renders as an internal overlay instead, so tapping a photo
     // doesn't kick you out of the sheet you were browsing.
-    onBeforeAction: () => void = () => {},
+    runAction: (action: () => void) => void = (action) => action(),
   ) => (
     <>
+      {/* ── Service-type switch ───────────────────────────────────────────
+          Only when the provider genuinely offers more than one macro type —
+          a single-type provider's menu opens straight onto the category
+          tabs, exactly as it did before this existed.
+
+          Deliberately a plain underline row, NOT a filled pill: the category
+          tabs immediately below are already filled pills, and two filled
+          controls stacked read as one confused level instead of two. Same
+          treatment (and same reasoning) as the History / To Do switch on
+          ProviderBookingHistoryScreen. */}
+      {provider.serviceTypes.length > 1 ? (
+        <View style={[styles.serviceTypeSwitch, { borderBottomColor: OP.border }]}>
+          {provider.serviceTypes.map((serviceType) => {
+            const active = serviceType === selectedServiceType;
+            const count = serviceCountsByType[serviceType] ?? 0;
+            return (
+              <TouchableOpacity
+                key={serviceType}
+                style={[
+                  styles.serviceTypeTab,
+                  active && { borderBottomColor: adaptiveAccentColor },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setSelectedServiceType(serviceType);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.serviceTypeTabText,
+                    {
+                      color: active ? OP.text : OP.sub,
+                      fontWeight: active ? "700" : "600",
+                    },
+                  ]}
+                >
+                  {serviceType}
+                  {count > 0 ? `  ${count}` : ""}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
+
       {/* Enhanced Category Tabs */}
-      <FlatList
-        data={Object.keys(provider.categories)}
-        renderItem={({ item: category }) => (
-          <CategoryTabItem
-            category={category}
-            isSelected={selectedCategory === category}
-            onPress={() => setSelectedCategory(category)}
-            cardBg={
-              selectedCategory === category ? adaptiveAccentColor : cardBg
-            }
-            blurIntensity={cardBlurIntensity}
-            blurTint={cardBlurTint}
-            borderColor={
-              selectedCategory === category ? "transparent" : OP.border
-            }
-            textColor={selectedCategory === category ? "#FFFFFF" : OP.text}
-          />
-        )}
-        keyExtractor={(item, index) => `cat-${item}-${index}`}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryTabs}
-        contentContainerStyle={styles.categoryTabsContent}
-        nestedScrollEnabled={true}
-      />
+      {categoryNamesForType.length > 0 ? (
+        <FlatList
+          data={categoryNamesForType}
+          renderItem={({ item: category }) => (
+            <CategoryTabItem
+              category={category}
+              isSelected={selectedCategory === category}
+              onPress={() => setSelectedCategory(category)}
+              cardBg={
+                selectedCategory === category ? adaptiveAccentColor : cardBg
+              }
+              blurIntensity={cardBlurIntensity}
+              blurTint={cardBlurTint}
+              borderColor={
+                selectedCategory === category ? "transparent" : OP.border
+              }
+              textColor={selectedCategory === category ? "#FFFFFF" : OP.text}
+            />
+          )}
+          keyExtractor={(item) => `cat-${item}`}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryTabs}
+          contentContainerStyle={styles.categoryTabsContent}
+          nestedScrollEnabled={true}
+        />
+      ) : (
+        <Text style={[styles.emptyServiceTypeText, { color: OP.sub }]}>
+          Services for {selectedServiceType} are coming soon.
+        </Text>
+      )}
 
       {/* Selected category's description — what it includes, benefits, etc. */}
       {provider.categoryDescriptions[selectedCategory] ? (
@@ -3566,6 +3673,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       )}
                     </View>
                   )}
+                  {(service.skinTonesSuitable?.length ?? 0) > 0 && (
+                    <View style={styles.serviceSafetyInline}>
+                      <Text
+                        style={[styles.serviceSafetyTitle, { color: OP.text }]}
+                      >
+                        Suitable Skin Tones
+                      </Text>
+                      <Text
+                        style={[styles.serviceSafetyLine, { color: OP.sub }]}
+                      >
+                        • {service.skinTonesSuitable!.join(", ")}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.serviceDetails}>
                     <Text style={[styles.serviceDuration, { color: OP.sub }]}>
                       {service.duration}
@@ -3592,16 +3713,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           <TouchableOpacity
                             disabled={fullyBooked}
                             // Checking a service that HAS add-ons opens the
-                            // add-on popup — another Modal — so onBeforeAction
-                            // has to run first to close the "All Services"
+                            // add-on popup — another Modal — so runAction has
+                            // to close the "All Services"
                             // sheet when this row is rendered inside it, same
                             // as Book/Waitlist below. Unchecking, and checking
                             // a service with no add-ons, opens nothing, so the
                             // sheet stays open for those.
                             onPress={() => {
                               const isSelecting = !selectedServiceIds.has(service.dbId);
-                              if (isSelecting && hasAddOns) onBeforeAction();
-                              toggleServiceSelected(service);
+                              if (isSelecting && hasAddOns) {
+                                runAction(() => toggleServiceSelected(service));
+                              } else {
+                                toggleServiceSelected(service);
+                              }
                             }}
                             style={[
                               styles.selectCheckbox,
@@ -3621,9 +3745,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           {isSelected && hasAddOns && (
                             <TouchableOpacity
                               onPress={() => {
-                                onBeforeAction();
-                                Haptics.selectionAsync().catch(() => {});
-                                setAddOnPickerService(service);
+                                runAction(() => {
+                                  Haptics.selectionAsync().catch(() => {});
+                                  setAddOnPickerService(service);
+                                });
                               }}
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             >
@@ -3649,8 +3774,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           },
                         ]}
                         onPress={() => {
-                          onBeforeAction();
-                          handleBook(service);
+                          runAction(() => handleBook(service));
                         }}
                         activeOpacity={0.8}
                         accessibilityState={{ disabled: fullyBooked }}
@@ -3707,8 +3831,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           </Text>
                           <TouchableOpacity
                             onPress={() => {
-                              onBeforeAction();
-                              setLeaveConfirmEntry(wEntry);
+                              runAction(() => setLeaveConfirmEntry(wEntry));
                             }}
                             activeOpacity={0.6}
                             hitSlop={{
@@ -3768,11 +3891,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           },
                         ]}
                         onPress={() => {
-                          onBeforeAction();
-                          setWaitlistNotes("");
-                          setWaitlistModal({
-                            visible: true,
-                            service,
+                          runAction(() => {
+                            setWaitlistNotes("");
+                            setWaitlistModal({
+                              visible: true,
+                              service,
+                            });
                           });
                         }}
                         activeOpacity={0.7}
@@ -3846,8 +3970,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* Driven by this provider's hero, not theme.statusBar: their profile
             theme never follows the viewer's dark mode, so reading the viewer's
             setting put dark, invisible icons over a black hero in light mode.
-            Only the icons -- the app-wide safe-area strip stays as it is,
-            since this screen owns its own transparent navigation header. */}
+            This is the at-top answer; handleScroll flips it imperatively once
+            the pale header background covers the safe area, because the clock
+            has to be dark against that. Imperative rather than state on
+            purpose -- a boolean in state here re-renders the whole screen,
+            which is the first-scroll freeze this screen already fixed. */}
         <StatusBar
           barStyle={heroIsDark ? "light-content" : "dark-content"}
           translucent={true}
@@ -3858,9 +3985,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         <NotificationAlert
           isVisible={showNotification}
           message={notificationMessage}
+          isBookmark={notificationMessageType === "bookmark"}
           onHide={() => setShowNotification(false)}
           slideAnimation={slideRightAnimation}
-          isNotificationsEnabled={isNotificationsEnabled}
+          isActive={notificationMessageType === "bookmark" ? providerIsBookmarked : isNotificationsEnabled}
         />
 
         {/* Success Message */}
@@ -4115,9 +4243,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={styles.modalScrollContent}
                 >
-                  {renderServiceCategoryBlock(selectedCategoryServices, null, () =>
-                    setShowAllServicesModal(false),
-                  )}
+                  {renderServiceCategoryBlock(selectedCategoryServices, null, (action) => {
+                    setShowAllServicesModal(false);
+                    // Match the pageSheet slide animation. React Native cannot
+                    // reliably present BookingSheet while this Modal is still
+                    // being dismissed, and Android has no Modal.onDismiss hook.
+                    setTimeout(action, 350);
+                  })}
                 </ScrollView>
                 {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(16)}
               </SafeAreaView>
@@ -4695,9 +4827,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     ]}
                     numberOfLines={1}
                   >
-                    {(provider.providerService === "OTHER"
-                      ? provider.customServiceType || "SERVICE"
-                      : provider.providerService
+                    {/* Every type they actually have services under, so a
+                        lashes-and-brows business doesn't read as only one.
+                        serviceTypes is already ordered by their declared set
+                        and already excludes types with nothing in them. */}
+                    {(provider.serviceTypes.length
+                      ? provider.serviceTypes
+                          .map((serviceType) =>
+                            serviceType === "OTHER"
+                              ? provider.customServiceType || "SERVICE"
+                              : serviceType,
+                          )
+                          .join(" · ")
+                      : provider.providerService === "OTHER"
+                        ? provider.customServiceType || "SERVICE"
+                        : provider.providerService
                     ).toUpperCase()}
                     {provider.location
                       ? ` · ${provider.location.toUpperCase()}`
@@ -4802,10 +4946,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <TouchableOpacity
                         style={styles.bellButtonInline}
                         onPress={handleNotificationToggle}
+                        disabled={!canSaveProvider || isNotificationLoading}
                         activeOpacity={0.8}
                         accessibilityLabel="Notifications"
                         accessibilityRole="button"
-                        accessibilityState={{ selected: isNotificationsEnabled }}
+                        accessibilityState={{ selected: isNotificationsEnabled, disabled: !canSaveProvider || isNotificationLoading }}
                       >
                         <BellIcon
                           size={16}
@@ -4863,7 +5008,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             {/* The content sheet rises over the hero photo with its own large
                 top corners (see contentSheet.borderTopLeftRadius/Right) —
                 rises directly off the hero photo like a floating card. */}
-            <View style={[styles.contentSheet, { minHeight: screenHeight, backgroundColor: OP.bg }]}>
+            <View
+              style={[
+                styles.contentSheet,
+                { minHeight: screenHeight, backgroundColor: OP.bg },
+                // With a background image, inset the sheet so the photo shows
+                // along its sides — the content reads as a card floating over
+                // the image rather than covering it edge to edge.
+                provider.backgroundImage ? styles.contentSheetFloating : null,
+              ]}
+            >
               {/* About / Policy tabbed card */}
               <View style={styles.aboutCardShadowWrap}>
                 <BlurView
@@ -4941,11 +5095,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           Relevant Information
                         </Text>
                       )}
-                      <Text style={[styles.aboutText, { color: OP.sub }]}>
-                        {showFullAbout
+                      {/* Provider-WRITTEN bio: rendered via DynamicText so it
+                          translates live to the active language when the paid
+                          translation feature is enabled, and shows the original
+                          English otherwise (the default in every current
+                          build). Not legal/health copy, so routing it through
+                          the dynamic path is safe. */}
+                      <DynamicText
+                        style={[styles.aboutText, { color: OP.sub }]}
+                        text={showFullAbout
                           ? provider.aboutText
                           : `${provider.aboutText.substring(0, 150)}...`}
-                      </Text>
+                      />
+
                       <TouchableOpacity
                         onPress={() => setShowFullAbout(!showFullAbout)}
                         style={styles.moreButton}
@@ -5193,6 +5355,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 6,
+  },
+  // Applied only when the provider has a background image: pulls the sheet in
+  // from both edges so the photo stays visible down its sides.
+  contentSheetFloating: {
+    marginHorizontal: 10,
   },
   loading: {
     flex: 1,
@@ -5447,7 +5614,6 @@ const styles = StyleSheet.create({
     // Was 70% of the screen, which wasn't enough room for a real provider name
     // in either the enabled or the disabled message — the tail of the sentence
     // ran under the toast's clipped (overflow: hidden) edge.
-    minWidth: 200,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -5472,20 +5638,18 @@ const styles = StyleSheet.create({
   },
   notificationContent: {
     flexDirection: "row",
-    alignItems: "flex-start", // Changed to flex-start for multi-line text
+    alignItems: "center",
     gap: 10, // Reduced gap
     zIndex: 1,
   },
   notificationText: {
     fontFamily: "BakbakOne-Regular",
-    fontSize: 12, // Reduced from 13
-    fontWeight: "bold",
-    flex: 1,
+    fontSize: 14,
     flexShrink: 1,
+    minWidth: 0,
     flexWrap: "wrap",
-    // BakbakOne is a tall face — 16 clipped the ascenders/descenders on every
-    // wrapped line, which read as the text being cut off vertically too.
-    lineHeight: 18,
+    // Let native font metrics size each line, including accessibility scaling.
+    paddingVertical: 2,
     textAlign: "left",
   },
 
@@ -5620,6 +5784,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
+  // Service-type switch — plain underline indicator, mirroring the
+  // History / To Do row on ProviderBookingHistoryScreen: enough to show
+  // selection without a second filled control competing with the category
+  // pills directly beneath it.
+  serviceTypeSwitch: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  serviceTypeTab: {
+    paddingTop: 4,
+    // More space below the label than above, so the 2px indicator doesn't sit
+    // tight against the text — same spacing as the booking-history switch.
+    paddingBottom: 12,
+    marginRight: 24,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  serviceTypeTabText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 15,
+    letterSpacing: -0.1,
+  },
   categoryTabs: {
     marginBottom: 20,
     maxHeight: 60, // Increased to accommodate animation
@@ -5642,6 +5830,13 @@ const styles = StyleSheet.create({
   categoryServicesContainer: {
     gap: 15,
     paddingHorizontal: 20,
+  },
+  emptyServiceTypeText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   showAllServicesBtn: {
     flexDirection: "row",

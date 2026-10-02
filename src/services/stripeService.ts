@@ -26,14 +26,13 @@ async function finalizePaymentIntent(
   return finalizeCheckoutPaymentIntent(checkoutBatchId, paymentIntentId, action);
 }
 
-/** Finalises the reserved bookings and captures their full canonical total. */
+/** Captures the canonical total and finalises the reserved bookings. */
 export async function capturePaymentIntent(checkoutBatchId: string, paymentIntentId: string): Promise<void> {
   return finalizePaymentIntent(checkoutBatchId, paymentIntentId, 'capture');
 }
 
-/** Release the authorisation hold without charging anything — call when
- *  booking creation fails after a successful card authorisation, so the
- *  client is never left charged with no booking to show for it. */
+/** Cancels an unconfirmed intent. Once authorised, server reconciliation owns
+ * completion so a network timeout cannot accidentally cancel a paid booking. */
 export async function cancelPaymentIntent(checkoutBatchId: string, paymentIntentId: string): Promise<void> {
   return finalizePaymentIntent(checkoutBatchId, paymentIntentId, 'cancel');
 }

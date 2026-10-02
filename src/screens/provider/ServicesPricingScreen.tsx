@@ -35,8 +35,8 @@ import {
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
-  SPECIALTIES_MAP, CLIENTELE_OPTS, STYLE_OPTS, PRICE_OPTS, TEAM_SIZE_OPTS,
-  SERVICE_TYPE_OPTS,
+  SPECIALTIES_MAP, CLIENTELE_OPTS, PRICE_OPTS, TEAM_SIZE_OPTS,
+  ALL_SERVICE_TYPE_OPTS, styleAestheticOptions, productsPlaceholder,
 } from '../../features/business-details/options';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -154,10 +154,19 @@ export default function ServicesPricingScreen({ navigation }: any) {
   // from here. The value is edited in Business Info (one editor, under a
   // 90-day cooldown); this is a pointer to it, not a second one.
   const serviceTypeLabel =
-    SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory;
+    ALL_SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory;
   // Hair types only mean something for hair providers — a nail tech has no
   // use for the question, and asking would put noise in their profile.
   const isHairProvider = serviceCategory === 'HAIR';
+
+  // Style aesthetic is scoped to the provider's trade (a lash artist sees
+  // "wispy / doll / cat-eye", not "Bohemian"). Any value already stored under
+  // the old generic list is unioned in so it still renders and can be
+  // deselected — otherwise a legacy tag would be an invisible chip that
+  // silently persists on save. Same pattern AboutYouScreen uses for languages.
+  const styleOptions = Array.from(
+    new Set([...styleAestheticOptions(serviceCategory), ...styleAesthetic]),
+  );
 
   if (loading) {
     return (
@@ -249,9 +258,9 @@ export default function ServicesPricingScreen({ navigation }: any) {
 
             <Card title="Your Style & Products" sub="Many clients specifically look for providers using certain products.">
               <SectionLabel text="Style aesthetic" />
-              <ChipGroup options={STYLE_OPTS} selected={styleAesthetic} onToggle={v => toggleChip(styleAesthetic, setStyleAesthetic, v)} />
+              <ChipGroup options={styleOptions} selected={styleAesthetic} onToggle={v => toggleChip(styleAesthetic, setStyleAesthetic, v)} />
               <View style={{ height: 14 }} />
-              <Field label="Products & Brands You Use" value={productsUsed} onChange={setProductsUsed} placeholder="e.g. Olaplex, KÉRASTASE, Mylee, Lash FX..." multiline />
+              <Field label="Products & Brands You Use" value={productsUsed} onChange={setProductsUsed} placeholder={productsPlaceholder(serviceCategory)} multiline />
               <ToggleRow label="Vegan & cruelty-free products only" value={isVegan} onChange={setIsVegan} />
             </Card>
 

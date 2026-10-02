@@ -41,6 +41,7 @@ export interface ProviderServiceDraft {
   aftercareNotes: string;
   serviceType: ProviderServiceType;
   hairTypesSuitable: string[];
+  skinTonesSuitable?: string[];
   audience: ProviderServiceAudience;
 }
 
@@ -74,13 +75,17 @@ export function createServiceDraft(template?: ServiceTemplateSeed | null): Provi
     outcomeTags: template?.outcomeTags ?? [],
     occasionTags: template?.occasionTags ?? [],
     trendNames: template?.trendNames ?? [],
-    isPregnancySafe: false,
+    // Off-by-default toggle FLAGS a service as unsafe; an untouched service is
+    // treated as safe (no warning), so the draft starts safe rather than
+    // asserting "not recommended during pregnancy" on every new service.
+    isPregnancySafe: true,
     patchTestRequired: false,
     minAge: null,
     contraindications: [],
     aftercareNotes: '',
     serviceType: template?.serviceType ?? '',
     hairTypesSuitable: [],
+    skinTonesSuitable: [],
     audience: '',
   };
 }

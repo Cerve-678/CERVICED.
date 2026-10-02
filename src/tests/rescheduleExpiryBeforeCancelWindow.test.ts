@@ -39,6 +39,11 @@ function latestDefinitionOf(name: string): { file: string; body: string } {
 // deadline had no cancel-notice term. See
 // 20260901150000_reschedule_expiry_before_cancel_window_closes.sql's header
 // for the full trace.
+//
+// 2026-10-02: the hard notice-window block in cancel_own_booking() was
+// removed — a client can now always cancel, and the window only records a
+// late cancel against their reliability. The auto-expiry bound below still
+// matters so a pending reschedule resolves in time to be acted on.
 describe('a pending reschedule request expires before the cancellation window closes', () => {
   it('process_expire_stale_reschedule_requests() bounds its deadline by cancel_notice_hours()', () => {
     const { body } = latestDefinitionOf('process_expire_stale_reschedule_requests');
@@ -80,10 +85,16 @@ describe('a pending reschedule request expires before the cancellation window cl
     expect(warningBody).toContain('public.cancel_notice_hours(');
     expect(expiryBody).toContain('public.cancel_notice_hours(');
 
-    // cancel_own_booking() must still be the real enforcement point — this
-    // fix does not grant a no-penalty cancellation, only makes the pending
-    // reschedule resolve in time for the client to use it while it's open.
-    expect(cancelBody).toMatch(/RAISE EXCEPTION 'This provider requires % hours notice to cancel'/);
+    // cancel_own_booking() still reads cancel_notice_hours() as the single
+    // source, but the notice window no longer BLOCKS a cancellation (the
+    // client can always cancel their own booking). The window now gates only
+    // the reliability late-cancel record, so the client stays subject to the
+    // provider's policy without being prevented from cancelling.
+    expect(cancelBody).not.toMatch(/RAISE EXCEPTION 'This provider requires % hours notice to cancel'/);
+    expect(cancelBody).toMatch(
+      /v_late_threshold := CASE WHEN COALESCE\(v_notice_hrs, 0\) > 0 THEN v_notice_hrs ELSE 24 END/,
+    );
+    expect(cancelBody).toMatch(/v_hours_until < v_late_threshold/);
   });
 
   it('cancel_notice_hours() maps a JSONB cancelNotice policy the same way cancel_own_booking() always has', () => {

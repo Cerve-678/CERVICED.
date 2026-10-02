@@ -27,7 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { withAlpha } from '../../constants/providerThemes';
 import * as Haptics from 'expo-haptics';
 import type { MyServiceDraft } from '../../services/databaseService';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -117,6 +117,7 @@ export default function ServiceEditorSheet({
   onSave: (draft: MyServiceDraft) => void;
   onClose: () => void;
 }) {
+  const bottomInset = useSystemBottomInset();
   const [value, setValue] = useState<ServiceEditorValue>(initial);
   const [error, setError] = useState<string | null>(null);
 
@@ -255,7 +256,7 @@ export default function ServiceEditorSheet({
           </ScrollView>
 
           <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: palette.accent, opacity: saving ? 0.6 : 1 }]}
+            style={[styles.saveButton, { backgroundColor: palette.accent, opacity: saving ? 0.6 : 1, marginBottom: Math.max(28, bottomInset + 16) }]}
             onPress={handleSave}
             disabled={saving}
             activeOpacity={0.85}
@@ -275,8 +276,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   dismissArea: {
     flex: 1,
@@ -286,7 +285,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
-    paddingBottom: 28,
   },
   grabber: {
     alignSelf: 'center',

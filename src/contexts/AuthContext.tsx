@@ -22,15 +22,13 @@ import {
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
+import { withTimeout } from '../utils/withTimeout';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 
 export type AccountType = 'user' | 'provider';
 
-/** Whether the once-per-session "which provider profile do I own?" lookup has
- *  produced an answer. 'failed' is deliberately distinct from a 'resolved'
- *  null: both leave myProviderId null, but only one of them means the account
- *  genuinely owns no provider profile. Collapsing the two would tell a provider
- *  they are not the owner of their own profile. */
+/** Result of the session-level owned-provider lookup. A failed lookup must
+ * stay distinct from a successful "owns no profile" null. */
 export type OwnedProviderLookupStatus = 'pending' | 'resolved' | 'failed';
 
 export interface UserData {
@@ -88,21 +86,15 @@ interface AuthContextType {
   session: Session | null;
   /** The only account/hat shape UI code should interpret. */
   hatState: AccountHatState;
-  /** The provider profile this account owns, or null if it owns none.
-   *  Resolved once per session so a screen can answer "is this mine?"
-   *  synchronously on first paint. Only meaningful when the status below is
-   *  'resolved' — on 'failed' it is null because the answer is unknown, which
-   *  is NOT the same as "owns none". */
+  /** Provider profile owned by this account. Meaningful once status resolves. */
   myProviderId: string | null;
-  /** Whether the lookup above actually produced an answer. Anything other than
-   *  'resolved' means ownership is unknown, and callers must withhold whatever
-   *  an owner is never allowed to see rather than assume non-ownership. */
   myProviderIdStatus: OwnedProviderLookupStatus;
   switchMode: () => Promise<void>;
   upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
     dobDay?: string; dobMonth?: string; dobYear?: string;
     serviceInterests?: string[]; serviceLocations?: string[];
+    yearsExperience?: string;
     priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
     accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
     preferredPaymentMethods?: string[];
@@ -151,6 +143,8 @@ async function clearStorageFolder(bucket: string, uid: string): Promise<void> {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Invalidates profile responses when a newer session or sign-out arrives.
+  const profileLoadVersion = useRef(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserData | null>(null);
@@ -160,22 +154,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => getAccountHatState(user?.accountType ?? null, user?.hasClientProfile, activeMode),
     [user?.accountType, user?.hasClientProfile, activeMode],
   );
-  // Ownership of a provider profile, resolved once per session rather than
-  // once per provider profile viewed. ProviderProfileScreen renders no
-  // booking controls at all until it knows the viewer isn't the owner, so
-  // asking per visit meant the Book button could only appear a round trip
-  // after the profile had already painted.
+  // Resolve ownership once per session, before a provider profile is opened.
+  // This lets its Book button paint with the service card instead of waiting
+  // for a second per-profile request after the screen has appeared.
   const [myProviderId, setMyProviderId] = useState<string | null>(null);
   const [myProviderIdStatus, setMyProviderIdStatus] =
     useState<OwnedProviderLookupStatus>('pending');
   useEffect(() => {
-    // Logged out: nobody owns anything, and there's nothing to look up.
-    // Settled immediately so a signed-out browser isn't made to wait.
     if (!user?.id) {
       setMyProviderId(null);
       setMyProviderIdStatus('resolved');
       return;
     }
+
     let cancelled = false;
     setMyProviderIdStatus('pending');
     void getProviderIdForUserId(user.id)
@@ -185,25 +176,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMyProviderIdStatus('resolved');
       })
       .catch((error: unknown) => {
-        // 'failed', not a resolved null. This lookup is one of the two things
-        // deciding whether an account is offered a Book button on a profile,
-        // and a null meaning "the query broke" must never be read as a null
-        // meaning "owns no provider profile" — that hands the owner the one
-        // control this gate exists to keep from them. Callers fall back to the
-        // slower per-profile check on this path.
         logger.warn('[AuthContext] Could not resolve owned provider id:', error);
         if (cancelled) return;
         setMyProviderId(null);
         setMyProviderIdStatus('failed');
       });
+
     return () => {
       cancelled = true;
     };
-    // accountType is a dep, not just id: upgradeToProvider creates the row
-    // mid-session and flips this same field, so without it a brand-new
-    // provider would keep the null they were resolved to at login.
+    // accountType changes when a provider row is created mid-session.
   }, [user?.id, user?.accountType]);
-
   // Mirrors activeMode for applyMode's noop check without pulling activeMode
   // into that callback's deps (which would otherwise force it to be
   // re-created — and re-registered via registerModeSetter — on every switch).
@@ -264,6 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
+        profileLoadVersion.current += 1;
         setSession(session);
         setIsLoading(false);
         return;
@@ -273,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // last would overwrite activeMode non-deterministically.
       if (event === 'TOKEN_REFRESHED') {
         if (!session) {
+          profileLoadVersion.current += 1;
           intentionalLogoutRef.current = true;
           await signOutCurrentSession().catch(() => {});
           setUser(null);
@@ -294,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // on another device, admin revocation, refresh token expired). Show an alert only
       // for the latter so the user isn't confused why they're on the login screen.
       if (event === 'SIGNED_OUT') {
+        profileLoadVersion.current += 1;
         if (!intentionalLogoutRef.current) {
           Alert.alert('Signed out', "You've been signed out. Please sign in again.");
         }
@@ -309,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         await loadUserProfileRef.current(session);
       } else {
+        profileLoadVersion.current += 1;
         setUser(null);
         setIsLoggedIn(false);
         setIsLoading(false);
@@ -316,12 +303,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      profileLoadVersion.current += 1;
       unsubscribeAuth();
       appStateSub.remove();
     };
   }, []);
 
   const loadUserProfile = useCallback(async (session: Session) => {
+    const version = ++profileLoadVersion.current;
+    const isCurrent = () => version === profileLoadVersion.current;
     try {
       logger.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
 
@@ -339,10 +329,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let profile = null;
       let profileError: Error | null = null;
       try {
-        profile = await getUserProfileById(session.user.id);
+        profile = await withTimeout(
+          getUserProfileById(session.user.id),
+          8_000,
+          'Profile restore',
+        );
       } catch (err: any) {
         profileError = err;
       }
+
+      if (!isCurrent()) return;
 
       if (profileError) {
         // Transient failure — network, 401 from expired token before auto-refresh
@@ -351,6 +347,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+        if (!isCurrent()) return;
         setActiveMode(resolveRestoredMode(savedMode, role));
         setUser({
           id: session.user.id,
@@ -423,6 +420,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clientArea: profile.client_area ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+        if (!isCurrent()) return;
         const restoredMode = resolveRestoredMode(savedMode, role, profile.has_client_profile === true);
         setActiveMode(restoredMode);
         // Persist the corrected hat so the stale value can't win a later restore
@@ -430,6 +428,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (restoredMode !== savedMode) {
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, restoredMode).catch(() => {});
         }
+        if (!isCurrent()) return;
         setUser(userData);
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
@@ -475,6 +474,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
+      if (!isCurrent()) return;
       // Unexpected JS error. Don't sign the user out — the session is still valid.
       // Fall back to session metadata so they stay in the app.
       logger.error('[AuthContext] unexpected error in loadUserProfile:', error);
@@ -482,6 +482,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const meta = session.user.user_metadata as Record<string, any>;
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+        if (!isCurrent()) return;
         setUser({
           id: session.user.id,
           name: meta?.['name'] ?? session.user.email?.split('@')[0] ?? '',
@@ -494,10 +495,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setActiveMode(resolveRestoredMode(savedMode, role));
         setIsLoggedIn(true);
       } catch {
-        setIsLoggedIn(false);
+        if (isCurrent()) setIsLoggedIn(false);
       }
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
   }, [resolveRestoredMode]);
 
@@ -565,6 +566,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
       dobDay?: string; dobMonth?: string; dobYear?: string;
       serviceInterests?: string[]; serviceLocations?: string[];
+      yearsExperience?: string;
       priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
       accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
       preferredPaymentMethods?: string[];

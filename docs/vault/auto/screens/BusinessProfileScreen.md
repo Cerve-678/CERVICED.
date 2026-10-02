@@ -10,9 +10,9 @@ tags: [screen, provider]
 - [[InfoRegScreen\|EditProfile]]
 - [[BrandingScreen\|Branding]]
 - [[BusinessDetailsScreen\|BusinessDetails]]
+- [[PaymentsScreen\|Payments]]
 - [[ProviderCommunicationsScreen\|Communications]]
 - [[ProviderAutomationsScreen\|Automations]]
-- [[PaymentsScreen\|Payments]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

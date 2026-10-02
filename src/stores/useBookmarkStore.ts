@@ -35,18 +35,12 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
   },
 
   addBookmark: async (id: string) => {
-    const current = get().bookmarkedIds;
-    if (!current.includes(id)) {
-      const updated = [...current, id];
-      set({ bookmarkedIds: updated });
-      try {
-        await storage.setItem(STORAGE_KEYS.BOOKMARKED_VIDEOS, updated);
-        await dbAddBookmark(id);
-      } catch (error) {
-        logger.error('Failed to save bookmark:', error);
-        set({ bookmarkedIds: current });
-      }
-    }
+    if (get().bookmarkedIds.includes(id)) return;
+    // Ownership is verified before updating either the UI or local storage.
+    await dbAddBookmark(id);
+    const updated = [...new Set([...get().bookmarkedIds, id])];
+    set({ bookmarkedIds: updated });
+    await storage.setItem(STORAGE_KEYS.BOOKMARKED_VIDEOS, updated);
   },
 
   removeBookmark: async (id: string) => {

@@ -43,6 +43,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { useAuth } from '../../contexts/AuthContext';
 import { CommonActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { logger, reportError } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -63,7 +64,7 @@ interface Notification {
       | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
       | 'info_pack_received' | 'intake_form_completed' | 'address_released'
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
-      | 'schedule_fully_booked';
+      | 'schedule_fully_booked' | 'points_earned';
   title: string;
   message: string;
   timestamp: string;
@@ -137,6 +138,11 @@ const notifSkeletonStyles = StyleSheet.create({
 // Types whose whole point is "go and look at this booking" — the row shows the
 // action itself. Everything else keeps Read More, which opens the full message.
 const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'booking_pending']);
+
+// Haptic tiers per DESIGN_SYSTEM.md — fire-and-forget, never block a tap.
+const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
+const hapticMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
+const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
 
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
@@ -651,14 +657,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     } else if (notification.type === 'provider_message') {
       logger.log('Navigating to ProviderInbox (Messages)');
       defer(() => {
-        navigateProviderHome('ProviderInbox', { initialFilter: 'messages' });
+        navigateProviderHome('ProviderInbox', { initialFilter: 'unread' });
       }, 300);
     } else if (notification.type === 'new_message') {
-      // Chat message — providers land in the inbox Messages tab; clients open
+      // Chat message — providers open the inbox section with unread messages; clients open
       // the chat with that provider (slug + name looked up from provider_id)
       if (isProviderRef.current) {
         defer(() => {
-          navigateProviderHome('ProviderInbox', { initialFilter: 'messages' });
+          navigateProviderHome('ProviderInbox', { initialFilter: 'unread' });
         }, 300);
       } else {
         if (!notification.providerId) return;
@@ -677,20 +683,19 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           );
         }, 300);
       }
+    } else if (notification.type === 'points_earned') {
+      // Client-only reward. Lands on the Points screen (in the Profile tab's
+      // stack), where the balance and rewards live — not on the booking the
+      // award came from, which is why it's not treated as a booking deep-link.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+      }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
       // screen rather than through BookingDetail like the booking types.
       defer(() => {
         navigateProviderHome('ProviderSchedule');
-      }, 300);
-    } else if (notification.type === 'points_earned') {
-      // Loyalty points earned — open the Rewards screen, which lives in the
-      // client Profile tab's stack. Client-only (already guarded above via
-      // CLIENT_ONLY_TYPES), so no provider branch is needed. Same dismiss-then-
-      // navigate-via-root-ref pattern as the other client deep-links.
-      defer(() => {
-        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
       }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
@@ -718,6 +723,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Refresh control
   const onRefresh = useCallback(async () => {
+    hapticLight();
     setRefreshing(true);
     await loadNotifications();
     setRefreshing(false);
@@ -823,8 +829,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
-      case 'points_earned':
-        return 'View Points';
       default:
         return 'View';
     }
@@ -847,7 +851,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         <Animated.View style={{ transform: [{ scale }] }}>
           <TouchableOpacity
             style={styles.deleteBubble}
-            onPress={() => deleteNotification(item.id)}
+            onPress={() => { hapticMedium(); deleteNotification(item.id); }}
             activeOpacity={0.75}
           >
             <Ionicons name="trash" size={22} color="#FFF" />
@@ -878,7 +882,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     >
       <GestureTouchableOpacity
         activeOpacity={0.8}
-        onPress={() => showFullMessage(item)}
+        onPress={() => { hapticLight(); showFullMessage(item); }}
         style={styles.notificationItem}
       >
         <View
@@ -946,6 +950,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   <TouchableOpacity
                     style={[styles.readMoreButton, { backgroundColor: P.accent, borderColor: P.accent }]}
                     onPress={() => {
+                      hapticMedium();
                       markAsRead(item.id);
                       handleNotificationAction(item);
                     }}
@@ -956,7 +961,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 ) : (
                   <TouchableOpacity
                     style={[styles.readMoreButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
-                    onPress={() => showFullMessage(item)}
+                    onPress={() => { hapticLight(); showFullMessage(item); }}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.readMoreText, { color: P.accentText }]}>Read More</Text>
@@ -1001,7 +1006,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           {unreadCount > 0 && (
             <TouchableOpacity
               style={[styles.markAllButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
-              onPress={markAllAsRead}
+              onPress={() => { hapticMedium(); markAllAsRead(); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.markAllText, { color: P.accentText }]}>Mark All Read</Text>
@@ -1027,7 +1032,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 ]
             )}
             activeKey={selectedFilter}
-            onPress={setSelectedFilter}
+            onPress={(key: string) => { hapticSelection(); setSelectedFilter(key); }}
             accentColor={P.accent}
             inactiveTextColor={P.sub}
             activeTextColor={P.onAccent}
@@ -1038,7 +1043,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {loadError && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{loadError}</Text>
-            <TouchableOpacity onPress={loadNotifications}>
+            <TouchableOpacity onPress={() => { hapticLight(); loadNotifications(); }}>
               <Text style={styles.errorRetryText}>Retry</Text>
             </TouchableOpacity>
           </View>
@@ -1049,7 +1054,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {actionError && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{actionError}</Text>
-            <TouchableOpacity onPress={() => setActionError(null)}>
+            <TouchableOpacity onPress={() => { hapticLight(); setActionError(null); }}>
               <Text style={styles.errorRetryText}>Dismiss</Text>
             </TouchableOpacity>
           </View>
@@ -1100,15 +1105,26 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={closeMessagePopup}
+            onPress={() => { hapticLight(); closeMessagePopup(); }}
           >
             <View style={styles.modalContainer}>
               <TouchableOpacity activeOpacity={1} onPress={() => {}}>
                 <View style={[styles.messagePopup, { backgroundColor: P.card, borderColor: P.border }]}>
                   {selectedNotification && (
                     <>
+                      {/* Accent Rail — the one saturated colour on the card,
+                          keyed to the notification type (green/amber/gold/…). */}
+                      <View
+                        style={[
+                          styles.popupAccentRail,
+                          { backgroundColor: getBellColor(selectedNotification.type) },
+                        ]}
+                      />
+
                       <View style={styles.popupHeader}>
                         <View style={styles.popupHeaderLeft}>
+                          {/* Bell keeps its type colour (green/amber/gold/…),
+                              alongside the type-coloured accent rail. */}
                           <View style={[
                             styles.popupIconContainer,
                             { backgroundColor: `${getBellColor(selectedNotification.type)}20`, borderColor: P.border }
@@ -1129,7 +1145,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
                         <TouchableOpacity
                           style={[styles.closeButton, { backgroundColor: P.surface }]}
-                          onPress={closeMessagePopup}
+                          onPress={() => { hapticLight(); closeMessagePopup(); }}
                           activeOpacity={0.7}
                         >
                           <Text style={[styles.closeButtonText, { color: P.text }]}>×</Text>
@@ -1139,6 +1155,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                       <Text style={[textStyles.h3, styles.popupTitle, { color: P.text }]}>
                         {selectedNotification.title}
                       </Text>
+
+                      {!!selectedNotification.provider && (
+                        <Text style={[textStyles.caption, styles.popupByline, { color: P.sub }]}>
+                          with {selectedNotification.provider}
+                        </Text>
+                      )}
 
                       <ScrollView style={styles.popupMessageScroll}>
                         <Text style={[textStyles.body, styles.popupMessage, { color: P.sub }]}>
@@ -1155,12 +1177,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                           <TouchableOpacity
                             style={[
                               styles.popupActionButton,
-                              { backgroundColor: getBellColor(selectedNotification.type) }
+                              // Colour-outlined rather than solid-filled — quieter,
+                              // so the rail stays the loudest use of the type colour.
+                              { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: getBellColor(selectedNotification.type) }
                             ]}
-                            onPress={() => handleNotificationAction(selectedNotification)}
+                            onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
                             activeOpacity={0.8}
                           >
-                            <Text style={[textStyles.button, styles.popupActionText]}>
+                            <Text style={[textStyles.button, styles.popupActionText, { color: getBellColor(selectedNotification.type) }]}>
                               {getActionButtonText(selectedNotification.type)}
                             </Text>
                           </TouchableOpacity>
@@ -1324,12 +1348,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center' 
   },
-  modalContainer: { width: '90%', maxWidth: 400, maxHeight: '80%' },
+  modalContainer: { width: '94%', maxWidth: 460, maxHeight: '80%' },
   messagePopup: {
     borderRadius: 25,
     padding: 24,
+    paddingLeft: 28, // clear the accent rail on the left edge
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  // Accent Rail — type-coloured stripe flush to the card's left edge. It's a
+  // plain square bar that deliberately overshoots the top and bottom edges;
+  // the card's overflow:hidden + borderRadius clip it into a clean rounded
+  // corner, filling the strip's ends completely rather than leaving a white
+  // sliver where a straight bar (or a taper) meets the curve.
+  popupAccentRail: {
+    position: 'absolute',
+    left: 0,
+    top: -40,
+    bottom: -40,
+    width: 6,
   },
   popupHeader: {
     flexDirection: 'row',
@@ -1362,9 +1399,17 @@ const styles = StyleSheet.create({
   },
   closeButtonText: { fontSize: 24, fontWeight: 'bold' },
   popupTitle: {
-    marginBottom: 16,
-    textAlign: 'center',
+    marginBottom: 4,
+    textAlign: 'left',
     fontFamily: 'BakbakOne-Regular',
+    // A touch smaller than the shared h3 (24) — local to this popup.
+    fontSize: 20,
+    lineHeight: 26,
+  },
+  // "with {provider}" byline under the title in the left-aligned reading layout.
+  popupByline: {
+    textAlign: 'left',
+    marginBottom: 16,
   },
   popupMessageScroll: {
     maxHeight: 200,
@@ -1372,7 +1417,7 @@ const styles = StyleSheet.create({
   },
   popupMessage: {
     lineHeight: 22,
-    textAlign: 'center'
+    textAlign: 'left'
   },
   popupFooter: {
     flexDirection: 'row',

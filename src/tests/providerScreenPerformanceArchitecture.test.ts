@@ -110,4 +110,19 @@ describe('provider screen performance contracts', () => {
       'Promise.all([fetchBookings(), fetchWaitlist(), fetchUnreadMessages()]).finally(() => setLoading(false))',
     );
   });
+
+  it('uses live modal insets and provider-purple in-progress actions', () => {
+    const clientele = readProviderScreen('ProviderClienteleScreen');
+    const detail = readProviderScreen('ProviderBookingDetailScreen');
+
+    expect(clientele).toContain('const bottomSafeGap = useSystemBottomInset() + 16');
+    expect(clientele).toContain('contentContainerStyle={[anSt.scroll, { paddingBottom: bottomSafeGap }]}');
+    expect(clientele).not.toContain('marginBottom: BOTTOM_SAFE_GAP');
+    expect(detail).toContain("const PROVIDER_IN_PROGRESS_PURPLE = '#7B2FBE'");
+    expect(detail).toContain('color={P.accent} label="Mark Complete"');
+    expect(detail).toContain('paddingBottom: Math.max(40, insets.bottom + 16)');
+    expect(detail).not.toContain('styles.modalOverlay, { paddingBottom:');
+    expect(detail).not.toContain('styles.pickerModalWrap, { paddingBottom:');
+    expect(clientele).not.toContain('anSt.pickerModalWrap, { paddingBottom:');
+  });
 });

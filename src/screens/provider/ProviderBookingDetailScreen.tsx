@@ -22,7 +22,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
-import { canDisputeNoShow } from '../../types/booking';
+import { canDisputeNoShow, PaymentStatus } from '../../types/booking';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
@@ -57,6 +57,7 @@ import {
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
   getServiceDurationsByIds,
+  refundProviderBooking,
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
@@ -76,7 +77,6 @@ import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentati
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
-import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -105,10 +105,11 @@ const DARK = {
   sep:     'rgba(126,102,103,0.10)',
   iconBg:  'rgba(175,145,151,0.10)',
 };
+const PROVIDER_IN_PROGRESS_PURPLE = '#7B2FBE';
 
 type ProviderInvoiceBooking = Pick<
   ConfirmedBooking,
-  'id' | 'status' | 'addOns' | 'paymentType' | 'amountPaid' | 'price' | 'bookingDate' | 'bookingTime' | 'endTime' | 'serviceName'
+  'id' | 'status' | 'addOns' | 'paymentType' | 'amountPaid' | 'depositAmount' | 'price' | 'bookingDate' | 'bookingTime' | 'endTime' | 'serviceName'
 > & {
   customerName?: string;
   paymentMethod?: string;
@@ -119,13 +120,17 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
   const statusColors: Record<string, string> = {
     UPCOMING: '#007AFF', COMPLETED: '#34C759',
     CANCELLED: '#FF3B30', NO_SHOW: '#FF3B30',
-    PENDING: '#FF9500', IN_PROGRESS: '#AF9197',
+    PENDING: '#FF9500', IN_PROGRESS: PROVIDER_IN_PROGRESS_PURPLE,
   };
   const statusColor = statusColors[booking.status] ?? '#AF9197';
   const addOnsRows = (booking.addOns ?? []).map(addOn =>
     `<tr><td style="padding:8px 0;color:#555;padding-left:20px;font-size:16px">+ ${addOn.name}</td><td style="padding:8px 0;color:#555;font-size:16px;text-align:right">£${Number(addOn.price).toFixed(2)}</td></tr>`
   ).join('');
   const depositLabel = booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment';
+  // Provider's own cut, never amount_paid — that figure is what left the
+  // client's card and, on a card charge, includes CERVICED's platform fee,
+  // which is never the provider's money.
+  const paidAmount = booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice;
   const remainingBalance = booking.remainingBalance ?? 0;
   const balanceRow = remainingBalance > 0
     ? `<tr><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px">Balance due</td><td style="padding:8px 0;color:#FF9500;font-weight:600;font-size:17px;text-align:right">£${remainingBalance.toFixed(2)}</td></tr>`
@@ -156,7 +161,6 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
   .ref-block { margin-top: 36px; text-align: center; }
   .ref-label { font-size: 13px; letter-spacing: 2px; color: #888; }
   .ref-value { font-size: 17px; font-weight: 700; letter-spacing: 4px; margin-top: 6px; }
-  .footer { margin-top: 44px; text-align: center; font-size: 13px; color: #bbb; letter-spacing: 1px; }
   section { margin-bottom: 4px; }
 </style>
 </head>
@@ -199,7 +203,7 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
   <section>
     <div class="label">PAYMENT</div>
     <table>
-      <tr><td style="padding:6px 0;color:#34C759;font-weight:600">${depositLabel}</td><td style="padding:6px 0;color:#34C759;font-weight:600;text-align:right">£${Number(booking.amountPaid ?? 0).toFixed(2)}</td></tr>
+      <tr><td style="padding:6px 0;color:#34C759;font-weight:600">${depositLabel}</td><td style="padding:6px 0;color:#34C759;font-weight:600;text-align:right">£${paidAmount.toFixed(2)}</td></tr>
       ${balanceRow}
       <tr><td style="padding:6px 0;color:#555">Payment method</td><td style="padding:6px 0;color:#555;text-align:right;font-weight:600">${paymentMethodLabel}</td></tr>
     </table>
@@ -213,8 +217,6 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
     <div class="ref-label">REFERENCE</div>
     <div class="ref-value">${formatBookingRef(booking)}</div>
   </div>
-
-  <div class="footer">cerviced.app</div>
 </body>
 </html>`;
 }
@@ -231,6 +233,18 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
   five_days_before:  'Sends 5 days before',
   week_before:       'Sends 1 week before',
 };
+
+// Why a refund is being issued. A refund isn't one thing — it can settle a
+// cancellation, a client dispute, or something that went wrong with a service
+// that already happened — so the provider picks the reason before any money
+// moves, and it's recorded on the refund for later reference.
+const REFUND_REASONS: { label: string; sub: string }[] = [
+  { label: 'Appointment cancelled',   sub: 'The booking isn’t going ahead' },
+  { label: 'Client dispute',          sub: 'Resolving a complaint or disagreement' },
+  { label: 'Issue with the service',  sub: 'Something went wrong with a completed appointment' },
+  { label: 'Goodwill gesture',        sub: 'Refunding by choice, no fault' },
+  { label: 'Other',                   sub: 'Add a note below' },
+];
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
   const { user, hatState } = useAuth();
@@ -268,7 +282,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // `status` is a MAPPED BookingStatus, never a raw DB string — it is merged
   // straight into booking.status, which the screen compares against
   // BookingStatus members. Typed as such so a raw 'confirmed' can't slip in.
-  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: BookingStatus } | null>(null);
+  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: BookingStatus; paymentStatus?: PaymentStatus } | null>(null);
   const [respondLoading, setRespondLoading] = useState(false);
   const [sendApology, setSendApology] = useState(false);
   const [apologyText, setApologyText] = useState(
@@ -321,6 +335,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeBusy, setDisputeBusy] = useState(false);
+  // Refund: a reason must be picked before money moves — a refund can mean a
+  // cancellation, a dispute, or a service issue, and that distinction matters
+  // (especially once a booking is already completed). The optional note is
+  // appended to the selected reason and recorded on the Stripe refund.
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundReason, setRefundReason] = useState<string | null>(null);
+  const [refundNote, setRefundNote] = useState('');
+  const [refundBusy, setRefundBusy] = useState(false);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
   const [groupDateOptions, setGroupDateOptions] = useState<
@@ -541,6 +563,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       ...(liveBookingOverrides?.bookingTime !== undefined && { bookingTime: liveBookingOverrides.bookingTime }),
       ...(liveBookingOverrides?.endTime !== undefined && { endTime: liveBookingOverrides.endTime }),
       ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status }),
+      ...(liveBookingOverrides?.paymentStatus !== undefined && { paymentStatus: liveBookingOverrides.paymentStatus }),
     } as ConfirmedBooking;
   }, [baseBooking, liveBookingOverrides]);
 
@@ -1081,6 +1104,47 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     });
   }, [booking, cancelBooking, navigation, groupSuffix]);
 
+  // Issue a refund through the same Stripe-backed path the Payments screen
+  // uses (refundProviderBooking -> refund-payment edge function). This returns
+  // the client's money; it deliberately does NOT cancel the appointment —
+  // cancelling is the separate action below. Opening the picker just resets
+  // its state; the money only moves from submitRefund, once a reason is chosen.
+  const handleRefund = useCallback(() => {
+    if (!booking) return;
+    setRefundReason(null);
+    setRefundNote('');
+    setShowRefundModal(true);
+  }, [booking]);
+
+  const submitRefund = useCallback(async () => {
+    if (!booking || !refundReason || refundBusy) return;
+    setRefundBusy(true);
+    try {
+      const note = refundNote.trim();
+      const reason = note ? `${refundReason} — ${note}` : refundReason;
+      // Throws on failure (see refundProviderBooking).
+      const completed = await refundProviderBooking(booking.id, reason);
+      setLiveBookingOverrides(prev => ({
+        ...(prev ?? {}),
+        paymentStatus: completed ? PaymentStatus.REFUNDED : PaymentStatus.REFUND_PENDING,
+      }));
+      setShowRefundModal(false);
+      showAlert(
+        completed ? 'Refund issued' : 'Refund processing',
+        completed
+          ? 'The refund has been issued. Their bank may take a few days to show it.'
+          : 'Stripe is still processing the refund. Check again shortly.',
+      );
+    } catch (err) {
+      showAlert(
+        'Refund failed',
+        toUserMessage(err, 'The refund could not be confirmed. Refresh before trying again.', 'ProviderBookingDetail.refund'),
+      );
+    } finally {
+      setRefundBusy(false);
+    }
+  }, [booking, refundReason, refundNote, refundBusy, showAlert]);
+
   const handleCallClient = useCallback(() => {
     if (!booking?.customerPhone) return;
     Linking.openURL(`tel:${booking.customerPhone}`);
@@ -1179,7 +1243,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     );
   }
 
-  const statusColor = BOOKING_STATUS_COLORS[booking.status] || '#007AFF';
+  // Provider-side in-progress actions use the same purple as Booking History.
+  const statusColor = booking.status === BookingStatus.IN_PROGRESS
+    ? PROVIDER_IN_PROGRESS_PURPLE
+    : BOOKING_STATUS_COLORS[booking.status] || '#007AFF';
 
   const isActive = booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS;
   const isPendingConfirmation = booking.status === BookingStatus.PENDING;
@@ -1216,16 +1283,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
-          {/* Hat label: this screen is reachable directly from a provider
-              notification on cold launch, where the tab bar is the only other
-              hat signal and is easy to miss. A dual-hat user must be able to
-              tell their own appointment from their client's job at a glance —
-              the two afford opposite actions. This screen is always the
-              provider hat's view of a job they are performing. */}
           <View style={styles.headerTitleWrap}>
-            <Text style={[styles.headerHat, { color: P.accent }]} numberOfLines={1}>
-              BUSINESS
-            </Text>
             <Text style={[styles.headerTitle, { color: P.text }]} numberOfLines={1}>
               Your Client's Booking
             </Text>
@@ -1399,7 +1457,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     rendered for mobile at all. The address itself lives in
                     the ADDRESS section further down; this is the status line
                     for it. */}
-                {!addressKnown ? (
+                {booking.status === BookingStatus.CANCELLED ? (
+                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                ) : !addressKnown ? (
                   <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
                 ) : isMobileProvider ? (
                   <Row
@@ -1635,13 +1695,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                               </Text>
                             </View>
                           )}
-                          {providerServiceCategory ? (
-                            <View style={{ backgroundColor: '#a342c322', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#a342c3', letterSpacing: 0.4 }}>
-                                {providerServiceCategory}
-                              </Text>
-                            </View>
-                          ) : null}
                         </View>
                         <Ionicons
                           name={profileExpanded ? 'chevron-up' : 'chevron-down'}
@@ -1893,10 +1946,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     "Full payment  £0.00" in green here would read as if £0
                     was collected via the app, when really nothing has been
                     collected through the app at all yet. */}
+                {/* amount_paid is what left the client's card, which for a
+                    card charge includes CERVICED's platform fee on top — the
+                    provider is never owed that fee, so this row shows the
+                    provider's own cut: the full service price when paid in
+                    full, or just the deposit (fee-free at source) otherwise. */}
                 {(booking.amountPaid ?? 0) > 0 && (
                   <Row
                     label={booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
-                    value={`£${(booking.amountPaid ?? 0).toFixed(2)}`}
+                    value={`£${(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)}`}
                     textColor={P.text}
                     divColor={rowDiv}
                     valueColor="#34C759"
@@ -1977,10 +2035,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── Receipt Footer ── */}
               <View style={[styles.receiptFooter, { borderTopColor: perf }]}>
-                <Text style={[styles.footerText, { color: P.sub }]}>
+                <Text style={[styles.footerLabel, { color: P.sub }]}>REFERENCE</Text>
+                <Text style={[styles.footerText, { color: P.text }]}>
                   {formatBookingRef(booking)}
                 </Text>
-                <Text style={[styles.footerText, { color: P.sub }]}>cerviced.app</Text>
               </View>
 
             </View>
@@ -2091,7 +2149,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={() => setClientHistoryVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '80%' }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '80%', paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <Text style={[styles.respondModalTitle, { color: P.text }]}>
                 {booking?.customerName ? `${booking.customerName}'s History` : 'Client History'}
@@ -2178,7 +2236,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={closeInitRescheduleModal}
       >
         <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             {initSent ? (
               <View style={styles.sentState}>
                 <Text style={styles.sentIcon}>{dbReschedule?.status === 'rejected' ? '✕' : '✓'}</Text>
@@ -2290,7 +2348,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={initSlotDatePickerVisible} onRequestClose={() => setInitSlotDatePickerVisible(false)}>
                       <View style={styles.pickerModalWrap}>
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitSlotDatePickerVisible(false)} />
-                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                        <View style={[styles.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                           <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
                             <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Date</Text>
                             <TouchableOpacity onPress={() => setInitSlotDatePickerVisible(false)}>
@@ -2366,7 +2424,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={initCustomTimePickerVisible} onRequestClose={() => setInitCustomTimePickerVisible(false)}>
                       <View style={styles.pickerModalWrap}>
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitCustomTimePickerVisible(false)} />
-                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                        <View style={[styles.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                           <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
                             <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Time</Text>
                             <TouchableOpacity onPress={() => setInitCustomTimePickerVisible(false)}>
@@ -2488,7 +2546,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={closeGroupRescheduleModal}
       >
         <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             {initSent ? (
               <View style={styles.sentState}>
                 <Text style={styles.sentIcon}>✓</Text>
@@ -2639,22 +2697,25 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         <TouchableOpacity style={styles.moreSheetOverlay} activeOpacity={1} onPress={() => setShowMoreSheet(false)} />
         <View style={[styles.moreSheet, { backgroundColor: isDarkMode ? '#1C1C1E' : '#F2F2F7' }]}>
           <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-          {booking && (booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS) && (
+          {/* Issue Refund — only when there's an app-taken payment left to
+              return (deposit or full). Hidden once already refunded or
+              refund-pending, and when nothing was paid through the app.
+              Reschedule still lives on its own button in the receipt body. */}
+          {booking && (booking.paymentStatus === PaymentStatus.DEPOSIT_PAID || booking.paymentStatus === PaymentStatus.PAID_IN_FULL) && (
             <TouchableOpacity
               style={[styles.moreSheetRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
               onPress={() => {
                 setShowMoreSheet(false);
-                const openGroup = groupSiblings.length > 1;
-                setTimeout(() => (openGroup ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true)), 260);
+                setTimeout(() => handleRefund(), 260);
               }}
               activeOpacity={0.7}
             >
-              <View style={[styles.moreSheetIcon, { backgroundColor: '#FF950018' }]}>
-                <Ionicons name="calendar-outline" size={18} color="#FF9500" />
+              <View style={[styles.moreSheetIcon, { backgroundColor: '#FF3B3018' }]}>
+                <Ionicons name="arrow-undo-outline" size={18} color="#FF3B30" />
               </View>
               <View style={styles.moreSheetTextBlock}>
-                <Text style={[styles.moreSheetTitle, { color: P.text }]}>Request Reschedule</Text>
-                <Text style={[styles.moreSheetSub, { color: P.text + '66' }]}>Propose new times to the client</Text>
+                <Text style={[styles.moreSheetTitle, { color: P.text }]}>Issue Refund</Text>
+                <Text style={[styles.moreSheetSub, { color: P.text + '66' }]}>Return this payment to the client</Text>
               </View>
               <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
             </TouchableOpacity>
@@ -2742,6 +2803,102 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </View>
       </Modal>
 
+      {/* ── Refund reason dialog ────────────────────────────────────────
+          A refund must carry a reason before money moves (cancellation,
+          dispute, service issue…) — it's recorded on the refund so a
+          completed booking's refund can still be explained later. Issuing the
+          refund does NOT cancel the appointment; that's the separate Cancel
+          action. The amount shown is the client's paid amount for the copy;
+          the edge function refunds the real captured amount server-side. */}
+      <Modal
+        visible={showRefundModal}
+        transparent statusBarTranslucent navigationBarTranslucent
+        animationType="fade"
+        onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
+      >
+        <TouchableOpacity
+          style={styles.dialogOverlay}
+          activeOpacity={1}
+          onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
+        />
+        <View style={styles.dialogPositioner} pointerEvents="box-none">
+          <View style={[styles.dialog, { backgroundColor: P.card }]}>
+            <Text style={[styles.dialogTitle, { color: P.text }]}>Issue a refund</Text>
+            <Text style={[styles.dialogMessage, { color: P.text + '88' }]}>
+              This returns £{(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)} to {booking.customerName || 'the client'} for {booking.serviceName || 'this booking'}. It does not cancel their appointment.
+            </Text>
+            <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
+              <Text style={[styles.refundReasonHeading, { color: P.text + '99' }]}>WHY ARE YOU REFUNDING?</Text>
+              {REFUND_REASONS.map(r => {
+                const selected = refundReason === r.label;
+                return (
+                  <TouchableOpacity
+                    key={r.label}
+                    activeOpacity={0.7}
+                    disabled={refundBusy}
+                    onPress={() => setRefundReason(r.label)}
+                    style={[styles.refundReasonRow, {
+                      borderColor: selected ? P.accent : (isDarkMode ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'),
+                      backgroundColor: selected ? P.accent + '14' : 'transparent',
+                    }]}
+                  >
+                    <Ionicons
+                      name={selected ? 'radio-button-on' : 'radio-button-off'}
+                      size={18}
+                      color={selected ? P.accent : P.text + '55'}
+                    />
+                    <View style={styles.refundReasonTextBlock}>
+                      <Text style={[styles.refundReasonLabel, { color: P.text }]}>{r.label}</Text>
+                      <Text style={[styles.refundReasonSub, { color: P.text + '66' }]}>{r.sub}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              <TextInput
+                style={[styles.respondInput, {
+                  color: P.text,
+                  borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+                  minHeight: 64,
+                  textAlignVertical: 'top',
+                  marginTop: 10,
+                }]}
+                placeholder={refundReason === 'Other' ? 'Add a note (required)' : 'Add a note (optional)'}
+                placeholderTextColor={P.text + '44'}
+                value={refundNote}
+                onChangeText={setRefundNote}
+                multiline
+                maxLength={500}
+                editable={!refundBusy}
+              />
+            </View>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={refundBusy || !refundReason || (refundReason === 'Other' && !refundNote.trim())}
+              onPress={submitRefund}
+            >
+              {refundBusy ? (
+                <ActivityIndicator size="small" color="#FF3B30" />
+              ) : (
+                <Text style={[styles.dialogBtnText, { color: '#FF3B30', fontWeight: '600', opacity: (refundReason && !(refundReason === 'Other' && !refundNote.trim())) ? 1 : 0.4 }]}>
+                  Refund payment
+                </Text>
+              )}
+            </TouchableOpacity>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={refundBusy}
+              onPress={() => setShowRefundModal(false)}
+            >
+              <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Confirm/decline dialog ── */}
       <Modal
         visible={!!pendingConfirm}
@@ -2821,7 +2978,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={() => setShowInfoPackPicker(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '70%' }]}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '70%', paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             <Text style={[styles.respondModalTitle, { color: P.text }]}>Send Info Pack</Text>
             <Text style={[styles.respondModalSub, { color: P.sub, marginBottom: 12 }]}>
               Choose a pack to send to the client for this booking.
@@ -3025,12 +3182,6 @@ const styles = StyleSheet.create({
   },
   headerTitleWrap: {
     alignItems: 'center',
-  },
-  headerHat: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 1,
   },
   headerTitle: {
     fontSize: 17,
@@ -3425,17 +3576,22 @@ const styles = StyleSheet.create({
 
   // ── Receipt footer ──
   receiptFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: 4,
   },
+  footerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
   footerText: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.8,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
 
   // ── Action buttons (below receipt) ──
@@ -3471,8 +3627,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   respondModal: {
     borderTopLeftRadius: 28,
@@ -3509,6 +3663,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 10,
   },
+  refundReasonHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  refundReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  refundReasonTextBlock: {
+    flex: 1,
+  },
+  refundReasonLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  refundReasonSub: {
+    fontSize: 12,
+    marginTop: 1,
+  },
   datePickBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3527,8 +3709,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     justifyContent: 'flex-end',
-    // Keeps the sheet clear of the system navigation bar.
-    paddingBottom: BOTTOM_SAFE_GAP,
   },
   pickerDismiss: {
     flex: 1,

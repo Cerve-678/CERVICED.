@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import * as Notifications from 'expo-notifications';
@@ -9,10 +9,12 @@ import { RootStackParamList } from './types';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { navigationRef } from './navigationRef';
-import { resolveModeChange } from './modeController';
+import { requestMode, resolveModeChange } from './modeController';
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
+import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
 import ErrorBoundary from '../components/ErrorBoundary';
+import AppLoadingScreen from '../components/AppLoadingScreen';
 
 // Auth screens
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
@@ -34,7 +36,7 @@ const Stack = createStackNavigator<RootStackParamList>();
 export default function RootNavigation() {
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
-  const { theme: colors, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
 
   // The switch overlay always uses the DESTINATION hat's real accent (not a
   // hardcoded placeholder color) — same "you're switching identity" signal
@@ -91,6 +93,30 @@ export default function RootNavigation() {
 
   // Track whether NavigationContainer has finished mounting
   const [isNavReady, setIsNavReady] = useState(false);
+  const [connectReturn, setConnectReturn] = useState<StripeConnectReturn | null>(null);
+  const handledConnectReturn = useRef<StripeConnectReturn | null>(null);
+  useEffect(() => {
+    let live = true;
+    const receive = (url: string) => {
+      const result = parseStripeConnectReturn(url);
+      if (live && result) setConnectReturn({ result, receivedAt: Date.now() });
+    };
+    void Linking.getInitialURL().then(url => { if (url) receive(url); }).catch(() => {});
+    const subscription = Linking.addEventListener('url', ({ url }) => receive(url));
+    return () => { live = false; subscription.remove(); };
+  }, []);
+  useEffect(() => {
+    if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !connectReturn ||
+        handledConnectReturn.current === connectReturn) return;
+    handledConnectReturn.current = connectReturn;
+    void requestMode('provider').then(mode => {
+      if (mode !== 'provider' || !navigationRef.isReady()) return;
+      navigationRef.navigate('MainTabs', {
+        screen: 'Profile', params: { screen: 'Payments', params: { stripeReturn: connectReturn } },
+      } as never);
+    });
+  }, [connectReturn, isNavReady, isLoggedIn, isLoading, pendingReactivation]);
+
   // Dedup guard — prevents the same notification firing both hooks
   const handledNotifRef = useRef<string | null>(null);
 
@@ -118,11 +144,7 @@ export default function RootNavigation() {
   }, []);
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
+    return <AppLoadingScreen />;
   }
 
   // Account is mid-30-day grace period — hold here instead of the normal

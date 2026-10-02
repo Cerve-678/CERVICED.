@@ -13,12 +13,10 @@
  *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
  *
- * Scheduling came later than the original three: availability had spread
- * across ServicesPricing, Automations and the calendar and now has one home.
+ * Scheduling and Payments came later than the original three: availability had
+ * spread across ServicesPricing, Automations and the calendar, and payment
+ * settings across ServicesPricing and Automations. Payments now lives directly under Business Profile.
  * Policies came later still, moved out of InfoRegScreen's one-shot editor.
- * Payments (payment types, deposits and payouts) used to live here too; it
- * moved up to Business Profile alongside Automations & Preferences so getting
- * paid isn't buried a level down. It's still the same PaymentsScreen.
  *
  * Shared form primitives live in src/features/business-details/.
  */
@@ -118,7 +116,6 @@ export default function BusinessDetailsScreen({ navigation }: any) {
 
           <Text style={[st.footnote, { color: C.sub }]}>
             Looking for reminders and client nudges? Those live in Automations & Preferences.
-            Payment types, deposits and payouts moved to Payments, alongside Automations.
           </Text>
         </ScrollView>
       </SafeAreaView>

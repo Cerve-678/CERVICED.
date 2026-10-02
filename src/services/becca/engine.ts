@@ -29,6 +29,7 @@ import { scoreToConfidence, SUGGESTION_MEMORY } from "./types";
 import userLearningService from "../userLearningService";
 import { resolveEntities } from "./entityResolver";
 import { understand } from "./matcher";
+import { normalizeAsk } from "./askNormaliser";
 import { capabilitiesFor, getCapability, toToolSchema } from "./registry";
 import { askChip, chip, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
@@ -327,9 +328,17 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const socialReply = buildSocialReply(message, hat);
   if (socialReply) return socialReply;
 
+  // People type "i want to do allmond" and "is there any one who can do
+  // lashes". Repair the ask ONCE, here, so entity resolution, capability
+  // matching and every capability's own regexes all read the same corrected
+  // text instead of each rediscovering the same typos. `message` stays
+  // verbatim above this point, where the confirmation prefix and the social/
+  // dismissal short-circuits need the user's exact words.
+  const ask = normalizeAsk(message);
+
   let entities: EntityBag = {};
   try {
-    entities = await resolveEntities(message, bookings, now);
+    entities = await resolveEntities(ask, bookings, now);
   } catch {
     // Entity resolution touches the network for providers. If it fails we
     // still want a useful reply from phrase matching alone, rather than an
@@ -472,7 +481,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   }
 
   const understanding = await understandWithFallback(
-    message,
+    ask,
     entities,
     hat,
     input.interpreter,
@@ -505,7 +514,14 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const ctx: CapabilityContext = {
     entities,
     hat,
-    rawMessage: message,
+    // The repaired ask, not the raw keystrokes: a capability testing its own
+    // modifiers ("walk-in", "vegan", "near me") should see the same text the
+    // matcher scored, or a typo that Becca understood well enough to route
+    // would still silently drop the filter the user asked for.
+    rawMessage: ask,
+    // The unrepaired keystrokes, for the one capability that reads a token's
+    // shape rather than its meaning. See CapabilityContext.verbatimMessage.
+    verbatimMessage: message,
     bookings,
     now,
     ...(userId ? { userId } : {}),
