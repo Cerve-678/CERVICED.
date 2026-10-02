@@ -21,8 +21,9 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
 import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking } from '../../types/booking';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { canRequestRefund, fileBookingSupportRequest, type BookingSupportKind } from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
-import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -105,6 +106,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       headerShadowVisible: false,
       headerTintColor: C.accentText,
       headerBackButtonDisplayMode: 'minimal',
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowMoreMenu(true); }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="More options"
+        >
+          <Ionicons name="ellipsis-horizontal" size={22} color={C.accentText} />
+        </TouchableOpacity>
+      ),
     });
   }, [navigation, C]);
 
@@ -160,6 +172,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeBusy, setDisputeBusy] = useState(false);
+  // ⋯ menu → a refund request or a complaint, both filed as a support ticket
+  // (see fileBookingSupportRequest). supportKind non-null = the form is open.
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [supportKind, setSupportKind] = useState<BookingSupportKind | null>(null);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportBusy, setSupportBusy] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState('');
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
@@ -505,6 +523,40 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setDisputeBusy(false);
     }
   }, [booking, disputeReason, activeMode]);
+
+  const openSupportForm = useCallback((kind: BookingSupportKind) => {
+    setShowMoreMenu(false);
+    setSupportMessage('');
+    // Let the menu's fade finish before the next Modal mounts — two Modals
+    // animating at once on iOS can leave the second one never presented.
+    setTimeout(() => setSupportKind(kind), 260);
+  }, []);
+
+  const handleSubmitSupport = useCallback(async () => {
+    if (!booking || !supportKind || !supportMessage.trim() || supportBusy) return;
+    setSupportBusy(true);
+    try {
+      const { ticketNumber } = await fileBookingSupportRequest(booking, supportKind, supportMessage, activeMode);
+      setSupportKind(null);
+      setSupportMessage('');
+      setSuccessMessage(
+        supportKind === 'refund'
+          ? `Your refund request is with Cerviced support. Your reference is #${ticketNumber}. We'll get back to you by email.`
+          : `Your complaint is with Cerviced support. Your reference is #${ticketNumber}. We'll get back to you by email.`,
+      );
+      setSuccessIcon('✓');
+      setShowSuccessModal(true);
+    } catch (error: unknown) {
+      logger.error('[BookingDetail] booking support request failed:', error);
+      Alert.alert(
+        "Couldn't Send",
+        // Never say it sent when it didn't — hand them the address instead.
+        `${toUserMessage(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitSupport')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+      );
+    } finally {
+      setSupportBusy(false);
+    }
+  }, [booking, supportKind, supportMessage, supportBusy, activeMode]);
 
   const handleReschedulePress = useCallback(async () => {
     if (!booking) return;
@@ -1531,6 +1583,80 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   {disputeBusy
                     ? <ActivityIndicator size="small" color={C.onAccent} />
                     : <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Send Dispute</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardDismissView>
+        </Modal>
+
+        {/* ─── More (⋯) menu ─── */}
+        <Modal visible={showMoreMenu} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowMoreMenu(false)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} onPress={() => setShowMoreMenu(false)}>
+            <Pressable style={[st.contactSheet, { backgroundColor: C.surfaceRaised }]} onPress={e => e.stopPropagation()}>
+              <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
+              <View style={{ gap: 8 }}>
+                {/* Only money paid through the app can be refunded through it. */}
+                {canRequestRefund(booking) && (
+                  <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openSupportForm('refund'); }}>
+                    <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}><Ionicons name="arrow-undo-outline" size={20} color={C.accentText} /></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Request a refund</Text><Text style={{ color: C.sub, fontSize: 12 }}>Ask Cerviced support to review a refund</Text></View>
+                    <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openSupportForm('complaint'); }}>
+                  <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}><Ionicons name="flag-outline" size={20} color={C.accentText} /></View>
+                  <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Make a complaint</Text><Text style={{ color: C.sub, fontSize: 12 }}>Tell Cerviced support what went wrong</Text></View>
+                  <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ height: 30 }} />
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* ─── Refund request / complaint form ────────────────────────────
+            The message is required: it is the entire support ticket. The copy
+            promises a human review, never a refund, and doesn't claim the
+            provider was told — nothing notifies them. */}
+        <Modal visible={supportKind !== null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
+          <KeyboardDismissView style={st.overlay} dismissOnTap>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={[st.sheetTitle, { color: C.text }]}>{supportKind === 'refund' ? 'Request a refund' : 'Make a complaint'}</Text>
+              <Text style={[st.sheetSub, { color: C.sub }]}>
+                {supportKind === 'refund'
+                  ? `Tell us why you're asking for a refund on this booking with ${booking.providerName}. Cerviced support will review it against their policy and reply by email.`
+                  : `Tell us what went wrong with this booking with ${booking.providerName}. This goes to Cerviced support, who will reply by email.`}
+              </Text>
+              <TextInput
+                style={[st.disputeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
+                placeholder={supportKind === 'refund' ? 'Why are you asking for a refund?' : 'What happened?'}
+                placeholderTextColor={C.sub}
+                value={supportMessage}
+                onChangeText={setSupportMessage}
+                multiline
+                maxLength={1000}
+                editable={!supportBusy}
+              />
+              <View style={st.sheetBtns}>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSupportKind(null); setSupportMessage(''); }}
+                  disabled={supportBusy}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.accent }, !supportMessage.trim() && { opacity: 0.5 }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleSubmitSupport(); }}
+                  disabled={supportBusy || !supportMessage.trim()}
+                  activeOpacity={0.7}
+                >
+                  {supportBusy
+                    ? <ActivityIndicator size="small" color={C.onAccent} />
+                    : <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Send</Text>}
                 </TouchableOpacity>
               </View>
             </View>
