@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,6 +41,10 @@ interface Props {
   onClose: () => void;
   onNavigate: (destination: DailyScheduleDestination) => void;
 }
+
+// Haptic tiers per DESIGN_SYSTEM.md — fire-and-forget, never block a tap.
+const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
+const hapticMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -118,7 +123,7 @@ export default function DailySchedulePopup({ visible, date, onClose, onNavigate 
   return (
     <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onClose}>
       <BlurView intensity={25} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      <TouchableOpacity style={st.backdrop} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity style={st.backdrop} activeOpacity={1} onPress={() => { hapticLight(); onClose(); }}>
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => {}}
@@ -133,7 +138,7 @@ export default function DailySchedulePopup({ visible, date, onClose, onNavigate 
                 </Text>
                 <Text style={[st.greeting, { color: P.onAccent }]} numberOfLines={2}>{greeting}</Text>
               </View>
-              <TouchableOpacity style={st.close} onPress={onClose} activeOpacity={0.7} accessibilityLabel="Close">
+              <TouchableOpacity style={st.close} onPress={() => { hapticLight(); onClose(); }} activeOpacity={0.7} accessibilityLabel="Close">
                 <Ionicons name="close" size={18} color={P.onAccent} />
               </TouchableOpacity>
             </View>
@@ -159,7 +164,7 @@ export default function DailySchedulePopup({ visible, date, onClose, onNavigate 
               <Text style={[st.body, { color: P.sub, textAlign: 'center' }]}>
                 We couldn't load your schedule just now.
               </Text>
-              <TouchableOpacity onPress={retry} activeOpacity={0.7} style={[st.retry, { borderColor: P.border }]}>
+              <TouchableOpacity onPress={() => { hapticLight(); retry(); }} activeOpacity={0.7} style={[st.retry, { borderColor: P.border }]}>
                 <Text style={[st.body, st.bold, { color: P.accentText }]}>Try again</Text>
               </TouchableOpacity>
             </View>
@@ -186,7 +191,7 @@ export default function DailySchedulePopup({ visible, date, onClose, onNavigate 
                         </View>
                         <TouchableOpacity
                           activeOpacity={0.7}
-                          onPress={() => onNavigate({ screen: 'BookingDetail', params: { bookingId: b.id } })}
+                          onPress={() => { hapticLight(); onNavigate({ screen: 'BookingDetail', params: { bookingId: b.id } }); }}
                           style={[st.tlCard, { backgroundColor: P.card }]}
                         >
                           <View style={st.flex}>
@@ -217,7 +222,7 @@ export default function DailySchedulePopup({ visible, date, onClose, onNavigate 
                   <TouchableOpacity
                     key={r.key}
                     activeOpacity={0.7}
-                    onPress={() => onNavigate(r.to)}
+                    onPress={() => { hapticLight(); onNavigate(r.to); }}
                     style={[st.todoRow, { borderTopColor: P.sep }]}
                   >
                     <View style={[st.checkbox, { borderColor: P.accent }]} />
@@ -232,7 +237,7 @@ export default function DailySchedulePopup({ visible, date, onClose, onNavigate 
           <View style={st.footer}>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => onNavigate({ screen: 'ProviderHomeMain', params: { jumpToDate: date, viewMode: 'list' } })}
+              onPress={() => { hapticMedium(); onNavigate({ screen: 'ProviderHomeMain', params: { jumpToDate: date, viewMode: 'list' } }); }}
               style={[st.calendarBtn, { backgroundColor: P.accent }]}
             >
               <Text style={[st.calendarText, { color: P.onAccent }]}>OPEN IN CALENDAR</Text>
