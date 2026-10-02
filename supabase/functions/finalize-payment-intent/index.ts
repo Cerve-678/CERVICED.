@@ -1,6 +1,6 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
+import { settleCheckout } from '../_shared/settleCheckout.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
+import Stripe from 'npm:stripe@17.4.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,19 +9,18 @@ const corsHeaders = {
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-12-18.acacia',
+  httpClient: Stripe.createFetchHttpClient(),
 });
 
 interface RequestBody {
   checkoutBatchId: string;
   paymentIntentId: string;
-  // 'capture' after the booking is successfully created (money actually
-  // moves); 'cancel' if booking creation failed (releases the card hold,
-  // nothing is ever charged). See create-payment-intent's capture_method
-  // comment for why this two-step exists.
+  // Capture and settle the server reservation, or cancel before authorisation.
+  // Once authorised, completion belongs to the server and signed webhook.
   action: 'capture' | 'cancel';
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -76,7 +75,10 @@ serve(async (req) => {
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     if (body.action === 'cancel') {
-      const paymentIntent = await stripe.paymentIntents.cancel(body.paymentIntentId);
+      if (batch.status === 'finalised' || ['succeeded', 'processing', 'requires_capture'].includes(existing.status)) {
+        return new Response(JSON.stringify({ error: 'Payment is being completed. Check your bookings.' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const paymentIntent = existing.status === 'canceled' ? existing : await stripe.paymentIntents.cancel(body.paymentIntentId);
       // Run as the authenticated caller so cancel_checkout can enforce batch
       // ownership. It deletes private on_hold rows instead of promoting the
       // "Reserving…" placeholder to a cancelled booking (and notification).
@@ -86,23 +88,13 @@ serve(async (req) => {
       if (cancelError) throw cancelError;
       return new Response(JSON.stringify({ status: paymentIntent.status }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    if (batch.status !== 'prepared' || new Date(batch.expires_at) <= new Date() || existing.status !== 'requires_capture') {
-      return new Response(JSON.stringify({ error: 'Payment is not ready to finalise' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-    const { error: finaliseError } = await admin.rpc('finalize_checkout', {
-      p_checkout_batch_id: batch.id,
-      p_payment_intent_id: body.paymentIntentId,
+    const status = await settleCheckout(admin, stripe, body.paymentIntentId);
+    return new Response(JSON.stringify({ status }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-    if (finaliseError) throw finaliseError;
-    const paymentIntent = await stripe.paymentIntents.capture(body.paymentIntentId);
-
-    return new Response(
-      JSON.stringify({ status: paymentIntent.status }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
   } catch (err) {
     console.error(`[finalize-payment-intent] fatal: ${String(err)}`);
-    return new Response(JSON.stringify({ error: String(err) }), {
+    return new Response(JSON.stringify({ error: 'Payment confirmation is pending. Check your bookings before trying again.' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

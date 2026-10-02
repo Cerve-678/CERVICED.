@@ -5,13 +5,14 @@
 
 #generated
 
-**2248 functions** across **305 files**.
+**2261 functions** across **308 files**.
 
-### `src/components/` (41)
+### `src/components/` (43)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showAlert · showConfirm · showToast · Toast · **useAppDialog**
+- `AppLoadingScreen.tsx` — AppLoadingScreen
 - `AreaPicker.tsx` — AreaPicker · back · cities · close · confirmFreeText · open · pickArea · pickCity · pickOtherCity · pickRegion · regionData · startAreaOther
 - `AvailabilityCard.tsx` — animatedStyle · handlePress · handlePressIn · handlePressOut · highlightColors
 - `BookingSheet.tsx` — **BookingSheet** · cancelEmergency · confirmEmergency · depositPolicyArg · goToStep · handleBack · handleLocalApplyPromo · handleLocalRemovePromo · handleNext · handleSelectDate · handleSelectTime · handleSubmit · localPromoDiscount · onAccentColor · stepBlocker · summaryRemaining · toggleAddOn · tokens · totalAddOnsPrice
@@ -20,6 +21,7 @@
 - `ChatComponents.tsx` — ActionCard · **AmbientMark** · animatedStyle · **ChatBubble** · **ChatInput** · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · **InspirationGallery** · **Mark** · PillChip · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator**
 - `CityMultiSelect.tsx` — add · addArea · addOther · **CityMultiSelect** · close · filtered · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
+- `DailySchedulePopup.tsx` — DailySchedulePopup · headline · plural · retry · todoRows
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
 - `HairTypeSelector.tsx` — **HairTypeSelector**
@@ -59,7 +61,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (8)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `DisplaySettingsContext.tsx` — **DisplaySettingsProvider** · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
@@ -212,7 +214,7 @@
 - `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · ClientHistorySheet · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleMessage · handleRebook · handleSend · handleSheetChange · handleViewHistory · initials · load · ProviderClienteleScreen · snapPoints · TabBar · tomorrow9am
 - `ProviderCommunicationsScreen.tsx` — flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod
 - `ProviderConversationScreen.tsx` — ProviderConversationScreen · renderMessage · sendMessage
-- `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsByDate · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · dayAvailability · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getMondayOf · getMonthDays · getWeekDates · goNextWeek · goPrevWeek · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · shiftDateString · SkeletonCard · statusCfg · SummaryRow · tap · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · weekDates · WeekView · windowsByDate
+- `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsByDate · bookingsWithServiceDuration · buildStrip · closeDaySchedule · closeSheet · countByDate · countdownLabel · dayAvailability · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getMondayOf · getMonthDays · getWeekDates · goNextWeek · goPrevWeek · handleDateTap · handleDayScheduleNavigate · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · shiftDateString · SkeletonCard · statusCfg · SummaryRow · tap · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · weekDates · WeekView · windowsByDate
 - `ProviderInboxScreen.tsx` — addTemplate · ConversationRow · flatItems · handleMarkConversationRead · handleSaveTemplates · handleSendReply · initials · loadInbox · onRefresh · openTemplates · ProviderInboxScreen · removeTemplate · renderRightActions · SkeletonRow · timeAgoISO · unreadCounts · updateTemplate
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleOpenSend · handlePickBookingForSend · handleSave · PackCard · performDelete · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · detectTemplate · getRelevantTemplates · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
@@ -231,7 +233,7 @@
 - `HelpCentreScreen.tsx` — buildMoreActions · FAQItem · handleContactSupport · HelpCentreScreen · openMore · runAction
 - `InfoScreen.tsx` — ScreenNameHere
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow
-- `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
+- `NotificationsScreen.tsx` — closeMessagePopup · closeRecap · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · handleRecapNavigate · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TermsScreen.tsx` — TermsScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
@@ -275,7 +277,7 @@
 ### `src/types/` (1)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 
-### `src/utils/` (42)
+### `src/utils/` (43)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -285,6 +287,7 @@
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **toArgbHex**
 - `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
+- `daySummary.ts` — **buildDaySummary** · **greetingFor**
 - `dayTimelineRange.ts` — **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
 - `displaySettings.ts` — **clampTextScale** · **fontFamilyForChoice** · **isFontChoiceKey** · **isLanguageCode** · **isRegionCode** · **labelForTextScale** · **snapTextScaleToStep**
