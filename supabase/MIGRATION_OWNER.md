@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### PENDING APPLY 2026-10-02 (cancel not blocked by notice window)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261002120000 | `cancel_not_blocked_subject_to_policy` | **Written, NOT yet applied** — the `apply_migration` MCP tool is broken for function bodies in this environment (its parser extracts the `AS` body and runs it standalone → `42601 syntax error at end of input`, regardless of `$$`/`$tag$`/single-quote), and `execute_sql` for DDL is gated as an auto-mode bypass. Every attempt failed at parse time so nothing partially applied. **Apply by pasting the file into the Supabase SQL editor.** Removes the `RAISE EXCEPTION 'This provider requires % hours notice to cancel'` block from `cancel_own_booking()` so a client can always cancel; the notice window now only gates the `client_provider_reliability` late-cancel counter (keyed to the provider's own window, 24h fallback). Reproduced verbatim from verified-live `pg_get_functiondef`, `SECURITY DEFINER` + `SET search_path TO 'public'` preserved. Frontier at authoring: `20260929052423`. If applied via `apply_migration` it stamps its own clock version — rename the file to match. Reversible: prior definition kept the inline block. Does NOT implement charging a fee / holding a deposit on cancel — that's a separate Stripe-path feature (see LEGAL-COMPLIANCE-NOTES.md §6).
+
 ### PENDING APPLY 2026-09-28 (pregnancy-safe write default)
 
 | Authored version | Name | Status |

@@ -8,7 +8,7 @@ import {
   LayoutAnimation,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
@@ -108,6 +108,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     });
   }, [navigation, C]);
 
+  const insets = useSafeAreaInsets();
+
   // Async data loaded on mount
   const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
@@ -130,6 +132,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   // is preferred whenever present, since it's frozen to what the client
   // actually agreed to, not whatever the provider's policy says today.
   const [livePolicyFallback, setLivePolicyFallback] = useState<Record<string, unknown> | null>(null);
+  // The provider's "Detailed Policy Image" (optional) — their current one, read
+  // live rather than from the snapshot: it's a reference document shown as a
+  // pop-up (same as on their profile), not a term the client froze at checkout.
+  const [policyImageUrl, setPolicyImageUrl] = useState<string | null>(null);
 
   // UI state
   const [showReceipt, setShowReceipt] = useState(false);
@@ -159,6 +165,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
   const [contactSheetInfo, setContactSheetInfo] = useState<ProviderContactInfo | null>(null);
   const [contactSheetLoading, setContactSheetLoading] = useState(false);
+  const [showPolicyImage, setShowPolicyImage] = useState(false);
 
   // One focus-aware loader owns both to-do requests. This runs once on first
   // focus and once when returning from the intake form, without a separate
@@ -256,6 +263,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         setCancellationNoticeHrs(metadata.cancellationNoticeHours);
         setLivePolicyFallback(
           booking.policySnapshot ? null : metadata.bookingPolicies,
+        );
+        setPolicyImageUrl(
+          (metadata.bookingPolicies as { policyImageUrl?: string } | null)
+            ?.policyImageUrl ?? null,
         );
         // Kept even for a booking that already has a client address: its
         // business_type is what says whose address is the venue. Dropping it
@@ -385,9 +396,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   // Whether cancelling right now would fall inside the provider's notice
   // window — purely informational (drives the modal's warning copy below).
-  // It does NOT block the attempt: cancel_own_booking() enforces the notice
-  // window server-side, so the Cancel button always calls handleCancelBooking
-  // and lets the RPC's own guard message surface if it's actually rejected.
+  // The notice window never blocks a cancellation: cancel_own_booking() lets
+  // the cancel through and only records it against the client's reliability
+  // with that provider (so they stay subject to the provider's policy without
+  // being prevented from cancelling). This flag just decides whether to warn.
   const isPastCancellationWindow = useMemo(() => {
     if (!booking || booking.status === BookingStatus.PENDING || cancellationNoticeHrs <= 0) return false;
     if (!booking.bookingDate || !booking.bookingTime) return false;
@@ -409,10 +421,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       logger.error('[BookingDetail] cancel failed:', err);
       Alert.alert(
         'Cancellation Failed',
-        // cancel_own_booking() enforces the provider's notice window
-        // server-side and throws a guard message written for the client
-        // reading it ("requires 24 hours notice to cancel") — let it
-        // through rather than masking it with a generic line.
+        // The notice window no longer blocks a cancel, but cancel_own_booking()
+        // still throws readable guards for the cases that genuinely stop one
+        // ("Booking not found", "This booking can no longer be cancelled") —
+        // let those through rather than masking them with a generic line.
         toUserMessageAllowingDbGuard(err, "We couldn't cancel this booking just now. Please try again.", 'BookingDetailScreen.handleCancelBooking'),
       );
     }
@@ -747,6 +759,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const isUpcoming = booking.status === BookingStatus.UPCOMING && !booking.isPendingReschedule;
   const isCompleted = booking.status === BookingStatus.COMPLETED;
   const isPending = booking.status === BookingStatus.PENDING;
+  // A booking with nothing left to act on: it's reached a terminal state
+  // (completed / cancelled / either side's no-show) or its appointment time
+  // has already gone by. The TO DO section (intake form, info packs) only
+  // makes sense before the appointment, so it's hidden once a booking is past.
+  const isPast =
+    isCompleted ||
+    booking.status === BookingStatus.CANCELLED ||
+    booking.status === BookingStatus.NO_SHOW ||
+    booking.status === BookingStatus.PROVIDER_NO_SHOW ||
+    (!!booking.bookingDate && !!booking.bookingTime &&
+      createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime() < Date.now());
 
   return (
     <ThemedBackground>
@@ -831,7 +854,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               badge) instead of disappearing — it used to only render while
               status === 'pending', so once submitted there was no way back
               into ClientIntakeFormScreen to see the answers you'd just filled in. */}
-          {!todoLoaded && (
+          {!isPast && !todoLoaded && (
             <View style={st.section} accessibilityLabel="Loading appointment tasks">
               <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
               <View style={[st.todoCard, st.todoLoadingCard, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -843,7 +866,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           )}
-          {todoLoaded && todoLoadError && (
+          {!isPast && todoLoaded && todoLoadError && (
             <View style={st.section}>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, padding: 14, flexDirection: 'row', alignItems: 'center' }]}>
                 <View style={{ flex: 1 }}>
@@ -860,7 +883,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           )}
-          {todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (
+          {!isPast && todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
               {bookingIntakeForm && (
@@ -1061,8 +1084,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Provider's cancellation/booking policy — the exact terms this
               client agreed to at checkout (policySnapshot), or the
               provider's current policy as a fallback for bookings made
-              before that was captured. */}
-          {policyRows.length > 0 && (
+              before that was captured. Hidden on past bookings (like the
+              policy image below): the policy only matters while there are
+              still actions to take on the booking. */}
+          {!isPast && policyRows.length > 0 && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>
                 {booking.providerName}'S POLICY
@@ -1080,6 +1105,34 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </View>
                 ))}
               </View>
+            </View>
+          )}
+
+          {/* The provider's optional "Detailed Policy Image" — the same
+              reference document shown as a pop-up on their profile, surfaced
+              here for an upcoming booking so the client can re-read the full
+              policy without going back to the profile. Live (not snapshotted):
+              it's a document to read, not a term frozen at checkout. Hidden on
+              past bookings, which have nothing left to act on. */}
+          {!isPast && policyImageUrl && (
+            <View style={st.section}>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>
+                {booking.providerName}'S FULL POLICY
+              </Text>
+              <TouchableOpacity
+                style={[st.card, { backgroundColor: C.card, borderColor: C.border, flexDirection: 'row', alignItems: 'center', padding: 14 }]}
+                activeOpacity={0.8}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowPolicyImage(true); }}
+                accessibilityRole="button"
+                accessibilityLabel="View full policy details"
+              >
+                <Ionicons name="document-text-outline" size={20} color={C.accent} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>View full policy details</Text>
+                  <Text style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{booking.providerName} shared a detailed policy document</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={C.sub} />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1297,15 +1350,35 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={{ height: 40 }} />
         </ScrollView>
 
+        {/* ─── Policy Image Modal ─── full-screen view of the provider's
+            detailed policy document, mirroring the profile's pop-up. */}
+        <Modal visible={showPolicyImage} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowPolicyImage(false)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setShowPolicyImage(false)}>
+            {policyImageUrl && (
+              <Image source={{ uri: policyImageUrl }} style={{ width: '100%', height: '82%' }} contentFit="contain" fadeDuration={0} />
+            )}
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowPolicyImage(false); }}
+              style={{ position: 'absolute', top: insets.top + 12, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Close policy document"
+            >
+              <Ionicons name="close" size={26} color="#FFF" />
+            </TouchableOpacity>
+          </Pressable>
+        </Modal>
+
         {/* ─── Cancel Modal ───────────────────────────────────────────────
             Same modal handles both states: the normal "are you sure" ask,
-            and — when isPastCancellationWindow is true — a heads-up that the
-            provider's notice window hasn't passed yet. Either way the Cancel
-            button always calls handleCancelBooking: cancel_own_booking()
-            enforces the notice window server-side (see BookingContext.
-            cancelBooking), so a rejection surfaces as the RPC's own guard
-            message via handleCancelBooking's catch, rather than this modal
-            silently blocking the attempt itself. */}
+            and — when isPastCancellationWindow is true — a heads-up that
+            cancelling inside the provider's notice window may be subject to
+            their policy. Either way the Cancel button calls handleCancelBooking
+            and the cancel goes through: cancel_own_booking() no longer blocks
+            on the notice window (it only records a late cancel against the
+            client's reliability). Its catch still surfaces the guards that do
+            genuinely stop a cancel ("can no longer be cancelled"). */}
         <Modal visible={showCancelModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowCancelModal(false)}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.overlay}>

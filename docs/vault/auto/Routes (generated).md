@@ -54,8 +54,6 @@ Curated overview: [[Screens & Navigation]].
 - `PaymentMethods`
 - `Subscription`
 - `HelpCentre`
-- `TextSizing`
-- `LanguageRegion`
 - `About`
 - `Terms`
 - `ReportProblem`

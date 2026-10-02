@@ -9,14 +9,14 @@ Live counts of the codebase. The generated detail notes below refresh on every c
 
 | Area | Count | Detail | Curated |
 |---|---|---|---|
-| Screens | 74 | [[Screens (generated)]] | [[Screens & Navigation]] |
-| Services | 35 | [[Services (generated)]] | [[Services]] |
-| Contexts | 8 | [[Contexts (generated)]] | [[Contexts]] |
-| Routes | 82 | [[Routes (generated)]] | [[Screens & Navigation]] |
-| Screen flow | 74 | [[Screen Flow (generated)]] | [[Screens & Navigation]] |
-| Nav edges | 132 | [[Navigation Graph (generated)]] | [[Screens & Navigation]] |
+| Screens | 72 | [[Screens (generated)]] | [[Screens & Navigation]] |
+| Services | 33 | [[Services (generated)]] | [[Services]] |
+| Contexts | 7 | [[Contexts (generated)]] | [[Contexts]] |
+| Routes | 80 | [[Routes (generated)]] | [[Screens & Navigation]] |
+| Screen flow | 72 | [[Screen Flow (generated)]] | [[Screens & Navigation]] |
+| Nav edges | 125 | [[Navigation Graph (generated)]] | [[Screens & Navigation]] |
 | DB objects | 296 | [[Database Objects (generated)]] | [[Data Layer — Supabase]] |
-| Functions | 2248 | [[Function Index (generated)]] | — |
+| Functions | 2162 | [[Function Index (generated)]] | — |
 | Feature map | 11 | [[Feature Map (generated)]] | — |
 | Code TODOs | 1 | [[TODO Backlog (generated)]] | — |
 
