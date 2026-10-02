@@ -5,7 +5,7 @@
 
 #generated
 
-**2131 functions** across **274 files**.
+**2136 functions** across **274 files**.
 
 ### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -106,7 +106,7 @@
 
 ### `src/features/providers/` (8)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
-- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **deriveRecommendedGoLiveFields** · **fetchGoLiveStatus**
+- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus**
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **getAdaptiveAccentColor** · **hasProviderPolicyInfo**
 - `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialtiesSection** · tileHeight · venueImages
@@ -218,7 +218,7 @@
 - `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · didn · exportBookings · fullClientReset · fullProviderReset · is · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
 - `HelpCentreScreen.tsx` — FAQItem · handleContactSupport · HelpCentreScreen · showMoreOptions
 - `InfoScreen.tsx` — ScreenNameHere
-- `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
+- `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TermsScreen.tsx` — TermsScreen
 
@@ -256,8 +256,9 @@
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles
 
-### `src/types/` (1)
+### `src/types/` (2)
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
+- `database.ts` — and
 
 ### `src/utils/` (31)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**

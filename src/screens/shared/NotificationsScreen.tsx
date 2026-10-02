@@ -43,6 +43,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { useAuth } from '../../contexts/AuthContext';
 import { CommonActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { logger, reportError } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -137,6 +138,11 @@ const notifSkeletonStyles = StyleSheet.create({
 // Types whose whole point is "go and look at this booking" — the row shows the
 // action itself. Everything else keeps Read More, which opens the full message.
 const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'booking_pending']);
+
+// Haptic tiers per DESIGN_SYSTEM.md — fire-and-forget, never block a tap.
+const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
+const hapticMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
+const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
 
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
@@ -718,6 +724,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Refresh control
   const onRefresh = useCallback(async () => {
+    hapticLight();
     setRefreshing(true);
     await loadNotifications();
     setRefreshing(false);
@@ -847,7 +854,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         <Animated.View style={{ transform: [{ scale }] }}>
           <TouchableOpacity
             style={styles.deleteBubble}
-            onPress={() => deleteNotification(item.id)}
+            onPress={() => { hapticMedium(); deleteNotification(item.id); }}
             activeOpacity={0.75}
           >
             <Ionicons name="trash" size={22} color="#FFF" />
@@ -878,7 +885,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     >
       <GestureTouchableOpacity
         activeOpacity={0.8}
-        onPress={() => showFullMessage(item)}
+        onPress={() => { hapticLight(); showFullMessage(item); }}
         style={styles.notificationItem}
       >
         <View
@@ -946,6 +953,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   <TouchableOpacity
                     style={[styles.readMoreButton, { backgroundColor: P.accent, borderColor: P.accent }]}
                     onPress={() => {
+                      hapticMedium();
                       markAsRead(item.id);
                       handleNotificationAction(item);
                     }}
@@ -956,7 +964,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 ) : (
                   <TouchableOpacity
                     style={[styles.readMoreButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
-                    onPress={() => showFullMessage(item)}
+                    onPress={() => { hapticLight(); showFullMessage(item); }}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.readMoreText, { color: P.accentText }]}>Read More</Text>
@@ -1001,7 +1009,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           {unreadCount > 0 && (
             <TouchableOpacity
               style={[styles.markAllButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
-              onPress={markAllAsRead}
+              onPress={() => { hapticMedium(); markAllAsRead(); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.markAllText, { color: P.accentText }]}>Mark All Read</Text>
@@ -1027,7 +1035,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 ]
             )}
             activeKey={selectedFilter}
-            onPress={setSelectedFilter}
+            onPress={(key: string) => { hapticSelection(); setSelectedFilter(key); }}
             accentColor={P.accent}
             inactiveTextColor={P.sub}
             activeTextColor={P.onAccent}
@@ -1038,7 +1046,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {loadError && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{loadError}</Text>
-            <TouchableOpacity onPress={loadNotifications}>
+            <TouchableOpacity onPress={() => { hapticLight(); loadNotifications(); }}>
               <Text style={styles.errorRetryText}>Retry</Text>
             </TouchableOpacity>
           </View>
@@ -1049,7 +1057,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {actionError && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{actionError}</Text>
-            <TouchableOpacity onPress={() => setActionError(null)}>
+            <TouchableOpacity onPress={() => { hapticLight(); setActionError(null); }}>
               <Text style={styles.errorRetryText}>Dismiss</Text>
             </TouchableOpacity>
           </View>
@@ -1100,7 +1108,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={closeMessagePopup}
+            onPress={() => { hapticLight(); closeMessagePopup(); }}
           >
             <View style={styles.modalContainer}>
               <TouchableOpacity activeOpacity={1} onPress={() => {}}>
@@ -1129,7 +1137,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
                         <TouchableOpacity
                           style={[styles.closeButton, { backgroundColor: P.surface }]}
-                          onPress={closeMessagePopup}
+                          onPress={() => { hapticLight(); closeMessagePopup(); }}
                           activeOpacity={0.7}
                         >
                           <Text style={[styles.closeButtonText, { color: P.text }]}>×</Text>
@@ -1157,7 +1165,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                               styles.popupActionButton,
                               { backgroundColor: getBellColor(selectedNotification.type) }
                             ]}
-                            onPress={() => handleNotificationAction(selectedNotification)}
+                            onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
                             activeOpacity={0.8}
                           >
                             <Text style={[textStyles.button, styles.popupActionText]}>
