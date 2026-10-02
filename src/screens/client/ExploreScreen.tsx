@@ -36,14 +36,11 @@ import { ImageDetailModal } from '../../components/ImageDetailModal';
 import { PortfolioItem, ServiceCategory } from '../../types/providers';
 import {
   getPortfolioItems,
-  getDiscoverProviders,
   getDiscoverServices,
-  getDiscoverUnclaimedProviders,
   getSavedPortfolioDetails,
   prefetchProviderBySlug,
 } from '../../services/databaseService';
-import type { DiscoverUnclaimedProvider } from '../../services/databaseService';
-import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider } from '../../types/database';
+import type { PortfolioItemWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 
 // Stores
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
@@ -52,35 +49,31 @@ import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
 
 
-// Mixes portfolio photos with provider and service ("bookable") cards for a
+// Mixes portfolio photos with service ("bookable") cards for a
 // Pinterest-style feed, instead of stacking every source back-to-back or
 // front-loading bookable cards near the top. Portfolio cards vastly
 // outnumber bookable ones, so a random weighted draw exhausts the bookable
 // pool early and leaves the rest of the scroll portfolio-only — instead,
 // bookable cards are spread at even intervals across the FULL feed length
 // (see interleaveDiscoverFeed), so every stretch of scrolling has some.
+//
+// There are deliberately no provider "cover" cards. The only image a provider
+// row has for one is providers.background_image_url — the backdrop a provider
+// picks on the Branding screen to theme their own profile page. That's
+// profile decoration, not work they've posted for discovery, and it read as
+// a stray photo leaking into the feed.
 
-// The four discover sources are queried independently and share no dedupe,
-// so the same photo file can legitimately arrive from more than one of them:
-// a provider's cover photo (providers.background_image_url) is very often
-// also one of their own portfolio_items rows, and a service_images row can
-// be the same upload as a portfolio photo. The card ids differ
-// (`provider-<id>` vs the portfolio row's own id), so nothing errors and
-// React keys stay unique — it just reads as the same picture appearing twice
-// in the feed. Dedupe on the image URL, which is the thing the user actually
-// perceives as duplicated.
+// The discover sources are queried independently and share no dedupe, so the
+// same photo file can legitimately arrive from both: a service_images row can
+// be the same upload as a portfolio photo. The card ids differ, so nothing
+// errors and React keys stay unique — it just reads as the same picture
+// appearing twice in the feed. Dedupe on the image URL, which is the thing
+// the user actually perceives as duplicated.
 //
 // Keeps the FIRST occurrence in the order given, so callers control which
 // source wins by argument order: portfolio photos (the richest cards — real
-// aspect ratio, caption, tags) are passed first and therefore beat a
-// provider cover or service photo pointing at the same file.
-// A card with no image file behind it has nothing to show in a masonry feed
-// — it renders as an empty box. Filtered out rather than papered over with a
-// placeholder, so the feed only ever contains real photographs.
-function hasFeedImage(card: PortfolioItem): boolean {
-  return !!(card.image as { uri?: string } | undefined)?.uri;
-}
-
+// aspect ratio, caption, tags) are passed first and therefore beat a service
+// photo pointing at the same file.
 function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
   const seen = new Set<string>();
   return cards.filter(card => {
@@ -97,11 +90,8 @@ function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
 function interleaveDiscoverFeed(
   portfolioCards: PortfolioItem[],
   serviceCards: PortfolioItem[],
-  providerCards: PortfolioItem[]
 ): PortfolioItem[] {
-  // Service and provider cards are both "bookable" — merged and reshuffled
-  // together so neither type clusters ahead of the other within this pool.
-  const bookable = shuffle([...serviceCards, ...providerCards]);
+  const bookable = shuffle(serviceCards);
   const total = portfolioCards.length + bookable.length;
   if (total === 0) return [];
 
@@ -344,56 +334,6 @@ const ExploreScreen = memo(() => {
     };
   }, []);
 
-  // Map a provider row to a cover-photo card for the mixed discovery feed.
-  // No real dimensions for a cover photo, so a portrait 4:5 default keeps it
-  // in line with typical portfolio photos rather than defaulting to square.
-  const mapDbProviderToCard = useCallback((p: DbProvider): PortfolioItem => ({
-    id: `provider-${p.id}`,
-    // Cover photo ONLY — never the logo. A logo is a brand mark sized for a
-    // 40px avatar; stretched into a feed tile it reads as a mistake, and it
-    // also duplicates the avatar already drawn on the same card. Rows with no
-    // cover are dropped from the feed by hasFeedImage below rather than
-    // falling back to one.
-    image: { uri: p.background_image_url ?? '' },
-    caption: p.about_text ?? '',
-    category: p.service_category as unknown as ServiceCategory,
-    aspectRatio: 0.8,
-    providerId: p.slug,
-    providerName: p.display_name,
-    providerSlug: p.slug,
-    providerRating: p.rating,
-    providerReviewCount: p.review_count,
-    kind: 'provider',
-    ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
-  }), []);
-
-  // Map an unclaimed/scraped provider row to a "ready to claim" card. No
-  // rating/review data exists for these (never onboarded), so those fields
-  // are simply omitted rather than faked as 0 — PortfolioCard already
-  // treats them as optional. providerId uses the real id, and providerSlug
-  // is deliberately omitted: ImageDetailModal navigates via
-  // `item.providerSlug ?? item.providerId`, and getProviderBySlug requires
-  // has_gone_live = true, which no unclaimed row ever has — so resolving by
-  // slug would 404. Leaving providerSlug unset makes that fallback resolve
-  // to the real id, which ProviderProfileScreen's unclaimed-fallback lookup
-  // (getUnclaimedProviderDetail) expects.
-  const mapDbUnclaimedProviderToCard = useCallback((p: DiscoverUnclaimedProvider): PortfolioItem => ({
-    id: `provider-${p.id}`,
-    // Same rule as claimed providers: no logo-as-feed-image. A scraped row
-    // has no cover photo column at all, so these always fall out of the
-    // discovery feed via hasFeedImage — the claim directory is where they're
-    // meant to be browsed, not as logo tiles between real work photos.
-    image: { uri: '' },
-    caption: p.about_text ?? '',
-    category: p.service_category as unknown as ServiceCategory,
-    aspectRatio: 0.8,
-    providerId: p.id,
-    providerName: p.display_name,
-    kind: 'provider',
-    isUnclaimed: true,
-    ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
-  }), []);
-
   // Map a service to one card PER photo in its carousel (not just the cover
   // shot) — each carries the same serviceId/price/provider so tapping any of
   // them books the same service. Ids carry a `__<imageIndex>` suffix so each
@@ -463,47 +403,36 @@ const ExploreScreen = memo(() => {
   // was cached for the current filter).
   const loadDiscoverFeed = useCallback(async (filter: string): Promise<PortfolioItem[]> => {
     const category = filter !== 'All' ? filterMap[filter] : undefined;
-    const [portfolioData, providerData, serviceData, unclaimedData] = await Promise.all([
+    const [portfolioData, serviceData] = await Promise.all([
       getPortfolioItems(category),
-      getDiscoverProviders(category),
       getDiscoverServices(category),
-      getDiscoverUnclaimedProviders(category),
     ]);
 
     // Every getDiscover*/getPortfolioItems query is deterministically
     // ordered (created_at, rating, scraped_at — see databaseService.ts) so
     // the DB always returns rows in the same order. Shuffling each source's
-    // own rows here, before interleaveDiscoverFeed mixes the three types
+    // own rows here, before interleaveDiscoverFeed mixes the two types
     // together, is what actually randomizes the feed — without it the same
     // provider's photos (or the same top-rated providers) reliably cluster/
     // repeat in the same run every load. Shuffled at the row level (before
     // serviceData's flatMap), not after, so a single service's own carousel
     // photos stay adjacent to each other instead of scattering across the
     // feed.
-    // Deduped across all four sources before interleaving — the same photo
-    // file can arrive from more than one source (see dedupeByImageUri).
-    // Order matters: portfolio cards are passed first so they win over a
-    // provider cover or service photo pointing at the same upload.
+    // Deduped across both sources before interleaving — the same photo
+    // file can arrive from both (see dedupeByImageUri). Order matters:
+    // portfolio cards are passed first so they win over a service photo
+    // pointing at the same upload.
     const portfolioCards = shuffle(portfolioData).map(mapDbPortfolioItem);
     const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
-    const providerCards = shuffle([
-      ...providerData.map(mapDbProviderToCard),
-      ...unclaimedData.map(mapDbUnclaimedProviderToCard),
-    ]).filter(hasFeedImage);
-    const deduped = dedupeByImageUri([
-      ...portfolioCards,
-      ...serviceCards,
-      ...providerCards,
-    ]);
+    const deduped = dedupeByImageUri([...portfolioCards, ...serviceCards]);
     const keep = new Set(deduped.map(c => c.id));
     const feed = interleaveDiscoverFeed(
       portfolioCards.filter(c => keep.has(c.id)),
       serviceCards.filter(c => keep.has(c.id)),
-      providerCards.filter(c => keep.has(c.id))
     );
     discoverFeedCache.current.set(filter, feed);
     return feed;
-  }, [filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbUnclaimedProviderToCard, mapDbServiceToCards]);
+  }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
 
   // Fetch the mixed discovery feed whenever the category filter changes —
   // but only if this filter hasn't been shuffled yet this session. Revisiting
@@ -567,7 +496,7 @@ const ExploreScreen = memo(() => {
 
     const load = async () => {
       try {
-        const { portfolioItems: savedPortfolio, providers, services } =
+        const { portfolioItems: savedPortfolio, services } =
           await getSavedPortfolioDetails(savedPortfolioIds);
         if (cancelled) return;
 
@@ -578,7 +507,6 @@ const ExploreScreen = memo(() => {
         const savedIdSet = new Set(savedPortfolioIds);
         const cards = [
           ...savedPortfolio.map(mapDbPortfolioItem),
-          ...providers.map(mapDbProviderToCard),
           ...services.flatMap(mapDbServiceToCards).filter(c => savedIdSet.has(c.id)),
         ];
         // Most-recently-saved first, matching save order in savedPortfolioIds.
@@ -593,7 +521,7 @@ const ExploreScreen = memo(() => {
     };
     load();
     return () => { cancelled = true; };
-  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
+  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbServiceToCards]);
 
   // Column width for masonry
   // Must match MasonryGrid's own column maths exactly — it lays the cards out,

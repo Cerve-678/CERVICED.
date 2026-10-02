@@ -138,16 +138,6 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
           </View>
         )}
 
-        {/* Unclaimed badge — top-right so it never collides with the price
-            badge (top-left). Unclaimed providers never carry a price, but
-            keeping the two on opposite corners avoids coupling this to that
-            fact. */}
-        {item.isUnclaimed && (
-          <View style={styles.unclaimedBadge}>
-            <Text style={styles.unclaimedBadgeText}>UNCLAIMED</Text>
-          </View>
-        )}
-
         {/* Save button — heart, standardized to match the same save/unsave
             action's icon in ImageDetailModal (was a bookmark glyph here,
             a heart there, for the identical underlying action). */}
@@ -263,22 +253,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: 'BakbakOne-Regular',
-  },
-  unclaimedBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  unclaimedBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    fontFamily: 'Jura-VariableFont_wght',
-    letterSpacing: 0.5,
   },
   overlay: {
     position: 'absolute',

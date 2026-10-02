@@ -1469,83 +1469,6 @@ export async function searchPortfolio(
 }
 
 /**
- * Fetch providers that have a cover photo, for the mixed Explore discovery
- * feed — mirrors getProviders' has_gone_live/is_active gating but requires
- * an image, since this powers a visual grid rather than a list.
- */
-export async function getDiscoverProviders(
-  category?: string,
-  limit = 40,
-): Promise<DbProvider[]> {
-  let query = supabase
-    .from("providers")
-    .select("*")
-    .eq("is_active", true)
-    .eq("has_gone_live", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
-    .not("background_image_url", "is", null)
-    .order("is_featured", { ascending: false })
-    .order("rating", { ascending: false })
-    .limit(limit);
-
-  if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
-}
-
-/**
- * Fetch unclaimed (is_claimed = false, source = 'scraped') provider rows for
- * the mixed Explore discovery feed, so a "ready to claim" business can be
- * discovered by browsing rather than only via the pre-signup claim search
- * (searchUnclaimedProviders). Deliberately bypasses has_gone_live/is_active —
- * unclaimed rows are always has_gone_live = false by construction (never
- * onboarded) — same is_claimed = false gate as searchUnclaimedProviders,
- * see that function's comment for why that's the correct safety boundary
- * here, not RLS. Narrow select: unclaimed rows have no services/availability/
- * rating/theme, so callers must render a reduced card/profile, never the
- * full live-provider UI.
- */
-export interface DiscoverUnclaimedProvider {
-  id: string;
-  slug: string;
-  display_name: string;
-  service_category: string;
-  location_text: string | null;
-  logo_url: string | null;
-  about_text: string | null;
-  instagram: string | null;
-  website: string | null;
-}
-
-export async function getDiscoverUnclaimedProviders(
-  category?: string,
-  limit = 20,
-): Promise<DiscoverUnclaimedProvider[]> {
-  let query = supabase
-    .from("providers")
-    .select(
-      "id, slug, display_name, service_category, location_text, logo_url, about_text, instagram, website",
-    )
-    .eq("is_claimed", false)
-    .order("scraped_at", { ascending: false })
-    .limit(limit);
-
-  if (category && category !== "All") {
-    query = query.eq("service_category", category.toUpperCase());
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
-}
-
-/**
  * Fetch services that have at least one photo, with provider info, for the
  * mixed Explore discovery feed. The !inner join on service_images excludes
  * services with no photo.
@@ -1619,18 +1542,18 @@ export async function getProviderIdsByServiceAudience(
 
 /**
  * Resolve the user's saved/"hearted" IDs (from `useBookmarkStore.savedPortfolioIds`,
- * a mix of raw portfolio_item ids and `provider-<id>`/`service-<id>` prefixed ids
- * from the mixed discovery feed) into full rows, batched by kind — no N+1.
+ * a mix of raw portfolio_item ids and `service-<id>` prefixed ids from the
+ * mixed discovery feed) into full rows, batched by kind — no N+1.
  * Powers the Explore screen's Favourites tab.
+ *
+ * Legacy `provider-<id>` ids (Explore used to show provider cover-photo cards,
+ * built from the Branding backdrop) are skipped rather than hydrated, so an
+ * old heart can't put a provider's profile backdrop back into Favourites.
  */
 export async function getSavedPortfolioDetails(ids: string[]): Promise<{
   portfolioItems: PortfolioItemWithProvider[];
-  providers: DbProvider[];
   services: DiscoverServiceWithProvider[];
 }> {
-  const providerIds = ids
-    .filter((id) => id.startsWith("provider-"))
-    .map((id) => id.slice("provider-".length));
   // service ids carry a per-image suffix (`service-<id>__<imageIndex>`, one
   // id per carousel photo — see mapDbServiceToCards) so multiple saved ids
   // can point at the same underlying service; strip the suffix and dedupe
@@ -1647,7 +1570,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
     (id) => !id.startsWith("provider-") && !id.startsWith("service-"),
   );
 
-  const [portfolioResult, providerResult, serviceResult] = await Promise.all([
+  const [portfolioResult, serviceResult] = await Promise.all([
     portfolioIds.length > 0
       ? supabase
           .from("portfolio_items")
@@ -1665,14 +1588,6 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
           // venue shot must not put one back into a browse surface it can no
           // longer be discovered in.
           .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
-      : Promise.resolve({ data: [], error: null }),
-    providerIds.length > 0
-      ? supabase
-          .from("providers")
-          .select("*")
-          .in("id", providerIds)
-          .eq("is_active", true)
-          .eq("has_gone_live", true)
       : Promise.resolve({ data: [], error: null }),
     serviceIds.length > 0
       ? supabase
@@ -1692,12 +1607,10 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
   ]);
 
   if (portfolioResult.error) throw portfolioResult.error;
-  if (providerResult.error) throw providerResult.error;
   if (serviceResult.error) throw serviceResult.error;
 
   return {
     portfolioItems: (portfolioResult.data ?? []) as PortfolioItemWithProvider[],
-    providers: (providerResult.data ?? []) as DbProvider[],
     services: (serviceResult.data ??
       []) as unknown as DiscoverServiceWithProvider[],
   };

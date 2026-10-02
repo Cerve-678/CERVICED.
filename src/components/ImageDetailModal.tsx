@@ -814,11 +814,7 @@ function ModalBody({
                     color={P.onAccent}
                   />
                   <Text style={[styles.bookNowText, { color: P.onAccent }]}>
-                    {isBookableService
-                      ? 'Book Now'
-                      : item.isUnclaimed
-                        ? 'View & Claim'
-                        : 'View Profile'}
+                    {isBookableService ? 'Book Now' : 'View Profile'}
                   </Text>
                 </View>
               </TouchableOpacity>
