@@ -23,7 +23,7 @@ describe('buildMoreLikeThis', () => {
       item('p1', 'HAIR', 'portfolio'),
       item('p2', 'HAIR', 'portfolio'),
       item('s1', 'HAIR', 'service'),
-      item('v1', 'HAIR', 'provider'),
+      item('s2', 'HAIR', 'service'),
       item('other', 'NAILS', 'service'),
     ]);
 
@@ -34,10 +34,9 @@ describe('buildMoreLikeThis', () => {
       'HAIR',
       'HAIR',
     ]);
-    expect(result.items.slice(0, 3).map(value => value.kind)).toEqual([
+    expect(result.items.slice(0, 2).map(value => value.kind)).toEqual([
       'portfolio',
       'service',
-      'provider',
     ]);
   });
 
@@ -67,7 +66,7 @@ describe('buildMoreLikeThis', () => {
       item('a-work-2', 'NAILS', 'portfolio', 'provider-a'),
       item('a-service', 'NAILS', 'service', 'provider-a'),
       item('b-work', 'NAILS', 'portfolio', 'provider-b'),
-      item('c-provider', 'NAILS', 'provider', 'provider-c'),
+      item('c-service', 'NAILS', 'service', 'provider-c'),
     ], 5);
 
     expect(new Set(result.items.slice(0, 3).map(value => value.providerId))).toEqual(

@@ -27,7 +27,7 @@ import {
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
 import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily } from '../../constants/providerFonts';
-import { uploadToStorage } from '../../services/providerRegistrationService';
+import { uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
 
@@ -55,7 +55,14 @@ async function uploadBackgroundImage(
   // fetch(localUri).blob() is unreliable for file:// URIs in React Native
   // ("Network request failed") — uploadToStorage reads via expo-file-system
   // and uploads as bytes instead, same as the provider logo upload.
-  return uploadToStorage('provider-backgrounds', storagePath, localUri);
+  const url = await uploadToStorage('provider-backgrounds', storagePath, localUri);
+  // The storage path is deterministic (one background.<ext> per provider,
+  // upserted in place), so a new photo lands at the SAME public URL as the old
+  // one. expo-image and the CDN both cache by URL, so clients would keep
+  // showing the previous photo. Append a version query so each save produces a
+  // distinct URL that forces a refetch — Supabase ignores unknown query params
+  // when serving the object but caches by the full URL.
+  return `${url}?v=${Date.now()}`;
 }
 
 export default function BrandingScreen({ navigation }: any) {
@@ -161,13 +168,27 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor);
+
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
         accent_color: resolvedAccent,
         background_image_url: backgroundImage,
-        profile_theme: encodeThemeKey(baseKey, sheetColor),
+        profile_theme: resolvedProfileTheme,
         brand_font: brandFont,
       });
+
+      // Keep My Profile's render cache in step with the DB so returning to it
+      // doesn't flash the previous colours/photo for a frame before the live
+      // row loads. Best-effort — the save already succeeded regardless.
+      if (userId) {
+        await patchCachedProviderBranding(userId, {
+          gradient: resolvedGradient,
+          accentColor: resolvedAccent,
+          backgroundImage,
+          profileTheme: resolvedProfileTheme,
+        });
+      }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
@@ -176,7 +197,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, brandFont, navigation]);
 
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {

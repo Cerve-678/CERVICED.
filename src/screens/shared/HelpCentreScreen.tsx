@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   ActionSheetIOS,
-  Alert,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StatusBar,
@@ -19,28 +19,19 @@ import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import Icon from '../../components/IconLibrary';
 import { supportMailtoUrl } from '../../constants/support';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
-const FAQS = [
-  {
-    q: 'How do I book an appointment?',
-    a: "Browse providers on the Explore tab, tap a provider, then select a service and available time slot. You'll receive a confirmation notification.",
-  },
-  {
-    q: 'Can I reschedule or cancel?',
-    a: "Yes. Go to Bookings, tap your appointment, and choose Reschedule or Cancel. Cancellations may be subject to the provider's policy.",
-  },
-  {
-    q: 'How does Becca work?',
-    a: 'Becca is your AI beauty assistant. Ask her anything — she can recommend providers, explain services, and help you find the right look.',
-  },
-  {
-    q: 'How do I earn points?',
-    a: 'You earn points by completing bookings, leaving reviews, referring friends, and on your first booking. Points can be redeemed for discounts.',
-  },
-  {
-    q: 'Is my payment info secure?',
-    a: 'All payment data is encrypted end-to-end. We never store full card numbers — payments are processed via PCI-DSS compliant providers.',
-  },
+// FAQ copy lives in the i18n catalog; this list just names the question/answer
+// keys. Two answers (cancel, payment) are legal/payment copy and are HELD IN
+// ENGLISH by the i18n DO_NOT_TRANSLATE guard even when another language is
+// active — see src/i18n/translate.ts.
+const FAQ_KEYS: ReadonlyArray<{ q: TranslationKey; a: TranslationKey }> = [
+  { q: 'helpCentre.faq.book.q', a: 'helpCentre.faq.book.a' },
+  { q: 'helpCentre.faq.cancel.q', a: 'helpCentre.faq.cancel.a' },
+  { q: 'helpCentre.faq.becca.q', a: 'helpCentre.faq.becca.a' },
+  { q: 'helpCentre.faq.points.q', a: 'helpCentre.faq.points.a' },
+  { q: 'helpCentre.faq.payment.q', a: 'helpCentre.faq.payment.a' },
 ];
 
 function FAQItem({ q, a, P }: { q: string; a: string; P: AppTheme }) {
@@ -65,23 +56,55 @@ function handleContactSupport() {
   Linking.openURL(supportMailtoUrl());
 }
 
-function showMoreOptions() {
-  if (Platform.OS === 'ios') {
-    ActionSheetIOS.showActionSheetWithOptions(
-      { options: ['Contact Support', 'Cancel'], cancelButtonIndex: 1 },
-      (idx) => { if (idx === 0) handleContactSupport(); },
-    );
-  } else {
-    Alert.alert('More Options', undefined, [
-      { text: 'Contact Support', onPress: handleContactSupport },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }
+interface MoreAction { label: string; run: () => void; }
+
+// Every option here routes somewhere real: Contact Support opens a mail
+// composer to the support address, and the other three navigate to screens
+// that exist in both navigators HelpCentre is registered in (client
+// ProfileNavigator and provider ProviderAccountNavigator), so it works from
+// either hat. No dead entries.
+function buildMoreActions(
+  navigation: { navigate: (screen: string) => void },
+  t: (key: TranslationKey) => string,
+): MoreAction[] {
+  return [
+    { label: t('helpCentre.action.contact'), run: handleContactSupport },
+    { label: t('helpCentre.action.report'), run: () => navigation.navigate('ReportProblem') },
+    // Held in English (legal reference) by the i18n do-not-translate guard.
+    { label: t('helpCentre.action.terms'), run: () => navigation.navigate('Terms') },
+    { label: t('helpCentre.action.about'), run: () => navigation.navigate('About') },
+  ];
 }
 
 export default function HelpCentreScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const actions = buildMoreActions(navigation, t);
+
+  // iOS: the native action sheet handles any number of options. Android's
+  // Alert.alert silently caps at 3 buttons, so with four options + Cancel some
+  // would vanish — and DESIGN_SYSTEM.md says not to use the OS Alert anyway.
+  // So Android gets a small themed in-component menu instead.
+  const openMore = () => {
+    Haptics.selectionAsync().catch(() => {});
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: [...actions.map(a => a.label), t('common.cancel')], cancelButtonIndex: actions.length },
+        (idx) => { if (idx < actions.length) actions[idx]?.run(); },
+      );
+    } else {
+      setMoreOpen(true);
+    }
+  };
+
+  const runAction = (action: MoreAction) => {
+    Haptics.selectionAsync().catch(() => {});
+    setMoreOpen(false);
+    action.run();
+  };
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -100,7 +123,7 @@ export default function HelpCentreScreen({ navigation }: any) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.moreBtn}
-            onPress={showMoreOptions}
+            onPress={openMore}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             activeOpacity={0.7}
           >
@@ -108,16 +131,49 @@ export default function HelpCentreScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.title, { color: P.text }]}>Help Centre</Text>
+        <Text style={[styles.title, { color: P.text }]}>{t('helpCentre.title')}</Text>
         <Text style={[styles.subtitle, { color: P.sub }]}>
-          Answers to common questions
+          {t('helpCentre.subtitle')}
         </Text>
 
-        <Text style={[styles.section, { color: P.accentText }]}>FAQS</Text>
-        {FAQS.map(item => (
-          <FAQItem key={item.q} q={item.q} a={item.a} P={P} />
+        <Text style={[styles.section, { color: P.accentText }]}>{t('helpCentre.section.faqs')}</Text>
+        {FAQ_KEYS.map(item => (
+          <FAQItem key={item.q} q={t(item.q)} a={t(item.a)} P={P} />
         ))}
       </ScrollView>
+
+      {/* Android "more options" menu — a themed bottom sheet rather than the
+          OS Alert, so all four options are reachable (Alert caps at 3). */}
+      <Modal
+        visible={moreOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setMoreOpen(false)}
+      >
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMoreOpen(false)}>
+          <View style={[styles.menuCard, { backgroundColor: P.surfaceRaised, borderColor: P.border }]}>
+            {actions.map((action, i) => (
+              <TouchableOpacity
+                key={action.label}
+                style={[styles.menuRow, i > 0 && { borderTopWidth: 0.5, borderTopColor: P.sep }]}
+                onPress={() => runAction(action)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.menuRowText, { color: P.text }]}>{action.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[styles.menuRow, styles.menuCancel, { borderTopWidth: 0.5, borderTopColor: P.sep }]}
+              onPress={() => setMoreOpen(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.menuRowText, { color: P.sub }]}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ThemedBackground>
   );
 }
@@ -131,7 +187,7 @@ const styles = StyleSheet.create({
   moreBtn: { padding: 4 },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 28, lineHeight: 20 },
-  section: { fontSize: 12, letterSpacing: 2, marginBottom: 12 },
+  section: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2, marginBottom: 12 },
   faqItem: {
     borderRadius: 14,
     borderWidth: 0.5,
@@ -141,4 +197,11 @@ const styles = StyleSheet.create({
   faqHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   faqQ: { fontSize: 14, fontWeight: '600', flex: 1, paddingRight: 8 },
   faqA: { fontSize: 13, lineHeight: 19, marginTop: 10 },
+
+  // Android "more options" themed menu
+  menuOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)', padding: 16, paddingBottom: 32 },
+  menuCard: { borderRadius: 20, borderWidth: 0.5, overflow: 'hidden' },
+  menuRow: { paddingVertical: 16, paddingHorizontal: 20, alignItems: 'center' },
+  menuRowText: { fontSize: 15, fontWeight: '600' },
+  menuCancel: {},
 });

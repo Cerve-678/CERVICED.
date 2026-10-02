@@ -34,25 +34,25 @@ export default function PaymentMethodsScreen({ navigation }: any) {
 
         <Text style={[styles.title, { color: P.text }]}>Payment Methods</Text>
         <Text style={[styles.subtitle, { color: P.sub }]}>
-          Manage your cards and payment options
+          Pay securely when you book
         </Text>
 
-        {/* Coming soon card */}
+        {/* Payment details are entered only in Stripe’s secure sheet. */}
         <View style={[styles.comingSoon, {
           backgroundColor: P.accentDim,
           borderColor: 'transparent',
         }]}>
           <Icon name="payment" size={40} color={P.accentText} />
-          <Text style={[styles.comingSoonTitle, { color: P.text }]}>Coming Soon</Text>
+          <Text style={[styles.comingSoonTitle, { color: P.text }]}>Secure checkout</Text>
           <Text style={[styles.comingSoonSub, { color: P.sub }]}>
-            Card payments, Apple Pay, and Google Pay will be available when online booking launches.
+            Choose your services and appointment time, then enter your card details at checkout. Supported wallet options appear automatically on your device.
           </Text>
         </View>
 
         <View style={[styles.infoRow, { backgroundColor: P.card, borderColor: P.border }]}>
           <Icon name="lock" size={18} color={P.accentText} />
           <Text style={[styles.infoText, { color: P.sub }]}>
-            All payments are secured with 256-bit encryption
+            Stripe handles your card details securely. Cerviced does not store your full card number.
           </Text>
         </View>
       </ScrollView>

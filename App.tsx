@@ -11,7 +11,7 @@ if (__DEV__) {
   }
 }
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
@@ -30,6 +30,7 @@ import { BookingProvider } from './src/contexts/BookingContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { RegistrationProvider } from './src/contexts/RegistrationContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
+import { DisplaySettingsProvider } from './src/contexts/DisplaySettingsContext';
 import {
   StatusBarTintProvider,
   useStatusBarTint,
@@ -39,8 +40,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import AppLoadingScreen from './src/components/AppLoadingScreen';
 import { storage, STORAGE_KEYS } from './src/utils/storage';
-import { useBookmarkStore } from './src/stores/useBookmarkStore';
 import { initSentry } from './src/lib/sentry';
 import { installAuthErrorFilter } from './src/utils/logger';
 import { applyFontScaleClamp } from './src/utils/fontScaleClamp';
@@ -67,8 +68,25 @@ if (Platform.OS === 'ios') {
 const StripeProvider: React.ComponentType<{
   publishableKey: string;
   merchantIdentifier: string;
+  urlScheme: string;
   children: React.ReactNode;
 }> = require('@stripe/stripe-react-native').StripeProvider;
+
+function StripeReturnHandler() {
+  const { handleURLCallback } = require('@stripe/stripe-react-native').useStripe();
+  useEffect(() => {
+    const { Linking } = require('react-native');
+    const handle = (url: string | null) => {
+      if (url?.startsWith('cerviced://stripe-redirect')) {
+        handleURLCallback(url).catch(() => {});
+      }
+    };
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const subscription = Linking.addEventListener('url', ({ url }: { url: string }) => handle(url));
+    return () => subscription.remove();
+  }, [handleURLCallback]);
+  return null;
+}
 
 // Before the first render: caps how far the OS font-size setting can enlarge
 // text, so an enlarged system font doesn't clip fixed-height rows and tile
@@ -136,7 +154,6 @@ function StatusBarBlur() {
 }
 
 export default Sentry.wrap(function App() {
-  const [appIsReady, setAppIsReady] = useState(false);
   const [fontsLoaded, fontError] = useFonts({
     'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
@@ -150,56 +167,42 @@ export default Sentry.wrap(function App() {
     VarelaRound_400Regular,
   });
 
+  const appIsReady = fontsLoaded || !!fontError;
+
   const onLayoutRootView = useCallback(async () => {
-    if (appIsReady) {
-      await SplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
+    await SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   useEffect(() => {
-    async function prepare() {
+    // Local defaults are best-effort background work. Home loads bookmarks
+    // after authentication; a network request must never hold the splash open.
+    const initializeApp = async () => {
       try {
-        if (fontsLoaded || fontError) {
-          await initializeApp();
-          setAppIsReady(true);
+        const existingBookmarks = await storage.getItem<string[]>(
+          STORAGE_KEYS.BOOKMARKED_VIDEOS,
+        );
+        if (!existingBookmarks) {
+          await storage.setItem(STORAGE_KEYS.BOOKMARKED_VIDEOS, []);
+          console.log('Bookmarks storage initialized');
         }
-      } catch (e) {
-        console.warn('Error during app preparation:', e);
-        setAppIsReady(true);
-      }
-    }
-    prepare();
-  }, [fontsLoaded, fontError]);
 
-  const initializeApp = async () => {
-    try {
-      const existingBookmarks = await storage.getItem<string[]>(
-        STORAGE_KEYS.BOOKMARKED_VIDEOS,
-      );
-      if (!existingBookmarks) {
-        await storage.setItem(STORAGE_KEYS.BOOKMARKED_VIDEOS, []);
-        console.log('Bookmarks storage initialized');
+        const settings = await storage.getItem(STORAGE_KEYS.SETTINGS);
+        if (!settings) {
+          await storage.setItem(STORAGE_KEYS.SETTINGS, {
+            notifications: true,
+            theme: 'light',
+          });
+          console.log('Settings storage initialized');
+        }
+      } catch (error) {
+        console.error('Error initializing app storage:', error);
       }
-
-      const { loadBookmarks } = useBookmarkStore.getState();
-      await loadBookmarks();
-      console.log('Bookmarks loaded into store');
-
-      const settings = await storage.getItem(STORAGE_KEYS.SETTINGS);
-      if (!settings) {
-        await storage.setItem(STORAGE_KEYS.SETTINGS, {
-          notifications: true,
-          theme: 'light',
-        });
-        console.log('Settings storage initialized');
-      }
-    } catch (error) {
-      console.error('Error initializing app storage:', error);
-    }
-  };
+    };
+    void initializeApp();
+  }, []);
 
   if (!appIsReady) {
-    return null;
+    return <View style={styles.container} onLayout={onLayoutRootView}><AppLoadingScreen /></View>;
   }
 
   if (fontError) {
@@ -212,6 +215,7 @@ export default Sentry.wrap(function App() {
         <SafeAreaProvider>
           <AuthProvider>
             <ThemeProvider>
+              <DisplaySettingsProvider>
               <RegistrationProvider>
                 <FontProvider customFontsLoaded={fontsLoaded && !fontError}>
                   <StripeProvider
@@ -219,7 +223,9 @@ export default Sentry.wrap(function App() {
                       process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY'] ?? ''
                     }
                     merchantIdentifier="merchant.com.cerviced"
+                    urlScheme="cerviced"
                   >
+                    <StripeReturnHandler />
                     <CartProvider>
                       <BookingProvider>
                         <StatusBarTintProvider>
@@ -236,6 +242,7 @@ export default Sentry.wrap(function App() {
                   </StripeProvider>
                 </FontProvider>
               </RegistrationProvider>
+              </DisplaySettingsProvider>
             </ThemeProvider>
           </AuthProvider>
         </SafeAreaProvider>

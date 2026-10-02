@@ -1,3 +1,4 @@
+import { PaymentRequestError } from '../../utils/paymentRequestError';
 // src/screens/CartScreen.tsx - COMPLETELY FIXED
 import React, { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
@@ -293,6 +294,7 @@ interface PaymentModalProps {
   // on the booking stays null, same as before either modal existed.
   onPaymentSuccess: (paymentMethod: string, paymentIntentId?: string) => Promise<void>;
   onPaymentComplete: () => void;
+  onPaymentPending?: () => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -599,21 +601,10 @@ const handlePayment = useCallback(async () => {
 
 PaymentModal.displayName = 'PaymentModal';
 
-// Real Stripe payment flow — card, Apple Pay, and Google Pay via Stripe's
-// own Payment Sheet (PayPal shows up automatically too, once PayPal is
-// turned on for the Stripe account under Settings > Payment methods —
-// nothing here needs to change for that, it rides on
-// automatic_payment_methods). Not wired into the active checkout yet; see
-// USE_STRIPE_PAYMENTS below CartScreen's imports. Swap PaymentModal for this
-// at the render site when ready to go live with real payment.
-//
-// capture_method: 'manual' on the PaymentIntent (create-payment-intent Edge
-// Function) means presentPaymentSheet() only authorises the card — the
-// booking is created first, and only a successful booking triggers the
-// actual capture (finalize-payment-intent). A failed booking cancels the
-// authorisation instead, so a client is never left charged with nothing
-// booked. See the CartScreen conversation history / commit messages for the
-// full reasoning — this preserves that behaviour exactly.
+// Stripe card checkout, including supported Apple Pay / Google Pay wallets.
+// The sheet authorises a server-priced reservation. The authenticated endpoint
+// and signed webhook share capture/finalisation logic, including recovery when
+// the app closes and refunds if the reservation can no longer be fulfilled.
 const StripePaymentModal: React.FC<PaymentModalProps> = memo(
   ({
     isVisible,
@@ -623,6 +614,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     checkoutBatchId,
     onPaymentSuccess,
     onPaymentComplete,
+    onPaymentPending,
     onBookingFailed,
   }) => {
     const { theme, palette: P } = useTheme();
@@ -642,12 +634,15 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       processingRef.current = true;
       setIsProcessing(true);
 
+      let paymentStarted = false;
+      let createdIntentId: string | undefined;
       try {
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
         }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
         const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
+        createdIntentId = paymentIntentId;
 
         // Theme the sheet to match the app's own palette instead of Stripe's
         // generic default. These are flat colours rather than Stripe's
@@ -673,6 +668,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
         const { error: initError } = await initPaymentSheet({
           merchantDisplayName: 'Cerviced',
+          returnURL: 'cerviced://stripe-redirect',
+          allowsDelayedPaymentMethods: false,
           paymentIntentClientSecret: clientSecret,
           appearance: {
             colors: stripeColors,
@@ -691,11 +688,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           // placeholder in app.json's plugin config ("merchant.com.cerviced")
           // unblocks the build but Apple Pay won't actually appear/function
           // until that registration is real.
-          applePay: { merchantCountryCode: 'GB' },
+          ...(!env.isExpoGo ? { applePay: { merchantCountryCode: 'GB' } } : {}),
           // Works in Stripe test mode. app.json enables Google Pay for
           // Android; production still requires a fully configured Stripe
           // account and release signing.
-          googlePay: { merchantCountryCode: 'GB', testEnv: __DEV__ },
+          ...(!env.isExpoGo ? { googlePay: { merchantCountryCode: 'GB', testEnv: process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_test_') === true } } : {}),
         });
         if (initError) {
           throw new Error(initError.message || 'Could not start payment.');
@@ -709,6 +706,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             // path entirely — call onClose explicitly so CartScreen's
             // release-the-hold-batch logic (wired into onClose) still runs
             // instead of leaving the slot reserved until the TTL sweep.
+            await cancelPaymentIntent(checkoutBatchId, paymentIntentId);
             onClose();
             return;
           }
@@ -716,42 +714,31 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         }
 
         if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
-        try {
-          // This Edge call converts the database hold to bookings and captures
-          // the exact server-calculated amount. It is intentionally one
-          // operation: this screen never writes bookings or chooses a charge.
-          await capturePaymentIntent(checkoutBatchId, paymentIntentId);
-          await onPaymentSuccess('card', paymentIntentId);
-        } catch (bookingError) {
-          logger.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED:`, bookingError);
-          // If finalisation failed before capture, release the Stripe hold and
-          // the database reservation. A successfully captured payment is not
-          // cancelled by this best-effort cleanup.
-          try { await cancelPaymentIntent(checkoutBatchId, paymentIntentId); } catch (cancelError) {
-            logger.error(`💰 [${timestamp()}] Failed to release payment hold:`, paymentIntentId, cancelError);
-          }
-          throw bookingError;
-        }
+        paymentStarted = true;
+        await capturePaymentIntent(checkoutBatchId, paymentIntentId);
+        await onPaymentSuccess('card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
         onPaymentComplete();
       } catch (error) {
         logger.error(`❌ [${timestamp()}] PAYMENT ERROR:`, error);
+        if (paymentStarted) {
+          // Do not cancel a reservation after an ambiguous capture response.
+          // The signed webhook finishes it, including after the app closes.
+          onPaymentPending?.();
+          return;
+        }
+        if (createdIntentId && checkoutBatchId) {
+          try { await cancelPaymentIntent(checkoutBatchId, createdIntentId); }
+          catch { onPaymentPending?.(); return; }
+        }
         onClose();
-        const partiallySucceeded = error instanceof BookingError && error.succeededAmountPaid > 0;
-        onBookingFailed(
-          (error instanceof BookingError
-            ? error.message
-            : "We couldn't complete this booking. Please try again.")
-          + (partiallySucceeded
-              ? " You were only charged for the services that were booked."
-              : " You have not been charged.")
-        );
+        onBookingFailed(error instanceof PaymentRequestError ? error.message : 'Payment could not be completed. Please review your booking and try again.');
       } finally {
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme]);
+    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, P, theme]);
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
@@ -762,6 +749,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
                   style={styles.paymentCloseButton}
+                  disabled={isProcessing}
+                  accessibilityLabel="Close payment"
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     onClose();
@@ -797,7 +786,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 <View style={styles.paymentMethods}>
                   <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Payment</Text>
                   <Text style={[styles.paymentMethodName, { color: P.sub }]}>
-                    Card, Apple Pay, or Google Pay — you'll enter your details securely on the next screen.
+                    Enter your card details securely with Stripe. Available wallet options appear on the next screen.
                   </Text>
                 </View>
               </ScrollView>
@@ -4254,6 +4243,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 totalAmount={paymentTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
+                onPaymentPending={() => {
+                  setShowPaymentModal(false);
+                  setServerCheckoutBatchId(null);
+                  showAlert('Checking your payment', 'Your payment may have completed. Check your bookings before paying again. If the reservation expired, the payment will be refunded.');
+                }}
                 onPaymentComplete={() => {
                   clearCart(); // Clear cart immediately after payment simulation
                   setShowPaymentModal(false);
@@ -4308,7 +4302,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setShowPaymentSuccessModal(false);
-                          navigation.navigate('Bookings'); // ✅ JUST NAVIGATE - bookings already created
+                          // Land on the Upcoming tab — the client just booked, so
+                          // the just-created appointments are what they want to see,
+                          // not the default (which can open on Past/other state).
+                          navigation.navigate('Bookings', { initialTab: 'all' }); // bookings already created
                         }}
                         activeOpacity={0.85}
                       >

@@ -59,6 +59,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 import { useTheme } from "../../contexts/ThemeContext";
 import { resolveProviderFontFamily } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
+import { DynamicText } from "../../components/DynamicText";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
@@ -5094,11 +5095,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           Relevant Information
                         </Text>
                       )}
-                      <Text style={[styles.aboutText, { color: OP.sub }]}>
-                        {showFullAbout
+                      {/* Provider-WRITTEN bio: rendered via DynamicText so it
+                          translates live to the active language when the paid
+                          translation feature is enabled, and shows the original
+                          English otherwise (the default in every current
+                          build). Not legal/health copy, so routing it through
+                          the dynamic path is safe. */}
+                      <DynamicText
+                        style={[styles.aboutText, { color: OP.sub }]}
+                        text={showFullAbout
                           ? provider.aboutText
                           : `${provider.aboutText.substring(0, 150)}...`}
-                      </Text>
+                      />
+
                       <TouchableOpacity
                         onPress={() => setShowFullAbout(!showFullAbout)}
                         style={styles.moreButton}

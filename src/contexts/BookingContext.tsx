@@ -21,6 +21,8 @@ import {
   type PaymentBreakdown,
 } from '../types/booking';
 import { logger } from '../utils/logger';
+import { env } from '../utils/env';
+import { applyCancellationRefund } from '../services/databaseService';
 import { formatTime12, formatLongDate } from '../utils/dateUtils';
 
 export class BookingError extends Error {
@@ -1374,14 +1376,31 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // any other error (e.g. the notice-window message) is a real
       // rejection and must reach the caller as-is, not be masked by a
       // second attempt.
+      let clientCancelled = false;
       if (isDbBookingId(bookingId)) {
         try {
           await cancelOwnBooking(bookingId);
+          clientCancelled = true;
         } catch (clientError: any) {
           if (!String(clientError?.message ?? '').includes('Booking not found')) {
             throw clientError;
           }
           await providerCancelOwnBooking(bookingId);
+        }
+      }
+
+      // The money half of a client cancellation — apply the provider's
+      // cancellation policy (keep the deposit / their share, or full refund)
+      // through Stripe, computed server-side. Best-effort and only when card
+      // payments are live: the cancel itself has already committed above, so a
+      // refund hiccup must not undo it or block the UI. The function is
+      // idempotent, so a later retry settles it. Inert (no-op 'no_payment')
+      // while USE_STRIPE_PAYMENTS is off, which it is in production today.
+      if (clientCancelled && env.stripePaymentsEnabled) {
+        try {
+          await applyCancellationRefund(bookingId);
+        } catch (refundError) {
+          logger.error('[Booking] cancellation refund not confirmed (cancel still stood):', refundError);
         }
       }
 

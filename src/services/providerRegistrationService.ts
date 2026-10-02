@@ -1019,3 +1019,39 @@ export async function getCachedProviderData(userId: string): Promise<ProviderReg
   }
   return null;
 }
+
+// Merge just the branding fields into the cached provider record. The Branding
+// screen writes these straight to the DB, but My Profile renders the cache
+// first (getCachedProviderData) before the live row arrives — so without this
+// the cache stays stale and the hero flashes the OLD colours/photo for a frame
+// before snapping to the new ones. Keep it best-effort: a cache miss or write
+// failure must never fail a save that already landed in the DB.
+export async function patchCachedProviderBranding(
+  userId: string,
+  branding: {
+    gradient: [string, string, ...string[]];
+    accentColor: string;
+    backgroundImage: string | null;
+    profileTheme: string;
+  },
+): Promise<void> {
+  try {
+    const cached = await getCachedProviderData(userId);
+    // Nothing cached yet means My Profile has no stale frame to show — it will
+    // simply load the live row, so there is nothing to patch.
+    if (!cached) return;
+    const updated: ProviderRegistrationData = {
+      ...cached,
+      gradient: branding.gradient,
+      // Mirror the live read's rule (see loadProviderFromSupabase): a saved
+      // gradient is always a real 2-tuple here, so it counts as custom.
+      hasCustomGradient: branding.gradient.length >= 2,
+      accentColor: branding.accentColor,
+      backgroundImage: branding.backgroundImage,
+      profileTheme: branding.profileTheme,
+    };
+    await AsyncStorage.setItem(`@provider_reg_data_${userId}`, JSON.stringify(updated));
+  } catch (e) {
+    logger.warn('patchCachedProviderBranding error:', e);
+  }
+}

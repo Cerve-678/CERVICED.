@@ -18,8 +18,7 @@ const normalizedServiceName = (item: PortfolioItem): string =>
  * Builds a stable, intentionally mixed recommendation row.
  *
  * Recommendations never cross categories. Within the category we balance
- * providers first, then rotate portfolio work, bookable services and provider
- * covers. If the opened card is a named service, that same service from other
+ * providers first, then rotate portfolio work and bookable services. If the opened card is a named service, that same service from other
  * providers is preferred before broader options in the category.
  */
 export function buildMoreLikeThis(
@@ -27,10 +26,7 @@ export function buildMoreLikeThis(
   source: readonly PortfolioItem[],
   limit = 12,
 ): MoreLikeThisResult {
-  const eligible = source.filter(item =>
-    item.id !== anchor.id &&
-    (item.kind == null || item.kind === 'portfolio' || item.kind === 'service' || item.kind === 'provider'),
-  );
+  const eligible = source.filter(item => item.id !== anchor.id);
   const sameCategory = eligible.filter(item => item.category === anchor.category);
   const pool = sameCategory;
   const anchorTags = new Set(anchor.tags ?? []);

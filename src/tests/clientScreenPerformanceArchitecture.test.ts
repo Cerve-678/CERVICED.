@@ -15,6 +15,14 @@ describe('client screen performance contracts', () => {
     expect(source).not.toContain('prefetchRemaining');
   });
 
+  it('bounds the initial Explore queries and never keeps the feed spinner forever', () => {
+    const source = readScreen('ExploreScreen');
+
+    expect(source).toContain('DISCOVER_PORTFOLIO_LIMIT = 60');
+    expect(source).toContain("withTimeout(");
+    expect(source).toContain("'Explore feed'");
+  });
+
   it('progressively mounts Explore cards and only measures fallback ratios', () => {
     const source = readScreen('ExploreScreen');
     const cardSource = fs.readFileSync(

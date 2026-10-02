@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Switch,
   StatusBar,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -20,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { useRegistration } from '../../contexts/RegistrationContext';
+import { useTranslation } from '../../i18n';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import {
   isBiometricAvailable,
@@ -66,8 +66,9 @@ SettingsOption.displayName = 'SettingsOption';
 
 export default function UserProfileScreen({ navigation }: any) {
   const { isLoggedIn, logout, user, switchMode, hatState } = useAuth();
-  const { isDarkMode, toggleTheme, theme: t, palette: P } = useTheme();
+  const { isDarkMode, toggleTheme, theme: appTheme, palette: P } = useTheme();
   const { resetData, updateData } = useRegistration();
+  const { t } = useTranslation();
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -108,7 +109,7 @@ export default function UserProfileScreen({ navigation }: any) {
       if (!authenticated) return;
       const token = await getCurrentRefreshToken();
       if (!token) {
-        Alert.alert('Error', 'Could not enable Face ID. Please try again.');
+        Alert.alert(t('profile.error.title'), t('profile.error.biometric', { method: biometricLabel }));
         return;
       }
       await enableBiometric(token);
@@ -132,7 +133,7 @@ export default function UserProfileScreen({ navigation }: any) {
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={t.statusBar} translucent />
+        <StatusBar barStyle={appTheme.statusBar} translucent />
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
@@ -140,8 +141,8 @@ export default function UserProfileScreen({ navigation }: any) {
           <View style={styles.heroSection}>
             <View style={styles.heroLeft}>
               <View style={styles.heroTextBlock}>
-                <Text style={[styles.heroSub, { color: P.sub }]}>Hello,</Text>
-                <Text style={[styles.heroName, { color: P.text }]}>{firstName || 'You'}.</Text>
+                <Text style={[styles.heroSub, { color: P.sub }]}>{t('profile.greeting')}</Text>
+                <Text style={[styles.heroName, { color: P.text }]}>{firstName || t('profile.youFallback')}.</Text>
               </View>
               <View style={[styles.avatar, { backgroundColor: P.iconBg, borderColor: P.border }]}>
                 <Text style={[styles.avatarText, { color: P.accentText }]}>{initials}</Text>
@@ -152,12 +153,12 @@ export default function UserProfileScreen({ navigation }: any) {
           {/* Quick cards */}
           <View style={[styles.quickRow, { backgroundColor: P.surface, borderColor: P.border }]}>
             {[
-              { icon: 'bookmark', label: 'Saved', sub: 'Your Favourites', onPress: () => navigation.navigate('BookmarkedProviders') },
-              { icon: 'calendar-today', label: 'Bookings', sub: 'Appointments', onPress: () => navigation.navigate('Bookings') },
-              { icon: 'star', label: 'Points', sub: 'Your Rewards', onPress: () => navigation.navigate('Points') },
-            ].map(({ icon, label, sub, onPress }) => (
+              { icon: 'bookmark', key: 'saved', label: t('profile.card.saved.label'), sub: t('profile.card.saved.sub'), onPress: () => navigation.navigate('BookmarkedProviders') },
+              { icon: 'calendar-today', key: 'bookings', label: t('profile.card.bookings.label'), sub: t('profile.card.bookings.sub'), onPress: () => navigation.navigate('Bookings') },
+              { icon: 'star', key: 'points', label: t('profile.card.points.label'), sub: t('profile.card.points.sub'), onPress: () => navigation.navigate('Points') },
+            ].map(({ icon, key, label, sub, onPress }) => (
               <TouchableOpacity
-                key={label}
+                key={key}
                 style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
                 activeOpacity={0.7}
@@ -171,25 +172,25 @@ export default function UserProfileScreen({ navigation }: any) {
 
           {/* Account Management */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.sub }]}>Account Management</Text>
-            <SettingsOption icon="chat-dots" title="Messages" subtitle="Chats with your providers" onPress={() => navigation.navigate('Messages')} palette={P} />
-            <SettingsOption icon="user" title="Account" subtitle="Name, phone, date of birth" onPress={() => navigation.navigate('ProfileInfo')} palette={P} />
-            <SettingsOption icon="heart" title="Beauty Profile" subtitle="Hair, skin, interests" onPress={() => navigation.navigate('BeautyProfile')} palette={P} />
-            <SettingsOption icon="lock" title="Change Password" subtitle="Update credentials" onPress={() => navigation.navigate('ChangePassword')} palette={P} />
-            <SettingsOption icon="payment" title="Payment Methods" subtitle="Cards, Apple Pay" onPress={() => navigation.navigate('PaymentMethods')} palette={P} />
-            <SettingsOption icon="receipt" title="Subscription & Billing" subtitle="Plans, invoices" onPress={() => navigation.navigate('Subscription')} palette={P} />
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.account')}</Text>
+            <SettingsOption icon="chat-dots" title={t('profile.account.messages.title')} subtitle={t('profile.account.messages.sub')} onPress={() => navigation.navigate('Messages')} palette={P} />
+            <SettingsOption icon="user" title={t('profile.account.account.title')} subtitle={t('profile.account.account.sub')} onPress={() => navigation.navigate('ProfileInfo')} palette={P} />
+            <SettingsOption icon="heart" title={t('profile.account.beauty.title')} subtitle={t('profile.account.beauty.sub')} onPress={() => navigation.navigate('BeautyProfile')} palette={P} />
+            <SettingsOption icon="lock" title={t('profile.account.password.title')} subtitle={t('profile.account.password.sub')} onPress={() => navigation.navigate('ChangePassword')} palette={P} />
+            <SettingsOption icon="payment" title={t('profile.account.payment.title')} subtitle={t('profile.account.payment.sub')} onPress={() => navigation.navigate('PaymentMethods')} palette={P} />
+            <SettingsOption icon="receipt" title={t('profile.account.subscription.title')} subtitle={t('profile.account.subscription.sub')} onPress={() => navigation.navigate('Subscription')} palette={P} />
           </View>
 
           {/* Notifications & Preferences */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.sub }]}>Preferences</Text>
-            <SettingsOption icon="notifications" title="Notifications" subtitle="Bookings, reminders, marketing" onPress={() => navigation.navigate('NotificationsSettings')} palette={P} />
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.preferences')}</Text>
+            <SettingsOption icon="notifications" title={t('profile.pref.notifications.title')} subtitle={t('profile.pref.notifications.sub')} onPress={() => navigation.navigate('NotificationsSettings')} palette={P} />
             <View style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}>
               <View style={styles.optionLeft}>
                 <Icon name="brightness-6" size={20} color={P.sub} style={{ marginRight: 12 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.optionText, { color: P.text }]}>Dark Mode</Text>
-                  <Text style={[styles.optionSubText, { color: P.sub }]}>Appearance</Text>
+                  <Text style={[styles.optionText, { color: P.text }]}>{t('profile.pref.darkMode.title')}</Text>
+                  <Text style={[styles.optionSubText, { color: P.sub }]}>{t('profile.pref.darkMode.sub')}</Text>
                 </View>
               </View>
               <Switch
@@ -205,7 +206,7 @@ export default function UserProfileScreen({ navigation }: any) {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.optionText, { color: P.text }]}>{biometricLabel}</Text>
                   <Text style={[styles.optionSubText, { color: P.sub }]}>
-                    {biometricAvailable ? 'Quick sign-in' : 'Not available on this device'}
+                    {biometricAvailable ? t('profile.pref.biometric.sub.available') : t('profile.pref.biometric.sub.unavailable')}
                   </Text>
                 </View>
               </View>
@@ -221,27 +222,27 @@ export default function UserProfileScreen({ navigation }: any) {
 
           {/* Accessibility & Support */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.sub }]}>Accessibility & Support</Text>
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.accessibility')}</Text>
             <SettingsOption
               icon="format-size"
-              title="Text Size & Font"
-              subtitle="Open phone display settings"
-              onPress={() => Linking.openURL('App-prefs:root=ACCESSIBILITY')}
+              title={t('profile.access.textSizing.title')}
+              subtitle={t('profile.access.textSizing.sub')}
+              onPress={() => navigation.navigate('TextSizing')}
               palette={P}
             />
             <SettingsOption
               icon="language"
-              title="Language & Region"
-              subtitle="Open phone language settings"
-              onPress={() => Linking.openURL('App-prefs:root=General&path=LANGUAGE_AND_REGION')}
+              title={t('profile.access.language.title')}
+              subtitle={t('profile.access.language.sub')}
+              onPress={() => navigation.navigate('LanguageRegion')}
               palette={P}
             />
-            <SettingsOption icon="help" title="Help Centre" subtitle="FAQs, contact support" onPress={() => navigation.navigate('HelpCentre')} palette={P} />
+            <SettingsOption icon="help" title={t('profile.access.help.title')} subtitle={t('profile.access.help.sub')} onPress={() => navigation.navigate('HelpCentre')} palette={P} />
           </View>
 
           {/* For Professionals */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.sub }]}>For Professionals</Text>
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.professionals')}</Text>
             {hatState.owned.provider ? (
               <TouchableOpacity
                 style={[styles.providerBtn, {
@@ -253,8 +254,8 @@ export default function UserProfileScreen({ navigation }: any) {
               >
                 <Icon name="swap-horiz" size={22} color={P.text} />
                 <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={[styles.providerBtnTitle, { color: P.text }]}>Switch to Provider Mode</Text>
-                  <Text style={[styles.providerBtnSub, { color: P.sub }]}>Go to your provider dashboard</Text>
+                  <Text style={[styles.providerBtnTitle, { color: P.text }]}>{t('profile.pro.switch.title')}</Text>
+                  <Text style={[styles.providerBtnSub, { color: P.sub }]}>{t('profile.pro.switch.sub')}</Text>
                 </View>
                 {providerUnread > 0 && (
                   <View style={styles.switchBadge}>
@@ -279,8 +280,8 @@ export default function UserProfileScreen({ navigation }: any) {
               >
                 <Icon name="storefront" size={22} color={P.text} />
                 <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={[styles.providerBtnTitle, { color: P.text }]}>Become a Provider</Text>
-                  <Text style={[styles.providerBtnSub, { color: P.sub }]}>List your services on Cerviced</Text>
+                  <Text style={[styles.providerBtnTitle, { color: P.text }]}>{t('profile.pro.become.title')}</Text>
+                  <Text style={[styles.providerBtnSub, { color: P.sub }]}>{t('profile.pro.become.sub')}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -288,10 +289,11 @@ export default function UserProfileScreen({ navigation }: any) {
 
           {/* App Info & Legal */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.sub }]}>App Info & Legal</Text>
-            <SettingsOption icon="info" title="About Cerviced" subtitle="Mission, version" onPress={() => navigation.navigate('About')} palette={P} />
-            <SettingsOption icon="gavel" title="Terms & Conditions" subtitle="Legal info" onPress={() => navigation.navigate('Terms')} palette={P} />
-            <SettingsOption icon="bug-report" title="Report a Problem" subtitle="Bugs, feedback" onPress={() => navigation.navigate('ReportProblem')} palette={P} />
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.appInfo')}</Text>
+            <SettingsOption icon="info" title={t('profile.appInfo.about.title')} subtitle={t('profile.appInfo.about.sub')} onPress={() => navigation.navigate('About')} palette={P} />
+            {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
+            <SettingsOption icon="gavel" title={t('profile.appInfo.terms.title')} subtitle={t('profile.appInfo.terms.sub')} onPress={() => navigation.navigate('Terms')} palette={P} />
+            <SettingsOption icon="bug-report" title={t('profile.appInfo.report.title')} subtitle={t('profile.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} palette={P} />
           </View>
 
           {isLoggedIn && (
@@ -301,7 +303,7 @@ export default function UserProfileScreen({ navigation }: any) {
               activeOpacity={0.7}
             >
               <Icon name="logout" size={16} color="#fff" />
-              <Text style={styles.logoutText}>Log Out</Text>
+              <Text style={styles.logoutText}>{t('profile.logout')}</Text>
             </TouchableOpacity>
           )}
 
@@ -313,10 +315,9 @@ export default function UserProfileScreen({ navigation }: any) {
       <Modal visible={showProviderModal} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowProviderModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlayCenter}>
           <View style={[styles.modalCard, { backgroundColor: P.surfaceRaised, borderColor: P.border }]}>
-            <Text style={[styles.modalTitle, { color: P.text }]}>Become a Provider</Text>
+            <Text style={[styles.modalTitle, { color: P.text }]}>{t('profile.becomeModal.title')}</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
-              We'll add a provider profile to your current account — same login, same details.
-              You can switch between client and provider mode any time.
+              {t('profile.becomeModal.body')}
             </Text>
 
             <TouchableOpacity
@@ -329,11 +330,11 @@ export default function UserProfileScreen({ navigation }: any) {
               }}
               activeOpacity={0.8}
             >
-              <Text style={[styles.modalBtnText, { color: P.onAccent }]}>Set up my provider profile</Text>
+              <Text style={[styles.modalBtnText, { color: P.onAccent }]}>{t('profile.becomeModal.cta')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowProviderModal(false)} activeOpacity={0.6}>
-              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </BlurView>
@@ -343,9 +344,9 @@ export default function UserProfileScreen({ navigation }: any) {
       <Modal visible={showLogoutModal} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: P.surfaceRaised, borderColor: P.border }]}>
-            <Text style={[styles.modalTitle, { color: P.text }]}>Log Out</Text>
+            <Text style={[styles.modalTitle, { color: P.text }]}>{t('profile.logoutModal.title')}</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
-              Are you sure you want to log out?
+              {t('profile.logoutModal.body')}
             </Text>
 
             <TouchableOpacity
@@ -353,11 +354,11 @@ export default function UserProfileScreen({ navigation }: any) {
               onPress={() => { setShowLogoutModal(false); handleLogout(); }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>Yes, log out</Text>
+              <Text style={styles.modalBtnText}>{t('profile.logoutModal.confirm')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowLogoutModal(false)} activeOpacity={0.6}>
-              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </BlurView>

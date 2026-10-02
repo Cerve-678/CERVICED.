@@ -56,6 +56,7 @@ import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../util
 import { resolveTimelineRange } from '../../utils/dayTimelineRange';
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
+import { withTimeout } from '../../utils/withTimeout';
 import type {
   DbProviderAvailability,
   DbProviderBlockedDate,
@@ -1176,7 +1177,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [showGoLiveCelebration, celebrationScale, celebrationOpacity]);
 
   // First-run coach-mark tour for brand-new providers.
-  const { user } = useAuth();
+  const { user, myProviderId } = useAuth();
+  const providerIdRef = useRef(myProviderId);
+  providerIdRef.current = myProviderId;
   const [showTour, setShowTour] = useState(false);
   // Home stays mounted as a tab; CoachMarkTour is a full-screen Modal. Gate it
   // on focus so an armed tour never spotlights over a screen pushed on top
@@ -1391,7 +1394,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const loadBookings = useCallback(async (showLoad = false, providerId?: string) => {
     if (showLoad) setLoading(true);
     try {
-      const rows = await getProviderBookings(90, providerId);
+      const rows = await withTimeout(
+        getProviderBookings(90, providerId ?? providerIdRef.current ?? undefined),
+        8_000,
+        'Appointments load',
+      );
       setBookings(rows.map(mapDbBookingToConfirmed));
     } catch (err) {
       logger.error('[ProviderHome] bookings load failed:', err);
@@ -1430,6 +1437,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // duplicate round trip on every visit to the screen providers live in.
   useFocusEffect(useCallback(() => {
     let cancelled = false;
+    // Appointments need only the already-resolved provider ID. Start them
+    // immediately instead of waiting for the full setup/availability profile.
+    const knownProviderId = providerIdRef.current;
+    if (knownProviderId) {
+      const showInitialLoad = !hasLoadedBookingsRef.current;
+      hasLoadedBookingsRef.current = true;
+      void loadBookings(showInitialLoad, knownProviderId);
+    }
     getMyProviderProfile().then(profile => {
       if (cancelled) return;
       // Flipped only once we're actually about to load, not before the
@@ -1444,7 +1459,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // decoupled from availability the way it was pre-merge, but not
       // silently skipping bookings entirely just because availability can't
       // load this focus.
-      void loadBookings(showInitialLoad, profile?.id);
+      if (!knownProviderId) void loadBookings(showInitialLoad, profile?.id);
       setHasNoProviderProfile(!profile);
       if (!profile) return;
       return Promise.all([
@@ -1515,35 +1530,28 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // this focus with neither bookings nor availability loaded.
       const showInitialLoad = !hasLoadedBookingsRef.current;
       hasLoadedBookingsRef.current = true;
-      void loadBookings(showInitialLoad);
+      if (!knownProviderId) void loadBookings(showInitialLoad);
     });
     return () => { cancelled = true; };
   }, [loadBookings]));
 
   useEffect(() => {
-    let cancelled = false;
-    let unsubscribe: (() => void) | null = null;
-    getMyProviderProfile().then(profile => {
-      if (!profile || cancelled) return;
-      unsubscribe = subscribeToProviderBookingChanges(profile.id, () => {
-        if (realtimeReloadTimerRef.current) {
-          clearTimeout(realtimeReloadTimerRef.current);
-        }
-        realtimeReloadTimerRef.current = setTimeout(() => {
-          realtimeReloadTimerRef.current = null;
-          void loadBookings();
-        }, 150);
-      });
-    }).catch((err) => logger.error('[ProviderHome] realtime subscribe failed:', err));
+    if (!myProviderId) return;
+    const unsubscribe = subscribeToProviderBookingChanges(myProviderId, () => {
+      if (realtimeReloadTimerRef.current) clearTimeout(realtimeReloadTimerRef.current);
+      realtimeReloadTimerRef.current = setTimeout(() => {
+        realtimeReloadTimerRef.current = null;
+        void loadBookings(false, myProviderId);
+      }, 150);
+    });
     return () => {
-      cancelled = true;
-      unsubscribe?.();
+      unsubscribe();
       if (realtimeReloadTimerRef.current) {
         clearTimeout(realtimeReloadTimerRef.current);
         realtimeReloadTimerRef.current = null;
       }
     };
-  }, [loadBookings]);
+  }, [loadBookings, myProviderId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

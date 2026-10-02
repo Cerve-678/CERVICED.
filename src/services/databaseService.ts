@@ -1,3 +1,4 @@
+import { getPaymentRequestError } from '../utils/paymentRequestError';
 import { supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
@@ -32,7 +33,7 @@ import type {
   ServiceCategory,
 } from "../types/database";
 import type { AddressReleasePolicy } from "../features/business-details/options";
-import { logger } from "../utils/logger";
+import { logger, reportError } from "../utils/logger";
 import {
   ADDRESS_PENDING_PLACEHOLDER,
   PHONE_PENDING_PLACEHOLDER,
@@ -76,8 +77,24 @@ export function setAuthAutoRefresh(active: boolean): void {
 export function subscribeToAuthStateChanges(
   onChange: (event: AuthChangeEvent, session: Session | null) => void | Promise<void>,
 ): () => void {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(onChange);
-  return () => subscription.unsubscribe();
+  // Auth invokes listeners while holding its session lock. Profile queries
+  // need that same lock to obtain a token, so awaiting them here deadlocks
+  // login/restore and subsequent requests throughout the app.
+  const pending = new Set<ReturnType<typeof setTimeout>>();
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const timer = setTimeout(() => {
+      pending.delete(timer);
+      void Promise.resolve().then(() => onChange(event, session)).catch(error => {
+        reportError(error, 'auth:state-change');
+      });
+    }, 0);
+    pending.add(timer);
+  });
+  return () => {
+    subscription.unsubscribe();
+    pending.forEach(clearTimeout);
+    pending.clear();
+  };
 }
 
 export async function signOutCurrentSession(): Promise<void> {
@@ -284,7 +301,7 @@ export async function runDevReset(
 // separates conditions, parens group them) so a term containing one can't
 // break out of its intended ilike condition.
 function sanitizeIlikeTerm(term: string): string {
-  return term.replace(/[(),]/g, " ").trim();
+  return term.replace(/[(),%_*"\\]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 /** Creates or completes the app profile after Supabase has verified the
@@ -688,6 +705,15 @@ export interface ProviderServiceFacets {
    *  …)` would simply not have returned. */
   audiences: Map<string, Set<string>>;
   skinTones: Map<string, Set<string>>;
+  /** Free-text "speciality" haystack per provider, for the client Speciality
+   *  filter's fuzzy match (src/utils/fuzzyMatch.ts). Unions three sources that
+   *  each name what a provider is known for: their chosen business
+   *  specialities (`provider_specialties`), every tag on their active services
+   *  (`tags`/`technique_tags`/`outcome_tags`/`occasion_tags`/`trend_names`),
+   *  and the service names themselves. The filter matches its chosen label
+   *  against this set, so casing/spacing/spelling need not agree across the
+   *  three. Absent means nothing to match. */
+  specialityText: Map<string, Set<string>>;
 }
 
 /**
@@ -711,23 +737,46 @@ export async function getProviderServiceFacets(
   const priceRanges = new Map<string, { min: number; max: number }>();
   const audiences = new Map<string, Set<string>>();
   const skinTones = new Map<string, Set<string>>();
-  if (providerIds.length === 0) return { priceRanges, audiences, skinTones };
+  const specialityText = new Map<string, Set<string>>();
+  if (providerIds.length === 0) {
+    return { priceRanges, audiences, skinTones, specialityText };
+  }
 
-  // Same provider-visibility gate as the two functions this replaces — see
-  // getProviderPriceRanges for why it lives here rather than being left to
-  // each caller to remember.
-  const { data, error } = await supabase
-    .from("services")
-    .select(
-      "provider_id, price, price_max, audience, skin_tones_suitable, providers!inner(has_gone_live, is_active)",
-    )
-    .eq("is_active", true)
-    .eq("providers.has_gone_live", true)
-    .eq("providers.is_active", true)
-    .in("provider_id", providerIds);
-  if (error) throw error;
+  const addSpeciality = (providerId: string, value: string | null | undefined) => {
+    if (!value) return;
+    const set = specialityText.get(providerId) ?? new Set<string>();
+    set.add(value);
+    specialityText.set(providerId, set);
+  };
 
-  for (const row of data ?? []) {
+  // The services scan and the provider_specialties scan are independent reads
+  // over the same already-visibility-gated id set — run them together rather
+  // than one after the other (see the Scalability "no sequential awaits" rule).
+  // Both carry the same has_gone_live/is_active gate as the price/audience
+  // functions this consolidates: the ids passed in are already the current
+  // result set, but re-gating here keeps a hidden provider's data out even if a
+  // caller ever passes an unfiltered id.
+  const [servicesRes, specialtiesRes] = await Promise.all([
+    supabase
+      .from("services")
+      .select(
+        "provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
+      )
+      .eq("is_active", true)
+      .eq("providers.has_gone_live", true)
+      .eq("providers.is_active", true)
+      .in("provider_id", providerIds),
+    supabase
+      .from("provider_specialties")
+      .select("provider_id, specialty, providers!inner(has_gone_live, is_active)")
+      .eq("providers.has_gone_live", true)
+      .eq("providers.is_active", true)
+      .in("provider_id", providerIds),
+  ]);
+  if (servicesRes.error) throw servicesRes.error;
+  if (specialtiesRes.error) throw specialtiesRes.error;
+
+  for (const row of servicesRes.data ?? []) {
     const providerId = row.provider_id as string;
 
     // A service with no price at all contributes an audience tag but must not
@@ -755,8 +804,25 @@ export async function getProviderServiceFacets(
       set.add(row.audience as string);
       audiences.set(providerId, set);
     }
+
+    // The service name plus every tag column feed the Speciality haystack.
+    addSpeciality(providerId, row.name as string | null);
+    for (const tag of [
+      ...(row.tags ?? []),
+      ...(row.technique_tags ?? []),
+      ...(row.outcome_tags ?? []),
+      ...(row.occasion_tags ?? []),
+      ...(row.trend_names ?? []),
+    ]) {
+      addSpeciality(providerId, tag as string);
+    }
   }
-  return { priceRanges, audiences, skinTones };
+
+  for (const row of specialtiesRes.data ?? []) {
+    addSpeciality(row.provider_id as string, row.specialty as string | null);
+  }
+
+  return { priceRanges, audiences, skinTones, specialityText };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -844,9 +910,10 @@ export async function searchProviders(
   // Falls back to the whole query when no location preposition was found,
   // so a bare "south london" (no "in") still gets tried as free text below.
   const textTerms = (
-    parsed.serviceTerms.length ? parsed.serviceTerms : [q]
-  ).map(sanitizeIlikeTerm);
-  const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm);
+    parsed.serviceTerms.length ? parsed.serviceTerms : (parsed.locationTerms.length ? parsed.locationTerms : [q])
+  ).map(sanitizeIlikeTerm).filter(Boolean);
+  const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm).filter(Boolean);
+  if (!textTerms.length) return [];
 
   const serviceOr = textTerms
     .map((t) => `name.ilike.%${t}%,description.ilike.%${t}%`)
@@ -870,9 +937,9 @@ export async function searchProviders(
   // None of these three lookups depend on each other's result, so run them
   // together instead of waiting on one before starting the next.
   const [
-    { data: serviceMatches },
-    { data: nameMatches },
-    { data: categoryMatches },
+    { data: serviceMatches, error: serviceError },
+    { data: nameMatches, error: nameError },
+    { data: categoryMatches, error: categoryError },
   ] = await Promise.all([
     // 1. Provider IDs where a service name or description matches
     supabase
@@ -899,6 +966,10 @@ export async function searchProviders(
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
   ]);
 
+  if (serviceError || nameError || categoryError) {
+    throw serviceError || nameError || categoryError;
+  }
+
   const serviceIds = (serviceMatches ?? []).map(
     (r: { provider_id: string }) => r.provider_id,
   );
@@ -920,7 +991,7 @@ export async function searchProviders(
     // (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
     .order("rating", { ascending: false })
-    .limit(limit);
+    .limit(allIds.length);
 
   if (category && category !== "ALL") {
     providerQuery = providerQuery.overlaps("service_categories", [category]);
@@ -934,7 +1005,22 @@ export async function searchProviders(
 
   const { data, error } = await providerQuery;
   if (error) throw error;
-  return (data ?? []) as PublicProviderSummary[];
+  // Exact business names and matching services precede broad category recall.
+  // Keep the server's featured/rating order as the tie-breaker.
+  const serviceIdSet = new Set(serviceIds);
+  const nameIdSet = new Set(nameIds);
+  const normalizedQuery = parsed.serviceText.toLowerCase();
+  const relevance = (provider: PublicProviderSummary): number => {
+    const name = provider.display_name.toLowerCase();
+    if (normalizedQuery && name === normalizedQuery) return 4;
+    if (normalizedQuery && name.includes(normalizedQuery)) return 3;
+    if (serviceIdSet.has(provider.id)) return 2;
+    if (nameIdSet.has(provider.id)) return 1;
+    return 0;
+  };
+  return ((data ?? []) as PublicProviderSummary[])
+    .sort((a, b) => relevance(b) - relevance(a))
+    .slice(0, limit);
 }
 
 /**
@@ -1493,6 +1579,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1526,7 +1613,7 @@ export async function getPortfolioItems(
     query = query.eq("category", category.toUpperCase());
   }
 
-  const { data, error } = await query.limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  const { data, error } = await query.limit(limit);
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
 }
@@ -1555,83 +1642,6 @@ export async function searchPortfolio(
 
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
-}
-
-/**
- * Fetch providers that have a cover photo, for the mixed Explore discovery
- * feed — mirrors getProviders' has_gone_live/is_active gating but requires
- * an image, since this powers a visual grid rather than a list.
- */
-export async function getDiscoverProviders(
-  category?: string,
-  limit = 40,
-): Promise<DbProvider[]> {
-  let query = supabase
-    .from("providers")
-    .select("*")
-    .eq("is_active", true)
-    .eq("has_gone_live", true)
-    // Never recommend a provider their own business (see
-    // ownProviderIdExclusion).
-    .not("id", "in", await ownProviderIdExclusion())
-    .not("background_image_url", "is", null)
-    .order("is_featured", { ascending: false })
-    .order("rating", { ascending: false })
-    .limit(limit);
-
-  if (category && category !== "All") {
-    query = query.overlaps("service_categories", [category.toUpperCase()]);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
-}
-
-/**
- * Fetch unclaimed (is_claimed = false, source = 'scraped') provider rows for
- * the mixed Explore discovery feed, so a "ready to claim" business can be
- * discovered by browsing rather than only via the pre-signup claim search
- * (searchUnclaimedProviders). Deliberately bypasses has_gone_live/is_active —
- * unclaimed rows are always has_gone_live = false by construction (never
- * onboarded) — same is_claimed = false gate as searchUnclaimedProviders,
- * see that function's comment for why that's the correct safety boundary
- * here, not RLS. Narrow select: unclaimed rows have no services/availability/
- * rating/theme, so callers must render a reduced card/profile, never the
- * full live-provider UI.
- */
-export interface DiscoverUnclaimedProvider {
-  id: string;
-  slug: string;
-  display_name: string;
-  service_category: string;
-  location_text: string | null;
-  logo_url: string | null;
-  about_text: string | null;
-  instagram: string | null;
-  website: string | null;
-}
-
-export async function getDiscoverUnclaimedProviders(
-  category?: string,
-  limit = 20,
-): Promise<DiscoverUnclaimedProvider[]> {
-  let query = supabase
-    .from("providers")
-    .select(
-      "id, slug, display_name, service_category, service_categories, location_text, logo_url, about_text, instagram, website",
-    )
-    .eq("is_claimed", false)
-    .order("scraped_at", { ascending: false })
-    .limit(limit);
-
-  if (category && category !== "All") {
-    query = query.overlaps("service_categories", [category.toUpperCase()]);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
 }
 
 /**
@@ -1715,18 +1725,18 @@ export async function getProviderIdsByServiceAudience(
 
 /**
  * Resolve the user's saved/"hearted" IDs (from `useBookmarkStore.savedPortfolioIds`,
- * a mix of raw portfolio_item ids and `provider-<id>`/`service-<id>` prefixed ids
- * from the mixed discovery feed) into full rows, batched by kind — no N+1.
+ * a mix of raw portfolio_item ids and `service-<id>` prefixed ids from the
+ * mixed discovery feed) into full rows, batched by kind — no N+1.
  * Powers the Explore screen's Favourites tab.
+ *
+ * Legacy `provider-<id>` ids (Explore used to show provider cover-photo cards,
+ * built from the Branding backdrop) are skipped rather than hydrated, so an
+ * old heart can't put a provider's profile backdrop back into Favourites.
  */
 export async function getSavedPortfolioDetails(ids: string[]): Promise<{
   portfolioItems: PortfolioItemWithProvider[];
-  providers: DbProvider[];
   services: DiscoverServiceWithProvider[];
 }> {
-  const providerIds = ids
-    .filter((id) => id.startsWith("provider-"))
-    .map((id) => id.slice("provider-".length));
   // service ids carry a per-image suffix (`service-<id>__<imageIndex>`, one
   // id per carousel photo — see mapDbServiceToCards) so multiple saved ids
   // can point at the same underlying service; strip the suffix and dedupe
@@ -1743,7 +1753,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
     (id) => !id.startsWith("provider-") && !id.startsWith("service-"),
   );
 
-  const [portfolioResult, providerResult, serviceResult] = await Promise.all([
+  const [portfolioResult, serviceResult] = await Promise.all([
     portfolioIds.length > 0
       ? supabase
           .from("portfolio_items")
@@ -1761,14 +1771,6 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
           // venue shot must not put one back into a browse surface it can no
           // longer be discovered in.
           .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
-      : Promise.resolve({ data: [], error: null }),
-    providerIds.length > 0
-      ? supabase
-          .from("providers")
-          .select("*")
-          .in("id", providerIds)
-          .eq("is_active", true)
-          .eq("has_gone_live", true)
       : Promise.resolve({ data: [], error: null }),
     serviceIds.length > 0
       ? supabase
@@ -1788,12 +1790,10 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
   ]);
 
   if (portfolioResult.error) throw portfolioResult.error;
-  if (providerResult.error) throw providerResult.error;
   if (serviceResult.error) throw serviceResult.error;
 
   return {
     portfolioItems: (portfolioResult.data ?? []) as PortfolioItemWithProvider[],
-    providers: (providerResult.data ?? []) as DbProvider[],
     services: (serviceResult.data ??
       []) as unknown as DiscoverServiceWithProvider[],
   };
@@ -9043,9 +9043,13 @@ export async function createCheckoutPaymentIntent(
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
   });
-  if (error) throw error;
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Payment could not be started. Please try again.');
   if (typeof data?.clientSecret !== 'string' || typeof data?.paymentIntentId !== 'string') {
     throw new Error('Payment could not be started. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
   }
   return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId };
 }
@@ -9055,10 +9059,15 @@ export async function finalizeCheckoutPaymentIntent(
   paymentIntentId: string,
   action: 'capture' | 'cancel',
 ): Promise<void> {
-  const { error } = await supabase.functions.invoke('finalize-payment-intent', {
+  const { data, error } = await supabase.functions.invoke('finalize-payment-intent', {
     body: { checkoutBatchId, paymentIntentId, action },
   });
   if (error) throw error;
+  if (action === 'capture' && data?.status !== 'succeeded') {
+    throw new Error(data?.status === 'refunded'
+      ? 'Your reservation expired. Your payment is being refunded.'
+      : 'Payment has not been confirmed. Check your bookings before trying again.');
+  }
 }
 
 export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unknown> {
@@ -9283,4 +9292,105 @@ export async function getProviderBookingPolicies(
     .maybeSingle();
   if (error) throw error;
   return (data?.booking_policies as Record<string, unknown> | null) ?? null;
+}
+
+
+export interface ConnectStatus {
+  connected: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  requirementsDue?: number;
+}
+export interface ProviderFinance {
+  connected: boolean;
+  livemode: boolean;
+  available: { amount: number; currency: string }[];
+  pending: { amount: number; currency: string }[];
+  payouts: { id: string; amount: number; currency: string; status: string; arrivalDate: number; created: number; automatic: boolean }[];
+  hasMore: boolean;
+}
+export async function getProviderFinance(cursor?: string): Promise<ProviderFinance> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'finance', ...(cursor ? { cursor } : {}) } });
+  if (error || !data || !Array.isArray(data.available) || !Array.isArray(data.pending) || !Array.isArray(data.payouts)) {
+    throw new Error('Could not load your balances and bank payouts.');
+  }
+  return data;
+}
+export interface ProviderPayout {
+  id: string;
+  booking_id: string;
+  payout_amount: number;
+  gross_amount: number;
+  booking?: { service_name_snapshot: string | null; customer_name: string | null; booking_date: string } | undefined;
+  platform_fee: number;
+  currency: string;
+  status: 'held' | 'transferred' | 'failed' | 'cancelled' | 'reversed';
+  release_after: string;
+  created_at: string;
+}
+
+async function connectAction(action: 'status' | 'onboard' | 'dashboard') {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not connect to Stripe. Please try again.');
+  return data;
+}
+export async function getConnectStatus(): Promise<ConnectStatus> {
+  const data = await connectAction('status');
+  if (typeof data?.connected !== 'boolean' || typeof data?.payoutsEnabled !== 'boolean') {
+    throw new Error('Could not load your Stripe account status.');
+  }
+  return data;
+}
+export async function getConnectLink(action: 'onboard' | 'dashboard'): Promise<string> {
+  const data = await connectAction(action);
+  const url = new URL(data?.url);
+  if (url.protocol !== 'https:' || !(url.hostname === 'stripe.com' || url.hostname.endsWith('.stripe.com'))) {
+    throw new Error('Stripe returned an invalid account link.');
+  }
+  return url.toString();
+}
+export async function getProviderPayouts(): Promise<ProviderPayout[]> {
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error('Please sign in again.');
+  const { data: provider, error: providerError } = await supabase.from('providers')
+    .select('id').eq('user_id', user.id).single();
+  if (providerError) throw providerError;
+  const { data, error } = await supabase.from('provider_payouts')
+    .select('id, booking_id, payout_amount, gross_amount, platform_fee, currency, status, release_after, created_at')
+    .eq('provider_id', provider.id).order('created_at', { ascending: false }).limit(50);
+  if (error) throw error;
+  if (!data?.length) return [];
+  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
+    .select('id, service_name_snapshot, customer_name, booking_date')
+    .eq('provider_id', provider.id).in('id', data.map(row => row.booking_id));
+  if (bookingsError) throw bookingsError;
+  return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
+}
+
+export async function refundProviderBooking(bookingId: string, reason?: string): Promise<boolean> {
+  // `reason` is recorded on the Stripe refund's metadata (see the refund-payment
+  // edge function) so a refund can be traced back to why it was issued —
+  // cancellation, dispute, service issue — especially on completed bookings.
+  const { data, error } = await supabase.functions.invoke('refund-payment', { body: { bookingId, reason } });
+  if (error || data?.error || !['refunded', 'already_refunded', 'pending', 'requires_action'].includes(data?.status)) {
+    throw new Error('The refund could not be confirmed. Refresh before trying again.');
+  }
+  return data?.status === 'refunded' || data?.status === 'already_refunded';
+}
+
+/** The money half of a CLIENT cancellation: applies the provider's cancellation
+ *  policy (keep the deposit / their share, or a full refund) through Stripe,
+ *  computed entirely server-side. Call it right AFTER cancel_own_booking() has
+ *  cancelled the booking. Idempotent and a safe no-op when nothing was captured
+ *  (e.g. Stripe not live) — it then just reports 'no_payment'. Throws on a hard
+ *  failure so the caller can surface/log it; the cancel itself has already
+ *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
+export async function applyCancellationRefund(
+  bookingId: string,
+): Promise<'settled' | 'already_settled' | 'no_payment'> {
+  const { data, error } = await supabase.functions.invoke('apply-cancellation-refund', { body: { bookingId } });
+  if (error || data?.error || !['settled', 'already_settled', 'no_payment'].includes(data?.status)) {
+    throw new Error('The cancellation refund could not be confirmed.');
+  }
+  return data.status;
 }

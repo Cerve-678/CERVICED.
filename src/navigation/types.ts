@@ -176,6 +176,8 @@ export type ProfileStackParamList = {
   PaymentMethods: undefined;
   Subscription: undefined;
   HelpCentre: undefined;
+  TextSizing: undefined;
+  LanguageRegion: undefined;
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;
@@ -344,6 +346,12 @@ export type ProviderAccountStackParamList = {
   BusinessProfile: undefined;
   Branding: undefined;
   HelpCentre: undefined;
+  // In-app Text & Sizing / Language & Region settings (shared screens). The
+  // client ProfileStackParamList registers these too — the preference itself is
+  // device-global (DisplaySettingsContext, mounted above the hat switch), so
+  // both hats reach the same single setting.
+  TextSizing: undefined;
+  LanguageRegion: undefined;
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;

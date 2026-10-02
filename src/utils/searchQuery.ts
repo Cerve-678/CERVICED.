@@ -33,11 +33,11 @@ export interface ParsedSearchQuery {
 // earlier in a longer phrase.
 const LOCATION_PREPOSITION = /\b(?:in|near|around|close to)\b\s+/gi;
 
-// Compass/scope qualifiers that often aren't present in a provider's
-// location_text even when the core place name is — e.g. a provider might
-// have location_text "Manchester" while a client searches "east manchester".
-// Stripping these out gives a fallback term that still matches the city.
-const LOCATION_STOPWORDS = new Set(['north', 'south', 'east', 'west', 'central', 'greater', 'the']);
+// Directional qualifiers are useful when present but are often absent from a
+// provider's stored city. Keep the full phrase first and offer one conservative
+// fallback; never split a place into its individual words ("New York" must not
+// also match every provider in York).
+const LOCATION_QUALIFIERS = new Set(['north', 'south', 'east', 'west', 'central', 'greater', 'the']);
 
 const CATEGORY_KEYWORDS: [ServiceCategory, string[]][] = [
   ['NAILS', ['nail', 'nails', 'manicure', 'pedicure', 'acrylic', 'acrylics', 'gel nails', 'nail art', 'nail tech']],
@@ -48,32 +48,27 @@ const CATEGORY_KEYWORDS: [ServiceCategory, string[]][] = [
   ['AESTHETICS', ['aesthetics', 'facial', 'facials', 'botox', 'filler', 'fillers', 'peel', 'skin']],
 ];
 
-/** Loosen a location phrase into a set of ilike terms — the full phrase
- *  plus a compass-stripped fallback (and its individual words), so "east
- *  manchester" still matches location_text that's just "Manchester". */
+/** Preserve a complete place name, with one directional-qualifier fallback. */
 export function buildLocationTerms(phrase: string): string[] {
-  const trimmed = phrase.trim();
-  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
-  const core = words.filter(w => !LOCATION_STOPWORDS.has(w));
-
-  const terms = new Set<string>();
-  if (trimmed) terms.add(trimmed);
-  if (core.length) terms.add(core.join(' '));
-  core.forEach(w => { if (w.length > 1) terms.add(w); });
-
-  return [...terms];
+  const location = phrase.trim().replace(/\s+/g, ' ');
+  if (!location) return [];
+  const core = location.split(' ').filter(word => !LOCATION_QUALIFIERS.has(word.toLowerCase()));
+  const fallback = core.join(' ');
+  return fallback && fallback.toLowerCase() !== location.toLowerCase()
+    ? [location, fallback]
+    : [location];
 }
 
 function detectCategory(query: string): ServiceCategory | null {
-  const lower = query.toLowerCase();
+  const lower = ` ${query.toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
   for (const [category, keywords] of CATEGORY_KEYWORDS) {
-    if (keywords.some(k => lower.includes(k))) return category;
+    if (keywords.some(k => lower.includes(` ${k.replace(/-/g, ' ')} `))) return category;
   }
   return null;
 }
 
 export function parseSearchQuery(raw: string): ParsedSearchQuery {
-  const q = raw.trim();
+  const q = raw.trim().replace(/\s+/g, ' ');
 
   let lastMatch: RegExpExecArray | null = null;
   let m: RegExpExecArray | null;
@@ -94,6 +89,6 @@ export function parseSearchQuery(raw: string): ParsedSearchQuery {
     serviceTerms,
     locationPhrase,
     locationTerms: locationPhrase ? buildLocationTerms(locationPhrase) : [],
-    categoryHint: detectCategory(q),
+    categoryHint: detectCategory(serviceText),
   };
 }

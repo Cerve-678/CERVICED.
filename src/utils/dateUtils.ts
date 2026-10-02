@@ -2,9 +2,24 @@
  * Single source of truth for date/time display formatting across the app.
  * Two canonical output styles:
  *  - formatLongDate:  "Wednesday 8th June 2026"
- *  - formatShortDate: "08/06/2026"
+ *  - formatShortDate: "08/06/2026" (order follows the user's region — see below)
  *  - formatTime12:    "09:00am" / "2:00pm" (AM hours are zero-padded, always :MM, lowercase am/pm, no space)
+ *
+ * Only the numeric short date is region-sensitive: "14/10/2026" (DMY) vs
+ * "10/14/2026" (MDY). The month-name formats are unambiguous in any locale, so
+ * they don't change by region. Region comes from regionStore (written by
+ * DisplaySettingsContext); a caller can also pass a region explicitly (the
+ * settings screen does, to preview an order without changing the stored one).
+ * Currency is NOT localised anywhere — all pricing stays GBP (£).
  */
+
+import { getRegion } from './regionStore';
+import { REGION_OPTIONS } from './displaySettings';
+
+/** The date-part order for a region code (defaults to DMY for anything unknown). */
+export function dateOrderForRegion(regionCode: string): 'DMY' | 'MDY' {
+  return REGION_OPTIONS.find((r) => r.code === regionCode)?.dateOrder ?? 'DMY';
+}
 
 export const DAY_NAMES_FULL = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
@@ -76,13 +91,19 @@ export function formatShortDayDate(input: string | Date): string {
   return `${DAY_NAMES_ABBREV[date.getDay()]} ${date.getDate()} ${MONTH_NAMES_ABBREV[date.getMonth()]}`;
 }
 
-/** "08/06/2026" (DD/MM/YYYY) */
-export function formatShortDate(input: string | Date): string {
+/**
+ * Numeric short date. Order follows the region: "14/10/2026" for DMY regions
+ * (UK/IE/AU/CA), "10/14/2026" for MDY (US). Region defaults to the stored one;
+ * pass `regionCode` to format for a specific region regardless of what's stored.
+ */
+export function formatShortDate(input: string | Date, regionCode: string = getRegion()): string {
   const date = toLocalDate(input);
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
+  return dateOrderForRegion(regionCode) === 'MDY'
+    ? `${month}/${day}/${year}`
+    : `${day}/${month}/${year}`;
 }
 
 /**

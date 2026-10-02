@@ -36,11 +36,13 @@ describe('client detail screen performance and safety contracts', () => {
   it('reserves the client booking-detail To Do area while tasks load', () => {
     const source = read('screens', 'client', 'BookingDetailScreen.tsx');
 
-    expect(source).toContain('{!todoLoaded && (');
+    // The To Do area is hidden for past bookings (nothing left to act on),
+    // so the skeleton is gated on !isPast as well as !todoLoaded.
+    expect(source).toContain('{!isPast && !todoLoaded && (');
     expect(source).toContain('accessibilityLabel="Loading appointment tasks"');
     expect(source).toContain('st.todoLoadingCard');
-    expect(source.indexOf('{!todoLoaded && (')).toBeLessThan(
-      source.indexOf('{todoLoaded && todoLoadError && ('),
+    expect(source.indexOf('{!isPast && !todoLoaded && (')).toBeLessThan(
+      source.indexOf('{!isPast && todoLoaded && todoLoadError && ('),
     );
   });
 

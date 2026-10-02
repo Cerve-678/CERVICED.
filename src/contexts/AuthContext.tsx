@@ -22,6 +22,7 @@ import {
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
+import { withTimeout } from '../utils/withTimeout';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 
 export type AccountType = 'user' | 'provider';
@@ -142,6 +143,8 @@ async function clearStorageFolder(bucket: string, uid: string): Promise<void> {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Invalidates profile responses when a newer session or sign-out arrives.
+  const profileLoadVersion = useRef(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserData | null>(null);
@@ -244,6 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
+        profileLoadVersion.current += 1;
         setSession(session);
         setIsLoading(false);
         return;
@@ -253,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // last would overwrite activeMode non-deterministically.
       if (event === 'TOKEN_REFRESHED') {
         if (!session) {
+          profileLoadVersion.current += 1;
           intentionalLogoutRef.current = true;
           await signOutCurrentSession().catch(() => {});
           setUser(null);
@@ -274,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // on another device, admin revocation, refresh token expired). Show an alert only
       // for the latter so the user isn't confused why they're on the login screen.
       if (event === 'SIGNED_OUT') {
+        profileLoadVersion.current += 1;
         if (!intentionalLogoutRef.current) {
           Alert.alert('Signed out', "You've been signed out. Please sign in again.");
         }
@@ -289,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         await loadUserProfileRef.current(session);
       } else {
+        profileLoadVersion.current += 1;
         setUser(null);
         setIsLoggedIn(false);
         setIsLoading(false);
@@ -296,12 +303,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      profileLoadVersion.current += 1;
       unsubscribeAuth();
       appStateSub.remove();
     };
   }, []);
 
   const loadUserProfile = useCallback(async (session: Session) => {
+    const version = ++profileLoadVersion.current;
+    const isCurrent = () => version === profileLoadVersion.current;
     try {
       logger.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
 
@@ -319,10 +329,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let profile = null;
       let profileError: Error | null = null;
       try {
-        profile = await getUserProfileById(session.user.id);
+        profile = await withTimeout(
+          getUserProfileById(session.user.id),
+          8_000,
+          'Profile restore',
+        );
       } catch (err: any) {
         profileError = err;
       }
+
+      if (!isCurrent()) return;
 
       if (profileError) {
         // Transient failure — network, 401 from expired token before auto-refresh
@@ -331,6 +347,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+        if (!isCurrent()) return;
         setActiveMode(resolveRestoredMode(savedMode, role));
         setUser({
           id: session.user.id,
@@ -403,6 +420,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clientArea: profile.client_area ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+        if (!isCurrent()) return;
         const restoredMode = resolveRestoredMode(savedMode, role, profile.has_client_profile === true);
         setActiveMode(restoredMode);
         // Persist the corrected hat so the stale value can't win a later restore
@@ -410,6 +428,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (restoredMode !== savedMode) {
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, restoredMode).catch(() => {});
         }
+        if (!isCurrent()) return;
         setUser(userData);
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
@@ -455,6 +474,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
+      if (!isCurrent()) return;
       // Unexpected JS error. Don't sign the user out — the session is still valid.
       // Fall back to session metadata so they stay in the app.
       logger.error('[AuthContext] unexpected error in loadUserProfile:', error);
@@ -462,6 +482,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const meta = session.user.user_metadata as Record<string, any>;
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+        if (!isCurrent()) return;
         setUser({
           id: session.user.id,
           name: meta?.['name'] ?? session.user.email?.split('@')[0] ?? '',
@@ -474,10 +495,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setActiveMode(resolveRestoredMode(savedMode, role));
         setIsLoggedIn(true);
       } catch {
-        setIsLoggedIn(false);
+        if (isCurrent()) setIsLoggedIn(false);
       }
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
   }, [resolveRestoredMode]);
 

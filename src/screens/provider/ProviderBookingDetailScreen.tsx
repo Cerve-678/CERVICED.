@@ -22,7 +22,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
-import { canDisputeNoShow } from '../../types/booking';
+import { canDisputeNoShow, PaymentStatus } from '../../types/booking';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
@@ -57,6 +57,7 @@ import {
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
   getServiceDurationsByIds,
+  refundProviderBooking,
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
@@ -233,6 +234,18 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
   week_before:       'Sends 1 week before',
 };
 
+// Why a refund is being issued. A refund isn't one thing — it can settle a
+// cancellation, a client dispute, or something that went wrong with a service
+// that already happened — so the provider picks the reason before any money
+// moves, and it's recorded on the refund for later reference.
+const REFUND_REASONS: { label: string; sub: string }[] = [
+  { label: 'Appointment cancelled',   sub: 'The booking isn’t going ahead' },
+  { label: 'Client dispute',          sub: 'Resolving a complaint or disagreement' },
+  { label: 'Issue with the service',  sub: 'Something went wrong with a completed appointment' },
+  { label: 'Goodwill gesture',        sub: 'Refunding by choice, no fault' },
+  { label: 'Other',                   sub: 'Add a note below' },
+];
+
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
   const { user, hatState } = useAuth();
   const activeMode = hatState.active;
@@ -269,7 +282,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // `status` is a MAPPED BookingStatus, never a raw DB string — it is merged
   // straight into booking.status, which the screen compares against
   // BookingStatus members. Typed as such so a raw 'confirmed' can't slip in.
-  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: BookingStatus } | null>(null);
+  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: BookingStatus; paymentStatus?: PaymentStatus } | null>(null);
   const [respondLoading, setRespondLoading] = useState(false);
   const [sendApology, setSendApology] = useState(false);
   const [apologyText, setApologyText] = useState(
@@ -322,6 +335,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeBusy, setDisputeBusy] = useState(false);
+  // Refund: a reason must be picked before money moves — a refund can mean a
+  // cancellation, a dispute, or a service issue, and that distinction matters
+  // (especially once a booking is already completed). The optional note is
+  // appended to the selected reason and recorded on the Stripe refund.
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundReason, setRefundReason] = useState<string | null>(null);
+  const [refundNote, setRefundNote] = useState('');
+  const [refundBusy, setRefundBusy] = useState(false);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
   const [groupDateOptions, setGroupDateOptions] = useState<
@@ -542,6 +563,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       ...(liveBookingOverrides?.bookingTime !== undefined && { bookingTime: liveBookingOverrides.bookingTime }),
       ...(liveBookingOverrides?.endTime !== undefined && { endTime: liveBookingOverrides.endTime }),
       ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status }),
+      ...(liveBookingOverrides?.paymentStatus !== undefined && { paymentStatus: liveBookingOverrides.paymentStatus }),
     } as ConfirmedBooking;
   }, [baseBooking, liveBookingOverrides]);
 
@@ -1081,6 +1103,47 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       },
     });
   }, [booking, cancelBooking, navigation, groupSuffix]);
+
+  // Issue a refund through the same Stripe-backed path the Payments screen
+  // uses (refundProviderBooking -> refund-payment edge function). This returns
+  // the client's money; it deliberately does NOT cancel the appointment —
+  // cancelling is the separate action below. Opening the picker just resets
+  // its state; the money only moves from submitRefund, once a reason is chosen.
+  const handleRefund = useCallback(() => {
+    if (!booking) return;
+    setRefundReason(null);
+    setRefundNote('');
+    setShowRefundModal(true);
+  }, [booking]);
+
+  const submitRefund = useCallback(async () => {
+    if (!booking || !refundReason || refundBusy) return;
+    setRefundBusy(true);
+    try {
+      const note = refundNote.trim();
+      const reason = note ? `${refundReason} — ${note}` : refundReason;
+      // Throws on failure (see refundProviderBooking).
+      const completed = await refundProviderBooking(booking.id, reason);
+      setLiveBookingOverrides(prev => ({
+        ...(prev ?? {}),
+        paymentStatus: completed ? PaymentStatus.REFUNDED : PaymentStatus.REFUND_PENDING,
+      }));
+      setShowRefundModal(false);
+      showAlert(
+        completed ? 'Refund issued' : 'Refund processing',
+        completed
+          ? 'The refund has been issued. Their bank may take a few days to show it.'
+          : 'Stripe is still processing the refund. Check again shortly.',
+      );
+    } catch (err) {
+      showAlert(
+        'Refund failed',
+        toUserMessage(err, 'The refund could not be confirmed. Refresh before trying again.', 'ProviderBookingDetail.refund'),
+      );
+    } finally {
+      setRefundBusy(false);
+    }
+  }, [booking, refundReason, refundNote, refundBusy, showAlert]);
 
   const handleCallClient = useCallback(() => {
     if (!booking?.customerPhone) return;
@@ -2634,22 +2697,25 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         <TouchableOpacity style={styles.moreSheetOverlay} activeOpacity={1} onPress={() => setShowMoreSheet(false)} />
         <View style={[styles.moreSheet, { backgroundColor: isDarkMode ? '#1C1C1E' : '#F2F2F7' }]}>
           <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-          {booking && (booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS) && (
+          {/* Issue Refund — only when there's an app-taken payment left to
+              return (deposit or full). Hidden once already refunded or
+              refund-pending, and when nothing was paid through the app.
+              Reschedule still lives on its own button in the receipt body. */}
+          {booking && (booking.paymentStatus === PaymentStatus.DEPOSIT_PAID || booking.paymentStatus === PaymentStatus.PAID_IN_FULL) && (
             <TouchableOpacity
               style={[styles.moreSheetRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
               onPress={() => {
                 setShowMoreSheet(false);
-                const openGroup = groupSiblings.length > 1;
-                setTimeout(() => (openGroup ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true)), 260);
+                setTimeout(() => handleRefund(), 260);
               }}
               activeOpacity={0.7}
             >
-              <View style={[styles.moreSheetIcon, { backgroundColor: '#FF950018' }]}>
-                <Ionicons name="calendar-outline" size={18} color="#FF9500" />
+              <View style={[styles.moreSheetIcon, { backgroundColor: '#FF3B3018' }]}>
+                <Ionicons name="arrow-undo-outline" size={18} color="#FF3B30" />
               </View>
               <View style={styles.moreSheetTextBlock}>
-                <Text style={[styles.moreSheetTitle, { color: P.text }]}>Request Reschedule</Text>
-                <Text style={[styles.moreSheetSub, { color: P.text + '66' }]}>Propose new times to the client</Text>
+                <Text style={[styles.moreSheetTitle, { color: P.text }]}>Issue Refund</Text>
+                <Text style={[styles.moreSheetSub, { color: P.text + '66' }]}>Return this payment to the client</Text>
               </View>
               <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
             </TouchableOpacity>
@@ -2730,6 +2796,102 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               activeOpacity={0.65}
               disabled={disputeBusy}
               onPress={() => { setShowDisputeModal(false); setDisputeReason(''); }}
+            >
+              <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Refund reason dialog ────────────────────────────────────────
+          A refund must carry a reason before money moves (cancellation,
+          dispute, service issue…) — it's recorded on the refund so a
+          completed booking's refund can still be explained later. Issuing the
+          refund does NOT cancel the appointment; that's the separate Cancel
+          action. The amount shown is the client's paid amount for the copy;
+          the edge function refunds the real captured amount server-side. */}
+      <Modal
+        visible={showRefundModal}
+        transparent statusBarTranslucent navigationBarTranslucent
+        animationType="fade"
+        onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
+      >
+        <TouchableOpacity
+          style={styles.dialogOverlay}
+          activeOpacity={1}
+          onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
+        />
+        <View style={styles.dialogPositioner} pointerEvents="box-none">
+          <View style={[styles.dialog, { backgroundColor: P.card }]}>
+            <Text style={[styles.dialogTitle, { color: P.text }]}>Issue a refund</Text>
+            <Text style={[styles.dialogMessage, { color: P.text + '88' }]}>
+              This returns £{(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)} to {booking.customerName || 'the client'} for {booking.serviceName || 'this booking'}. It does not cancel their appointment.
+            </Text>
+            <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
+              <Text style={[styles.refundReasonHeading, { color: P.text + '99' }]}>WHY ARE YOU REFUNDING?</Text>
+              {REFUND_REASONS.map(r => {
+                const selected = refundReason === r.label;
+                return (
+                  <TouchableOpacity
+                    key={r.label}
+                    activeOpacity={0.7}
+                    disabled={refundBusy}
+                    onPress={() => setRefundReason(r.label)}
+                    style={[styles.refundReasonRow, {
+                      borderColor: selected ? P.accent : (isDarkMode ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'),
+                      backgroundColor: selected ? P.accent + '14' : 'transparent',
+                    }]}
+                  >
+                    <Ionicons
+                      name={selected ? 'radio-button-on' : 'radio-button-off'}
+                      size={18}
+                      color={selected ? P.accent : P.text + '55'}
+                    />
+                    <View style={styles.refundReasonTextBlock}>
+                      <Text style={[styles.refundReasonLabel, { color: P.text }]}>{r.label}</Text>
+                      <Text style={[styles.refundReasonSub, { color: P.text + '66' }]}>{r.sub}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              <TextInput
+                style={[styles.respondInput, {
+                  color: P.text,
+                  borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+                  minHeight: 64,
+                  textAlignVertical: 'top',
+                  marginTop: 10,
+                }]}
+                placeholder={refundReason === 'Other' ? 'Add a note (required)' : 'Add a note (optional)'}
+                placeholderTextColor={P.text + '44'}
+                value={refundNote}
+                onChangeText={setRefundNote}
+                multiline
+                maxLength={500}
+                editable={!refundBusy}
+              />
+            </View>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={refundBusy || !refundReason || (refundReason === 'Other' && !refundNote.trim())}
+              onPress={submitRefund}
+            >
+              {refundBusy ? (
+                <ActivityIndicator size="small" color="#FF3B30" />
+              ) : (
+                <Text style={[styles.dialogBtnText, { color: '#FF3B30', fontWeight: '600', opacity: (refundReason && !(refundReason === 'Other' && !refundNote.trim())) ? 1 : 0.4 }]}>
+                  Refund payment
+                </Text>
+              )}
+            </TouchableOpacity>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={refundBusy}
+              onPress={() => setShowRefundModal(false)}
             >
               <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>Cancel</Text>
             </TouchableOpacity>
@@ -3500,6 +3662,34 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     marginBottom: 10,
+  },
+  refundReasonHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  refundReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  refundReasonTextBlock: {
+    flex: 1,
+  },
+  refundReasonLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  refundReasonSub: {
+    fontSize: 12,
+    marginTop: 1,
   },
   datePickBtn: {
     flexDirection: 'row',

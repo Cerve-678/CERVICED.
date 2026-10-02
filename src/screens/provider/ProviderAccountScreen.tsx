@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Switch,
   StatusBar,
-  Linking,
   Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -17,7 +16,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import Icon from '../../components/IconLibrary';
+import DynamicText from '../../components/DynamicText';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useTranslation } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -129,6 +130,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { user, logout, switchMode, hatState } = useAuth();
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
   const [showClientModal, setShowClientModal] = useState(false);
@@ -186,7 +188,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
       if (!authenticated) return;
       const token = await getCurrentRefreshToken();
       if (!token) {
-        Alert.alert('Error', 'Could not enable Face ID. Please try again.');
+        Alert.alert(t('providerAccount.error.title'), t('providerAccount.error.biometric', { method: biometricLabel }));
         return;
       }
       await enableBiometric(token);
@@ -267,22 +269,23 @@ export default function ProviderAccountScreen({ navigation }: any) {
             <View style={[styles.previewGlow2, { backgroundColor: P.accent, opacity: isDarkMode ? 0.08 : 0.06 }]} />
             <View style={styles.previewTop}>
               <View style={[styles.previewBadge, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.10)' : P.iconBg }]}>
-                <Text style={[styles.previewBadgeText, { color: isDarkMode ? '#FFFFFF' : P.accent }]}>PROVIDER</Text>
+                <Text style={[styles.previewBadgeText, { color: isDarkMode ? '#FFFFFF' : P.accent }]}>{t('providerAccount.badge')}</Text>
               </View>
               <View style={[styles.previewAvatar, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : P.iconBg }]}>
                 <Text style={[styles.previewAvatarText, { color: isDarkMode ? '#FFFFFF' : P.accent }]}>{initials}</Text>
               </View>
             </View>
-            <Text
+            {/* Provider-WRITTEN business name — translated live via DynamicText
+                when dynamic translation is on, not held in the UI catalog. */}
+            <DynamicText
+              text={displayName}
               style={[styles.previewTitle, { color: P.text }]}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.7}
-            >
-              {displayName}
-            </Text>
+            />
             <Text style={[styles.previewSub, { color: P.sub }]}>
-              Your business, bookings and how Cerviced looks &amp; feels — all in one place.
+              {t('providerAccount.hero.sub')}
             </Text>
             <View style={styles.previewStats}>
               <TouchableOpacity
@@ -290,8 +293,8 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Analytics'); }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.previewStatNum, { color: P.text }]}>Analytics</Text>
-                <Text style={[styles.previewStatLbl, { color: P.sub }]}>Revenue &amp; Stats</Text>
+                <Text style={[styles.previewStatNum, { color: P.text }]}>{t('providerAccount.hero.analytics')}</Text>
+                <Text style={[styles.previewStatLbl, { color: P.sub }]}>{t('providerAccount.hero.analyticsSub')}</Text>
               </TouchableOpacity>
               {OFFERS_ENABLED && (
                 <TouchableOpacity
@@ -299,8 +302,8 @@ export default function ProviderAccountScreen({ navigation }: any) {
                   onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Promotions'); }}
                   activeOpacity={0.75}
                 >
-                  <Text style={[styles.previewStatNum, { color: P.text }]}>Promotions</Text>
-                  <Text style={[styles.previewStatLbl, { color: P.sub }]}>Offers &amp; Deals</Text>
+                  <Text style={[styles.previewStatNum, { color: P.text }]}>{t('providerAccount.hero.promotions')}</Text>
+                  <Text style={[styles.previewStatLbl, { color: P.sub }]}>{t('providerAccount.hero.promotionsSub')}</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -308,8 +311,8 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Clientele'); }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.previewStatNum, { color: P.text }]}>Clientele</Text>
-                <Text style={[styles.previewStatLbl, { color: P.sub }]}>Loyal Clients</Text>
+                <Text style={[styles.previewStatNum, { color: P.text }]}>{t('providerAccount.hero.clientele')}</Text>
+                <Text style={[styles.previewStatLbl, { color: P.sub }]}>{t('providerAccount.hero.clienteleSub')}</Text>
               </TouchableOpacity>
             </View>
             </View>
@@ -352,8 +355,8 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 <Text style={[styles.ringBadgeText, { color: P.accentText }]}>{initials}</Text>
               </View>
               <View style={styles.ringInlineText}>
-                <Text style={[styles.ringInlineTitle, { color: P.text }]}>Business Profile</Text>
-                <Text style={[styles.ringInlineSub, { color: P.sub }]}>Profile, details &amp; communications</Text>
+                <Text style={[styles.ringInlineTitle, { color: P.text }]}>{t('providerAccount.businessProfile.title')}</Text>
+                <Text style={[styles.ringInlineSub, { color: P.sub }]}>{t('providerAccount.businessProfile.sub')}</Text>
               </View>
               <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.35 }} />
             </TouchableOpacity>
@@ -361,11 +364,11 @@ export default function ProviderAccountScreen({ navigation }: any) {
             {/* ── My Business: horizontal card carousel, replacing a vertical
                 list — matches Concept E's mechanism exactly. ────────────── */}
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: P.sub }]}>MY BUSINESS</Text>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.myBusiness')}</Text>
               <View style={styles.carousel}>
-                <CarouselCard key="schedule" icon="calendar-today" title="Schedule" subtitle="Set your hours & block dates" onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
-                <CarouselCard key="inbox" icon="email" title="Inbox" subtitle="Enquiries and client messages" onPress={() => navigation.navigate('ProviderInbox')} P={P} />
-                <CarouselCard key="booking-history" icon="stack" title="Booking History" subtitle="View past bookings" onPress={() => navigation.navigate('BookingHistory')} P={P} />
+                <CarouselCard key="schedule" icon="calendar-today" title={t('providerAccount.myBusiness.schedule.title')} subtitle={t('providerAccount.myBusiness.schedule.sub')} onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
+                <CarouselCard key="inbox" icon="email" title={t('providerAccount.myBusiness.inbox.title')} subtitle={t('providerAccount.myBusiness.inbox.sub')} onPress={() => navigation.navigate('ProviderInbox')} P={P} />
+                <CarouselCard key="booking-history" icon="stack" title={t('providerAccount.myBusiness.history.title')} subtitle={t('providerAccount.myBusiness.history.sub')} onPress={() => navigation.navigate('BookingHistory')} P={P} />
               </View>
             </View>
 
@@ -376,7 +379,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                   <View style={[styles.twinIcon, { backgroundColor: P.iconBg }]}>
                     <Icon name="brightness-6" size={14} color={P.accent} />
                   </View>
-                  <Text style={[styles.twinTitle, { color: P.text }]}>Dark Mode</Text>
+                  <Text style={[styles.twinTitle, { color: P.text }]}>{t('providerAccount.pref.darkMode')}</Text>
                 </View>
                 <Switch
                   value={isDarkMode}
@@ -403,40 +406,40 @@ export default function ProviderAccountScreen({ navigation }: any) {
             </View>
 
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: P.sub }]}>ACCOUNT</Text>
-              <SettingsOption icon="lock" title="Change Password" subtitle="Update credentials" onPress={() => navigation.navigate('ChangePassword')} P={P} />
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.account')}</Text>
+              <SettingsOption icon="lock" title={t('providerAccount.account.password.title')} subtitle={t('providerAccount.account.password.sub')} onPress={() => navigation.navigate('ChangePassword')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="badge" title="Account Info" subtitle="Name, phone, DOB & login email" onPress={() => navigation.navigate('AccountInfo')} P={P} />
+              <SettingsOption icon="badge" title={t('providerAccount.account.info.title')} subtitle={t('providerAccount.account.info.sub')} onPress={() => navigation.navigate('AccountInfo')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="notifications" title="Notifications" subtitle="Bookings, messages, reminders" onPress={() => navigation.navigate('Notifications')} P={P} />
+              <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t('providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('Notifications')} P={P} />
             </View>
 
             {/* ── Accessibility & Support ─────────────────────────────────── */}
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: P.sub }]}>ACCESSIBILITY & SUPPORT</Text>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.accessibility')}</Text>
               <SettingsOption
                 icon="format-size"
-                title="Text Size & Font"
-                subtitle="Open phone display settings"
-                onPress={() => Linking.openURL('App-prefs:root=ACCESSIBILITY')}
+                title={t('providerAccount.access.textSizing.title')}
+                subtitle={t('providerAccount.access.textSizing.sub')}
+                onPress={() => navigation.navigate('TextSizing')}
                 P={P}
               />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption
                 icon="language"
-                title="Language & Region"
-                subtitle="Open phone language settings"
-                onPress={() => Linking.openURL('App-prefs:root=General&path=LANGUAGE_AND_REGION')}
+                title={t('providerAccount.access.language.title')}
+                subtitle={t('providerAccount.access.language.sub')}
+                onPress={() => navigation.navigate('LanguageRegion')}
                 P={P}
               />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="help" title="Help Centre" subtitle="FAQs, contact support" onPress={() => navigation.navigate('HelpCentre')} P={P} />
+              <SettingsOption icon="help" title={t('providerAccount.access.help.title')} subtitle={t('providerAccount.access.help.sub')} onPress={() => navigation.navigate('HelpCentre')} P={P} />
             </View>
 
             {/* ── For Clients: contained accent-filled card, in its usual
                 position — not merged into the opening panel. ───────────── */}
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: P.sub }]}>FOR CLIENTS</Text>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.forClients')}</Text>
               <TouchableOpacity
                 style={[styles.providerCard, { backgroundColor: P.accent, shadowColor: P.shadow }]}
                 onPress={handleSwitchToClient}
@@ -447,10 +450,10 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.providerCardTitle}>
-                    {hatState.owned.client ? 'Switch to Client Mode' : 'Create Client Account'}
+                    {hatState.owned.client ? t('providerAccount.forClients.switch.title') : t('providerAccount.forClients.create.title')}
                   </Text>
                   <Text style={styles.providerCardSub}>
-                    {hatState.owned.client ? 'Browse Cerviced as a client' : 'Set up your client profile to browse'}
+                    {hatState.owned.client ? t('providerAccount.forClients.switch.sub') : t('providerAccount.forClients.create.sub')}
                   </Text>
                 </View>
                 {clientUnread > 0 && (
@@ -463,12 +466,13 @@ export default function ProviderAccountScreen({ navigation }: any) {
 
             {/* ── App Info & Legal ────────────────────────────────────────── */}
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: P.sub }]}>APP INFO & LEGAL</Text>
-              <SettingsOption icon="info" title="About Cerviced" subtitle="Mission, version" onPress={() => navigation.navigate('About')} P={P} />
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.appInfo')}</Text>
+              <SettingsOption icon="info" title={t('providerAccount.appInfo.about.title')} subtitle={t('providerAccount.appInfo.about.sub')} onPress={() => navigation.navigate('About')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="gavel" title="Terms & Conditions" subtitle="Legal info" onPress={() => navigation.navigate('Terms')} P={P} />
+              {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
+              <SettingsOption icon="gavel" title={t('providerAccount.appInfo.terms.title')} subtitle={t('providerAccount.appInfo.terms.sub')} onPress={() => navigation.navigate('Terms')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="bug-report" title="Report a Problem" subtitle="Bugs, feedback" onPress={() => navigation.navigate('ReportProblem')} P={P} />
+              <SettingsOption icon="bug-report" title={t('providerAccount.appInfo.report.title')} subtitle={t('providerAccount.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} P={P} />
             </View>
 
             <TouchableOpacity
@@ -477,7 +481,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               activeOpacity={0.7}
             >
               <Icon name="logout" size={14} color={P.text} />
-              <Text style={[styles.logoutText, { color: P.text }]}>Log Out</Text>
+              <Text style={[styles.logoutText, { color: P.text }]}>{t('providerAccount.logout')}</Text>
             </TouchableOpacity>
 
             <Text style={[styles.footerText, { color: P.sub }]}>Cerviced v1.0.0</Text>
@@ -489,10 +493,9 @@ export default function ProviderAccountScreen({ navigation }: any) {
       <Modal visible={showClientModal} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowClientModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.modalTitle, { color: P.text }]}>Become a Client</Text>
+            <Text style={[styles.modalTitle, { color: P.text }]}>{t('providerAccount.clientModal.title')}</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
-              We'll add a client profile to your current account — same login, same details.
-              You can switch between provider and client mode any time.
+              {t('providerAccount.clientModal.body')}
             </Text>
 
             <TouchableOpacity
@@ -512,11 +515,11 @@ export default function ProviderAccountScreen({ navigation }: any) {
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>Set up my client profile</Text>
+              <Text style={styles.modalBtnText}>{t('providerAccount.clientModal.cta')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowClientModal(false)} activeOpacity={0.6}>
-              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </BlurView>
@@ -526,9 +529,9 @@ export default function ProviderAccountScreen({ navigation }: any) {
       <Modal visible={showLogoutModal} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.modalTitle, { color: P.text }]}>Log Out</Text>
+            <Text style={[styles.modalTitle, { color: P.text }]}>{t('providerAccount.logoutModal.title')}</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
-              Are you sure you want to log out?
+              {t('providerAccount.logoutModal.body')}
             </Text>
 
             <TouchableOpacity
@@ -536,11 +539,11 @@ export default function ProviderAccountScreen({ navigation }: any) {
               onPress={() => { setShowLogoutModal(false); handleLogout(); }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>Yes, log out</Text>
+              <Text style={styles.modalBtnText}>{t('providerAccount.logoutModal.confirm')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowLogoutModal(false)} activeOpacity={0.6}>
-              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </BlurView>

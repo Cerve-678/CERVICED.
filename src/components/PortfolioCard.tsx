@@ -124,6 +124,8 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
             },
           ]}
           contentFit="cover"
+          cachePolicy="memory-disk"
+          priority={index < 8 ? "high" : "normal"}
           transition={0}
         />
 
@@ -144,16 +146,6 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
         {item.price && (
           <View ref={priceRef} collapsable={false} style={styles.priceBadge}>
             <Text style={styles.priceBadgeText}>{item.price}</Text>
-          </View>
-        )}
-
-        {/* Unclaimed badge — top-right so it never collides with the price
-            badge (top-left). Unclaimed providers never carry a price, but
-            keeping the two on opposite corners avoids coupling this to that
-            fact. */}
-        {item.isUnclaimed && (
-          <View style={styles.unclaimedBadge}>
-            <Text style={styles.unclaimedBadgeText}>UNCLAIMED</Text>
           </View>
         )}
 
@@ -272,22 +264,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: 'BakbakOne-Regular',
-  },
-  unclaimedBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  unclaimedBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    fontFamily: 'Jura-VariableFont_wght',
-    letterSpacing: 0.5,
   },
   overlay: {
     position: 'absolute',

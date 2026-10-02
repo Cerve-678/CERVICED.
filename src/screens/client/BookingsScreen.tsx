@@ -1957,7 +1957,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     activeOpacity={0.7}
                     onPress={() => { setContactSheetVisible(false); if (contactSheetBooking) openProviderChat(contactSheetBooking); }}
                   >
-                    <View style={[csSt.optionIcon, { backgroundColor: '#5B1E32' }]}><Text style={csSt.optionEmoji}>💬</Text></View>
+                    <View style={[csSt.optionIcon, { backgroundColor: '#5B1E32' }]}><Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" /></View>
                     <View style={csSt.optionText}>
                       <Text style={[csSt.optionLabel, { color: P.text }]}>In-app message</Text>
                       <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>Chat directly inside Cerviced</Text>
@@ -1970,7 +1970,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       activeOpacity={0.7}
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}
                     >
-                      <View style={[csSt.optionIcon, { backgroundColor: '#1C3A5B' }]}><Text style={csSt.optionEmoji}>✉️</Text></View>
+                      <View style={[csSt.optionIcon, { backgroundColor: '#1C3A5B' }]}><Ionicons name="mail-outline" size={20} color="#fff" /></View>
                       <View style={csSt.optionText}>
                         <Text style={[csSt.optionLabel, { color: P.text }]}>Email</Text>
                         <Text style={[csSt.optionDesc, { color: '#7E6667' }]} numberOfLines={1}>{contactSheetInfo.email}</Text>
@@ -1984,7 +1984,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       activeOpacity={0.7}
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}
                     >
-                      <View style={[csSt.optionIcon, { backgroundColor: '#1A3D2B' }]}><Text style={csSt.optionEmoji}>💚</Text></View>
+                      <View style={[csSt.optionIcon, { backgroundColor: '#1A3D2B' }]}><Ionicons name="logo-whatsapp" size={20} color="#fff" /></View>
                       <View style={csSt.optionText}>
                         <Text style={[csSt.optionLabel, { color: P.text }]}>WhatsApp</Text>
                         <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>{contactSheetInfo.whatsapp_number}</Text>
@@ -1998,7 +1998,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       activeOpacity={0.7}
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}
                     >
-                      <View style={[csSt.optionIcon, { backgroundColor: '#2B2B1A' }]}><Text style={csSt.optionEmoji}>📞</Text></View>
+                      <View style={[csSt.optionIcon, { backgroundColor: '#2B2B1A' }]}><Ionicons name="call-outline" size={20} color="#fff" /></View>
                       <View style={csSt.optionText}>
                         <Text style={[csSt.optionLabel, { color: P.text }]}>Phone call</Text>
                         <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>{contactSheetInfo.phone}</Text>
@@ -4114,7 +4114,6 @@ const csSt = StyleSheet.create({
   options:     { gap: 10 },
   option:      { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, gap: 14 },
   optionIcon:  { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  optionEmoji: { fontSize: 20 },
   optionText:  { flex: 1 },
   optionLabel: { fontSize: 15, fontWeight: '600' },
   optionDesc:  { fontSize: 12, marginTop: 2 },
