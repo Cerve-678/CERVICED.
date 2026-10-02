@@ -5,7 +5,7 @@
 
 #generated
 
-**2261 functions** across **308 files**.
+**2264 functions** across **308 files**.
 
 ### `src/components/` (43)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -21,7 +21,7 @@
 - `ChatComponents.tsx` — ActionCard · **AmbientMark** · animatedStyle · **ChatBubble** · **ChatInput** · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · **InspirationGallery** · **Mark** · PillChip · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator**
 - `CityMultiSelect.tsx` — add · addArea · addOther · **CityMultiSelect** · close · filtered · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
-- `DailySchedulePopup.tsx` — DailySchedulePopup · headline · plural · retry · todoRows
+- `DailySchedulePopup.tsx` — DailySchedulePopup · hapticLight · hapticMedium · plural · retry · span · todoRows
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
 - `HairTypeSelector.tsx` — **HairTypeSelector**
@@ -233,7 +233,7 @@
 - `HelpCentreScreen.tsx` — buildMoreActions · FAQItem · handleContactSupport · HelpCentreScreen · openMore · runAction
 - `InfoScreen.tsx` — ScreenNameHere
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow
-- `NotificationsScreen.tsx` — closeMessagePopup · closeRecap · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · handleRecapNavigate · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
+- `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TermsScreen.tsx` — TermsScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
