@@ -239,6 +239,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     providerRespondToReschedule,
     reloadBookings,
     reloadBookingsIfStale,
+    isLoading: bookingsLoading,
   } = useBooking();
 
   // Past Bookings only shows the last 30 days of history — older rows stay
@@ -1762,6 +1763,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       </>
                     )}
                   </>
+                ) : bookingsLoading ? (
+                  <View style={styles.emptyState}>
+                    <ActivityIndicator size="small" color={P.accent} />
+                  </View>
                 ) : (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>No appointments scheduled for today</Text>
@@ -1882,13 +1887,21 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
                 )}
                 {(activeFilters.has('past') ? pastBookingsFiltered.length === 0 : listItems.length === 0) ? (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyStateText}>
-                      {activeFilters.has('past')
-                        ? (pastCategoryFilter ? `No ${pastCategoryFilter.toLowerCase()} bookings` : 'No past bookings')
-                        : 'No upcoming bookings'}
-                    </Text>
-                  </View>
+                  bookingsLoading ? (
+                    // Still fetching (e.g. straight after sign-in, when logout
+                    // has wiped the cached copy) — not "you have none".
+                    <View style={styles.emptyState}>
+                      <ActivityIndicator size="small" color={P.accent} />
+                    </View>
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>
+                        {activeFilters.has('past')
+                          ? (pastCategoryFilter ? `No ${pastCategoryFilter.toLowerCase()} bookings` : 'No past bookings')
+                          : 'No upcoming bookings'}
+                      </Text>
+                    </View>
+                  )
                 ) : null}
               </View>
             )}

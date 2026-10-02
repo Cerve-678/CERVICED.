@@ -68,6 +68,19 @@ export async function getCurrentAuthUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
+/**
+ * The signed-in user's id from the locally cached session — no network round
+ * trip, unlike getCurrentAuthUserId() (getUser() re-verifies with the auth
+ * server). Use it where the id only narrows a query RLS already enforces, so a
+ * forged local session gains nothing; use getCurrentAuthUserId() where the
+ * answer has to be authoritative.
+ */
+export async function getSessionUserId(): Promise<string | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session?.user?.id ?? null;
+}
+
 export function setAuthAutoRefresh(active: boolean): void {
   if (active) supabase.auth.startAutoRefresh();
   else supabase.auth.stopAutoRefresh();
@@ -2799,10 +2812,11 @@ export async function getBookingById(
 export async function getMyBookings(
   sinceDaysAgo = 90,
 ): Promise<BookingWithAddOns[]> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+  // Cached session, not getUser(): this id only narrows the read to the
+  // client side of a dual-hat account — bookings' RLS is the enforcement —
+  // so the auth-server round trip getUser() costs buys nothing here.
+  const userId = await getSessionUserId();
+  if (!userId) return [];
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - sinceDaysAgo);
@@ -2819,7 +2833,7 @@ export async function getMyBookings(
   const { data, error } = await supabase
     .from("client_bookings")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .gte("booking_date", cutoffDate)
     .order("booking_date", { ascending: false })
     .order("booking_time", { ascending: true })
@@ -2894,15 +2908,16 @@ export async function getOlderBookings(
   beforeDate: string,
   limit = 30,
 ): Promise<BookingWithAddOns[]> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+  // Cached session, not getUser(): this id only narrows the read to the
+  // client side of a dual-hat account — bookings' RLS is the enforcement —
+  // so the auth-server round trip getUser() costs buys nothing here.
+  const userId = await getSessionUserId();
+  if (!userId) return [];
 
   const { data, error } = await supabase
     .from("client_bookings") // gated view, client-side only — see getMyBookings
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .lt("booking_date", beforeDate)
     .order("booking_date", { ascending: false })
     .order("booking_time", { ascending: true })

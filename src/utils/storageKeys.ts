@@ -6,6 +6,10 @@
 export const STORAGE_KEYS = {
   /** BookingContext's persisted bookings cache — the one screens actually read from */
   BOOKINGS:           '@bookings',
+  /** Auth user id the BOOKINGS cache was written for. A cache with a different
+   *  (or no) owner is discarded on sign-in — logout() clears it, but other
+   *  sign-out paths (session expiry, server-side sign-out) don't. */
+  BOOKINGS_OWNER:     '@bookings_owner',
   /** Zustand booking store persistence key — kept in sync by BookingContext but
    *  has no readers of its own (see stores/useBookingStore.ts) */
   BOOKINGS_STORE_LEGACY: '@cerviced_bookings',

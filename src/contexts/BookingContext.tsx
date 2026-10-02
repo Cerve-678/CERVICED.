@@ -3,9 +3,10 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
-import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, getServiceIdsByNames, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow, getCurrentAuthUserId, subscribeToUserBookingChanges, subscribeToRescheduleRequestChanges } from '../services/databaseService';
+import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, getServiceIdsByNames, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow, getCurrentAuthUserId, getSessionUserId, subscribeToUserBookingChanges, subscribeToRescheduleRequestChanges } from '../services/databaseService';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
+import { useAuth } from './AuthContext';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { parseRescheduleRequestToken } from '../utils/rescheduleWindow';
 
@@ -152,6 +153,9 @@ export interface BookingContextType {
 
   // getMyBookings() only loads a recent window (default 90 days) plus
   // everything upcoming, for scale — call this to page further back.
+  // True until the signed-in account's first load settles — lets a screen
+  // show a loading state instead of "no bookings" while it's still fetching.
+  isLoading: boolean;
   hasMoreHistory: boolean;
   loadingMoreHistory: boolean;
   loadOlderBookings: () => Promise<void>;
@@ -462,6 +466,19 @@ export { mapDbBookingStatus } from '../types/booking';
 // ==================== PROVIDER COMPONENT ====================
 
 export const BookingProvider = ({ children }: { children: ReactNode }) => {
+  // Bookings belong to whoever is signed in. This provider sits above the
+  // auth-gated navigator and lives for the whole app session, so it has to
+  // follow sign-in/sign-out itself — otherwise it loads once at launch, never
+  // reloads for the next login, and keeps the last account's bookings in
+  // memory after logout. Keyed on the session (set before the profile fetch
+  // finishes) rather than `user`, so the load starts as early as possible.
+  const { session } = useAuth();
+  const authUserId = session?.user?.id ?? null;
+  // Bumped on every sign-in/sign-out. A load captures it at the start and
+  // drops its result if it changed mid-flight, so a slow load for the previous
+  // account can't repopulate state (or rewrite the cache logout just wiped)
+  // after the next account is already in.
+  const authGenerationRef = useRef(0);
   const [bookings, setBookings] = useState<ConfirmedBooking[]>([]);
   // Mirror of the current booking ids, for the realtime handler below. Held in a
   // ref rather than read from `bookings` directly so the subscription doesn't
@@ -476,13 +493,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
   // When loadBookings last ran, for reloadBookingsIfStale's skip check.
   const lastLoadedAtRef = useRef<number>(0);
+  // The load currently running, so reloadBookingsIfStale can join it instead
+  // of starting a second identical one (a screen mounting while the sign-in
+  // load is still in flight would otherwise double the network work).
+  const inFlightLoadRef = useRef<Promise<void> | null>(null);
 
   const loadBookings = useCallback(async () => {
+    const generation = authGenerationRef.current;
+    const isStale = () => generation !== authGenerationRef.current;
     try {
       logger.log('Loading bookings from storage...');
       setIsLoading(true);
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      
+      if (isStale()) return;
+
       if (stored) {
         const parsed = JSON.parse(stored);
         logger.log('Loaded', parsed.length, 'bookings from storage');
@@ -544,6 +568,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         // the network merge below — the merge still runs and re-renders with
         // authoritative data once it resolves, but the user isn't staring at
         // a loading state for a round-trip that isn't needed to show *something*.
+        if (isStale()) return;
         setBookings(migratedBookings);
         setIsLoading(false);
 
@@ -553,7 +578,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         // (not yet synced) are kept as-is. Local reschedule/UI state is kept.
         let mergedBookings: ConfirmedBooking[] = migratedBookings;
         try {
-          const userId = await getCurrentAuthUserId();
+          const userId = await getSessionUserId();
           if (userId) {
             const dbBookings = await getMyBookings();
             if (dbBookings.length > 0) {
@@ -668,15 +693,17 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           };
         });
 
+        if (isStale()) return;
         setBookings(updatedBookings);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookings));
 
       } else {
         logger.log('No bookings in storage — trying Supabase fallback...');
         try {
-          const userId = await getCurrentAuthUserId();
+          const userId = await getSessionUserId();
           if (userId) {
             const dbBookings = await getMyBookings();
+            if (isStale()) return;
             if (dbBookings.length > 0) {
               const mapped = dbBookings.map(mapDbBookingToConfirmed);
               setBookings(mapped);
@@ -689,16 +716,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             setBookings([]);
           }
         } catch {
-          setBookings([]);
+          if (!isStale()) setBookings([]);
         }
       }
     } catch (error) {
+      if (isStale()) return;
       logger.error('❌ Failed to load bookings:', error);
       setBookings([]);
       throw error; // Re-throw so screens can show UI feedback
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
+    if (isStale()) return;
     // Only reached on success — the catch above rethrows, so a failed load
     // never stamps this. reloadBookingsIfStale trusts this timestamp to skip
     // a reload; stamping it on failure too would make a load that just
@@ -707,32 +736,73 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     lastLoadedAtRef.current = Date.now();
   }, []);
 
+  // Load on sign-in, clear on sign-out. Runs again for every account change,
+  // so the next login starts fetching immediately instead of waiting for the
+  // Bookings screen to mount and ask.
   useEffect(() => {
-    loadBookings().catch(() => {
-      // Initial load failure is logged above; screens handle their own UI
-    });
-  }, [loadBookings]);
-
-  // Realtime: re-fetch bookings whenever a booking row changes for the current user
-  useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
-    let active = true;
-
-    getCurrentAuthUserId().then(userId => {
-      if (!active || !userId) return;
-      unsubscribe = subscribeToUserBookingChanges(userId, () => {
-            // A booking was inserted/updated — reload to reflect latest status.
-            // Also update the Zustand store so non-context consumers stay fresh.
-            loadBookings().catch(() => {});
-            useBookingStore.getState().refreshBookings(userId).catch(() => {});
+    authGenerationRef.current += 1;
+    lastLoadedAtRef.current = 0;
+    inFlightLoadRef.current = null;
+    setHasMoreHistory(true);
+    if (!authUserId) {
+      // logout() already removes the cached copy from AsyncStorage; this
+      // clears what's still held in memory so it can't show to the next
+      // account signing in on this device.
+      setBookings([]);
+      useBookingStore.getState().setBookings([]);
+      setIsLoading(true);
+      return;
+    }
+    const generation = authGenerationRef.current;
+    const load = (async () => {
+      // Only trust the cache if it was written for this account. logout()
+      // wipes it, but a session that expires or is revoked server-side skips
+      // that path — and loadBookings shows the cache before the network
+      // answers, so another account's cache would flash up (and its local-only
+      // rows would survive the merge). Checked here rather than per write:
+      // every cache write happens while this account is signed in, guarded by
+      // the generation check, so tagging it once per sign-in keeps it true.
+      const owner = await AsyncStorage.getItem(STORAGE_KEYS.BOOKINGS_OWNER);
+      if (generation !== authGenerationRef.current) return;
+      if (owner !== authUserId) {
+        await AsyncStorage.removeItem(STORAGE_KEY);
+        if (generation !== authGenerationRef.current) return;
+        await AsyncStorage.setItem(STORAGE_KEYS.BOOKINGS_OWNER, authUserId);
+      }
+      await loadBookings();
+    })();
+    inFlightLoadRef.current = load;
+    load
+      .catch(() => {
+        // Initial load failure is logged above; screens handle their own UI
+      })
+      .finally(() => {
+        if (inFlightLoadRef.current === load) inFlightLoadRef.current = null;
       });
-    }).catch(() => {});
+  }, [authUserId, loadBookings]);
 
-    return () => {
-      active = false;
-      unsubscribe?.();
-    };
-  }, [loadBookings]);
+  // Realtime: re-fetch bookings whenever a booking row changes for the current
+  // user. Re-subscribes per account — it used to subscribe once at launch for
+  // whoever was signed in then, so after a logout/login it stopped delivering.
+  useEffect(() => {
+    if (!authUserId) return;
+    const unsubscribe = subscribeToUserBookingChanges(authUserId, () => {
+      // A booking was inserted/updated — reload to reflect latest status.
+      // Also update the Zustand store so non-context consumers stay fresh.
+      loadBookings().catch(() => {});
+      const generation = authGenerationRef.current;
+      useBookingStore.getState().refreshBookings(authUserId)
+        .then(() => {
+          // Signed out while it was in flight — the store just repopulated
+          // with this account's rows after the sign-out cleared it.
+          if (generation !== authGenerationRef.current) {
+            useBookingStore.getState().setBookings([]);
+          }
+        })
+        .catch(() => {});
+    });
+    return unsubscribe;
+  }, [authUserId, loadBookings]);
 
   const saveBookings = useCallback(async (bookingsToSave: ConfirmedBooking[]) => {
     try {
@@ -2237,6 +2307,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   }, [loadBookings]);
 
   const reloadBookingsIfStale = useCallback(async (maxAgeMs = 15000) => {
+    if (inFlightLoadRef.current) return inFlightLoadRef.current;
     if (Date.now() - lastLoadedAtRef.current < maxAgeMs) return;
     await loadBookings();
   }, [loadBookings]);
@@ -2397,6 +2468,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     declineReschedule,
     confirmGroupReschedule,
     declineGroupReschedule,
+    isLoading,
     hasMoreHistory,
     loadingMoreHistory,
     loadOlderBookings,
@@ -2429,6 +2501,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     declineReschedule,
     confirmGroupReschedule,
     declineGroupReschedule,
+    isLoading,
     hasMoreHistory,
     loadingMoreHistory,
     loadOlderBookings,
