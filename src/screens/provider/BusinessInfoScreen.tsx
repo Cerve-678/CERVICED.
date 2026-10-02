@@ -330,7 +330,11 @@ export default function BusinessInfoScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            <Card title="Business Details" sub="Shown on your public profile and used for communications.">
+            {/* Identity — who the business is, not how to reach it. Kept in its
+                own card, split out from the contact fields below, so the name
+                and experience read as the headline facts rather than one more
+                row in a list of handles and emails. */}
+            <Card title="Name & Experience" sub="Your business name and experience, shown on your public profile.">
               {/* The one place a provider's public business name can be
                   changed. Locked for 14 days after each change — the note
                   says when it reopens rather than just refusing. */}
@@ -344,6 +348,12 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   ? `Shown on your profile. You changed it recently — you can change it again on ${formatLongDate(nameUnlocksAt)}.`
                   : 'Shown on your profile. Once you change it, you can’t change it again for 14 days.'}
               />
+              <Field label="Years of Experience" value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 5" keyboardType="phone-pad" />
+            </Card>
+
+            {/* Contact & links — the handles and addresses clients and Cerviced
+                reach the business through. */}
+            <Card title="Contact & Links" sub="Your links and email addresses — how clients and Cerviced reach you.">
               <Field label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap to visit your page." />
               <Field label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
               {/* Two emails, and the old labels had them backwards. `business_email`
@@ -356,7 +366,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   provider about a booking (those are push + in-app only). */}
               <Field label="Business Email" value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Your business address. Cerviced uses this to reach you, and it prefills the enquiry email below." />
               <Field label="Public Enquiry Email" value={bookingEmail} onChange={setBookingEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Shown on your profile under Get In Touch. Prefilled from your business email — change it only if you'd rather enquiries went elsewhere." />
-              <Field label="Years of Experience" value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 5" keyboardType="phone-pad" />
             </Card>
 
             {/* Service Type. Sits between the identity card and Business Type
