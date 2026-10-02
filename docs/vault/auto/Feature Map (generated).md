@@ -8,12 +8,12 @@
 ## Address release
 Curated: [[Address Release]] · **88 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/services/databaseService.ts` _(162)_
+- `src/services/databaseService.ts` _(168)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(74)_
+- `src/screens/client/CartScreen.tsx` _(65)_
 - `src/services/providerRegistrationService.ts` _(62)_
-- `src/screens/client/CartScreen.tsx` _(60)_
 - `src/contexts/BookingContext.tsx` _(53)_
 - `src/components/AddressPicker.tsx` _(47)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
@@ -76,8 +76,8 @@ Curated: [[Availability & Slots]] · **164 files**
 ## Payments
 Curated: [[Payments]] · **126 files**
 - `src/screens/client/CartScreen.tsx` _(502)_
+- `src/services/databaseService.ts` _(179)_
 - `src/screens/provider/PaymentsScreen.tsx` _(176)_
-- `src/services/databaseService.ts` _(155)_
 - `src/services/bookingService.ts` _(117)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
@@ -98,21 +98,21 @@ Curated: [[Payments]] · **126 files**
 - `src/types/booking.ts` _(29)_
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/InfoRegScreen.tsx` _(27)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
 - `src/utils/policyDisplay.ts` _(26)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(25)_
 - `supabase/fix_waitlist_selection_method_hook.sql` _(24)_
 - `src/features/cart/pricing.ts` _(23)_
 - `src/screens/client/PointsScreen.tsx` _(23)_
 - `src/services/becca/capabilities/provider.ts` _(23)_
-- `src/screens/auth/SignUpStep4Screen.tsx` _(21)_
 - … +96 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **249 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/services/databaseService.ts` _(646)_
-- `src/screens/client/CartScreen.tsx` _(598)_
+- `src/services/databaseService.ts` _(650)_
+- `src/screens/client/CartScreen.tsx` _(601)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(542)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/client/BookingDetailScreen.tsx` _(361)_
@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **249 files**
 ## Notifications
 Curated: [[Notifications]] · **151 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(291)_
+- `src/screens/shared/NotificationsScreen.tsx` _(292)_
 - `src/services/databaseService.ts` _(152)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(102)_
@@ -177,9 +177,9 @@ Curated: [[Notifications]] · **151 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **74 files**
-- `src/services/databaseService.ts` _(66)_
+- `src/services/databaseService.ts` _(72)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(49)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(52)_
 - `src/features/providers/goLiveStatus.ts` _(46)_
 - `src/screens/provider/InfoRegScreen.tsx` _(34)_
 - `src/services/providerRegistrationService.ts` _(28)_
@@ -279,9 +279,9 @@ Curated: [[Booking Flow]] · **160 files**
 
 ## Auth
 Curated: [[Contexts]] · **172 files**
-- `src/services/databaseService.ts` _(243)_
+- `src/services/databaseService.ts` _(247)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(140)_
+- `src/contexts/AuthContext.tsx` _(141)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_
@@ -347,9 +347,9 @@ Curated: [[Services]] · **44 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **69 files**
-- `src/screens/client/CartScreen.tsx` _(385)_
+- `src/screens/client/CartScreen.tsx` _(387)_
+- `src/services/databaseService.ts` _(71)_
 - `src/contexts/BookingContext.tsx` _(70)_
-- `src/services/databaseService.ts` _(69)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(62)_
 - `src/components/BookingSheet.tsx` _(34)_
 - `src/contexts/CartContext.tsx` _(32)_

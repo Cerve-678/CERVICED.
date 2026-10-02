@@ -1,6 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
+import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
+import Stripe from 'npm:stripe@17.4.0';
 
 // Step 3 of the Connect build (handoff: stripe-connect-payouts-build-handoff):
 // the release job. It finds 'held' payout rows whose hold has elapsed
@@ -25,6 +24,7 @@ import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-12-18.acacia',
+  httpClient: Stripe.createFetchHttpClient(),
 });
 
 const admin = createClient(
@@ -42,7 +42,7 @@ const BATCH_LIMIT = 50;
 // no money should move.
 const PAYABLE_BOOKING_STATUSES = ['confirmed', 'completed'];
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
@@ -76,7 +76,7 @@ serve(async (req) => {
       // Re-check the booking is still genuinely owed before moving money.
       const { data: booking, error: bookingError } = await admin
         .from('bookings')
-        .select('status')
+        .select('status, payment_intent_id, payment_status, stripe_refund_id')
         .eq('id', row.booking_id)
         .maybeSingle();
       if (bookingError) {
@@ -98,6 +98,20 @@ serve(async (req) => {
         continue;
       }
 
+      // Never fund a transfer from an unverified or refunded booking.
+      if (!booking.payment_intent_id || booking.stripe_refund_id || booking.payment_status === 'refunded') {
+        skipped++;
+        continue;
+      }
+      const payment = await stripe.paymentIntents.retrieve(booking.payment_intent_id);
+      if (payment.status !== 'succeeded' || !payment.latest_charge) {
+        skipped++;
+        continue;
+      }
+      const chargeId = typeof payment.latest_charge === 'string' ? payment.latest_charge : payment.latest_charge.id;
+      const charge = await stripe.charges.retrieve(chargeId);
+      if (charge.disputed || charge.amount_refunded > 0) { skipped++; continue; }
+
       if (row.payout_amount <= 0) {
         // Zero-value payout (shouldn't happen given the split, but never call
         // Stripe with it). Close it out.
@@ -108,11 +122,16 @@ serve(async (req) => {
       }
 
       try {
-        const transfer = await stripe.transfers.create(
+        // Stripe may prune idempotency keys after 24 hours. The transfer group
+        // makes recovery durable when a successful transfer's DB write failed.
+        const previous = await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 });
+        const transfer = previous.data[0] ?? await stripe.transfers.create(
           {
             amount: row.payout_amount,
             currency: row.currency ?? 'gbp',
             destination: row.stripe_account_id,
+            source_transaction: chargeId,
+            transfer_group: `payout_${row.id}`,
             // Ties the transfer back to what it paid, for reconciliation and
             // for the webhook to match it.
             metadata: { payout_id: row.id, booking_id: row.booking_id, provider_id: row.provider_id },
@@ -162,3 +181,4 @@ serve(async (req) => {
     });
   }
 });
+

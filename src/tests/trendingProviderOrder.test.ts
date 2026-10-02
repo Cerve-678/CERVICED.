@@ -31,6 +31,7 @@ jest.mock('../lib/supabase', () => ({
 const chainable = (rows: unknown[]) => {
   const result = { data: rows, error: null };
   const chain: Record<string, unknown> = {
+    not: () => chain,
     eq: () => chain,
     then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
   };
