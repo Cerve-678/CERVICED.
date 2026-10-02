@@ -108,7 +108,7 @@ Curated: [[Payments]] · **114 files**
 - … +84 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **242 files**
+Curated: [[Booking Flow]] · **244 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(694)_
 - `src/services/databaseService.ts` _(618)_
@@ -125,10 +125,10 @@ Curated: [[Booking Flow]] · **242 files**
 - `src/screens/client/RescheduleScreen.tsx` _(175)_
 - `src/services/AvailabilityService.ts` _(134)_
 - `supabase/waitlist_holds.sql` _(134)_
-- `src/screens/shared/NotificationsScreen.tsx` _(125)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(123)_
+- `src/screens/shared/NotificationsScreen.tsx` _(123)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `supabase/automation_jobs.sql` _(107)_
@@ -139,12 +139,12 @@ Curated: [[Booking Flow]] · **242 files**
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `src/services/bookingService.ts` _(88)_
-- … +212 more
+- … +214 more
 
 ## Notifications
-Curated: [[Notifications]] · **148 files**
+Curated: [[Notifications]] · **149 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(286)_
+- `src/screens/shared/NotificationsScreen.tsx` _(287)_
 - `src/services/databaseService.ts` _(152)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(100)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **148 files**
 - `supabase/provider_follow_notify_cron.sql` _(24)_
 - `src/screens/client/NotificationsSettingsScreen.tsx` _(23)_
 - `supabase/notifications_full_matrix.sql` _(23)_
-- … +118 more
+- … +119 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **74 files**
@@ -210,7 +210,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **74 files**
 - … +44 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **54 files**
+Curated: [[Booking Flow]] · **56 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(207)_
 - `src/screens/client/BookingsScreen.tsx` _(84)_
 - `supabase/waitlist_holds.sql` _(75)_
@@ -227,7 +227,9 @@ Curated: [[Booking Flow]] · **54 files**
 - `supabase/booking_cancellation_actor_aware_fix.sql` _(13)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(12)_
 - `src/screens/provider/InfoRegScreen.tsx` _(10)_
+- `src/components/DailySchedulePopup.tsx` _(9)_
 - `src/types/database.ts` _(8)_
+- `src/utils/daySummary.ts` _(8)_
 - `src/constants/waitlist.ts` _(7)_
 - `src/screens/shared/NotificationsScreen.tsx` _(6)_
 - `supabase/fix_reschedule_flow_completion.sql` _(6)_
@@ -239,12 +241,10 @@ Curated: [[Booking Flow]] · **54 files**
 - `supabase/fix_provider_status_transition_guard.sql` _(4)_
 - `supabase/provider_fully_booked_alert.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
-- `src/screens/shared/BeccaScreen.tsx` _(3)_
-- `src/services/becca/engine.ts` _(3)_
-- … +24 more
+- … +26 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **153 files**
+Curated: [[Booking Flow]] · **155 files**
 - `src/contexts/BookingContext.tsx` _(319)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(285)_
 - `src/services/databaseService.ts` _(199)_
@@ -275,10 +275,10 @@ Curated: [[Booking Flow]] · **153 files**
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_
-- … +123 more
+- … +125 more
 
 ## Auth
-Curated: [[Contexts]] · **163 files**
+Curated: [[Contexts]] · **164 files**
 - `src/services/databaseService.ts` _(237)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(139)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **163 files**
 - `supabase/delete_account.sql` _(12)_
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
 - `src/screens/provider/InfoRegScreen.tsx` _(11)_
-- … +133 more
+- … +134 more
 
 ## Becca / AI
 Curated: [[Services]] · **39 files**

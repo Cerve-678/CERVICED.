@@ -40,6 +40,7 @@ import { navigateNested, navigateTab, navigateAfterDismiss } from '../../navigat
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
+import DailySchedulePopup, { type DailyScheduleDestination } from '../../components/DailySchedulePopup';
 import { useAuth } from '../../contexts/AuthContext';
 import { CommonActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
@@ -63,7 +64,7 @@ interface Notification {
       | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
       | 'info_pack_received' | 'intake_form_completed' | 'address_released'
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
-      | 'schedule_fully_booked';
+      | 'schedule_fully_booked' | 'points_earned';
   title: string;
   message: string;
   timestamp: string;
@@ -152,6 +153,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showMessagePopup, setShowMessagePopup] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  // The day a "Today's Schedule" recap was sent for, while its schedule popup
+  // is open. The recap's own day, not today's — an older recap still shows the
+  // day it was about.
+  const [recapDate, setRecapDate] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Mark-read and delete update the list optimistically so the UI stays snappy.
   // That's only honest if a failed write puts the row back — otherwise the
@@ -436,6 +441,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Show full message popup
   const showFullMessage = useCallback((notification: Notification) => {
+    // The provider's daily recap opens the day's actual schedule (clients +
+    // to-dos, loaded live) instead of a box repeating the 07:00 text.
+    if (isProviderRef.current && notification.type === 'daily_recap') {
+      setRecapDate(dateToYMD(new Date(notification.timestamp)));
+      markAsRead(notification.id);
+      return;
+    }
     setSelectedNotification(notification);
     setShowMessagePopup(true);
     markAsRead(notification.id);
@@ -459,6 +471,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const navigateProviderHome = useCallback((screen: string, params?: Record<string, unknown>) => {
     dismissThenNavigate(() => navigateNested('ProviderHome', screen, params));
   }, [dismissThenNavigate]);
+
+  // A row in the schedule popup was tapped: let the popup fade out before the
+  // sheet itself dismisses, so the two transitions don't fight each other.
+  const handleRecapNavigate = useCallback((d: DailyScheduleDestination) => {
+    setRecapDate(null);
+    defer(() => navigateProviderHome(d.screen, d.params), 250);
+  }, [defer, navigateProviderHome]);
+  const closeRecap = useCallback(() => setRecapDate(null), []);
 
   // ✅ Handle notification action (View Booking, Reschedule, etc.)
   const handleNotificationAction = useCallback((notification: Notification) => {
@@ -512,8 +532,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'info_pack_received' ||
         notification.type === 'address_released' ||
         notification.type === 'pending_booking_reminder' ||
-        notification.type === 'rebooking_nudge' ||
-        notification.type === 'daily_recap') {
+        notification.type === 'rebooking_nudge') {
 
       const openReschedule = notification.type === 'reschedule_request' ||
                             notification.type === 'reschedule_provider_response';
@@ -527,14 +546,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         if (isProviderRef.current) {
           // Provider: always land in the Calendar (ProviderHome) stack, not
           // wherever Notifications happened to be opened from.
-          if (notification.type === 'daily_recap') {
-            // The day's recap ("Today's Schedule") summarizes every booking
-            // that day rather than pointing at one, so it never carries a
-            // bookingId. It lands on today's calendar in list view — the same
-            // list-shaped answer the recap itself gave.
-            navigateProviderHome('ProviderHomeMain', { jumpToDate: dateToYMD(new Date()), viewMode: 'list' });
-            logger.log('Provider — daily_recap, navigating to ProviderHome list view');
-          } else if (notification.bookingId) {
+          if (notification.bookingId) {
             const bookingId = notification.bookingId;
             navigateProviderHome('BookingDetail', { bookingId, openReschedule: openReschedule || undefined, fromRescheduleRequest: openReschedule || undefined });
             logger.log('Provider — navigating to BookingDetail:', bookingId);
@@ -763,8 +775,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // the client gets to everything else about it.
       case 'booking_reminder':
         return 'View Full Details';
-      case 'daily_recap':
-        return 'View Schedule';
       case 'booking_confirmed':
       case 'booking_in_progress':
       case 'rebooking_nudge':
@@ -1173,6 +1183,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
             </View>
           </TouchableOpacity>
         </Modal>
+        <DailySchedulePopup
+          visible={recapDate !== null}
+          date={recapDate ?? dateToYMD(new Date())}
+          onClose={closeRecap}
+          onNavigate={handleRecapNavigate}
+        />
       </SafeAreaView>
     </ThemedBackground>
   );

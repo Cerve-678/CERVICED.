@@ -209,7 +209,7 @@ export type ProviderHomeStackParamList = {
   // silently leaving the provider on whatever day they already had selected.
   // viewMode: lets a caller (the daily-recap notification) open the calendar
   // straight into the list view rather than whichever mode was last used.
-  ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
+  ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list'; openDaySchedule?: string } | undefined;
   ProviderSchedule: undefined;
   AddBooking: undefined;
   // Reachable from the Calendar tab's profile quick-actions. Registered here

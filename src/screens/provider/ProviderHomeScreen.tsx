@@ -35,6 +35,8 @@ import { storage } from '../../utils/storage';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import DailySchedulePopup, { type DailyScheduleDestination } from '../../components/DailySchedulePopup';
+import { navigateNested, navigateAfterDismiss } from '../../navigation/rootNavigate';
 import { FLOATING_TAB_BAR_CLEARANCE, tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { tabBarOccupiedHeight } from '../../utils/tabBarGeometry';
 import {
@@ -1362,15 +1364,33 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     return undefined;
   }, [route.params?.jumpToDate, navigation]);
 
-  // The daily-recap notification ("Today's Schedule") lands here in list view:
-  // it summarises the day as a list, so the timeline would answer a different
-  // question. Cleared after use so a later re-focus doesn't force the mode again.
+  // The day-schedule popup's "Open in calendar" lands here in list view: the
+  // popup summarises the day as a list, so the timeline would answer a
+  // different question. Cleared after use so a later re-focus doesn't force
+  // the mode again.
   useEffect(() => {
     const requested = route.params?.viewMode;
     if (!requested) return;
     setViewMode(requested);
     navigation.setParams({ viewMode: undefined });
   }, [route.params?.viewMode, navigation]);
+
+  // A pushed "Today's Schedule" recap opens that day's schedule popup over
+  // the calendar (notificationTapHandler). Same consume-and-clear as above.
+  const [dayScheduleDate, setDayScheduleDate] = useState<string | null>(null);
+  useEffect(() => {
+    const requested = route.params?.openDaySchedule;
+    if (!requested) return;
+    setDayScheduleDate(requested);
+    navigation.setParams({ openDaySchedule: undefined });
+  }, [route.params?.openDaySchedule, navigation]);
+  const closeDaySchedule = useCallback(() => setDayScheduleDate(null), []);
+  // Let the popup fade out before pushing, so the Modal's dismissal and the
+  // stack push don't fight each other.
+  const handleDayScheduleNavigate = useCallback((d: DailyScheduleDestination) => {
+    setDayScheduleDate(null);
+    navigateAfterDismiss(() => navigateNested('ProviderHome', d.screen, d.params), 250);
+  }, []);
 
   // Fetch bookings. `providerId`, when the caller already has it (the
   // combined focus effect below fetches the profile once for both this and
@@ -2141,6 +2161,13 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       </TouchableOpacity>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
+
+      <DailySchedulePopup
+        visible={dayScheduleDate !== null && isFocused}
+        date={dayScheduleDate ?? TODAY_STR}
+        onClose={closeDaySchedule}
+        onNavigate={handleDayScheduleNavigate}
+      />
 
       {/* ── Go-live celebration ──────────────────────────────────── */}
       <Modal visible={showGoLiveCelebration} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowGoLiveCelebration(false)}>

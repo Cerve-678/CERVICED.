@@ -11,6 +11,7 @@ import { requestMode } from '../navigation/modeController';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { markNotificationRead, getProviderBasicById } from './databaseService';
 import { logger } from '../utils/logger';
+import { dateToYMD } from '../utils/dateUtils';
 
 export interface NotificationTapData {
   type?: string;
@@ -235,8 +236,16 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Provider's daily recap ("Today's Schedule") ──────────────────────────────
+  // Opens the day's schedule popup over the calendar. The recap is sent at
+  // 07:00 for that same day, so today is the day it's about.
+  if (type === 'daily_recap' && isProvider) {
+    navigateNested('ProviderHome', 'ProviderHomeMain', { openDaySchedule: dateToYMD(new Date()) });
+    return;
+  }
+
   // ── Everything else → Notifications screen ───────────────────────────────────
-  // (promotion, daily_recap, schedule_fully_booked, etc.) Either they have no
+  // (promotion, schedule_fully_booked, etc.) Either they have no
   // specific destination, or the in-app handler covers them.
   openNotifications();
 }
