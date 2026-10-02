@@ -130,6 +130,13 @@ export default function BusinessProfileScreen({ navigation }: any) {
               onPress={() => navigation.navigate('Automations')}
               P={P}
             />
+            <SettingsOption
+              icon="payment"
+              title="Payments"
+              subtitle="Payment types, deposits & payouts"
+              onPress={() => navigation.navigate('Payments')}
+              P={P}
+            />
           </View>
 
         </ScrollView>

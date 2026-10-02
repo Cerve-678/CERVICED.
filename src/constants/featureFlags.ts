@@ -22,6 +22,20 @@ export const MULTI_SERVICE_BOOKING_ENABLED = false;
 // re-enabling is a one-line flip. See FUTURE_LOGIC.md.
 export const EMERGENCY_BOOKINGS_ENABLED = false;
 
+// Provider Stripe Connect payouts — the "Set up payouts" surface on
+// PaymentsScreen that onboards a provider to Stripe Express so Cerviced can pay
+// them out through the app's own processor. Off keeps the whole payouts card
+// hidden.
+//
+// ON as of 2026-09-29: the Connect backend is live — providers.stripe_* columns
+// applied (20260929050150), the create-connect-account / stripe-webhook /
+// release-payouts / refund-payment functions deployed, Stripe secrets + webhook
+// configured. Currently on TEST-mode Stripe keys, so onboarding creates test
+// Express accounts; swap to live keys at real launch (no code change here).
+// NOTE: this is a build-time flag — it reaches providers only in the next
+// build/OTA update. See the auto-memory stripe-connect-payouts-build-handoff.
+export const STRIPE_CONNECT_PAYOUTS_ENABLED = true;
+
 // The "Popular Men's/Kids' Services" photo rail on HomeScreen's Male/Kids
 // sections — actual matching services.audience-tagged services shown as
 // PortfolioCard photo tiles (tap → that service's booking modal), fetched via

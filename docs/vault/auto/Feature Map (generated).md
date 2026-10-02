@@ -74,10 +74,10 @@ Curated: [[Availability & Slots]] · **164 files**
 - … +134 more
 
 ## Payments
-Curated: [[Payments]] · **125 files**
+Curated: [[Payments]] · **126 files**
 - `src/screens/client/CartScreen.tsx` _(502)_
-- `src/screens/provider/PaymentsScreen.tsx` _(161)_
-- `src/services/databaseService.ts` _(156)_
+- `src/services/databaseService.ts` _(179)_
+- `src/screens/provider/PaymentsScreen.tsx` _(176)_
 - `src/services/bookingService.ts` _(117)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
@@ -86,9 +86,10 @@ Curated: [[Payments]] · **125 files**
 - `src/components/ProviderStripePayments.tsx` _(89)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(80)_
 - `src/features/bookings/receipt.ts` _(64)_
+- `src/types/database.ts` _(52)_
 - `src/features/bookings/paymentPresentation.ts` _(50)_
+- `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/client/BookingDetailScreen.tsx` _(41)_
-- `src/types/database.ts` _(40)_
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(37)_
@@ -97,21 +98,20 @@ Curated: [[Payments]] · **125 files**
 - `src/types/booking.ts` _(29)_
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/InfoRegScreen.tsx` _(27)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
 - `src/utils/policyDisplay.ts` _(26)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(25)_
 - `supabase/fix_waitlist_selection_method_hook.sql` _(24)_
 - `src/features/cart/pricing.ts` _(23)_
 - `src/screens/client/PointsScreen.tsx` _(23)_
 - `src/services/becca/capabilities/provider.ts` _(23)_
-- `src/screens/auth/SignUpStep4Screen.tsx` _(21)_
-- `src/screens/provider/PoliciesScreen.tsx` _(21)_
-- … +95 more
+- … +96 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **248 files**
+Curated: [[Booking Flow]] · **249 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/services/databaseService.ts` _(649)_
+- `src/services/databaseService.ts` _(650)_
 - `src/screens/client/CartScreen.tsx` _(601)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(542)_
 - `src/services/becca/capabilities/client.ts` _(502)_
@@ -139,12 +139,12 @@ Curated: [[Booking Flow]] · **248 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `src/services/bookingService.ts` _(88)_
-- … +218 more
+- … +219 more
 
 ## Notifications
 Curated: [[Notifications]] · **151 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(291)_
+- `src/screens/shared/NotificationsScreen.tsx` _(292)_
 - `src/services/databaseService.ts` _(152)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(102)_
@@ -155,7 +155,7 @@ Curated: [[Notifications]] · **151 files**
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(52)_
 - `supabase/automation_jobs.sql` _(51)_
-- `src/services/notificationTapHandler.ts` _(44)_
+- `src/services/notificationTapHandler.ts` _(45)_
 - `src/services/becca/capabilities/client.ts` _(42)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_
@@ -176,11 +176,11 @@ Curated: [[Notifications]] · **151 files**
 - … +121 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **73 files**
-- `src/services/databaseService.ts` _(66)_
+Curated: [[Provider Onboarding & Go-Live]] · **74 files**
+- `src/services/databaseService.ts` _(72)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(49)_
-- `src/features/providers/goLiveStatus.ts` _(35)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(52)_
+- `src/features/providers/goLiveStatus.ts` _(46)_
 - `src/screens/provider/InfoRegScreen.tsx` _(34)_
 - `src/services/providerRegistrationService.ts` _(28)_
 - `src/contexts/RegistrationContext.tsx` _(27)_
@@ -197,6 +197,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
 - `src/components/ProviderStripePayments.tsx` _(4)_
 - `src/screens/client/CartScreen.tsx` _(4)_
+- `src/screens/provider/PaymentsScreen.tsx` _(4)_
 - `src/contexts/AuthContext.tsx` _(3)_
 - `src/screens/auth/ClaimProviderScreen.tsx` _(3)_
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
@@ -206,8 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **73 files**
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
 - `src/services/becca/aiRuntime.ts` _(3)_
-- `supabase/add_providers_availability_rpc.sql` _(3)_
-- … +43 more
+- … +44 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**
@@ -279,9 +279,9 @@ Curated: [[Booking Flow]] · **160 files**
 
 ## Auth
 Curated: [[Contexts]] · **172 files**
-- `src/services/databaseService.ts` _(243)_
+- `src/services/databaseService.ts` _(247)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(140)_
+- `src/contexts/AuthContext.tsx` _(141)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_

@@ -692,10 +692,11 @@ system popup can't be themed and breaks the screen's visual language.
   layer above any bottom sheet.
 
 `useAppDialog()` is the only dialog system, on both hats — provider screens use
-it too. (A separate `useProviderDialog()` with its own fixed burgundy/teal
-palette existed until September 2026; it ignored the theme and light/dark mode,
-so provider popups looked like a different app. It was removed — don't
-reintroduce a per-hat dialog.) It must read colour through `useTheme().palette`
+it too. (A separate `useProviderDialog()` existed until September 2026. It
+began with its own fixed burgundy/teal palette that ignored the theme and
+light/dark mode, so provider popups looked like a different app; it was later
+re-themed onto the app palette, and then removed as a near-identical duplicate
+of this one. Don't reintroduce a per-hat dialog.) It must read colour through `useTheme().palette`
 (hat-aware), never the raw `theme` field (always provider) — it did the
 latter until August 2026, which made every client-side confirm dialog
 ("Are you sure you want to discard?" etc.) render in provider-brown

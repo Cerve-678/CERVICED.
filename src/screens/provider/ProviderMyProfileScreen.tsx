@@ -140,6 +140,8 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackPar
   policies: 'Policies',
   payment: 'Payments',
   logo: 'EditProfile',
+  // "Set up payouts" card lives on PaymentsScreen, same as the payment step.
+  stripe: 'Payments',
   // Terms live inside EditProfile (InfoReg)'s own "Your Terms &
   // Conditions" card. Portfolio is handled as a special case in
   // handleGoLiveStep below (it's edited inline on this screen, not a
@@ -1126,6 +1128,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const heroIsDark =
     !!providerData?.backgroundImage || (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? '#FFFFFF' : '#26201E';
+  // The hero runs under the safe area, so the root status bar strip has to
+  // follow it rather than the theme's isDark token — Black pairs a true-black
+  // hero with a pale card, so isDark is false there. Gated on the profile
+  // actually rendering: the loading and empty states below fall back to the
+  // pale ThemedBackground, and heroIsDark defaults to true with no data, which
+  // would otherwise flash a dark strip over them.
+  useDarkTopArea(!isLoading && !!providerData && heroIsDark);
   const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
 
   // Threshold, not per-frame state: this flips at most once per direction, so

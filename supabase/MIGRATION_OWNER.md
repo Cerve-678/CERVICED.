@@ -43,6 +43,59 @@ OWNER:  (none)
 |---|---|---|
 | 20260928213516 | `users_years_experience_staging` | `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS years_experience INT CHECK (0–80 or NULL)`. Post-apply `information_schema.columns` confirms `users.years_experience` is `integer`. Additive/nullable, no default. Staging column for the new "Years of experience" answer on SignUpStep4 — mirrors `team_size`/`price_range`, copied into `providers.years_experience` by InfoRegScreen's first-save prefill. Authored version `20260928210000`; apply_migration stamped its own clock version `20260928213516` and the file was renamed to match. Frontier before apply: `20260928201412`. Step 4 input clamps to 0–80 so the CHECK can never fail the verification upsert.
 
+### Applied 2026-10-02 (Stripe path captures the mobile client address)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261002020233 | `prepare_checkout_captures_mobile_client_address` | `prepare_checkout()` now rejects a mobile-provider item with no `client_address` (message "…address before payment") and writes `client_address`/`client_area` onto the held row for a mobile provider, reading `business_type` from the provider row. Reproduced verbatim from the pre-change live `pg_get_functiondef()`; only the gate + two INSERT columns added. Post-apply verified: gate message + logic present, `is_emergency_request, emergency_ack_at, client_address, client_area` in the INSERT, `SECURITY DEFINER` + `SET search_path TO 'public','pg_temp'` intact, `anon` EXECUTE = false. apply_migration stamped `20261002020233` (authored `20260929061000`); file renamed to match. Frontier before apply: `20260929052423`. The live claim route already captured the address at claim time and is unchanged. App-side shipped with it on `fix/mobile-booking-address-server-guard`: `CheckoutIntentItem` + CartScreen Stripe `intent` builder. |
+
+### Applied out-of-band 2026-10-02 (guard trigger) — verified, ledger backfilled
+
+`20261002030000_mobile_booking_requires_client_address` (the DEFERRABLE INITIALLY
+DEFERRED constraint trigger that refuses to confirm a mobile booking with no
+`booking_client_addresses` row) was applied by the **user in the Supabase SQL
+editor on 2026-10-02**. A later session the same day verified it live:
+`enforce_mobile_booking_has_client_address` is a constraint trigger on `bookings`,
+AFTER INSERT OR UPDATE, DEFERRABLE INITIALLY DEFERRED; the function is SECURITY
+DEFINER with `search_path=public, pg_temp`. The missing `schema_migrations` row
+was **backfilled** for version `20261002030000` (its `statements` record that it
+is a backfill, not a re-execution — same pattern as `20260827210000`).
+
+**Fixed 2026-10-02:** the file never revoked Postgres's default PUBLIC
+EXECUTE grant, so `has_function_privilege('anon', …)` was **true** despite its
+comment saying otherwise. `20261002230000_revoke_public_execute_mobile_address_guard`
+fixes it (one REVOKE). The MCP apply was refused by the auto-mode classifier,
+so the user ran it in the SQL editor; verified live (`proacl` is postgres +
+service_role only, anon/authenticated EXECUTE = false) and its ledger row was
+backfilled for `20261002230000`.
+
+Its Stripe prerequisite (`20261002020233`) is applied and verified. Pre-apply
+sweep had found 0 at-risk rows. `USE_STRIPE_PAYMENTS` is off.
+
+### Applied 2026-09-29 (Stripe Connect payouts — 6 migrations)
+
+Applied via `apply_migration` (each stamped its own clock version) against the
+live project, frontier before was `20260928213516`. All verified against the
+live schema, not just trusted to have run. Files in this branch renamed to the
+recorded versions below. **This branch's MIGRATION_OWNER.md is behind `main`**
+(missing the loyalty/years-experience/pregnancy entries) — reconcile on merge;
+do not treat this list as the whole ledger.
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260929050150 | `stripe_connect_account_columns` | 4 `providers.stripe_*` columns present; `on_provider_stripe_change` AFTER-UPDATE trigger present; `check_and_set_provider_live` NOT modified (go-live gate deliberately not applied). ⚠️ Its `REVOKE UPDATE(col)` is a no-op — see guard migration below. |
+| 20260929050213 | `provider_refund_columns` | 3 `bookings.refunded_*` columns present. bookings RLS has no UPDATE policy, so clients can't write them regardless. |
+| 20260929050240 | `provider_payouts_ledger` | `provider_payouts` table + RLS on + owner-read policy + 2 key constraints (split-adds-up, one-per-booking-provider) + 4 indexes + updated_at trigger. |
+| 20260929050324 | `provider_payout_creation_trigger` | `create_held_payout_on_finalize()` SECURITY DEFINER, `search_path=public, pg_temp`; `on_booking_finalized_create_payout` trigger present. Reads the split (amount_paid/service_charge), never recomputes. |
+| 20260929050657 | `guard_provider_stripe_columns_server_only` | **NEW, not in original drafts.** BEFORE UPDATE trigger (`enforce_provider_stripe_columns_server_only`, SECURITY **INVOKER**) rejects a client-role write to any `stripe_*` column — the real enforcement the no-op REVOKE never gave. Verified functionally (rolled-back): authenticated own-row write to `stripe_charges_enabled` rejected with `check_violation`; service_role writes pass. |
+| 20260929052423 | `provider_payout_release_job` | `process_due_payouts()` SECURITY DEFINER; pg_cron job `release-due-payouts` `*/15 * * * *`. Short-circuits when nothing due. `release-payouts` edge fn deployed; vault `service_role_key` present. |
+
+**NOT applied, deliberately held:** `DRAFT_stripe_connect_gate_go_live.sql`
+(still DRAFT). It adds `stripe_charges_enabled = TRUE` to the go-live gate and
+would dark all 7 currently-live providers (0 onboarded). Apply ONLY after
+providers have onboarded via a shipped build carrying `STRIPE_CONNECT_PAYOUTS_
+ENABLED = true` — otherwise the marketplace goes dark with no way to onboard.
+
 ### Applied 2026-09-28 (loyalty points first-bonus rebalance)
 
 | Recorded version | Name | Verified live |
@@ -76,6 +129,27 @@ Verified live: migration version recorded, no public functions retain the
 legacy format, and direct database formatting produced `02:00pm` / `09:00am`.
 The local filename was renamed to the recorded migration version.
 
+### Applied 2026-09-14 (client_bookings exposes booking_ref)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260914031215 | `client_bookings_expose_booking_ref` | `booking_ref` present on `public.client_bookings` at ordinal position 49 (appended, per the view's append-only constraint); every other column unchanged from the last live definition (`20260827161000`, 48 columns, confirmed via `information_schema.columns` before applying). 5 sampled live bookings returned identical `booking_ref` via `bookings` and via `client_bookings`. |
+
+Closes the gap `formatBookingRef()` and its test (`src/tests/bookingReference.test.ts`) already
+anticipated: `20260827153834` added `bookings.booking_ref` but never added it to
+`client_bookings`, which lists its columns explicitly rather than `b.*`. Since that column is
+backfilled + NOT NULL, every client-side read fell back to the old `id.slice(0,8)` truncation on
+every booking — the same appointment read `CRV-4B2X9K7M` to the provider and `34E82C04` to the
+client. Purely additive (a new SELECT column + matching GRANT), so it could not have reverted
+concurrent work in either order.
+
+Frontmost live migration before this was `20260914025249`
+(`replace_provider_services_writes_service_category`), confirmed via
+`SELECT max(version) FROM supabase_migrations.schema_migrations` before applying; nothing between
+`20260827161000` and the frontier redefines `client_bookings` (checked via
+`grep -l 'client_bookings' supabase/migrations/*.sql`). Renamed from its authored `20260914143000`
+to the version `apply_migration` actually recorded, per the standing gotcha.
+
 ### Applied 2026-09-14 (service skin-tone suitability)
 
 `20260913234413_service_skin_tone_suitability.sql` adds nullable
@@ -91,20 +165,34 @@ rejection all passed. Column, constraint and unchanged authenticated/service-rol
 execute grants were checked separately. Frontmost live migration before this was
 `20260908105737` (the multi-service column is already present live).
 
-### Pending 2026-09-09 (restored multi-service provider offerings)
+### Service types: both migrations applied (reconciled 2026-10-02)
 
-The existing multi-service offering work was recovered from
-`feat/multi-select-service-type-chips`. Its two migrations remain **unapplied**
-and must be applied together, in this order:
+Earlier notes on both branches called these pending/BLOCKED; the live
+ledger now has both: `provider_multiple_service_types` as `20260908002113`
+and `service_type_cooldown_covers_the_whole_set` as `20260925185939`.
 
-1. `20260908090000_provider_multiple_service_types`
-2. `20260908090100_service_type_cooldown_covers_the_whole_set`
+### Applied 2026-09-08 (checkout snapshots + plural service types)
 
-The first adds `providers.service_categories` and
-`services.service_category`. The second closes the service-type cooldown and
-category-cascade gaps introduced by plural types. The original first migration
-was authored as `20260906193000` but was deliberately renumbered above the
-already-applied `20260907000413` frontier; do not restore the old filename.
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908001701 | `checkout_writes_provider_category_and_says_when` | Renamed from its authored `20260908120000`. The zero-row query in the file's own verification (snapshot equal to `services.category_name` yet differing from `providers.service_category`) returns **0 rows**, so the backfill caught every row the bug wrote. All three functions re-checked `SECURITY DEFINER` with `search_path` intact: `prepare_checkout` and `finalize_checkout` at `public, pg_temp`, `claim_cart_booking_slots` at `public`. The body recorded in `schema_migrations` hashes **identical** to the file (md5 `9d971e3b…`, trailing newline stripped), so nothing was dropped or paraphrased in transit. |
+| 20260908002113 | `provider_multiple_service_types` | Applied from `feat/multi-select-service-type-chips` at the user's request; authored there as `20260908090000`. Live: `providers.service_categories text[] NOT NULL DEFAULT '{}'` and `services.service_category text` both present; **0** providers with an empty set, **0** with `service_categories[1]` desynced from the headline, **0** of 53 services left untyped; `providers_service_categories_check` present and `convalidated = true`; both triggers (`trg_sync_provider_service_categories`, `trg_default_service_category`) and both indexes (`providers_service_categories_gin`, `services_service_category_idx`) created. **Its follow-up is blocked — see above.** |
+
+Neither collides with the other: `provider_multiple_service_types` keeps
+`providers.service_category` a scalar headline alongside the new array and does
+not redefine any checkout function, so applying it second did not revert the
+checkout fix. The two migrations were confirmed non-overlapping by reading both
+in full before either was applied.
+
+Latent issue spotted while reading `provider_multiple_service_types`, not fixed
+here because the file is another branch's to change:
+`sync_provider_service_categories()` is a `BEFORE INSERT OR UPDATE` trigger
+whose `ELSIF` arm reads `OLD.service_category`. On an INSERT that supplies a
+non-empty `service_categories` whose first element differs from
+`service_category`, that arm is reached with `OLD` unassigned and will raise.
+Today's inserts leave the array at its `'{}'` default and take the first arm
+instead, so nothing hits it yet — but the chips branch's own writers should be
+checked against it before merge.
 
 ### Applied 2026-09-07 (cart reservations remain private)
 
@@ -121,6 +209,29 @@ The app-side half of that fix (CartScreen's `abandonOutstandingCheckout`) is
 already in the working tree and does not depend on this migration; the
 migration covers the exits the app cannot observe (crash, force-quit, dev
 reload, dead network).
+
+### Applied 2026-09-08 (reschedule offer says accept or decline)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260908105737 | `reschedule_offer_says_accept_or_decline` | Renamed from its authored placeholder `20260908140000`. Copy-only change to `handle_reschedule_request_change()`. Body reproduced from the LIVE `pg_get_functiondef`, **not** from `20260808181219_reschedule_flow_completion.sql`, which has drifted (the live body carries `20260809205845`'s group handling and writes `NEW.booking_id` where the file writes `NEW.id`) — applying from the file would have reverted the group-dedup fix. |
+
+Verified by comparing structural counts in `prosrc` before and after: 10
+`INSERT INTO public.notifications`, 4 `'reschedule_request'`, 2
+`'reschedule_provider_response'`, 2 `'reschedule_confirmed'`, 2
+`'reschedule_declined'`, 5 `NEW.response_note` and 6 `v_representative_id` —
+all **unchanged**, so no branch was dropped in transcription. The old copy is
+gone (`has proposed new times` and `has shared available dates` both 0) and the
+new call to action appears 4 times. `prosecdef = true`,
+`search_path=public, pg_temp`, and `on_reschedule_request_changed` still bound.
+The body recorded in `schema_migrations` hashes identical to the file
+(md5 `98113ec8…`).
+
+Note this file is tracked in git and therefore **per-branch**: this copy does
+not carry the other 2026-09-08 entries recorded on
+`fix/checkout-snapshots-and-notification-detail` and
+`fix/provider-name-trailing-whitespace`. Reconcile on merge. The live frontier
+at the time of this apply was `20260908104927`.
 
 ### Applied 2026-09-07 (provider service-category change cooldown + cascade)
 
@@ -314,6 +425,7 @@ Written but **not applied**, in the order they must run:
 
 | Version | File | Notes |
 |---|---|---|
+| 20261002030000 | `mobile_booking_requires_client_address` | **Applied out-of-band (SQL editor) 2026-10-02; verified live and ledger row backfilled the same day.** Its PUBLIC EXECUTE revoke is the pending `20261002230000` — see the section near the top. The `DEFERRABLE INITIALLY DEFERRED` constraint trigger that refuses to confirm a mobile booking with no `booking_client_addresses` row. Contract: `src/tests/mobileBookingRequiresClientAddress.test.ts`. |
 | 20260827160000 | `cancel_window_closing_warning` | **Written 2026-08-27 by the session doing reschedule/legal work; NOT applied — the lock above is held.** New `process_cancel_window_closing_warnings()` + cron `cancel-window-closing-warnings` + the `cancel_window_closing` notification type. Numbered above the 20260827120519 frontier and above the two cart-hold files so it runs last. Touches nothing the lock holder touches (no cart-hold functions, no booking triggers). Its one shared surface is `notifications_type_check`, which it **appends to** rather than recreating from a literal list — so it is safe in either order against `20260827140000_no_show_disputes`, which also adds a type. App-side wiring (`database.ts`, `NotificationsScreen`, `notificationTapHandler`) is already committed, so the type union is ahead of the constraint until this runs. **STEP 2 BELONGS TO WHOEVER APPLIES IT:** the file adds `cancel_notice_hours(INT, JSONB)` as the single definition of the cancellation-notice mapping and calls it, but `cancel_own_booking()` still carries its own inline copy. Rewrite it to call the helper in the same pass — with `pg_get_functiondef()` output in hand so `LANGUAGE`/`SECURITY DEFINER`/`SET search_path` survive the reproduction. It was left undone because the MCP connection was down when the file was written, and reproducing a live function from memory is exactly what stripped `SET search_path` off three functions earlier the same day. |
 | 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
 

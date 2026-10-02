@@ -222,6 +222,19 @@ export interface DbProvider {
   is_featured: boolean;
   is_verified: boolean;
   has_gone_live: boolean;
+  // Stripe Connect (Express) payout account, added
+  // 20260929050150_stripe_connect_account_columns. All four are synced FROM
+  // Stripe by the stripe-webhook edge function and are server-only — a client
+  // write to any of them is rejected by enforce_provider_stripe_columns_server_only,
+  // so never write them from the app. `stripe_charges_enabled` (KYC complete,
+  // i.e. the account can actually be paid) is the one the go-live gate reads:
+  // once STRIPE_CONNECT_PAYOUTS_ENABLED is on and the gate migration is applied,
+  // a provider can't be live until this is true. See the auto-memory
+  // stripe-connect-payouts-build-handoff.
+  stripe_account_id: string | null;
+  stripe_charges_enabled: boolean;
+  stripe_payouts_enabled: boolean;
+  stripe_details_submitted: boolean;
   // Stamped once, the moment the provider first publishes their profile
   // (InfoRegScreen's !isEditMode path) — never overwritten by later edits.
   // Null for providers who published before this column existed.
