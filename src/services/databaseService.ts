@@ -9284,3 +9284,27 @@ export async function getProviderBookingPolicies(
   if (error) throw error;
   return (data?.booking_policies as Record<string, unknown> | null) ?? null;
 }
+
+/** The money half of a CLIENT cancellation: applies the provider's cancellation
+ *  policy (keep the deposit / their share, or a full refund) through Stripe,
+ *  computed entirely server-side. Call it right AFTER cancel_own_booking() has
+ *  cancelled the booking. Idempotent and a safe no-op when nothing was captured
+ *  (e.g. Stripe not live) — it then just reports 'no_payment'. Throws on a hard
+ *  failure so the caller can surface/log it; the cancel itself has already
+ *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
+export async function applyCancellationRefund(
+  bookingId: string,
+): Promise<"settled" | "already_settled" | "no_payment"> {
+  const { data, error } = await supabase.functions.invoke(
+    "apply-cancellation-refund",
+    { body: { bookingId } },
+  );
+  if (
+    error ||
+    data?.error ||
+    !["settled", "already_settled", "no_payment"].includes(data?.status)
+  ) {
+    throw new Error("The cancellation refund could not be confirmed.");
+  }
+  return data.status;
+}
