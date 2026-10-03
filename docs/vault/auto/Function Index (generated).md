@@ -5,7 +5,7 @@
 
 #generated
 
-**2258 functions** across **308 files**.
+**2262 functions** across **309 files**.
 
 ### `src/components/` (42)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -280,7 +280,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (43)
+### `src/utils/` (44)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -309,6 +309,7 @@
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
 - `regionStore.ts` — **getRegion** · **setRegion**
 - `reorderCategories.ts` — exists · **reorderCategoriesWithinType**
+- `requestTiming.ts` — **createTimedFetch** · **formatTimingLine** · **labelSupabaseRequest** · name
 - `rescheduleBlockedReason.ts` — **getRescheduleBlock** · **getStaleRequestBlock** · **hasBookingDatePassed**
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
