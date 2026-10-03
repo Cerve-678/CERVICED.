@@ -47,6 +47,7 @@ import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dat
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
   calculateBookingPaymentBreakdown,
+  describeRefundOutcome,
   PAYMENT_METHOD_LABELS,
 } from '../../features/bookings/paymentPresentation';
 import {
@@ -415,6 +416,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   );
 
   const noticeWindowText = useMemo(() => formatNoticeWindow(cancellationNoticeHrs), [cancellationNoticeHrs]);
+  const refundOutcome = useMemo(
+    () => (booking ? describeRefundOutcome(booking, cancellationNoticeHrs) : null),
+    [booking, cancellationNoticeHrs],
+  );
 
   // Whether cancelling right now would fall inside the provider's notice
   // window — purely informational (drives the modal's warning copy below).
@@ -1003,6 +1008,24 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
+            {/* What came back or was kept after a cancellation — at the top so
+                it reads before the original totals, in both the summary and
+                the full-receipt view. */}
+            {refundOutcome && (
+              <View style={[st.refundNotice, { backgroundColor: C.card, borderColor: C.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name={refundOutcome.title === 'Refund pending' ? 'time-outline' : refundOutcome.title === 'Refunded' ? 'checkmark-circle-outline' : 'shield-checkmark-outline'} size={15} color={refundOutcome.title === 'Refund pending' ? '#FF9500' : refundOutcome.title === 'Refunded' ? '#34C759' : C.accentText} />
+                  <Text style={{ color: C.text, fontWeight: '700', fontSize: 14 }}>{refundOutcome.title}</Text>
+                </View>
+                <Text style={{ color: C.sub, fontSize: 13, lineHeight: 18 }}>{refundOutcome.message}</Text>
+                {refundOutcome.rows.map(r => (
+                  <View key={r.label} style={st.rcptRow}>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>{r.label}</Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>{r.amount < 0 ? '−' : ''}£{Math.abs(r.amount).toFixed(2)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
             {!showReceipt ? (
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
@@ -2017,6 +2040,7 @@ const st = StyleSheet.create({
   // unconstrained row, and Yoga can collapse it to zero width so it never
   // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
   sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
+  refundNotice: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6, marginBottom: 10 },
   disputeInput: {
     width: '100%', minHeight: 96, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14,

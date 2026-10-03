@@ -189,7 +189,10 @@ async function handleTransfer(eventTransfer: Stripe.Transfer): Promise<void> {
   if (error) throw error;
   if (payout.status === 'reversed') return;
   const destination = typeof transfer.destination === 'string' ? transfer.destination : transfer.destination?.id;
-  if (destination !== payout.stripe_account_id || transfer.amount !== payout.payout_amount) throw new Error('Transfer mismatch');
+  // A partial refund lowers payout_amount by reversing part of the transfer,
+  // so compare against what is left of it, not its original amount.
+  const netTransferred = transfer.amount - (transfer.amount_reversed ?? 0);
+  if (destination !== payout.stripe_account_id || netTransferred !== payout.payout_amount) throw new Error('Transfer mismatch');
   const { error: writeError } = await admin.from('provider_payouts')
     .update({ status: 'transferred', stripe_transfer_id: transfer.id, failure_reason: null })
     .eq('id', payout.id).neq('status', 'reversed');
@@ -204,9 +207,14 @@ async function handleTransfer(eventTransfer: Stripe.Transfer): Promise<void> {
 // post-transfer refund. Reflect it on the ledger row.
 async function handleTransferReversed(transfer: Stripe.Transfer): Promise<void> {
   const reversalId = transfer.reversals?.data?.[0]?.id ?? null;
+  // transfer.reversed fires for PARTIAL reversals too (a provider's partial or
+  // goodwill refund). Only a fully reversed transfer means the payout is gone;
+  // a partial one was already recorded by reconcileRefund, which lowered
+  // payout_amount, so just note the reversal id.
+  const fullyReversed = transfer.reversed === true || (transfer.amount_reversed ?? 0) >= transfer.amount;
   const { data: rows, error } = await admin
     .from('provider_payouts')
-    .update({ status: 'reversed', stripe_reversal_id: reversalId })
+    .update(fullyReversed ? { status: 'reversed', payout_amount: 0, stripe_reversal_id: reversalId } : { stripe_reversal_id: reversalId })
     .eq('stripe_transfer_id', transfer.id)
     .select('id');
   if (error) throw error;

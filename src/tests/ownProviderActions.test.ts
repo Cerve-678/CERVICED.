@@ -4,7 +4,7 @@ const mockEq = jest.fn();
 
 jest.mock('../lib/supabase', () => ({
   supabase: {
-    auth: { getUser: async () => ({ data: { user: { id: 'viewer' } } }) },
+    auth: { getSession: async () => ({ data: { session: { user: { id: 'viewer' } } }, error: null }) },
     from: (table: string) => {
       if (table === 'providers') {
         const chain = {

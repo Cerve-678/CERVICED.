@@ -59,6 +59,8 @@ export type PaymentStatus =
   | "deposit_paid"
   | "fully_paid"
   | "refunded"
+  | "partially_refunded"
+  | "refund_pending"
   | "failed";
 
 export type NotificationType =
@@ -71,6 +73,7 @@ export type NotificationType =
   | "no_show"
   | "provider_no_show"
   | "payment_success"
+  | "cancellation_settled"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"
@@ -615,6 +618,9 @@ export interface DbBooking {
   // that migration is applied — and null on any booking never marked.
   no_show_marked_at?: string | null;
   no_show_disputed_at?: string | null;
+  refunded_amount?: number | null;
+  policy_retained_amount?: number | null;
+  cancelled_by?: 'client' | 'provider' | 'system' | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;
   // Client intent — feeds search personalisation and Becca context
