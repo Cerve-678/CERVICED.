@@ -41,6 +41,7 @@ import {
 import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
+import { cancellationNoticeHours } from "../utils/policyDisplay";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -9604,8 +9605,18 @@ export interface ProviderRefundState {
   heldPence: number;
   /** True once anything has been refunded; a full refund is then no longer offered. */
   anyRefunded: boolean;
-  /** Set when the client's late cancellation was settled by the provider's policy. */
-  policySettlement: { refundedToClientPence: number; providerKeptPence: number } | null;
+  /**
+   * Set once the client's own cancellation was settled by the provider's
+   * policy. `hoursBefore` is cancel-to-start, `noticeHours` the policy window,
+   * `keptIsDeposit` whether what was kept is the booking's deposit.
+   */
+  policySettlement: {
+    refundedToClientPence: number;
+    providerKeptPence: number;
+    hoursBefore: number | null;
+    noticeHours: number;
+    keptIsDeposit: boolean;
+  } | null;
 }
 
 /**
@@ -9616,7 +9627,13 @@ export interface ProviderRefundState {
  */
 export async function getProviderRefundState(bookingId: string): Promise<ProviderRefundState> {
   const [bookingRes, payoutRes, refundsRes] = await Promise.all([
-    supabase.from('bookings').select('amount_paid, service_charge, refunded_amount').eq('id', bookingId).single(),
+    // Embeds the provider's own policy row (provider reading their own record)
+    // for the notice window the settlement summary quotes.
+    supabase
+      .from('bookings')
+      .select('amount_paid, service_charge, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
+      .eq('id', bookingId)
+      .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
     supabase.from('booking_refunds').select('amount_pence, kind, provider_kept_pence').eq('booking_id', bookingId).limit(50),
   ]);
@@ -9632,14 +9649,31 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
   const held = payout
     ? (payout.status === 'reversed' || payout.status === 'cancelled' ? 0 : Number(payout.payout_amount))
     : Math.max(0, share - refunded);
-  const settlement = (refundsRes.data ?? []).find(r => r.kind === 'cancellation_settlement');
+  const settlementRow = (refundsRes.data ?? []).find(r => r.kind === 'cancellation_settlement');
+  // A settlement that kept everything refunds nothing, so it writes no
+  // booking_refunds row — bookings.policy_retained_amount is the record that
+  // is always there once the policy has run on a client's cancellation.
+  const b = bookingRes.data;
+  const retained = b.policy_retained_amount != null ? Math.round(Number(b.policy_retained_amount) * 100) : null;
+  const settled = b.cancelled_by === 'client' && (retained != null || !!settlementRow);
+  const providerRow = (Array.isArray(b.providers) ? b.providers[0] : b.providers) as
+    { cancellation_notice_hours: number | null; booking_policies: { cancelNotice?: unknown } | null } | null | undefined;
+  const startMs = Date.parse(`${b.booking_date}T${b.booking_time}`);
+  const cancelledMs = b.cancelled_at ? Date.parse(b.cancelled_at) : NaN;
+  const hoursBefore = Number.isFinite(startMs) && Number.isFinite(cancelledMs) ? (startMs - cancelledMs) / 3_600_000 : null;
 
   return {
     sharePence: share,
     heldPence: Math.max(0, Math.min(held, paid - refunded)),
     anyRefunded: refunded > 0,
-    policySettlement: settlement
-      ? { refundedToClientPence: Number(settlement.amount_pence), providerKeptPence: Number(settlement.provider_kept_pence ?? 0) }
+    policySettlement: settled
+      ? {
+          refundedToClientPence: settlementRow ? Number(settlementRow.amount_pence) : 0,
+          providerKeptPence: retained ?? Number(settlementRow?.provider_kept_pence ?? 0),
+          hoursBefore,
+          noticeHours: cancellationNoticeHours(providerRow?.cancellation_notice_hours, providerRow?.booking_policies),
+          keptIsDeposit: b.payment_type === 'deposit',
+        }
       : null,
   };
 }

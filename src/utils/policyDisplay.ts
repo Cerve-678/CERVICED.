@@ -166,3 +166,22 @@ export function buildPolicyDisplayRows(
 
   return rows;
 }
+
+/**
+ * Mirror of cancel_notice_hours() (SQL) and apply-cancellation-refund's
+ * noticeHours(): the explicit column wins, else the cancelNotice policy maps
+ * to hours, else there is no notice window. Keep the three in step.
+ */
+export function cancellationNoticeHours(
+  columnHours: number | null | undefined,
+  policies: { cancelNotice?: unknown } | null | undefined,
+): number {
+  const col = Number(columnHours);
+  if (Number.isFinite(col) && col > 0) return col;
+  switch (policies?.cancelNotice) {
+    case '24h': return 24;
+    case '48h': return 48;
+    case '72h': return 72;
+    default: return 0;
+  }
+}

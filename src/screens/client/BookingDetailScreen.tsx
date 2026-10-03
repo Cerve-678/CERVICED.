@@ -5,12 +5,13 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
   Keyboard, TouchableWithoutFeedback,
-  LayoutAnimation, KeyboardAvoidingView,
+  LayoutAnimation,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { SlideUpOnMount } from '../../components/SlideUpOnMount';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
@@ -1621,7 +1622,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── More (⋯) menu ─── */}
         <Modal visible={showMoreMenu} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowMoreMenu(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} onPress={() => setShowMoreMenu(false)}>
-            <Pressable style={[st.contactSheet, { backgroundColor: C.surfaceRaised }]} onPress={e => e.stopPropagation()}>
+            <SlideUpOnMount>
+            <Pressable style={[st.moreMenuSheet, { backgroundColor: C.surfaceRaised, marginBottom: Math.max(insets.bottom, 10) }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
               <View style={{ gap: 8 }}>
                 {/* Only money paid through the app can be refunded through it. */}
@@ -1640,8 +1642,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                 </TouchableOpacity>
               </View>
-              <View style={{ height: 30 }} />
             </Pressable>
+            </SlideUpOnMount>
           </Pressable>
         </Modal>
 
@@ -1651,12 +1653,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             only required for "Something else". The copy promises a human
             review, never a refund, and doesn't claim the provider was told —
             nothing notifies them. */}
-        <Modal visible={supportKind !== null} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Modal visible={supportKind !== null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
+          {/* The keyboard sits over the sheet's footer rather than pushing the
+              sheet up; the ScrollView insets itself so the note stays visible. */}
+          <View style={{ flex: 1 }}>
             <Pressable style={st.supportOverlay} onPress={() => { if (!supportBusy) setSupportKind(null); }} />
             <View style={[st.supportSheet, { backgroundColor: C.surfaceRaised, paddingBottom: Math.max(insets.bottom, 16) }]}>
               <View style={[st.supportHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)' }]} />
-              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+              <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
                 <View style={st.supportHead}>
                   <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}>
                     <Ionicons name={supportKind === 'refund' ? 'arrow-undo-outline' : 'flag-outline'} size={20} color={C.accentText} />
@@ -1741,7 +1745,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 })()}
               </View>
             </View>
-          </KeyboardAvoidingView>
+          </View>
         </Modal>
 
         {/* ─── Rating Modal ─── */}
@@ -2050,10 +2054,13 @@ const st = StyleSheet.create({
   reviewInput: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 12, minHeight: 80, fontSize: 14, marginBottom: 16 },
   tipChip: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },
   contactSheet: { maxHeight: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 40 },
+  // The ⋯ menu floats: inset from the edges, rounded on all four corners.
+  moreMenuSheet: { marginHorizontal: 10, borderRadius: 28, padding: 18 },
   contactOption: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   supportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10 },
+  // Top corners only, rounder than the other sheets.
+  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 10 },
   supportHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   supportHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   supportTitle: { fontSize: 18, fontWeight: '800' },
