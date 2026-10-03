@@ -347,6 +347,8 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
       case 'fully_paid':    return PaymentStatus.PAID_IN_FULL;
       case 'deposit_paid':  return PaymentStatus.DEPOSIT_PAID;
       case 'refunded':      return PaymentStatus.REFUNDED;
+      case 'partially_refunded': return PaymentStatus.PARTIALLY_REFUNDED;
+      case 'refund_pending': return PaymentStatus.REFUND_PENDING;
       case 'failed':        return PaymentStatus.FAILED;
       default:              return PaymentStatus.PENDING;
     }
@@ -448,6 +450,10 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     noShowMarkedAt: db.no_show_marked_at ?? undefined,
     noShowDisputedAt: db.no_show_disputed_at ?? undefined,
     noShowDisputeReason: db.no_show_dispute_reason ?? undefined,
+    // numeric columns arrive as strings from PostgREST; Number() both.
+    refundedAmount: db.refunded_amount != null ? Number(db.refunded_amount) : undefined,
+    policyRetainedAmount: db.policy_retained_amount != null ? Number(db.policy_retained_amount) : undefined,
+    cancelledBy: db.cancelled_by ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
     clientUserId: (db as any).user_id ?? undefined,
     addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({

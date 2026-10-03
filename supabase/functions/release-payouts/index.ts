@@ -98,8 +98,12 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Never fund a transfer from an unverified or refunded booking.
-      if (!booking.payment_intent_id || booking.stripe_refund_id || booking.payment_status === 'refunded') {
+      // Never fund a transfer from an unverified or fully refunded booking. A
+      // PARTIALLY refunded one (policy kept a deposit, or a provider's partial
+      // refund) is still owed what's left — reconcileRefund already lowered
+      // payout_amount — so it passes here and is checked against the ledger below.
+      if (!booking.payment_intent_id || booking.payment_status === 'refunded'
+          || (booking.stripe_refund_id && booking.payment_status !== 'partially_refunded')) {
         skipped++;
         continue;
       }
@@ -110,7 +114,31 @@ Deno.serve(async (req: Request) => {
       }
       const chargeId = typeof payment.latest_charge === 'string' ? payment.latest_charge : payment.latest_charge.id;
       const charge = await stripe.charges.retrieve(chargeId);
-      if (charge.disputed || charge.amount_refunded > 0) { skipped++; continue; }
+      if (charge.disputed) { skipped++; continue; }
+      // A refund on the charge is fine only if every penny of it is one the
+      // booking_refunds ledger recorded AND already took off its payout. (A
+      // batch charge covers several bookings, so sum across all of them.)
+      // Anything unexplained — a dashboard refund, an adjustment still in
+      // flight — holds the payout as before.
+      if (charge.amount_refunded > 0) {
+        const { data: siblings, error: sibErr } = await admin.from('bookings')
+          .select('id').eq('payment_intent_id', booking.payment_intent_id).limit(50);
+        const ids = (siblings ?? []).map(b => b.id);
+        const { data: ledger, error: ledErr } = ids.length
+          ? await admin.from('booking_refunds').select('amount_pence, payout_applied').in('booking_id', ids)
+          : { data: [], error: null };
+        if (sibErr || ledErr) { skipped++; continue; }
+        const recorded = (ledger ?? []).reduce((sum, r) => sum + Number(r.amount_pence), 0);
+        const allApplied = (ledger ?? []).every(r => r.payout_applied);
+        if (recorded !== charge.amount_refunded || !allApplied) { skipped++; continue; }
+      }
+
+      // Re-read the amount right before paying: a partial refund since this
+      // run started lowers payout_amount, and the old figure must not go out.
+      const { data: fresh, error: freshErr } = await admin.from('provider_payouts')
+        .select('status, payout_amount').eq('id', row.id).maybeSingle();
+      if (freshErr || !fresh || fresh.status !== 'held') { skipped++; continue; }
+      row.payout_amount = Number(fresh.payout_amount);
 
       if (row.payout_amount <= 0) {
         // Zero-value payout (shouldn't happen given the split, but never call

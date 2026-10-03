@@ -6,6 +6,7 @@ import { PaymentRequestError } from '../utils/paymentRequestError';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
+import { newRequestId } from '../utils/requestId';
 import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, type ConnectStatus, type ProviderPayout } from '../services/providerPaymentService';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
@@ -114,7 +115,7 @@ export default function ProviderStripePayments({ stripeReturn, children }: { str
         opening.current = true;
         setBusy(true);
         try {
-          const completed = await refundProviderBooking(row.booking_id);
+          const completed = await refundProviderBooking({ bookingId: row.booking_id, reason: 'Refunded from Payments', requestId: newRequestId() });
           await load();
           Alert.alert(completed ? 'Refund issued' : 'Refund processing', completed
             ? 'The refund has been issued. Their bank may take a few days to show it.'
