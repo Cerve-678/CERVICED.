@@ -5,7 +5,7 @@
 
 #generated
 
-**2281 functions** across **311 files**.
+**2283 functions** across **312 files**.
 
 ### `src/components/` (42)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -73,7 +73,7 @@
 - `languages.ts` — **recognizeLanguage**
 - `portfolioFeed.ts` — **getAllPortfolioItems** · **getPortfolioByCategory** · **getPortfolioByProvider** · **getPortfolioItemById** · **getProviderForItem** · **searchPortfolio**
 
-### `src/features/bookings/` (9)
+### `src/features/bookings/` (10)
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **canRequestRefund** · **fileBookingSupportRequest** · **isSupportRequestReady**
@@ -83,6 +83,7 @@
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **describeRefundOutcome** · money
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
 - `receipt.ts` — **buildClientReceiptHTML** · escapeHtml · money
+- `timelineBookings.ts` — **withoutReplacedCancellations**
 
 ### `src/features/business-details/` (2)
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
@@ -217,7 +218,7 @@
 - `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · ClientHistorySheet · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleMessage · handleRebook · handleSend · handleSheetChange · handleViewHistory · initials · load · ProviderClienteleScreen · snapPoints · TabBar · tomorrow9am
 - `ProviderCommunicationsScreen.tsx` — flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod
 - `ProviderConversationScreen.tsx` — ProviderConversationScreen · renderMessage · sendMessage
-- `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsByDate · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · dayAvailability · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getMondayOf · getMonthDays · getWeekDates · goNextWeek · goPrevWeek · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · shiftDateString · SkeletonCard · statusCfg · SummaryRow · tap · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · weekDates · WeekView · windowsByDate
+- `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsByDate · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · dayAvailability · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getMondayOf · getMonthDays · getWeekDates · goNextWeek · goPrevWeek · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · shiftDateString · SkeletonCard · statusCfg · SummaryRow · tap · timelineBookings · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · weekDates · WeekView · windowsByDate
 - `ProviderInboxScreen.tsx` — addTemplate · ConversationRow · flatItems · handleMarkConversationRead · handleSaveTemplates · handleSendReply · initials · loadInbox · onRefresh · openTemplates · ProviderInboxScreen · removeTemplate · renderRightActions · SkeletonRow · timeAgoISO · unreadCounts · updateTemplate
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleOpenSend · handlePickBookingForSend · handleSave · PackCard · performDelete · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
