@@ -1,38 +1,19 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
+import { reconcileRefund } from '../_shared/reconcileRefund.ts';
+import { settleCheckout } from '../_shared/settleCheckout.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
+import Stripe from 'npm:stripe@17.4.0';
 
-// Stripe -> CERVICED webhook. This is the LINCHPIN of the Connect build:
-// nothing flips a provider payout-eligible or moves a payout row through its
-// lifecycle without a Stripe event arriving here. Two jobs it actually owns:
-//
-//   1. account.updated  -> mirror the connected account's capability flags
-//      onto the provider row (stripe_charges_enabled/payouts_enabled/
-//      details_submitted). The providers trigger then re-runs the go-live
-//      check, so a provider becomes bookable the moment Stripe says they can
-//      be paid. The app trusts THESE columns, never a client-sent value.
-//
-//   2. transfer.*  -> keep the provider_payouts ledger honest. A Transfer is
-//      how the platform pays a provider their split out of the platform
-//      balance; the release job creates it and stamps stripe_transfer_id, and
-//      these events confirm/reverse it.
-//
-// charge.dispute.* and payout.* are logged with enough detail for a human to
-// act on, but are NOT auto-resolved here — disputes and connected-account
-// bank payouts need admin/legal judgement in v1, and silently mutating money
-// rows off them would be worse than surfacing them. See the handoff note
-// stripe-connect-payouts-build-handoff.md.
-//
-// Auth model: Stripe cannot present a Supabase JWT, so this function runs with
-// verify_jwt = false (see config.toml) and authenticates the request by
-// verifying the Stripe signature against STRIPE_WEBHOOK_SECRET instead. An
-// unsigned or wrongly-signed request is rejected before any work happens.
+// Signed Stripe events reconcile checkout capture, refunds, connected-account
+// capabilities, and provider transfers. Always retrieve current Stripe state:
+// delivery may be repeated or out of order. A handler failure returns 500 so
+// Stripe retries; no Supabase JWT is expected from Stripe.
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-12-18.acacia',
+  httpClient: Stripe.createFetchHttpClient(),
 });
 
-const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
+const webhookSecrets = [Deno.env.get('STRIPE_WEBHOOK_SECRET'), Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET')].filter((value): value is string => Boolean(value));
 
 // Service role: this function does privileged, server-only writes to columns
 // the client roles cannot touch (provider capability flags, the payout
@@ -42,7 +23,7 @@ const admin = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // Stripe only ever POSTs; no CORS/OPTIONS handling needed (it isn't a
   // browser caller).
   if (req.method !== 'POST') {
@@ -63,7 +44,15 @@ serve(async (req) => {
     // constructEventAsync (not the sync variant) is mandatory on Deno: the
     // sync one uses Node's crypto, which isn't available here; the async one
     // uses Web Crypto (SubtleCrypto).
-    event = await stripe.webhooks.constructEventAsync(rawBody, signature, webhookSecret);
+    let verified: Stripe.Event | undefined;
+    for (const secret of webhookSecrets) {
+      try {
+        verified = await stripe.webhooks.constructEventAsync(rawBody, signature, secret, undefined, Stripe.createSubtleCryptoProvider());
+        break;
+      } catch { /* Try the optional separate Connect destination secret. */ }
+    }
+    if (!verified) throw new Error('No matching webhook signature');
+    event = verified;
   } catch (err) {
     // A bad signature is the security boundary of this endpoint — reject it,
     // real reason to logs only.
@@ -73,6 +62,18 @@ serve(async (req) => {
 
   try {
     switch (event.type) {
+      case 'payment_intent.amount_capturable_updated':
+      case 'payment_intent.succeeded': {
+        const intent = event.data.object as Stripe.PaymentIntent;
+        if (intent.metadata.checkout_batch_id) await settleCheckout(admin, stripe, intent.id);
+        break;
+      }
+      case 'refund.created':
+      case 'refund.updated': {
+        const refund = await stripe.refunds.retrieve((event.data.object as Stripe.Refund).id);
+        await reconcileRefund(admin, stripe, refund);
+        break;
+      }
       case 'account.updated': {
         await handleAccountUpdated(event.data.object as Stripe.Account);
         break;
@@ -130,7 +131,9 @@ serve(async (req) => {
 // writes when something actually changed, so a redelivered event doesn't churn
 // the row (and doesn't needlessly re-fire the go-live trigger, which is gated
 // on stripe_charges_enabled changing).
-async function handleAccountUpdated(account: Stripe.Account): Promise<void> {
+async function handleAccountUpdated(eventAccount: Stripe.Account): Promise<void> {
+  // Read current state: events can arrive out of order.
+  const account = await stripe.accounts.retrieve(eventAccount.id);
   const { data: provider, error: readError } = await admin
     .from('providers')
     .select('id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
@@ -176,22 +179,25 @@ async function handleAccountUpdated(account: Stripe.Account): Promise<void> {
 // platform balance for their connected account. Match it to the ledger row the
 // release job stamped with this transfer id and mark it transferred. Idempotent
 // on redelivery — writing 'transferred' twice is a no-op-equivalent update.
-async function handleTransfer(transfer: Stripe.Transfer): Promise<void> {
-  const { data: rows, error } = await admin
-    .from('provider_payouts')
-    .update({ status: 'transferred', failure_reason: null })
-    .eq('stripe_transfer_id', transfer.id)
-    .in('status', ['held', 'transferred', 'failed'])
-    .select('id');
+async function handleTransfer(eventTransfer: Stripe.Transfer): Promise<void> {
+  const transfer = await stripe.transfers.retrieve(eventTransfer.id);
+  if (transfer.reversed) { await handleTransferReversed(transfer); return; }
+  const payoutId = transfer.metadata.payout_id;
+  if (!payoutId) return;
+  const { data: payout, error } = await admin.from('provider_payouts')
+    .select('id, booking_id, stripe_account_id, payout_amount, status').eq('id', payoutId).single();
   if (error) throw error;
-  if (!rows || rows.length === 0) {
-    // The release job stamps stripe_transfer_id before/at creation, so a
-    // transfer with no matching row means an out-of-band transfer or an event
-    // that beat our own write. Log rather than guess.
-    console.log(`[stripe-webhook] transfer ${transfer.id} matched no payout row (yet)`);
-    return;
-  }
-  console.log(`[stripe-webhook] payout row(s) ${rows.map((r) => r.id).join(',')} marked transferred (transfer=${transfer.id})`);
+  if (payout.status === 'reversed') return;
+  const destination = typeof transfer.destination === 'string' ? transfer.destination : transfer.destination?.id;
+  if (destination !== payout.stripe_account_id || transfer.amount !== payout.payout_amount) throw new Error('Transfer mismatch');
+  const { error: writeError } = await admin.from('provider_payouts')
+    .update({ status: 'transferred', stripe_transfer_id: transfer.id, failure_reason: null })
+    .eq('id', payout.id).neq('status', 'reversed');
+  if (writeError) throw writeError;
+  const { data: booking, error: bookingError } = await admin.from('bookings')
+    .select('stripe_refund_id').eq('id', payout.booking_id).single();
+  if (bookingError) throw bookingError;
+  if (booking.stripe_refund_id) await reconcileRefund(admin, stripe, await stripe.refunds.retrieve(booking.stripe_refund_id));
 }
 
 // A Transfer reversal — the platform clawed a provider's split back after a
@@ -210,3 +216,4 @@ async function handleTransferReversed(transfer: Stripe.Transfer): Promise<void> 
   }
   console.log(`[stripe-webhook] payout row(s) ${rows.map((r) => r.id).join(',')} marked reversed (transfer=${transfer.id})`);
 }
+

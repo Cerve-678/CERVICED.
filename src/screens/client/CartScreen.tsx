@@ -3975,6 +3975,12 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                             if (!item.providerId || !booking?.selectedDate || !booking.selectedTime) {
                               throw new Error('Every service needs a provider, date and time before payment.');
                             }
+                            // Reads the FROZEN snapshot, like the claim path — a
+                            // metadata refetch between "Confirm & Pay" and here
+                            // must not change which items carry the address.
+                            const isMobileItem = checkoutSnapshot.mobileProviderNames.includes(
+                              item.providerDisplayName ?? item.providerName,
+                            );
                             return {
                               provider_id: item.providerId,
                               service_id: item.serviceId,
@@ -3983,6 +3989,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               add_on_ids: (item.addOns ?? []).map(addOn => String(addOn.id)),
                               use_deposit: Boolean(booking.isDepositOnly),
                               notes: booking.notes,
+                              // Only a mobile provider's item carries the client's
+                              // address. prepare_checkout rejects a mobile item
+                              // without one and writes it onto the held row, so it
+                              // reaches the provider after accept exactly as on the
+                              // live route. The area is the account's chosen one,
+                              // like the claim path; the DB derives it if absent.
+                              ...(isMobileItem && clientAddress.trim()
+                                ? { client_address: clientAddress.trim(), client_area: user?.clientArea ?? null }
+                                : {}),
                               // The single Terms checkbox above folds in
                               // safety acknowledgement when relevant — it
                               // can't be checked while it's required and

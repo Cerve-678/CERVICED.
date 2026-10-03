@@ -1,6 +1,6 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
+import { reconcileRefund } from '../_shared/reconcileRefund.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
+import Stripe from 'npm:stripe@17.4.0';
 
 // Step 4 of the Connect build: refunds. Provider-initiated or admin, never
 // automatic (handoff decision). Refunds the client's FULL payment for a
@@ -27,6 +27,7 @@ const corsHeaders = {
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-12-18.acacia',
+  httpClient: Stripe.createFetchHttpClient(),
 });
 
 const admin = createClient(
@@ -39,7 +40,7 @@ interface RequestBody {
   reason?: string;
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -57,7 +58,7 @@ serve(async (req) => {
     // Load the booking with the service role (we need private payment fields).
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, provider_id, payment_intent_id, amount_paid, payment_status')
+      .select('id, provider_id, payment_intent_id, amount_paid, payment_status, stripe_refund_id')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -88,6 +89,9 @@ serve(async (req) => {
 
     // Idempotent: an already-refunded booking is a no-op success.
     if (booking.payment_status === 'refunded') {
+      // Reconcile again on retries in case reversal previously failed.
+      const { data: recorded } = await admin.from('bookings').select('stripe_refund_id').eq('id', booking.id).single();
+      if (recorded?.stripe_refund_id) await reconcileRefund(admin, stripe, await stripe.refunds.retrieve(recorded.stripe_refund_id));
       return json({ status: 'already_refunded' }, 200);
     }
     if (!booking.payment_intent_id || Number(booking.amount_paid) <= 0) {
@@ -103,7 +107,17 @@ serve(async (req) => {
     // batch PaymentIntent (a batch can cover several bookings); this returns
     // exactly what this booking's client paid, fee included. Idempotency key
     // keyed on the booking so a retry returns the same refund.
-    const refund = await stripe.refunds.create(
+    let previousRefund: Stripe.Refund | undefined;
+    if (booking.stripe_refund_id) {
+      previousRefund = await stripe.refunds.retrieve(booking.stripe_refund_id);
+    } else {
+      // Recover even after Stripe's idempotency window if the database write
+      // failed after Stripe had already issued this booking's refund.
+      for await (const candidate of stripe.refunds.list({ payment_intent: booking.payment_intent_id, limit: 100 })) {
+        if (candidate.metadata?.booking_id === booking.id) { previousRefund = candidate; break; }
+      }
+    }
+    const refund = previousRefund ?? await stripe.refunds.create(
       {
         payment_intent: booking.payment_intent_id,
         amount: refundPence,
@@ -112,52 +126,9 @@ serve(async (req) => {
       { idempotencyKey: `refund_${booking.id}` },
     );
 
-    // 2) Settle the provider's payout row so the ledger matches reality.
-    const { data: payout, error: payoutErr } = await admin
-      .from('provider_payouts')
-      .select('id, status, stripe_transfer_id, payout_amount')
-      .eq('booking_id', booking.id)
-      .eq('provider_id', booking.provider_id)
-      .maybeSingle();
-    if (payoutErr) throw payoutErr;
-
-    if (payout) {
-      if (payout.status === 'held') {
-        // Never transferred — just cancel it; nothing to claw back.
-        await admin.from('provider_payouts')
-          .update({ status: 'cancelled', failure_reason: 'refunded before release' })
-          .eq('id', payout.id).eq('status', 'held');
-      } else if (payout.status === 'transferred' && payout.stripe_transfer_id) {
-        // Already paid — reclaim the provider's share into the platform
-        // balance. Reversals don't need the connected account to hold funds.
-        const reversal = await stripe.transfers.createReversal(
-          payout.stripe_transfer_id,
-          { amount: payout.payout_amount, metadata: { booking_id: booking.id } },
-          { idempotencyKey: `reversal_${payout.id}` },
-        );
-        await admin.from('provider_payouts')
-          .update({ status: 'reversed', stripe_reversal_id: reversal.id })
-          .eq('id', payout.id).eq('status', 'transferred');
-      }
-      // 'cancelled'/'reversed'/'failed' already: nothing further to do.
-    }
-
-    // 3) Record the client-side refund on the booking (money side only —
-    // booking status/notifications stay with the cancel flow).
-    const { error: writeErr } = await admin
-      .from('bookings')
-      .update({
-        payment_status: 'refunded',
-        refunded_amount: booking.amount_paid,
-        refunded_at: new Date().toISOString(),
-        stripe_refund_id: refund.id,
-      })
-      .eq('id', booking.id);
-    if (writeErr) {
-      // The money already moved; failing to record it must be loud, not
-      // silent, so it can be reconciled.
-      console.error(`[refund-payment] refund ${refund.id} succeeded but booking write failed for ${booking.id}: ${String(writeErr)}`);
-      throw writeErr;
+    await reconcileRefund(admin, stripe, refund);
+    if (refund.status !== 'succeeded') {
+      return json({ status: refund.status, refundId: refund.id }, 202);
     }
 
     return json({ status: 'refunded', refundId: refund.id, amount: refundPence }, 200);
@@ -173,3 +144,4 @@ function json(payload: unknown, status: number): Response {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
+
