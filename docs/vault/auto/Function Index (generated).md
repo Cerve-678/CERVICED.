@@ -5,7 +5,7 @@
 
 #generated
 
-**2267 functions** across **309 files**.
+**2268 functions** across **309 files**.
 
 ### `src/components/` (42)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -76,7 +76,7 @@
 ### `src/features/bookings/` (9)
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
-- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **canRequestRefund** · **fileBookingSupportRequest**
+- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **canRequestRefund** · **fileBookingSupportRequest** · **isSupportRequestReady**
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `noShowDispute.ts` — **fileNoShowDispute**

@@ -5,7 +5,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
   Keyboard, TouchableWithoutFeedback,
-  LayoutAnimation,
+  LayoutAnimation, KeyboardAvoidingView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,9 +19,12 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking } from '../../types/booking';
+import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus } from '../../types/booking';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
-import { canRequestRefund, fileBookingSupportRequest, type BookingSupportKind } from '../../features/bookings/bookingSupportRequest';
+import {
+  canRequestRefund, fileBookingSupportRequest, isSupportRequestReady,
+  OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
+} from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
@@ -176,6 +179,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   // (see fileBookingSupportRequest). supportKind non-null = the form is open.
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [supportKind, setSupportKind] = useState<BookingSupportKind | null>(null);
+  const [supportReason, setSupportReason] = useState<string | null>(null);
   const [supportMessage, setSupportMessage] = useState('');
   const [supportBusy, setSupportBusy] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState('');
@@ -526,6 +530,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   const openSupportForm = useCallback((kind: BookingSupportKind) => {
     setShowMoreMenu(false);
+    setSupportReason(null);
     setSupportMessage('');
     // Let the menu's fade finish before the next Modal mounts — two Modals
     // animating at once on iOS can leave the second one never presented.
@@ -533,11 +538,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   }, []);
 
   const handleSubmitSupport = useCallback(async () => {
-    if (!booking || !supportKind || !supportMessage.trim() || supportBusy) return;
+    if (!booking || !supportKind || !supportReason || !isSupportRequestReady(supportReason, supportMessage) || supportBusy) return;
     setSupportBusy(true);
     try {
-      const { ticketNumber } = await fileBookingSupportRequest(booking, supportKind, supportMessage, activeMode);
+      const { ticketNumber } = await fileBookingSupportRequest(booking, supportKind, supportReason, supportMessage, activeMode);
       setSupportKind(null);
+      setSupportReason(null);
       setSupportMessage('');
       setSuccessMessage(
         supportKind === 'refund'
@@ -556,7 +562,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     } finally {
       setSupportBusy(false);
     }
-  }, [booking, supportKind, supportMessage, supportBusy, activeMode]);
+  }, [booking, supportKind, supportReason, supportMessage, supportBusy, activeMode]);
 
   const handleReschedulePress = useCallback(async () => {
     if (!booking) return;
@@ -1616,51 +1622,103 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           </Pressable>
         </Modal>
 
-        {/* ─── Refund request / complaint form ────────────────────────────
-            The message is required: it is the entire support ticket. The copy
-            promises a human review, never a refund, and doesn't claim the
-            provider was told — nothing notifies them. */}
-        <Modal visible={supportKind !== null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
-          <KeyboardDismissView style={st.overlay} dismissOnTap>
-            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
-              <Text style={[st.sheetTitle, { color: C.text }]}>{supportKind === 'refund' ? 'Request a refund' : 'Make a complaint'}</Text>
-              <Text style={[st.sheetSub, { color: C.sub }]}>
-                {supportKind === 'refund'
-                  ? `Tell us why you're asking for a refund on this booking with ${booking.providerName}. Cerviced support will review it against their policy and reply by email.`
-                  : `Tell us what went wrong with this booking with ${booking.providerName}. This goes to Cerviced support, who will reply by email.`}
-              </Text>
-              <TextInput
-                style={[st.disputeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-                placeholder={supportKind === 'refund' ? 'Why are you asking for a refund?' : 'What happened?'}
-                placeholderTextColor={C.sub}
-                value={supportMessage}
-                onChangeText={setSupportMessage}
-                multiline
-                maxLength={1000}
-                editable={!supportBusy}
-              />
-              <View style={st.sheetBtns}>
-                <TouchableOpacity
-                  style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSupportKind(null); setSupportMessage(''); }}
-                  disabled={supportBusy}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[st.sheetBtn, { backgroundColor: C.accent }, !supportMessage.trim() && { opacity: 0.5 }]}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleSubmitSupport(); }}
-                  disabled={supportBusy || !supportMessage.trim()}
-                  activeOpacity={0.7}
-                >
-                  {supportBusy
-                    ? <ActivityIndicator size="small" color={C.onAccent} />
-                    : <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Send</Text>}
-                </TouchableOpacity>
+        {/* ─── Refund request / complaint sheet ───────────────────────────
+            A bottom sheet, same shape as the provider's Issue Refund sheet.
+            The reason leads the support ticket; the note is the detail and is
+            only required for "Something else". The copy promises a human
+            review, never a refund, and doesn't claim the provider was told —
+            nothing notifies them. */}
+        <Modal visible={supportKind !== null} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <Pressable style={st.supportOverlay} onPress={() => { if (!supportBusy) setSupportKind(null); }} />
+            <View style={[st.supportSheet, { backgroundColor: C.surfaceRaised, paddingBottom: Math.max(insets.bottom, 16) }]}>
+              <View style={[st.supportHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)' }]} />
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+                <View style={st.supportHead}>
+                  <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}>
+                    <Ionicons name={supportKind === 'refund' ? 'arrow-undo-outline' : 'flag-outline'} size={20} color={C.accentText} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[st.supportTitle, { color: C.text }]}>{supportKind === 'refund' ? 'Request a refund' : 'Make a complaint'}</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }} numberOfLines={1}>
+                      {booking.providerName} · {booking.serviceName}
+                    </Text>
+                  </View>
+                </View>
+
+                {supportKind === 'refund' && (
+                  <View style={[st.supportCard, { backgroundColor: C.card, borderColor: C.border }]}>
+                    <View style={st.supportRowBetween}>
+                      <Text style={{ color: C.text, fontWeight: '600', fontSize: 14 }}>
+                        {booking.paymentStatus === PaymentStatus.DEPOSIT_PAID ? 'Deposit paid in the app' : 'Paid in the app'}
+                      </Text>
+                      <Text style={{ color: C.text, fontWeight: '700', fontSize: 16 }}>£{Number(booking.amountPaid || 0).toFixed(2)}</Text>
+                    </View>
+                    <Text style={{ color: C.sub, fontSize: 12, marginTop: 2 }}>
+                      {formatBookingDisplayDate(booking.bookingDate)} · {formatTime12Safe(booking.bookingTime)} · {formatBookingRef(booking)}
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={[st.supportHeading, { color: C.sub }]}>{supportKind === 'refund' ? "WHAT'S THE REFUND FOR?" : 'WHAT WENT WRONG?'}</Text>
+                <View style={{ gap: 8 }}>
+                  {(supportKind ? SUPPORT_REASONS[supportKind] : []).map(r => {
+                    const selected = supportReason === r;
+                    return (
+                      <TouchableOpacity
+                        key={r}
+                        activeOpacity={0.7}
+                        disabled={supportBusy}
+                        onPress={() => { Haptics.selectionAsync().catch(() => {}); setSupportReason(r); }}
+                        style={[st.supportReasonRow, { backgroundColor: C.card, borderColor: selected ? C.accent : C.border }]}
+                      >
+                        <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={18} color={selected ? C.accentText : C.sub} />
+                        <Text style={{ color: C.text, fontSize: 14, fontWeight: selected ? '600' : '400', flex: 1 }}>{r}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TextInput
+                  style={[st.disputeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text, marginTop: 14 }]}
+                  placeholder={supportReason === OTHER_SUPPORT_REASON ? 'Tell us what happened (required)' : 'Anything else we should know? (optional)'}
+                  placeholderTextColor={C.sub}
+                  value={supportMessage}
+                  onChangeText={setSupportMessage}
+                  multiline
+                  maxLength={1000}
+                  editable={!supportBusy}
+                />
+
+                <View style={[st.supportNext, { backgroundColor: C.accent + '14' }]}>
+                  <Ionicons name="information-circle-outline" size={16} color={C.accentText} style={{ marginTop: 1 }} />
+                  <Text style={{ color: C.text, fontSize: 13, lineHeight: 18, flex: 1 }}>
+                    {supportKind === 'refund'
+                      ? `This is a request, not a refund. Cerviced support will review it against ${booking.providerName}'s policy and reply by email.`
+                      : 'This goes to Cerviced support, who will look into it and reply by email.'}
+                  </Text>
+                </View>
+              </ScrollView>
+
+              <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+                {(() => {
+                  const ready = isSupportRequestReady(supportReason, supportMessage);
+                  return (
+                    <TouchableOpacity
+                      style={[st.supportSend, { backgroundColor: C.accent }, !ready && { opacity: 0.5 }]}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleSubmitSupport(); }}
+                      disabled={supportBusy || !ready}
+                      activeOpacity={0.7}
+                    >
+                      {supportBusy
+                        ? <ActivityIndicator size="small" color={C.onAccent} />
+                        : <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 15 }}>{supportKind === 'refund' ? 'Send refund request' : 'Send complaint'}</Text>}
+                    </TouchableOpacity>
+                  );
+                })()}
               </View>
             </View>
-          </KeyboardDismissView>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* ─── Rating Modal ─── */}
@@ -1970,6 +2028,17 @@ const st = StyleSheet.create({
   contactSheet: { maxHeight: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 40 },
   contactOption: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  supportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10 },
+  supportHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
+  supportHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  supportTitle: { fontSize: 18, fontWeight: '800' },
+  supportCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
+  supportRowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  supportHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 18, marginBottom: 8 },
+  supportReasonRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  supportNext: { flexDirection: 'row', gap: 8, borderRadius: 12, padding: 12 },
+  supportSend: { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   msgInput: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 15, maxHeight: 100 },
   sendBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 });
