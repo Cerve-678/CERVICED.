@@ -1,4 +1,5 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
+import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import {
   computeCancellationSettlement,
   type CancelPenalty,
@@ -132,7 +133,9 @@ Deno.serve(async (req: Request) => {
     const penalty = readPenalty(snapshot?.['cancelPenalty'] ?? livePolicies?.['cancelPenalty']);
     const hours = noticeHours(provider?.cancellation_notice_hours, livePolicies);
 
-    const apptMs = Date.parse(`${booking.booking_date}T${booking.booking_time}`);
+    // booking_date/time are UK wall-clock; read as UTC they'd be an hour late
+    // in summer, handing a late canceller an extra hour of notice.
+    const apptMs = londonWallTimeToUtcMs(String(booking.booking_date), String(booking.booking_time));
     // Measured from WHEN they cancelled (stamped by the DB), never from when
     // this call arrives — otherwise waiting until after the appointment would
     // turn a late cancel into a full refund.
