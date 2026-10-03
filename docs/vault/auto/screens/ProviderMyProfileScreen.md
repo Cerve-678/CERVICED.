@@ -8,12 +8,12 @@ tags: [screen, provider]
 
 ## → Navigates to
 - [[InfoRegScreen\|EditProfile]]
+- [[PaymentsScreen\|Payments]]
 - [[ProviderScheduleScreen\|ProviderSchedule]]
 - [[BrandingScreen\|Branding]]
 - [[ProviderAnalyticsScreen\|Analytics]]
 - [[PoliciesScreen\|Policies]]
 - [[BusinessInfoScreen\|BusinessInfo]]
-- [[PaymentsScreen\|Payments]]
 - [[SchedulingScreen\|Scheduling]]
 - [[ProviderInfoPackScreen\|InfoPacks]]
 - [[ProviderClienteleScreen\|Clientele]]

@@ -3437,6 +3437,7 @@ export async function providerCancelGroupBooking(
 export async function getProviderBookings(
   sinceDaysAgo = 90,
   providerId?: string,
+  untilDaysAhead?: number,
 ): Promise<BookingWithAddOns[]> {
   const resolvedProviderId = providerId ?? (await getMyProviderProfile())?.id;
   if (!resolvedProviderId) return [];
@@ -3467,6 +3468,11 @@ export async function getProviderBookings(
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - sinceDaysAgo);
     query = query.gte("booking_date", cutoff.toISOString().split("T")[0]);
+  }
+  if (untilDaysAhead != null && Number.isFinite(untilDaysAhead)) {
+    const end = new Date();
+    end.setDate(end.getDate() + Math.max(0, untilDaysAhead));
+    query = query.lte("booking_date", end.toISOString().split("T")[0]);
   }
 
   const { data, error } = await query
@@ -3990,6 +3996,7 @@ export async function declineWaitlistHold(bookingId: string): Promise<void> {
 /** Fetch all notifications for the current user */
 export async function getMyNotifications(
   role: "provider" | "client",
+  limit = 50,
 ): Promise<DbNotification[]> {
   const { data, error } = await supabase
     .from("notifications")
@@ -3998,7 +4005,11 @@ export async function getMyNotifications(
     )
     .eq("recipient_role", role)
     .order("created_at", { ascending: false })
-    .limit(100);
+    // The notification drawer is an inbox preview, not an archive. A smaller
+    // first page gets the recent, actionable items onto screen faster; older
+    // history remains available through the notification centre's pagination
+    // when that is added.
+    .limit(Math.min(Math.max(Math.trunc(limit), 1), 100));
 
   if (error) throw error;
   return data ?? [];
@@ -7943,20 +7954,24 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
 }
 
 /** Current provider's branding without a screen-level auth round trip. */
-export async function getMyProviderBranding(): Promise<
+export async function getMyProviderBranding(knownUserId?: string): Promise<
   | (NonNullable<Awaited<ReturnType<typeof getProviderBrandingByUserId>>> & {
       userId: string;
     })
   | null
 > {
-  const {
-    data: { user },
-    error,
-  } = await getSessionUser();
-  if (error) throw error;
-  if (!user) return null;
-  const branding = await getProviderBrandingByUserId(user.id);
-  return branding ? { ...branding, userId: user.id } : null;
+  let userId = knownUserId;
+  if (!userId) {
+    const {
+      data: { user },
+      error,
+    } = await getSessionUser();
+    if (error) throw error;
+    userId = user?.id;
+  }
+  if (!userId) return null;
+  const branding = await getProviderBrandingByUserId(userId);
+  return branding ? { ...branding, userId } : null;
 }
 
 export interface ProviderAccountEditorInfo {

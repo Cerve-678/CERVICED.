@@ -19,7 +19,7 @@ describe('provider management performance contracts', () => {
       );
     }
     expect(read('screens/provider/BrandingScreen.tsx')).toContain(
-      'getMyProviderBranding()',
+      'getMyProviderBranding(user?.id)',
     );
     expect(read('screens/provider/ProviderAccountInfoScreen.tsx')).toContain(
       'getMyProviderAccountEditorInfo()',
@@ -89,6 +89,17 @@ describe('provider management performance contracts', () => {
 
     expect(source).not.toContain("from '../../lib/supabase'");
     expect(source).toContain('subscribeToProviderBookingDetailChanges');
+  });
+
+  it('keeps provider refund controls usable while typing a reason', () => {
+    const source = read('screens/provider/ProviderBookingDetailScreen.tsx');
+
+    // The keyboard sits over the sheet's footer; the ScrollView insets itself
+    // so the amount and note stay reachable while typing.
+    expect(source).toContain('automaticallyAdjustKeyboardInsets');
+    expect(source).toContain('keyboardShouldPersistTaps="handled"');
+    expect(source).toContain('Issue a refund');
+    expect(source).toContain('>Cancel</Text>');
   });
 
   it('saves the full weekly schedule through one atomic RPC', () => {
