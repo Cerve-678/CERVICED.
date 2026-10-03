@@ -11,11 +11,11 @@ import {
   Modal,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { SlideUpOnMount } from '../../components/SlideUpOnMount';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -2775,17 +2775,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       </Modal>
 
       {/* ── ⋯ sheet ──────────────────────────────────────────────────────
-          A floating card, rounded on all four corners, same row shape as the
-          client's ⋯ sheet. Reschedule still lives on its own button in the
+          A floating card, same row shape as the client's ⋯ sheet. Reschedule still lives on its own button in the
           receipt body. */}
       <Modal
         visible={showMoreSheet}
         transparent statusBarTranslucent navigationBarTranslucent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowMoreSheet(false)}
       >
         <TouchableOpacity style={styles.moreSheetOverlay} activeOpacity={1} onPress={() => setShowMoreSheet(false)} />
-        <View style={[styles.moreSheet, { backgroundColor: P.bg, bottom: Math.max(insets.bottom, 10) }]}>
+        <SlideUpOnMount style={[styles.moreSheet, { backgroundColor: P.bg, bottom: Math.max(insets.bottom, 10) }]}>
           <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
           <View style={{ gap: 8 }}>
             {/* Issue a refund — only when there's an app-taken payment left to
@@ -2826,7 +2825,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <Ionicons name="chevron-forward" size={16} color={P.sub} />
             </TouchableOpacity>
           </View>
-        </View>
+        </SlideUpOnMount>
       </Modal>
 
       {/* ── Dispute dialog ──────────────────────────────────────────────
@@ -2908,15 +2907,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         animationType="fade"
         onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
       >
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* The keyboard sits over the footer (Choose a reason / Cancel) rather
+            than pushing the sheet up; the ScrollView insets itself so the
+            amount and note fields stay reachable. */}
+        <View style={{ flex: 1 }}>
           <TouchableOpacity
             style={styles.refundOverlay}
             activeOpacity={1}
             onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
           />
-          <View style={[styles.refundSheet, { backgroundColor: P.bg, marginBottom: Math.max(insets.bottom, 10), paddingBottom: 12 }]}>
+          <View style={[styles.refundSheet, { backgroundColor: P.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
               <View style={styles.refundHead}>
                 <View style={[styles.refundHeadIcon, { backgroundColor: P.iconBg }]}>
                   <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
@@ -3149,7 +3151,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               );
             })()}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* ── Confirm/decline dialog ── */}
@@ -3917,7 +3919,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   refundOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  refundSheet: { maxHeight: '90%', marginHorizontal: 10, borderRadius: 28, paddingTop: 8, overflow: 'hidden' },
+  // Top corners only, rounder than the other sheets.
+  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 8 },
   refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
   refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },
@@ -4177,6 +4180,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
+  // Floats: inset from the edges, rounded on all four corners.
   moreSheet: {
     position: 'absolute',
     left: 10,
