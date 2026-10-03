@@ -1343,6 +1343,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
   const perf = isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
   const rowDiv = isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  const timeRange = booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime
+    ? `${booking.bookingTime} – ${booking.endTime}`
+    : booking.bookingTime || '—';
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1394,15 +1397,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
         {/* ══════════════ THE RECEIPT ══════════════ */}
         <View style={styles.receiptScene}>
-          {/* 3D depth layers — stacked paper sheets behind the card */}
-          <View style={[styles.receiptDepthLayer, styles.receiptDepth3, {
-            backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.45)',
-            borderColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(200,200,200,0.60)',
-          }]} />
-          <View style={[styles.receiptDepthLayer, styles.receiptDepth2, {
-            backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.60)',
-            borderColor: isDarkMode ? 'rgba(255,255,255,0.09)' : 'rgba(220,220,220,0.70)',
-          }]} />
+          {/* One sheet peeking out from under the card */}
           <View style={[styles.receiptDepthLayer, styles.receiptDepth1, {
             backgroundColor: isDarkMode ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.75)',
             borderColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(240,240,240,0.85)',
@@ -1420,6 +1415,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <View style={styles.receiptHeader}>
                 <Text style={[styles.receiptBrand, { color: P.text }]}>CERVICED</Text>
                 <Text style={[styles.receiptSubBrand, { color: P.sub }]}>Booking Receipt</Text>
+                <Text style={[styles.receiptDate, { color: P.text }]}>{formatBookingDisplayDate(booking.bookingDate) || '—'}</Text>
+                <Text style={[styles.receiptTime, { color: P.sub }]}>{timeRange}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusBadgeText, { color: statusColor }]}>
@@ -1456,7 +1453,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )}
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} />
+              <Perf color={perf} notch={P.bg} />
 
               {/* ── SERVICE section ── */}
               <View style={styles.section}>
@@ -1482,7 +1479,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   returns here. ── */}
               {groupSiblings.length > 1 && (
                 <>
-                  <Perf color={perf} />
+                  <Perf color={perf} notch={P.bg} />
                   <View style={styles.section}>
                     <View style={styles.groupSectionHeader}>
                       <Ionicons name="link" size={12} color={P.sub} />
@@ -1526,13 +1523,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )}
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} />
+              <Perf color={perf} notch={P.bg} />
 
               {/* ── APPOINTMENT section ── */}
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: P.sub }]}>APPOINTMENT</Text>
                 <Row label="Date" value={formatBookingDisplayDate(booking.bookingDate) || '—'} textColor={P.text} divColor={rowDiv} />
-                <Row label="Time" value={booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime ? `${booking.bookingTime} – ${booking.endTime}` : booking.bookingTime || '—'} textColor={P.text} divColor={rowDiv} />
+                <Row label="Time" value={timeRange} textColor={P.text} divColor={rowDiv} />
                 {displayDuration ? (
                   <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
@@ -1613,7 +1610,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} />
+              <Perf color={perf} notch={P.bg} />
 
               {/* ── ADDRESS section — mobile providers only.
                   This section exists to SHOW the client's address; the
@@ -1645,7 +1642,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
 
                   {/* ── Perforated divider ── */}
-                  <Perf color={perf} />
+                  <Perf color={perf} notch={P.bg} />
                 </>
               )}
 
@@ -1666,7 +1663,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
                     </View>
                   </View>
-                  <Perf color={perf} />
+                  <Perf color={perf} notch={P.bg} />
                 </>
               ) : null}
 
@@ -1674,8 +1671,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: P.sub }]}>CLIENT</Text>
                 <View style={styles.clientHeader}>
-                  <View style={[styles.avatar, { backgroundColor: '#a342c322', borderColor: '#a342c355' }]}>
-                    <Text style={[styles.avatarText, { color: '#a342c3' }]}>{initials}</Text>
+                  <View style={[styles.avatar, { backgroundColor: P.iconBg, borderColor: P.border }]}>
+                    <Text style={[styles.avatarText, { color: P.accent }]}>{initials}</Text>
                   </View>
                   <Text style={[styles.clientNameLarge, { color: P.text }]}>{booking.customerName || 'Unknown'}</Text>
                   {clientUserId ? (
@@ -1691,10 +1688,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         }
                         setClientHistoryLoading(false);
                       }}
-                      style={{ marginLeft: 'auto', padding: 8 }}
+                      style={[styles.historyBtn, { borderColor: P.border }]}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      activeOpacity={0.7}
                     >
-                      <Ionicons name="eye-outline" size={22} color={P.accent} />
+                      <Text style={[styles.historyBtnText, { color: P.accent }]}>History</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -1721,7 +1719,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <Ionicons name="warning-outline" size={16} color="#FF3B30" />
                     <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#FF3B30', lineHeight: 17 }}>
                       {[
-                        clientProfile.allergies.length > 0 && `${clientProfile.allergies.length} allerg${clientProfile.allergies.length > 1 ? 'ies' : 'y'} on file`,
+                        clientProfile.allergies.length > 0 && `Allergic to ${clientProfile.allergies.join(', ')}`,
                         clientProfile.medicalNotes && 'Medical notes on file',
                       ].filter(Boolean).join('  ·  ')}
                     </Text>
@@ -1739,23 +1737,28 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 ) : null}
                 {(booking.customerPhone || booking.customerEmail) && (
                   <View style={styles.contactRow}>
+                    <TouchableOpacity
+                      style={[styles.contactBtn, { backgroundColor: P.accent, borderColor: P.accent }]}
+                      onPress={handleOpenChat}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.contactBtnText, { color: '#FFFFFF' }]}>Message</Text>
+                    </TouchableOpacity>
                     {booking.customerPhone ? (
-                      <TouchableOpacity style={[styles.contactBtn, { backgroundColor: '#34C759' }]} onPress={handleCallClient}>
-                        <Text style={styles.contactBtnText}>Call Client</Text>
+                      <TouchableOpacity
+                        style={[styles.contactBtn, { borderColor: P.border }]}
+                        onPress={handleCallClient}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.contactBtnText, { color: P.text }]}>Call</Text>
                       </TouchableOpacity>
                     ) : null}
-                    <TouchableOpacity
-                      style={[styles.contactBtn, { backgroundColor: '#a342c3' }]}
-                      onPress={handleOpenChat}
-                    >
-                      <Text style={styles.contactBtnText}>Message</Text>
-                    </TouchableOpacity>
                   </View>
                 )}
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} />
+              <Perf color={perf} notch={P.bg} />
 
               {/* ── CLIENT PROFILE section ── */}
               {clientProfile && (() => {
@@ -1933,7 +1936,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         );
                       })()}
                     </View>
-                    <Perf color={perf} />
+                    <Perf color={perf} notch={P.bg} />
                   </>
                 );
               })()}
@@ -1966,7 +1969,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         <Text style={[styles.intakeFormStatusText, {
                           color: intakeForm.status === 'completed' ? '#34C759' : '#FF9500',
                         }]}>
-                          {intakeForm.status === 'completed' ? '✓ Received' : '⏳ Sent'}
+                          {intakeForm.status === 'completed' ? 'Received' : 'Sent'}
                         </Text>
                       </View>
                     </View>
@@ -1995,14 +1998,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     }]}
                   >
                     <View style={styles.intakeFormCardInner}>
-                      <Text style={[styles.intakeFormTitle, { color: P.text }]}>📄 {pack.title}</Text>
+                      <View style={styles.packTitleRow}>
+                        <Ionicons name="document-text-outline" size={15} color={P.accent} />
+                        <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
+                      </View>
                       <View style={[styles.intakeFormStatus, {
                         backgroundColor: pack.viewedAt ? '#34C759' + '22' : P.sub + '22',
                       }]}>
                         <Text style={[styles.intakeFormStatusText, {
                           color: pack.viewedAt ? '#34C759' : P.sub,
                         }]}>
-                          {pack.viewedAt ? '✓ Read' : '⏳ Sent'}
+                          {pack.viewedAt ? 'Read' : 'Not read'}
                         </Text>
                       </View>
                     </View>
@@ -2019,7 +2025,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     refuses it server-side too. */}
                 {booking!.status !== BookingStatus.CANCELLED && (
                   <TouchableOpacity
-                    style={[styles.sendInfoPackBtn, { borderColor: P.border, backgroundColor: P.surface }]}
+                    style={[styles.sendInfoPackBtn, { borderColor: P.border }]}
                     onPress={() => setShowInfoPackPicker(true)}
                     activeOpacity={0.75}
                   >
@@ -2030,7 +2036,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} />
+              <Perf color={perf} notch={P.bg} />
 
               {/* ── PAYMENT section ── */}
               <View style={styles.section}>
@@ -2074,7 +2080,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 )}
 
                 {/* Grand total block */}
-                <View style={[styles.totalBlock, { borderTopColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)' }]}>
+                <View style={[styles.totalBlock, { borderTopColor: P.text }]}>
                   <Text style={[styles.totalLabel, { color: P.text }]}>TOTAL</Text>
                   <Text style={[styles.totalValue, { color: P.text }]}>£{totalPrice.toFixed(2)}</Text>
                 </View>
@@ -2083,7 +2089,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Reschedule section ── */}
               {hasRescheduleRequest && dbReschedule && (
                 <>
-                  <Perf color={perf} />
+                  <Perf color={perf} notch={P.bg} />
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: '#FF9500' }]}>
                       {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : 'RESCHEDULE · RESPONDED'}
@@ -3293,10 +3299,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       activeOpacity={0.75}
                     >
                       <View style={styles.intakeFormCardInner}>
-                        <Text style={[styles.intakeFormTitle, { color: P.text }]}>📄 {pack.title}</Text>
+                        <View style={styles.packTitleRow}>
+                          <Ionicons name="document-text-outline" size={15} color={P.accent} />
+                          <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
+                        </View>
                         {alreadySent && (
                           <View style={[styles.intakeFormStatus, { backgroundColor: '#34C759' + '22' }]}>
-                            <Text style={[styles.intakeFormStatusText, { color: '#34C759' }]}>✓ Sent</Text>
+                            <Text style={[styles.intakeFormStatusText, { color: '#34C759' }]}>Sent</Text>
                           </View>
                         )}
                       </View>
@@ -3331,12 +3340,19 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 // ── Sub-components ──────────────────────────────────────────────────────────
 
 /** Perforated receipt divider */
-function Perf({ color }: { color: string }) {
+/** Tear line between receipt sections: a dashed rule with a half-circle
+ *  notch at each edge. The notches are filled with the screen background and
+ *  clipped by the card's rounded overflow, so they read as cut-outs. */
+function Perf({ color, notch }: { color: string; notch: string }) {
   return (
     <View style={styles.perfRow}>
-      {Array.from({ length: 24 }).map((_, i) => (
-        <View key={i} style={[styles.perfDot, { backgroundColor: color }]} />
-      ))}
+      <View style={[styles.perfNotch, styles.perfNotchLeft, { backgroundColor: notch }]} />
+      <View style={styles.perfDashes}>
+        {Array.from({ length: 26 }).map((_, i) => (
+          <View key={i} style={[styles.perfDash, { backgroundColor: color }]} />
+        ))}
+      </View>
+      <View style={[styles.perfNotch, styles.perfNotchRight, { backgroundColor: notch }]} />
     </View>
   );
 }
@@ -3368,11 +3384,13 @@ function Row({
     ]}>
       <Text style={[
         styles.rowLabel,
-        { color: indent ? textColor + '88' : textColor },
+        // Labels sit back (≈55% of the text colour) so the values carry the row;
+        // a bold row is a heading line (the service itself) and stays full strength.
+        { color: bold ? textColor : textColor + '8C' },
         bold && styles.rowLabelBold,
         indent && { paddingLeft: 12 },
       ]} numberOfLines={1}>
-        {indent ? '· ' : ''}{label}
+        {indent ? '– ' : ''}{label}
       </Text>
       <Text style={[
         styles.rowValue,
@@ -3407,7 +3425,7 @@ function ActionButton({
           // transparent (~8% alpha) fill it shows straight through as a dark
           // band hugging the inside edge — a thick "shadow ring" instead of
           // a normal outline chip. Zero it out for ghost buttons only.
-          ? { backgroundColor: color + '14', borderWidth: 1.5, borderColor: color + '55', elevation: 0, shadowOpacity: 0 }
+          ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: color, elevation: 0, shadowOpacity: 0 }
           : { backgroundColor: color },
       ]}
       onPress={onPress}
@@ -3568,17 +3586,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
   },
-  receiptDepth3: {
-    transform: [{ translateY: 10 }, { scaleX: 0.94 }],
-    opacity: 0.6,
-  },
-  receiptDepth2: {
-    transform: [{ translateY: 6 }, { scaleX: 0.96 }],
-    opacity: 0.75,
-  },
   receiptDepth1: {
-    transform: [{ translateY: 3 }, { scaleX: 0.98 }],
-    opacity: 0.90,
+    transform: [{ translateY: 7 }, { scaleX: 0.95 }],
+    opacity: 0.85,
   },
 
   // Main receipt card
@@ -3626,7 +3636,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 2,
     textTransform: 'uppercase',
-    marginBottom: 16,
+    marginBottom: 14,
+  },
+  receiptDate: {
+    fontSize: 19,
+    fontFamily: 'BakbakOne-Regular',
+    letterSpacing: 0.4,
+  },
+  receiptTime: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+    marginBottom: 14,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -3650,16 +3672,28 @@ const styles = StyleSheet.create({
 
   // ── Perforated divider ──
   perfRow: {
+    height: 22,
+    justifyContent: 'center',
+  },
+  perfDashes: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    marginVertical: 4,
+    marginHorizontal: 18,
   },
-  perfDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
+  perfDash: {
+    width: 6,
+    height: 1.5,
+    borderRadius: 1,
   },
+  perfNotch: {
+    position: 'absolute',
+    top: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  perfNotchLeft: { left: -11 },
+  perfNotchRight: { right: -11 },
 
   // ── Section ──
   section: {
@@ -3697,8 +3731,9 @@ const styles = StyleSheet.create({
   },
   rowValue: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
   rowValueBold: {
     fontWeight: '800',
@@ -3756,12 +3791,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 11,
     borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
   },
   contactBtnText: {
-    color: '#fff',
     fontWeight: '700',
     fontSize: 14,
+  },
+  historyBtn: {
+    marginLeft: 'auto',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  historyBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
   },
 
   // ── Payment total block ──
@@ -4381,9 +4427,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  packTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   sendInfoPackText: {
     fontSize: 13,
