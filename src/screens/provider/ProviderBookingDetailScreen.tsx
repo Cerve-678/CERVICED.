@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -355,6 +356,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundReason, setRefundReason] = useState<string | null>(null);
   const [refundNote, setRefundNote] = useState('');
+  const refundFormScrollRef = useRef<ScrollView>(null);
   const [refundBusy, setRefundBusy] = useState(false);
   // What the sheet shows comes from the server (getProviderRefundState); the
   // refund-payment function re-derives every figure when the refund is made.
@@ -2913,18 +2915,20 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         animationType="fade"
         onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
       >
-        {/* The keyboard sits over the footer (Choose a reason / Cancel) rather
-            than pushing the sheet up; the ScrollView insets itself so the
-            amount and note fields stay reachable. */}
-        <View style={{ flex: 1 }}>
+        {/* Keep the form above the keyboard and scroll focused fields into view. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <TouchableOpacity
-            style={styles.refundOverlay}
+            style={[styles.refundOverlay, StyleSheet.absoluteFill]}
             activeOpacity={1}
             onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
           />
           <View style={[styles.refundSheet, { backgroundColor: P.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-            <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
+            <ScrollView ref={refundFormScrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
               <View style={styles.refundHead}>
                 <View style={[styles.refundHeadIcon, { backgroundColor: P.iconBg }]}>
                   <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
@@ -3046,6 +3050,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                                 style={[styles.refundAmountInput, { color: P.text }]}
                                 value={refundAmountText}
                                 onChangeText={t => setRefundAmountText(t.replace(/[^0-9.]/g, ''))}
+                                onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
                                 keyboardType="decimal-pad"
                                 placeholder="0.00"
                                 placeholderTextColor={P.text + '44'}
@@ -3108,6 +3113,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           placeholderTextColor={P.text + '44'}
                           value={refundNote}
                           onChangeText={setRefundNote}
+                          onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
                           multiline
                           maxLength={500}
                           editable={!refundBusy}
@@ -3158,6 +3164,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             })()}
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Confirm/decline dialog ── */}
@@ -3926,8 +3933,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   refundOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  // Top corners only, rounder than the other sheets.
-  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 8 },
+  // Full-width bottom modal; its backdrop sits behind it so the top rounding
+  // is not obscured by a separate overlay edge.
+  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 8 },
   refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
   refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },
