@@ -11,11 +11,11 @@ import {
   Modal,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { SlideUpOnMount } from '../../components/SlideUpOnMount';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -77,7 +77,7 @@ import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFac
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
 import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
-import { describeRefundOutcome, PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
+import { describeRefundOutcome, describeSettlementTiming, PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
@@ -254,9 +254,10 @@ const REFUND_REASONS = [
 const REFUND_GREEN = { light: '#2F7D55', dark: '#6CC79A' };
 const REFUND_KEEP = { light: '#A0603A', dark: '#D9A27E' };
 const formatPence = (p: number) => `£${(p / 100).toFixed(2)}`;
-/** 'full' = everything back (fee included); 'giveback' = all the provider kept
- *  after a policy settlement; 'custom' = an amount out of the provider's share. */
-type RefundMode = 'full' | 'giveback' | 'custom';
+/** 'full' = everything back (fee included); 'custom' = an amount out of the
+ *  provider's share — the only option once their policy has settled a
+ *  client's cancellation. */
+type RefundMode = 'full' | 'custom';
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
   const { user, hatState } = useAuth();
@@ -360,6 +361,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [refundState, setRefundState] = useState<ProviderRefundState | null>(null);
   const [refundStateError, setRefundStateError] = useState(false);
   const [refundMode, setRefundMode] = useState<RefundMode>('full');
+  // After a policy settlement the sheet is a summary first; a partial refund
+  // on top is opt-in, behind its own row.
+  const [refundPartialOpen, setRefundPartialOpen] = useState(false);
   const [refundAmountText, setRefundAmountText] = useState('');
   // One per sheet opening: a double tap or retry reuses it, so Stripe returns
   // the first refund instead of making a second.
@@ -1136,7 +1140,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     try {
       const state = await getProviderRefundState(bookingId);
       setRefundState(state);
-      setRefundMode(state.policySettlement ? 'giveback' : state.anyRefunded ? 'custom' : 'full');
+      setRefundMode(state.policySettlement || state.anyRefunded ? 'custom' : 'full');
     } catch (err) {
       logger.error('[ProviderBookingDetail] refund state failed to load:', err);
       setRefundStateError(true);
@@ -1148,6 +1152,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setRefundReason(null);
     setRefundNote('');
     setRefundAmountText('');
+    setRefundPartialOpen(false);
     refundRequestId.current = newRequestId();
     setShowRefundModal(true);
     void loadRefundState(booking.id);
@@ -1158,7 +1163,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const refundPreview = useMemo(() => {
     if (!refundState) return { refundPence: 0, keepPence: 0, error: null as string | null };
     const held = refundState.heldPence;
-    if (refundMode === 'full' || refundMode === 'giveback') return { refundPence: held, keepPence: 0, error: null };
+    if (refundMode === 'full') return { refundPence: held, keepPence: 0, error: null };
     const typed = refundAmountText.trim();
     const pence = Math.round(Number(typed) * 100);
     if (!typed) return { refundPence: 0, keepPence: held, error: null };
@@ -2769,7 +2774,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </View>
       </Modal>
 
-      {/* ── Support dropdown ── */}
+      {/* ── ⋯ sheet ──────────────────────────────────────────────────────
+          A floating card, same row shape as the client's ⋯ sheet. Reschedule still lives on its own button in the
+          receipt body. */}
       <Modal
         visible={showMoreSheet}
         transparent statusBarTranslucent navigationBarTranslucent
@@ -2777,47 +2784,48 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         onRequestClose={() => setShowMoreSheet(false)}
       >
         <TouchableOpacity style={styles.moreSheetOverlay} activeOpacity={1} onPress={() => setShowMoreSheet(false)} />
-        <View style={[styles.moreSheet, { backgroundColor: isDarkMode ? '#1C1C1E' : '#F2F2F7' }]}>
+        <SlideUpOnMount style={[styles.moreSheet, { backgroundColor: P.bg, bottom: Math.max(insets.bottom, 10) }]}>
           <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-          {/* Issue Refund — only when there's an app-taken payment left to
-              return (deposit, full, or partly refunded already). Hidden once
-              fully refunded or refund-pending, and when nothing was paid
-              through the app.
-              Reschedule still lives on its own button in the receipt body. */}
-          {booking && (booking.paymentStatus === PaymentStatus.DEPOSIT_PAID || booking.paymentStatus === PaymentStatus.PAID_IN_FULL || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED) && (
+          <View style={{ gap: 8 }}>
+            {/* Issue a refund — only when there's an app-taken payment left to
+                return (deposit, full, or partly refunded already). Hidden once
+                fully refunded or refund-pending, and when nothing was paid
+                through the app. */}
+            {booking && (booking.paymentStatus === PaymentStatus.DEPOSIT_PAID || booking.paymentStatus === PaymentStatus.PAID_IN_FULL || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED) && (
+              <TouchableOpacity
+                style={[styles.moreSheetRow, { backgroundColor: P.card, borderColor: P.border }]}
+                onPress={() => {
+                  setShowMoreSheet(false);
+                  setTimeout(() => handleRefund(), 260);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.moreSheetIcon, { backgroundColor: P.iconBg }]}>
+                  <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
+                </View>
+                <View style={styles.moreSheetTextBlock}>
+                  <Text style={[styles.moreSheetTitle, { color: P.text }]}>Issue a refund</Text>
+                  <Text style={[styles.moreSheetSub, { color: P.sub }]}>Return some or all of this payment</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={P.sub} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={[styles.moreSheetRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
-              onPress={() => {
-                setShowMoreSheet(false);
-                setTimeout(() => handleRefund(), 260);
-              }}
+              style={[styles.moreSheetRow, { backgroundColor: P.card, borderColor: P.border }]}
+              onPress={() => { setShowMoreSheet(false); Linking.openURL(supportMailtoUrl('Booking Support')); }}
               activeOpacity={0.7}
             >
-              <View style={[styles.moreSheetIcon, { backgroundColor: '#FF3B3018' }]}>
-                <Ionicons name="arrow-undo-outline" size={18} color="#FF3B30" />
+              <View style={[styles.moreSheetIcon, { backgroundColor: P.iconBg }]}>
+                <Ionicons name="headset-outline" size={20} color={P.accent} />
               </View>
               <View style={styles.moreSheetTextBlock}>
-                <Text style={[styles.moreSheetTitle, { color: P.text }]}>Issue Refund</Text>
-                <Text style={[styles.moreSheetSub, { color: P.text + '66' }]}>Return this payment to the client</Text>
+                <Text style={[styles.moreSheetTitle, { color: P.text }]}>Get support</Text>
+                <Text style={[styles.moreSheetSub, { color: P.sub }]}>Contact the Cerviced team</Text>
               </View>
-              <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
+              <Ionicons name="chevron-forward" size={16} color={P.sub} />
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.moreSheetRow}
-            onPress={() => { setShowMoreSheet(false); Linking.openURL(supportMailtoUrl('Booking Support')); }}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.moreSheetIcon, { backgroundColor: '#007AFF18' }]}>
-              <Ionicons name="headset-outline" size={18} color="#007AFF" />
-            </View>
-            <View style={styles.moreSheetTextBlock}>
-              <Text style={[styles.moreSheetTitle, { color: P.text }]}>Get Support</Text>
-              <Text style={[styles.moreSheetSub, { color: P.text + '66' }]}>Contact the CERVICED team</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
-          </TouchableOpacity>
-        </View>
+          </View>
+        </SlideUpOnMount>
       </Modal>
 
       {/* ── Dispute dialog ──────────────────────────────────────────────
@@ -2899,7 +2907,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         animationType="fade"
         onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
       >
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* The keyboard sits over the footer (Choose a reason / Cancel) rather
+            than pushing the sheet up; the ScrollView insets itself so the
+            amount and note fields stay reachable. */}
+        <View style={{ flex: 1 }}>
           <TouchableOpacity
             style={styles.refundOverlay}
             activeOpacity={1}
@@ -2907,7 +2918,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           />
           <View style={[styles.refundSheet, { backgroundColor: P.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
               <View style={styles.refundHead}>
                 <View style={[styles.refundHeadIcon, { backgroundColor: P.iconBg }]}>
                   <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
@@ -2935,9 +2946,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 const first = booking.customerName?.split(' ')[0] || 'the client';
                 const held = refundState.heldPence;
                 const settled = refundState.policySettlement;
-                const modes: RefundMode[] = settled ? ['giveback', 'custom'] : refundState.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
+                const modes: RefundMode[] = refundState.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
+                const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours) : null;
                 const optionCopy: Record<RefundMode, { title: string; sub: string; value: string }> = {
-                  giveback: { title: `Give back the ${formatPence(held)} you kept`, sub: 'On top of what your policy already refunded', value: formatPence(held) },
                   full: { title: 'Full refund', sub: `Everything ${first} paid that hasn't come back yet`, value: formatPence(held) },
                   custom: { title: 'Partial refund', sub: 'Choose an amount', value: '' },
                 };
@@ -2956,12 +2967,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             <Ionicons name="shield-checkmark-outline" size={15} color={green} />
                             <Text style={{ color: green, fontWeight: '700', fontSize: 13 }}>Your policy was applied automatically</Text>
                           </View>
+                          {!!timing && <Text style={{ color: P.text, fontSize: 13 }}>{timing}</Text>}
+                          {settled.refundedToClientPence > 0 && (
+                            <View style={styles.refundRowBetween}>
+                              <Text style={{ color: P.text, fontSize: 13 }}>Refunded to {first}</Text>
+                              <Text style={{ color: P.text, fontSize: 13 }}>{formatPence(settled.refundedToClientPence)}</Text>
+                            </View>
+                          )}
                           <View style={styles.refundRowBetween}>
-                            <Text style={{ color: P.text, fontSize: 13 }}>Refunded to {first}</Text>
-                            <Text style={{ color: P.text, fontSize: 13 }}>{formatPence(settled.refundedToClientPence)}</Text>
-                          </View>
-                          <View style={styles.refundRowBetween}>
-                            <Text style={{ color: P.text, fontSize: 13 }}>You kept</Text>
+                            <Text style={{ color: P.text, fontSize: 13 }}>You kept{settled.keptIsDeposit ? ' (deposit)' : ''}</Text>
                             <Text style={{ color: P.text, fontSize: 13, fontWeight: '700' }}>{formatPence(settled.providerKeptPence)}</Text>
                           </View>
                         </View>
@@ -2972,7 +2986,26 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       <Text style={{ color: P.sub, fontSize: 14, marginTop: 16 }}>There's nothing left of your share to refund on this booking.</Text>
                     ) : (
                       <>
-                        <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>{settled ? 'WANT TO REFUND MORE?' : 'HOW MUCH TO REFUND'}</Text>
+                        {settled ? (
+                          refundPartialOpen ? (
+                            <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>PARTIAL REFUND</Text>
+                          ) : (
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              onPress={() => { setRefundMode('custom'); setRefundPartialOpen(true); }}
+                              style={[styles.refundReasonRow, { backgroundColor: P.card, borderColor: P.border, marginTop: 16 }]}
+                            >
+                              <Ionicons name="add-circle-outline" size={18} color={P.accent} />
+                              <View style={styles.refundReasonTextBlock}>
+                                <Text style={[styles.refundReasonLabel, { color: P.text }]}>Give a partial refund</Text>
+                                <Text style={[styles.refundReasonSub, { color: P.sub }]}>Optional · up to {formatPence(held)}</Text>
+                              </View>
+                              <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
+                            </TouchableOpacity>
+                          )
+                        ) : (
+                        <>
+                        <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>HOW MUCH TO REFUND</Text>
                         {modes.map(m => {
                           const selected = refundMode === m;
                           return (
@@ -2995,6 +3028,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             </TouchableOpacity>
                           );
                         })}
+                        </>
+                        )}
+                        {(!settled || refundPartialOpen) && (
+                        <>
                         {refundMode === 'custom' && (
                           <>
                             <View style={[styles.refundAmountInputRow, { backgroundColor: P.card, borderColor: P.accent }]}>
@@ -3070,6 +3107,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           editable={!refundBusy}
                         />
                         <Text style={{ color: P.sub, fontSize: 12 }}>This doesn't cancel the appointment. Banks usually take 5–10 working days to show a refund.</Text>
+                        </>
+                        )}
                       </>
                     )}
                   </>
@@ -3082,6 +3121,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 && !refundPreview.error && refundPreview.refundPence > 0;
               const first = booking.customerName?.split(' ')[0] || 'client';
               const label = refundMode === 'full' ? `Refund ${first} in full` : `Refund ${formatPence(refundPreview.refundPence)} to ${first}`;
+              // Nothing to submit until they opt into a partial refund (or
+              // there's nothing left to refund): the sheet is just the summary.
+              if (refundState && (refundState.heldPence <= 0 || (refundState.policySettlement && !refundPartialOpen))) {
+                return (
+                  <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
+                    <TouchableOpacity style={[styles.refundCta, { backgroundColor: P.accent }]} activeOpacity={0.8} onPress={() => setShowRefundModal(false)}>
+                      <Text style={styles.refundCtaText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
               return (
                 <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
                   <TouchableOpacity
@@ -3101,7 +3151,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               );
             })()}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* ── Confirm/decline dialog ── */}
@@ -3869,7 +3919,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   refundOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8 },
+  // Top corners only, rounder than the other sheets.
+  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 8 },
   refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
   refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },
@@ -4129,35 +4180,35 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
+  // Floats: inset from the edges, rounded on all four corners.
   moreSheet: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 36,
-    paddingTop: 12,
-    paddingHorizontal: 16,
+    left: 10,
+    right: 10,
+    borderRadius: 28,
+    paddingBottom: 14,
+    paddingTop: 10,
+    paddingHorizontal: 14,
   },
   moreSheetHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 14,
   },
   moreSheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
     gap: 12,
   },
   moreSheetIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4166,7 +4217,7 @@ const styles = StyleSheet.create({
   },
   moreSheetTitle: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   moreSheetSub: {
     fontSize: 12,
