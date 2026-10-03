@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### PENDING APPLY 2026-10-03 (no info pack on a cancelled booking)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261003120000 | `info_pack_not_on_cancelled_booking` | **Written, NOT yet applied. Paste it into the Supabase SQL editor** (apply_migration can't handle function bodies here). Adds a `status = 'cancelled'` guard to `attach_info_pack_to_booking()` so the manual Send Info Pack refuses a cancelled booking. Reproduced verbatim from verified-live `pg_get_functiondef`; SECURITY DEFINER and `search_path` preserved. Frontier at authoring: `20261003110000`. Once applied, record the version in `supabase_migrations.schema_migrations`. |
+
 ### PENDING APPLY 2026-10-02 (cancel not blocked by notice window)
 
 | Authored version | Name | Status |
