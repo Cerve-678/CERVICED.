@@ -395,7 +395,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   const noticeWindowText = useMemo(() => formatNoticeWindow(cancellationNoticeHrs), [cancellationNoticeHrs]);
   const refundOutcome = useMemo(
-    () => (booking ? describeRefundOutcome(booking, 'client', cancellationNoticeHrs) : null),
+    () => (booking ? describeRefundOutcome(booking, cancellationNoticeHrs) : null),
     [booking, cancellationNoticeHrs],
   );
 
@@ -956,7 +956,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {refundOutcome && (
               <View style={[st.refundNotice, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name={refundOutcome.title === 'Refunded' ? 'arrow-undo-outline' : 'shield-checkmark-outline'} size={15} color={C.accentText} />
+                  <Ionicons name={refundOutcome.title === 'Refund pending' ? 'time-outline' : refundOutcome.title === 'Refunded' ? 'checkmark-circle-outline' : 'shield-checkmark-outline'} size={15} color={refundOutcome.title === 'Refund pending' ? '#FF9500' : refundOutcome.title === 'Refunded' ? '#34C759' : C.accentText} />
                   <Text style={{ color: C.text, fontWeight: '700', fontSize: 14 }}>{refundOutcome.title}</Text>
                 </View>
                 <Text style={{ color: C.sub, fontSize: 13, lineHeight: 18 }}>{refundOutcome.message}</Text>

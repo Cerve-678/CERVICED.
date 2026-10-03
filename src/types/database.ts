@@ -60,6 +60,7 @@ export type PaymentStatus =
   | "fully_paid"
   | "refunded"
   | "partially_refunded"
+  | "refund_pending"
   | "failed";
 
 export type NotificationType =

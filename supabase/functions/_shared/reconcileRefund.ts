@@ -23,7 +23,7 @@ export async function reconcileRefund(admin: SupabaseClient, stripe: Stripe, ref
   const bookingId = refund.metadata?.booking_id;
   if (!bookingId) return;
   const { data: booking, error } = await admin.from('bookings')
-    .select('id, payment_intent_id, amount_paid').eq('id', bookingId).single();
+    .select('id, payment_intent_id, amount_paid, payment_type').eq('id', bookingId).single();
   if (error) throw error;
   const intentId = typeof refund.payment_intent === 'string' ? refund.payment_intent : refund.payment_intent?.id;
   const paidPence = Math.round(Number(booking.amount_paid) * 100);
@@ -32,7 +32,22 @@ export async function reconcileRefund(admin: SupabaseClient, stripe: Stripe, ref
   }
 
   if (refund.status !== 'succeeded') {
-    const { error } = await admin.from('bookings').update({ stripe_refund_id: refund.id }).eq('id', booking.id);
+    // Pending → the client sees "Refund pending" until Stripe confirms it.
+    // Failed / cancelled → put the booking back to what it was before this
+    // refund: partly refunded if earlier refunds succeeded, else paid.
+    let paymentStatus: string;
+    if (refund.status === 'pending' || refund.status === 'requires_action') {
+      paymentStatus = 'refund_pending';
+    } else {
+      const { data: prior, error: priorErr } = await admin.from('booking_refunds')
+        .select('amount_pence').eq('booking_id', booking.id);
+      if (priorErr) throw priorErr;
+      paymentStatus = (prior ?? []).length > 0
+        ? 'partially_refunded'
+        : booking.payment_type === 'full' ? 'fully_paid' : 'deposit_paid';
+    }
+    const { error } = await admin.from('bookings')
+      .update({ stripe_refund_id: refund.id, payment_status: paymentStatus }).eq('id', booking.id);
     if (error) throw error;
     return;
   }

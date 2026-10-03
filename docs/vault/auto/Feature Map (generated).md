@@ -78,7 +78,7 @@ Curated: [[Payments]] · **127 files**
 - `src/screens/client/CartScreen.tsx` _(502)_
 - `src/services/databaseService.ts` _(184)_
 - `src/screens/provider/PaymentsScreen.tsx` _(176)_
-- `src/services/bookingService.ts` _(118)_
+- `src/services/bookingService.ts` _(119)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
@@ -86,8 +86,8 @@ Curated: [[Payments]] · **127 files**
 - `src/components/ProviderStripePayments.tsx` _(90)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(83)_
 - `src/features/bookings/receipt.ts` _(64)_
+- `src/features/bookings/paymentPresentation.ts` _(55)_
 - `src/types/database.ts` _(52)_
-- `src/features/bookings/paymentPresentation.ts` _(51)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/client/BookingDetailScreen.tsx` _(41)_
 - `src/services/becca/capabilities/client.ts` _(39)_
@@ -246,7 +246,7 @@ Curated: [[Booking Flow]] · **54 files**
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **161 files**
 - `src/contexts/BookingContext.tsx` _(329)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(295)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(294)_
 - `src/services/databaseService.ts` _(214)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_

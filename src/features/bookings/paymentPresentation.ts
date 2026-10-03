@@ -73,54 +73,64 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
 }
 
 /**
- * What a booking's receipt should say about money that came back or was kept
- * after the fact — shown at the top of the payment section on both hats.
- * Null when nothing was refunded or kept.
+ * What a booking's details should say about money that came back or was kept
+ * after the fact. Null when nothing was refunded, kept, or is on its way.
  *
- * `viewer` decides the wording only: the client reads "{provider} kept…", the
- * provider reads "You kept…". The provider's line never mentions the platform
- * fee (user decision 2026-10-03).
+ * Client: a short notice at the top of the payment section — "Refund pending"
+ * while Stripe processes it, then "Refunded" with what the policy kept.
+ * Provider: one plain status for the receipt header — "Refund issued" or
+ * "Policy enforced" — never mentioning the platform fee (user decisions
+ * 2026-10-03).
  */
-export interface PolicySettlementNotice {
+export interface RefundOutcome {
   title: string;
   message: string;
-  /** Receipt rows: label → signed £ amount. */
+  /** Receipt rows for the client: label → signed £ amount. */
   rows: { label: string; amount: number }[];
+  /** One-line status for the provider's receipt header. */
+  providerStatus: string;
 }
 
 export function describeRefundOutcome(
-  booking: Pick<ConfirmedBooking, 'policyRetainedAmount' | 'refundedAmount' | 'providerName'>,
-  viewer: 'client' | 'provider',
+  booking: Pick<ConfirmedBooking, 'policyRetainedAmount' | 'refundedAmount' | 'providerName' | 'paymentStatus'>,
   noticeHours: number,
-): PolicySettlementNotice | null {
+): RefundOutcome | null {
   const kept = booking.policyRetainedAmount ?? 0;
   const refunded = booking.refundedAmount ?? 0;
   const money = (n: number) => `£${n.toFixed(2)}`;
+  const provider = booking.providerName?.trim() || 'Your provider';
   const policy = noticeHours > 0 ? `${noticeHours}-hour cancellation policy` : 'cancellation policy';
+  const keptLine = `${provider} kept ${money(kept)} under their ${policy}.`;
 
-  if (kept > 0) {
-    const who = viewer === 'client' ? (booking.providerName?.trim() || 'Your provider') : 'You';
-    const their = viewer === 'client' ? 'their' : 'your';
-    const keptLine = `${who} kept ${money(kept)} under ${their} ${policy}.`;
-    const refundLine = refunded > 0
-      ? (viewer === 'client' ? ` ${money(refunded)} was refunded to you.` : '')
-      : (viewer === 'client' ? ' Nothing was refunded.' : '');
+  if (booking.paymentStatus === PaymentStatus.REFUND_PENDING) {
     return {
-      title: 'Cancellation policy applied',
-      message: keptLine + refundLine,
+      title: 'Refund pending',
+      message: kept > 0
+        ? `Your refund is being processed. ${keptLine}`
+        : 'Your refund is being processed. This will update once it has gone through.',
+      rows: kept > 0 ? [{ label: 'Kept under cancellation policy', amount: kept }] : [],
+      providerStatus: 'Refund pending',
+    };
+  }
+  if (kept > 0) {
+    return {
+      title: refunded > 0 ? 'Refunded' : 'No refund',
+      message: refunded > 0
+        ? `${money(refunded)} refunded to you. ${keptLine}`
+        : `${keptLine} Nothing was refunded.`,
       rows: [
         ...(refunded > 0 ? [{ label: 'Refunded', amount: -refunded }] : []),
         { label: 'Kept under cancellation policy', amount: kept },
       ],
+      providerStatus: `Policy enforced · ${money(kept)} kept`,
     };
   }
   if (refunded > 0) {
     return {
       title: 'Refunded',
-      message: viewer === 'client'
-        ? `${money(refunded)} was refunded to you. Banks usually take 5–10 working days to show it.`
-        : `${money(refunded)} was refunded to the client.`,
+      message: `${money(refunded)} refunded to you. Banks usually take 5–10 working days to show it.`,
       rows: [{ label: 'Refunded', amount: -refunded }],
+      providerStatus: `Refund issued · ${money(refunded)}`,
     };
   }
   return null;

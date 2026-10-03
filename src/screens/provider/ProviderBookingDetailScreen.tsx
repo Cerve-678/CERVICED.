@@ -1419,27 +1419,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {BOOKING_STATUS_LABELS[booking.status]}{isPending ? '  ·  Reschedule Requested' : ''}
                   </Text>
                 </View>
+                {/* Money after the fact, in one plain line: "Refund issued ·
+                    £85.00" / "Policy enforced · £20.00 kept" / "Refund pending". */}
+                {(() => {
+                  const outcome = describeRefundOutcome(booking, 0);
+                  if (!outcome) return null;
+                  const tint = outcome.providerStatus.startsWith('Policy')
+                    ? (isDarkMode ? REFUND_KEEP.dark : REFUND_KEEP.light)
+                    : outcome.providerStatus === 'Refund pending' ? '#FF9500'
+                    : (isDarkMode ? REFUND_GREEN.dark : REFUND_GREEN.light);
+                  return (
+                    <View style={[styles.statusBadge, { backgroundColor: tint + '20', borderColor: tint + '50', marginTop: 6 }]}>
+                      <View style={[styles.statusDot, { backgroundColor: tint }]} />
+                      <Text style={[styles.statusBadgeText, { color: tint }]}>{outcome.providerStatus}</Text>
+                    </View>
+                  );
+                })()}
               </View>
-
-              {/* ── Refund / cancellation-policy outcome ── at the top of the
-                  receipt so the money that came back or was kept reads first. */}
-              {(() => {
-                const outcome = describeRefundOutcome(booking, 'provider', 0);
-                if (!outcome) return null;
-                const tint = isDarkMode ? REFUND_KEEP.dark : REFUND_KEEP.light;
-                return (
-                  <View style={[styles.completionBanner, { backgroundColor: tint + '12', borderColor: tint + '40', flexDirection: 'column', alignItems: 'stretch', gap: 4 }]}>
-                    <Text style={[styles.completionTitle, { color: tint }]}>{outcome.title}</Text>
-                    <Text style={{ color: P.text, fontSize: 13 }}>{outcome.message}</Text>
-                    {outcome.rows.map(r => (
-                      <View key={r.label} style={styles.refundRowBetween}>
-                        <Text style={{ color: P.sub, fontSize: 13 }}>{r.label === 'Refunded' ? 'Refunded to client' : r.label}</Text>
-                        <Text style={{ color: P.text, fontSize: 13, fontWeight: '600' }}>{r.amount < 0 ? '−' : ''}£{Math.abs(r.amount).toFixed(2)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })()}
 
               {/* ── Completion banner (completed bookings only) ── */}
               {booking.status === BookingStatus.COMPLETED && (
