@@ -6,15 +6,11 @@ import {
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ⚠️  WRITTEN BUT NOT YET LIVE — NEEDS REVIEW BEFORE IT TOUCHES REAL MONEY.
-//     This has NOT been run against Stripe (test or live). Do not deploy or
-//     enable without: a security review, a Stripe test-mode end-to-end run of
-//     each penalty path (none / deposit / full, held payout AND already-released
-//     payout), and the 20261002 payment_status migration applied. It is inert
-//     while USE_STRIPE_PAYMENTS is off (bookings then have no captured payment,
-//     so every path is a no-op). See LEGAL-COMPLIANCE-NOTES.md §6.
-// ─────────────────────────────────────────────────────────────────────────────
+// Live in Stripe TEST mode from 2026-10-03 (security-reviewed; migration
+// 20261003100000 adds the partially_refunded status, the booking_refunds
+// ledger and the cancelled_at/cancelled_by stamp this relies on). Run each
+// penalty path (none / deposit / full, held AND already-released payout) in
+// test mode before switching Stripe to live keys. See LEGAL-COMPLIANCE-NOTES.md §6.
 //
 // The MONEY HALF of a client cancellation, paired with the cancel action the
 // same way refund-payment is (the cancel itself — status change + the DB
@@ -94,7 +90,7 @@ Deno.serve(async (req: Request) => {
     // the frozen policy snapshot and the stored money figures.
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, user_id, provider_id, status, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, booking_date, booking_time, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
+      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, booking_date, booking_time, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -105,6 +101,13 @@ Deno.serve(async (req: Request) => {
     // refund a live booking.
     if (booking.status !== 'cancelled') {
       return json({ error: 'This booking is not cancelled.' }, 409);
+    }
+    // Only a CLIENT's own cancellation is settled by the policy. A provider
+    // cancel is refunded in full by refund_booking_async; a booking cancelled
+    // before cancelled_by existed has no trustworthy cancel time. Neither is
+    // this function's to settle.
+    if (booking.cancelled_by !== 'client' || !booking.cancelled_at) {
+      return json({ status: 'not_eligible' }, 200);
     }
     // Idempotent: a settlement already happened.
     if (booking.stripe_refund_id || booking.payment_status === 'refunded' || booking.payment_status === 'partially_refunded') {
@@ -130,7 +133,11 @@ Deno.serve(async (req: Request) => {
     const hours = noticeHours(provider?.cancellation_notice_hours, livePolicies);
 
     const apptMs = Date.parse(`${booking.booking_date}T${booking.booking_time}`);
-    const hoursUntil = Number.isFinite(apptMs) ? (apptMs - Date.now()) / 3_600_000 : 0;
+    // Measured from WHEN they cancelled (stamped by the DB), never from when
+    // this call arrives — otherwise waiting until after the appointment would
+    // turn a late cancel into a full refund.
+    const cancelledMs = Date.parse(booking.cancelled_at);
+    const hoursUntil = Number.isFinite(apptMs) && Number.isFinite(cancelledMs) ? (apptMs - cancelledMs) / 3_600_000 : 0;
     const isLateCancel = hours > 0 && hoursUntil >= 0 && hoursUntil < hours;
 
     // The provider's payout row for this booking (its stored share, in pence).

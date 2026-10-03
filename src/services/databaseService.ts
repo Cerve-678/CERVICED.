@@ -9632,9 +9632,9 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
  *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
 export async function applyCancellationRefund(
   bookingId: string,
-): Promise<'settled' | 'already_settled' | 'no_payment'> {
+): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible'> {
   const { data, error } = await supabase.functions.invoke('apply-cancellation-refund', { body: { bookingId } });
-  if (error || data?.error || !['settled', 'already_settled', 'no_payment'].includes(data?.status)) {
+  if (error || data?.error || !['settled', 'already_settled', 'no_payment', 'not_eligible'].includes(data?.status)) {
     throw new Error('The cancellation refund could not be confirmed.');
   }
   return data.status;

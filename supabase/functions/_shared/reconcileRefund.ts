@@ -15,8 +15,10 @@ import { adjustPayout } from './refundPlan.ts';
 // How much payout to take back is decided by whoever CREATED the refund and
 // carried on its metadata (payout_adjust_pence). A cancellation settlement
 // carries 0 because apply-cancellation-refund settles the payout itself. A
-// refund made outside the app (Stripe dashboard) has no metadata: it takes back
-// the whole remaining payout only if it completes a full refund.
+// refund made before this ledger existed carries booking_id but no
+// payout_adjust_pence: it takes back the whole remaining payout only if it
+// completes a full refund. (A dashboard refund with no booking_id metadata is
+// not reconciled at all — it returns at the first line.)
 export async function reconcileRefund(admin: SupabaseClient, stripe: Stripe, refund: Stripe.Refund) {
   const bookingId = refund.metadata?.booking_id;
   if (!bookingId) return;
@@ -117,20 +119,28 @@ async function takeBackFromPayout(
       { amount: take, metadata: { booking_id: bookingId, refund_id: refundId } },
       { idempotencyKey: `reversal_${refundId}` },
     );
-    const { error } = await admin.from('provider_payouts')
+    const { data: rows, error } = await admin.from('provider_payouts')
       .update(emptied
         ? { status: 'reversed', payout_amount: 0, stripe_reversal_id: reversal.id }
         : { payout_amount: newAmountPence, stripe_reversal_id: reversal.id })
-      .eq('id', payout.id).eq('payout_amount', current);
+      .eq('id', payout.id).eq('status', payout.status).eq('payout_amount', current)
+      .select('id');
     if (error) throw error;
+    // The row moved under us: throw so the claim is released and a retry
+    // re-reads it (the reversal itself is idempotent on the refund id).
+    if (!rows?.length) throw new Error('Payout changed during refund; retry');
     return;
   }
 
   // Not transferred yet (held / failed): just lower what will be released.
-  const { error: upErr } = await admin.from('provider_payouts')
+  // Filtered on status too, so a payout release-payouts sent in the meantime
+  // isn't "lowered" after the full amount already went out.
+  const { data: rows, error: upErr } = await admin.from('provider_payouts')
     .update(emptied
       ? { status: 'cancelled', payout_amount: 0, failure_reason: 'refunded before release' }
       : { payout_amount: newAmountPence })
-    .eq('id', payout.id).eq('payout_amount', current);
+    .eq('id', payout.id).eq('status', payout.status).eq('payout_amount', current)
+    .select('id');
   if (upErr) throw upErr;
+  if (!rows?.length) throw new Error('Payout changed during refund; retry');
 }

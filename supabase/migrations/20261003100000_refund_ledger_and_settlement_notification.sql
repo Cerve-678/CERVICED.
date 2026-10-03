@@ -23,6 +23,18 @@
 --    late cancellation leaves the provider keeping a deposit / their share.
 --    Rebuilt from the live constraint (verified 2026-10-03) plus the new value.
 --
+-- 4. bookings.cancelled_at / cancelled_by, stamped by a trigger the moment a
+--    booking becomes cancelled. apply-cancellation-refund is called by the
+--    client, so it must judge "late" against WHEN they cancelled (not when the
+--    call arrives — waiting until after the appointment would otherwise turn a
+--    late cancel into a full refund) and must only settle CLIENT cancellations
+--    (a provider cancel is refunded in full by refund_booking_async). Security
+--    review 2026-10-03. auth.uid() is the caller's JWT even inside the
+--    SECURITY DEFINER cancel RPCs; cron expiry has none, so it is 'system'.
+--
+-- Contains a function body: apply in the Supabase SQL editor (apply_migration
+-- mis-parses bodies — see MIGRATION_OWNER.md).
+--
 -- Frontier at authoring: 20261002230000.
 
 ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_payment_status_check;
@@ -60,8 +72,8 @@ CREATE POLICY booking_refunds_provider_read ON public.booking_refunds
      WHERE p.user_id = auth.uid()
   ));
 
-REVOKE ALL ON public.booking_refunds FROM anon;
-REVOKE INSERT, UPDATE, DELETE ON public.booking_refunds FROM authenticated;
+REVOKE ALL ON public.booking_refunds FROM anon, authenticated;
+GRANT SELECT ON public.booking_refunds TO authenticated;
 
 -- Backfill the one refund issued before this table existed, so "already
 -- refunded" sums stay right for it.
@@ -88,3 +100,32 @@ ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check
     'pending_booking_reminder', 'provider_no_show', 'no_show_disputed', 'points_earned',
     'cancellation_settled'
   ]::text[]));
+
+ALTER TABLE public.bookings
+  ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
+  ADD COLUMN IF NOT EXISTS cancelled_by text CHECK (cancelled_by IN ('client', 'provider', 'system'));
+
+CREATE OR REPLACE FUNCTION public.stamp_booking_cancellation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled' THEN
+    NEW.cancelled_at := now();
+    NEW.cancelled_by := CASE
+      WHEN auth.uid() IS NULL THEN 'system'
+      WHEN auth.uid() = NEW.user_id THEN 'client'
+      ELSE 'provider'
+    END;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE EXECUTE ON FUNCTION public.stamp_booking_cancellation() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_stamp_booking_cancellation ON public.bookings;
+CREATE TRIGGER trg_stamp_booking_cancellation
+  BEFORE UPDATE OF status ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_booking_cancellation();
