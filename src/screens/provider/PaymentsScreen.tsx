@@ -36,10 +36,11 @@
  * So: no balance-collected toggles, no amount-received fields, no
  * payout/earnings surface here without that going through the real processor.
  *
- * The "Payouts" card IS that sanctioned exception: it onboards the provider to
- * Stripe Connect (Express) so Cerviced can pay them out through the real
- * processor. It's gated behind STRIPE_CONNECT_PAYOUTS_ENABLED and stays hidden
- * until the Connect backend is live. It does not track any in-person money.
+ * Payouts are that sanctioned exception, and they live in
+ * ProviderStripePayments (the Overview/Booking payments/Payouts tabs this
+ * screen's settings sit under): money moving through Stripe Connect, the real
+ * processor. Onboarding and "Manage payout account" are there, once — this
+ * screen used to carry a second "Set up payouts" card that did the same job.
  *
  * PERSISTENCE mirrors ProviderAutomationsScreen's dual-write — `user_metadata`
  * (legacy fallback) plus the `providers` row (what clients and cron jobs
@@ -51,34 +52,41 @@ import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TextInput, 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import * as Linking from 'expo-linking';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   getMyProviderProfile,
   updateProviderContactDetails,
   updateProviderAutomationSettings,
-  getMyProviderPayoutStatus,
-  startProviderPayoutOnboarding,
-  type StripeConnectStatus,
 } from '../../services/databaseService';
-import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import {
   saveProviderPolicies,
   loadProviderPolicies,
 } from '../../services/providerRegistrationService';
 import {
-  Card, ChipGroup, Field, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
+  Card, ChipGroup, Field, ToggleRow, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import { PAYMENT_OPTS } from '../../features/business-details/options';
 import { resolveEditorDepositMode, type DepositMode } from '../../utils/depositPolicy';
 import { toUserMessage } from '../../utils/userFacingError';
 
-const DEPOSIT_MODE_OPTS: { value: DepositMode; label: string; sub: string }[] = [
-  { value: 'full_only',        label: 'No deposit',        sub: 'Clients pay the full price when they book.' },
-  { value: 'client_choice',    label: 'Deposit optional',  sub: 'Clients choose: pay a deposit now, or pay in full now.' },
-  { value: 'deposit_required', label: 'Deposit required',  sub: 'Clients must pay the deposit to book \u2014 paying in full isn\u2019t offered.' },
+// `sub` is the full explanation, read out as each option's accessibility hint;
+// the button itself only has room for `label` + `hint`.
+const DEPOSIT_MODE_OPTS: { value: DepositMode; label: string; hint: string; sub: string }[] = [
+  { value: 'full_only',        label: 'None',     hint: 'Pay in full',  sub: 'Clients pay the full price when they book.' },
+  { value: 'client_choice',    label: 'Optional', hint: 'Client picks', sub: 'Clients choose: pay a deposit now, or pay in full now.' },
+  { value: 'deposit_required', label: 'Required', hint: 'Deposit only', sub: 'Clients must pay the deposit to book \u2014 paying in full isn\u2019t offered.' },
 ];
+
+// The buttons the client booking sheet shows for each mode — previewed under
+// the deposit controls so the provider sees the effect of what they picked.
+const CLIENT_SEES: Record<DepositMode, string[]> = {
+  full_only:        ['Pay Full Amount'],
+  client_choice:    ['Pay Full Amount', 'Pay Deposit'],
+  deposit_required: ['Pay Deposit'],
+};
+
+const paymentLabel = (value: string) => PAYMENT_OPTS.find(o => o.value === value)?.label ?? value;
 
 export default function PaymentsScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
@@ -111,10 +119,6 @@ export default function PaymentsScreen({ navigation, route }: any) {
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Stripe Connect payouts (gated by STRIPE_CONNECT_PAYOUTS_ENABLED). null =
-  // not loaded / not applicable.
-  const [payoutStatus, setPayoutStatus] = useState<StripeConnectStatus | null>(null);
-  const [payoutBusy, setPayoutBusy]     = useState(false);
   // Both writes below (booking_policies and automation_settings) are full
   // REPLACEs, and the keys this screen doesn't own are only preserved via the
   // otherPolicies/otherAutomation copies read on load. If that read failed
@@ -178,39 +182,6 @@ export default function PaymentsScreen({ navigation, route }: any) {
     setTimeout(() => setToast(null), 3500);
   }
 
-  // Payout status is loaded independently of the deposit/payment-type settings
-  // above so a failure here (e.g. the Connect backend not yet live) can never
-  // stop the rest of the screen loading. Only runs when the feature is on.
-  const loadPayoutStatus = useCallback(async () => {
-    if (!STRIPE_CONNECT_PAYOUTS_ENABLED) return;
-    try {
-      setPayoutStatus(await getMyProviderPayoutStatus());
-    } catch {
-      // Leave status null; the card shows the "set up" call to action.
-    }
-  }, []);
-
-  useEffect(() => { loadPayoutStatus(); }, [loadPayoutStatus]);
-
-  const handleSetUpPayouts = useCallback(async () => {
-    setPayoutBusy(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    try {
-      // Stripe bounces back into the app via these deep links (cerviced://…):
-      // returnUrl when they finish or bail, refreshUrl if the link expired.
-      const returnUrl = Linking.createURL('payouts/return');
-      const refreshUrl = Linking.createURL('payouts/refresh');
-      const { url } = await startProviderPayoutOnboarding(refreshUrl, returnUrl);
-      await Linking.openURL(url);
-      // We can't await the return; refresh status when they reopen the screen.
-      await loadPayoutStatus();
-    } catch (e: any) {
-      flash(toUserMessage(e, 'Could not start payout setup.', 'PaymentsScreen.payouts'), 'error');
-    } finally {
-      setPayoutBusy(false);
-    }
-  }, [loadPayoutStatus]);
-
   const handleSave = useCallback(async () => {
     if (!providerId) { flash('No provider profile found', 'error'); return; }
     // See loadFailed above: writing without a successful read would delete the
@@ -263,6 +234,15 @@ export default function PaymentsScreen({ navigation, route }: any) {
   }, [providerId, userId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed]);
 
 
+  const acceptedLabels = paymentMethods.map(paymentLabel);
+  const depositAmountLabel = depositType === 'percent' ? `${depositAmount}%` : `£${depositAmount}`;
+  const setupSummary = loading || loadFailed ? undefined : {
+    deposit: depositMode === 'full_only' ? 'No deposit'
+      : [depositMode === 'client_choice' ? 'Optional' : 'Required', depositAmount && depositAmountLabel, depositRequiredNew && 'new clients']
+          .filter(Boolean).join(' · '),
+    inPerson: acceptedLabels.length ? acceptedLabels.join(', ') : 'None set',
+  };
+
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
@@ -286,90 +266,66 @@ export default function PaymentsScreen({ navigation, route }: any) {
         >
           {toast && <Toast message={toast.message} type={toast.type} />}
 
-          <ProviderStripePayments stripeReturn={route?.params?.stripeReturn}>
+          <ProviderStripePayments stripeReturn={route?.params?.stripeReturn} setup={setupSummary}>
           {loading ? <ActivityIndicator color={C.accent} size="large" /> : <>
           {loadFailed && <Toast message="Payment settings could not load. Reopen this screen before saving." type="error" />}
 
-          <Card
-            title="How You Take Payment"
-            sub="Shown on your profile so clients know what to expect."
-          >
-            <SectionLabel text="Preferred payment types" />
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: C.sub, marginBottom: 8 }}>
-              Cerviced doesn't process payments you take in person — these are shown to clients as a heads-up, nothing more.
-            </Text>
-            <ChipGroup
-              options={PAYMENT_OPTS.map(o => o.label)}
-              selected={paymentMethods.map(v => PAYMENT_OPTS.find(o => o.value === v)?.label ?? v)}
-              onToggle={label => {
-                const opt = PAYMENT_OPTS.find(o => o.label === label);
-                if (!opt) return;
-                setPaymentMethods(prev =>
-                  prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value],
-                );
-              }}
-            />
-          </Card>
-
-          <Card
-            title="What Clients Are Told"
-            sub="A preview of the payment line shown on your public profile."
-          >
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: C.text, lineHeight: 19 }}>
-              {paymentMethods.length === 0
-                ? 'No payment types selected yet — clients won’t see any payment guidance on your profile.'
-                : `Accepts ${paymentMethods
-                    .map(v => PAYMENT_OPTS.find(o => o.value === v)?.label ?? v)
-                    .join(', ')
-                    .replace(/, ([^,]*)$/, ' and $1')}.`}
-            </Text>
-          </Card>
-
-          {/* The whole deposit setup, in one card. Previously split: the
-              amount/requirement lived on PoliciesScreen and only "new clients
-              only" lived here, which meant a provider had to visit two screens
-              to answer one question. */}
           <Card title="Deposits" sub="Whether clients pay something up front to hold their slot.">
-            <RadioGroup
-              options={DEPOSIT_MODE_OPTS}
-              value={depositMode}
-              onChange={v => setDepositMode(v as DepositMode)}
-            />
+            <View style={st.modeRow}>
+              {DEPOSIT_MODE_OPTS.map(o => {
+                const on = depositMode === o.value;
+                return (
+                  <TouchableOpacity
+                    key={o.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`Deposit: ${o.label}`}
+                    accessibilityHint={o.sub}
+                    style={[st.modeBtn, { backgroundColor: on ? C.accent : C.surface, borderColor: on ? C.accent : C.border }]}
+                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setDepositMode(o.value); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[st.modeLabel, { color: on ? C.bg : C.text }]}>{o.label}</Text>
+                    <Text style={[st.modeHint, { color: on ? C.bg : C.sub }]}>{o.hint}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             {depositMode !== 'full_only' && (
               <>
-                <SectionLabel text="Amount" />
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                  {([
-                    { v: 'percent' as const, l: '%' },
-                    { v: 'fixed'   as const, l: '£' },
-                  ]).map(({ v, l }) => (
-                    <TouchableOpacity
-                      key={v}
-                      style={{
-                        paddingHorizontal: 15, paddingVertical: 9, borderRadius: 20,
-                        borderWidth: StyleSheet.hairlineWidth,
-                        backgroundColor: depositType === v ? C.accent : C.surface,
-                        borderColor: depositType === v ? C.accent : C.border,
-                      }}
-                      onPress={() => { Haptics.selectionAsync().catch(() => {}); setDepositType(v); }}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 13, color: depositType === v ? C.ice : C.sub }}>{l}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  <TextInput
-                    style={{
-                      flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: 10,
-                      paddingHorizontal: 12, paddingVertical: 9,
-                      fontFamily: 'Jura-VariableFont_wght', fontSize: 14, color: C.text, backgroundColor: C.surface,
-                    }}
-                    placeholder={depositType === 'percent' ? 'e.g. 20' : 'e.g. 25'}
-                    placeholderTextColor={C.sub}
-                    value={depositAmount}
-                    onChangeText={v => setDepositAmount(v.replace(/[^0-9.]/g, ''))}
-                    keyboardType="numeric"
-                  />
+                <View style={st.amountRow}>
+                  <View style={[st.segment, { backgroundColor: C.surface }]}>
+                    {([
+                      { v: 'percent' as const, l: '%' },
+                      { v: 'fixed'   as const, l: '£' },
+                    ]).map(({ v, l }) => (
+                      <TouchableOpacity
+                        key={v}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: depositType === v }}
+                        accessibilityLabel={v === 'percent' ? 'Percentage of price' : 'Fixed amount in pounds'}
+                        style={[st.segmentBtn, depositType === v && { backgroundColor: C.card }]}
+                        onPress={() => { Haptics.selectionAsync().catch(() => {}); setDepositType(v); }}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[st.segmentLabel, { color: depositType === v ? C.text : C.sub }]}>{l}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={[st.amountBox, { backgroundColor: C.surface, borderColor: C.border }]}>
+                    {depositType === 'fixed' && <Text style={[st.amountAffix, { color: C.sub }]}>£</Text>}
+                    <TextInput
+                      style={[st.amountInput, { color: C.text }]}
+                      accessibilityLabel="Deposit amount"
+                      placeholder={depositType === 'percent' ? 'e.g. 20' : 'e.g. 25'}
+                      placeholderTextColor={C.sub}
+                      value={depositAmount}
+                      onChangeText={v => setDepositAmount(v.replace(/[^0-9.]/g, ''))}
+                      keyboardType="numeric"
+                    />
+                    {depositType === 'percent' && <Text style={[st.amountAffix, { color: C.sub }]}>% of price</Text>}
+                  </View>
                 </View>
 
                 <ToggleRow
@@ -380,7 +336,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 />
 
                 <Field
-                  label="Note (optional)"
+                  label="Note to clients (optional)"
                   value={depositNote}
                   onChange={setDepositNote}
                   placeholder='e.g. "Deposit comes off your final bill"'
@@ -388,88 +344,80 @@ export default function PaymentsScreen({ navigation, route }: any) {
               </>
             )}
 
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: C.sub, lineHeight: 17, marginTop: 4 }}>
-              {depositMode === 'full_only'
-                ? 'Clients will only see a "Pay Full Amount" option when they book.'
-                : depositMode === 'client_choice'
-                  ? 'Clients will see both "Pay Full Amount" and "Pay Deposit" when they book, and pick one.'
-                  : 'Clients will only see a "Pay Deposit" option when they book, with the balance due at their appointment.'}
-            </Text>
-          </Card>
-
-          {/* Refunds are a money question a client asks here first, but they're
-              cancellation policy and PoliciesScreen owns the field. Read-only
-              signpost, same pattern as BusinessInfoScreen's Contact
-              Preferences row — never a second editor. */}
-          <Card title="Refunds">
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: refundPolicyNote ? C.text : C.sub, lineHeight: 19, marginBottom: 12 }}>
-              {refundPolicyNote || 'You haven\u2019t written a refund policy yet — clients booking with you won\u2019t see one.'}
-            </Text>
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 8,
-                paddingVertical: 11, paddingHorizontal: 14, borderRadius: 12,
-                borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, backgroundColor: C.surface,
-              }}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Policies'); }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="document-text-outline" size={16} color={C.accent} />
-              <Text style={{ flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3, color: C.text }}>
-                {refundPolicyNote ? 'Edit in Policies' : 'Write one in Policies'}
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={C.sub} style={{ opacity: 0.5 }} />
-            </TouchableOpacity>
-          </Card>
-
-          {STRIPE_CONNECT_PAYOUTS_ENABLED && (
-            <Card
-              title="Payouts"
-              sub="Get paid through Cerviced for online bookings, straight to your bank."
-            >
-              {payoutStatus?.chargesEnabled ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name="checkmark-circle" size={18} color={C.accent} />
-                  <Text style={{ flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: C.text, lineHeight: 19 }}>
-                    You’re set up to receive payouts. Cerviced pays you your share automatically after each appointment.
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: C.sub, lineHeight: 19, marginBottom: 12 }}>
-                    {payoutStatus?.detailsSubmitted
-                      ? 'Your details are with Stripe for review. This card will update once you’re approved to receive payouts.'
-                      : payoutStatus?.accountId
-                        ? 'You’ve started setting up payouts but haven’t finished. Pick up where you left off.'
-                        : 'Set up secure payouts with Stripe so clients can pay online and the money reaches your bank. Takes a few minutes.'}
-                  </Text>
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12,
-                      backgroundColor: C.accent, opacity: payoutBusy ? 0.6 : 1,
-                    }}
-                    onPress={handleSetUpPayouts}
-                    disabled={payoutBusy}
-                    activeOpacity={0.85}
-                  >
-                    {payoutBusy
-                      ? <ActivityIndicator color={C.ice} size="small" />
-                      : <Ionicons name="card-outline" size={16} color={C.ice} />}
-                    <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3, color: C.ice }}>
-                      {payoutStatus?.accountId ? 'Continue payout setup' : 'Set up payouts'}
-                    </Text>
-                  </TouchableOpacity>
-                </>
+            <View style={[st.preview, { borderColor: C.accent }]}>
+              <Text style={[st.eyebrow, { color: C.accentText }]}>CLIENTS WILL SEE</Text>
+              <View style={st.previewRow}>
+                {CLIENT_SEES[depositMode].map(label => (
+                  <View key={label} style={[st.previewBtn, { backgroundColor: C.bg }]}>
+                    <Text style={[st.previewLabel, { color: C.text }]}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+              {depositMode === 'deposit_required' && (
+                <Text style={[st.footnote, { color: C.sub }]}>The balance is due at their appointment.</Text>
               )}
-            </Card>
-          )}
-
-          <Card title="Getting Paid">
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: C.sub, lineHeight: 19 }}>
-              Anything a client pays in person — the balance after a deposit included — is between you and them. Cerviced doesn’t collect, hold, verify or record those payments, so keep your own receipts.
-            </Text>
+            </View>
           </Card>
+
+          <Card
+            title="How You Take Payment"
+            sub="Shown on your profile so clients know what to expect."
+          >
+            <SectionLabel text="Preferred payment types" />
+            <ChipGroup
+              options={PAYMENT_OPTS.map(o => o.label)}
+              selected={acceptedLabels}
+              onToggle={label => {
+                const opt = PAYMENT_OPTS.find(o => o.label === label);
+                if (!opt) return;
+                setPaymentMethods(prev =>
+                  prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value],
+                );
+              }}
+            />
+            <Text style={[st.footnote, { color: C.sub, marginTop: 6 }]}>
+              Cerviced doesn't process payments you take in person — these are shown to clients as a heads-up, nothing more.
+            </Text>
+            <View style={[st.toldPanel, { backgroundColor: C.bg }]}>
+              <Text style={[st.eyebrow, { color: C.accentText }]}>WHAT CLIENTS ARE TOLD</Text>
+              <Text style={[st.body, { color: C.text }]}>
+                {acceptedLabels.length === 0
+                  ? 'No payment types selected yet — clients won’t see any payment guidance on your profile.'
+                  : `Accepts ${acceptedLabels.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`}
+              </Text>
+            </View>
+          </Card>
+
+          {/* Refunds are cancellation policy and PoliciesScreen owns the field.
+              Read-only signpost — never a second editor. */}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={refundPolicyNote ? 'Refund policy. Edit in Policies' : 'Refund policy not written yet. Write one in Policies'}
+            style={[st.rowCard, { backgroundColor: C.card, borderColor: C.border }]}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Policies'); }}
+            activeOpacity={0.7}
+          >
+            <View style={[st.iconChip, { backgroundColor: C.surface }]}>
+              <Ionicons name="document-text-outline" size={18} color={C.accentText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[st.rowTitle, { color: C.text }]}>Refund policy</Text>
+              <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>
+                {refundPolicyNote || 'Not written yet — clients booking with you won’t see one.'}
+              </Text>
+            </View>
+            <Text style={[st.rowAction, { color: C.accentText }]}>{refundPolicyNote ? 'Edit in Policies' : 'Write one'}</Text>
+          </TouchableOpacity>
+
+          <View style={st.gettingPaid}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={C.sub} style={{ marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[st.rowTitle, { color: C.text, fontSize: 13 }]}>Getting Paid</Text>
+              <Text style={[st.footnote, { color: C.sub }]}>
+                Anything a client pays in person — the balance after a deposit included — is between you and them. Cerviced doesn’t collect, hold, verify or record those payments, so keep your own receipts.
+              </Text>
+            </View>
+          </View>
 
           {!loadFailed && <SaveButton saving={saving} onPress={handleSave} />}
           </>}
@@ -479,3 +427,30 @@ export default function PaymentsScreen({ navigation, route }: any) {
     </View>
   );
 }
+
+const st = StyleSheet.create({
+  modeRow:      { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  modeBtn:      { flex: 1, minHeight: 64, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  modeLabel:    { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  modeHint:     { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, marginTop: 3, opacity: 0.85 },
+  amountRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  segment:      { flexDirection: 'row', padding: 3, borderRadius: 12 },
+  segmentBtn:   { width: 42, height: 38, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  segmentLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  amountBox:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 44, paddingHorizontal: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  amountInput:  { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 17, paddingVertical: 0 },
+  amountAffix:  { fontFamily: 'Jura-VariableFont_wght', fontSize: 13 },
+  preview:      { borderWidth: 1, borderStyle: 'dashed', borderRadius: 14, padding: 12, gap: 8, marginTop: 6 },
+  previewRow:   { flexDirection: 'row', gap: 8 },
+  previewBtn:   { flex: 1, paddingVertical: 9, paddingHorizontal: 6, borderRadius: 10, alignItems: 'center' },
+  previewLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
+  eyebrow:      { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.4 },
+  body:         { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, marginTop: 4 },
+  footnote:     { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
+  toldPanel:    { borderRadius: 12, padding: 12, marginTop: 12 },
+  rowCard:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, minHeight: 64, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, marginBottom: 16 },
+  iconChip:     { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  rowTitle:     { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  rowAction:    { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
+  gettingPaid:  { flexDirection: 'row', gap: 10, paddingHorizontal: 6, marginBottom: 20 },
+});
