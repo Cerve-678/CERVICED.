@@ -20,4 +20,9 @@ describe('search intent', () => {
   it('supports location-only intent', () => {
     expect(parseSearchQuery('near Manchester')).toMatchObject({ serviceTerms: [], locationTerms: ['Manchester'] });
   });
+  it('recognises a supported city without requiring “in”', () => {
+    expect(parseSearchQuery('nail art Nottingham')).toMatchObject({
+      serviceTerms: ['nail art'], locationTerms: ['Nottingham'], categoryHint: 'NAILS',
+    });
+  });
 });

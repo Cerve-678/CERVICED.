@@ -906,7 +906,7 @@ export async function loadProviderFromSupabase(
     });
   }
 
-  return {
+  const loaded: ProviderRegistrationData = {
     providerName: provider.display_name,
     providerService: provider.service_category,
     serviceCategories: provider.service_categories?.length
@@ -955,6 +955,12 @@ export async function loadProviderFromSupabase(
     bookingPolicies: (provider.booking_policies as ProviderRegistrationData['bookingPolicies']) ?? null,
     cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
   };
+  // A live read is also the best offline/startup snapshot. Persist it so the
+  // profile editor opened from My Profile can paint its saved fields straight
+  // away instead of showing a blank loading route and repeating this work.
+  void AsyncStorage.setItem(`@provider_reg_data_${userId}`, JSON.stringify(loaded))
+    .catch(error => logger.warn('Could not cache provider registration data:', error));
+  return loaded;
 }
 
 // ── Booking policies — saved to Supabase booking_policies column ─────────────

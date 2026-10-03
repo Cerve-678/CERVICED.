@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import { useFont } from '../../contexts/FontContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -38,6 +39,7 @@ import {
   getRebookableService,
   setBookingTip,
   getBookingTip,
+  invokeSendSupportRequest,
 } from '../../services/databaseService';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
@@ -90,6 +92,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const booking = useMemo(() =>
     [...(todayBookings ?? []), ...(upcomingBookings ?? []), ...(pastBookings ?? [])].find(b => b.id === bookingId)
   , [bookingId, todayBookings, upcomingBookings, pastBookings]);
+  const [bookingActionsVisible, setBookingActionsVisible] = useState(false);
 
   // Native stack header (not a custom in-body top bar) — gives the real
   // OS-provided back button and swipe-back gesture, same convention as
@@ -105,6 +108,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       headerShadowVisible: false,
       headerTintColor: C.accentText,
       headerBackButtonDisplayMode: 'minimal',
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync().catch(() => {}); setBookingActionsVisible(true); }}
+          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Booking options"
+        >
+          <Ionicons name="ellipsis-horizontal" size={24} color={C.accentText} />
+        </TouchableOpacity>
+      ),
     });
   }, [navigation, C]);
 
@@ -160,6 +174,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeBusy, setDisputeBusy] = useState(false);
+  const [refundRequestVisible, setRefundRequestVisible] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundRequestBusy, setRefundRequestBusy] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState('');
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
@@ -505,6 +522,49 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setDisputeBusy(false);
     }
   }, [booking, disputeReason, activeMode]);
+
+  // A client can ask support to review a refund, but a request is never a
+  // payment action. Refunds remain an authorised decision on the booking;
+  // this records the client's account in the same durable support channel as
+  // other booking issues and gives them a reference to follow up with.
+  const handleSubmitRefundRequest = useCallback(async () => {
+    if (!booking || !refundReason.trim()) return;
+    setRefundRequestBusy(true);
+    try {
+      const { ticketNumber } = await invokeSendSupportRequest({
+        category: 'Payment',
+        description: [
+          `REFUND REQUEST — ${formatBookingRef(booking)}`,
+          '',
+          `Booking: ${booking.serviceName} with ${booking.providerName}`,
+          `Date: ${booking.bookingDate} ${booking.bookingTime}`,
+          `Booking id: ${booking.id}`,
+          `Amount paid: £${booking.amountPaid.toFixed(2)}`,
+          '',
+          'Reason:',
+          refundReason.trim(),
+        ].join('\n'),
+        platform: `${Platform.OS} ${String(Platform.Version)}`,
+        appVersion: Constants.expoConfig?.version ?? 'unknown',
+        activeMode,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setRefundRequestVisible(false);
+      setRefundReason('');
+      setSuccessMessage(`Your refund request has been sent to support. Your reference is #${ticketNumber}.`);
+      setSuccessIcon('✓');
+      setShowSuccessModal(true);
+    } catch (error) {
+      logger.error('[BookingDetail] refund request failed:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert(
+        "Couldn't Send Refund Request",
+        `${toUserMessageAllowingDbGuard(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitRefundRequest')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+      );
+    } finally {
+      setRefundRequestBusy(false);
+    }
+  }, [booking, refundReason, activeMode]);
 
   const handleReschedulePress = useCallback(async () => {
     if (!booking) return;
@@ -1350,6 +1410,97 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={{ height: 40 }} />
         </ScrollView>
 
+        {/* ─── Booking options ─────────────────────────────────────────── */}
+        <Modal
+          visible={bookingActionsVisible}
+          animationType="fade"
+          transparent
+          statusBarTranslucent
+          navigationBarTranslucent
+          onRequestClose={() => setBookingActionsVisible(false)}
+        >
+          <Pressable style={st.actionMenuOverlay} onPress={() => setBookingActionsVisible(false)}>
+            <Pressable
+              style={[st.actionMenu, { backgroundColor: C.surfaceRaised, borderColor: C.border }]}
+              onPress={event => event.stopPropagation()}
+            >
+              <Text style={[st.actionMenuTitle, { color: C.text }]}>Booking options</Text>
+              <TouchableOpacity
+                style={st.actionMenuItem}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setBookingActionsVisible(false);
+                  setRefundRequestVisible(true);
+                }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Request a refund"
+              >
+                <View style={[st.actionMenuIcon, { backgroundColor: C.accentDim }]}>
+                  <Ionicons name="cash-outline" size={19} color={C.accentText} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[st.actionMenuItemTitle, { color: C.text }]}>Request a refund</Text>
+                  <Text style={[st.actionMenuItemSub, { color: C.sub }]}>Ask support to review this booking</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={C.sub} />
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* ─── Refund request ────────────────────────────────────────────
+            This creates a support request; it deliberately cannot issue a
+            payment refund from the client app. */}
+        <Modal
+          visible={refundRequestVisible}
+          animationType="fade"
+          transparent
+          statusBarTranslucent
+          navigationBarTranslucent
+          onRequestClose={() => { setRefundRequestVisible(false); setRefundReason(''); }}
+        >
+          <KeyboardDismissView style={st.overlay} dismissOnTap>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Request a refund</Text>
+              <Text style={[st.sheetSub, { color: C.sub }]}>
+                Tell us why you’re requesting a refund for this booking. We’ll review it and contact you if we need anything else.
+              </Text>
+              <TextInput
+                style={[st.disputeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
+                placeholder="What happened?"
+                placeholderTextColor={C.sub}
+                value={refundReason}
+                onChangeText={setRefundReason}
+                multiline
+                maxLength={1000}
+                editable={!refundRequestBusy}
+                accessibilityLabel="Reason for refund request"
+              />
+              <View style={st.sheetBtns}>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setRefundRequestVisible(false); setRefundReason(''); }}
+                  disabled={refundRequestBusy}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.accent }, !refundReason.trim() && { opacity: 0.5 }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleSubmitRefundRequest(); }}
+                  disabled={refundRequestBusy || !refundReason.trim()}
+                  activeOpacity={0.7}
+                >
+                  {refundRequestBusy
+                    ? <ActivityIndicator size="small" color={C.onAccent} />
+                    : <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Send request</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardDismissView>
+        </Modal>
+
         {/* ─── Policy Image Modal ─── full-screen view of the provider's
             detailed policy document, mirroring the profile's pop-up. */}
         <Modal visible={showPolicyImage} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowPolicyImage(false)}>
@@ -1824,6 +1975,13 @@ const st = StyleSheet.create({
   },
   mapActionBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, fontWeight: 'bold' },
   mapActionBtnDisabled: { opacity: 0.5 },
+  actionMenuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 64, paddingRight: 16 },
+  actionMenu: { width: 286, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  actionMenuTitle: { fontSize: 13, fontWeight: '700', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6 },
+  actionMenuItem: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, padding: 10 },
+  actionMenuIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  actionMenuItemTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  actionMenuItemSub: { fontSize: 12, lineHeight: 16 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
   sheetTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },

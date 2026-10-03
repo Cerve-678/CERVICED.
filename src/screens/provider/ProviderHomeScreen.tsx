@@ -1181,7 +1181,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [showGoLiveCelebration, celebrationScale, celebrationOpacity]);
 
   // First-run coach-mark tour for brand-new providers.
-  const { user, myProviderId } = useAuth();
+  const { user, myProviderId, myProviderIdStatus } = useAuth();
   const providerIdRef = useRef(myProviderId);
   providerIdRef.current = myProviderId;
   const [showTour, setShowTour] = useState(false);
@@ -1399,7 +1399,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     if (showLoad) setLoading(true);
     try {
       const rows = await withTimeout(
-        getProviderBookings(90, providerId ?? providerIdRef.current ?? undefined),
+        // Calendar only renders the recent strip and the next month. Loading
+        // an entire provider history (and every far-future booking) on every
+        // realtime update was the source of the visible calendar stutter;
+        // the Booking History screen remains the place for the full archive.
+        getProviderBookings(7, providerId ?? providerIdRef.current ?? undefined, 60),
         8_000,
         'Appointments load',
       );
@@ -1441,6 +1445,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // duplicate round trip on every visit to the screen providers live in.
   useFocusEffect(useCallback(() => {
     let cancelled = false;
+    // Auth resolves the provider id during app restoration. Starting a second
+    // profile lookup while that short lookup is still pending turns the first
+    // calendar paint into two serial requests: profile first, appointments
+    // second. Keep the skeleton visible for that brief hand-off; this effect
+    // reruns as soon as the id resolves and can then start both loads together.
+    if (myProviderIdStatus === 'pending') {
+      return () => { cancelled = true; };
+    }
     // Appointments need only the already-resolved provider ID. Start them
     // immediately instead of waiting for the full setup/availability profile.
     const knownProviderId = providerIdRef.current;
@@ -1469,24 +1481,25 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       return Promise.all([
         getProviderAvailability(profile.id),
         getProviderBlockedDates(profile.id),
-        countProviderServices(profile.id),
         getProviderAvailabilityWindows(profile.id),
         // Overrides only from a fortnight back — far enough to cover every
         // booking the day list can show, without pulling a provider's whole
         // history of one-off closures on each focus.
         getProviderAvailabilityOverrides(profile.id, overridesFromDate()),
-        // full_address is no longer on `providers` — it lives in the owner-only
-        // provider_private_details table (restrict_provider_full_address.sql).
-        // Checked via the go-live helper rather than a bare address read: the
-        // server also requires latitude/longitude, so an address saved without
-        // coordinates is not a completed step no matter how it reads on screen.
-        hasMyProviderGoLiveAddress().catch(() => false),
-      ]).then(([avail, blocked, serviceCount, windows, overrides, goLiveAddress]) => {
+      ]).then(([avail, blocked, windows, overrides]) => {
         if (cancelled) return;
         setAvailability(avail);
         setBlockedDates(blocked);
         setAvailabilityWindows(windows);
         setAvailabilityOverrides(overrides);
+        // The setup card is supplementary. Do not make the calendar wait for
+        // its service-count and private-address reads before it can draw the
+        // day's working hours and blocked dates.
+        return Promise.all([
+          countProviderServices(profile.id),
+          hasMyProviderGoLiveAddress(profile.id).catch(() => false),
+        ]).then(([serviceCount, goLiveAddress]) => {
+          if (cancelled) return;
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
           servicesSet: serviceCount > 0,
@@ -1530,6 +1543,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             storage.setItem(celebrationKey, false).catch((err) => logger.error('[ProviderHome] go-live pending write failed:', err));
           }
         }).catch((err) => logger.error('[ProviderHome] go-live celebration flag read failed:', err));
+        });
       });
     }).catch((err) => {
       logger.error('[ProviderHome] provider profile load failed:', err);
@@ -1542,7 +1556,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       if (!knownProviderId) void loadBookings(showInitialLoad);
     });
     return () => { cancelled = true; };
-  }, [loadBookings]));
+  }, [loadBookings, myProviderId, myProviderIdStatus]));
 
   useEffect(() => {
     if (!myProviderId) return;

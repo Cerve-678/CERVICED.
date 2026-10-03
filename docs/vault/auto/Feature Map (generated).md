@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **88 files**
 - … +58 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **164 files**
+Curated: [[Availability & Slots]] · **165 files**
 - `src/services/AvailabilityService.ts` _(333)_
 - `src/services/databaseService.ts` _(271)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
@@ -52,7 +52,7 @@ Curated: [[Availability & Slots]] · **164 files**
 - `src/contexts/BookingContext.tsx` _(80)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(80)_
 - `src/services/becca/capabilities/client.ts` _(71)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(67)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(68)_
 - `src/screens/client/RescheduleScreen.tsx` _(55)_
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/client/CartScreen.tsx` _(47)_
@@ -63,18 +63,18 @@ Curated: [[Availability & Slots]] · **164 files**
 - `supabase/add_providers_availability_rpc.sql` _(31)_
 - `src/components/MultiBookingSheet.tsx` _(27)_
 - `src/utils/slotsRowText.ts` _(27)_
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(25)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(24)_
 - `src/features/providers/useProviderProfileData.ts` _(22)_
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(21)_
 - `src/screens/client/BookingsScreen.tsx` _(20)_
 - `src/types/database.ts` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- … +134 more
+- … +135 more
 
 ## Payments
-Curated: [[Payments]] · **126 files**
+Curated: [[Payments]] · **127 files**
 - `src/screens/client/CartScreen.tsx` _(502)_
 - `src/services/databaseService.ts` _(179)_
 - `src/screens/provider/PaymentsScreen.tsx` _(176)_
@@ -89,7 +89,7 @@ Curated: [[Payments]] · **126 files**
 - `src/types/database.ts` _(52)_
 - `src/features/bookings/paymentPresentation.ts` _(50)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
-- `src/screens/client/BookingDetailScreen.tsx` _(41)_
+- `src/screens/client/BookingDetailScreen.tsx` _(44)_
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(37)_
@@ -105,27 +105,27 @@ Curated: [[Payments]] · **126 files**
 - `src/features/cart/pricing.ts` _(23)_
 - `src/screens/client/PointsScreen.tsx` _(23)_
 - `src/services/becca/capabilities/provider.ts` _(23)_
-- … +96 more
+- … +97 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **249 files**
+Curated: [[Booking Flow]] · **250 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/services/databaseService.ts` _(650)_
+- `src/services/databaseService.ts` _(651)_
 - `src/screens/client/CartScreen.tsx` _(601)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(542)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/client/BookingDetailScreen.tsx` _(361)_
+- `src/screens/client/BookingDetailScreen.tsx` _(385)_
 - `src/screens/client/BookingsScreen.tsx` _(344)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(238)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(240)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(193)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/RescheduleScreen.tsx` _(175)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
-- `src/screens/shared/NotificationsScreen.tsx` _(127)_
+- `src/screens/shared/NotificationsScreen.tsx` _(131)_
 - `supabase/phase1_schema.sql` _(125)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(124)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **249 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `src/services/bookingService.ts` _(88)_
-- … +219 more
+- … +220 more
 
 ## Notifications
 Curated: [[Notifications]] · **151 files**
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **151 files**
 - … +121 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **74 files**
+Curated: [[Provider Onboarding & Go-Live]] · **75 files**
 - `src/services/databaseService.ts` _(72)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **74 files**
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
 - `src/services/becca/aiRuntime.ts` _(3)_
-- … +44 more
+- … +45 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**
@@ -246,11 +246,11 @@ Curated: [[Booking Flow]] · **54 files**
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **160 files**
 - `src/contexts/BookingContext.tsx` _(329)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(294)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(295)_
 - `src/services/databaseService.ts` _(211)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
-- `src/screens/client/BookingDetailScreen.tsx` _(154)_
+- `src/screens/client/BookingDetailScreen.tsx` _(155)_
 - `src/screens/client/RescheduleScreen.tsx` _(143)_
 - `src/services/becca/capabilities/client.ts` _(132)_
 - `src/screens/client/CartScreen.tsx` _(111)_
@@ -259,9 +259,9 @@ Curated: [[Booking Flow]] · **160 files**
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `src/screens/provider/InfoRegScreen.tsx` _(58)_
+- `src/screens/shared/NotificationsScreen.tsx` _(58)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
-- `src/screens/shared/NotificationsScreen.tsx` _(54)_
 - `src/screens/client/BookingsScreen.tsx` _(52)_
 - `src/services/bookingService.ts` _(52)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_

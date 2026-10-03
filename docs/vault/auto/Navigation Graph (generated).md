@@ -84,8 +84,8 @@ graph LR
   ProviderAccountScreen --> SignUpStep3
   ProviderAccountScreen --> TermsScreen
   ProviderAccountScreen --> TextSizingScreen
+  ProviderAnalyticsScreen --> PaymentsScreen
   ProviderAnalyticsScreen --> ProviderBookingDetailScreen
-  ProviderAnalyticsScreen --> ProviderClienteleScreen
   ProviderBookingDetailScreen --> ProviderConversationScreen
   ProviderBookingDetailScreen --> ProviderIntakeFormScreen
   ProviderBookingHistoryScreen --> DevSettingsScreen
@@ -177,7 +177,7 @@ graph LR
 - `provider/BusinessProfileScreen` → `provider/BrandingScreen`, `provider/BusinessDetailsScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/ProviderAutomationsScreen`, `provider/ProviderCommunicationsScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
 - `provider/ProviderAccountScreen` → `provider/BusinessProfileScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/LanguageRegionScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `shared/TextSizingScreen`, `SignUpStep3`
-- `provider/ProviderAnalyticsScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderClienteleScreen`
+- `provider/ProviderAnalyticsScreen` → `provider/PaymentsScreen`, `provider/ProviderBookingDetailScreen`
 - `provider/ProviderBookingDetailScreen` → `provider/ProviderConversationScreen`, `provider/ProviderIntakeFormScreen`
 - `provider/ProviderBookingHistoryScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderInboxScreen`, `shared/DevSettingsScreen`
 - `provider/ProviderClienteleScreen` → `provider/ProviderConversationScreen`
