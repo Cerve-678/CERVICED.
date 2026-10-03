@@ -27,6 +27,7 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import {
+  BookingStatus,
   ConfirmedBooking,
 } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -70,6 +71,7 @@ import * as Haptics from 'expo-haptics';
 /** Light selection tick for every tappable on this screen. */
 const tap = () => { Haptics.selectionAsync().catch(() => {}); };
 import { formatBookingRef } from '../../features/bookings/presentation';
+import { withoutReplacedCancellations } from '../../features/bookings/timelineBookings';
 import {
   buildGoLiveSteps,
   buildGoLiveHeadline,
@@ -469,13 +471,15 @@ function parseDurationToMinutes(dur: string): number {
   return h * 60 + m;
 }
 
+// No red in the rotation: red on the timeline means cancelled, and nothing else.
 const BLOCK_COLORS = [
   { bg: '#0A84FF', dark: '#2F91FF', text: '#FFFFFF' },
   { bg: '#34C759', dark: '#30D158', text: '#FFFFFF' },
   { bg: '#FF9F0A', dark: '#FF9F0A', text: '#FFFFFF' },
   { bg: '#AF52DE', dark: '#BF5AF2', text: '#FFFFFF' },
-  { bg: '#FF375F', dark: '#FF453A', text: '#FFFFFF' },
 ];
+const CANCELLED_BLOCK = { bg: '#C73535', dark: '#E5484D', text: '#FFFFFF' };
+const EMPTY_DAY_BOOKINGS: ConfirmedBooking[] = [];
 
 interface DayTimelineProps {
   bookings: ConfirmedBooking[];
@@ -655,7 +659,7 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
           {/* Booking blocks */}
           {positioned.map(({ booking, top, height, col, cols, colorIdx }) => {
             const cfg   = statusCfg(booking.status);
-            const color = BLOCK_COLORS[colorIdx]!;
+            const color = booking.status === BookingStatus.CANCELLED ? CANCELLED_BLOCK : BLOCK_COLORS[colorIdx]!;
             const blockW = bookingAreaW / cols - 4;
             const left   = col * (bookingAreaW / cols) + 2;
             const past   = isPastBooking(booking.bookingDate, booking.bookingTime);
@@ -978,7 +982,7 @@ function WeekView({
 
                   {/* Booking blocks */}
                   {positioned.map(({ booking, top, height, col, cols, colorIdx }) => {
-                    const color    = BLOCK_COLORS[colorIdx]!;
+                    const color    = booking.status === BookingStatus.CANCELLED ? CANCELLED_BLOCK : BLOCK_COLORS[colorIdx]!;
                     const past     = isPastBooking(booking.bookingDate, booking.bookingTime);
                     const issues   = scheduleIssues.get(booking.id) ?? EMPTY_ISSUES;
                     const topIssue = primaryIssue(issues);
@@ -1682,14 +1686,24 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // full list seven times per render.
   const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate]);
 
+  // The timeline's view of the diary: a cancelled booking is replaced once
+  // another booking takes any of its time (see withoutReplacedCancellations).
+  const timelineBookings = useMemo(
+    () => withoutReplacedCancellations(bookingsWithServiceDuration, b => {
+      const start = parseTimeToMinutes(b.bookingTime);
+      return { start, end: start + parseDurationToMinutes(b.duration) };
+    }),
+    [bookingsWithServiceDuration],
+  );
+
   const bookingsByDate = useMemo(() => {
     const map = new Map<string, ConfirmedBooking[]>();
-    for (const b of bookingsWithServiceDuration) {
+    for (const b of timelineBookings) {
       const arr = map.get(b.bookingDate);
       if (arr) arr.push(b); else map.set(b.bookingDate, [b]);
     }
     return map;
-  }, [bookingsWithServiceDuration]);
+  }, [timelineBookings]);
 
   // Build list rows: show ALL upcoming bookings grouped by day (from selectedDate onwards)
   // Sourced from bookingsWithServiceDuration (not raw `bookings`) so a legacy
@@ -2088,7 +2102,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </ScrollView>
           ) : viewMode === 'timeline' ? (
             <DayTimeline
-              bookings={bookingsWithServiceDuration.filter(b => b.bookingDate === selectedDate)}
+              bookings={bookingsByDate.get(selectedDate) ?? EMPTY_DAY_BOOKINGS}
               onPress={b => navigation.navigate('BookingDetail', { bookingId: b.id, booking: b })}
               dark={dark}
               P={P}

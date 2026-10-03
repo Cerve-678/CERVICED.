@@ -94,13 +94,11 @@ describe('provider management performance contracts', () => {
   it('keeps provider refund controls usable while typing a reason', () => {
     const source = read('screens/provider/ProviderBookingDetailScreen.tsx');
 
-    expect(source).toContain("Keyboard.addListener(showEvent");
-    expect(source).toContain('setRefundKeyboardHeight(event.endCoordinates.height)');
-    expect(source).toContain("justifyContent: 'flex-end'");
-    expect(source).toContain('paddingBottom: refundKeyboardHeight + 12');
-    expect(source).toContain('styles.refundDialogScroll');
+    // The keyboard sits over the sheet's footer; the ScrollView insets itself
+    // so the amount and note stay reachable while typing.
+    expect(source).toContain('automaticallyAdjustKeyboardInsets');
     expect(source).toContain('keyboardShouldPersistTaps="handled"');
-    expect(source).toContain('Refund payment');
+    expect(source).toContain('Issue a refund');
     expect(source).toContain('>Cancel</Text>');
   });
 

@@ -1,4 +1,5 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
+import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import {
   computeCancellationSettlement,
   type CancelPenalty,
@@ -6,15 +7,11 @@ import {
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ⚠️  WRITTEN BUT NOT YET LIVE — NEEDS REVIEW BEFORE IT TOUCHES REAL MONEY.
-//     This has NOT been run against Stripe (test or live). Do not deploy or
-//     enable without: a security review, a Stripe test-mode end-to-end run of
-//     each penalty path (none / deposit / full, held payout AND already-released
-//     payout), and the 20261002 payment_status migration applied. It is inert
-//     while USE_STRIPE_PAYMENTS is off (bookings then have no captured payment,
-//     so every path is a no-op). See LEGAL-COMPLIANCE-NOTES.md §6.
-// ─────────────────────────────────────────────────────────────────────────────
+// Live in Stripe TEST mode from 2026-10-03 (security-reviewed; migration
+// 20261003100000 adds the partially_refunded status, the booking_refunds
+// ledger and the cancelled_at/cancelled_by stamp this relies on). Run each
+// penalty path (none / deposit / full, held AND already-released payout) in
+// test mode before switching Stripe to live keys. See LEGAL-COMPLIANCE-NOTES.md §6.
 //
 // The MONEY HALF of a client cancellation, paired with the cancel action the
 // same way refund-payment is (the cancel itself — status change + the DB
@@ -94,7 +91,7 @@ Deno.serve(async (req: Request) => {
     // the frozen policy snapshot and the stored money figures.
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, user_id, provider_id, status, payment_intent_id, amount_paid, deposit_amount, platform_fee, payment_status, stripe_refund_id, booking_date, booking_time, policy_snapshot')
+      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, booking_date, booking_time, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -105,6 +102,13 @@ Deno.serve(async (req: Request) => {
     // refund a live booking.
     if (booking.status !== 'cancelled') {
       return json({ error: 'This booking is not cancelled.' }, 409);
+    }
+    // Only a CLIENT's own cancellation is settled by the policy. A provider
+    // cancel is refunded in full by refund_booking_async; a booking cancelled
+    // before cancelled_by existed has no trustworthy cancel time. Neither is
+    // this function's to settle.
+    if (booking.cancelled_by !== 'client' || !booking.cancelled_at) {
+      return json({ status: 'not_eligible' }, 200);
     }
     // Idempotent: a settlement already happened.
     if (booking.stripe_refund_id || booking.payment_status === 'refunded' || booking.payment_status === 'partially_refunded') {
@@ -119,7 +123,7 @@ Deno.serve(async (req: Request) => {
     // agreed to; fall back to the provider's current policy for older bookings.
     const { data: provider, error: provErr } = await admin
       .from('providers')
-      .select('cancellation_notice_hours, booking_policies')
+      .select('cancellation_notice_hours, booking_policies, user_id, display_name')
       .eq('id', booking.provider_id)
       .maybeSingle();
     if (provErr) throw provErr;
@@ -129,8 +133,14 @@ Deno.serve(async (req: Request) => {
     const penalty = readPenalty(snapshot?.['cancelPenalty'] ?? livePolicies?.['cancelPenalty']);
     const hours = noticeHours(provider?.cancellation_notice_hours, livePolicies);
 
-    const apptMs = Date.parse(`${booking.booking_date}T${booking.booking_time}`);
-    const hoursUntil = Number.isFinite(apptMs) ? (apptMs - Date.now()) / 3_600_000 : 0;
+    // booking_date/time are UK wall-clock; read as UTC they'd be an hour late
+    // in summer, handing a late canceller an extra hour of notice.
+    const apptMs = londonWallTimeToUtcMs(String(booking.booking_date), String(booking.booking_time));
+    // Measured from WHEN they cancelled (stamped by the DB), never from when
+    // this call arrives — otherwise waiting until after the appointment would
+    // turn a late cancel into a full refund.
+    const cancelledMs = Date.parse(booking.cancelled_at);
+    const hoursUntil = Number.isFinite(apptMs) && Number.isFinite(cancelledMs) ? (apptMs - cancelledMs) / 3_600_000 : 0;
     const isLateCancel = hours > 0 && hoursUntil >= 0 && hoursUntil < hours;
 
     // The provider's payout row for this booking (its stored share, in pence).
@@ -146,7 +156,9 @@ Deno.serve(async (req: Request) => {
       isLateCancel,
       amountPaidPence: Math.round(Number(booking.amount_paid) * 100),
       depositPence: Math.round(Number(booking.deposit_amount ?? 0) * 100),
-      platformFeePence: Math.round(Number(booking.platform_fee ?? 0) * 100),
+      // The platform fee is stored as bookings.service_charge (there is no
+      // platform_fee column — reading one made every call fail).
+      platformFeePence: Math.round(Number(booking.service_charge ?? 0) * 100),
       payoutAmountPence: payout ? Number(payout.payout_amount) : 0,
     });
 
@@ -207,20 +219,87 @@ Deno.serve(async (req: Request) => {
         {
           payment_intent: booking.payment_intent_id,
           amount: settlement.clientRefundPence,
-          metadata: { booking_id: booking.id, settled_by_cancel: 'true', reason: 'client_cancellation_policy' },
+          metadata: { booking_id: booking.id, settled_by_cancel: 'true', reason: 'client_cancellation_policy', provider_kept_pence: String(settlement.providerKeepPence) },
         },
         { idempotencyKey: `cancelrefund_${booking.id}` },
       );
       await reconcileRefund(admin, stripe, refund);
-      return json({ status: 'settled', refundId: refund.id, clientRefundPence: settlement.clientRefundPence, providerKeepPence: settlement.providerKeepPence }, 200);
     }
 
-    return json({ status: 'settled', clientRefundPence: 0, providerKeepPence: settlement.providerKeepPence }, 200);
+    // Record what the policy kept on the booking itself, so both receipts can
+    // show it — a 'full' penalty makes no refund, so the ledger alone can't.
+    if (settlement.providerKeepPence > 0) {
+      const { error: keptErr } = await admin.from('bookings')
+        .update({ policy_retained_amount: settlement.providerKeepPence / 100 })
+        .eq('id', booking.id);
+      if (keptErr) throw keptErr;
+    }
+    await notifySettlement(booking, provider, penalty, hours, settlement);
+    return json({ status: 'settled', clientRefundPence: settlement.clientRefundPence, providerKeepPence: settlement.providerKeepPence }, 200);
   } catch (err) {
     console.error(`[apply-cancellation-refund] fatal: ${String(err)}`);
     return json({ error: 'Could not settle the cancellation. Please try again.' }, 500);
   }
 });
+
+// When the policy left the provider keeping money, tell both sides what was
+// kept and why (user decision 2026-10-03). The provider's message says only
+// what they kept — not what the client got back. A clean cancel (nothing kept)
+// sends nothing here; the ordinary cancellation notice already covers it.
+// Best-effort: the money has moved, so a failed notice is logged, not thrown.
+async function notifySettlement(
+  booking: { id: string; user_id: string; provider_id: string; provider_name_snapshot: string | null; customer_name: string | null },
+  provider: { user_id: string | null; display_name: string | null } | null,
+  penalty: CancelPenalty,
+  hours: number,
+  settlement: { clientRefundPence: number; providerKeepPence: number },
+) {
+  if (settlement.providerKeepPence <= 0) return;
+  // A retried settlement (e.g. a 'full' penalty, which leaves no refund to
+  // mark the booking settled) must not notify twice.
+  const { count, error: seenErr } = await admin.from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('booking_id', booking.id).eq('type', 'cancellation_settled');
+  if (seenErr) console.error(`[apply-cancellation-refund] notification check failed: ${String(seenErr.message ?? seenErr)}`);
+  if ((count ?? 0) > 0) return;
+  const kept = `£${(settlement.providerKeepPence / 100).toFixed(2)}`;
+  const what = penalty === 'full' ? `the full ${kept}` : `the ${kept} deposit`;
+  const window = hours > 0 ? `${hours}-hour cancellation policy` : 'cancellation policy';
+  const clientName = booking.customer_name?.trim() || 'Your client';
+  const providerName = booking.provider_name_snapshot?.trim() || provider?.display_name?.trim() || 'Your provider';
+  const refunded = `£${(settlement.clientRefundPence / 100).toFixed(2)}`;
+
+  const rows = [
+    ...(provider?.user_id ? [{
+      user_id: provider.user_id,
+      type: 'cancellation_settled',
+      title: `${clientName.split(' ')[0]} cancelled late`,
+      message: `You kept ${what} under your ${window}.`,
+      priority: 'medium',
+      is_actionable: false,
+      booking_id: booking.id,
+      provider_id: booking.provider_id,
+      recipient_role: 'provider',
+      metadata: { provider_kept_pence: settlement.providerKeepPence },
+    }] : []),
+    {
+      user_id: booking.user_id,
+      type: 'cancellation_settled',
+      title: settlement.clientRefundPence > 0 ? `${refunded} refunded` : 'Cancellation charge applied',
+      message: settlement.clientRefundPence > 0
+        ? `${providerName} kept ${what} under their ${window}. ${refunded} is on its way back to you.`
+        : `${providerName} kept ${what} under their ${window}, so nothing is refunded.`,
+      priority: 'medium',
+      is_actionable: false,
+      booking_id: booking.id,
+      provider_id: booking.provider_id,
+      recipient_role: 'client',
+      metadata: { provider_kept_pence: settlement.providerKeepPence, client_refund_pence: settlement.clientRefundPence },
+    },
+  ];
+  const { error } = await admin.from('notifications').insert(rows);
+  if (error) console.error(`[apply-cancellation-refund] settled but notification failed: ${String(error.message ?? error)}`);
+}
 
 async function latestChargeId(paymentIntentId: string): Promise<string | null> {
   const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
