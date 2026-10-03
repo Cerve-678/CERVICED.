@@ -30,6 +30,22 @@ import {
 const HOSTILE = `<script>alert(1)</script>&"'`;
 const AMPERSAND = 'Curls&Co';
 
+const BOOKING = {
+  providerName: 'Amara Lash Studio',
+  service: 'Classic lash full set',
+  date: 'Wednesday, 14 October 2026',
+  time: '2:30pm',
+  location: '12 Rose Street',
+  reference: 'CRV-7K2QMX',
+  basePrice: 65,
+  addOns: [{ name: 'Lash bath', price: 8 }],
+  serviceCharge: 1.99,
+  depositAmount: 0,
+  amountPaid: 74.99,
+  paymentType: 'full',
+  paymentStatus: 'paid_in_full',
+};
+
 const every = () => [
   ['clientWelcomeEmail', clientWelcomeEmail({ name: HOSTILE })],
   ['providerWelcomeEmail', providerWelcomeEmail({ name: HOSTILE, businessName: HOSTILE })],
@@ -40,12 +56,14 @@ const every = () => [
   [
     'bookingConfirmationEmail',
     bookingConfirmationEmail({
-      clientName: HOSTILE,
+      ...BOOKING,
       providerName: HOSTILE,
       service: HOSTILE,
       date: HOSTILE,
       time: HOSTILE,
       location: HOSTILE,
+      reference: HOSTILE,
+      addOns: [{ name: HOSTILE, price: 5 }],
     }),
   ],
   [
@@ -77,7 +95,7 @@ describe('email templates', () => {
   it('keeps subject lines as plain text, not HTML', () => {
     expect(
       bookingConfirmationEmail({
-        clientName: 'Sarah',
+        ...BOOKING,
         providerName: AMPERSAND,
         service: 'Gel manicure & art',
         date: 'Friday, 12 September 2026',
@@ -136,5 +154,45 @@ describe('email templates', () => {
     expect(ops).not.toContain('You&#39;re receiving this because you have a CERVICED account');
     expect(ops).not.toContain("You're receiving this because you have a CERVICED account");
     expect(ops).toContain('Support inbox');
+  });
+});
+
+describe('booking confirmation money', () => {
+  it('itemises the services, the platform fee and a pay-in-full total', () => {
+    const { html } = bookingConfirmationEmail(BOOKING);
+    expect(html).toContain('Lash bath');
+    expect(html).toContain('Cerviced platform fee');
+    expect(html).toContain('£74.99');
+    expect(html).toContain('Paid in full');
+    expect(html).not.toContain('Due to provider');
+  });
+
+  it("shows a deposit as the provider's own figure, with the balance due", () => {
+    const { html } = bookingConfirmationEmail({
+      ...BOOKING,
+      paymentType: 'deposit',
+      paymentStatus: 'deposit_paid',
+      depositAmount: 20,
+      amountPaid: 21.99,
+    });
+    expect(html).toContain('Deposit paid to provider');
+    expect(html).toContain('£20.00');
+    expect(html).not.toContain('£21.99');
+    expect(html).toContain('Due to provider at appointment');
+    expect(html).toContain('£53.00');
+  });
+
+  it('never calls a hand-added unpaid booking paid in full', () => {
+    const { html } = bookingConfirmationEmail({
+      ...BOOKING,
+      serviceCharge: 0,
+      amountPaid: 0,
+      paymentType: 'full',
+      paymentStatus: 'pending',
+    });
+    expect(html).not.toContain('Paid in full');
+    expect(html).toContain('Awaiting payment');
+    expect(html).not.toContain('platform fee');
+    expect(html).toContain('£73.00');
   });
 });
