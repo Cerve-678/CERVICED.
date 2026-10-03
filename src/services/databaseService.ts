@@ -9543,15 +9543,84 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
 }
 
-export async function refundProviderBooking(bookingId: string, reason?: string): Promise<boolean> {
+export interface RefundRequestInput {
+  bookingId: string;
+  reason: string;
+  /** Omit for a full refund (fee included). Otherwise pence out of the provider's share. */
+  amountPence?: number;
+  /** One per refund attempt, so a retry can never refund twice. */
+  requestId: string;
+}
+
+export async function refundProviderBooking(input: RefundRequestInput): Promise<boolean> {
   // `reason` is recorded on the Stripe refund's metadata (see the refund-payment
   // edge function) so a refund can be traced back to why it was issued —
   // cancellation, dispute, service issue — especially on completed bookings.
-  const { data, error } = await supabase.functions.invoke('refund-payment', { body: { bookingId, reason } });
-  if (error || data?.error || !['refunded', 'already_refunded', 'pending', 'requires_action'].includes(data?.status)) {
+  const { data, error } = await supabase.functions.invoke('refund-payment', {
+    body: { bookingId: input.bookingId, reason: input.reason, amountPence: input.amountPence ?? null, requestId: input.requestId },
+  });
+  if (error) {
+    // refund-payment's 409 bodies are written for the provider ("You can
+    // refund at most £20.00."), so lift them out. A 5xx body is not shown.
+    const res = (error as { context?: Response }).context;
+    if (res && res.status >= 400 && res.status < 500) {
+      const body = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof body?.error === 'string' && body.error) throw new Error(body.error);
+    }
+    throw new Error('The refund could not be confirmed. Refresh before trying again.');
+  }
+  if (data?.error || !['refunded', 'already_refunded', 'pending', 'requires_action'].includes(data?.status)) {
     throw new Error('The refund could not be confirmed. Refresh before trying again.');
   }
   return data?.status === 'refunded' || data?.status === 'already_refunded';
+}
+
+/** What the Issue Refund sheet needs to know about one of the provider's own bookings. */
+export interface ProviderRefundState {
+  /** The provider's share of this booking, in pence (what the client paid less the platform fee). */
+  sharePence: number;
+  /** What the provider still holds from it, in pence — the most a partial refund can be. */
+  heldPence: number;
+  /** True once anything has been refunded; a full refund is then no longer offered. */
+  anyRefunded: boolean;
+  /** Set when the client's late cancellation was settled by the provider's policy. */
+  policySettlement: { refundedToClientPence: number; providerKeptPence: number } | null;
+}
+
+/**
+ * Reads a provider's OWN booking's refund state (RLS: bookings, provider_payouts
+ * and booking_refunds are all owner-readable for the provider). The server
+ * re-derives every figure when the refund is actually made — this is for the
+ * sheet's display only.
+ */
+export async function getProviderRefundState(bookingId: string): Promise<ProviderRefundState> {
+  const [bookingRes, payoutRes, refundsRes] = await Promise.all([
+    supabase.from('bookings').select('amount_paid, service_charge, refunded_amount').eq('id', bookingId).single(),
+    supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
+    supabase.from('booking_refunds').select('amount_pence, kind, provider_kept_pence').eq('booking_id', bookingId).limit(50),
+  ]);
+  if (bookingRes.error) throw bookingRes.error;
+  if (payoutRes.error) throw payoutRes.error;
+  if (refundsRes.error) throw refundsRes.error;
+
+  const paid = Math.round(Number(bookingRes.data.amount_paid ?? 0) * 100);
+  const fee = Math.round(Number(bookingRes.data.service_charge ?? 0) * 100);
+  const refunded = Math.round(Number(bookingRes.data.refunded_amount ?? 0) * 100);
+  const share = Math.max(0, paid - fee);
+  const payout = payoutRes.data;
+  const held = payout
+    ? (payout.status === 'reversed' || payout.status === 'cancelled' ? 0 : Number(payout.payout_amount))
+    : Math.max(0, share - refunded);
+  const settlement = (refundsRes.data ?? []).find(r => r.kind === 'cancellation_settlement');
+
+  return {
+    sharePence: share,
+    heldPence: Math.max(0, Math.min(held, paid - refunded)),
+    anyRefunded: refunded > 0,
+    policySettlement: settlement
+      ? { refundedToClientPence: Number(settlement.amount_pence), providerKeptPence: Number(settlement.provider_kept_pence ?? 0) }
+      : null,
+  };
 }
 
 /** The money half of a CLIENT cancellation: applies the provider's cancellation

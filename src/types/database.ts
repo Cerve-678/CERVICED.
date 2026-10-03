@@ -59,6 +59,7 @@ export type PaymentStatus =
   | "deposit_paid"
   | "fully_paid"
   | "refunded"
+  | "partially_refunded"
   | "failed";
 
 export type NotificationType =
@@ -71,6 +72,7 @@ export type NotificationType =
   | "no_show"
   | "provider_no_show"
   | "payment_success"
+  | "cancellation_settled"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"

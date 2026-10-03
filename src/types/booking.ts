@@ -194,6 +194,8 @@ export enum PaymentStatus {
   PAID_IN_FULL = 'paid_in_full',
   REFUND_PENDING = 'refund_pending',
   REFUNDED = 'refunded',
+  /** Part of the payment came back (policy kept a deposit, or a partial refund). */
+  PARTIALLY_REFUNDED = 'partially_refunded',
   FAILED = 'failed',
 }
 
