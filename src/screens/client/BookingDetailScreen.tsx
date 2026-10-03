@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useR
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
-  Keyboard, TouchableWithoutFeedback,
+  Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback,
   LayoutAnimation,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -183,6 +183,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [supportKind, setSupportKind] = useState<BookingSupportKind | null>(null);
   const [supportReason, setSupportReason] = useState<string | null>(null);
   const [supportMessage, setSupportMessage] = useState('');
+  const supportFormScrollRef = useRef<ScrollView>(null);
   const [supportBusy, setSupportBusy] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState('');
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
@@ -1654,13 +1655,20 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             review, never a refund, and doesn't claim the provider was told —
             nothing notifies them. */}
         <Modal visible={supportKind !== null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
-          {/* The keyboard sits over the sheet's footer rather than pushing the
-              sheet up; the ScrollView insets itself so the note stays visible. */}
-          <View style={{ flex: 1 }}>
-            <Pressable style={st.supportOverlay} onPress={() => { if (!supportBusy) setSupportKind(null); }} />
+          {/* Keep the form above the keyboard; the body scrolls to its focused
+              note without hiding it behind the keyboard. */}
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <Pressable
+              style={[st.supportOverlay, StyleSheet.absoluteFill]}
+              onPress={() => { if (!supportBusy) setSupportKind(null); }}
+            />
             <View style={[st.supportSheet, { backgroundColor: C.surfaceRaised, paddingBottom: Math.max(insets.bottom, 16) }]}>
               <View style={[st.supportHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)' }]} />
-              <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+              <ScrollView ref={supportFormScrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
                 <View style={st.supportHead}>
                   <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}>
                     <Ionicons name={supportKind === 'refund' ? 'arrow-undo-outline' : 'flag-outline'} size={20} color={C.accentText} />
@@ -1712,6 +1720,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   placeholderTextColor={C.sub}
                   value={supportMessage}
                   onChangeText={setSupportMessage}
+                  onFocus={() => setTimeout(() => supportFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
                   multiline
                   maxLength={1000}
                   editable={!supportBusy}
@@ -1746,6 +1755,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* ─── Rating Modal ─── */}
@@ -2059,8 +2069,9 @@ const st = StyleSheet.create({
   contactOption: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   supportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  // Top corners only, rounder than the other sheets.
-  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 10 },
+  // Full-width bottom modal; its backdrop sits behind it so the top rounding
+  // is not obscured by a separate overlay edge.
+  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 10 },
   supportHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   supportHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   supportTitle: { fontSize: 18, fontWeight: '800' },
