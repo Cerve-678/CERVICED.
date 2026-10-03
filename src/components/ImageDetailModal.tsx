@@ -207,6 +207,7 @@ export const ImageDetailModal = ({
           and InfoRegScreen for the same pattern used elsewhere. */}
       <SafeAreaProvider>
         <ModalBody
+          visible={visible}
           item={item}
           palette={P}
           isDarkMode={isDarkMode}
@@ -332,7 +333,9 @@ const ImageCarousel: React.FC<{
           // grid, it is not a thumbnail, so cropping it with `cover` makes
           // the photo appear to end underneath the information sheet.
           contentFit="contain"
-          transition={0}
+          // Fade a newly decoded image in without changing its size. This is
+          // calmer than the previous height animation on modal entry.
+          transition={180}
           onLoad={({ source: loadedSource }) => {
             if (loadedSource.width > 0 && loadedSource.height > 0) {
               onImageAspectRatio(index, loadedSource.width / loadedSource.height);
@@ -347,6 +350,7 @@ const ImageCarousel: React.FC<{
 };
 
 interface ModalBodyProps {
+  visible: boolean;
   item: PortfolioItem;
   palette: ReturnType<typeof useTheme>['palette'];
   isDarkMode: boolean;
@@ -363,6 +367,7 @@ interface ModalBodyProps {
 }
 
 function ModalBody({
+  visible,
   item,
   palette: P,
   isDarkMode,
@@ -437,11 +442,23 @@ function ModalBody({
   // One animated height drives the image, hit area and sheet spacer together.
   // This covers cached-photo switches as well as dimensions arriving on load.
   const animatedImageHeight = useSharedValue(imageHeight);
+  const hasResolvedInitialImageRef = useRef(false);
   useEffect(() => {
-    animatedImageHeight.value = reduceMotionRef.current
-      ? imageHeight
-      : withTiming(imageHeight, { duration: 280, easing: Easing.inOut(Easing.cubic) });
-  }, [imageHeight, animatedImageHeight]);
+    if (visible) hasResolvedInitialImageRef.current = false;
+  }, [visible, item.id]);
+  useEffect(() => {
+    // The first pass uses a stored/fallback ratio; the real ratio arrives a
+    // moment later from expo-image. Both belong to the opening layout, so
+    // neither may animate — otherwise the image visibly expands on entry.
+    const hasMeasuredActiveImage =
+      Number.isFinite(loadedImageRatio) && (loadedImageRatio ?? 0) > 0;
+    if (!hasResolvedInitialImageRef.current || reduceMotionRef.current) {
+      animatedImageHeight.value = imageHeight;
+      if (hasMeasuredActiveImage) hasResolvedInitialImageRef.current = true;
+      return;
+    }
+    animatedImageHeight.value = withTiming(imageHeight, { duration: 180, easing: Easing.out(Easing.cubic) });
+  }, [imageHeight, loadedImageRatio, animatedImageHeight]);
   const imageHeightStyle = useAnimatedStyle(() => ({ height: animatedImageHeight.value }));
   const exposedImageStyle = useAnimatedStyle(() => ({ height: Math.max(0, animatedImageHeight.value - CARD_OVERLAP) }));
 
@@ -522,6 +539,9 @@ function ModalBody({
         // This view sits above the card so it must claim the touch from the
         // start; waiting for a move lets the overlapping ScrollView consume
         // the gesture before the carousel ever sees it.
+        // This layer also owns left/right taps, so it must take the gesture
+        // from its start. A tap changes photo by side; a drag still follows
+        // the finger through the carousel below.
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {

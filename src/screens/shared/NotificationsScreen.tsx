@@ -138,6 +138,13 @@ const notifSkeletonStyles = StyleSheet.create({
 // Types whose whole point is "go and look at this booking" — the row shows the
 // action itself. Everything else keeps Read More, which opens the full message.
 const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'booking_pending']);
+// Providers need a direct route to act on an incoming booking and to inspect a
+// cancellation. Clients keep their existing notification treatment, because a
+// provider cancellation is informative rather than a client-side action.
+const PROVIDER_INLINE_BOOKING_ACTION_TYPES: ReadonlySet<string> = new Set([
+  'booking_pending',
+  'booking_cancelled',
+]);
 
 // Haptic tiers per DESIGN_SYSTEM.md — fire-and-forget, never block a tap.
 const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
@@ -259,6 +266,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   const loadNotifications = useCallback(async () => {
     try {
+      setNotificationsLoading(true);
       setLoadError(null);
       const role = isProvider ? 'provider' : 'client';
       const dbRows = await getMyNotifications(role);
@@ -274,6 +282,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // Reload and re-subscribe whenever the active role changes so the list
   // switches cleanly between provider and client notifications.
   useEffect(() => {
+    // Never show the previous hat's private notifications while the new role
+    // is loading. The lightweight loading state below gives immediate feedback
+    // without a full-screen spinner.
+    setNotifications([]);
     loadNotifications();
     Notifications.setBadgeCountAsync(0).catch(() => {});
 
@@ -697,6 +709,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
+    } else if (notification.type === 'points_earned') {
+      // Loyalty points earned — open the Rewards screen, which lives in the
+      // client Profile tab's stack. Client-only (already guarded above via
+      // CLIENT_ONLY_TYPES), so no provider branch is needed. Same dismiss-then-
+      // navigate-via-root-ref pattern as the other client deep-links.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+      }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
 
@@ -777,7 +797,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Booking';
       case 'booking_declined':
       case 'booking_cancelled':
-        return 'View Past Bookings';
+        return isProvider ? 'View Booking' : 'View Past Bookings';
       case 'no_show':
       case 'provider_no_show':
       case 'no_show_disputed':
@@ -829,6 +849,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'points_earned':
+        return 'View Points';
       default:
         return 'View';
     }
@@ -942,11 +964,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   {formatTimestamp(item.timestamp)}
                 </Text>
 
-                {/* The tomorrow reminder and a new booking are both "go and look"
-                    notifications, so the row carries the action itself instead
-                    of a Read More that only opens a popup holding the same
-                    button. Tapping the row still opens the full message. */}
-                {item.actionable && INLINE_ACTION_TYPES.has(item.type) ? (
+                {/* Provider booking requests and cancellations have a direct
+                    destination, so surface the action in the row. The client
+                    keeps its existing reminder/request treatment. */}
+                {item.actionable && (
+                  INLINE_ACTION_TYPES.has(item.type)
+                  || (isProvider && PROVIDER_INLINE_BOOKING_ACTION_TYPES.has(item.type))
+                ) ? (
                   <TouchableOpacity
                     style={[styles.readMoreButton, { backgroundColor: P.accent, borderColor: P.accent }]}
                     onPress={() => {
@@ -1076,6 +1100,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <View style={[styles.emptyStateBlur, { borderColor: P.border, backgroundColor: P.accentDim }]}>
+                {notificationsLoading ? (
+                  <>
+                    <BellIcon size={48} color={P.sub} />
+                    <Text style={[textStyles.body, styles.emptyStateText, { color: P.sub }]}>Loading notifications…</Text>
+                  </>
+                ) : <>
                 <BellIcon size={64} color={P.sub} />
                 <Text style={[textStyles.h3, styles.emptyStateTitle, { color: P.text }]}>
                   {isProvider ? 'No business notifications' : 'No beauty notifications'}
@@ -1089,6 +1119,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                       ? `You're all caught up here — but you have ${otherHatUnread} unread in ${isProvider ? 'client' : 'provider'} mode.`
                       : "You're all caught up! New notifications will appear here."}
                 </Text>
+                </>}
               </View>
             </View>
           }

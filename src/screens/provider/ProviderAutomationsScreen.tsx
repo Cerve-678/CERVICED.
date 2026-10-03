@@ -104,23 +104,14 @@ function SectionHeader({ icon, label, sub, C }: { icon: string; label: string; s
   );
 }
 
-function PlatformBadge({ C }: { C: typeof C_DARK }) {
-  return (
-    <View style={{ backgroundColor: C.green + '18', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: 6 }}>
-      <Text style={{ fontSize: 9, fontWeight: '700', color: C.green, letterSpacing: 0.5 }}>CERVICED SENDS</Text>
-    </View>
-  );
-}
-
 function AutoCard({
-  title, description, value, onToggle, C, platform, children,
+  title, description, value, onToggle, C, children,
 }: {
   title: string; description: string; value: boolean; onToggle: (v: boolean) => void;
-  C: typeof C_DARK; platform?: boolean; children?: React.ReactNode;
+  C: typeof C_DARK; children?: React.ReactNode;
 }) {
   return (
     <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, marginBottom: 8 }]}>
-      {platform && <PlatformBadge C={C} />}
       <View style={st.cardRow}>
         <View style={{ flex: 1, marginRight: 12 }}>
           <Text style={[st.cardTitle, { color: C.text }]}>{title}</Text>
@@ -363,7 +354,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         {/* Client appointment reminders */}
         <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, marginBottom: 8 }]}>
-          <PlatformBadge C={C} />
           <Text style={[st.cardTitle, { color: C.text, marginBottom: 4 }]}>Appointment reminders to clients</Text>
           <Text style={[st.cardDesc, { color: C.sub, marginBottom: 12 }]}>
             Cerviced sends a push notification to clients at each selected interval before their appointment.
@@ -442,7 +432,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           description="2 hours after an appointment is marked completed, Cerviced asks the client to leave a star rating and review."
           value={d.autoReviewRequest}
           onToggle={v => set('autoReviewRequest', v)}
-          platform
           C={C}
         />
 
@@ -451,7 +440,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           description="The day after a treatment, Cerviced sends a short follow-up asking the client how they're feeling."
           value={d.postApptCheckIn}
           onToggle={v => set('postApptCheckIn', v)}
-          platform
           C={C}
         />
 
@@ -460,7 +448,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           description="Cerviced sends a personalised birthday message to clients who have their birthday on file — a simple way to stay front of mind."
           value={d.birthdayGreeting}
           onToggle={v => set('birthdayGreeting', v)}
-          platform
           C={C}
         />
 
@@ -469,7 +456,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           description="Each morning, Cerviced sends you a push notification summarising your appointments for the day."
           value={d.newBookingRecap}
           onToggle={v => set('newBookingRecap', v)}
-          platform
           C={C}
         />
 

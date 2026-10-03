@@ -11,6 +11,8 @@ import {
   Modal,
   TextInput,
   Alert,
+  Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -253,6 +255,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { showAlert, DialogHost } = useAppDialog();
   // Deliberately NOT wired to BookingContext: that cache is the client hat's
   // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
@@ -343,6 +346,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [refundReason, setRefundReason] = useState<string | null>(null);
   const [refundNote, setRefundNote] = useState('');
   const [refundBusy, setRefundBusy] = useState(false);
+  const [refundKeyboardHeight, setRefundKeyboardHeight] = useState(0);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
   const [groupDateOptions, setGroupDateOptions] = useState<
@@ -351,6 +355,24 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [groupRescheduleSending, setGroupRescheduleSending] = useState(false);
   const [groupRescheduleError, setGroupRescheduleError] = useState('');
   const groupChainsByStart = useRef<Map<string, BackToBackSlot[]>>(new Map());
+
+  // Modals are not reliably resized by the Android window-soft-input setting,
+  // and a generic KeyboardAvoidingView can leave the dialog actions beneath
+  // the keyboard. Measure the keyboard instead, then pin this money-action
+  // dialog directly above it.
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, event => {
+      setRefundKeyboardHeight(event.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener(hideEvent, () => setRefundKeyboardHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  const refundDialogMaxHeight = refundKeyboardHeight > 0
+    ? Math.max(280, windowHeight - refundKeyboardHeight - insets.top - 24)
+    : undefined;
 
   const [addressSettings, setAddressSettings] = useState<ProviderAddressPolicy | null>(null);
   // Distinct from `addressSettings === null`, which cannot tell "not back yet"
@@ -2821,56 +2843,78 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           activeOpacity={1}
           onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
         />
-        <View style={styles.dialogPositioner} pointerEvents="box-none">
-          <View style={[styles.dialog, { backgroundColor: P.card }]}>
-            <Text style={[styles.dialogTitle, { color: P.text }]}>Issue a refund</Text>
-            <Text style={[styles.dialogMessage, { color: P.text + '88' }]}>
-              This returns £{(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)} to {booking.customerName || 'the client'} for {booking.serviceName || 'this booking'}. It does not cancel their appointment.
-            </Text>
-            <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
-              <Text style={[styles.refundReasonHeading, { color: P.text + '99' }]}>WHY ARE YOU REFUNDING?</Text>
-              {REFUND_REASONS.map(r => {
-                const selected = refundReason === r.label;
-                return (
-                  <TouchableOpacity
-                    key={r.label}
-                    activeOpacity={0.7}
-                    disabled={refundBusy}
-                    onPress={() => setRefundReason(r.label)}
-                    style={[styles.refundReasonRow, {
-                      borderColor: selected ? P.accent : (isDarkMode ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'),
-                      backgroundColor: selected ? P.accent + '14' : 'transparent',
-                    }]}
-                  >
-                    <Ionicons
-                      name={selected ? 'radio-button-on' : 'radio-button-off'}
-                      size={18}
-                      color={selected ? P.accent : P.text + '55'}
-                    />
-                    <View style={styles.refundReasonTextBlock}>
-                      <Text style={[styles.refundReasonLabel, { color: P.text }]}>{r.label}</Text>
-                      <Text style={[styles.refundReasonSub, { color: P.text + '66' }]}>{r.sub}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-              <TextInput
-                style={[styles.respondInput, {
-                  color: P.text,
-                  borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
-                  minHeight: 64,
-                  textAlignVertical: 'top',
-                  marginTop: 10,
-                }]}
-                placeholder={refundReason === 'Other' ? 'Add a note (required)' : 'Add a note (optional)'}
-                placeholderTextColor={P.text + '44'}
-                value={refundNote}
-                onChangeText={setRefundNote}
-                multiline
-                maxLength={500}
-                editable={!refundBusy}
-              />
-            </View>
+        <View
+          style={[
+            styles.dialogPositioner,
+            refundKeyboardHeight > 0 && {
+              justifyContent: 'flex-end',
+              paddingBottom: refundKeyboardHeight + 12,
+            },
+          ]}
+          pointerEvents="box-none"
+        >
+          <View style={[
+            styles.dialog,
+            styles.refundDialog,
+            { backgroundColor: P.card },
+            refundDialogMaxHeight !== undefined && { maxHeight: refundDialogMaxHeight },
+          ]}>
+            <ScrollView
+              style={styles.refundDialogScroll}
+              contentContainerStyle={styles.refundDialogScrollContent}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={[styles.dialogTitle, { color: P.text }]}>Issue a refund</Text>
+              <Text style={[styles.dialogMessage, { color: P.text + '88' }]}>
+                This returns £{(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)} to {booking.customerName || 'the client'} for {booking.serviceName || 'this booking'}. It does not cancel their appointment.
+              </Text>
+              <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
+                <Text style={[styles.refundReasonHeading, { color: P.text + '99' }]}>WHY ARE YOU REFUNDING?</Text>
+                {REFUND_REASONS.map(r => {
+                  const selected = refundReason === r.label;
+                  return (
+                    <TouchableOpacity
+                      key={r.label}
+                      activeOpacity={0.7}
+                      disabled={refundBusy}
+                      onPress={() => setRefundReason(r.label)}
+                      style={[styles.refundReasonRow, {
+                        borderColor: selected ? P.accent : (isDarkMode ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'),
+                        backgroundColor: selected ? P.accent + '14' : 'transparent',
+                      }]}
+                    >
+                      <Ionicons
+                        name={selected ? 'radio-button-on' : 'radio-button-off'}
+                        size={18}
+                        color={selected ? P.accent : P.text + '55'}
+                      />
+                      <View style={styles.refundReasonTextBlock}>
+                        <Text style={[styles.refundReasonLabel, { color: P.text }]}>{r.label}</Text>
+                        <Text style={[styles.refundReasonSub, { color: P.text + '66' }]}>{r.sub}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TextInput
+                  style={[styles.respondInput, {
+                    color: P.text,
+                    borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+                    minHeight: 64,
+                    textAlignVertical: 'top',
+                    marginTop: 10,
+                  }]}
+                  placeholder={refundReason === 'Other' ? 'Add a note (required)' : 'Add a note (optional)'}
+                  placeholderTextColor={P.text + '44'}
+                  value={refundNote}
+                  onChangeText={setRefundNote}
+                  multiline
+                  maxLength={500}
+                  editable={!refundBusy}
+                />
+              </View>
+            </ScrollView>
             <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
             <TouchableOpacity
               style={styles.dialogBtn}
@@ -3964,6 +4008,18 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 14,
     overflow: 'hidden',
+  },
+  // The keyboard reduces the available modal height. The reason list scrolls
+  // within that space while the refund and cancel actions stay pinned above it.
+  refundDialog: {
+    maxHeight: '88%',
+  },
+  refundDialogScroll: {
+    flexShrink: 1,
+  },
+  refundDialogScrollContent: {
+    paddingTop: 0,
+    paddingBottom: 4,
   },
   dialogTitle: {
     fontSize: 17,

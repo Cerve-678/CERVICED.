@@ -84,6 +84,8 @@ import { resolveProviderTheme, withAlpha, isDarkColor, blend } from '../../const
 import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
+import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
+import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useDarkTopArea } from '../../contexts/StatusBarTintContext';
 import { logger } from '../../utils/logger';
@@ -597,11 +599,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       // Returning providers can render their saved profile before the live
       // request finishes. Supabase still refreshes every field below; this
       // merely removes the empty spinner from the route transition.
+      // Only when nothing is on screen yet: on a refocus the screen already
+      // holds live data, and swapping in the (possibly stale) saved copy
+      // flashed old theme/services before the live read swapped them back —
+      // or, if the cache read lost the race, left the stale copy showing.
       if (user?.id) {
         getCachedProviderData(user.id)
           .then(cached => {
             if (!cached || !active) return;
-            setProviderData(cached);
+            setProviderData(prev => prev ?? cached);
             setIsLoading(false);
           })
           .catch(() => {});
@@ -638,6 +644,21 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               setProviderId(profile.id);
               setReviewCount(profile.review_count ?? 0);
 
+              // Started before the catalogue await, not after it: "How you
+              // take bookings" doesn't depend on the services list, and
+              // waiting on it kept the card on its placeholder for that whole
+              // load — or for good, if the catalogue read threw.
+              // No setAvailabilityLoading(true) here: it starts true for the
+              // first load, and flipping it back on every refocus swapped the
+              // whole schedule card for its placeholder each time you tabbed
+              // back. Later focuses refresh behind what's already shown.
+              AvailabilityService.getAvailabilitySummary(profile.id, {
+                includeExtendedSearch: false,
+              })
+                .then(setAvailability)
+                .catch(() => setAvailability(null))
+                .finally(() => setAvailabilityLoading(false));
+
               // The catalogue is what this screen is for, so it's awaited
               // rather than fired and forgotten — everything else can arrive
               // late without the screen looking broken.
@@ -666,14 +687,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 .catch(err => {
                   logger.error('[MyServices] top services load failed:', err);
                 });
-
-              setAvailabilityLoading(true);
-              AvailabilityService.getAvailabilitySummary(profile.id, {
-                includeExtendedSearch: false,
-              })
-                .then(setAvailability)
-                .catch(() => setAvailability(null))
-                .finally(() => setAvailabilityLoading(false));
 
               getProviderReviews(profile.id, { limit: 20 })
                 .then(dbReviews =>
@@ -795,10 +808,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
   const showSteps = stepsOpen ?? !(goLive?.isLive ?? false);
   const topService = topServices?.[0] ?? null;
-  // Every step ticked, the optional logo included — the one state where the
-  // card has nothing left to ask for and can move out of the way.
-  const setupComplete = setup.percent === 100;
-
   const averageRating = providerData?.rating ?? 0;
   // Falls back to the rows in hand only while the count hasn't arrived, so an
   // in-flight load never briefly claims "0 reviews" under a visible one.
@@ -807,6 +816,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const handleEditProfile = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('EditProfile');
+  }, [navigation]);
+
+  // The payout card hapticks on its own press, so this only navigates.
+  const handleOpenPayments = useCallback(() => {
+    navigation.navigate('Payments');
   }, [navigation]);
 
   const handleEditSchedule = useCallback(() => {
@@ -1171,7 +1185,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       <ThemedBackground>
         <SafeAreaView style={styles.container} edges={['top']}>
           <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color="#a342c3" />
+            <ActivityIndicator size="large" color={theme.accent} />
           </View>
         </SafeAreaView>
       </ThemedBackground>
@@ -1560,7 +1574,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
               {tab === 'dashboard' ? (
                 <>
-                  {setupComplete ? null : statusSection}
+                  {setup.percent === 100 ? null : statusSection}
 
                   {/* ── What clients say ───────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
@@ -1879,7 +1893,24 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     />
                   </View>
 
-                  {setupComplete ? statusSection : null}
+                  {STRIPE_CONNECT_PAYOUTS_ENABLED && (
+                    <>
+                      <Text style={[styles.sectionLabel, { color: PP.sub }]}>PAYOUTS</Text>
+                      <View style={styles.availabilityWrap}>
+                        <ProviderPayoutSummaryCard
+                          cardBg={cardBg}
+                          blurIntensity={cardBlurIntensity}
+                          blurTint={cardBlurTint}
+                          borderColor={PP.border}
+                          textColor={PP.text}
+                          subTextColor={PP.sub}
+                          accentColor={accentColor}
+                          onOpenPayments={handleOpenPayments}
+                        />
+                      </View>
+                    </>
+                  )}
+
                 </>
               ) : (
                 <>
@@ -1935,6 +1966,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       />
                     ))
                   )}
+
+                  {setup.percent === 100 ? statusSection : null}
                 </>
               )}
             </View>
@@ -1980,6 +2013,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+  },
+  profileLoadingShell: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  profileLoadingHero: {
+    height: 260,
+    borderRadius: 24,
+    backgroundColor: 'rgba(126,102,103,0.16)',
+  },
+  profileLoadingCard: {
+    marginTop: -40,
+    marginHorizontal: 12,
+    padding: 22,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+  },
+  profileLoadingTitle: {
+    height: 24,
+    width: '58%',
+    borderRadius: 8,
+    backgroundColor: 'rgba(126,102,103,0.20)',
+  },
+  profileLoadingLine: {
+    height: 13,
+    marginTop: 16,
+    borderRadius: 7,
+    backgroundColor: 'rgba(126,102,103,0.14)',
+  },
+  profileLoadingLineShort: {
+    height: 13,
+    width: '66%',
+    marginTop: 9,
+    borderRadius: 7,
+    backgroundColor: 'rgba(126,102,103,0.14)',
   },
   emptyTitle: {
     fontSize: 22,
@@ -2137,7 +2206,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: SHEET_LIP_RADIUS,
     overflow: 'hidden',
   },
-
   // Dashboard / Services switch, sitting above everything in the sheet.
   tabBar: {
     flexDirection: 'row',

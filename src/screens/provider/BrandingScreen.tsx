@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   PROVIDER_THEMES,
   DEFAULT_PROVIDER_THEME,
@@ -27,7 +28,7 @@ import {
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
 import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily } from '../../constants/providerFonts';
-import { uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
+import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
 
@@ -67,6 +68,7 @@ async function uploadBackgroundImage(
 
 export default function BrandingScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
   const P = isDarkMode ? DARK : LIGHT;
 
   const [loading, setLoading]       = useState(true);
@@ -87,9 +89,33 @@ export default function BrandingScreen({ navigation }: any) {
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
 
   useEffect(() => {
+    let active = true;
+    // Show the last saved appearance immediately. The authoritative branding
+    // row still refreshes below, but opening this editor should not be held up
+    // by an auth lookup plus a provider query.
+    if (user?.id) {
+      void getCachedProviderData(user.id).then(cached => {
+        if (!cached || !active) return;
+        setUserId(user.id);
+        setGradient(cached.gradient);
+        setAccentColor(cached.accentColor);
+        setBackgroundImage(cached.backgroundImage);
+        setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
+        const { base, sheet } = parseThemeKey(cached.profileTheme);
+        setSheetColor(sheet);
+        const custom = decodeCustomTheme(base);
+        if (custom) {
+          setThemeChoice('custom');
+          setCustomBackdrop(custom.backdrop);
+          setCustomCard(custom.card);
+          setCustomAccent(custom.accent);
+        } else if (base) setThemeChoice(base);
+        setLoading(false);
+      }).catch(() => {});
+    }
     (async () => {
       try {
-        const data = await getMyProviderBranding();
+        const data = await getMyProviderBranding(user?.id);
 
         if (data) {
           setUserId(data.userId);
@@ -113,14 +139,19 @@ export default function BrandingScreen({ navigation }: any) {
           }
         }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     })();
-  }, []);
+    return () => { active = false; };
+  }, [user?.id]);
 
   const pickImage = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    if (!userId) { Alert.alert('Not signed in'); return; }
+    // Avoid asking the native permission service again once access is already
+    // granted. That extra hop delayed the picker even for returning providers.
+    let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+    if (!permission.granted) permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
       Alert.alert('Permission needed', 'Allow access to your photo library to set a background image.');
       return;
     }
@@ -132,19 +163,23 @@ export default function BrandingScreen({ navigation }: any) {
     });
     if (result.canceled || !result.assets[0]) return;
 
-    if (!userId) { Alert.alert('Not signed in'); return; }
-
+    const localUri = result.assets[0].uri;
+    const previousImage = backgroundImage;
+    // The provider chose this image already; show it now, rather than making
+    // the preview wait for the storage upload to finish.
+    setBackgroundImage(localUri);
     setUploadingImage(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      const url = await uploadBackgroundImage(userId, result.assets[0].uri);
+      const url = await uploadBackgroundImage(userId, localUri);
       setBackgroundImage(url);
     } catch (e: any) {
+      setBackgroundImage(previousImage);
       Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'BrandingScreen.upload'));
     } finally {
       setUploadingImage(false);
     }
-  }, [userId]);
+  }, [userId, backgroundImage]);
 
   const removeImage = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -347,7 +382,7 @@ export default function BrandingScreen({ navigation }: any) {
             style={[styles.saveBtn, { backgroundColor: accentColor, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave}
             activeOpacity={0.85}
-            disabled={saving}
+            disabled={saving || uploadingImage}
           >
             {saving ? (
               <ActivityIndicator color="#fff" />

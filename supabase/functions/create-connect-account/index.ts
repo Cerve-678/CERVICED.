@@ -1,6 +1,7 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
+import { readProviderFinance } from '../_shared/providerFinance.ts';
+import { createConnectedAccount } from '../_shared/createConnectedAccount.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
+import Stripe from 'npm:stripe@17.4.0';
 
 // Express onboarding for CERVICED providers. Chosen model: "buyers purchase
 // from you" + split payouts (Uber-Eats pattern) — the platform is merchant of
@@ -17,17 +18,18 @@ const corsHeaders = {
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2024-12-18.acacia',
+  httpClient: Stripe.createFetchHttpClient(),
 });
 
 interface RequestBody {
   // Deep links the app registers so Stripe can bounce the provider back into
   // it. `refreshUrl` is hit if the link expired before completion; `returnUrl`
   // when they finish (or bail) — the app then re-reads the account status.
-  refreshUrl: string;
-  returnUrl: string;
+  action?: 'onboard' | 'status' | 'dashboard' | 'finance';
+  cursor?: string;
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -53,11 +55,6 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    if (!body.refreshUrl || !body.returnUrl) {
-      return new Response(JSON.stringify({ error: 'Invalid request' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     // Resolve the caller's OWN provider row (providers.user_id = auth.uid()).
     // The RLS SELECT policy already scopes this to the caller, but we filter
@@ -74,53 +71,59 @@ serve(async (req) => {
     }
 
     let accountId = provider.stripe_account_id as string | null;
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    if (body.action === 'status') {
+      if (!accountId) return json({ connected: false, payoutsEnabled: false, detailsSubmitted: false });
+      const account = await stripe.accounts.retrieve(accountId);
+      const { error } = await admin.from('providers').update({
+        stripe_charges_enabled: account.charges_enabled,
+        stripe_payouts_enabled: account.payouts_enabled,
+        stripe_details_submitted: account.details_submitted,
+      }).eq('id', provider.id);
+      if (error) throw error;
+      return json({ connected: true, payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
+        requirementsDue: account.requirements?.currently_due?.length ?? 0 });
+    }
+    if (body.action === 'finance') {
+      if (body.cursor !== undefined && (typeof body.cursor !== 'string' || !/^po_[A-Za-z0-9]+$/.test(body.cursor))) {
+        return json({ error: 'Invalid payout cursor' }, 400);
+      }
+      return json(await readProviderFinance(stripe, accountId, body.cursor));
+    }
+    if (body.action === 'dashboard') {
+      if (!accountId) throw new Error('No connected account');
+      const link = await stripe.accounts.createLoginLink(accountId);
+      return json({ url: link.url });
+    }
+    if (body.action && body.action !== 'onboard') return json({ error: 'Invalid action' }, 400);
 
     // Create the Express account once; reuse it on every subsequent call so a
     // provider who re-opens onboarding continues the same account rather than
     // orphaning a new one each time.
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'GB',
-        // Platform collects card payments; provider only receives transfers.
-        capabilities: { transfers: { requested: true } },
-        business_type: 'individual',
-        metadata: { provider_id: provider.id, user_id: user.id },
-      });
+      if (!user.email?.trim()) return json({ code: 'stripe_contact_email_required', error: 'Add an email address to your account before setting up Stripe.' }, 422);
+      const account = await createConnectedAccount(Deno.env.get('STRIPE_SECRET_KEY')!, provider.id, user.id, user.email);
       accountId = account.id;
 
       // Persist with the service role — clients cannot write these columns
       // (REVOKE UPDATE in the schema migration). Guard against a concurrent
       // create by only writing when the row still has no account id.
-      const admin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      );
-      const { error: writeError } = await admin
-        .from('providers')
-        .update({ stripe_account_id: accountId })
-        .eq('id', provider.id)
-        .is('stripe_account_id', null);
-      if (writeError) {
-        // Another request already attached an account — clean up the one we
-        // just created so we don't leak an orphaned Stripe account, then reuse
-        // the row's existing id.
-        await stripe.accounts.del(accountId).catch(() => {});
-        const { data: fresh } = await admin
-          .from('providers')
-          .select('stripe_account_id')
-          .eq('id', provider.id)
-          .single();
-        accountId = fresh?.stripe_account_id ?? null;
-        if (!accountId) throw writeError;
-      }
+      const { error: writeError } = await admin.from('providers')
+        .update({ stripe_account_id: accountId }).eq('id', provider.id).is('stripe_account_id', null);
+      if (writeError) throw writeError;
+      const { data: fresh, error: readError } = await admin.from('providers')
+        .select('stripe_account_id').eq('id', provider.id).single();
+      if (readError || !fresh?.stripe_account_id) throw readError ?? new Error('Account could not be linked');
+      accountId = fresh.stripe_account_id;
+
     }
 
     // A fresh Account Link every call — they are single-use and short-lived.
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: body.refreshUrl,
-      return_url: body.returnUrl,
+      refresh_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/stripe-connect-return?result=refresh`,
+      return_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/stripe-connect-return?result=return`,
       type: 'account_onboarding',
     });
 
@@ -132,8 +135,13 @@ serve(async (req) => {
     console.error(`[create-connect-account] fatal: ${String(err)}`);
     // Friendly to the client, real reason in the logs (error-message-sweep).
     return new Response(
-      JSON.stringify({ error: 'Could not start payout setup. Please try again.' }),
+      JSON.stringify({ code: 'stripe_setup_unavailable', error: 'Stripe account setup is unavailable. Please try again or contact support.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
 });
+
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
