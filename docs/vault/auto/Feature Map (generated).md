@@ -76,7 +76,7 @@ Curated: [[Availability & Slots]] · **164 files**
 ## Payments
 Curated: [[Payments]] · **128 files**
 - `src/screens/client/CartScreen.tsx` _(502)_
-- `src/services/databaseService.ts` _(184)_
+- `src/services/databaseService.ts` _(191)_
 - `src/screens/provider/PaymentsScreen.tsx` _(176)_
 - `src/services/bookingService.ts` _(119)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -84,7 +84,7 @@ Curated: [[Payments]] · **128 files**
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/components/ProviderStripePayments.tsx` _(90)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(83)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(85)_
 - `src/features/bookings/receipt.ts` _(64)_
 - `src/features/bookings/paymentPresentation.ts` _(55)_
 - `src/types/database.ts` _(52)_
@@ -111,7 +111,7 @@ Curated: [[Payments]] · **128 files**
 Curated: [[Booking Flow]] · **250 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/services/databaseService.ts` _(672)_
+- `src/services/databaseService.ts` _(683)_
 - `src/screens/client/CartScreen.tsx` _(601)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(553)_
 - `src/services/becca/capabilities/client.ts` _(502)_
@@ -246,8 +246,8 @@ Curated: [[Booking Flow]] · **54 files**
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **162 files**
 - `src/contexts/BookingContext.tsx` _(329)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(294)_
-- `src/services/databaseService.ts` _(214)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(295)_
+- `src/services/databaseService.ts` _(230)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/BookingDetailScreen.tsx` _(157)_
@@ -268,10 +268,10 @@ Curated: [[Booking Flow]] · **162 files**
 - `src/screens/provider/PoliciesScreen.tsx` _(46)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
+- `src/utils/policyDisplay.ts` _(43)_
 - `supabase/fix_provider_no_show_status.sql` _(42)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
-- `src/utils/policyDisplay.ts` _(37)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_

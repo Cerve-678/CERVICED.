@@ -5,7 +5,7 @@
 
 #generated
 
-**2281 functions** across **311 files**.
+**2283 functions** across **311 files**.
 
 ### `src/components/` (42)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -80,7 +80,7 @@
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `noShowDispute.ts` — **fileNoShowDispute**
-- `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **describeRefundOutcome** · money
+- `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **describeRefundOutcome** · **describeSettlementTiming** · money
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
 - `receipt.ts` — **buildClientReceiptHTML** · escapeHtml · money
 
@@ -306,7 +306,7 @@
 - `newestAddedItem.ts` — **newestAddedItem**
 - `paymentRequestError.ts` — **getPaymentRequestError** · response
 - `performance.ts` — for
-- `policyDisplay.ts` — **buildPolicyDisplayRows** · **buildPolicySnapshot** · **readProviderTermsSnapshot**
+- `policyDisplay.ts` — **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · **readProviderTermsSnapshot**
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
 - `regionStore.ts` — **getRegion** · **setRegion**
 - `reorderCategories.ts` — exists · **reorderCategoriesWithinType**
