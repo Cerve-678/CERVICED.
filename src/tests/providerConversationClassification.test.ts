@@ -9,7 +9,7 @@ const mockState = {
 
 jest.mock('../lib/supabase', () => ({
   supabase: {
-    auth: { getUser: async () => ({ data: { user: { id: 'owner' } }, error: null }) },
+    auth: { getSession: async () => ({ data: { session: { user: { id: 'owner' } } }, error: null }) },
     rpc: async () => ({ data: [], error: null }),
     from: (table: string) => {
       const call: any = { table, filters: [] };
