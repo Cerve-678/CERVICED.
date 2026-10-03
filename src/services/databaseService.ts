@@ -1,7 +1,7 @@
 import { getPaymentRequestError } from '../utils/paymentRequestError';
 import { supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
-import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
   DbProvider,
   DbBooking,
@@ -63,8 +63,26 @@ export async function refreshAuthSession(refreshToken: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * The signed-in user, read from the session stored on this device. Same shape
+ * as `supabase.auth.getUser()`, without its round trip to the Auth server.
+ * getUser() exists for servers, where a forged cookie could claim to be
+ * anyone; here the session is the user's own, and every query still sends its
+ * access token for the database to verify, so RLS stays the enforcement point.
+ * Calling getUser() before each query added a network round trip to almost
+ * every screen load. A network call only happens when the token is due to
+ * refresh. Signed out → `user` is null with no error.
+ */
+async function getSessionUser(): Promise<{
+  data: { user: User | null };
+  error: AuthError | null;
+}> {
+  const { data, error } = await supabase.auth.getSession();
+  return { data: { user: data.session?.user ?? null }, error };
+}
+
 export async function getCurrentAuthUserId(): Promise<string | null> {
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await getSessionUser();
   if (error) throw error;
   return data.user?.id ?? null;
 }
@@ -257,7 +275,7 @@ export async function removePortfolioStorageObject(path: string): Promise<void> 
 }
 
 export async function getCurrentUserStoredPushToken(): Promise<string | null> {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await getSessionUser();
   if (authError) throw authError;
   if (!authData.user) return null;
   const { data, error } = await supabase
@@ -1365,7 +1383,7 @@ export async function getProviderProfileViewerContext(
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (authError) throw authError;
   if (!user) return null;
 
@@ -1422,7 +1440,7 @@ export async function getMyProviderProfile(): Promise<DbProvider | null> {
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (error) throw error;
   if (!user) return null;
   return getProviderProfileForUserId(user.id);
@@ -1437,7 +1455,7 @@ export async function getMyProviderProfileContext(): Promise<{
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (error) throw error;
   if (!user) return null;
   return {
@@ -1870,7 +1888,7 @@ export async function getProviderActivePromotions(
 export async function getMyPromotions(): Promise<DbPromotion[]> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -1918,7 +1936,7 @@ export async function upsertPromotion(
 ): Promise<DbPromotion> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -1981,7 +1999,7 @@ export async function getMyProviderServices(): Promise<
 > {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -2043,7 +2061,7 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await getSessionUser();
     if (authError) throw authError;
     if (!user) throw new Error("Not authenticated");
 
@@ -2170,7 +2188,7 @@ export async function getMyPromotionManagerCore(): Promise<{
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (authError) throw authError;
   if (!user) throw new Error("Not authenticated");
   const { data: provider, error: providerError } = await supabase
@@ -2348,7 +2366,7 @@ export async function getProviderClientele(): Promise<
 > {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -2413,7 +2431,7 @@ export async function getClientBookingHistory(
 ): Promise<import("../types/database").DbBooking[]> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -2458,7 +2476,7 @@ export async function getClientReliabilityStats(
 ): Promise<ClientReliabilityStats> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -2496,7 +2514,7 @@ export async function getClientReliabilityStatsBatch(
   if (clientUserIds.length === 0) return {};
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -2579,7 +2597,7 @@ export async function sendPromotionNotificationsToClients(
 ): Promise<{ sent: number }> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -2687,7 +2705,7 @@ export async function sendAnnouncement(
 ): Promise<{ sent: number }> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { data: provider } = await supabase
@@ -2787,7 +2805,7 @@ export async function addBookmark(providerId: string): Promise<void> {
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
   await assertNotOwnProvider(providerId, user.id);
 
@@ -2804,7 +2822,7 @@ export async function removeBookmark(providerId: string): Promise<void> {
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
 
   const { error } = await supabase
@@ -2824,7 +2842,7 @@ export async function isProviderBookmarked(
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return false;
 
   const { data } = await supabase
@@ -2878,7 +2896,7 @@ export async function getMyBookings(
 ): Promise<BookingWithAddOns[]> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return [];
 
   const cutoff = new Date();
@@ -2940,7 +2958,7 @@ export async function getMyUpcomingBookedSpans(
 ): Promise<ClientBookedSpan[]> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return [];
 
   const { data, error } = await supabase
@@ -2973,7 +2991,7 @@ export async function getOlderBookings(
 ): Promise<BookingWithAddOns[]> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return [];
 
   const { data, error } = await supabase
@@ -3677,7 +3695,7 @@ export async function getUserConversations(): Promise<
 > {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return [];
 
   const { data, error } = await supabase
@@ -5829,7 +5847,7 @@ export async function submitIntakeFormAnswers(
 export async function getPendingIntakeFormsForMe(): Promise<IntakeForm[]> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return [];
 
   const { data, error } = await supabase
@@ -5915,7 +5933,7 @@ export async function getMyBookingActionItems(): Promise<
 > {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return {};
 
   const counts: Record<string, number> = {};
@@ -6321,7 +6339,7 @@ export async function getProviderIdsWithBookingHistory(
   if (providerIds.length === 0) return new Set();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return new Set();
   const { data, error } = await supabase
     .from("bookings")
@@ -6339,7 +6357,7 @@ export async function hasBookingHistoryWithProvider(
 ): Promise<boolean> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return false;
   const { data, error } = await supabase
     .from("bookings")
@@ -6599,7 +6617,7 @@ export async function getClientBookingsForAddressShare(
 export async function getMyLastClientAddress(): Promise<string | null> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return null;
 
   const { data, error } = await supabase
@@ -6676,7 +6694,7 @@ export async function trackUserInteraction(interaction: {
   try {
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await getSessionUser();
     if (!user) return;
 
     await supabase.from("user_interactions").insert({
@@ -6700,7 +6718,7 @@ export async function followProvider(providerId: string): Promise<void> {
   if (!UUID_RE.test(providerId)) return;
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
   const { error } = await supabase
     .from("provider_follows")
@@ -6713,7 +6731,7 @@ export async function unfollowProvider(providerId: string): Promise<void> {
   if (!UUID_RE.test(providerId)) return;
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
   const { error } = await supabase
     .from("provider_follows")
@@ -6728,7 +6746,7 @@ export async function checkIsFollowing(providerId: string): Promise<boolean> {
   if (!UUID_RE.test(providerId)) return false;
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return false;
   const { data } = await supabase
     .from("provider_follows")
@@ -6752,7 +6770,7 @@ export async function checkFollowNotifyEnabled(
   if (!UUID_RE.test(providerId)) return false;
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return false;
   const { data } = await supabase
     .from("provider_follows")
@@ -6778,7 +6796,7 @@ export async function setProviderFollowNotify(
   if (!UUID_RE.test(providerId)) return;
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
   await assertNotOwnProvider(providerId, user.id);
   const { error } = await supabase
@@ -6806,7 +6824,7 @@ export async function getProviderFollowerCount(
 export async function getMyFollowerCount(): Promise<number> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return 0;
   const { data: providerRow } = await supabase
     .from("providers")
@@ -6825,7 +6843,7 @@ export async function getMyFollowerCount(): Promise<number> {
 export async function getSavedPortfolioIds(): Promise<string[]> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return [];
   const { data, error } = await supabase
     .from("users")
@@ -6840,7 +6858,7 @@ export async function getSavedPortfolioIds(): Promise<string[]> {
 export async function savePortfolioItemToDb(itemId: string): Promise<void> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return;
   // Append the item ID to the JSONB array if not already present
   const { error } = await supabase.rpc("append_saved_portfolio_item", {
@@ -6854,7 +6872,7 @@ export async function savePortfolioItemToDb(itemId: string): Promise<void> {
 export async function unsavePortfolioItemFromDb(itemId: string): Promise<void> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return;
   const { error } = await supabase.rpc("remove_saved_portfolio_item", {
     p_user_id: user.id,
@@ -6889,7 +6907,7 @@ const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
 export async function getNotificationPreferences(): Promise<NotificationPreferences> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not signed in");
   const { data, error } = await supabase
     .from("users")
@@ -6906,7 +6924,7 @@ export async function saveNotificationPreferences(
 ): Promise<void> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) throw new Error("Not signed in");
   const { error } = await supabase
     .from("users")
@@ -6919,7 +6937,7 @@ export async function saveNotificationPreferences(
 export async function getMyBookmarkCount(): Promise<number> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (!user) return 0;
   const { data: providerRow } = await supabase
     .from("providers")
@@ -7859,7 +7877,7 @@ export async function getMyProviderBranding(): Promise<
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (error) throw error;
   if (!user) return null;
   const branding = await getProviderBrandingByUserId(user.id);
@@ -7880,7 +7898,7 @@ export async function getMyProviderAccountEditorInfo(): Promise<ProviderAccountE
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await getSessionUser();
   if (authError) throw authError;
   if (!user) return null;
   const [basic, businessName] = await Promise.all([
@@ -9350,6 +9368,9 @@ export async function getConnectLink(action: 'onboard' | 'dashboard'): Promise<s
   return url.toString();
 }
 export async function getProviderPayouts(): Promise<ProviderPayout[]> {
+  // Payouts re-confirm the account with the Auth server rather than trusting
+  // the stored session, so a just-banned or deleted account is refused here
+  // immediately instead of when its access token expires.
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) throw new Error('Please sign in again.');
   const { data: provider, error: providerError } = await supabase.from('providers')
