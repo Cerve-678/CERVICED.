@@ -13,10 +13,11 @@ const LONDON = new Intl.DateTimeFormat('en-GB', {
 
 /** London's offset from UTC at `utcMs`, in ms (0 in winter, +1h in summer). */
 function londonOffsetMs(utcMs: number): number {
-  const parts = Object.fromEntries(LONDON.formatToParts(new Date(utcMs)).map(p => [p.type, p.value]));
+  const parts = LONDON.formatToParts(new Date(utcMs));
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(p => p.type === type)?.value);
   const asIfUtc = Date.UTC(
-    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
-    Number(parts.hour), Number(parts.minute), Number(parts.second),
+    part('year'), part('month') - 1, part('day'),
+    part('hour'), part('minute'), part('second'),
   );
   return asIfUtc - Math.floor(utcMs / 1000) * 1000;
 }
