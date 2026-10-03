@@ -1294,3 +1294,118 @@ matching are all unaffected and stay live.
 Flip `AUDIENCE_SERVICE_PHOTOS_ENABLED` to `true` in
 `src/constants/featureFlags.ts`. No other changes needed unless
 `getDiscoverServices` or `PortfolioCard` have drifted in the meantime.
+
+---
+
+## Client Care Rhythm: personal care reminders, product suggestions, shop and affiliate links
+
+*Discussed 2026-10-03. Nothing here is built.*
+
+### What it means
+
+The app learns where each client is in their own beauty cycle and sends care
+reminders at the right moment: wash day, a protective style nearing the end of
+its life, a lash or gel infill due, roots growing out. Alongside that, clients
+see suggested products — from their own providers, from a CERVICED shop, and
+through affiliate links.
+
+**Decision (user, 2026-10-03): care reminders carry no sales angle.** A wash-day
+reminder is about the client's hair, not a prompt to book. No "book now" button,
+no provider slot, no discount bolted onto a care message. Rebooking prompts stay a
+separate thing (the existing rebook nudge / "Rebook Rhythm" idea); the two must
+not be merged into one notification. Trust is the point of this feature — a care
+reminder that turns out to be an ad teaches the client to mute all of them.
+
+**Decision (user, 2026-10-03): products come from BOTH a CERVICED shop AND
+affiliate links**, on top of provider-recommended products.
+
+### What exists today to build on
+
+- **Beauty Profile** (`src/types/beautyProfile.ts`, `BeautyProfileScreen.tsx`)
+  already collects `hairType`, `scalpCondition`, `hairGoals`, `treatmentHistory`,
+  `skinType`, `skinConcerns`, `sensitiveAreas`, `lashStatus`, `nailShape`,
+  `allergies`, `medicalNotes`, `serviceInterests`.
+- **Booking history** gives the date and service of the last appointment, which
+  is what timing a cycle off needs.
+- **Notification preferences already gate push** (memory
+  `notification-preferences-now-gate-push`) — new reminder kinds slot into that.
+- **Info packs** (`ProviderInfoPackScreen.tsx`) are the nearest existing thing to
+  provider-authored aftercare.
+
+### What's missing
+
+**1. Routine fields in the Beauty Profile (all optional)**
+- Hair: wash frequency + usual wash day, current style and date installed
+  (braids/locs/weave/silk press), last chemical service (relaxer/colour) and date.
+- Skin: actives in use (retinol, acids) — needed for prep reminders, see legal below.
+- Adding fields changes the profile completeness number. Per memory
+  `beauty-profile-dashboard-redesign`, every category counts 1/9 and a field
+  counts as "set" at one selection — decide whether routine fields count toward
+  completeness at all (suggest: no, so the headline number doesn't drop for
+  existing users on release).
+
+**2. A cycle table, not hardcoded intervals in app code**
+Service category → typical care interval, owned server-side so it can be tuned
+without an app release. Starting values to argue with:
+| Cycle | Typical interval |
+|---|---|
+| Wash day | client's own setting |
+| Box/knotless braids takedown | 6–8 weeks |
+| Silk press refresh | ~2 weeks |
+| Lash infill | 2–3 weeks |
+| Gel/acrylic infill | 2–3 weeks |
+| Root touch-up | 6–8 weeks |
+| Brow tint / lamination | 4–6 weeks |
+
+Anchor on the actual last booking (or the client's stated install date), never
+on a fixed calendar.
+
+**3. Reminder kinds (care only)**
+- Wash day: "It's Sunday, your wash day. It's been 4 weeks since a deep condition."
+- Style lifespan: "Your braids are at week 6 — give your edges some care."
+- Prep: provider-authored prep notes before an appointment ("come with clean,
+  dry hair").
+- Aftercare: timed messages after a service, written by the provider.
+
+Each is a **new notification type** — that's four places to touch, not one
+(memory `new-notification-type-is-four-places`). Each kind gets its own toggle,
+plus a global cap (e.g. at most one care reminder every few days) so the feature
+never becomes noise.
+
+**4. Products — three sources, kept visibly separate**
+- **Provider shelf**: products a provider uses and recommends, shown in that
+  provider's aftercare. Advice stays the provider's.
+- **CERVICED shop**: real commerce — inventory/fulfilment or dropship, returns,
+  VAT, a second Stripe flow (goods, not services). A whole product line on its
+  own; scope it separately before starting.
+- **Affiliate links**: outbound links with a tracking partner.
+- A client must always be able to tell which of the three they're looking at.
+- **Product suggestions must never appear inside a care reminder** — that would
+  break the no-sales-angle decision above. They live on their own surface
+  (e.g. a "Your shelf" tab in the Beauty Profile or aftercare view).
+
+### Legal / safety — raise before building (not legal advice; route through `cerviced-legal-flagger`)
+
+- **Health-adjacent data.** Allergies, skin concerns, actives, pregnancy and
+  medical notes may be special-category data under UK GDPR. Any reminder or
+  product suggestion that *uses* them needs explicit opt-in, separate from the
+  general profile consent.
+- **Product suggestions near allergies.** Never suggest a product to a client
+  whose listed allergies it could conflict with — and CERVICED recommending
+  products itself (rather than a provider) reads as advice. Safest default is
+  to filter the shop/affiliate surface by allergies, and suppress suggestions
+  entirely when `allergies`/`medicalNotes` are set but unparsed.
+- **Affiliate disclosure.** CAP Code / ASA require affiliate links to be clearly
+  identified as ads. Commission must be disclosed.
+- **Shop.** Consumer Contracts Regulations (14-day returns on goods), product
+  liability for cosmetics sold under the CERVICED name, VAT registration.
+- **Prep reminders about actives** ("stop retinol 5–7 days before a peel") are
+  clinical-sounding guidance — provider-authored only, never generated by CERVICED.
+
+### Commercial note
+
+Care reminders stay **free for clients**. The provider-side tools (shelf, prep
+notes, aftercare timing) fit the Signature plan in the provider subscription
+proposal (artifact "CERVICED Provider Plans", 2026-10-03). Shop margin and
+affiliate commission are a third revenue line alongside the client platform
+fee and provider subscriptions.
