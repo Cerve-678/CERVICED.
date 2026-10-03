@@ -638,6 +638,21 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               setProviderId(profile.id);
               setReviewCount(profile.review_count ?? 0);
 
+              // Started before the catalogue await, not after it: "How you
+              // take bookings" doesn't depend on the services list, and
+              // waiting on it kept the card on its placeholder for that whole
+              // load — or for good, if the catalogue read threw.
+              // No setAvailabilityLoading(true) here: it starts true for the
+              // first load, and flipping it back on every refocus swapped the
+              // whole schedule card for its placeholder each time you tabbed
+              // back. Later focuses refresh behind what's already shown.
+              AvailabilityService.getAvailabilitySummary(profile.id, {
+                includeExtendedSearch: false,
+              })
+                .then(setAvailability)
+                .catch(() => setAvailability(null))
+                .finally(() => setAvailabilityLoading(false));
+
               // The catalogue is what this screen is for, so it's awaited
               // rather than fired and forgotten — everything else can arrive
               // late without the screen looking broken.
@@ -666,14 +681,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 .catch(err => {
                   logger.error('[MyServices] top services load failed:', err);
                 });
-
-              setAvailabilityLoading(true);
-              AvailabilityService.getAvailabilitySummary(profile.id, {
-                includeExtendedSearch: false,
-              })
-                .then(setAvailability)
-                .catch(() => setAvailability(null))
-                .finally(() => setAvailabilityLoading(false));
 
               getProviderReviews(profile.id, { limit: 20 })
                 .then(dbReviews =>
