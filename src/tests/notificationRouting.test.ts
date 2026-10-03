@@ -69,6 +69,17 @@ describe('notification routing — post-dismiss navigation', () => {
       "from '../../navigation/rootNavigate'",
     );
   });
+
+  it('gives providers a direct booking action for new and cancelled bookings', () => {
+    const source = notificationsScreen();
+
+    expect(source).toContain('PROVIDER_INLINE_BOOKING_ACTION_TYPES');
+    expect(source).toContain("'booking_pending'");
+    expect(source).toContain("'booking_cancelled'");
+    expect(source).toContain("return isProvider ? 'View Booking' : 'View Past Bookings'");
+    expect(source).toContain('PROVIDER_INLINE_BOOKING_ACTION_TYPES.has(item.type)');
+    expect(source).toContain("navigateProviderHome('BookingDetail'");
+  });
 });
 
 describe('notification routing — deep-link payload', () => {

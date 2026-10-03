@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-03 (no info pack on a cancelled booking)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261003120000 | `info_pack_not_on_cancelled_booking` | **Applied 2026-10-03** by the user in the SQL editor and recorded in schema_migrations; guard verified live via pg_get_functiondef. Adds a `status = 'cancelled'` guard to `attach_info_pack_to_booking()` so the manual Send Info Pack refuses a cancelled booking. Reproduced verbatim from verified-live `pg_get_functiondef`; SECURITY DEFINER and `search_path` preserved. Frontier at authoring: `20261003110000`. |
+
 ### PENDING APPLY 2026-10-02 (cancel not blocked by notice window)
 
 | Authored version | Name | Status |

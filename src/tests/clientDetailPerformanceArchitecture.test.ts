@@ -131,4 +131,15 @@ describe('client detail screen performance and safety contracts', () => {
       source.indexOf('if (isPastNoticeWindow)'),
     );
   });
+
+  it('keeps refund requests in the client booking detail as support tickets', () => {
+    const source = read('screens', 'client', 'BookingDetailScreen.tsx');
+
+    // The ⋯ menu opens the refund/complaint sheet, which files a support
+    // ticket (fileBookingSupportRequest) and never moves money itself.
+    expect(source).toContain('accessibilityLabel="More options"');
+    expect(source).toContain('Request a refund');
+    expect(source).toContain('fileBookingSupportRequest(');
+    expect(source).not.toContain('refundProviderBooking(');
+  });
 });

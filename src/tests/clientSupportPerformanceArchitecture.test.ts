@@ -55,7 +55,8 @@ describe('client support screen performance contracts', () => {
     );
 
     expect(conversationSection).toContain('.limit(DEFAULT_PROVIDER_QUERY_LIMIT)');
-    expect(notificationSection).toContain('.limit(100)');
+    // Caller-chosen page size, never more than 100.
+    expect(notificationSection).toContain('.limit(Math.min(Math.max(Math.trunc(limit), 1), 100))');
     expect(messageSection).toContain('.limit(');
     expect(promotionSection).toContain('.limit(DEFAULT_PROVIDER_QUERY_LIMIT)');
     expect(promotionSection).not.toContain('.select("*")');

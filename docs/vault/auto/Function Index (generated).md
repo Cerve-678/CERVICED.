@@ -5,9 +5,9 @@
 
 #generated
 
-**2289 functions** across **314 files**.
+**2293 functions** across **315 files**.
 
-### `src/components/` (43)
+### `src/components/` (44)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -37,6 +37,7 @@
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — ProviderFontPicker
+- `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderStripePayments.tsx` — balances · BookingPayment · date · EmptyState · load · loadMore · money · Notice · openStripe · PaymentAction · ProviderStripePayments · requestRefund · StatusBadge
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
@@ -213,7 +214,7 @@
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
 - `ProviderAnalyticsScreen.tsx` — accentColor · AnimatedFillBar · AnimatedNumber · AnimatedPath · bookingServiceMap · bucketNoun · buildInsight · chartData · CompletionRing · DeckCard · fetchBookingsForRange · fetchSupportingMetrics · fmtGBP · handlePress · hasCompletedInRange · inRange · InsightStrip · insightText · kpi · LivePulse · maxBarIndex · monthKey · monthlyRatings · months · monthsAgo · onRefresh · period · pressIn · pressOut · PressScale · prevPeriod · ProviderAnalyticsScreen · quadChartWidth · quadWidth · RangeSelector · ranked · RatingAnalytics · ratingChartWidth · recent · RecentStream · Reveal · RevenueChart · revenueOf · reviewsInRange · SectionLabel · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · StatTile · tileWidth · topServices · TopServices · totalForBookings
-- `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · PlatformBadge · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
+- `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
 - `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · cancelBooking · canDispute · catLabel · chipRow · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · CR · displayDuration · formatPence · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleRefund · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · handleSubmitDispute · isAddressReleased · loadRefundState · parseMin · Perf · ProviderBookingDetailScreen · re · refreshBookingStatus · refundPreview · releaseAddressNow · relevantInfoPacks · Row · s · show · submitRefund · to12 · toggleInitTime · updateBookingStatus
 - `ProviderBookingHistoryScreen.tsx` — agendaSort · BookingCard · counts · fetchBookings · fetchUnreadMessages · fetchWaitlist · filterBookings · fmtDayLabel · fmtMoney · fmtTime · handleComplete · handleConfirmInvite · handleHistoryFilterPress · handleTabPress · isHistoryStatus · items · matchesHistoryFilter · onRefresh · openInvitePicker · pendingCount · PendingPill · ProviderBookingHistoryScreen · rescheduleRequestCount · rescheduleRequestRows · SkeletonList · statusFor · waitlistCount
 - `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · ClientHistorySheet · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleMessage · handleRebook · handleSend · handleSheetChange · handleViewHistory · initials · load · ProviderClienteleScreen · snapPoints · TabBar · tomorrow9am
@@ -223,7 +224,7 @@
 - `ProviderInboxScreen.tsx` — addTemplate · ConversationRow · flatItems · handleMarkConversationRead · handleSaveTemplates · handleSendReply · initials · loadInbox · onRefresh · openTemplates · ProviderInboxScreen · removeTemplate · renderRightActions · SkeletonRow · timeAgoISO · unreadCounts · updateTemplate
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleOpenSend · handlePickBookingForSend · handleSave · PackCard · performDelete · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
-- `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeEditor · DashCard · DashEmpty · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hasPolicyInfo · hidden · live · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · renderRow · row · ServiceCategoryCard · ServiceRow · serviceType · setup
+- `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeEditor · DashCard · DashEmpty · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handleOpenPayments · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hasPolicyInfo · hidden · live · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · renderRow · row · ServiceCategoryCard · ServiceRow · serviceType · setup
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
 - `SchedulingScreen.tsx` — flash · handleSave · SchedulingScreen · toggleChip

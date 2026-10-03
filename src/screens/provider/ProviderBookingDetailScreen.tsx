@@ -1862,7 +1862,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </TouchableOpacity>
                 ) : (
                   <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
-                    No form on this booking — forms linked to this service send automatically.
+                    {booking!.status === BookingStatus.CANCELLED
+                      ? 'No form on this booking. It was cancelled, so nothing more will be sent.'
+                      : 'No form on this booking — forms linked to this service send automatically.'}
                   </Text>
                 )}
 
@@ -1896,15 +1898,19 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
                 ))}
 
-                {/* Send Info Pack button */}
-                <TouchableOpacity
-                  style={[styles.sendInfoPackBtn, { borderColor: P.border, backgroundColor: P.surface }]}
-                  onPress={() => setShowInfoPackPicker(true)}
-                  activeOpacity={0.75}
-                >
-                  <Ionicons name="document-text-outline" size={15} color={P.accent} style={{ marginRight: 6 }} />
-                  <Text style={[styles.sendInfoPackText, { color: P.accent }]}>Send Info Pack</Text>
-                </TouchableOpacity>
+                {/* Send Info Pack — not on a cancelled booking; there's no
+                    appointment left to prepare for. attach_info_pack_to_booking
+                    refuses it server-side too. */}
+                {booking!.status !== BookingStatus.CANCELLED && (
+                  <TouchableOpacity
+                    style={[styles.sendInfoPackBtn, { borderColor: P.border, backgroundColor: P.surface }]}
+                    onPress={() => setShowInfoPackPicker(true)}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="document-text-outline" size={15} color={P.accent} style={{ marginRight: 6 }} />
+                    <Text style={[styles.sendInfoPackText, { color: P.accent }]}>Send Info Pack</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* ── Perforated divider ── */}
@@ -3148,7 +3154,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           setBookingInfoPacks(updated);
                           setShowInfoPackPicker(false);
                         } catch (e) {
-                          Alert.alert('Info pack not sent', toUserMessage(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
+                          // Let the DB's own guard through ("This booking was cancelled...").
+                          Alert.alert('Info pack not sent', toUserMessageAllowingDbGuard(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
                         } finally {
                           setIsAttachingInfoPack(false);
                         }

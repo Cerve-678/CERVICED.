@@ -1497,15 +1497,15 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             <View style={{ width: 36 }} />
           </View>
 
-          {/* ── Range selector + clientele shortcut ── */}
+          {/* ── Range selector + payouts shortcut ── */}
           <View style={main.rangeArea}>
             <RangeSelector range={range} onChange={setRange} dark={dark} theme={theme} />
             <PressScale
-              onPress={() => navigation.navigate('Clientele')}
+              onPress={() => navigation.navigate('Payments')}
               haptic="light"
               style={[main.historyBtn, { backgroundColor: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
             >
-              <Ionicons name="people-outline" size={20} color={theme.secondaryText} />
+              <Ionicons name="wallet-outline" size={20} color={theme.secondaryText} />
             </PressScale>
           </View>
 
