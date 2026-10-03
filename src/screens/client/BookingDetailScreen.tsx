@@ -23,7 +23,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus } from '../../types/booking';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import {
-  canRequestRefund, fileBookingSupportRequest, isSupportRequestReady,
+  describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
 } from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
@@ -421,6 +421,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     () => (booking ? describeRefundOutcome(booking, cancellationNoticeHrs) : null),
     [booking, cancellationNoticeHrs],
   );
+  // Cerviced only gets involved with money paid through the app — the refund
+  // sheet says so up front, and for an off-app booking that's all it says.
+  const refundScope = booking ? getRefundRequestScope(booking) : 'settled';
+  const refundScopeCopy = useMemo(() => (booking ? describeRefundScope(booking) : null), [booking]);
+  const isOffAppRefund = supportKind === 'refund' && refundScope === 'off_app';
 
   // Whether cancelling right now would fall inside the provider's notice
   // window — purely informational (drives the modal's warning copy below).
@@ -1626,8 +1631,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <Pressable style={[st.moreMenuSheet, { backgroundColor: C.surfaceRaised, marginBottom: Math.max(insets.bottom, 10) }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
               <View style={{ gap: 8 }}>
-                {/* Only money paid through the app can be refunded through it. */}
-                {canRequestRefund(booking) && (
+                {/* Offered unless a refund already happened: an off-app booking
+                    opens to an explanation that it's between them and the
+                    provider, rather than hiding the option with no reason. */}
+                {refundScope !== 'settled' && (
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openSupportForm('refund'); }}>
                     <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}><Ionicons name="arrow-undo-outline" size={20} color={C.accentText} /></View>
@@ -1673,7 +1680,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </View>
                 </View>
 
-                {supportKind === 'refund' && (
+                {supportKind === 'refund' && refundScope === 'in_app' && (
                   <View style={[st.supportCard, { backgroundColor: C.card, borderColor: C.border }]}>
                     <View style={st.supportRowBetween}>
                       <Text style={{ color: C.text, fontWeight: '600', fontSize: 14 }}>
@@ -1687,6 +1694,19 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </View>
                 )}
 
+                {supportKind === 'refund' && refundScopeCopy && (
+                  <View style={[st.supportNext, { backgroundColor: C.accent + '14', marginTop: 12 }]}>
+                    <Ionicons name={refundScope === 'off_app' ? 'cash-outline' : 'shield-checkmark-outline'} size={16} color={C.accentText} style={{ marginTop: 1 }} />
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>{refundScopeCopy.title}</Text>
+                      {refundScopeCopy.lines.map(line => (
+                        <Text key={line} style={{ color: C.text, fontSize: 13, lineHeight: 18 }}>{line}</Text>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {!isOffAppRefund && (<>
                 <Text style={[st.supportHeading, { color: C.sub }]}>{supportKind === 'refund' ? "WHAT'S THE REFUND FOR?" : 'WHAT WENT WRONG?'}</Text>
                 <View style={{ gap: 8 }}>
                   {(supportKind ? SUPPORT_REASONS[supportKind] : []).map(r => {
@@ -1725,10 +1745,29 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       : 'This goes to Cerviced support, who will look into it and reply by email.'}
                   </Text>
                 </View>
+                </>)}
               </ScrollView>
 
               <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-                {(() => {
+                {isOffAppRefund ? (
+                  <View style={{ gap: 8 }}>
+                    <TouchableOpacity
+                      style={[st.supportSend, { backgroundColor: C.accent }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setSupportKind(null);
+                        // Let this sheet's fade finish before the contact sheet mounts.
+                        setTimeout(() => openContactSheet(booking), 260);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 15 }}>Contact {booking.providerName}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={{ paddingVertical: 10, alignItems: 'center' }} onPress={() => setSupportKind(null)} activeOpacity={0.7}>
+                      <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (() => {
                   const ready = isSupportRequestReady(supportReason, supportMessage);
                   return (
                     <TouchableOpacity
