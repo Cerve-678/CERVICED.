@@ -135,3 +135,21 @@ export function describeRefundOutcome(
   }
   return null;
 }
+
+/**
+ * Why the policy applied, in one line for the provider's settlement summary:
+ * "Cancelled 6 hours before, inside your 24-hour notice." `hoursBefore` is
+ * measured from when the client cancelled to the appointment start, the same
+ * way the server decides whether it was a late cancel.
+ */
+export function describeSettlementTiming(hoursBefore: number | null, noticeHours: number): string | null {
+  if (hoursBefore == null || !Number.isFinite(hoursBefore)) return null;
+  const notice = noticeHours > 0 ? `, inside your ${noticeHours}-hour notice` : '';
+  if (hoursBefore < 0) return 'Cancelled after the appointment start time.';
+  if (hoursBefore < 1) {
+    const mins = Math.max(1, Math.round(hoursBefore * 60));
+    return `Cancelled ${mins} minute${mins === 1 ? '' : 's'} before${notice}.`;
+  }
+  const hrs = Math.floor(hoursBefore);
+  return `Cancelled ${hrs} hour${hrs === 1 ? '' : 's'} before${notice}.`;
+}
