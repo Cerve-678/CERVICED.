@@ -617,6 +617,9 @@ export interface DbBooking {
   // that migration is applied — and null on any booking never marked.
   no_show_marked_at?: string | null;
   no_show_disputed_at?: string | null;
+  refunded_amount?: number | null;
+  policy_retained_amount?: number | null;
+  cancelled_by?: 'client' | 'provider' | 'system' | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;
   // Client intent — feeds search personalisation and Becca context

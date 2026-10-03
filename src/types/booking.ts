@@ -333,6 +333,13 @@ export interface ConfirmedBooking {
   noShowDisputedAt?: string | undefined;
   /** The accused party's own words, shown to the other party. */
   noShowDisputeReason?: string | undefined;
+  /** £ refunded so far (Stripe path), across every refund on this booking. */
+  refundedAmount?: number | undefined;
+  /** £ the provider kept under their cancellation policy, set by the server
+   *  when a client's late cancellation was settled. */
+  policyRetainedAmount?: number | undefined;
+  /** Who cancelled — stamped by the DB when the booking became cancelled. */
+  cancelledBy?: 'client' | 'provider' | 'system' | undefined;
 
   // Metadata
   notes?: string | undefined;

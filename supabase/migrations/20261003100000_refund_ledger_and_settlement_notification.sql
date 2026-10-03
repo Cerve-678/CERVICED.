@@ -32,6 +32,14 @@
 --    review 2026-10-03. auth.uid() is the caller's JWT even inside the
 --    SECURITY DEFINER cancel RPCs; cron expiry has none, so it is 'system'.
 --
+-- 5. bookings.policy_retained_amount (£): what the provider kept under their
+--    cancellation policy, written by apply-cancellation-refund — including a
+--    'full' penalty, where no refund exists to record it. client_bookings
+--    gains refunded_amount, cancelled_by and policy_retained_amount (APPENDED,
+--    so CREATE OR REPLACE VIEW keeps every existing column and the address
+--    masking exactly as live, verified 2026-10-03) so the client's receipt can
+--    say what the policy kept.
+--
 -- Contains a function body: apply in the Supabase SQL editor (apply_migration
 -- mis-parses bodies — see MIGRATION_OWNER.md).
 --
@@ -129,3 +137,72 @@ DROP TRIGGER IF EXISTS trg_stamp_booking_cancellation ON public.bookings;
 CREATE TRIGGER trg_stamp_booking_cancellation
   BEFORE UPDATE OF status ON public.bookings
   FOR EACH ROW EXECUTE FUNCTION public.stamp_booking_cancellation();
+
+ALTER TABLE public.bookings
+  ADD COLUMN IF NOT EXISTS policy_retained_amount numeric(10,2);
+
+CREATE OR REPLACE VIEW public.client_bookings WITH (security_invoker = true) AS
+ SELECT b.id,
+    b.user_id,
+    b.provider_id,
+    b.service_id,
+    b.status,
+    b.booking_date,
+    b.booking_time,
+    b.end_time,
+    b.notes,
+    b.booking_instructions,
+    b.payment_type,
+    b.base_price,
+    b.add_ons_total,
+    b.service_charge,
+    b.deposit_amount,
+    b.amount_paid,
+    b.remaining_balance,
+    b.payment_status,
+    b.payment_method,
+    b.payment_intent_id,
+    b.is_group_booking,
+    b.group_booking_id,
+    b.group_booking_count,
+    b.provider_name_snapshot,
+    b.service_name_snapshot,
+    b.service_category_snapshot,
+    b.provider_logo_snapshot,
+        CASE
+            WHEN is_address_released(b.status, p.address_release_policy, b.address_released_at, b.booking_date, b.booking_time) THEN b.provider_address_snapshot
+            ELSE NULL::text
+        END AS provider_address_snapshot,
+    b.provider_phone_snapshot,
+        CASE
+            WHEN is_address_released(b.status, p.address_release_policy, b.address_released_at, b.booking_date, b.booking_time) THEN b.provider_coordinates
+            ELSE NULL::jsonb
+        END AS provider_coordinates,
+    b.customer_name,
+    b.customer_email,
+    b.customer_phone,
+    b.confirmed_at,
+    b.address_released_at,
+    ca.address AS client_address,
+    b.occasion_type,
+    b.style_request,
+    b.reference_image_url,
+    b.created_at,
+    b.updated_at,
+    ( SELECT COALESCE(jsonb_agg(to_jsonb(a.*) ORDER BY a.id), '[]'::jsonb) AS "coalesce"
+           FROM booking_add_ons a
+          WHERE a.booking_id = b.id) AS add_ons,
+    jsonb_build_object('logo_url', p.logo_url) AS provider,
+    p.business_type AS provider_business_type,
+    b.no_show_marked_at,
+    b.no_show_disputed_at,
+    b.no_show_dispute_reason,
+    b.no_show_counted_at,
+    b.booking_ref,
+    b.refunded_amount,
+    b.cancelled_by,
+    b.policy_retained_amount
+   FROM bookings b
+     LEFT JOIN providers p ON p.id = b.provider_id
+     LEFT JOIN booking_client_addresses ca ON ca.booking_id = b.id
+  WHERE b.status <> 'on_hold'::text;

@@ -71,3 +71,57 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     paidAmount,
   };
 }
+
+/**
+ * What a booking's receipt should say about money that came back or was kept
+ * after the fact — shown at the top of the payment section on both hats.
+ * Null when nothing was refunded or kept.
+ *
+ * `viewer` decides the wording only: the client reads "{provider} kept…", the
+ * provider reads "You kept…". The provider's line never mentions the platform
+ * fee (user decision 2026-10-03).
+ */
+export interface PolicySettlementNotice {
+  title: string;
+  message: string;
+  /** Receipt rows: label → signed £ amount. */
+  rows: { label: string; amount: number }[];
+}
+
+export function describeRefundOutcome(
+  booking: Pick<ConfirmedBooking, 'policyRetainedAmount' | 'refundedAmount' | 'providerName'>,
+  viewer: 'client' | 'provider',
+  noticeHours: number,
+): PolicySettlementNotice | null {
+  const kept = booking.policyRetainedAmount ?? 0;
+  const refunded = booking.refundedAmount ?? 0;
+  const money = (n: number) => `£${n.toFixed(2)}`;
+  const policy = noticeHours > 0 ? `${noticeHours}-hour cancellation policy` : 'cancellation policy';
+
+  if (kept > 0) {
+    const who = viewer === 'client' ? (booking.providerName?.trim() || 'Your provider') : 'You';
+    const their = viewer === 'client' ? 'their' : 'your';
+    const keptLine = `${who} kept ${money(kept)} under ${their} ${policy}.`;
+    const refundLine = refunded > 0
+      ? (viewer === 'client' ? ` ${money(refunded)} was refunded to you.` : '')
+      : (viewer === 'client' ? ' Nothing was refunded.' : '');
+    return {
+      title: 'Cancellation policy applied',
+      message: keptLine + refundLine,
+      rows: [
+        ...(refunded > 0 ? [{ label: 'Refunded', amount: -refunded }] : []),
+        { label: 'Kept under cancellation policy', amount: kept },
+      ],
+    };
+  }
+  if (refunded > 0) {
+    return {
+      title: 'Refunded',
+      message: viewer === 'client'
+        ? `${money(refunded)} was refunded to you. Banks usually take 5–10 working days to show it.`
+        : `${money(refunded)} was refunded to the client.`,
+      rows: [{ label: 'Refunded', amount: -refunded }],
+    };
+  }
+  return null;
+}

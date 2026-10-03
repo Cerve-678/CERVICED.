@@ -77,7 +77,7 @@ import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFac
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
 import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
-import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
+import { describeRefundOutcome, PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
@@ -1420,6 +1420,26 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </Text>
                 </View>
               </View>
+
+              {/* ── Refund / cancellation-policy outcome ── at the top of the
+                  receipt so the money that came back or was kept reads first. */}
+              {(() => {
+                const outcome = describeRefundOutcome(booking, 'provider', 0);
+                if (!outcome) return null;
+                const tint = isDarkMode ? REFUND_KEEP.dark : REFUND_KEEP.light;
+                return (
+                  <View style={[styles.completionBanner, { backgroundColor: tint + '12', borderColor: tint + '40', flexDirection: 'column', alignItems: 'stretch', gap: 4 }]}>
+                    <Text style={[styles.completionTitle, { color: tint }]}>{outcome.title}</Text>
+                    <Text style={{ color: P.text, fontSize: 13 }}>{outcome.message}</Text>
+                    {outcome.rows.map(r => (
+                      <View key={r.label} style={styles.refundRowBetween}>
+                        <Text style={{ color: P.sub, fontSize: 13 }}>{r.label === 'Refunded' ? 'Refunded to client' : r.label}</Text>
+                        <Text style={{ color: P.text, fontSize: 13, fontWeight: '600' }}>{r.amount < 0 ? '−' : ''}£{Math.abs(r.amount).toFixed(2)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
 
               {/* ── Completion banner (completed bookings only) ── */}
               {booking.status === BookingStatus.COMPLETED && (

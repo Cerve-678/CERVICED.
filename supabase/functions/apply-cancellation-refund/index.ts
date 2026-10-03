@@ -223,6 +223,14 @@ Deno.serve(async (req: Request) => {
       await reconcileRefund(admin, stripe, refund);
     }
 
+    // Record what the policy kept on the booking itself, so both receipts can
+    // show it — a 'full' penalty makes no refund, so the ledger alone can't.
+    if (settlement.providerKeepPence > 0) {
+      const { error: keptErr } = await admin.from('bookings')
+        .update({ policy_retained_amount: settlement.providerKeepPence / 100 })
+        .eq('id', booking.id);
+      if (keptErr) throw keptErr;
+    }
     await notifySettlement(booking, provider, penalty, hours, settlement);
     return json({ status: 'settled', clientRefundPence: settlement.clientRefundPence, providerKeepPence: settlement.providerKeepPence }, 200);
   } catch (err) {
