@@ -18,6 +18,7 @@ import {
   Platform,
   ActivityIndicator,
   useWindowDimensions,
+  ViewStyle,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -156,6 +157,7 @@ interface ProviderCardProps {
   onPress: () => void;
   index: number;
   P: AppTheme;
+  widthStyle?: ViewStyle | undefined;
 }
 
 // A real provider tag/speciality is often stored lowercase-hyphenated
@@ -300,8 +302,8 @@ const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: str
 
 
 
-// ── Provider Card — vertical, sits two-up in the results grid ──────────────────
-const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) => {
+// ── Provider Card — vertical, sits two-up (three-up on iPad) in the results grid ──────────────────
+const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, widthStyle }) => {
   const slideAnim = useRef(new Animated.Value(24)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const availInfo = provider.availability ? AVAILABILITY_INFO[provider.availability] : null;
@@ -318,7 +320,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
   }, [fadeAnim, index, slideAnim]);
 
   return (
-    <Animated.View style={[styles.card, { backgroundColor: P.card, borderColor: P.border, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+    <Animated.View style={[styles.card, widthStyle, { backgroundColor: P.card, borderColor: P.border, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       <TouchableOpacity style={styles.cardBody} onPress={onPress} activeOpacity={0.88}>
 
         {/* Provider image */}
@@ -398,7 +400,11 @@ export default function SearchScreen({ navigation, route }: Props) {
   // maxHeight on the sheet + flexShrink on the ScrollView left the list
   // un-scrollable until a second layout pass (the "have to scroll down before
   // up" bug); a definite height makes it scrollable on first render.
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  // Two-up on phones, three-up on iPad (and phone landscape) — same 600pt
+  // breakpoint Explore's masonry uses for its third column.
+  const gridColumns = windowWidth >= 600 ? 3 : 2;
+  const cardWidthStyle = gridColumns === 3 ? styles.cardThreeUp : undefined;
   const filterScrollMaxHeight = Math.round(windowHeight * 0.55);
   const { isDarkMode, palette: P } = useTheme();
   const { user } = useAuth();
@@ -1074,8 +1080,8 @@ export default function SearchScreen({ navigation, route }: Props) {
   }, [navigation]);
 
   const renderCard: ListRenderItem<ProviderCardData> = useCallback(({ item, index }) => (
-    <ProviderCard provider={item} onPress={() => handleProviderPress(item)} index={index} P={P} />
-  ), [handleProviderPress, P]);
+    <ProviderCard provider={item} onPress={() => handleProviderPress(item)} index={index} P={P} widthStyle={cardWidthStyle} />
+  ), [handleProviderPress, P, cardWidthStyle]);
 
   // Each active (non-default) filter as a dismissible chip — key, label, and
   // the callback to clear just that one. distance's "Any" value is 999, not
@@ -1601,13 +1607,15 @@ export default function SearchScreen({ navigation, route }: Props) {
       {/* ── Results area — wraps the FlatList. ── */}
       <ReAnimated.View style={[{ flex: 1 }, resultsAnimatedStyle]}>
 
-      {/* ── Provider grid — two columns, matches the provider-grid layout used
+      {/* ── Provider grid — two columns (three on iPad), matches the provider-grid layout used
           on the bookmarked-providers screen ── */}
       <FlatList
         data={providersLoading ? [] : filteredProviders}
         renderItem={renderCard}
         keyExtractor={item => item.id}
-        numColumns={2}
+        // FlatList can't change numColumns on the fly — remount on rotation.
+        key={`grid-${gridColumns}`}
+        numColumns={gridColumns}
         columnWrapperStyle={styles.columnWrapper}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={styles.listContent}
@@ -1934,6 +1942,9 @@ const styles = StyleSheet.create({
     // instead of letting it fade outward, showing as a dark ring. iOS keeps
     // its shadow via shadow* above.
     elevation: 0,
+  },
+  cardThreeUp: {
+    width: '32%',
   },
   cardBody: {
     flexDirection: 'column',
