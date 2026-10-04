@@ -1342,11 +1342,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const totalPrice = (booking.price ?? 0) + (booking.addOns?.reduce((s: number, a: { price: number }) => s + (a.price ?? 0), 0) ?? 0);
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
   const perf = isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
-  // The tear-line notches get their own, stronger rim: in light mode the card's
-  // near-white edge vanished against the light background, so the cut-outs
-  // barely read as cut-outs at all.
-  const notchEdge = isDarkMode ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.22)';
-  const cardBorder = isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.90)';
+  // One outline for the card edge AND the tear-line notches, so it reads as a
+  // single line that dips in at each notch. A separate notch rim showed up as a
+  // ring stuck on the card, and the old near-white edge was invisible on the
+  // light background, so the cut-outs didn't read at all.
+  const cardBorder = isDarkMode ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.10)';
   const rowDiv = isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
   const timeRange = booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime
     ? `${booking.bookingTime} – ${booking.endTime}`
@@ -1461,7 +1461,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )}
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} edge={notchEdge} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── SERVICE section ── */}
               <View style={styles.section}>
@@ -1487,7 +1487,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   returns here. ── */}
               {groupSiblings.length > 1 && (
                 <>
-                  <Perf color={perf} notch={P.bg} edge={notchEdge} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   <View style={styles.section}>
                     <View style={styles.groupSectionHeader}>
                       <Ionicons name="link" size={12} color={P.sub} />
@@ -1531,7 +1531,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )}
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} edge={notchEdge} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── APPOINTMENT section ── */}
               <View style={styles.section}>
@@ -1618,7 +1618,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} edge={notchEdge} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── ADDRESS section — mobile providers only.
                   This section exists to SHOW the client's address; the
@@ -1650,7 +1650,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
 
                   {/* ── Perforated divider ── */}
-                  <Perf color={perf} notch={P.bg} edge={notchEdge} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                 </>
               )}
 
@@ -1671,7 +1671,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
                     </View>
                   </View>
-                  <Perf color={perf} notch={P.bg} edge={notchEdge} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                 </>
               ) : null}
 
@@ -1766,7 +1766,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} edge={notchEdge} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── CLIENT PROFILE section ── */}
               {clientProfile && (() => {
@@ -1944,7 +1944,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         );
                       })()}
                     </View>
-                    <Perf color={perf} notch={P.bg} edge={notchEdge} />
+                    <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   </>
                 );
               })()}
@@ -2044,7 +2044,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} edge={notchEdge} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── PAYMENT section ── */}
               <View style={styles.section}>
@@ -2097,7 +2097,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Reschedule section ── */}
               {hasRescheduleRequest && dbReschedule && (
                 <>
-                  <Perf color={perf} notch={P.bg} edge={notchEdge} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: '#FF9500' }]}>
                       {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : 'RESCHEDULE · RESPONDED'}
@@ -3349,8 +3349,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
 /** Tear line between receipt sections: a dashed rule with a half-circle
  *  notch at each edge. The notches are filled with the screen background,
- *  clipped by the card's rounded overflow, and rimmed in a stronger colour
- *  than the card's own edge, so they read clearly as cut-outs. */
+ *  clipped by the card's rounded overflow, and rimmed in the card's own edge
+ *  colour and width, so the outline runs unbroken into each cut-out. */
 function Perf({ color, notch, edge }: { color: string; notch: string; edge: string }) {
   return (
     <View style={styles.perfRow}>
@@ -3702,7 +3702,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   perfNotchLeft: { left: -11 },
   perfNotchRight: { right: -11 },
