@@ -27,11 +27,13 @@
  */
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   getMyProviderProfileContext,
   getUserBusinessInfo,
@@ -59,6 +61,7 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 export default function BusinessInfoScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
+  const { updateUser } = useAuth();
   const C = useBusinessPalette();
 
   const [userId, setUserId]         = useState<string | null>(null);
@@ -284,6 +287,13 @@ export default function BusinessInfoScreen({ navigation }: any) {
       }
 
       await Promise.all(ops);
+      // Provider Settings remains mounted beneath this screen and falls back
+      // to AuthContext while it refreshes providers.display_name. Keep that
+      // immediate value aligned with the saved public name so the previous
+      // business name cannot flash or persist after navigating back.
+      if (nameChanged) {
+        await updateUser({ businessName: trimmedName });
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {

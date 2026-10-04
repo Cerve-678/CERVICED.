@@ -37,6 +37,7 @@ jest.mock('../contexts/StatusBarTintContext', () => ({
 }));
 jest.mock('../components/ErrorBoundary', () => ({ children }: any) => children);
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }: any) => children }));
+jest.mock('../components/SafeArea', () => ({ WindowControlsInsetProvider: ({ children }: any) => children }));
 jest.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: ({ children }: any) => children }));
 jest.mock('@stripe/stripe-react-native', () => ({
   StripeProvider: ({ children }: any) => children,

@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
