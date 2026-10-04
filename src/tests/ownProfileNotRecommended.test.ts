@@ -69,6 +69,7 @@ import {
   getNewProviders,
   getTopRatedProviders,
   getPortfolioItems,
+  getDiscoverServices,
   searchProviders,
   searchPortfolio,
 } from '../services/databaseService';
@@ -165,6 +166,18 @@ describe('own profile is allowed to show up outside recommendations', () => {
 
   it('does not exclude the signed-in provider from an explicit portfolio search', async () => {
     await searchPortfolio('nails');
+
+    expect(exclusion()).toBeNull();
+  });
+
+  it('does not exclude the signed-in provider from the Explore portfolio feed', async () => {
+    await getPortfolioItems(undefined, undefined, { excludeOwnProvider: false });
+
+    expect(exclusion()).toBeNull();
+  });
+
+  it('does not exclude the signed-in provider from the Explore service feed', async () => {
+    await getDiscoverServices(undefined, undefined, undefined, { excludeOwnProvider: false });
 
     expect(exclusion()).toBeNull();
   });
