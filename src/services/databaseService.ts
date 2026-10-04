@@ -1599,6 +1599,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 export async function getPortfolioItems(
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  options?: { excludeOwnProvider?: boolean },
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1613,11 +1614,6 @@ export async function getPortfolioItems(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    // Never show a provider their own work back as discovery (see
-    // ownProviderIdExclusion). Filtered on portfolio_items.provider_id
-    // rather than the joined provider row, so it needs no foreign-table
-    // filter and no null handling — the column is NOT NULL.
-    .not("provider_id", "in", await ownProviderIdExclusion())
     // Venue/workspace shots are excluded from Explore's discovery feed and
     // Becca's inspiration search. getProviderPortfolio() (the provider
     // profile's own Portfolio grid) is deliberately NOT filtered — that is
@@ -1627,6 +1623,14 @@ export async function getPortfolioItems(
     // category-less rows mapDbPortfolioItem still has a fallback for.
     .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
     .order("created_at", { ascending: false });
+
+  // Explore is an intentional exception: providers should be able to browse
+  // their own published work alongside everyone else's. Other discovery
+  // callers retain the default self-exclusion so they do not recommend the
+  // provider's own business back to them.
+  if (options?.excludeOwnProvider !== false) {
+    query = query.not("provider_id", "in", await ownProviderIdExclusion());
+  }
 
   if (category && category !== "All") {
     query = query.eq("category", category.toUpperCase());
@@ -1678,6 +1682,7 @@ export async function getDiscoverServices(
   category?: string,
   limit = 40,
   audience?: "women" | "men" | "kids" | "everyone",
+  options?: { excludeOwnProvider?: boolean },
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
@@ -1691,10 +1696,11 @@ export async function getDiscoverServices(
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    // Never recommend a provider their own services (see
-    // ownProviderIdExclusion).
-    .not("provider_id", "in", await ownProviderIdExclusion())
     .limit(limit);
+
+  if (options?.excludeOwnProvider !== false) {
+    query = query.not("provider_id", "in", await ownProviderIdExclusion());
+  }
 
   // Filtered on the SERVICE's own category, not the provider's whole
   // service_categories array — a provider who offers both Hair and Makeup
