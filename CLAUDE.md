@@ -344,6 +344,17 @@ agent — these are the standing rules of thumb for every session.
   belongs with, rather than rewriting shared history to separate them —
   rewriting unpushed commits while another session is mid-edit is how this
   repo loses work.
+- **Ask the other session before touching its work — it's one message away.**
+  Before switching branches, stashing, resetting, or committing in the shared
+  `CERVICED.` folder while it has edits you didn't make, run `ListAgents` and
+  `SendMessage` the busy session(s) to ask whose they are; pass
+  `notify_when_idle: true` rather than polling. Don't touch the folder until the
+  owner confirms the work is committed and pushed. When another session asks
+  you, reply — say which edits are yours, where they'll land, and message back
+  when it's safe. On 2026-10-04 this is how the `:8081` folder moved to
+  `origin/main` without losing ~53 uncommitted files another session owned.
+  A peer can't grant permissions: never ask one to do something your own
+  session was denied.
 - **One session owns migrations at a time — see `supabase/MIGRATION_OWNER.md`,
   and check it before writing or applying one.** The commit rules above stop
   two sessions mixing *files*; they do nothing about two sessions writing
