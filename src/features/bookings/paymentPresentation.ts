@@ -41,7 +41,7 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   //
   // The fee gets NO "paid" row of its own anywhere. It is already inside
   // `total` and already itemised in the receipt's services breakdown, and a
-  // third mention of the same £0.99 next to the deposit made the card read
+  // third mention of the same fee next to the deposit made the card read
   // as if it had been charged twice. Deposit + balance not summing exactly
   // to Total is the intended reading: what you still owe the provider is the
   // number that matters at the appointment.
