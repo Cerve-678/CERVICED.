@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -355,6 +356,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundReason, setRefundReason] = useState<string | null>(null);
   const [refundNote, setRefundNote] = useState('');
+  const refundFormScrollRef = useRef<ScrollView>(null);
   const [refundBusy, setRefundBusy] = useState(false);
   // What the sheet shows comes from the server (getProviderRefundState); the
   // refund-payment function re-derives every figure when the refund is made.
@@ -1340,6 +1342,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const totalPrice = (booking.price ?? 0) + (booking.addOns?.reduce((s: number, a: { price: number }) => s + (a.price ?? 0), 0) ?? 0);
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
   const perf = isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
+  const cardBorder = isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.90)';
   const rowDiv = isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
   const timeRange = booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime
     ? `${booking.bookingTime} – ${booking.endTime}`
@@ -1404,7 +1407,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           {/* Main receipt card */}
           <View style={styles.receiptOuter}>
           <BlurView intensity={isDarkMode ? 45 : 65} tint={blurTint} style={styles.receiptBlur}>
-            <View style={[styles.receiptCard, { borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.90)' }]}>
+            <View style={styles.receiptCard}>
+              {/* The card's edge, drawn as the first child so the tear-line
+                  notches render over it. A border on the card itself sits on
+                  top of every child, and ran straight through each notch. */}
+              <View pointerEvents="none" style={[styles.receiptBorder, { borderColor: cardBorder }]} />
 
               {/* Top-edge highlight (light catching the glass) */}
               <View style={[styles.receiptTopHighlight, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.70)' }]} />
@@ -1413,7 +1420,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <View style={styles.receiptHeader}>
                 <Text style={[styles.receiptBrand, { color: P.text }]}>CERVICED</Text>
                 <Text style={[styles.receiptSubBrand, { color: P.sub }]}>Booking Receipt</Text>
-                <Text style={[styles.receiptDate, { color: P.text }]}>{formatBookingDisplayDate(booking.bookingDate) || '—'}</Text>
                 <Text style={[styles.receiptTime, { color: P.sub }]}>{timeRange}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -1451,7 +1457,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )}
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── SERVICE section ── */}
               <View style={styles.section}>
@@ -1477,7 +1483,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   returns here. ── */}
               {groupSiblings.length > 1 && (
                 <>
-                  <Perf color={perf} notch={P.bg} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   <View style={styles.section}>
                     <View style={styles.groupSectionHeader}>
                       <Ionicons name="link" size={12} color={P.sub} />
@@ -1521,7 +1527,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )}
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── APPOINTMENT section ── */}
               <View style={styles.section}>
@@ -1608,7 +1614,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── ADDRESS section — mobile providers only.
                   This section exists to SHOW the client's address; the
@@ -1640,7 +1646,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
 
                   {/* ── Perforated divider ── */}
-                  <Perf color={perf} notch={P.bg} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                 </>
               )}
 
@@ -1661,7 +1667,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
                     </View>
                   </View>
-                  <Perf color={perf} notch={P.bg} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                 </>
               ) : null}
 
@@ -1756,7 +1762,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── CLIENT PROFILE section ── */}
               {clientProfile && (() => {
@@ -1934,7 +1940,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         );
                       })()}
                     </View>
-                    <Perf color={perf} notch={P.bg} />
+                    <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   </>
                 );
               })()}
@@ -2034,7 +2040,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </View>
 
               {/* ── Perforated divider ── */}
-              <Perf color={perf} notch={P.bg} />
+              <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
               {/* ── PAYMENT section ── */}
               <View style={styles.section}>
@@ -2087,7 +2093,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Reschedule section ── */}
               {hasRescheduleRequest && dbReschedule && (
                 <>
-                  <Perf color={perf} notch={P.bg} />
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: '#FF9500' }]}>
                       {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : 'RESCHEDULE · RESPONDED'}
@@ -2919,18 +2925,20 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         animationType="fade"
         onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
       >
-        {/* The keyboard sits over the footer (Choose a reason / Cancel) rather
-            than pushing the sheet up; the ScrollView insets itself so the
-            amount and note fields stay reachable. */}
-        <View style={{ flex: 1 }}>
+        {/* Keep the form above the keyboard and scroll focused fields into view. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <TouchableOpacity
-            style={styles.refundOverlay}
+            style={[styles.refundOverlay, StyleSheet.absoluteFill]}
             activeOpacity={1}
             onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
           />
           <View style={[styles.refundSheet, { backgroundColor: P.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-            <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
+            <ScrollView ref={refundFormScrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
               <View style={styles.refundHead}>
                 <View style={[styles.refundHeadIcon, { backgroundColor: P.iconBg }]}>
                   <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
@@ -3052,6 +3060,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                                 style={[styles.refundAmountInput, { color: P.text }]}
                                 value={refundAmountText}
                                 onChangeText={t => setRefundAmountText(t.replace(/[^0-9.]/g, ''))}
+                                onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
                                 keyboardType="decimal-pad"
                                 placeholder="0.00"
                                 placeholderTextColor={P.text + '44'}
@@ -3114,6 +3123,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           placeholderTextColor={P.text + '44'}
                           value={refundNote}
                           onChangeText={setRefundNote}
+                          onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
                           multiline
                           maxLength={500}
                           editable={!refundBusy}
@@ -3164,6 +3174,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             })()}
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Confirm/decline dialog ── */}
@@ -3332,20 +3343,20 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-/** Perforated receipt divider */
 /** Tear line between receipt sections: a dashed rule with a half-circle
- *  notch at each edge. The notches are filled with the screen background and
- *  clipped by the card's rounded overflow, so they read as cut-outs. */
-function Perf({ color, notch }: { color: string; notch: string }) {
+ *  notch at each edge. The notches are filled with the screen background,
+ *  clipped by the card's rounded overflow, and rimmed in the card's edge
+ *  colour, so they read as cut-outs. */
+function Perf({ color, notch, edge }: { color: string; notch: string; edge: string }) {
   return (
     <View style={styles.perfRow}>
-      <View style={[styles.perfNotch, styles.perfNotchLeft, { backgroundColor: notch }]} />
+      <View style={[styles.perfNotch, styles.perfNotchLeft, { backgroundColor: notch, borderColor: edge }]} />
       <View style={styles.perfDashes}>
         {Array.from({ length: 26 }).map((_, i) => (
           <View key={i} style={[styles.perfDash, { backgroundColor: color }]} />
         ))}
       </View>
-      <View style={[styles.perfNotch, styles.perfNotchRight, { backgroundColor: notch }]} />
+      <View style={[styles.perfNotch, styles.perfNotchRight, { backgroundColor: notch, borderColor: edge }]} />
     </View>
   );
 }
@@ -3592,8 +3603,16 @@ const styles = StyleSheet.create({
   receiptBlur: { borderRadius: 22 },
   receiptCard: {
     borderRadius: 22,
-    borderWidth: 1,
     overflow: 'hidden',
+  },
+  receiptBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 22,
+    borderWidth: 1,
   },
 
   // Top-edge highlight — simulates light catching the top rim
@@ -3630,11 +3649,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 14,
-  },
-  receiptDate: {
-    fontSize: 19,
-    fontFamily: 'BakbakOne-Regular',
-    letterSpacing: 0.4,
   },
   receiptTime: {
     fontSize: 14,
@@ -3684,6 +3698,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
+    borderWidth: 1,
   },
   perfNotchLeft: { left: -11 },
   perfNotchRight: { right: -11 },
@@ -3972,8 +3987,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   refundOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  // Top corners only, rounder than the other sheets.
-  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 8 },
+  // Full-width bottom modal; its backdrop sits behind it so the top rounding
+  // is not obscured by a separate overlay edge.
+  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 8 },
   refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
   refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },

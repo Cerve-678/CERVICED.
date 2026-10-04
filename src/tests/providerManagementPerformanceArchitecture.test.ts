@@ -94,9 +94,10 @@ describe('provider management performance contracts', () => {
   it('keeps provider refund controls usable while typing a reason', () => {
     const source = read('screens/provider/ProviderBookingDetailScreen.tsx');
 
-    // The keyboard sits over the sheet's footer; the ScrollView insets itself
-    // so the amount and note stay reachable while typing.
-    expect(source).toContain('automaticallyAdjustKeyboardInsets');
+    // The sheet rides above the keyboard, and focusing the amount or note
+    // scrolls the form so the field stays in view while typing.
+    expect(source).toContain('<KeyboardAvoidingView');
+    expect(source).toContain('refundFormScrollRef.current?.scrollToEnd');
     expect(source).toContain('keyboardShouldPersistTaps="handled"');
     expect(source).toContain('Issue a refund');
     expect(source).toContain('>Cancel</Text>');

@@ -6,8 +6,9 @@ jest.mock('expo-constants', () => ({ expoConfig: { version: '1.0.0' } }));
 import { invokeSendSupportRequest } from '../services/databaseService';
 import {
   buildBookingSupportDescription,
-  canRequestRefund,
+  describeRefundScope,
   fileBookingSupportRequest,
+  getRefundRequestScope,
   isSupportRequestReady,
   OTHER_SUPPORT_REASON,
   SUPPORT_REASONS,
@@ -25,14 +26,39 @@ const booking = {
   paymentStatus: PaymentStatus.PAID_IN_FULL,
 } as unknown as ConfirmedBooking;
 
-describe('canRequestRefund', () => {
-  it('allows a refund request only for money paid through the app', () => {
-    expect(canRequestRefund({ paymentStatus: PaymentStatus.DEPOSIT_PAID })).toBe(true);
-    expect(canRequestRefund({ paymentStatus: PaymentStatus.PAID_IN_FULL })).toBe(true);
-    expect(canRequestRefund({ paymentStatus: PaymentStatus.PENDING })).toBe(false);
-    expect(canRequestRefund({ paymentStatus: PaymentStatus.REFUND_PENDING })).toBe(false);
-    expect(canRequestRefund({ paymentStatus: PaymentStatus.REFUNDED })).toBe(false);
-    expect(canRequestRefund({ paymentStatus: PaymentStatus.FAILED })).toBe(false);
+describe('getRefundRequestScope', () => {
+  it('treats only money paid through the app as something Cerviced can review', () => {
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.DEPOSIT_PAID })).toBe('in_app');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.PAID_IN_FULL })).toBe('in_app');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.PARTIALLY_REFUNDED })).toBe('in_app');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.PENDING })).toBe('off_app');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.FAILED })).toBe('off_app');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.REFUND_PENDING })).toBe('settled');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.REFUNDED })).toBe('settled');
+  });
+});
+
+describe('describeRefundScope', () => {
+  const base = { providerName: 'Braids by Amara', amountPaid: 20, remainingBalance: 60 };
+
+  it('tells an off-app client it is between them and the provider', () => {
+    const { title, lines } = describeRefundScope({ ...base, paymentStatus: PaymentStatus.PENDING, paymentType: 'full', amountPaid: 0 });
+    expect(title).toBe('Not paid through Cerviced');
+    expect(lines.join(' ')).toContain('between you and Braids by Amara');
+  });
+
+  it('limits a deposit request to the deposit, and says a broken policy stands', () => {
+    const { lines } = describeRefundScope({ ...base, paymentStatus: PaymentStatus.DEPOSIT_PAID, paymentType: 'deposit' });
+    expect(lines[0]).toContain('£20.00 deposit');
+    expect(lines[0]).toContain('£60.00 balance due at the appointment is between you and Braids by Amara');
+    expect(lines[1]).toMatch(/cancelled late, didn't turn up, or rescheduled late/);
+    expect(lines[1]).toContain("Cerviced won't overturn it");
+  });
+
+  it('still says a broken policy stands for a full in-app payment', () => {
+    const { lines } = describeRefundScope({ ...base, paymentStatus: PaymentStatus.PAID_IN_FULL, paymentType: 'full', remainingBalance: 0 });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Braids by Amara can keep some or all/);
   });
 });
 
