@@ -10,7 +10,7 @@ import {
   Switch,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';

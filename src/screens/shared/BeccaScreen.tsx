@@ -12,7 +12,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView } from "../../components/SafeArea";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";

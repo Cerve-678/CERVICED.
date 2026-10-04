@@ -1,7 +1,7 @@
 // Copy this template for: HomeScreen, ExploreScreen, CartScreen, UserProfileScreen, etc.
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { useFont } from '../../contexts/FontContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import LiquidGlassCard from '../../components/LiquidGlassCard';

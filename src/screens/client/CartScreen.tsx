@@ -18,7 +18,8 @@ import {
   Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -195,6 +196,7 @@ function SummaryShell({
     // come back zero without it. Same pattern as ImageDetailModal and
     // ProviderProfileScreen.
     <SafeAreaProvider>
+    <WindowControlsInsetProvider>
       <SafeAreaView style={[styles.summaryScreen, { backgroundColor: P.bg }]} edges={['top', 'bottom', 'left', 'right']}>
         <View style={[styles.summaryHeader, { borderBottomColor: P.border }]}>
           <TouchableOpacity
@@ -227,6 +229,7 @@ function SummaryShell({
           <View style={styles.reviewButtonRow}>{actions}</View>
         </View>
       </SafeAreaView>
+    </WindowControlsInsetProvider>
     </SafeAreaProvider>
   );
 }

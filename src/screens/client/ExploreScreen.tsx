@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useFocusEffect, useIsFocused, NavigationProp } from '@react-navigation/native';
 import { useExploreFocusStore } from '../../stores/useExploreFocusStore';
