@@ -653,14 +653,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
-    await updateUserContactDetails(updated.id, {
-      name: updated.name,
-      phone: updated.phone ?? '',
-      // Only written when this call is actually changing it, so an unrelated
-      // updateUser({ name }) can't wipe a saved address.
-      ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
-      ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
-    });
+    // Some provider fields (for example businessName) are already persisted
+    // by their owning screen. Do not turn a local AuthContext refresh into an
+    // unrelated second contact-details write; only persist when this call
+    // actually changes a contact/address field owned by this function.
+    if (
+      partial.name !== undefined
+      || partial.phone !== undefined
+      || partial.clientAddress !== undefined
+      || partial.clientArea !== undefined
+    ) {
+      await updateUserContactDetails(updated.id, {
+        name: updated.name,
+        phone: updated.phone ?? '',
+        // Only written when this call is actually changing it, so an unrelated
+        // updateUser({ name }) can't wipe a saved address.
+        ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
+        ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
+      });
+    }
     setUser(updated);
   }, [user, session]);
 
