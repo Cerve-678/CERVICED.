@@ -32,6 +32,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   getMyProviderProfileContext,
   getUserBusinessInfo,
@@ -60,6 +61,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
+  const { updateUser } = useAuth();
 
   const [userId, setUserId]         = useState<string | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -285,6 +287,13 @@ export default function BusinessInfoScreen({ navigation }: any) {
 
       await Promise.all(ops);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      // Provider Settings remains mounted beneath this screen and falls back
+      // to AuthContext while it refreshes providers.display_name. Keep that
+      // immediate value aligned with the saved public name so the previous
+      // business name cannot flash or persist after navigating back.
+      if (nameChanged) {
+        await updateUser({ businessName: trimmedName });
+      }
       navigation.goBack();
     } catch (e: any) {
       // AllowingDbGuard, not the plain version: the service-type cooldown
