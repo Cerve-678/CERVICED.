@@ -14,7 +14,12 @@ const payoutLabels: Record<ProviderPayout['status'], string> = {
   cancelled: 'Cancelled', reversed: 'Returned',
 };
 
-export default function ProviderStripePayments({ stripeReturn, children }: { stripeReturn?: StripeConnectReturn; children?: React.ReactNode }) {
+/** One-line summaries of the provider's own payment settings, shown as the
+ *  "Your setup" tiles on Overview. PaymentsScreen owns those settings, so it
+ *  passes these in rather than this component reading them a second time. */
+export interface PaymentSetupSummary { deposit: string; inPerson: string }
+
+export default function ProviderStripePayments({ stripeReturn, setup, children }: { stripeReturn?: StripeConnectReturn; setup?: PaymentSetupSummary | undefined; children?: React.ReactNode }) {
   const C = useBusinessPalette();
   const [section, setSection] = useState<'overview' | 'bookings' | 'payouts' | 'settings'>('overview');
   const [finance, setFinance] = useState<ProviderFinance | null>(null);
@@ -133,6 +138,7 @@ export default function ProviderStripePayments({ stripeReturn, children }: { str
     { key: 'settings', label: 'Payment settings', icon: 'options-outline' },
   ] as const;
   const setupReady = account?.payoutsEnabled;
+  const manageAccount = !!account && (!!setupReady || (account.detailsSubmitted && !account.requirementsDue));
   const accountTitle = !account ? 'Checking your payout account' : setupReady ? 'Your payout account is connected'
     : account.detailsSubmitted && !account.requirementsDue ? 'Your details are submitted' : 'Set up your payout account';
   const nextPayout = finance?.payouts.filter(p => p.status === 'pending' || p.status === 'in_transit')
@@ -144,12 +150,17 @@ export default function ProviderStripePayments({ stripeReturn, children }: { str
       {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>Test mode · no real money moves</Text>}
     </View>
     <View style={styles.tabs}>
-      {tabs.map(tab => <TouchableOpacity key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: section === tab.key }}
-        onPress={() => { void Haptics.selectionAsync().catch(() => {}); setSection(tab.key); }} activeOpacity={0.75}
-        style={[styles.tab, { backgroundColor: section === tab.key ? C.accent : C.card, borderColor: C.border }]}>
-        <Ionicons name={tab.icon} size={18} color={section === tab.key ? C.bg : C.accentText} />
-        <Text style={[styles.tabLabel, { color: section === tab.key ? C.bg : C.text }]}>{tab.label}</Text>
-      </TouchableOpacity>)}
+      {tabs.map(tab => {
+        const selected = section === tab.key;
+        return <TouchableOpacity key={tab.key} accessibilityRole="tab" accessibilityState={{ selected }}
+          onPress={() => { void Haptics.selectionAsync().catch(() => {}); setSection(tab.key); }} activeOpacity={0.75}
+          style={[styles.tab, { backgroundColor: selected ? C.accent : C.card, borderColor: selected ? C.accent : C.border }]}>
+          <View style={[styles.iconChip, styles.tabIcon, { backgroundColor: selected ? `${C.bg}29` : C.surface }]}>
+            <Ionicons name={tab.icon} size={16} color={selected ? C.bg : C.accentText} />
+          </View>
+          <Text style={[styles.tabLabel, { color: selected ? C.bg : C.text }]}>{tab.label}</Text>
+        </TouchableOpacity>;
+      })}
     </View>
     <View style={styles.refreshRow}>
       <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: C.sub }]}>{loading ? 'Updating your payments…' : 'Your payment information'}</Text>
@@ -159,34 +170,43 @@ export default function ProviderStripePayments({ stripeReturn, children }: { str
       </TouchableOpacity>
     </View>
     {!!error && <Notice text={error} />}
-    {(section === 'overview' || section === 'settings') && account && (!setupReady || !!account.requirementsDue || section === 'settings') &&
-      <Card title={accountTitle} sub={setupReady ? 'Bank details and verification are managed securely by Stripe.' : 'Finish your details with Stripe so you can receive online booking payments.'}>
-        <PaymentAction disabled={busy} label={busy ? 'Opening Stripe…' : setupReady || (account.detailsSubmitted && !account.requirementsDue) ? 'Manage payout account' : 'Continue with Stripe'}
-          onPress={() => void openStripe(setupReady || (account.detailsSubmitted && !account.requirementsDue) ? 'dashboard' : 'onboard')} />
-        {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
-      </Card>}
 
     {section === 'overview' && <>
       {!!financeError && <Notice text={financeError} />}
       <View style={[styles.hero, { backgroundColor: C.accent }]}>
-        <View style={styles.row}>
-          <Text style={[styles.heroLabel, { color: C.bg }]}>Available in Stripe</Text>
-          <Ionicons name="wallet-outline" size={26} color={C.bg} />
-        </View>
+        <Text style={[styles.heroLabel, { color: C.bg }]}>AVAILABLE IN STRIPE</Text>
         <Text style={[styles.heroAmount, { color: C.bg }]}>{finance?.connected ? balances(finance.available) : '—'}</Text>
         <Text style={[styles.heroNote, { color: C.bg }]}>{finance?.connected ? 'Ready for your Stripe payout schedule.' : !finance ? (loading ? 'Checking your Stripe balance…' : 'Balance unavailable. Refresh to try again.') : 'Connect your payout account to see your balance.'}</Text>
         <View style={[styles.heroDivider, { borderColor: C.bg }]} />
-        <Text style={[styles.heroLabel, { color: C.bg }]}>Clearing in Stripe</Text>
-        <Text style={[styles.heroPending, { color: C.bg }]}>{finance?.connected ? balances(finance.pending) : '—'}</Text>
+        <View style={styles.heroRow}>
+          <Text style={[styles.heroNote, { color: C.bg }]}>Clearing in Stripe</Text>
+          <Text style={[styles.heroPending, { color: C.bg }]}>{finance?.connected ? balances(finance.pending) : '—'}</Text>
+        </View>
       </View>
-      <Card title="On its way to your bank" sub="An estimated arrival, once Stripe has scheduled a payout.">
-        {nextPayout ? <>
+
+      {account && <>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? 'Manage payout account' : 'Continue with Stripe'}`}
+          disabled={busy} onPress={() => void openStripe(manageAccount ? 'dashboard' : 'onboard')} activeOpacity={0.75}
+          style={[styles.rowCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[styles.iconChip, { backgroundColor: C.surface }]}><Ionicons name="business-outline" size={18} color={C.accentText} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: C.text }]}>{accountTitle}</Text>
+            <Text style={[styles.caption, { color: C.sub }]}>{setupReady ? 'Bank details managed securely by Stripe' : 'Finish with Stripe to receive online booking payments'}</Text>
+          </View>
+          {busy ? <ActivityIndicator size="small" color={C.accentText} />
+            : <Text style={[styles.rowAction, { color: C.accentText }]}>{manageAccount ? 'Manage' : 'Continue'}</Text>}
+        </TouchableOpacity>
+        {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
+      </>}
+
+      <IconCard icon="calendar-outline" title="On its way to your bank" sub="An estimated arrival, once Stripe has scheduled a payout.">
+        {nextPayout ? <View style={[styles.amountPanel, { backgroundColor: C.bg }]}>
           <Text style={[styles.amount, { color: C.text }]}>{money(nextPayout.amount, nextPayout.currency)}</Text>
-          <Text style={[styles.description, { color: C.text }]}>Expected {date(nextPayout.arrivalDate * 1000)}</Text>
-        </> : <Text style={[styles.description, { color: C.text }]}>{financeError ? 'Payout information is unavailable. Refresh to try again.' : loading ? 'Checking scheduled payouts…' : 'No upcoming payout in your recent Stripe activity.'}</Text>}
+          <Text style={[styles.caption, { color: C.text }]}>Expected {date(nextPayout.arrivalDate * 1000)}</Text>
+        </View> : <Text style={[styles.description, { color: C.text }]}>{financeError ? 'Payout information is unavailable. Refresh to try again.' : loading ? 'Checking scheduled payouts…' : 'No upcoming payout in your recent Stripe activity.'}</Text>}
         <PaymentAction secondary label="View payouts" disabled={false} onPress={() => setSection('payouts')} />
-      </Card>
-      <Card title="Recent booking activity" sub="Your latest online booking payments.">
+      </IconCard>
+      <IconCard icon="receipt-outline" title="Recent booking activity" sub="Your latest online booking payments.">
         {!!payoutError && <Notice text={payoutError} />}
         {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
         {payouts.slice(0, 3).map(row => <View key={row.id} style={[styles.activity, { borderColor: C.border }]}>
@@ -195,7 +215,20 @@ export default function ProviderStripePayments({ stripeReturn, children }: { str
           <Text style={[styles.label, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text>
         </View>)}
         <PaymentAction secondary label="View booking payments" disabled={false} onPress={() => setSection('bookings')} />
-      </Card>
+      </IconCard>
+
+      {setup && <>
+        <Text style={[styles.groupTitle, { color: C.text }]}>Your setup</Text>
+        <View style={styles.setupGrid}>
+          {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
+            <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
+              onPress={() => { void Haptics.selectionAsync().catch(() => {}); setSection('settings'); }} activeOpacity={0.75}
+              style={[styles.setupTile, { backgroundColor: C.card, borderColor: C.border }]}>
+              <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
+              <Text style={[styles.label, { color: C.text }]}>{value}</Text>
+            </TouchableOpacity>)}
+        </View>
+      </>}
     </>}
 
     {section === 'bookings' && <>
@@ -263,6 +296,19 @@ function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: bo
     </View>}
   </View>;
 }
+function IconCard({ icon, title, sub, children }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; sub: string; children: React.ReactNode }) {
+  const C = useBusinessPalette();
+  return <View style={[styles.iconCard, { backgroundColor: C.card, borderColor: C.border }]}>
+    <View style={styles.iconCardHead}>
+      <View style={[styles.iconChip, { backgroundColor: C.surface }]}><Ionicons name={icon} size={18} color={C.accentText} /></View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.label, { color: C.text, fontSize: 15 }]}>{title}</Text>
+        <Text style={[styles.caption, { color: C.sub }]}>{sub}</Text>
+      </View>
+    </View>
+    {children}
+  </View>;
+}
 function StatusBadge({ label, attention = false }: { label: string; attention?: boolean }) {
   const C = useBusinessPalette();
   return <View style={[styles.badge, { backgroundColor: C.surface }]}>
@@ -293,18 +339,29 @@ const styles = StyleSheet.create({
   label: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
   testBadge: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, padding: 9, borderRadius: 8, alignSelf: 'flex-start' },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tab: { width: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 13, minHeight: 52, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  tab: { width: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, minHeight: 56, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  iconChip: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  tabIcon: { width: 32, height: 32 },
   tabLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, flexShrink: 1 },
   refreshRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 8 },
   refresh: { padding: 12, minWidth: 44, minHeight: 44 },
-  hero: { padding: 24, borderRadius: 24, marginBottom: 18 },
-  heroLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
-  heroAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 38, marginVertical: 12 },
+  hero: { padding: 20, borderRadius: 22, marginBottom: 12 },
+  heroLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.4, opacity: 0.85 },
+  heroAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 38, marginTop: 8, marginBottom: 6 },
   heroNote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 20 },
-  heroDivider: { borderTopWidth: StyleSheet.hairlineWidth, opacity: 0.3, marginVertical: 20 },
-  heroPending: { fontFamily: 'BakbakOne-Regular', fontSize: 22, marginTop: 6 },
+  heroDivider: { borderTopWidth: StyleSheet.hairlineWidth, opacity: 0.3, marginTop: 16, marginBottom: 12 },
+  heroRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
+  heroPending: { fontFamily: 'BakbakOne-Regular', fontSize: 17, textAlign: 'right' },
+  rowCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, minHeight: 64, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12 },
+  rowAction: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  iconCard: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 16, marginBottom: 12 },
+  iconCardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  amountPanel: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: 12, borderRadius: 12, marginTop: 8 },
+  groupTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 16, marginTop: 10, marginBottom: 10, marginHorizontal: 4 },
+  setupGrid: { flexDirection: 'row', gap: 10 },
+  setupTile: { flex: 1, minHeight: 84, padding: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, justifyContent: 'space-between', gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
-  amount: { fontFamily: 'BakbakOne-Regular', fontSize: 28, marginBottom: 6 },
+  amount: { fontFamily: 'BakbakOne-Regular', fontSize: 22 },
   amountSmall: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   activity: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   sectionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 22, marginBottom: 8 },

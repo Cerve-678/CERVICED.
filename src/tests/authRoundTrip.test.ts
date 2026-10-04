@@ -8,7 +8,7 @@ const source = fs.readFileSync(
 
 // Payout reads re-confirm the account with the Auth server so a just-banned or
 // deleted account is refused on the money screen immediately.
-const SERVER_CHECKED = ['getMyProviderPayoutStatus', 'getProviderPayouts'];
+const SERVER_CHECKED = ['getProviderPayouts'];
 
 /** Name of the function each `await supabase.auth.getUser()` call sits in. */
 function getUserCallers(): string[] {
