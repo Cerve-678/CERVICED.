@@ -55,7 +55,7 @@ import {
   formatNoticeWindow,
   isLongBookingInfoPack,
 } from '../../features/bookings/clientBookingPresentation';
-import { buildClientReceiptHTML } from '../../features/bookings/receipt';
+import { A4_PRINT_SIZE, buildClientReceiptHTML } from '../../features/bookings/receipt';
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
@@ -73,7 +73,7 @@ type Props = {
  * error). Throwing here now means a genuine, loggable failure.
  */
 async function shareReceipt(booking: ConfirmedBooking): Promise<boolean> {
-  const { uri } = await Print.printToFileAsync({ html: buildClientReceiptHTML(booking) });
+  const { uri } = await Print.printToFileAsync({ html: buildClientReceiptHTML(booking), ...A4_PRINT_SIZE });
   if (!(await Sharing.isAvailableAsync())) return false;
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Receipt', UTI: 'com.adobe.pdf' });
   return true;
