@@ -39,7 +39,7 @@ import { withTimeout } from '../../utils/withTimeout';
 // Data types
 import { PortfolioItem, ServiceCategory } from '../../types/providers';
 import {
-  getPortfolioItems,
+  getExplorePortfolioItems,
   getDiscoverServices,
   getDiscoverFeedTotal,
   getSavedPortfolioDetails,
@@ -475,7 +475,7 @@ const ExploreScreen = memo(() => {
       Promise.all([
         // Explore is a browse surface, including for providers viewing their
         // own public work. Do not hide a provider's images from this feed.
-        getPortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT, { excludeOwnProvider: false }),
+        getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT),
         getDiscoverServices(category, DISCOVER_INITIAL_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
       ]),
       8_000,
@@ -524,10 +524,9 @@ const ExploreScreen = memo(() => {
     try {
       const [portfolioData, serviceData] = await withTimeout(
         Promise.all([
-          getPortfolioItems(
+          getExplorePortfolioItems(
             category,
             DISCOVER_INITIAL_PORTFOLIO_LIMIT,
-            { excludeOwnProvider: false },
             cursor.portfolioOffset,
           ),
           getDiscoverServices(
