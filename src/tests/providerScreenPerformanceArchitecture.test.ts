@@ -33,10 +33,12 @@ describe('provider screen performance contracts', () => {
     // One focus effect keyed on the user, not on any piece of view state.
     expect(source).toContain('}, [user?.id])');
 
-    // The provider row is read ONCE and then passed around. Re-resolving it
-    // per consumer is what made this screen read the same row several times:
-    // an id lookup, a reviews lookup, a catalogue lookup, a go-live lookup.
+    // The provider row is read ONCE, then shared with the registration
+    // reconstruction and every downstream consumer. Re-resolving it per
+    // consumer is what made this screen read the same row several times.
     expect(source).toContain('getMyProviderProfile()');
+    expect(source).toContain('const profilePromise = getMyProviderProfile()');
+    expect(source).toContain('loadProviderFromSupabase(user.id, profile)');
     expect(source).not.toContain('getProviderIdForUserId');
     expect(source).toContain('getMyServiceCatalogue(profile.id)');
     expect(source).toContain('getProviderReviews(profile.id, { limit: 20 })');
