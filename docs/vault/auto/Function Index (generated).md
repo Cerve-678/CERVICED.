@@ -5,7 +5,7 @@
 
 #generated
 
-**2292 functions** across **315 files**.
+**2296 functions** across **316 files**.
 
 ### `src/components/` (44)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -43,11 +43,11 @@
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
 - `SafeHeader.tsx` — SafeHeader
+- `SignUpHeader.tsx` — SignUpHeader
 - `SlideUpOnMount.tsx` — **SlideUpOnMount**
 - `SlidingTabs.tsx` — handleLayout · handleNaturalLayout · row · slideTo · SlidingTabs
 - `SpecialityMultiSelect.tsx` — addCustom · close · customCandidate · filtered · **SpecialityMultiSelect** · toggle
 - `StatusBarBlur.tsx` — StatusBarBlur
-- `StepProgressIndicator.tsx` — StepProgressIndicator
 - `TabIcon.tsx` — renderIcon · TabIcon
 - `ThemedBackground.tsx` — **ThemedBackground**
 - `ThemedText.tsx` — **ThemedText**
@@ -119,8 +119,9 @@
 - `ServiceImageCropper.tsx` — finish · handleCancel · handleUse · layout · panResponder · **ServiceImageCropper**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **useVerticalDragReorder**
 
-### `src/features/providers/` (8)
+### `src/features/providers/` (9)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
+- `externalBookingLink.ts` — **normalizeExternalBookingUrl** · **openExternalBookingPage**
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus**
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **getAdaptiveAccentColor** · **hasProviderPolicyInfo**
@@ -171,10 +172,10 @@
 - `NewPasswordScreen.tsx` — handleSave · NewPasswordScreen
 - `ReactivateAccountScreen.tsx` — formatDeletionDate · handleDecline · handleReactivate · ReactivateAccountScreen
 - `ResetPasswordOTPScreen.tsx` — handleKeyPress · handleOtpChange · handleResend · handleVerify · ResetPasswordOTPScreen
-- `SignUpStep1Screen.tsx` — SignUpStep1Screen
+- `SignUpStep1Screen.tsx` — handleContinue · pick · SignUpStep1Screen · tile
 - `SignUpStep2Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep3Screen · validate
-- `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · pickTeamSize · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
+- `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
 - `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · finishHatSwitch · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
 - `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · WelcomeScreen
 
