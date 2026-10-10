@@ -1622,7 +1622,9 @@ export async function getExplorePortfolioItems(
 
   const { data, error } = await query.limit(limit);
   if (error) throw error;
-  return (data ?? []) as PortfolioItemWithProvider[];
+  // The public projection is intentionally narrower than DbPortfolioItem,
+  // while the Explore mapper only reads the selected card fields above.
+  return (data ?? []) as unknown as PortfolioItemWithProvider[];
 }
 
 /** Fetch portfolio items, optionally filtered by category */
