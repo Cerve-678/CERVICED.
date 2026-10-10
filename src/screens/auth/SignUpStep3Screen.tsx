@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
-import StepProgressIndicator from '../../components/StepProgressIndicator';
+import SignUpHeader from '../../components/SignUpHeader';
 import { validateEmail, validateDob } from '../../utils/validation';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -124,16 +124,7 @@ export default function SignUpStep3Screen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back */}
-          <TouchableOpacity
-            style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
-          </TouchableOpacity>
-
-          <StepProgressIndicator currentStep={3} totalSteps={totalSteps} stepLabel={isUser ? 'Personal Info' : needsDob ? 'Your Details' : 'Business Details'} />
+          <SignUpHeader onBack={() => navigation.goBack()} currentStep={3} totalSteps={totalSteps} />
 
           <View style={styles.header}>
             <Text style={[styles.headerTitle, { color: t.text }]}>
@@ -299,16 +290,6 @@ const styles = StyleSheet.create({
   bg: { flex: 1 },
   flex: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  backIcon: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   header: { marginBottom: 28 },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',

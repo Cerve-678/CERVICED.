@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
-import StepProgressIndicator from '../../components/StepProgressIndicator';
+import SignUpHeader from '../../components/SignUpHeader';
 import { validateEmail, validatePassword, validatePhone, validateDob, getPasswordStrength } from '../../utils/validation';
 import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { useAuth } from '../../contexts/AuthContext';
@@ -147,19 +147,11 @@ export default function SignUpStep2Screen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back */}
-          <TouchableOpacity
-            style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
-          </TouchableOpacity>
-
-          <StepProgressIndicator currentStep={2} totalSteps={totalSteps} />
+          <SignUpHeader onBack={() => navigation.goBack()} currentStep={2} totalSteps={totalSteps} />
 
           <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: t.text }]}>Create Account</Text>
+            <Text style={[styles.headerTitle, { color: t.text }]}>Create your login</Text>
+            <Text style={[styles.headerSubtitle, { color: t.sub }]}>What you'll log in with.</Text>
           </View>
 
           <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.border }]}>
@@ -302,22 +294,13 @@ const styles = StyleSheet.create({
   bg: { flex: 1 },
   flex: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  backIcon: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   header: { marginBottom: 28 },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 32,
     letterSpacing: 1,
   },
+  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, marginTop: 6, lineHeight: 21 },
   formCard: {
     borderRadius: 20,
     borderWidth: 1,

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { signInWithAppleIdToken } from '../../services/databaseService';
@@ -71,87 +72,84 @@ export default function WelcomeScreen({ navigation }: Props) {
     }
   };
 
+  const SERVICE_WORDS = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS'];
+
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
-      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}>
-        {/* Branding */}
-        <View style={styles.brandSection}>
-          <Text style={[styles.brandName, { color: t.text }]}>CERVICED.</Text>
-          <Text style={[styles.tagline, { color: t.sub }]}>
-            Beauty maintenance at your fingertips
-          </Text>
+      <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 20 }]}>
+        <Text style={[styles.wordmark, { color: t.text }]}>CERVICED.</Text>
+
+        <Text style={[styles.headline, { color: t.text }]}>
+          Beauty{'\n'}maintenance,{'\n'}<Text style={{ color: t.accent }}>sorted.</Text>
+        </Text>
+        <View style={styles.wordsRow}>
+          {SERVICE_WORDS.map(w => (
+            <Text key={w} style={[styles.word, { color: t.sub }]}>{w}</Text>
+          ))}
         </View>
 
-        {/* Actions */}
-        <View style={styles.actionsSection}>
-          {/* Sign Up */}
+        <View style={{ flex: 1 }} />
+
+        <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: t.accent }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); navigation.navigate('SignUpStep1'); }}
             activeOpacity={0.75}
           >
-            <Text style={styles.primaryBtnText}>SIGN UP</Text>
+            <Text style={[styles.primaryBtnText, { color: t.onAccent }]}>GET STARTED</Text>
           </TouchableOpacity>
 
-          {/* Log In */}
           <TouchableOpacity
-            style={[styles.secondaryBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('Login'); }}
+            style={[styles.appleBtn, { backgroundColor: t.text }]}
+            onPress={handleAppleLogin}
             activeOpacity={0.75}
+            disabled={isAppleLoading}
+            accessibilityLabel="Continue with Apple"
           >
-            <Text style={[styles.secondaryBtnText, { color: t.text }]}>LOG IN</Text>
+            {isAppleLoading ? (
+              <ActivityIndicator color={t.bg} />
+            ) : (
+              <>
+                <Ionicons name="logo-apple" size={18} color={t.bg} />
+                <Text style={[styles.socialLabel, { color: t.bg }]}>Continue with Apple</Text>
+              </>
+            )}
           </TouchableOpacity>
 
-          {/* Claim an existing listing */}
           <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClaimProvider'); }}
+            style={[styles.outlineBtn, { borderColor: t.border }]}
+            onPress={() => handleSocialLogin('Google')}
             activeOpacity={0.7}
-            style={styles.claimLink}
           >
-            <Text style={[styles.claimLinkText, { color: t.accent }]}>Is your business already listed?</Text>
+            <Text style={[styles.socialLabel, { color: t.text }]}>Continue with Google</Text>
           </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
-            <Text style={[styles.dividerLabel, { color: t.sub }]}>OR</Text>
-            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
-          </View>
-
-          {/* Social Login */}
-          <View style={styles.socialRow}>
-            {(['Instagram', 'Google'] as const).map(p => (
-              <TouchableOpacity
-                key={p}
-                style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-                onPress={() => handleSocialLogin(p)}
-                activeOpacity={0.7}
+          <View style={styles.linksRow}>
+            <Text style={[styles.linkText, { color: t.sub }]}>
+              Have an account?{' '}
+              <Text
+                style={[styles.linkStrong, { color: t.accent }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('Login'); }}
               >
-                <Text style={[styles.socialLabel, { color: t.text }]}>{p}</Text>
-              </TouchableOpacity>
-            ))}
+                Log in
+              </Text>
+            </Text>
             <TouchableOpacity
-              style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-              onPress={handleAppleLogin}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClaimProvider'); }}
               activeOpacity={0.7}
-              disabled={isAppleLoading}
+              hitSlop={10}
             >
-              {isAppleLoading ? (
-                <ActivityIndicator color={t.text} />
-              ) : (
-                <Text style={[styles.socialLabel, { color: t.text }]}>Apple</Text>
-              )}
+              <Text style={[styles.linkStrong, { color: t.accent }]}>Claim your listing</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Terms */}
           <Text style={[styles.termsText, { color: t.sub }]}>
             By continuing, you agree to our{' '}
             <Text style={[styles.termsLink, { color: t.accent }]}>Terms of Service</Text>
             {' '}and{' '}
-            <Text style={[styles.termsLink, { color: t.accent }]}>Privacy Policy</Text>
+            <Text style={[styles.termsLink, { color: t.accent }]}>Privacy Policy</Text>.
           </Text>
         </View>
       </View>
@@ -160,99 +158,20 @@ export default function WelcomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
-  },
-  brandSection: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 175,
-  },
-  brandName: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 44,
-    letterSpacing: 2,
-  },
-  tagline: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    marginTop: 8,
-    letterSpacing: 0.5,
-    fontWeight: '600',
-  },
-  actionsSection: {
-    paddingBottom: 8,
-  },
-  primaryBtn: {
-    minHeight: 50,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  primaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    letterSpacing: 1,
-    color: '#FFFFFF',
-  },
-  secondaryBtn: {
-    minHeight: 50,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  secondaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    letterSpacing: 1,
-  },
-  claimLink: {
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  claimLinkText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  dividerLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-    letterSpacing: 2,
-    marginHorizontal: 16,
-  },
-  socialRow: { flexDirection: 'row', gap: 10 },
-  socialBtn: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  socialLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  termsText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 20,
-  },
+  content: { flex: 1, paddingHorizontal: 24 },
+  wordmark: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 2 },
+  headline: { fontFamily: 'BakbakOne-Regular', fontSize: 48, lineHeight: 50, letterSpacing: 0.5, marginTop: 64 },
+  wordsRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 20 },
+  word: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1.5 },
+  actions: { gap: 10 },
+  primaryBtn: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center' },
+  primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
+  appleBtn: { minHeight: 56, borderRadius: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  outlineBtn: { minHeight: 56, borderRadius: 100, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  socialLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '700' },
+  linksRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  linkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
+  linkStrong: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700' },
+  termsText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18, marginTop: 6 },
   termsLink: { fontWeight: '700' },
 });

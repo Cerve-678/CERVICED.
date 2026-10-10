@@ -3070,6 +3070,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   email: prev.email || prefill.business_email || '',
                   instagram: prev.instagram || prefill.instagram || '',
                   website: prev.website || prefill.website || '',
+                  // Asked on SignUpStep1 ("I use my own booking link").
+                  externalBookingUrl: prev.externalBookingUrl || prefill.external_booking_url || '',
                   tiktok: prev.tiktok || prefill.tiktok || '',
                   businessType: prev.businessType || prefilledBusinessType || '',
                   teamSize: prev.teamSize || prefilledTeamSize || '',

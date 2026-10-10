@@ -127,7 +127,6 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         referral_source:       meta['referral_source']       ?? null,
         gender:                meta['gender']                ?? null,
         has_kids:              meta['has_kids']               ?? false,
-        team_size:             meta['team_size']               ?? null,
         // Staged on users (INT), copied to providers.years_experience by
         // InfoRegScreen's first-save prefill. Signup sends it as a numeric
         // string; coerce and drop anything non-numeric rather than upserting a
@@ -141,6 +140,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         price_range:               meta['price_range']               ?? null,
         preferred_contact_methods: meta['preferred_contact_methods'] ?? [],
         preferred_payment_methods: meta['preferred_payment_methods'] ?? [],
+        external_booking_url:      meta['external_booking_url']      ?? null,
       };
 
       try {

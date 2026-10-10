@@ -18,7 +18,7 @@ import path from 'path';
 const GUARDED: ReadonlyArray<[string, readonly string[]]> = [
   ['screens/auth/EmailVerificationScreen.tsx', ['primaryBtn', 'secondaryBtn']],
   ['screens/auth/ForgotPasswordScreen.tsx', ['primaryBtn']],
-  ['screens/auth/WelcomeScreen.tsx', ['primaryBtn', 'secondaryBtn']],
+  ['screens/auth/WelcomeScreen.tsx', ['primaryBtn', 'appleBtn', 'outlineBtn']],
   ['screens/auth/NewPasswordScreen.tsx', ['primaryBtn']],
   ['screens/auth/ResetPasswordOTPScreen.tsx', ['primaryBtn', 'secondaryBtn']],
   ['screens/auth/ClaimProviderScreen.tsx', ['primaryBtn', 'input']],

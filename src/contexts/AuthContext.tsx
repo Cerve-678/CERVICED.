@@ -105,7 +105,7 @@ interface AuthContextType {
     dobDay?: string; dobMonth?: string; dobYear?: string;
     serviceInterests?: string[]; serviceLocations?: string[];
     yearsExperience?: string;
-    priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+    priceRange?: string; externalBookingUrl?: string; preferredContactMethods?: string[];
     accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
     preferredPaymentMethods?: string[];
     referralSource?: string;
@@ -588,7 +588,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dobDay?: string; dobMonth?: string; dobYear?: string;
       serviceInterests?: string[]; serviceLocations?: string[];
       yearsExperience?: string;
-      priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+      priceRange?: string; externalBookingUrl?: string; preferredContactMethods?: string[];
       accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
       preferredPaymentMethods?: string[];
       referralSource?: string;

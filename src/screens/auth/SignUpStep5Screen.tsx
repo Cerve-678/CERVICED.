@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useAuth } from '../../contexts/AuthContext';
-import StepProgressIndicator from '../../components/StepProgressIndicator';
+import SignUpHeader from '../../components/SignUpHeader';
 import { invokeSendAccountEmail, signUpWithEmail } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -294,7 +294,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           dobDay: data.dobDay, dobMonth: data.dobMonth, dobYear: data.dobYear,
           serviceInterests: data.serviceInterests, serviceLocations: data.serviceLocations,
           yearsExperience: data.yearsExperience,
-          priceRange: data.priceRange, teamSize: data.teamSize,
+          priceRange: data.priceRange,
+          externalBookingUrl: data.externalBookingUrl,
           preferredContactMethods: data.preferredContactMethods,
           preferredPaymentMethods: data.preferredPaymentMethods,
           accessibilityNotes: selectedAccessibility.join('|'),
@@ -347,7 +348,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
             gender: selectedGender || null, has_kids: hasKids,
             price_range: isProvider ? (data.priceRange || null) : null,
-            team_size: isProvider ? (data.teamSize || null) : null,
+            external_booking_url: isProvider ? (data.externalBookingUrl || null) : null,
             preferred_contact_methods: isProvider ? data.preferredContactMethods : null,
             accessibility_notes: isProvider ? (selectedAccessibility.join('|') || null) : null,
             languages_spoken: isProvider ? finalLanguages : null,
@@ -423,16 +424,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Back */}
-        <TouchableOpacity
-          style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
-        </TouchableOpacity>
-
-        <StepProgressIndicator currentStep={5} totalSteps={totalSteps} stepLabel="Tell Me More" />
+        <SignUpHeader onBack={() => navigation.goBack()} currentStep={5} totalSteps={totalSteps} />
 
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: t.text }]}>Tell me more</Text>
@@ -619,8 +611,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  backIcon: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   header: { marginBottom: 28 },
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 32, letterSpacing: 1 },
   headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, marginTop: 8, lineHeight: 20 },
