@@ -805,23 +805,31 @@ export async function saveProviderToSupabase(
 // Falls back to AsyncStorage cache if Supabase returns nothing.
 
 export async function loadProviderFromSupabase(
-  userId: string
+  userId: string,
+  knownProvider?: DbProvider | null,
 ): Promise<ProviderRegistrationData | null> {
-  let provider: Awaited<ReturnType<typeof getProviderRegistrationRecord>>;
-  try {
-    provider = await getProviderRegistrationRecord(userId);
-  } catch (error) {
-    logger.warn('loadProviderFromSupabase error:', error);
-    const cached = await getCachedProviderData(userId);
-    if (cached) return cached;
-    // A transient failure here is NOT the same thing as "no provider row
-    // exists" — returning null in both cases is indistinguishable to every
-    // caller, which is exactly what let an existing, published provider's
-    // locked Business Name/Service Type fields render as editable (and, if
-    // touched, silently overwrite service_category on save) after a
-    // one-off network blip during load. Callers must treat this as a
-    // failure to retry, never as "confirmed new signup".
-    throw error;
+  let provider: DbProvider | null;
+  if (knownProvider !== undefined) {
+    // A caller that already resolved its own provider row can pass it in.
+    // My Profile does this so its registration reconstruction and dashboard
+    // share one `providers` request instead of issuing identical reads.
+    provider = knownProvider;
+  } else {
+    try {
+      provider = await getProviderRegistrationRecord(userId);
+    } catch (error) {
+      logger.warn('loadProviderFromSupabase error:', error);
+      const cached = await getCachedProviderData(userId);
+      if (cached) return cached;
+      // A transient failure here is NOT the same thing as "no provider row
+      // exists" — returning null in both cases is indistinguishable to every
+      // caller, which is exactly what let an existing, published provider's
+      // locked Business Name/Service Type fields render as editable (and, if
+      // touched, silently overwrite service_category on save) after a
+      // one-off network blip during load. Callers must treat this as a
+      // failure to retry, never as "confirmed new signup".
+      throw error;
+    }
   }
   // The query itself succeeded and genuinely found no row — this really is
   // either a brand-new signup or an offline draft that never reached the
