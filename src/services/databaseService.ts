@@ -1595,6 +1595,38 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Explore's masonry cards do not need the full portfolio row (personalisation
+// fields and service linkage are used by other callers). Keep its network
+// response small without narrowing the shared getPortfolioItems() contract.
+const EXPLORE_PORTFOLIO_SELECT = `
+  id, provider_id, image_url, caption, category, tags, price, aspect_ratio,
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+`;
+
+/** Fetch the lean portfolio projection used by Explore's public masonry feed. */
+export async function getExplorePortfolioItems(
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+): Promise<PortfolioItemWithProvider[]> {
+  let query = supabase
+    .from("portfolio_items")
+    .select(EXPLORE_PORTFOLIO_SELECT)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
+    .order("created_at", { ascending: false });
+
+  if (category && category !== "All") {
+    query = query.eq("category", category.toUpperCase());
+  }
+
+  const { data, error } = await query.limit(limit);
+  if (error) throw error;
+  // The public projection is intentionally narrower than DbPortfolioItem,
+  // while the Explore mapper only reads the selected card fields above.
+  return (data ?? []) as unknown as PortfolioItemWithProvider[];
+}
+
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
