@@ -5,7 +5,7 @@
 
 #generated
 
-**2390 functions** across **331 files**.
+**2392 functions** across **331 files**.
 
 ### `src/components/` (44)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -79,7 +79,7 @@
 ### `src/features/beauty-profile/` (3)
 - `BeautyLanding.tsx` — **BeautyLanding** · go · groups · maintenanceCard · S
 - `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · sectionHead · setSingle · sub · toggleAllergen · toggleMulti
-- `MyProfileView.tsx` — **MyProfileView** · Ring
+- `MyProfileView.tsx` — editToggle · **MyProfileView** · Ring · tapLight
 
 ### `src/features/bookings/` (10)
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles

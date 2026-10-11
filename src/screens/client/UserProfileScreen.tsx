@@ -52,6 +52,8 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P,
     style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
+    accessibilityRole="button"
+    accessibilityLabel={badge ? `${title}, ${badge}` : title}
   >
     <View style={styles.optionLeft}>
       <Icon name={icon} size={20} color={danger ? P.accentText : P.sub} style={{ marginRight: 12 }} />

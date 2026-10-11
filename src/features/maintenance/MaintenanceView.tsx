@@ -212,7 +212,9 @@ export function MaintenanceView({
             {isEmpty ? (
               <View style={[ui.card, styles.empty, { backgroundColor: P.card, borderColor: P.border }]}>
                 <Text style={[styles.emptyTitle, { color: P.text }]}>{t('maintenance.empty.title')}</Text>
-                <Text style={[ui.body, { color: P.sub }]}>{t('maintenance.firstRun.note')}</Text>
+                <Text style={[ui.body, { color: P.sub }]}>
+                  {state.remindersOn ? t('maintenance.firstRun.note') : t('maintenance.empty.bookingNote')}
+                </Text>
               </View>
             ) : (
               <View style={styles.summary}>

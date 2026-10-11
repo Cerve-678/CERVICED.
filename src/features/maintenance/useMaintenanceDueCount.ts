@@ -5,8 +5,15 @@
 // card counts — countDueItems with the same upcoming-booking coverage — so the
 // badge and the card can't disagree. A failed read shows no badge rather than
 // a wrong one; it is logged, not surfaced.
+//
+// Tab switches re-focus this screen constantly, so a successful read is reused
+// for REFRESH_MS. Changes made in Beauty Profile still show promptly: coming
+// back from that stack is a focus well after the window in normal use, and the
+// window is short.
 
-import { useCallback, useState } from 'react';
+const REFRESH_MS = 60_000;
+
+import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { getMaintenanceItems, getUpcomingMaintenanceCoverage } from '../../services/databaseService';
 import { dateToYMD } from '../../utils/dateUtils';
@@ -15,13 +22,16 @@ import { countDueItems } from './presentation';
 
 export function useMaintenanceDueCount(enabled: boolean): number {
   const [count, setCount] = useState(0);
+  const lastReadAt = useRef(0);
 
   useFocusEffect(useCallback(() => {
-    if (!enabled) { setCount(0); return; }
+    if (!enabled) { setCount(0); lastReadAt.current = 0; return; }
+    if (Date.now() - lastReadAt.current < REFRESH_MS) return;
     let cancelled = false;
     Promise.all([getMaintenanceItems(), getUpcomingMaintenanceCoverage()])
       .then(([items, coverage]) => {
         if (cancelled) return;
+        lastReadAt.current = Date.now();
         setCount(countDueItems(items, dateToYMD(new Date()), {
           serviceIds: new Set(coverage.serviceIds),
           providerIds: new Set(coverage.providerIds),

@@ -21,6 +21,7 @@ import {
   CATEGORY_LABELS, CATEGORY_ORDER, type BeautyProfileStats, type CategoryStats,
 } from '../../utils/beautyProfileStats';
 import { ALLERGENS } from './options';
+import { semanticColors } from '../maintenance/ui';
 import { CategoryEditor } from './CategoryEditor';
 
 /** Categories whose answers the maintenance suggestions read
@@ -66,12 +67,14 @@ export function MyProfileView({
   draft, setDraft, stats, editing, saving, selectedCategory,
   onBack, onOpenCategory, onCloseCategory, onToggleEdit, onSave,
 }: Props) {
-  const { theme, palette: P } = useTheme();
+  const { theme, isDarkMode, palette: P } = useTheme();
+  const S = semanticColors(isDarkMode);
+  const tapLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const editToggle = (
-    <TouchableOpacity onPress={onToggleEdit} activeOpacity={0.5} accessibilityRole="button">
+    <TouchableOpacity onPress={() => { tapLight(); onToggleEdit(); }} activeOpacity={0.5} accessibilityRole="button">
       <Text style={[styles.editToggle, { color: P.accentText }]}>
         {editing ? t('beautyProfile.cancel') : t('beautyProfile.edit')}
       </Text>
@@ -81,7 +84,7 @@ export function MyProfileView({
   const saveButton = editing && (
     <TouchableOpacity
       style={[styles.saveBtn, { backgroundColor: P.accent, borderColor: P.accent }]}
-      onPress={onSave}
+      onPress={onSave /* fires its own Medium haptic */}
       disabled={saving}
       activeOpacity={0.75}
       accessibilityRole="button"
@@ -175,12 +178,12 @@ export function MyProfileView({
         </View>
 
         <TouchableOpacity
-          style={[styles.hs, { borderColor: P.border, backgroundColor: health.started ? 'rgba(52,199,89,0.12)' : 'rgba(255,214,10,0.2)' }]}
-          onPress={() => onOpenCategory('health')}
+          style={[styles.hs, { borderColor: P.border, backgroundColor: health.started ? S.okDim : S.warnDim }]}
+          onPress={() => onOpenCategory('health') /* openCategory fires the haptic */}
           activeOpacity={0.5}
           accessibilityRole="button"
         >
-          <Ionicons name="shield-checkmark-outline" size={22} color={P.accentText} />
+          <Ionicons name="shield-checkmark-outline" size={22} color={health.started ? S.ok : S.warn} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.hsTitle, { color: P.text }]}>{CATEGORY_LABELS.health}</Text>
             <Text style={[styles.hsSub, { color: P.sub }]} numberOfLines={2}>

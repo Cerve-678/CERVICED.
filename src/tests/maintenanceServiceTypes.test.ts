@@ -62,7 +62,8 @@ describe('beauty maintenance migration contracts', () => {
     const body = fn('process_maintenance_reminders');
     expect(migration).toContain('CHECK (due_push_count BETWEEN 0 AND 2)');
     expect(body).toContain("COALESCE(u.notification_preferences->>'maintenanceReminders', 'false') = 'true'");
-    expect(body).toContain('u.reminder_enabled = TRUE');
+    // The opt-in is the one user-facing control; users.reminder_enabled has no UI.
+    expect(body).not.toContain('reminder_enabled');
     expect(body).toContain("b.status IN ('pending', 'confirmed', 'in_progress')");
     expect(body).toContain("DELETE FROM public.maintenance_items WHERE kind = 'event' AND event_on < CURRENT_DATE");
   });
@@ -73,6 +74,13 @@ describe('beauty maintenance migration contracts', () => {
     for (const name of ['process_maintenance_reminders', 'handle_booking_completed_maintenance']) {
       expect(fn(name)).toMatch(/v_copy\.title, v_copy\.message/);
     }
+  });
+
+  it('lets the settings upsert through: user_id is in the UPDATE grant, pinned by WITH CHECK', () => {
+    // PostgREST upserts SET every payload column; without user_id here every
+    // settings save fails with 42501 (security review, 2026-10-11).
+    expect(migration).toMatch(/GRANT UPDATE \(user_id, protective_style/);
+    expect(migration).toContain('ON public.maintenance_settings\n  FOR UPDATE TO authenticated\n  USING (user_id = (SELECT auth.uid())) WITH CHECK (user_id = (SELECT auth.uid()));');
   });
 
   it('is owner-only: no USING (true), no provider read, origin pinned for clients', () => {
@@ -92,6 +100,8 @@ describe('beauty maintenance migration contracts', () => {
   it('skips the provider rebooking nudge for a maintained service', () => {
     const body = fn('process_rebooking_nudges');
     expect(body).toContain("SET search_path TO 'public', 'pg_temp'");
-    expect(body).toContain('mi.service_id  = r.last_service_id');
+    expect(body).toContain('(mi.service_id = r.last_service_id OR mi.service_id IS NULL)');
+    // Only steps aside when the maintenance reminder will actually be sent.
+    expect(body).toContain("u.notification_preferences->>'maintenanceReminders'");
   });
 });

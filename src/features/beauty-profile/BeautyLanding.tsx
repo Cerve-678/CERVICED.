@@ -115,7 +115,7 @@ export function BeautyLanding({
             {next.view.progressPercent !== null && (
               <ProgressBar
                 percent={next.view.progressPercent}
-                colour={next.view.state === 'overdue' ? S.bad : P.onAccent}
+                colour={P.onAccent}
                 track={isDarkMode ? 'rgba(27,39,64,0.2)' : 'rgba(255,255,255,0.22)'}
               />
             )}

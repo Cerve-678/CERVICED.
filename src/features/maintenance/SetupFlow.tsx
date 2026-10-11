@@ -9,7 +9,7 @@
 // The answers are saved to Maintenance (maintenance_settings), not to the
 // Beauty Profile, so they never count toward its completeness.
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -51,7 +51,9 @@ export function SetupFlow({ profile, state, onClose, onDone }: Props) {
   const [style, setStyle] = useState<ProtectiveStyle | null>(state.settings?.protectiveStyle ?? null);
   const [wearWeeks, setWearWeeks] = useState(state.settings?.protectiveWearWeeks ?? DEFAULT_WEAR_WEEKS);
   const [weeksIn, setWeeksIn] = useState<number | null>(null);
-  const [events, setEvents] = useState<{ name: string; date: string | null }[]>([]);
+  // Each row gets a local id so removing one doesn't remount the rows below it.
+  const [events, setEvents] = useState<{ id: number; name: string; date: string | null }[]>([]);
+  const nextEventId = useRef(0);
   const [eventPicker, setEventPicker] = useState<number | null>(null);
   const [patchDate, setPatchDate] = useState<string | null>(state.settings?.lastPatchTestOn ?? null);
   const [patchPicker, setPatchPicker] = useState(false);
@@ -267,7 +269,7 @@ export function SetupFlow({ profile, state, onClose, onDone }: Props) {
             <View style={styles.field}>
               {question(t('maintenance.setup.q.events'))}
               {events.map((e, i) => (
-                <View key={i} style={styles.eventRow}>
+                <View key={e.id} style={styles.eventRow}>
                   <TextInput
                     value={e.name}
                     onChangeText={name => setEvents(prev => prev.map((x, j) => (j === i ? { ...x, name } : x)))}
@@ -297,7 +299,7 @@ export function SetupFlow({ profile, state, onClose, onDone }: Props) {
               )}
               {events.length < MAX_EVENTS && (
                 <GhostButton small P={P} icon="add" label={t('maintenance.setup.q.addEvent')} style={{ alignSelf: 'flex-start' }}
-                  onPress={() => setEvents(prev => [...prev, { name: '', date: null }])} />
+                  onPress={() => setEvents(prev => [...prev, { id: nextEventId.current++, name: '', date: null }])} />
               )}
             </View>
 

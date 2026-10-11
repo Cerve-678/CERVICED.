@@ -99,7 +99,10 @@ CREATE TABLE public.maintenance_settings (
 ALTER TABLE public.maintenance_settings ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.maintenance_settings FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, DELETE ON public.maintenance_settings TO authenticated;
-GRANT UPDATE (protective_style, protective_wear_weeks, last_patch_test_on, setup_completed_at)
+-- user_id is in the UPDATE grant only because a PostgREST upsert sets every
+-- payload column in ON CONFLICT DO UPDATE; the owner policy's WITH CHECK pins
+-- it to auth.uid(), so it can never be changed to someone else.
+GRANT UPDATE (user_id, protective_style, protective_wear_weeks, last_patch_test_on, setup_completed_at)
   ON public.maintenance_settings TO authenticated;
 
 CREATE POLICY maintenance_settings_owner_select ON public.maintenance_settings
@@ -155,6 +158,8 @@ CREATE UNIQUE INDEX maintenance_items_booking_unique
 CREATE INDEX maintenance_items_user_idx ON public.maintenance_items (user_id, due_on);
 -- The cron's scan: unpaused rows whose date has arrived.
 CREATE INDEX maintenance_items_due_idx ON public.maintenance_items (due_on) WHERE NOT paused;
+-- The cron's daily removal of past events.
+CREATE INDEX maintenance_items_event_idx ON public.maintenance_items (event_on) WHERE kind = 'event';
 
 ALTER TABLE public.maintenance_items ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.maintenance_items FROM PUBLIC, anon, authenticated;
@@ -353,7 +358,6 @@ BEGIN
       IF EXISTS (
            SELECT 1 FROM public.users u
             WHERE u.id = NEW.user_id
-              AND u.reminder_enabled = TRUE
               AND u.deletion_requested_at IS NULL
               AND COALESCE(u.notification_preferences->>'maintenanceReminders', 'false') = 'true')
          -- A group booking completes one row per guest for the same service:
@@ -420,7 +424,6 @@ BEGIN
       JOIN public.users u ON u.id = i.user_id
      WHERE NOT i.paused
        AND i.due_on <= CURRENT_DATE
-       AND u.reminder_enabled = TRUE
        AND u.deletion_requested_at IS NULL
        AND COALESCE(u.notification_preferences->>'maintenanceReminders', 'false') = 'true'
        AND (
@@ -539,7 +542,8 @@ $function$;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Live body reproduced; deltas: (a) carries the last completed booking's
 -- service_id, (b) skips when the client has an unpaused maintenance item for
--- that provider + service, (c) gains SET search_path (live had none).
+-- that provider + service (or provider only) and has opted in to maintenance
+-- reminders, (c) gains SET search_path (live had none).
 -- Scope note: the nudge is per provider and names only the LAST service, so
 -- the skip covers that service only.
 
@@ -583,14 +587,20 @@ BEGIN
          AND n.created_at  > NOW() - INTERVAL '21 days'
     ) THEN CONTINUE; END IF;
 
-    -- The client is already tracking this service in Beauty Maintenance, which
-    -- sends its own reminder. One reminder about one thing.
-    IF r.last_service_id IS NOT NULL AND EXISTS (
-      SELECT 1 FROM public.maintenance_items mi
+    -- The client is already tracking this in Beauty Maintenance AND has opted
+    -- in to its reminders, so that reminder covers it: one reminder about one
+    -- thing. Without the opt-in the nudge still goes — otherwise each feature
+    -- would assume the other one reminds them and neither would. A
+    -- provider-only item (no service) covers any service with that provider.
+    IF EXISTS (
+      SELECT 1
+        FROM public.maintenance_items mi
+        JOIN public.users u ON u.id = mi.user_id
        WHERE mi.user_id     = r.user_id
          AND mi.provider_id = r.provider_id
-         AND mi.service_id  = r.last_service_id
          AND NOT mi.paused
+         AND (mi.service_id = r.last_service_id OR mi.service_id IS NULL)
+         AND COALESCE(u.notification_preferences->>'maintenanceReminders', 'false') = 'true'
     ) THEN CONTINUE; END IF;
 
     INSERT INTO public.notifications
