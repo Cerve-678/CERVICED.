@@ -251,7 +251,7 @@ export const en = {
   // UNREVIEWED legal placeholder — not final copy (legal-flagger, 2026-10-10).
   'maintenance.disclaimer': "Reminders are prompts, not medical advice. Always follow your provider's own instructions.",
   'maintenance.firstRun.title': 'Set up my beauty maintenance',
-  'maintenance.firstRun.note': "When you book, don't worry — CERVICED will remind you when you're due for your maintenance.",
+  'maintenance.firstRun.note': "When you book, don't worry — CERVICED can remind you when you're due for your maintenance.",
   'maintenance.firstRun.cta': 'Set up',
   'maintenance.finishSetup': 'Finish setting up your maintenance schedule',
   'maintenance.remindersOff': "Push reminders are off, so nothing here will notify you. You'll still see everything on this screen.",
