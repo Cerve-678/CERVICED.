@@ -23,6 +23,7 @@ import {
   passwordChangedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
+  refundRequestedProviderEmail,
   supportRequestEmail,
 } from './emailTemplates.ts';
 
@@ -46,6 +47,16 @@ const every = () => [
       date: HOSTILE,
       time: HOSTILE,
       location: HOSTILE,
+    }),
+  ],
+  [
+    'refundRequestedProviderEmail',
+    refundRequestedProviderEmail({
+      clientName: HOSTILE,
+      service: HOSTILE,
+      date: HOSTILE,
+      time: HOSTILE,
+      reason: HOSTILE,
     }),
   ],
   [

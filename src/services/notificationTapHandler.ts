@@ -34,6 +34,8 @@ const BOOKING_TYPES = new Set([
   'provider_no_show',
   'no_show_disputed',
   'cancellation_settled',
+  'refund_requested',
+  'refund_request_updated',
   'booking_reminder',
   'booking_cancelled',
   'payment_success',

@@ -15,10 +15,17 @@
 // written back to notified_at / notify_error so an undelivered report is
 // visible as exactly that.
 //
+// A refund request (refundRequestId in the body) is ALSO emailed to the
+// booking's provider, since they are the one who can refund it. The request
+// row itself is made first by request_booking_refund(), which already
+// notified them in the app; this links the ticket to it and sends the email.
+// Neither step can fail the report.
+//
 // Requires a signed-in user (verify_jwt = true in config.toml).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { supportRequestEmail } from '../_shared/emailTemplates.ts';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { refundRequestedProviderEmail, supportRequestEmail } from '../_shared/emailTemplates.ts';
+import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_EMAIL = 'CERVICED <noreply@cerviced.co>';
@@ -55,6 +62,79 @@ function json(body: unknown, status = 200) {
   });
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Links this ticket to the caller's refund request and emails the provider.
+ * Only a request the caller filed themselves, with no ticket linked yet —
+ * so a replayed id can neither re-email a provider nor hijack someone else's
+ * request. Never throws: the report is already saved by the time this runs.
+ */
+async function notifyProviderOfRefundRequest(
+  supabase: SupabaseClient,
+  userId: string,
+  refundRequestId: string,
+  ticketId: string,
+): Promise<boolean> {
+  try {
+    const { data: linked, error: linkError } = await supabase
+      .from('refund_requests')
+      .update({ support_request_id: ticketId })
+      .eq('id', refundRequestId)
+      .eq('client_id', userId)
+      .is('support_request_id', null)
+      .in('status', ['with_provider', 'under_review'])
+      .select('booking_id, provider_id, reason')
+      .maybeSingle();
+    if (linkError) throw linkError;
+    if (!linked?.provider_id) return false;
+
+    const [{ data: booking, error: bookingError }, { data: provider, error: providerError }] = await Promise.all([
+      supabase
+        .from('bookings')
+        .select('customer_name, service_name_snapshot, booking_date, booking_time')
+        .eq('id', linked.booking_id)
+        .single(),
+      supabase
+        .from('providers')
+        .select('user_id')
+        .eq('id', linked.provider_id)
+        .single(),
+    ]);
+    if (bookingError) throw bookingError;
+    if (providerError) throw providerError;
+
+    // The provider's LOGIN address, same as every other provider email: the
+    // business address is unvalidated (see email-is-server-owned).
+    const { data: account, error: accountError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', provider.user_id)
+      .single();
+    if (accountError) throw accountError;
+    const to = account?.email;
+    if (!to) return false;
+
+    const { subject, html } = refundRequestedProviderEmail({
+      clientName: booking.customer_name?.trim() || 'A client',
+      service: booking.service_name_snapshot || 'their booking',
+      date: formatLongDate(booking.booking_date),
+      time: formatTime12(booking.booking_time),
+      reason: linked.reason,
+    });
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: FROM_EMAIL, to, subject, html }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
+  } catch (e) {
+    console.error(`[support] refund request ${refundRequestId}: provider not emailed:`, e);
+    return false;
+  }
+}
+
 /** Client-supplied context (platform, app version) — informational only, never trusted. */
 function clip(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -85,6 +165,9 @@ serve(async (req) => {
     const platform = clip(body?.platform, MAX_CONTEXT);
     const appVersion = clip(body?.appVersion, MAX_CONTEXT);
     const activeMode = clip(body?.activeMode, MAX_CONTEXT);
+    const refundRequestId = typeof body?.refundRequestId === 'string' && UUID.test(body.refundRequestId)
+      ? body.refundRequestId
+      : null;
 
     if (!CATEGORIES.includes(category)) return json({ error: 'Unknown category.' }, 400);
     if (!description) return json({ error: 'Description is required.' }, 400);
@@ -188,6 +271,12 @@ serve(async (req) => {
 
     const ref = `#${ticket.ticket_number}`;
     rows.unshift(['Ticket', ref]);
+    if (refundRequestId) rows.push(['Refund request', refundRequestId]);
+
+    // Runs alongside the support email; independent of it.
+    const providerEmailed = refundRequestId
+      ? notifyProviderOfRefundRequest(supabase, user.id, refundRequestId, ticket.id)
+      : Promise.resolve(false);
 
     // Built from the shared templates so the support inbox gets the same
     // letterhead as everything else we send — this was the last surface still
@@ -228,7 +317,7 @@ serve(async (req) => {
         .update({ notify_error: errText.slice(0, 2000) })
         .eq('id', ticket.id);
       console.error(`[support] ${ref} saved but not emailed: ${errText}`);
-      return json({ saved: true, notified: false, ticketNumber: ticket.ticket_number });
+      return json({ saved: true, notified: false, providerNotified: await providerEmailed, ticketNumber: ticket.ticket_number });
     }
 
     await supabase
@@ -236,7 +325,7 @@ serve(async (req) => {
       .update({ notified_at: new Date().toISOString() })
       .eq('id', ticket.id);
 
-    return json({ saved: true, notified: true, ticketNumber: ticket.ticket_number });
+    return json({ saved: true, notified: true, providerNotified: await providerEmailed, ticketNumber: ticket.ticket_number });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : String(error) }, 500);
   }

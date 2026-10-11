@@ -199,6 +199,30 @@ export enum PaymentStatus {
   FAILED = 'failed',
 }
 
+/**
+ * Where a client's refund request is (refund_requests.status):
+ * - `with_provider` — the provider has been told and can refund it
+ * - `under_review`  — the provider passed it to Cerviced, with a reason
+ * - `refunded`      — money went back while it was open, by any path
+ * - `declined`      — Cerviced reviewed it and isn't refunding
+ */
+export type RefundRequestStatus = 'with_provider' | 'under_review' | 'refunded' | 'declined';
+
+export interface RefundRequest {
+  id: string;
+  bookingId: string;
+  status: RefundRequestStatus;
+  reason: string;
+  message: string | null;
+  /** Cerviced's note when it resolved the request. */
+  outcomeNote: string | null;
+  /** £ that came back while the request was open. */
+  refundedAmount: number | null;
+  createdAt: string;
+  passedToCervicedAt: string | null;
+  resolvedAt: string | null;
+}
+
 export interface PaymentBreakdown {
   baseServicePrice: number;
   addOnsTotal: number;

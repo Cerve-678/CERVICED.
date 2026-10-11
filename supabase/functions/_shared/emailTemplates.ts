@@ -617,6 +617,61 @@ export function bookingConfirmationEmail(params: {
   };
 }
 
+/**
+ * A client asked for a refund — to the provider, who is the one who can
+ * issue it. Carries the client's picked reason but NOT their free-text note:
+ * that can hold anything (health details included), so it stays behind the
+ * app's sign-in rather than sitting in an inbox.
+ */
+export function refundRequestedProviderEmail(params: {
+  clientName: string;
+  service: string;
+  date: string;
+  time: string;
+  reason: string;
+}) {
+  const P = PROVIDER;
+  const e = {
+    clientName: esc(params.clientName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+    reason: esc(params.reason),
+  };
+  const detail = (label: string, value: string, first = false) => `
+          <tr><td style="padding:${first ? '0' : '13px'} 0 0;${first ? '' : `border-top:1px solid ${P.border};`}">
+            <div style="font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:2px;text-transform:uppercase;line-height:1.4;">${label}</div>
+            <div style="font-family:${BODY};color:${P.text};font-size:15px;line-height:1.6;padding:5px 0 13px;">${value}</div>
+          </td></tr>`;
+  return {
+    subject: `Refund requested — ${params.service} with ${params.clientName}`,
+    html: letter(P, {
+      preview: `${e.clientName} has asked for a refund on ${e.service} (${e.date}).`,
+      content:
+        eyebrow(P, 'Refund requested') +
+        headline(P, `${e.clientName} has asked for a refund`) +
+        lede(
+          P,
+          'Open the booking in the CERVICED app to read their note, then either refund it or pass it to Cerviced to review.',
+        ) +
+        panel(
+          P,
+          'The booking',
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${detail('Reason', e.reason, true)}${detail('Service', e.service)}${detail('When', `${e.date} &middot; ${e.time}`)}
+        </table>`,
+          8,
+        ) +
+        note(
+          P,
+          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy.",
+        ) +
+        button(P, 'cerviced://home', 'Open CERVICED') +
+        appHint(P),
+    }),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Support report — the one email that goes to US
 // ---------------------------------------------------------------------------

@@ -74,6 +74,8 @@ export type NotificationType =
   | "provider_no_show"
   | "payment_success"
   | "cancellation_settled"
+  | "refund_requested"
+  | "refund_request_updated"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"

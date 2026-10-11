@@ -22,8 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session cerviced-4d, branch feat/refund-request-timeline (2026-10-11)
 ```
+
+### PENDING APPLY 2026-10-11 (refund requests timeline)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261011100000 | `refund_requests_timeline` | **Written, NOT yet applied.** Adds `refund_requests` (client + provider SELECT only), `request_booking_refund()` (client files it, notifies the provider `refund_requested`), `pass_refund_request_to_cerviced()` (provider → under_review), a `bookings` AFTER UPDATE OF refunded_amount trigger that closes an open request as refunded, and a status trigger that notifies the client `refund_request_updated`. Rebuilds `notifications_type_check` from the live constraint (verified 2026-10-11) plus the two new types. Contains function bodies: **paste into the SQL editor**, then record the version in schema_migrations. Frontier at authoring: `20261003120000`. Deploy `send-support-request` AFTER this applies (it reads refund_requests). |
 
 ### Applied 2026-10-03 (no info pack on a cancelled booking)
 
