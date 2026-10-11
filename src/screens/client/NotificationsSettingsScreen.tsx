@@ -209,7 +209,7 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
           <>
             <Text style={[styles.section, { color: P.accentText }]}>BOOKINGS</Text>
             <ToggleRow icon="event-available" title="Booking Confirmed"   subtitle="Instant confirmation alerts"    value={prefs.bookingConfirm}  onToggle={() => toggle('bookingConfirm')}  palette={P} />
-            <ToggleRow icon="alarm"           title="Appointment Reminders" subtitle="24h and 1h before"            value={prefs.bookingReminder} onToggle={() => toggle('bookingReminder')} palette={P} />
+            <ToggleRow icon="alarm"           title="Appointment Reminders" subtitle="Before your confirmed appointments"            value={prefs.bookingReminder} onToggle={() => toggle('bookingReminder')} palette={P} />
             <ToggleRow icon="update"          title="Booking Updates"     subtitle="Changes, cancellations"          value={prefs.bookingUpdates}  onToggle={() => toggle('bookingUpdates')}  palette={P} />
 
             {/* Its own switch, separate from Appointment Reminders: maintenance
