@@ -20,6 +20,7 @@ interface NotificationPayload {
     type: string;
     priority: string;
     recipient_role: 'provider' | 'client';
+    metadata?: Record<string, unknown> | null;
   };
   schema: string;
 }
@@ -152,6 +153,10 @@ const PREF_KEY_BY_TYPE: Record<string, string> = {
   post_appt_check_in: 'promotions',
   // "New Providers — Professionals near you"
   new_provider: 'newProviders',
+  // "Maintenance Reminders" — opt-in. The DB already writes no maintenance
+  // notification while this is off; gating the push too is defence in depth.
+  maintenance_due: 'maintenanceReminders',
+  aftercare_available: 'maintenanceReminders',
 };
 
 // Must match DEFAULT_NOTIF_PREFS in databaseService.ts.
@@ -162,6 +167,7 @@ const DEFAULT_PREFS: Record<string, boolean> = {
   promotions: false,
   newProviders: true,
   weeklySummary: false,
+  maintenanceReminders: false,
 };
 
 /**
@@ -305,6 +311,12 @@ serve(async (req) => {
           notification_id: payload.record.id,
           type: payload.record.type,
           recipient_role: payload.record.recipient_role,
+          // Maintenance pushes are deliberately generic on the lock screen;
+          // the tap opens the item itself, so its id rides in the payload.
+          maintenance_item_id:
+            typeof payload.record.metadata?.['maintenance_item_id'] === 'string'
+              ? payload.record.metadata['maintenance_item_id']
+              : undefined,
         },
       }),
     });

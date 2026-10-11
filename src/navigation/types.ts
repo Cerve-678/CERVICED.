@@ -170,7 +170,9 @@ export type ProfileStackParamList = {
    *  Confirm Your Details state, is still mounted) instead of falling back to
    *  ProfileMain. */
   ProfileInfo: { returnToTab?: string } | undefined;
-  BeautyProfile: undefined;
+  /** `openMaintenance` lands on the Maintenance view (a maintenance push or
+   *  in-app notification); `focusItemId` scrolls to that item. */
+  BeautyProfile: { openMaintenance?: boolean; focusItemId?: string } | undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;
   PaymentMethods: undefined;

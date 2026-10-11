@@ -8,7 +8,7 @@
 ## Address release
 Curated: [[Address Release]] · **88 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/services/databaseService.ts` _(168)_
+- `src/services/databaseService.ts` _(172)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(74)_
@@ -68,8 +68,8 @@ Curated: [[Availability & Slots]] · **165 files**
 - `src/components/AvailabilityCard.tsx` _(24)_
 - `src/features/providers/useProviderProfileData.ts` _(22)_
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(21)_
+- `src/types/database.ts` _(21)_
 - `src/screens/client/BookingsScreen.tsx` _(20)_
-- `src/types/database.ts` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
 - … +135 more
 
@@ -110,8 +110,8 @@ Curated: [[Payments]] · **129 files**
 ## Booking flow
 Curated: [[Booking Flow]] · **255 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
+- `src/services/databaseService.ts` _(715)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/services/databaseService.ts` _(684)_
 - `src/screens/client/CartScreen.tsx` _(597)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(532)_
 - `src/services/becca/capabilities/client.ts` _(502)_
@@ -144,8 +144,8 @@ Curated: [[Booking Flow]] · **255 files**
 ## Notifications
 Curated: [[Notifications]] · **155 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(298)_
-- `src/services/databaseService.ts` _(154)_
+- `src/screens/shared/NotificationsScreen.tsx` _(302)_
+- `src/services/databaseService.ts` _(168)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(102)_
 - `supabase/notification_recipient_role.sql` _(91)_
@@ -155,7 +155,7 @@ Curated: [[Notifications]] · **155 files**
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(52)_
 - `supabase/automation_jobs.sql` _(51)_
-- `src/services/notificationTapHandler.ts` _(45)_
+- `src/services/notificationTapHandler.ts` _(46)_
 - `src/services/becca/capabilities/client.ts` _(42)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_
@@ -163,6 +163,7 @@ Curated: [[Notifications]] · **155 files**
 - `supabase/fix_pending_booking_provider_reminder.sql` _(38)_
 - `src/screens/provider/ProviderAutomationsScreen.tsx` _(37)_
 - `supabase/waitlist_holds.sql` _(32)_
+- `src/screens/client/NotificationsSettingsScreen.tsx` _(30)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(29)_
 - `supabase/phase1_schema.sql` _(29)_
 - `src/navigation/RootNavigation.tsx` _(28)_
@@ -171,13 +172,12 @@ Curated: [[Notifications]] · **155 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(26)_
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
-- `src/screens/client/NotificationsSettingsScreen.tsx` _(23)_
 - `supabase/notifications_full_matrix.sql` _(23)_
 - … +125 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **75 files**
-- `src/services/databaseService.ts` _(67)_
+- `src/services/databaseService.ts` _(69)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/features/providers/goLiveStatus.ts` _(46)_
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **163 files**
 
 ## Auth
 Curated: [[Contexts]] · **174 files**
-- `src/services/databaseService.ts` _(255)_
+- `src/services/databaseService.ts` _(264)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(141)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
@@ -316,7 +316,7 @@ Curated: [[Services]] · **44 files**
 - `src/screens/shared/BeccaScreen.tsx` _(94)_
 - `src/services/becca/capabilities/client.ts` _(51)_
 - `src/services/becca/engine.ts` _(50)_
-- `src/services/databaseService.ts` _(41)_
+- `src/services/databaseService.ts` _(42)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_
 - `src/services/becca/types.ts` _(34)_
 - `src/components/ChatComponents.tsx` _(31)_

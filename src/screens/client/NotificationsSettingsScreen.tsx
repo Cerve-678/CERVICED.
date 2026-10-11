@@ -68,6 +68,7 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
     promotions: false,
     newProviders: true,
     weeklySummary: false,
+    maintenanceReminders: false,
   });
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -210,6 +211,13 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
             <ToggleRow icon="event-available" title="Booking Confirmed"   subtitle="Instant confirmation alerts"    value={prefs.bookingConfirm}  onToggle={() => toggle('bookingConfirm')}  palette={P} />
             <ToggleRow icon="alarm"           title="Appointment Reminders" subtitle="24h and 1h before"            value={prefs.bookingReminder} onToggle={() => toggle('bookingReminder')} palette={P} />
             <ToggleRow icon="update"          title="Booking Updates"     subtitle="Changes, cancellations"          value={prefs.bookingUpdates}  onToggle={() => toggle('bookingUpdates')}  palette={P} />
+
+            {/* Its own switch, separate from Appointment Reminders: maintenance
+                reminders are opt-in (off until the client turns them on here
+                or in Maintenance setup). The 24h prep line rides on the
+                Appointment Reminders switch above. */}
+            <Text style={[styles.section, { color: P.accentText }]}>BEAUTY MAINTENANCE</Text>
+            <ToggleRow icon="heart" title="Maintenance Reminders" subtitle="When something you track is due, and aftercare notes" value={prefs.maintenanceReminders} onToggle={() => toggle('maintenanceReminders')} palette={P} />
 
             <Text style={[styles.section, { color: P.accentText }]}>DISCOVER</Text>
             <ToggleRow icon="local-offer"  title="Offers & Promotions" subtitle="Deals from your saved providers" value={prefs.promotions}    onToggle={() => toggle('promotions')}    palette={P} />

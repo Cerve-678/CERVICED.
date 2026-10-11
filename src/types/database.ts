@@ -101,7 +101,13 @@ export type NotificationType =
   | "daily_recap" // provider's automated today's-schedule summary (provider-facing)
   | "schedule_fully_booked" // provider's whole calendar has no openings in their alert window (provider-facing)
   | "pending_booking_reminder" // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
-  | "points_earned"; // client earned loyalty points (client-facing)
+  | "points_earned" // client earned loyalty points (client-facing)
+  /** Beauty Maintenance: something the client tracks is due. Generic copy;
+   *  metadata.maintenance_item_id says which item. Opt-in only. */
+  | "maintenance_due"
+  /** Beauty Maintenance: the completed booking's provider wrote aftercare
+   *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
+  | "aftercare_available";
 
 export type NotificationPriority = "high" | "medium" | "low";
 

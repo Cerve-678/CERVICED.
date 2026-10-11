@@ -65,7 +65,8 @@ interface Notification {
       | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
       | 'info_pack_received' | 'intake_form_completed' | 'address_released'
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
-      | 'schedule_fully_booked' | 'points_earned';
+      | 'schedule_fully_booked' | 'points_earned'
+      | 'maintenance_due'    | 'aftercare_available';
   title: string;
   message: string;
   timestamp: string;
@@ -78,6 +79,8 @@ interface Notification {
   bookingId?: string | undefined;
   status?: string | undefined;
   providerId?: string | undefined; // For new_provider notifications
+  /** Beauty Maintenance: which item a maintenance_due row is about. */
+  maintenanceItemId?: string | undefined;
 }
 
 // ── Skeleton Notification Row ───────────────────────────────────
@@ -148,6 +151,13 @@ const PROVIDER_INLINE_BOOKING_ACTION_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 // Haptic tiers per DESIGN_SYSTEM.md — fire-and-forget, never block a tap.
+/** The maintenance item a maintenance_due row points at, if it carries one. */
+function maintenanceItemIdOf(metadata: unknown): string | undefined {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+  const id = (metadata as Record<string, unknown>)['maintenance_item_id'];
+  return typeof id === 'string' ? id : undefined;
+}
+
 const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
 const hapticMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
 const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
@@ -262,6 +272,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     provider: '',
     service: '',
     bookingId: db.booking_id ?? undefined,
+    maintenanceItemId: maintenanceItemIdOf(db.metadata),
     providerId: db.provider_id ?? undefined,
   });
 
@@ -503,6 +514,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       'post_appt_check_in',
       'rebooking_nudge',
       'points_earned',
+      'maintenance_due',
+      'aftercare_available',
     ]);
     if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
       logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
@@ -704,6 +717,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         dismissThenNavigate(() => navigateNested('Profile', 'Points'));
       }, 300);
+    } else if (notification.type === 'maintenance_due' || notification.type === 'aftercare_available') {
+      // Beauty Maintenance. The notification is generic by design (nothing
+      // health-adjacent on a lock screen), so the detail is the destination:
+      // the Maintenance view, scrolled to the item when we know which one.
+      // Client-only, guarded above via CLIENT_ONLY_TYPES.
+      const focusItemId = notification.maintenanceItemId;
+      defer(() => {
+        dismissThenNavigate(() =>
+          navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
+        );
+      }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
@@ -780,7 +804,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in'].includes(type)) return P.accentText;
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available'].includes(type)) return P.accentText;
     return '#FF9800';
   };
 
@@ -856,6 +880,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Schedule';
       case 'points_earned':
         return 'View Points';
+      case 'maintenance_due':
+        return 'View Maintenance';
+      case 'aftercare_available':
+        return 'Read Aftercare';
       default:
         return 'View';
     }
