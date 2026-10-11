@@ -8220,6 +8220,28 @@ export async function getMaintenanceBookingContext(): Promise<MaintenanceBooking
 }
 
 /**
+ * Which services and providers the client already has an upcoming booking
+ * with — what makes a maintenance item "booked" rather than due. One light
+ * query for the Profile tab's "N due" badge.
+ */
+export async function getUpcomingMaintenanceCoverage(): Promise<{ serviceIds: string[]; providerIds: string[] }> {
+  const userId = await requireSessionUserId();
+  const { data, error } = await supabase
+    .from("client_bookings")
+    .select("service_id, provider_id")
+    .eq("user_id", userId)
+    .in("status", ["pending", "confirmed", "in_progress"])
+    .gte("booking_date", dateToYMD(new Date()))
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
+  const rows = (data ?? []) as { service_id: string | null; provider_id: string }[];
+  return {
+    serviceIds: [...new Set(rows.map((r) => r.service_id).filter((id): id is string => !!id))],
+    providerIds: [...new Set(rows.map((r) => r.provider_id))],
+  };
+}
+
+/**
  * Where "Rebook" can go for an item: the provider's public slug when they're
  * live and active (client-facing — has_gone_live gated), plus the service when
  * it's still offered. Null sends the client to Search instead.
