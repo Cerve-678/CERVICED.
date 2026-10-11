@@ -82,9 +82,9 @@ Curated: [[Payments]] · **130 files**
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
+- `src/components/ProviderStripePayments.tsx` _(102)_
 - `src/features/bookings/receipt.ts` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
-- `src/components/ProviderStripePayments.tsx` _(90)_
 - `src/features/bookings/paymentPresentation.ts` _(55)_
 - `src/types/database.ts` _(52)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(48)_
@@ -192,10 +192,10 @@ Curated: [[Provider Onboarding & Go-Live]] · **75 files**
 - `supabase/dev_reset_provider.sql` _(8)_
 - `src/services/becca/capabilities/client.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
+- `src/components/ProviderStripePayments.tsx` _(5)_
 - `src/screens/auth/SignUpStep5Screen.tsx` _(5)_
 - `src/services/acuityTransferService.ts` _(5)_
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
-- `src/components/ProviderStripePayments.tsx` _(4)_
 - `src/constants/featureFlags.ts` _(4)_
 - `src/screens/client/CartScreen.tsx` _(4)_
 - `src/contexts/AuthContext.tsx` _(3)_
