@@ -5,7 +5,7 @@
 
 #generated
 
-**2292 functions** across **315 files**.
+**2303 functions** across **319 files**.
 
 ### `src/components/` (44)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -53,7 +53,8 @@
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
 
-### `src/constants/` (6)
+### `src/constants/` (7)
+- `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
 - `PlatformDimensions.ts` — for
 - `providerFonts.ts` — **resolveProviderFontFamily**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · valid · **withAlpha**
@@ -104,6 +105,9 @@
 
 ### `src/features/intake-forms/` (1)
 - `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst
+
+### `src/features/maintenance/` (1)
+- `presentation.ts` — byDue · **countDueItems** · dayDiff · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **needsAttention** · **presentMaintenanceItem**
 
 ### `src/features/provider-registration/` (12)
 - `BufferPicker.tsx` — **BufferPicker**
@@ -284,7 +288,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (45)
+### `src/utils/` (46)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -304,6 +308,7 @@
 - `fuzzyMatch.ts` — levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar**
 - `hairTypeMatch.ts` — **matchesHairType**
 - `logger.ts` — **clearLogBuffer** · formatArgs · **getLogBuffer** · **installAuthErrorFilter** · noop · pushToBuffer · **reportError** · **setErrorReporter** · **subscribeToLogBuffer**
+- `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer
 - `masonryHeight.ts` — **getMasonryItemHeight** · hashToUnit
 - `mergeSavedExploreCards.ts` — **mergeSavedExploreCards**
 - `newestAddedItem.ts` — **newestAddedItem**
