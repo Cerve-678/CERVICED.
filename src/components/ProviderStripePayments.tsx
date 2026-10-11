@@ -4,10 +4,12 @@ import * as WebBrowser from 'expo-web-browser';
 import type { StripeConnectReturn } from '../utils/stripeConnectReturn';
 import { PaymentRequestError } from '../utils/paymentRequestError';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
-import { newRequestId } from '../utils/requestId';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, type ConnectStatus, type ProviderPayout } from '../services/providerPaymentService';
+import { useAppDialog } from './AppDialog';
+import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
+import { useTheme } from '../contexts/ThemeContext';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, type ConnectStatus, type ProviderPayout } from '../services/providerPaymentService';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
@@ -21,6 +23,7 @@ export interface PaymentSetupSummary { deposit: string; inPerson: string }
 
 export default function ProviderStripePayments({ stripeReturn, setup, children }: { stripeReturn?: StripeConnectReturn; setup?: PaymentSetupSummary | undefined; children?: React.ReactNode }) {
   const C = useBusinessPalette();
+  const { isDarkMode } = useTheme();
   const [section, setSection] = useState<'overview' | 'bookings' | 'payouts' | 'settings'>('overview');
   const [finance, setFinance] = useState<ProviderFinance | null>(null);
   const [financeError, setFinanceError] = useState('');
@@ -111,26 +114,15 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stripeReturn.result === 'refresh') void openStripe('onboard');
   }, [stripeReturn, load, openStripe]);
-  const requestRefund = (row: ProviderPayout) => {
-    const share = new Intl.NumberFormat('en-GB', { style: 'currency', currency: row.currency }).format(row.payout_amount / 100);
-    Alert.alert('Refund this payment?', `This refunds ${row.booking?.customer_name || 'the client'} in full for ${row.booking?.service_name_snapshot || 'this booking'} and reverses your ${share} share. It does not cancel their appointment.`, [
-      { text: 'Keep payment', style: 'cancel' },
-      { text: 'Refund payment', style: 'destructive', onPress: async () => {
-        if (opening.current) return;
-        opening.current = true;
-        setBusy(true);
-        try {
-          const completed = await refundProviderBooking({ bookingId: row.booking_id, reason: 'Refunded from Payments', requestId: newRequestId() });
-          await load();
-          Alert.alert(completed ? 'Refund issued' : 'Refund processing', completed
-            ? 'The refund has been issued. Their bank may take a few days to show it.'
-            : 'Stripe is processing the refund. Please check again later.');
-        } catch {
-          setError('We could not confirm the refund. Refresh payment status before trying again.');
-        } finally { opening.current = false; setBusy(false); }
-      } },
-    ]);
-  };
+  // Same full-or-partial refund sheet as the booking detail screen; the
+  // confirmation goes through the in-app dialog, never a native alert.
+  const [refundRow, setRefundRow] = useState<ProviderPayout | null>(null);
+  const { showAlert, DialogHost } = useAppDialog();
+  const handleRefunded = useCallback(({ title, message }: RefundIssued) => {
+    setRefundRow(null);
+    void load();
+    showAlert(title, message);
+  }, [load, showAlert]);
   const tabs = [
     { key: 'overview', label: 'Overview', icon: 'grid-outline' },
     { key: 'bookings', label: 'Booking payments', icon: 'receipt-outline' },
@@ -236,7 +228,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       <Text style={[styles.sectionNote, { color: C.sub }]}>Latest 50 online payments. Open a booking payment to see your share and release status.</Text>
       {!!payoutError && <Notice text={payoutError} />}
       {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
-      {payouts.map(row => <BookingPayment key={row.id} row={row} busy={busy} onRefund={() => requestRefund(row)} />)}
+      {payouts.map(row => <BookingPayment key={row.id} row={row} busy={busy} onRefund={() => setRefundRow(row)} />)}
     </>}
 
     {section === 'payouts' && <>
@@ -266,6 +258,14 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </Card>
     </>}
     {section === 'settings' && children}
+    {refundRow && <IssueRefundSheet
+      booking={{ id: refundRow.booking_id, customerName: refundRow.booking?.customer_name, serviceName: refundRow.booking?.service_name_snapshot }}
+      palette={{ ...C, iconBg: `${C.accent}1F` }}
+      isDarkMode={isDarkMode}
+      onClose={() => setRefundRow(null)}
+      onRefunded={handleRefunded}
+    />}
+    <DialogHost />
   </>;
 }
 
