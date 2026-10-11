@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### PENDING APPLY 2026-10-10 (Beauty Maintenance)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261010120000 | `beauty_maintenance` | **Written, NOT yet applied** (branch `feat/beauty-maintenance`). Frontier at authoring: `20261003120000`, re-checked 2026-10-11. New owner-only tables `maintenance_service_types` / `maintenance_settings` / `maintenance_items`; widens `notifications_type_check` (+`maintenance_due`, `aftercare_available`); new trigger `on_booking_completed_maintenance`; new cron `client-maintenance-reminders` (09:30 daily). Redefines three live functions, each reproduced from verified-live `pg_get_functiondef` with commented deltas: `process_client_appointment_reminders` (prep line), `process_rebooking_nudges` (maintenance skip; **gains** `SET search_path`), `delete_client_profile` (deletes the two new tables). Re-diff those three against live immediately before applying — another session may have redefined them since. Apply via the SQL editor (the MCP `apply_migration` stamps its own version; rename the file to match if used). |
+
 ### Applied 2026-10-03 (no info pack on a cancelled booking)
 
 | Authored version | Name | Status |
