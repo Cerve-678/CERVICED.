@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-11 (sign-up booking link staged on users)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261011102423 | `users_external_booking_url` | **Applied 2026-10-11** via `apply_migration` (authored as 20261010120000, renamed to the version the tool recorded). Adds nullable `users.external_booking_url text` — the "I use my own booking link" answer from SignUpStep1, staged like the other sign-up answers and copied to `providers.external_booking_url` on the first InfoReg save. Additive only; table-level grants cover the new column. Frontier at authoring: `20261003120000`. Note: `wt-service-chips`' committed lock (session 4fe95792, since 2026-09-08, unrelated service-type cooldown migration) was found stale — main showed `(none)` and later migrations had already been applied over it. |
+
 ### Applied 2026-10-03 (no info pack on a cancelled booking)
 
 | Authored version | Name | Status |

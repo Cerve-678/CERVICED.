@@ -9,7 +9,7 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 | Piece | State |
 |---|---|
 | Book button opens their page **inside** the app | Built — `fix/external-booking-in-app` (`src/features/providers/externalBookingLink.ts`) |
-| Sign-up asks for the link (Step 1, "I use my own booking link") | Built — `feat/signup-redesign`. Needs migration `20261010120000_users_external_booking_url` applied first |
+| Sign-up asks for the link (Step 1, "I use my own booking link") | Built — `feat/signup-redesign`. Migration `20261011102423_users_external_booking_url` applied 2026-10-11 |
 | Link-only mode as a real provider column (`booking_mode`) | Not started |
 | Their limited home screen, go-live, analytics | Not started |
 | Client "Did you book?" → Upcoming | Not started (needs a new table) |
