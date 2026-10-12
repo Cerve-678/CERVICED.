@@ -17,7 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
-import StepProgressIndicator from '../../components/StepProgressIndicator';
+import SignUpHeader from '../../components/SignUpHeader';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -50,11 +50,6 @@ const PRICE_RANGES: { v: 'budget' | 'mid' | 'premium' | 'luxury'; l: string }[] 
   { v: 'premium', l: '£65–£100' },
   { v: 'luxury',  l: '£100+' },
 ];
-const TEAM_SIZES: { v: 'solo' | 'small_team' | 'large_team'; l: string }[] = [
-  { v: 'solo',        l: 'Just me' },
-  { v: 'small_team',  l: '2–5 people' },
-  { v: 'large_team',  l: '6+ people' },
-];
 const CONTACT_METHODS: { v: string; l: string }[] = [
   { v: 'in_app',   l: 'In-app messages' },
   { v: 'phone',    l: 'Phone' },
@@ -86,7 +81,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const servicesY         = React.useRef(0);
   const locationY        = React.useRef(0);
   const priceRangeY      = React.useRef(0);
-  const teamSizeY        = React.useRef(0);
   const contactMethodsY  = React.useRef(0);
   const paymentMethodsY   = React.useRef(0);
 
@@ -106,7 +100,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const [selectedLocation, setSelectedLocation] = useState<string>(data.location);
   const [selectedPriceRange, setSelectedPriceRange] = useState<typeof data.priceRange>(data.priceRange);
   const [yearsExperience, setYearsExperience] = useState<string>(data.yearsExperience);
-  const [selectedTeamSize, setSelectedTeamSize] = useState<typeof data.teamSize>(data.teamSize);
   const [selectedContactMethods, setSelectedContactMethods] = useState<string[]>(
     data.preferredContactMethods.length ? data.preferredContactMethods : ['in_app']
   );
@@ -114,6 +107,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
   const isUser = data.accountType === 'user';
   const isProvider = data.accountType === 'provider';
+  const usesOwnLink = data.externalBookingUrl !== '';
 
   const scrollTo = (yRef: React.MutableRefObject<number>) =>
     scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current - 24), animated: true });
@@ -203,11 +197,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     setSelectedPriceRange(prev => prev === range ? '' : range);
   };
 
-  const pickTeamSize = (size: NonNullable<typeof data.teamSize> | '') => {
-    Haptics.selectionAsync().catch(() => {});
-    setSelectedTeamSize(prev => prev === size ? '' : size);
-  };
-
   const toggleContactMethod = (method: string) => {
     Haptics.selectionAsync().catch(() => {});
     setSelectedContactMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
@@ -226,9 +215,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
         location: selectedLocation,
         yearsExperience: yearsExperience.trim(),
         priceRange: selectedPriceRange,
-        teamSize: selectedTeamSize,
         preferredContactMethods: selectedContactMethods,
-        preferredPaymentMethods: selectedPaymentMethods,
+        preferredPaymentMethods: usesOwnLink ? [] : selectedPaymentMethods,
       });
     } else {
       updateData({
@@ -253,9 +241,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
         !selectedBusinessType          ? businessTypeY :
         !selectedLocation.trim()      ? locationY :
         !selectedPriceRange           ? priceRangeY :
-        !selectedTeamSize             ? teamSizeY :
         !selectedContactMethods.length ? contactMethodsY :
-        !selectedPaymentMethods.length ? paymentMethodsY :
+        !usesOwnLink && !selectedPaymentMethods.length ? paymentMethodsY :
         null;
       if (firstEmptyY) {
         setShowErrors(true);
@@ -297,16 +284,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
-        {/* Back */}
-        <TouchableOpacity
-          style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
-        </TouchableOpacity>
-
-        <StepProgressIndicator currentStep={4} totalSteps={totalSteps} stepLabel={isProvider ? 'About Your Business' : 'Beauty Profile'} />
+        <SignUpHeader onBack={() => navigation.goBack()} currentStep={4} totalSteps={totalSteps} />
 
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: t.text }]}>{isProvider ? 'About Your Business' : 'Beauty Profile'}</Text>
@@ -548,21 +526,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               </View>
             </View>
 
-            {/* Who you work with */}
-            <View onLayout={(e: LayoutChangeEvent) => { teamSizeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedTeamSize ? '#DC2626' : t.text }]}>
-                WHO YOU WORK WITH{showErrors && !selectedTeamSize ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Are you solo or part of a team?</Text>
-              <View style={styles.chipsContainer}>
-                {TEAM_SIZES.map(({ v, l }) => (
-                  <TouchableOpacity key={v} style={chipStyle(selectedTeamSize === v)} onPress={() => pickTeamSize(v)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedTeamSize === v)}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
             {/* Contact preferences */}
             <View onLayout={(e: LayoutChangeEvent) => { contactMethodsY.current = e.nativeEvent.layout.y; }}>
               <Text style={[styles.sectionLabel, { color: showErrors && !selectedContactMethods.length ? '#DC2626' : t.text }]}>
@@ -578,7 +541,9 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               </View>
             </View>
 
-            {/* Preferred payment type */}
+            {/* Preferred payment type — not asked when bookings happen on the
+                professional's own booking page; that page owns payment. */}
+            {!usesOwnLink && (
             <View onLayout={(e: LayoutChangeEvent) => { paymentMethodsY.current = e.nativeEvent.layout.y; }}>
               <Text style={[styles.sectionLabel, { color: showErrors && !selectedPaymentMethods.length ? '#DC2626' : t.text }]}>
                 PREFERRED PAYMENT TYPE{showErrors && !selectedPaymentMethods.length ? '  — required' : ''}
@@ -592,6 +557,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
                 ))}
               </View>
             </View>
+            )}
 
           </>
         )}
@@ -620,8 +586,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  backIcon: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   header: { marginBottom: 28 },
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 32, letterSpacing: 1 },
   headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, marginTop: 8, lineHeight: 20 },

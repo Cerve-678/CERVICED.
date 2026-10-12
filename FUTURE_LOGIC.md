@@ -881,6 +881,15 @@ Scoped out of the 2026-08-20 Get In Touch / Communications source-of-truth split
 
 ## Signup Step 2b: "Take bookings here, or link out?" (provider path)
 
+> **IN PROGRESS (2026-10-10).** The product owner has decided the shape —
+> the full spec, status table and planned £5.99/month (free trial) pricing
+> for calendar sync + in-app messages live in the vault note
+> `docs/vault/Link-Only Providers.md`. Built so far: in-app booking page
+> (`fix/external-booking-in-app`) and the sign-up question, asked on Step 1
+> rather than a separate Step 2b (`feat/signup-redesign`). Everything is
+> free until the owner switches the subscription on. Points 1–5 below still
+> stand for the remaining work.
+
 ### What it means
 
 Right after someone picks **provider** at signup, offer a second page asking how

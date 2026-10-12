@@ -7498,13 +7498,14 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   price_range: string | null;
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
+  external_booking_url: string | null;
 } | null> {
   const { data, error } = await supabase
     .from("users")
     .select(
       "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
         "service_interests, service_locations, location_text, years_experience, team_size, accessibility_notes, languages_spoken, specialties, " +
-        "price_range, preferred_contact_methods, preferred_payment_methods",
+        "price_range, preferred_contact_methods, preferred_payment_methods, external_booking_url",
     )
     .eq("id", userId)
     .single();
@@ -7533,6 +7534,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     price_range: string | null;
     preferred_contact_methods: string[] | null;
     preferred_payment_methods: string[] | null;
+    external_booking_url: string | null;
   };
 }
 
@@ -7570,7 +7572,7 @@ export async function upgradeUserToProvider(
     serviceLocations?: string[];
     yearsExperience?: string;
     priceRange?: string;
-    teamSize?: string;
+    externalBookingUrl?: string;
     preferredContactMethods?: string[];
     accessibilityNotes?: string;
     languagesSpoken?: string[];
@@ -7608,7 +7610,9 @@ export async function upgradeUserToProvider(
       ...(extras?.yearsExperience && !Number.isNaN(parseInt(extras.yearsExperience, 10))
         ? { years_experience: parseInt(extras.yearsExperience, 10) }
         : {}),
-      ...(extras?.teamSize ? { team_size: extras.teamSize } : {}),
+      ...(extras?.externalBookingUrl
+        ? { external_booking_url: extras.externalBookingUrl }
+        : {}),
       ...(extras?.accessibilityNotes
         ? { accessibility_notes: extras.accessibilityNotes }
         : {}),
@@ -7643,6 +7647,7 @@ export async function upgradeUserToProvider(
   // waiting on their next InfoRegScreen save.
   if (
     extras?.priceRange ||
+    extras?.externalBookingUrl ||
     extras?.preferredContactMethods?.length ||
     extras?.preferredPaymentMethods?.length
   ) {
@@ -7650,6 +7655,9 @@ export async function upgradeUserToProvider(
       .from("providers")
       .update({
         ...(extras?.priceRange ? { price_tier: extras.priceRange } : {}),
+        ...(extras?.externalBookingUrl
+          ? { external_booking_url: extras.externalBookingUrl }
+          : {}),
         ...(extras?.preferredContactMethods?.length
           ? { preferred_contact_methods: extras.preferredContactMethods }
           : {}),

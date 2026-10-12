@@ -5,7 +5,7 @@
 
 #generated
 
-**2297 functions** across **317 files**.
+**2299 functions** across **317 files**.
 
 ### `src/components/` (45)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -44,11 +44,11 @@
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
 - `SafeArea.tsx` — **SafeAreaView** · value · **WindowControlsInsetProvider**
 - `SafeHeader.tsx` — SafeHeader
+- `SignUpHeader.tsx` — SignUpHeader
 - `SlideUpOnMount.tsx` — **SlideUpOnMount**
 - `SlidingTabs.tsx` — handleLayout · handleNaturalLayout · row · slideTo · SlidingTabs
 - `SpecialityMultiSelect.tsx` — addCustom · close · customCandidate · filtered · **SpecialityMultiSelect** · toggle
 - `StatusBarBlur.tsx` — StatusBarBlur
-- `StepProgressIndicator.tsx` — StepProgressIndicator
 - `TabIcon.tsx` — renderIcon · TabIcon
 - `ThemedBackground.tsx` — **ThemedBackground**
 - `ThemedText.tsx` — **ThemedText**
@@ -173,10 +173,10 @@
 - `NewPasswordScreen.tsx` — handleSave · NewPasswordScreen
 - `ReactivateAccountScreen.tsx` — formatDeletionDate · handleDecline · handleReactivate · ReactivateAccountScreen
 - `ResetPasswordOTPScreen.tsx` — handleKeyPress · handleOtpChange · handleResend · handleVerify · ResetPasswordOTPScreen
-- `SignUpStep1Screen.tsx` — SignUpStep1Screen
+- `SignUpStep1Screen.tsx` — handleContinue · pick · SignUpStep1Screen · tile
 - `SignUpStep2Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep3Screen · validate
-- `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · pickTeamSize · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
+- `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
 - `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · finishHatSwitch · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
 - `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · WelcomeScreen
 

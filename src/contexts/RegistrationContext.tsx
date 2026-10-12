@@ -20,6 +20,8 @@ export interface RegistrationData {
   instagram: string;
   tiktok: string;
   website: string;
+  /** Set when a professional takes bookings on their own page (Fresha, Treatwell…). Empty = books through CERVICED. */
+  externalBookingUrl: string;
   // A BusinessType value (or '' before the picker is answered) — asked once
   // here instead of only in the post-login provider profile screen, since it
   // also decides whether a private address needs to be collected there. Kept
@@ -53,7 +55,6 @@ export interface RegistrationData {
   // InfoRegScreen's first-save prefill — same route as team_size/price_range.
   yearsExperience: string;
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
-  teamSize: 'solo' | 'small_team' | 'large_team' | '';
   preferredContactMethods: string[];
   preferredPaymentMethods: string[];
   // Provider "Tell me more" (Step 5) — accessibility/language/specialty
@@ -93,6 +94,7 @@ const initialData: RegistrationData = {
   instagram: '',
   tiktok: '',
   website: '',
+  externalBookingUrl: '',
   businessType: '',
   // Beauty profile
   hairType: '',
@@ -115,7 +117,6 @@ const initialData: RegistrationData = {
   location: '',
   yearsExperience: '',
   priceRange: '',
-  teamSize: '',
   preferredContactMethods: [],
   preferredPaymentMethods: [],
   // Provider "Tell me more"

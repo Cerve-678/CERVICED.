@@ -448,3 +448,23 @@ they are re-enable blockers.
 
 **Not changed unilaterally** — consent design and Terms wording are product/legal
 calls. Flagging for the re-enable checklist, not resolving.
+
+## 16. Link-only providers: off-platform bookings and a planned subscription (2026-10-10)
+
+See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
+
+1. **Off-platform booking.** Tapping Book sends a client to the provider's own
+   booking site (opened inside the app). The booking, payment, cancellation and
+   data handling all happen under that site's terms, not ours. `TermsScreen`
+   says nothing about this yet.
+2. **Client-entered "booked elsewhere" entries.** The client's Upcoming list
+   will hold appointments CERVICED never saw. The copy is deliberately framed as
+   the client's own note ("we just keep track of them") — keep it that way so
+   the app never appears to confirm or vouch for an external booking (same
+   boundary as item 4).
+3. **Planned £5.99/month subscription with a free trial** (calendar sync +
+   in-app messages). Free for now; before it is switched on it needs Terms
+   wording for price, trial length, auto-renewal, cancellation and refunds, and
+   the App Store / Play billing rules for in-app subscriptions.
+
+**Not changed unilaterally** — flagged for the product owner.
