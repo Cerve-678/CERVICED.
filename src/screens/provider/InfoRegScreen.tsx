@@ -23,7 +23,8 @@ import {
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -3992,6 +3993,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   return (
     <InfoRegChromeContext.Provider value={chromeTheme}>
     <SafeAreaProvider>
+    <WindowControlsInsetProvider>
       {/* Plain painted View instead of <ThemedBackground> — that component
           reads the app's shared ThemeContext directly, so it would follow
           the APP's dark/light mode, not this screen's own chrome theme
@@ -5519,6 +5521,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           <DialogHost />
         </SafeAreaView>
       </View>
+    </WindowControlsInsetProvider>
     </SafeAreaProvider>
     </InfoRegChromeContext.Provider>
   );

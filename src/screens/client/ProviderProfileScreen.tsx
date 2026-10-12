@@ -34,7 +34,8 @@ import {
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -3938,6 +3939,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   return (
     <SafeAreaProvider>
+    <WindowControlsInsetProvider>
       <ThemedBackground>
         {/* Hero photo/gradient — full-bleed backdrop; the rounded sheet below overlaps
             up onto its lower edge for a seamless card-over-photo transition.
@@ -5269,6 +5271,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </ScrollView>
         </SafeAreaView>
       </ThemedBackground>
+    </WindowControlsInsetProvider>
     </SafeAreaProvider>
   );
 };

@@ -48,7 +48,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 // land as a tap and open the editor.
 import { TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';

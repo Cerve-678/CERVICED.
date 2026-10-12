@@ -5,9 +5,9 @@
 
 #generated
 
-**2292 functions** across **315 files**.
+**2295 functions** across **316 files**.
 
-### `src/components/` (44)
+### `src/components/` (45)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -42,6 +42,7 @@
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
+- `SafeArea.tsx` — **SafeAreaView** · value · **WindowControlsInsetProvider**
 - `SafeHeader.tsx` — SafeHeader
 - `SlideUpOnMount.tsx` — **SlideUpOnMount**
 - `SlidingTabs.tsx` — handleLayout · handleNaturalLayout · row · slideTo · SlidingTabs
