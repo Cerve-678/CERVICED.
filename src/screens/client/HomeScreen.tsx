@@ -479,13 +479,14 @@ export default function HomeScreen() {
     };
 
     // Fetch live providers — shows empty state if DB has no data
-    Promise.all([getProviders(), getOwnProviderIds()]).then(([data, ownIds]) => {
-      setOwnProviderIds(ownIds);
-      setLiveProviders(data.map(mapDbProvider));
-      setProvidersLoading(false);
-    }).catch(() => {
-      setProvidersLoading(false);
-    });
+    // The visible provider rail does not depend on the owner-id guard. Let it
+    // paint as soon as its own query lands; the guard can reconcile quietly
+    // afterwards instead of holding the whole Home screen behind it.
+    getProviders()
+      .then(data => setLiveProviders(data.map(mapDbProvider)))
+      .catch(() => {})
+      .finally(() => setProvidersLoading(false));
+    getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
 
     // Ask for location once on mount — same permission string already
     // declared in app.json ("...show nearby beauty service providers").

@@ -18,7 +18,8 @@ import {
   Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -195,6 +196,7 @@ function SummaryShell({
     // come back zero without it. Same pattern as ImageDetailModal and
     // ProviderProfileScreen.
     <SafeAreaProvider>
+    <WindowControlsInsetProvider>
       <SafeAreaView style={[styles.summaryScreen, { backgroundColor: P.bg }]} edges={['top', 'bottom', 'left', 'right']}>
         <View style={[styles.summaryHeader, { borderBottomColor: P.border }]}>
           <TouchableOpacity
@@ -227,6 +229,7 @@ function SummaryShell({
           <View style={styles.reviewButtonRow}>{actions}</View>
         </View>
       </SafeAreaView>
+    </WindowControlsInsetProvider>
     </SafeAreaProvider>
   );
 }
@@ -274,8 +277,12 @@ function checkoutTotalsFrom(priced: EffectiveCartItem[]): { subtotal: number; fe
     (sum, { isDeposit, effectivePrice }) => (isDeposit ? sum : sum + effectivePrice),
     0,
   );
-  const isDepositOnlyCheckout = priced.length > 0 && priced.every(({ isDeposit }) => isDeposit);
-  const fee = calculatePlatformFee(fullPaymentSubtotal, isDepositOnlyCheckout);
+  // A deposit-only checkout is tiered on the full service price, not the deposit.
+  const depositServiceSubtotal = priced.reduce(
+    (sum, { isDeposit, item }) => (isDeposit ? sum + getCartItemFullPrice(item) : sum),
+    0,
+  );
+  const fee = calculatePlatformFee(fullPaymentSubtotal, depositServiceSubtotal);
   const subtotal = priced.reduce((sum, { effectivePrice }) => sum + effectivePrice, 0);
   return { subtotal, fee, total: subtotal + fee };
 }
@@ -2575,15 +2582,17 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flaggedProvidersKey]);
 
-  // The fee is separate from provider money: tiered for a full-payment
-  // checkout, or £0.99 for an all-deposit checkout.
+  // The fee is separate from provider money: tiered on the full-payment
+  // subtotal, or on the full service price for an all-deposit checkout.
   const platformFee = useMemo(() => {
-    const fullPaymentSubtotal = items.reduce((sum, item) => {
-      if (getServiceBooking(item.id).isDepositOnly) return sum;
-      return sum + Math.max(0, getCartItemFullPrice(item) - (itemPromoDiscounts[item.id] ?? 0));
-    }, 0);
-    const isDepositOnlyCheckout = items.length > 0 && items.every(item => getServiceBooking(item.id).isDepositOnly);
-    return calculatePlatformFee(fullPaymentSubtotal, isDepositOnlyCheckout);
+    let fullPaymentSubtotal = 0;
+    let depositServiceSubtotal = 0;
+    for (const item of items) {
+      const price = Math.max(0, getCartItemFullPrice(item) - (itemPromoDiscounts[item.id] ?? 0));
+      if (getServiceBooking(item.id).isDepositOnly) depositServiceSubtotal += price;
+      else fullPaymentSubtotal += price;
+    }
+    return calculatePlatformFee(fullPaymentSubtotal, depositServiceSubtotal);
   }, [items, getServiceBooking, itemPromoDiscounts]);
 
   const effectiveFinalTotal = useMemo(

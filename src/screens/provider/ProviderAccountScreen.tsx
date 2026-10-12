@@ -11,7 +11,8 @@ import {
   Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';

@@ -41,6 +41,7 @@ test('keeps booking release, Stripe balance and bank payouts distinct across fou
   const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   expect(ui.getByText('Test mode · no real money moves')).toBeTruthy();
+  expect(ui.getByText('Your payout account is connected')).toBeTruthy();
   expect(ui.queryByText('Deposit settings')).toBeNull();
   fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
   fireEvent.press(ui.getByText('Hair appointment'));
@@ -56,7 +57,8 @@ test('keeps booking release, Stripe balance and bank payouts distinct across fou
   expect(ui.getByText('On the way')).toBeTruthy();
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
   expect(ui.getByText('Deposit settings')).toBeTruthy();
-  expect(ui.getByText('Your payout account is connected')).toBeTruthy();
+  // The payout account lives on Overview only — Settings must not repeat it.
+  expect(ui.queryByText('Your payout account is connected')).toBeNull();
 });
 
 test('a booking history failure does not hide connected account settings or Stripe balance', async () => {
@@ -64,8 +66,15 @@ test('a booking history failure does not hide connected account settings or Stri
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   expect(ui.getByText(/Booking payments could not load/)).toBeTruthy();
-  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
-  expect(ui.getByText('Manage payout account')).toBeTruthy();
+  expect(ui.getByRole('button', { name: /Manage payout account/ })).toBeTruthy();
+});
+
+test('"Your setup" tiles summarise the settings and open them', async () => {
+  const ui = render(<ProviderStripePayments setup={{ deposit: 'Optional · 20%', inPerson: 'Card, Cash' }}><Text>Deposit settings</Text></ProviderStripePayments>);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  expect(ui.getByText('Optional · 20%')).toBeTruthy();
+  fireEvent.press(ui.getByRole('button', { name: /In person: Card, Cash/ }));
+  expect(ui.getByText('Deposit settings')).toBeTruthy();
 });
 
 test('failed finance request never shows a fabricated zero balance', async () => {

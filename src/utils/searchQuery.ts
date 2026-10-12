@@ -1,4 +1,5 @@
 import type { ServiceCategory } from '../types/database';
+import { UK_CITIES } from '../constants/ukCities';
 
 // ─────────────────────────────────────────────────────────
 // NATURAL-LANGUAGE SEARCH PARSING
@@ -75,8 +76,19 @@ export function parseSearchQuery(raw: string): ParsedSearchQuery {
   LOCATION_PREPOSITION.lastIndex = 0;
   while ((m = LOCATION_PREPOSITION.exec(q)) !== null) lastMatch = m;
 
-  const locationPhrase = lastMatch ? q.slice(lastMatch.index + lastMatch[0].length).trim() || null : null;
-  const serviceText = (lastMatch ? q.slice(0, lastMatch.index) : q).trim();
+  // Clients commonly omit "in" ("nail art Nottingham"). Recognise only a
+  // city from the same curated list providers use for service coverage, so a
+  // normal final service word is never misread as a location.
+  const implicitCity = lastMatch ? null : [...UK_CITIES]
+    .sort((a, b) => b.length - a.length)
+    .find(city => q.toLowerCase().endsWith(city.toLowerCase())
+      && (q.length === city.length || /\s/.test(q.charAt(q.length - city.length - 1))));
+  const locationPhrase = lastMatch
+    ? q.slice(lastMatch.index + lastMatch[0].length).trim() || null
+    : implicitCity ?? null;
+  const serviceText = (lastMatch
+    ? q.slice(0, lastMatch.index)
+    : implicitCity ? q.slice(0, q.length - implicitCity.length) : q).trim();
 
   const serviceTerms = serviceText
     .split(/,|&|\band\b/i)

@@ -1599,6 +1599,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 export async function getPortfolioItems(
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  options?: { excludeOwnProvider?: boolean },
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1613,11 +1614,6 @@ export async function getPortfolioItems(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    // Never show a provider their own work back as discovery (see
-    // ownProviderIdExclusion). Filtered on portfolio_items.provider_id
-    // rather than the joined provider row, so it needs no foreign-table
-    // filter and no null handling — the column is NOT NULL.
-    .not("provider_id", "in", await ownProviderIdExclusion())
     // Venue/workspace shots are excluded from Explore's discovery feed and
     // Becca's inspiration search. getProviderPortfolio() (the provider
     // profile's own Portfolio grid) is deliberately NOT filtered — that is
@@ -1627,6 +1623,14 @@ export async function getPortfolioItems(
     // category-less rows mapDbPortfolioItem still has a fallback for.
     .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
     .order("created_at", { ascending: false });
+
+  // Explore is an intentional exception: providers should be able to browse
+  // their own published work alongside everyone else's. Other discovery
+  // callers retain the default self-exclusion so they do not recommend the
+  // provider's own business back to them.
+  if (options?.excludeOwnProvider !== false) {
+    query = query.not("provider_id", "in", await ownProviderIdExclusion());
+  }
 
   if (category && category !== "All") {
     query = query.eq("category", category.toUpperCase());
@@ -1678,6 +1682,7 @@ export async function getDiscoverServices(
   category?: string,
   limit = 40,
   audience?: "women" | "men" | "kids" | "everyone",
+  options?: { excludeOwnProvider?: boolean },
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
@@ -1691,10 +1696,11 @@ export async function getDiscoverServices(
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    // Never recommend a provider their own services (see
-    // ownProviderIdExclusion).
-    .not("provider_id", "in", await ownProviderIdExclusion())
     .limit(limit);
+
+  if (options?.excludeOwnProvider !== false) {
+    query = query.not("provider_id", "in", await ownProviderIdExclusion());
+  }
 
   // Filtered on the SERVICE's own category, not the provider's whole
   // service_categories array — a provider who offers both Hair and Makeup
@@ -3437,6 +3443,7 @@ export async function providerCancelGroupBooking(
 export async function getProviderBookings(
   sinceDaysAgo = 90,
   providerId?: string,
+  untilDaysAhead?: number,
 ): Promise<BookingWithAddOns[]> {
   const resolvedProviderId = providerId ?? (await getMyProviderProfile())?.id;
   if (!resolvedProviderId) return [];
@@ -3467,6 +3474,11 @@ export async function getProviderBookings(
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - sinceDaysAgo);
     query = query.gte("booking_date", cutoff.toISOString().split("T")[0]);
+  }
+  if (untilDaysAhead != null && Number.isFinite(untilDaysAhead)) {
+    const end = new Date();
+    end.setDate(end.getDate() + Math.max(0, untilDaysAhead));
+    query = query.lte("booking_date", end.toISOString().split("T")[0]);
   }
 
   const { data, error } = await query
@@ -3990,6 +4002,7 @@ export async function declineWaitlistHold(bookingId: string): Promise<void> {
 /** Fetch all notifications for the current user */
 export async function getMyNotifications(
   role: "provider" | "client",
+  limit = 50,
 ): Promise<DbNotification[]> {
   const { data, error } = await supabase
     .from("notifications")
@@ -3998,7 +4011,11 @@ export async function getMyNotifications(
     )
     .eq("recipient_role", role)
     .order("created_at", { ascending: false })
-    .limit(100);
+    // The notification drawer is an inbox preview, not an archive. A smaller
+    // first page gets the recent, actionable items onto screen faster; older
+    // history remains available through the notification centre's pagination
+    // when that is added.
+    .limit(Math.min(Math.max(Math.trunc(limit), 1), 100));
 
   if (error) throw error;
   return data ?? [];
@@ -7943,20 +7960,24 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
 }
 
 /** Current provider's branding without a screen-level auth round trip. */
-export async function getMyProviderBranding(): Promise<
+export async function getMyProviderBranding(knownUserId?: string): Promise<
   | (NonNullable<Awaited<ReturnType<typeof getProviderBrandingByUserId>>> & {
       userId: string;
     })
   | null
 > {
-  const {
-    data: { user },
-    error,
-  } = await getSessionUser();
-  if (error) throw error;
-  if (!user) return null;
-  const branding = await getProviderBrandingByUserId(user.id);
-  return branding ? { ...branding, userId: user.id } : null;
+  let userId = knownUserId;
+  if (!userId) {
+    const {
+      data: { user },
+      error,
+    } = await getSessionUser();
+    if (error) throw error;
+    userId = user?.id;
+  }
+  if (!userId) return null;
+  const branding = await getProviderBrandingByUserId(userId);
+  return branding ? { ...branding, userId } : null;
 }
 
 export interface ProviderAccountEditorInfo {
@@ -9173,71 +9194,6 @@ export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unkn
   const { data, error } = await supabase.functions.invoke("becca-ai", { body });
   if (error) throw error;
   return data;
-}
-
-// ─── Stripe Connect payouts ─────────────────────────────────────────────────
-// The provider side of getting paid THROUGH Cerviced (as opposed to in-person
-// payments, which the app never touches). Gated in the UI behind
-// STRIPE_CONNECT_PAYOUTS_ENABLED — these read the providers.stripe_* columns
-// (DRAFT_stripe_connect_account_columns.sql) and call the create-connect-account
-// edge function, neither of which is live until that migration is applied and
-// the function deployed, so nothing calls these while the flag is off.
-
-/** A provider's Stripe Connect onboarding/eligibility state, as mirrored from
- *  Stripe onto their provider row by the stripe-webhook function. */
-export interface StripeConnectStatus {
-  /** The connected-account id (acct_...), or null before onboarding starts. */
-  accountId: string | null;
-  /** Stripe says this account may take money / be paid out (KYC complete). */
-  chargesEnabled: boolean;
-  payoutsEnabled: boolean;
-  /** They finished the hosted onboarding form (may still be under review). */
-  detailsSubmitted: boolean;
-}
-
-/** Read the signed-in provider's own payout status. Own-record read, so it is
- *  allowed to see these server-managed columns (RLS scopes it to the caller). */
-export async function getMyProviderPayoutStatus(): Promise<StripeConnectStatus | null> {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from('providers')
-    .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
-    .eq('user_id', user.id)
-    .single();
-  if (error) throw error;
-
-  const row = data as {
-    stripe_account_id: string | null;
-    stripe_charges_enabled: boolean | null;
-    stripe_payouts_enabled: boolean | null;
-    stripe_details_submitted: boolean | null;
-  };
-  return {
-    accountId: row.stripe_account_id ?? null,
-    chargesEnabled: row.stripe_charges_enabled === true,
-    payoutsEnabled: row.stripe_payouts_enabled === true,
-    detailsSubmitted: row.stripe_details_submitted === true,
-  };
-}
-
-/** Start (or resume) Express onboarding: the edge function creates/reuses the
- *  provider's connected account and returns a short-lived hosted Account Link
- *  URL for the app to open. The account id is written server-side only. */
-export async function startProviderPayoutOnboarding(
-  refreshUrl: string,
-  returnUrl: string,
-): Promise<{ url: string; accountId: string }> {
-  const { data, error } = await supabase.functions.invoke('create-connect-account', {
-    body: { refreshUrl, returnUrl },
-  });
-  if (error) throw error;
-  if (typeof data?.url !== 'string' || typeof data?.accountId !== 'string') {
-    throw new Error('Could not start payout setup. Please try again.');
-  }
-  return { url: data.url, accountId: data.accountId };
 }
 
 export async function extractProviderProfileFromUrl(

@@ -19,6 +19,12 @@ describe('provider screen performance contracts', () => {
     );
     expect(analytics).not.toContain('getProviderBookings(Infinity),');
     expect(analytics).toContain("range === 'all' ? Infinity : 210");
+    expect(analytics).toContain("navigation.navigate('Payments')");
+    expect(analytics).not.toContain("navigation.navigate('Clientele')");
+    // The calendar waits for Auth's provider-id lookup, then uses that id for
+    // bookings instead of making a serial profile lookup first.
+    expect(home).toContain("myProviderIdStatus === 'pending'");
+    expect(home).toContain('hasMyProviderGoLiveAddress(profile.id)');
   });
 
   it('loads Provider My Services once per focus, reusing the provider row it fetched', () => {

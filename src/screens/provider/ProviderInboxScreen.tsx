@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';

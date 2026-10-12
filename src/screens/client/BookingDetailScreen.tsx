@@ -4,11 +4,12 @@ import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useR
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
-  Keyboard, TouchableWithoutFeedback,
+  Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback,
   LayoutAnimation,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SlideUpOnMount } from '../../components/SlideUpOnMount';
@@ -23,7 +24,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus } from '../../types/booking';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import {
-  canRequestRefund, fileBookingSupportRequest, isSupportRequestReady,
+  describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
 } from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
@@ -55,7 +56,7 @@ import {
   formatNoticeWindow,
   isLongBookingInfoPack,
 } from '../../features/bookings/clientBookingPresentation';
-import { buildClientReceiptHTML } from '../../features/bookings/receipt';
+import { A4_PRINT_SIZE, buildClientReceiptHTML } from '../../features/bookings/receipt';
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
@@ -73,7 +74,7 @@ type Props = {
  * error). Throwing here now means a genuine, loggable failure.
  */
 async function shareReceipt(booking: ConfirmedBooking): Promise<boolean> {
-  const { uri } = await Print.printToFileAsync({ html: buildClientReceiptHTML(booking) });
+  const { uri } = await Print.printToFileAsync({ html: buildClientReceiptHTML(booking), ...A4_PRINT_SIZE });
   if (!(await Sharing.isAvailableAsync())) return false;
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Receipt', UTI: 'com.adobe.pdf' });
   return true;
@@ -183,6 +184,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [supportKind, setSupportKind] = useState<BookingSupportKind | null>(null);
   const [supportReason, setSupportReason] = useState<string | null>(null);
   const [supportMessage, setSupportMessage] = useState('');
+  const supportFormScrollRef = useRef<ScrollView>(null);
   const [supportBusy, setSupportBusy] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState('');
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
@@ -421,6 +423,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     () => (booking ? describeRefundOutcome(booking, cancellationNoticeHrs) : null),
     [booking, cancellationNoticeHrs],
   );
+  // Cerviced only gets involved with money paid through the app — the refund
+  // sheet says so up front, and for an off-app booking that's all it says.
+  const refundScope = booking ? getRefundRequestScope(booking) : 'settled';
+  const refundScopeCopy = useMemo(() => (booking ? describeRefundScope(booking) : null), [booking]);
+  const isOffAppRefund = supportKind === 'refund' && refundScope === 'off_app';
 
   // Whether cancelling right now would fall inside the provider's notice
   // window — purely informational (drives the modal's warning copy below).
@@ -1626,8 +1633,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <Pressable style={[st.moreMenuSheet, { backgroundColor: C.surfaceRaised, marginBottom: Math.max(insets.bottom, 10) }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
               <View style={{ gap: 8 }}>
-                {/* Only money paid through the app can be refunded through it. */}
-                {canRequestRefund(booking) && (
+                {/* Offered unless a refund already happened: an off-app booking
+                    opens to an explanation that it's between them and the
+                    provider, rather than hiding the option with no reason. */}
+                {refundScope !== 'settled' && (
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openSupportForm('refund'); }}>
                     <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}><Ionicons name="arrow-undo-outline" size={20} color={C.accentText} /></View>
@@ -1654,13 +1663,20 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             review, never a refund, and doesn't claim the provider was told —
             nothing notifies them. */}
         <Modal visible={supportKind !== null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
-          {/* The keyboard sits over the sheet's footer rather than pushing the
-              sheet up; the ScrollView insets itself so the note stays visible. */}
-          <View style={{ flex: 1 }}>
-            <Pressable style={st.supportOverlay} onPress={() => { if (!supportBusy) setSupportKind(null); }} />
+          {/* Keep the form above the keyboard; the body scrolls to its focused
+              note without hiding it behind the keyboard. */}
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <Pressable
+              style={[st.supportOverlay, StyleSheet.absoluteFill]}
+              onPress={() => { if (!supportBusy) setSupportKind(null); }}
+            />
             <View style={[st.supportSheet, { backgroundColor: C.surfaceRaised, paddingBottom: Math.max(insets.bottom, 16) }]}>
               <View style={[st.supportHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)' }]} />
-              <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+              <ScrollView ref={supportFormScrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
                 <View style={st.supportHead}>
                   <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}>
                     <Ionicons name={supportKind === 'refund' ? 'arrow-undo-outline' : 'flag-outline'} size={20} color={C.accentText} />
@@ -1673,7 +1689,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </View>
                 </View>
 
-                {supportKind === 'refund' && (
+                {supportKind === 'refund' && refundScope === 'in_app' && (
                   <View style={[st.supportCard, { backgroundColor: C.card, borderColor: C.border }]}>
                     <View style={st.supportRowBetween}>
                       <Text style={{ color: C.text, fontWeight: '600', fontSize: 14 }}>
@@ -1687,6 +1703,19 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </View>
                 )}
 
+                {supportKind === 'refund' && refundScopeCopy && (
+                  <View style={[st.supportNext, { backgroundColor: C.accent + '14', marginTop: 12 }]}>
+                    <Ionicons name={refundScope === 'off_app' ? 'cash-outline' : 'shield-checkmark-outline'} size={16} color={C.accentText} style={{ marginTop: 1 }} />
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>{refundScopeCopy.title}</Text>
+                      {refundScopeCopy.lines.map(line => (
+                        <Text key={line} style={{ color: C.text, fontSize: 13, lineHeight: 18 }}>{line}</Text>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {!isOffAppRefund && (<>
                 <Text style={[st.supportHeading, { color: C.sub }]}>{supportKind === 'refund' ? "WHAT'S THE REFUND FOR?" : 'WHAT WENT WRONG?'}</Text>
                 <View style={{ gap: 8 }}>
                   {(supportKind ? SUPPORT_REASONS[supportKind] : []).map(r => {
@@ -1712,6 +1741,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   placeholderTextColor={C.sub}
                   value={supportMessage}
                   onChangeText={setSupportMessage}
+                  onFocus={() => setTimeout(() => supportFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
                   multiline
                   maxLength={1000}
                   editable={!supportBusy}
@@ -1725,10 +1755,29 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       : 'This goes to Cerviced support, who will look into it and reply by email.'}
                   </Text>
                 </View>
+                </>)}
               </ScrollView>
 
               <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-                {(() => {
+                {isOffAppRefund ? (
+                  <View style={{ gap: 8 }}>
+                    <TouchableOpacity
+                      style={[st.supportSend, { backgroundColor: C.accent }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setSupportKind(null);
+                        // Let this sheet's fade finish before the contact sheet mounts.
+                        setTimeout(() => openContactSheet(booking), 260);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 15 }}>Contact {booking.providerName}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={{ paddingVertical: 10, alignItems: 'center' }} onPress={() => setSupportKind(null)} activeOpacity={0.7}>
+                      <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (() => {
                   const ready = isSupportRequestReady(supportReason, supportMessage);
                   return (
                     <TouchableOpacity
@@ -1746,6 +1795,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* ─── Rating Modal ─── */}
@@ -2059,8 +2109,9 @@ const st = StyleSheet.create({
   contactOption: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   supportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  // Top corners only, rounder than the other sheets.
-  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 10 },
+  // Full-width bottom modal; its backdrop sits behind it so the top rounding
+  // is not obscured by a separate overlay edge.
+  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 10 },
   supportHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   supportHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   supportTitle: { fontSize: 18, fontWeight: '800' },
