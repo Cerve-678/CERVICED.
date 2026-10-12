@@ -463,8 +463,10 @@ const ExploreScreen = memo(() => {
     const category = filter !== 'All' ? filterMap[filter] : undefined;
     const [portfolioData, serviceData] = await withTimeout(
       Promise.all([
-        getPortfolioItems(category, DISCOVER_PORTFOLIO_LIMIT),
-        getDiscoverServices(category, DISCOVER_SERVICE_LIMIT),
+        // Explore is a browse surface, including for providers viewing their
+        // own public work. Do not hide a provider's images from this feed.
+        getPortfolioItems(category, DISCOVER_PORTFOLIO_LIMIT, { excludeOwnProvider: false }),
+        getDiscoverServices(category, DISCOVER_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
       ]),
       8_000,
       'Explore feed',

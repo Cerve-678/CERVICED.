@@ -1,4 +1,4 @@
-import { buildClientReceiptHTML } from '../features/bookings/receipt';
+import { buildClientReceiptHTML, buildProviderInvoiceHTML } from '../features/bookings/receipt';
 import { resolveServiceCategory } from '../features/bookings/presentation';
 import { calculateBookingPaymentBreakdown } from '../features/bookings/paymentPresentation';
 import { BookingStatus, type ConfirmedBooking } from '../contexts/BookingContext';
@@ -111,6 +111,76 @@ describe('booking receipt', () => {
     expect(receipt).not.toContain('Paid in full');
     expect(receipt).toContain('Awaiting payment');
     expect(receipt).toContain('No payment has been taken through CERVICED');
+  });
+});
+
+describe('provider invoice', () => {
+  const base = {
+    id: 'inv12345-booking',
+    serviceName: 'Classic lash full set',
+    providerName: 'Amara Lash Studio ',
+    customerName: 'Jordan Ellis',
+    bookingDate: '2026-10-14',
+    bookingTime: '14:30',
+    price: 65,
+    serviceCharge: 1.99,
+    status: BookingStatus.UPCOMING,
+    addOns: [{ id: 'bath', name: 'Lash bath', price: 8 }],
+  };
+
+  it("leaves CERVICED's platform fee out of the provider's own invoice", () => {
+    const html = buildProviderInvoiceHTML({
+      ...base,
+      amountPaid: 74.99,
+      paymentType: 'full',
+      paymentStatus: PaymentStatus.PAID_IN_FULL,
+    } as unknown as ConfirmedBooking);
+
+    expect(html).toContain('£73.00');
+    expect(html).not.toContain('£74.99');
+    expect(html).not.toContain('platform fee');
+    expect(html).toContain('Full payment');
+    expect(html).toContain('Jordan Ellis');
+  });
+
+  it('shows the deposit and the balance the client still owes the provider', () => {
+    const html = buildProviderInvoiceHTML({
+      ...base,
+      depositAmount: 20,
+      amountPaid: 21.99,
+      paymentType: 'deposit',
+      paymentStatus: PaymentStatus.DEPOSIT_PAID,
+    } as unknown as ConfirmedBooking);
+
+    expect(html).toContain('Deposit paid');
+    expect(html).toContain('£20.00');
+    expect(html).toContain('£53.00');
+  });
+
+  it('never invoices a hand-added unpaid booking as a full payment', () => {
+    const html = buildProviderInvoiceHTML({
+      ...base,
+      serviceCharge: 0,
+      amountPaid: 0,
+      paymentType: 'full',
+      paymentStatus: PaymentStatus.PENDING,
+    } as unknown as ConfirmedBooking);
+
+    expect(html).not.toContain('Full payment');
+    expect(html).toContain('Not paid in app');
+    expect(html).toContain('Balance due');
+  });
+
+  it('escapes names that reach the HTML', () => {
+    const html = buildProviderInvoiceHTML({
+      ...base,
+      customerName: '<script>x</script>',
+      amountPaid: 0,
+      paymentType: 'full',
+      paymentStatus: PaymentStatus.PENDING,
+    } as unknown as ConfirmedBooking);
+
+    expect(html).not.toContain('<script>x');
   });
 });
 

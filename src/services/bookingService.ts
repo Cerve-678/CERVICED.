@@ -45,8 +45,8 @@ export const DEPOSIT_PERCENTAGE = 20; // 20% deposit
  * Uses the transparent fixed-tier platform fee. Deposits are deliberately
  * excluded by the caller — that money belongs entirely to the provider.
  */
-export const calculateServiceCharge = (subtotal: number, isDepositOnlyCheckout = false): number => {
-  return calculatePlatformFee(subtotal, isDepositOnlyCheckout);
+export const calculateServiceCharge = (subtotal: number, depositOnlyServiceSubtotal = 0): number => {
+  return calculatePlatformFee(subtotal, depositOnlyServiceSubtotal);
 };
 
 /**
@@ -145,7 +145,8 @@ export class BookingService {
     const feeAllocationSubtotal = feeEligibleSubtotal > 0
       ? feeEligibleSubtotal
       : items.reduce((total, item) => total + (Number(item.price) || 0) + (item.addOns || []).reduce((sum: number, addOn: any) => sum + (Number(addOn.price) || 0), 0), 0);
-    const totalServiceCharge = calculateServiceCharge(feeEligibleSubtotal, isDepositOnlyCheckout);
+    // A deposit-only checkout is tiered on the full service price of its items.
+    const totalServiceCharge = calculateServiceCharge(feeEligibleSubtotal, isDepositOnlyCheckout ? feeAllocationSubtotal : 0);
 
     logger.log('Cart totals:', {
       feeEligibleSubtotal,
