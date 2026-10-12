@@ -1,5 +1,6 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
 import { planRefund } from '../_shared/refundPlan.ts';
+import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 
@@ -59,8 +60,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get('Authorization') ?? '';
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const isServiceCaller = authHeader === `Bearer ${serviceKey}`;
+    const isServiceCaller = await isServiceRoleRequest(authHeader);
 
     const body: RequestBody = await req.json();
     if (!body.bookingId) {

@@ -20,7 +20,8 @@ import {
   Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from './SafeArea';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
 import { EmergencyBookingPrompt } from './EmergencyBookingPrompt';
 import { AvailabilityService } from '../services/AvailabilityService';

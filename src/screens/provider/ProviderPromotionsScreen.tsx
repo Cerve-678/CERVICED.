@@ -17,7 +17,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { Ionicons } from '@expo/vector-icons';

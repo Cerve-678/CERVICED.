@@ -19,7 +19,7 @@
 // it renders as a real Modal.
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Modal, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from './SafeArea';
 import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../constants/providerThemes';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';

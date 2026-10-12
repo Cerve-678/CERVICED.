@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
+import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 
 // Step 3 of the Connect build (handoff: stripe-connect-payouts-build-handoff):
 // the release job. It finds 'held' payout rows whose hold has elapsed
@@ -49,9 +50,7 @@ Deno.serve(async (req: Request) => {
 
   // Only the server/cron may run this. The service role key is the shared
   // secret; a normal user session must never reach the transfer path.
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  if (authHeader !== `Bearer ${serviceKey}`) {
+  if (!(await isServiceRoleRequest(req.headers.get('Authorization')))) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), {
       status: 403, headers: { 'Content-Type': 'application/json' },
     });
