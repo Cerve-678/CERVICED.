@@ -2,14 +2,19 @@ import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderStripePayments from '../components/ProviderStripePayments';
-import { getConnectStatus, getProviderPayouts, getProviderFinance } from '../services/providerPaymentService';
+import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderRefundState } from '../services/providerPaymentService';
 
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'dismiss' }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../services/providerPaymentService', () => ({
   getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(),
-  getConnectLink: jest.fn(), refundProviderBooking: jest.fn(),
+  getConnectLink: jest.fn(), refundProviderBooking: jest.fn(), getProviderRefundState: jest.fn(),
+}));
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('../contexts/ThemeContext', () => ({
+  useTheme: () => ({ isDarkMode: false, palette: { accent: '#5C4033', onAccent: '#FFFFFF', text: '#1C1A18', secondaryText: '#8A8680', card: '#FFFFFF', border: '#eeeeee' } }),
 }));
 jest.mock('../features/business-details/BusinessDetailsKit', () => {
   // Jest factories need local imports because mocks are hoisted.
@@ -82,4 +87,20 @@ test('failed finance request never shows a fabricated zero balance', async () =>
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText(/Balances and bank payouts could not load/)).toBeTruthy());
   expect(ui.queryByText('£0.00')).toBeNull();
+});
+
+test('Refund client opens the in-app refund sheet with full and partial options, not a system alert', async () => {
+  const { Alert } = jest.requireActual('react-native');
+  const alertSpy = jest.spyOn(Alert, 'alert');
+  (getProviderRefundState as jest.Mock).mockResolvedValue({ sharePence: 9000, heldPence: 9000, anyRefunded: false, policySettlement: null });
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
+  fireEvent.press(ui.getByText('Hair appointment'));
+  fireEvent.press(ui.getByText('Refund client'));
+  await waitFor(() => expect(ui.getByText('Full refund')).toBeTruthy());
+  expect(ui.getByText('Issue a refund')).toBeTruthy();
+  expect(ui.getByText('Partial refund')).toBeTruthy();
+  expect(getProviderRefundState).toHaveBeenCalledWith('booking');
+  expect(alertSpy).not.toHaveBeenCalled();
 });

@@ -11,7 +11,6 @@ import {
   Modal,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -26,7 +25,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
 import { canDisputeNoShow, PaymentStatus } from '../../types/booking';
-import { newRequestId } from '../../utils/requestId';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
@@ -61,9 +59,6 @@ import {
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
   getServiceDurationsByIds,
-  refundProviderBooking,
-  getProviderRefundState,
-  type ProviderRefundState,
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
@@ -79,7 +74,8 @@ import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFac
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
 import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
-import { describeRefundOutcome, describeSettlementTiming } from '../../features/bookings/paymentPresentation';
+import { describeRefundOutcome } from '../../features/bookings/paymentPresentation';
+import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '../../components/IssueRefundSheet';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings/receipt';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
@@ -127,26 +123,6 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
   week_before:       'Sends 1 week before',
 };
 
-// Why a refund is being issued. A refund isn't one thing — it can settle a
-// cancellation, a client dispute, or something that went wrong with a service
-// that already happened — so the provider picks the reason before any money
-// moves, and it's recorded on the refund for later reference.
-const REFUND_REASONS = [
-  'Appointment cancelled',
-  'Client complaint',
-  'Issue with the service',
-  'Goodwill gesture',
-  'Other',
-] as const;
-
-// Issue Refund sheet: what goes back to the client vs what the provider keeps.
-const REFUND_GREEN = { light: '#2F7D55', dark: '#6CC79A' };
-const REFUND_KEEP = { light: '#A0603A', dark: '#D9A27E' };
-const formatPence = (p: number) => `£${(p / 100).toFixed(2)}`;
-/** 'full' = everything back (fee included); 'custom' = an amount out of the
- *  provider's share — the only option once their policy has settled a
- *  client's cancellation. */
-type RefundMode = 'full' | 'custom';
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
   const { user, hatState } = useAuth();
@@ -237,27 +213,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeBusy, setDisputeBusy] = useState(false);
-  // Refund: a reason must be picked before money moves — a refund can mean a
-  // cancellation, a dispute, or a service issue, and that distinction matters
-  // (especially once a booking is already completed). The optional note is
-  // appended to the selected reason and recorded on the Stripe refund.
-  const [showRefundModal, setShowRefundModal] = useState(false);
-  const [refundReason, setRefundReason] = useState<string | null>(null);
-  const [refundNote, setRefundNote] = useState('');
-  const refundFormScrollRef = useRef<ScrollView>(null);
-  const [refundBusy, setRefundBusy] = useState(false);
-  // What the sheet shows comes from the server (getProviderRefundState); the
-  // refund-payment function re-derives every figure when the refund is made.
-  const [refundState, setRefundState] = useState<ProviderRefundState | null>(null);
-  const [refundStateError, setRefundStateError] = useState(false);
-  const [refundMode, setRefundMode] = useState<RefundMode>('full');
-  // After a policy settlement the sheet is a summary first; a partial refund
-  // on top is opt-in, behind its own row.
-  const [refundPartialOpen, setRefundPartialOpen] = useState(false);
-  const [refundAmountText, setRefundAmountText] = useState('');
-  // One per sheet opening: a double tap or retry reuses it, so Stripe returns
-  // the first refund instead of making a second.
-  const refundRequestId = useRef<string>(newRequestId());
+  // Refund: the sheet owns its own form state and is mounted only while open.
+  const [refundOpen, setRefundOpen] = useState(false);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
   const [groupDateOptions, setGroupDateOptions] = useState<
@@ -1020,91 +977,21 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, [booking, cancelBooking, navigation, groupSuffix]);
 
   // Issue a refund through the same Stripe-backed path the Payments screen
-  // uses (refundProviderBooking -> refund-payment edge function). This returns
-  // the client's money; it deliberately does NOT cancel the appointment —
-  // cancelling is the separate action below. Opening the sheet resets it and
-  // loads what is left to refund; the money only moves from submitRefund.
-  const loadRefundState = useCallback(async (bookingId: string) => {
-    setRefundState(null);
-    setRefundStateError(false);
-    try {
-      const state = await getProviderRefundState(bookingId);
-      setRefundState(state);
-      setRefundMode(state.policySettlement || state.anyRefunded ? 'custom' : 'full');
-    } catch (err) {
-      logger.error('[ProviderBookingDetail] refund state failed to load:', err);
-      setRefundStateError(true);
-    }
-  }, []);
+  // uses (IssueRefundSheet -> refund-payment edge function). This returns the
+  // client's money; it deliberately does NOT cancel the appointment —
+  // cancelling is the separate action below.
+  const handleRefund = useCallback(() => { if (booking) setRefundOpen(true); }, [booking]);
 
-  const handleRefund = useCallback(() => {
-    if (!booking) return;
-    setRefundReason(null);
-    setRefundNote('');
-    setRefundAmountText('');
-    setRefundPartialOpen(false);
-    refundRequestId.current = newRequestId();
-    setShowRefundModal(true);
-    void loadRefundState(booking.id);
-  }, [booking, loadRefundState]);
-
-  // The amount this refund would move, in pence, plus any reason it can't go.
-  // Mirrors supabase/functions/_shared/refundPlan.ts for display only.
-  const refundPreview = useMemo(() => {
-    if (!refundState) return { refundPence: 0, keepPence: 0, error: null as string | null };
-    const held = refundState.heldPence;
-    if (refundMode === 'full') return { refundPence: held, keepPence: 0, error: null };
-    const typed = refundAmountText.trim();
-    const pence = Math.round(Number(typed) * 100);
-    if (!typed) return { refundPence: 0, keepPence: held, error: null };
-    if (!Number.isFinite(pence) || pence <= 0) return { refundPence: 0, keepPence: held, error: 'Enter an amount above £0.00.' };
-    if (pence > held) return { refundPence: 0, keepPence: held, error: `You can refund at most ${formatPence(held)}.` };
-    return { refundPence: pence, keepPence: held - pence, error: null };
-  }, [refundState, refundMode, refundAmountText]);
-
-  const submitRefund = useCallback(async () => {
-    if (!booking || !refundReason || refundBusy || !refundState) return;
-    if (refundPreview.error || refundPreview.refundPence <= 0) return;
-    setRefundBusy(true);
-    try {
-      const note = refundNote.trim();
-      const reason = note ? `${refundReason} — ${note}` : refundReason;
-      const isFull = refundMode === 'full';
-      // Throws on failure (see refundProviderBooking).
-      const completed = await refundProviderBooking({
-        bookingId: booking.id,
-        reason,
-        ...(isFull ? {} : { amountPence: refundPreview.refundPence }),
-        requestId: refundRequestId.current,
-      });
-      setLiveBookingOverrides(prev => ({
-        ...(prev ?? {}),
-        paymentStatus: !completed
-          ? PaymentStatus.REFUND_PENDING
-          : isFull ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
-      }));
-      setShowRefundModal(false);
-      refundRequestId.current = newRequestId();
-      const who = booking.customerName?.split(' ')[0] || 'your client';
-      showAlert(
-        completed ? 'Refund issued' : 'Refund processing',
-        completed
-          ? `${isFull ? `${who} is being refunded in full` : `${formatPence(refundPreview.refundPence)} is on its way back to ${who}`}. Their bank may take a few days to show it.`
-          : 'Stripe is still processing the refund. Check again shortly.',
-      );
-    } catch (err) {
-      showAlert(
-        'Refund failed',
-        // refund-payment's 409 messages are written for the provider ("You can
-        // refund at most £20.00."); anything else falls back to the generic copy.
-        err instanceof Error && /^(You can|Enter an|There is nothing|This booking has|A refund for)/.test(err.message)
-          ? err.message
-          : toUserMessage(err, 'The refund could not be confirmed. Refresh before trying again.', 'ProviderBookingDetail.refund'),
-      );
-    } finally {
-      setRefundBusy(false);
-    }
-  }, [booking, refundReason, refundNote, refundBusy, refundState, refundPreview, refundMode, showAlert]);
+  const handleRefunded = useCallback(({ completed, isFull, title, message }: RefundIssued) => {
+    setLiveBookingOverrides(prev => ({
+      ...(prev ?? {}),
+      paymentStatus: !completed
+        ? PaymentStatus.REFUND_PENDING
+        : isFull ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
+    }));
+    setRefundOpen(false);
+    showAlert(title, message);
+  }, [showAlert]);
 
   const handleCallClient = useCallback(() => {
     if (!booking?.customerPhone) return;
@@ -2803,270 +2690,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </View>
       </Modal>
 
-      {/* ── Issue Refund sheet ──────────────────────────────────────────
-          Amounts are the provider's own share — the platform fee is never
-          shown (it isn't theirs). When the client's late cancellation was
-          already settled by the provider's policy, that is shown as done and
-          the only choices are refunding MORE on top: never "apply the policy"
-          again. A reason is required before money moves. Issuing a refund
-          does NOT cancel the appointment; that's the separate Cancel action. */}
-      <Modal
-        visible={showRefundModal}
-        transparent statusBarTranslucent navigationBarTranslucent
-        animationType="fade"
-        onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
-      >
-        {/* Keep the form above the keyboard and scroll focused fields into view. */}
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <TouchableOpacity
-            style={[styles.refundOverlay, StyleSheet.absoluteFill]}
-            activeOpacity={1}
-            onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
-          />
-          <View style={[styles.refundSheet, { backgroundColor: P.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-            <ScrollView ref={refundFormScrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
-              <View style={styles.refundHead}>
-                <View style={[styles.refundHeadIcon, { backgroundColor: P.iconBg }]}>
-                  <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.refundTitle, { color: P.text }]}>Issue a refund</Text>
-                  <Text style={{ color: P.sub, fontSize: 13 }} numberOfLines={1}>
-                    {booking.customerName || 'Client'} · {booking.serviceName || 'Booking'}
-                  </Text>
-                </View>
-              </View>
-
-              {refundStateError ? (
-                <View style={[styles.refundCard, { backgroundColor: P.card }]}>
-                  <Text style={{ color: P.text, fontSize: 14 }}>Couldn't load this booking's payment.</Text>
-                  <TouchableOpacity onPress={() => loadRefundState(booking.id)} activeOpacity={0.7} style={{ marginTop: 8 }}>
-                    <Text style={{ color: P.accent, fontWeight: '600' }}>Try again</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : !refundState ? (
-                <ActivityIndicator color={P.accent} style={{ marginVertical: 32 }} />
-              ) : (() => {
-                const green = isDarkMode ? REFUND_GREEN.dark : REFUND_GREEN.light;
-                const keep = isDarkMode ? REFUND_KEEP.dark : REFUND_KEEP.light;
-                const first = booking.customerName?.split(' ')[0] || 'the client';
-                const held = refundState.heldPence;
-                const settled = refundState.policySettlement;
-                const modes: RefundMode[] = refundState.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
-                const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours) : null;
-                const optionCopy: Record<RefundMode, { title: string; sub: string; value: string }> = {
-                  full: { title: 'Full refund', sub: `Everything ${first} paid that hasn't come back yet`, value: formatPence(held) },
-                  custom: { title: 'Partial refund', sub: 'Choose an amount', value: '' },
-                };
-                const total = Math.max(held, 1);
-                return (
-                  <>
-                    <View style={[styles.refundCard, { backgroundColor: P.card }]}>
-                      <View style={styles.refundRowBetween}>
-                        <Text style={{ color: P.text, fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>{booking.serviceName || 'Booking'}</Text>
-                        <Text style={[styles.refundAmount, { color: P.text }]}>{formatPence(refundState.sharePence)}</Text>
-                      </View>
-                      <Text style={{ color: P.sub, fontSize: 12, marginTop: 2 }}>Paid in app</Text>
-                      {settled && (
-                        <View style={[styles.refundSettled, { backgroundColor: green + '1A' }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="shield-checkmark-outline" size={15} color={green} />
-                            <Text style={{ color: green, fontWeight: '700', fontSize: 13 }}>Your policy was applied automatically</Text>
-                          </View>
-                          {!!timing && <Text style={{ color: P.text, fontSize: 13 }}>{timing}</Text>}
-                          {settled.refundedToClientPence > 0 && (
-                            <View style={styles.refundRowBetween}>
-                              <Text style={{ color: P.text, fontSize: 13 }}>Refunded to {first}</Text>
-                              <Text style={{ color: P.text, fontSize: 13 }}>{formatPence(settled.refundedToClientPence)}</Text>
-                            </View>
-                          )}
-                          <View style={styles.refundRowBetween}>
-                            <Text style={{ color: P.text, fontSize: 13 }}>You kept{settled.keptIsDeposit ? ' (deposit)' : ''}</Text>
-                            <Text style={{ color: P.text, fontSize: 13, fontWeight: '700' }}>{formatPence(settled.providerKeptPence)}</Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-
-                    {held <= 0 ? (
-                      <Text style={{ color: P.sub, fontSize: 14, marginTop: 16 }}>There's nothing left of your share to refund on this booking.</Text>
-                    ) : (
-                      <>
-                        {settled ? (
-                          refundPartialOpen ? (
-                            <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>PARTIAL REFUND</Text>
-                          ) : (
-                            <TouchableOpacity
-                              activeOpacity={0.7}
-                              onPress={() => { setRefundMode('custom'); setRefundPartialOpen(true); }}
-                              style={[styles.refundReasonRow, { backgroundColor: P.card, borderColor: P.border, marginTop: 16 }]}
-                            >
-                              <Ionicons name="add-circle-outline" size={18} color={P.accent} />
-                              <View style={styles.refundReasonTextBlock}>
-                                <Text style={[styles.refundReasonLabel, { color: P.text }]}>Give a partial refund</Text>
-                                <Text style={[styles.refundReasonSub, { color: P.sub }]}>Optional · up to {formatPence(held)}</Text>
-                              </View>
-                              <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
-                            </TouchableOpacity>
-                          )
-                        ) : (
-                        <>
-                        <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>HOW MUCH TO REFUND</Text>
-                        {modes.map(m => {
-                          const selected = refundMode === m;
-                          return (
-                            <TouchableOpacity
-                              key={m}
-                              activeOpacity={0.7}
-                              disabled={refundBusy}
-                              onPress={() => setRefundMode(m)}
-                              style={[styles.refundReasonRow, {
-                                backgroundColor: P.card,
-                                borderColor: selected ? P.accent : P.border,
-                              }]}
-                            >
-                              <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={18} color={selected ? P.accent : P.text + '55'} />
-                              <View style={styles.refundReasonTextBlock}>
-                                <Text style={[styles.refundReasonLabel, { color: P.text }]}>{optionCopy[m].title}</Text>
-                                <Text style={[styles.refundReasonSub, { color: P.sub }]}>{optionCopy[m].sub}</Text>
-                              </View>
-                              {!!optionCopy[m].value && <Text style={{ color: P.text, fontWeight: '700', fontSize: 14 }}>{optionCopy[m].value}</Text>}
-                            </TouchableOpacity>
-                          );
-                        })}
-                        </>
-                        )}
-                        {(!settled || refundPartialOpen) && (
-                        <>
-                        {refundMode === 'custom' && (
-                          <>
-                            <View style={[styles.refundAmountInputRow, { backgroundColor: P.card, borderColor: P.accent }]}>
-                              <Text style={[styles.refundAmount, { color: P.sub }]}>£</Text>
-                              <TextInput
-                                style={[styles.refundAmountInput, { color: P.text }]}
-                                value={refundAmountText}
-                                onChangeText={t => setRefundAmountText(t.replace(/[^0-9.]/g, ''))}
-                                onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
-                                keyboardType="decimal-pad"
-                                placeholder="0.00"
-                                placeholderTextColor={P.text + '44'}
-                                editable={!refundBusy}
-                                autoFocus
-                              />
-                              <Text style={{ color: P.sub, fontSize: 12 }}>max {formatPence(held)}</Text>
-                            </View>
-                            {!!refundPreview.error && <Text style={styles.refundError}>{refundPreview.error}</Text>}
-                          </>
-                        )}
-
-                        <View style={[styles.refundSplit, { backgroundColor: P.card, borderColor: P.border }]}>
-                          <View style={[styles.refundBar, { backgroundColor: P.surface }]}>
-                            <View style={{ flex: refundPreview.refundPence / total, backgroundColor: green }} />
-                            <View style={{ flex: refundPreview.keepPence / total, backgroundColor: keep }} />
-                          </View>
-                          <View style={{ padding: 12, gap: 6 }}>
-                            <View style={styles.refundRowBetween}>
-                              <Text style={{ color: P.text, fontSize: 13 }}><Text style={{ color: green }}>■ </Text>Back to {first}</Text>
-                              <Text style={{ color: P.text, fontSize: 13, fontWeight: '700' }}>{formatPence(refundPreview.refundPence)}</Text>
-                            </View>
-                            <View style={styles.refundRowBetween}>
-                              <Text style={{ color: P.text, fontSize: 13 }}><Text style={{ color: keep }}>■ </Text>You keep</Text>
-                              <Text style={{ color: P.text, fontSize: 13 }}>{formatPence(refundPreview.keepPence)}</Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>REASON</Text>
-                        <View style={styles.refundChips}>
-                          {REFUND_REASONS.map(r => {
-                            const selected = refundReason === r;
-                            return (
-                              <TouchableOpacity
-                                key={r}
-                                activeOpacity={0.7}
-                                disabled={refundBusy}
-                                onPress={() => setRefundReason(r)}
-                                style={[styles.refundChip, {
-                                  backgroundColor: selected ? P.iconBg : P.card,
-                                  borderColor: selected ? P.accent : P.border,
-                                }]}
-                              >
-                                <Text style={{ color: P.text, fontSize: 13, fontWeight: selected ? '600' : '400' }}>{r}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                        <TextInput
-                          style={[styles.respondInput, {
-                            color: P.text,
-                            backgroundColor: P.card,
-                            borderColor: P.border,
-                            minHeight: 56,
-                            textAlignVertical: 'top',
-                            marginTop: 10,
-                          }]}
-                          placeholder={refundReason === 'Other' ? 'Add a note (required)' : 'Add a note (optional)'}
-                          placeholderTextColor={P.text + '44'}
-                          value={refundNote}
-                          onChangeText={setRefundNote}
-                          onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
-                          multiline
-                          maxLength={500}
-                          editable={!refundBusy}
-                        />
-                        <Text style={{ color: P.sub, fontSize: 12 }}>This doesn't cancel the appointment. Banks usually take 5–10 working days to show a refund.</Text>
-                        </>
-                        )}
-                      </>
-                    )}
-                  </>
-                );
-              })()}
-            </ScrollView>
-            {(() => {
-              const canSubmit = !!refundState && refundState.heldPence > 0 && !!refundReason
-                && !(refundReason === 'Other' && !refundNote.trim())
-                && !refundPreview.error && refundPreview.refundPence > 0;
-              const first = booking.customerName?.split(' ')[0] || 'client';
-              const label = refundMode === 'full' ? `Refund ${first} in full` : `Refund ${formatPence(refundPreview.refundPence)} to ${first}`;
-              // Nothing to submit until they opt into a partial refund (or
-              // there's nothing left to refund): the sheet is just the summary.
-              if (refundState && (refundState.heldPence <= 0 || (refundState.policySettlement && !refundPartialOpen))) {
-                return (
-                  <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
-                    <TouchableOpacity style={[styles.refundCta, { backgroundColor: P.accent }]} activeOpacity={0.8} onPress={() => setShowRefundModal(false)}>
-                      <Text style={styles.refundCtaText}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }
-              return (
-                <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
-                  <TouchableOpacity
-                    style={[styles.refundCta, { backgroundColor: P.accent, opacity: canSubmit ? 1 : 0.4 }]}
-                    activeOpacity={0.8}
-                    disabled={!canSubmit || refundBusy}
-                    onPress={submitRefund}
-                  >
-                    {refundBusy
-                      ? <ActivityIndicator size="small" color="#FFFFFF" />
-                      : <Text style={styles.refundCtaText}>{refundState && refundState.heldPence > 0 && !refundReason ? 'Choose a reason' : label}</Text>}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={{ alignItems: 'center', padding: 8 }} disabled={refundBusy} onPress={() => setShowRefundModal(false)} activeOpacity={0.7}>
-                    <Text style={{ color: P.sub, fontSize: 14 }}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })()}
-          </View>
-        </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {refundOpen && booking && (
+        <IssueRefundSheet
+          booking={{ id: booking.id, customerName: booking.customerName, serviceName: booking.serviceName }}
+          palette={P}
+          isDarkMode={isDarkMode}
+          onClose={() => setRefundOpen(false)}
+          onRefunded={handleRefunded}
+        />
+      )}
 
       {/* ── Confirm/decline dialog ── */}
       <Modal
@@ -3876,55 +3508,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     marginBottom: 10,
-  },
-  refundOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  // Full-width bottom modal; its backdrop sits behind it so the top rounding
-  // is not obscured by a separate overlay edge.
-  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 8 },
-  refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
-  refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },
-  refundCard: { borderRadius: 16, padding: 14 },
-  refundRowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  refundAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 20 },
-  refundSettled: { marginTop: 10, borderRadius: 12, padding: 10, gap: 4 },
-  refundAmountInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 4 },
-  refundAmountInput: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 22, paddingVertical: 2 },
-  refundError: { color: '#E5484D', fontSize: 12, marginBottom: 4, marginLeft: 2 },
-  refundSplit: { marginTop: 10, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  refundBar: { flexDirection: 'row', height: 8 },
-  refundChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  refundChip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
-  refundFoot: { paddingHorizontal: 18, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 2 },
-  refundCta: { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
-  refundCtaText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
-  refundReasonHeading: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  refundReasonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  refundReasonTextBlock: {
-    flex: 1,
-  },
-  refundReasonLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  refundReasonSub: {
-    fontSize: 12,
-    marginTop: 1,
   },
   datePickBtn: {
     flexDirection: 'row',
