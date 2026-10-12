@@ -191,7 +191,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <View style={[styles.iconChip, { backgroundColor: C.surface }]}><Ionicons name="business-outline" size={18} color={C.accentText} /></View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: C.text }]}>{accountTitle}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>{setupReady ? 'Bank details managed securely by Stripe' : 'Finish with Stripe to receive online booking payments'}</Text>
+            <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? 'Finish with Stripe to receive online booking payments'
+              : account.bankAccount ? `Paid to ${account.bankAccount.bankName ?? 'your bank'} ••${account.bankAccount.last4}. Tap Manage to change it.`
+              : 'Bank details managed securely by Stripe'}</Text>
           </View>
           {busy ? <ActivityIndicator size="small" color={C.accentText} />
             : <Text style={[styles.rowAction, { color: C.accentText }]}>{manageAccount ? 'Manage' : 'Continue'}</Text>}

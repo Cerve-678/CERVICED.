@@ -83,3 +83,10 @@ test('failed finance request never shows a fabricated zero balance', async () =>
   await waitFor(() => expect(ui.getByText(/Balances and bank payouts could not load/)).toBeTruthy());
   expect(ui.queryByText('£0.00')).toBeNull();
 });
+
+test('names the bank payouts land in, and points to Manage to change it', async () => {
+  (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: true, detailsSubmitted: true,
+    bankAccount: { bankName: 'BARCLAYS BANK PLC', last4: '6789' } });
+  const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
+  await waitFor(() => expect(ui.getByText('Paid to BARCLAYS BANK PLC ••6789. Tap Manage to change it.')).toBeTruthy());
+});
