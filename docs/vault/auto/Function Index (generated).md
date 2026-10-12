@@ -5,7 +5,7 @@
 
 #generated
 
-**2295 functions** across **316 files**.
+**2297 functions** across **317 files**.
 
 ### `src/components/` (45)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -120,8 +120,9 @@
 - `ServiceImageCropper.tsx` — finish · handleCancel · handleUse · layout · panResponder · **ServiceImageCropper**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **useVerticalDragReorder**
 
-### `src/features/providers/` (8)
+### `src/features/providers/` (9)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
+- `externalBookingLink.ts` — **normalizeExternalBookingUrl** · **openExternalBookingPage**
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus**
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **getAdaptiveAccentColor** · **hasProviderPolicyInfo**
