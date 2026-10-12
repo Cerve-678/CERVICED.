@@ -81,9 +81,16 @@ Deno.serve(async (req: Request) => {
         stripe_details_submitted: account.details_submitted,
       }).eq('id', provider.id);
       if (error) throw error;
+      // Which bank payouts land in, so the app can name it without the
+      // provider opening Stripe. Bank name and last four only — Stripe never
+      // returns the full number, and the app never handles bank details.
+      const banks = (account.external_accounts?.data ?? [])
+        .filter((ext): ext is Stripe.BankAccount => ext.object === 'bank_account');
+      const bank = banks.find(b => b.default_for_currency) ?? banks[0];
       return json({ connected: true, payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
-        requirementsDue: account.requirements?.currently_due?.length ?? 0 });
+        requirementsDue: account.requirements?.currently_due?.length ?? 0,
+        bankAccount: bank ? { bankName: bank.bank_name ?? null, last4: bank.last4 } : null });
     }
     if (body.action === 'finance') {
       if (body.cursor !== undefined && (typeof body.cursor !== 'string' || !/^po_[A-Za-z0-9]+$/.test(body.cursor))) {

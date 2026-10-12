@@ -9459,6 +9459,8 @@ export interface ConnectStatus {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   requirementsDue?: number;
+  /** Where payouts land — bank name and last four only, never the full number. */
+  bankAccount?: { bankName: string | null; last4: string } | null;
 }
 export interface ProviderFinance {
   connected: boolean;
