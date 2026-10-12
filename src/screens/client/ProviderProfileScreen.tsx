@@ -34,7 +34,8 @@ import {
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -92,6 +93,7 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasPro
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
+import { openExternalBookingPage } from "../../features/providers/externalBookingLink";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 import {
   ProviderAdditionalInfoSection,
@@ -2568,7 +2570,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // handleBook uses for the same check on the non-Quick-Book path.
       if (provider.externalBookingUrl) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        Linking.openURL(provider.externalBookingUrl).catch(() => {
+        openExternalBookingPage(provider.externalBookingUrl).catch((error) => {
+          logger.error('[ProviderProfile] external booking link failed to open', error);
           Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
         });
         return;
@@ -2688,7 +2691,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     const url = provider?.externalBookingUrl;
     if (!url) return false;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Linking.openURL(url).catch(() => {
+    openExternalBookingPage(url).catch((error) => {
+      logger.error('[ProviderProfile] external booking link failed to open', error);
       Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
     });
     return true;
@@ -3037,7 +3041,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (isOwnProvider) return;
     const targetId = route.params?.openServiceId;
     // Never auto-fire for external-booking providers — handleBook would
-    // silently launch Linking.openURL the moment this screen mounts, before
+    // silently open their booking page the moment this screen mounts, before
     // the client has even seen the profile. Let them tap Book themselves.
     if (!targetId || !provider || provider.externalBookingUrl) return;
     // Wait for the owner check before auto-opening anything (see viewerChecked).
@@ -3938,6 +3942,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   return (
     <SafeAreaProvider>
+    <WindowControlsInsetProvider>
       <ThemedBackground>
         {/* Hero photo/gradient — full-bleed backdrop; the rounded sheet below overlaps
             up onto its lower edge for a seamless card-over-photo transition.
@@ -5269,6 +5274,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </ScrollView>
         </SafeAreaView>
       </ThemedBackground>
+    </WindowControlsInsetProvider>
     </SafeAreaProvider>
   );
 };

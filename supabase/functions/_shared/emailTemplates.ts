@@ -117,7 +117,7 @@ const DISPLAY = "'Bakbak One', 'Arial Black', Impact, sans-serif";
 const BODY = "'Jura', 'Trebuchet MS', Verdana, sans-serif";
 
 const FONT_LINK =
-  'https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;600;700&display=swap';
+  'https://fonts.googleapis.com/css2?family=Bakbak+One&family=Prata&family=Jura:wght@400;600;700&display=swap';
 
 const SUPPORT_ADDRESS = 'support@cerviced.co';
 
@@ -297,32 +297,6 @@ function stepsPanel(P: EmailPalette, label: string, items: string[]) {
         <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${rows}
         </table>`,
     18,
-  );
-}
-
-/**
- * The appointment. Date and time are the largest things in the panel because
- * they are the reason the email exists — the previous version buried them as
- * rows three and four of a five-row table in 14px, right-aligned.
- */
-function appointmentPanel(
-  P: EmailPalette,
-  a: { date: string; time: string; service: string; location: string },
-) {
-  const detail = (label: string, value: string) => `
-          <tr><td style="padding:13px 0 0;border-top:1px solid ${P.border};">
-            <div style="font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:2px;text-transform:uppercase;line-height:1.4;">${label}</div>
-            <div style="font-family:${BODY};color:${P.text};font-size:15px;line-height:1.6;padding:5px 0 13px;">${value}</div>
-          </td></tr>`;
-  return panel(
-    P,
-    'Your appointment',
-    `
-        <p style="font-family:${DISPLAY};color:${P.text};font-size:20px;letter-spacing:0.3px;line-height:1.3;">${a.date}</p>
-        <p style="font-family:${DISPLAY};color:${P.accent};font-size:30px;letter-spacing:0.5px;line-height:1.2;padding:4px 0 20px;">${a.time}</p>
-        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${detail('Service', a.service)}${detail('Where', a.location)}
-        </table>`,
-    8,
   );
 }
 
@@ -572,48 +546,198 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
   };
 }
 
-export function bookingConfirmationEmail(params: {
-  clientName: string;
+// ---------------------------------------------------------------------------
+// Booking confirmation — the receipt letterhead
+// ---------------------------------------------------------------------------
+// Deliberately NOT the shared letter() shell. The booking confirmation mirrors
+// the shareable receipt PDF (src/features/bookings/receipt.ts) so the email and
+// the receipt read as the same document: a tinted masthead with the CVD mark,
+// the service in caps, the provider in Prata, then the reference and address,
+// the itemised services and total, and the payment box. Keep the two in step.
+//
+// Money wording follows the app's calculateBookingPaymentBreakdown: paid state
+// comes from payment_status, never payment_type (a hand-added booking is
+// payment_type 'full' with nothing paid), and a deposit is the provider's own
+// figure, never deposit + platform fee.
+
+/** The CVD mark alone, transparent, in client plum. */
+const BRAND_MARK_PLUM = `${BRAND_ASSETS}/cerviced-mark-plum.png`;
+
+const PRATA = "'Prata', Didot, Georgia, serif";
+
+const gbp = (amount: number) => `£${Math.max(0, amount).toFixed(2)}`;
+
+export interface BookingConfirmationParams {
   providerName: string;
   service: string;
   date: string;
   time: string;
   location: string;
-}) {
+  reference: string;
+  basePrice: number;
+  addOns: Array<{ name: string; price: number }>;
+  serviceCharge: number;
+  depositAmount: number;
+  amountPaid: number;
+  paymentType: string;
+  paymentStatus: string;
+}
+
+export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const P = CLIENT;
-  // Subject and preheader are plain text; everything below them is HTML.
+  const tint = P.bg;
+  const hair = '#EEE7EC'; // rgba(74,35,64,0.08) flattened onto white
+  const pillFill = '#EDE5EB'; // rgba(74,35,64,0.10) flattened onto the tint
+  const second = '#4A6B8F'; // clientLightTheme.secondaryText
+
+  const addOnsTotal = params.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+  const total = params.basePrice + addOnsTotal + params.serviceCharge;
+  const isDeposit = params.paymentType === 'deposit';
+  const isPaidInFull = params.paymentStatus === 'paid_in_full';
+  const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
+  const paidAmount = isUnpaid ? 0 : isDeposit ? params.depositAmount : params.amountPaid;
+  const remaining = Math.max(0, total - (isUnpaid ? 0 : params.amountPaid));
+
+  const state = isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
+  const paidLabel = isUnpaid ? 'Total paid' : isDeposit ? 'Deposit paid to provider' : 'Paid today';
+
+  const label = (text: string, colour = P.sub) =>
+    `<span style="font-family:${DISPLAY};font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:${colour};">${text}</span>`;
+
+  const line = (name: string, amount: number, muted: boolean) => `
+              <tr>
+                <td style="font-family:${BODY};font-size:15px;font-weight:${muted ? 600 : 700};color:${muted ? P.sub : P.text};padding:8px 0;">${esc(name)}</td>
+                <td align="right" style="font-family:${BODY};font-size:15px;font-weight:700;color:${muted ? P.sub : P.text};padding:8px 0;white-space:nowrap;">${gbp(amount)}</td>
+              </tr>`;
+
+  const payRow = (name: string, amount: number, strong: boolean) => `
+              <tr>
+                <td style="font-family:${BODY};font-size:14.5px;font-weight:${strong ? 700 : 600};color:${strong ? P.text : P.sub};padding-top:9px;">${name}</td>
+                <td align="right" style="font-family:${BODY};font-size:14.5px;font-weight:700;color:${strong ? P.accent : P.text};padding-top:9px;white-space:nowrap;">${gbp(amount)}</td>
+              </tr>`;
+
+  const lines =
+    line(params.service, params.basePrice, false) +
+    params.addOns.map(a => line(`+ ${a.name}`, Number(a.price) || 0, true)).join('') +
+    (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
+
+  const payRows =
+    payRow(paidLabel, paidAmount, remaining <= 0) +
+    (remaining > 0 ? payRow('Due to provider at appointment', remaining, true) : '');
+
   const e = {
-    clientName: esc(params.clientName),
     providerName: esc(params.providerName),
     service: esc(params.service),
     date: esc(params.date),
     time: esc(params.time),
     location: esc(params.location),
+    reference: esc(params.reference),
   };
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <link href="${FONT_LINK}" rel="stylesheet" />
+  <style>
+    @import url('${FONT_LINK}');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background-color: ${P.surface}; font-family: ${BODY}; }
+    a { color: ${P.accent}; }
+  </style>
+</head>
+<body style="background:${P.surface};margin:0;padding:0;font-family:${BODY};">${preheader(`${e.date} at ${e.time} · ${e.reference}`)}
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:${P.surface};">
+    <tr><td align="center" style="padding:28px 12px 40px;">
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:600px;background:${P.card};border-radius:16px;">
+
+        <!-- Masthead: the receipt's tinted panel -->
+        <tr><td align="center" bgcolor="${tint}" style="background:${tint};border-radius:16px 16px 0 0;padding:42px 26px 32px;border-bottom:4px solid ${P.accent};">
+          <img src="${BRAND_MARK_PLUM}" alt="CERVICED" width="96" height="48" style="display:block;width:96px;height:48px;margin:0 auto;border:0;" />
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:12px auto 0;">
+            <tr><td bgcolor="${pillFill}" style="background:${pillFill};border-radius:100px;padding:5px 14px;">${label('Booking confirmed', P.accent)}</td></tr>
+          </table>
+          <h1 style="font-family:${DISPLAY};font-weight:400;font-size:27px;line-height:1.15;letter-spacing:0.5px;text-transform:uppercase;color:${P.text};padding-top:26px;">${e.service}</h1>
+          <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.sub};padding-top:10px;">with <span style="font-family:${PRATA};font-weight:400;font-size:19px;color:${P.text};">${e.providerName}</span></p>
+          <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.sub};padding-top:2px;">${e.date} &middot; ${e.time}</p>
+        </td></tr>
+        <tr><td style="font-size:0;line-height:0;">
+          <table role="presentation" width="36%" align="right" border="0" cellpadding="0" cellspacing="0"><tr><td bgcolor="${second}" style="background:${second};height:4px;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+        </td></tr>
+
+        <tr><td align="center" style="padding:30px 24px 40px;">
+          <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:470px;">
+
+            <!-- Reference and address -->
+            <tr><td style="border-bottom:1px solid ${hair};padding-bottom:16px;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="38%" align="center" valign="top" style="padding:0 10px;">${label('Reference')}
+                    <p style="font-family:${BODY};font-size:14px;font-weight:700;color:${P.text};padding-top:4px;">${e.reference}</p></td>
+                  <td width="62%" align="center" valign="top" style="padding:0 10px;border-left:1px solid ${hair};">${label('Where')}
+                    <p style="font-family:${BODY};font-size:14px;font-weight:700;color:${P.text};padding-top:4px;">${e.location}</p></td>
+                </tr>
+              </table>
+            </td></tr>
+
+            <!-- Services and total -->
+            <tr><td style="padding-top:26px;">
+              ${label('Services', P.accent)}
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-top:4px;">${lines}
+                <tr><td colspan="2" style="border-top:1px solid ${hair};font-size:0;line-height:0;padding-top:6px;">&nbsp;</td></tr>
+                <tr>
+                  <td style="padding-top:6px;">${label('Total')}</td>
+                  <td align="right" style="font-family:${DISPLAY};font-size:28px;line-height:1;color:${P.accent};padding-top:6px;white-space:nowrap;">${gbp(total)}</td>
+                </tr>
+              </table>
+            </td></tr>
+
+            <!-- Payment -->
+            <tr><td style="padding-top:24px;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="${tint}" style="background:${tint};border-radius:14px;">
+                <tr><td style="padding:16px 20px 18px;">
+                  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="border-bottom:1px solid ${hair};padding-bottom:10px;">${label('Payment')}</td>
+                      <td align="right" style="border-bottom:1px solid ${hair};padding-bottom:10px;white-space:nowrap;">${label(`&#9679;&nbsp;${state}`, P.accent)}</td>
+                    </tr>${payRows}
+                  </table>
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <!-- One action -->
+            <tr><td align="center" style="padding-top:30px;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                <tr><td align="center" bgcolor="${P.accent}" style="background:${P.accent};border-radius:14px;">
+                  <a href="cerviced://home" style="display:inline-block;color:${P.onAccent};font-family:${DISPLAY};font-size:14px;letter-spacing:1.6px;text-transform:uppercase;text-decoration:none;padding:15px 64px;">View booking</a>
+                </td></tr>
+              </table>
+            </td></tr>
+
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td align="center" style="padding:0 24px 34px;">
+          <p style="font-family:${DISPLAY};font-size:16px;letter-spacing:6px;color:${P.accent};">CERVICED</p>
+          <p style="font-family:${BODY};font-size:11.5px;font-weight:600;color:${P.sub};line-height:1.7;padding-top:8px;">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};">${SUPPORT_ADDRESS}</a></p>
+          <p style="font-family:${BODY};font-size:11.5px;font-weight:600;color:${P.sub};line-height:1.7;">You're receiving this because you have a CERVICED account.</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
   return {
+    // Plain text — the template escapes only what lands in HTML.
     subject: `Booking confirmed — ${params.service} with ${params.providerName}`,
-    html: letter(P, {
-      preview: `${e.service} with ${e.providerName} — ${e.date} at ${e.time}.`,
-      content:
-        eyebrow(P, 'Booking confirmed') +
-        headline(P, `You're booked in with ${e.providerName}`) +
-        lede(
-          P,
-          `Hi ${e.clientName} — that's all confirmed. Here's everything you need for your appointment.`,
-        ) +
-        appointmentPanel(P, {
-          date: e.date,
-          time: e.time,
-          service: e.service,
-          location: e.location,
-        }) +
-        note(
-          P,
-          'Need to cancel or reschedule? Open the CERVICED app — your provider is notified either way.',
-        ) +
-        button(P, 'cerviced://home', 'View booking') +
-        appHint(P),
-    }),
+    html,
   };
 }
 
