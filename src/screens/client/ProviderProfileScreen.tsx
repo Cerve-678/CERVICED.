@@ -1348,6 +1348,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const providerId = route.params?.providerId ?? "";
+  // A resolved `null` is meaningful (this viewer owns no provider); an
+  // unresolved or failed lookup stays `undefined` so the hook retains its
+  // authenticated fallback check.
+  const { myProviderId, myProviderIdStatus } = useAuth();
+  const viewerOwnershipHint =
+    myProviderIdStatus === "resolved" ? myProviderId : undefined;
   const {
     provider,
     providerDbId,
@@ -1369,11 +1375,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isNotificationsEnabled,
     setIsNotificationsEnabled,
     loadAllReviews,
-  } = useProviderProfileData(providerId);
+  } = useProviderProfileData(providerId, viewerOwnershipHint);
   // AuthContext normally knows ownership before this screen mounts, allowing
   // Book to paint with the service card. The slower per-profile result stays
   // authoritative and can withdraw it if session state is stale.
-  const { myProviderId, myProviderIdStatus } = useAuth();
   const canBookProvider = shouldShowBookingCta({
     providerDbId,
     myProviderId,

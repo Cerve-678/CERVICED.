@@ -8,7 +8,7 @@ describe("ProviderProfileScreen data architecture", () => {
   );
 
   it("uses the progressive hook instead of restoring the blocking loader", () => {
-    expect(source).toContain("useProviderProfileData(providerId)");
+    expect(source).toContain("useProviderProfileData(providerId, viewerOwnershipHint)");
     expect(source).not.toContain("getProviderBySlug(providerId)");
     expect(source).not.toContain("Promise.allSettled([");
   });
@@ -24,6 +24,7 @@ describe("ProviderProfileScreen data architecture", () => {
     );
 
     expect(source).toContain("const { myProviderId, myProviderIdStatus } = useAuth()");
+    expect(source).toContain('myProviderIdStatus === "resolved" ? myProviderId : undefined');
     expect(source).toContain("const canBookProvider = shouldShowBookingCta({");
     expect(auth).toContain("getProviderIdForUserId");
     expect(auth).toContain("}, [user?.id, user?.accountType]);");

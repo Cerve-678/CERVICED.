@@ -1380,6 +1380,12 @@ export interface ProviderProfileViewerContext {
  */
 export async function getProviderProfileViewerContext(
   providerId: string,
+  /**
+   * AuthContext resolves this once per session. When it has a settled answer,
+   * reuse it instead of issuing another providers lookup for every profile a
+   * client opens. `undefined` deliberately means unknown, not "owns none".
+   */
+  knownOwnedProviderId?: string | null,
 ): Promise<ProviderProfileViewerContext | null> {
   const {
     data: { user },
@@ -1390,12 +1396,17 @@ export async function getProviderProfileViewerContext(
 
   const [userResult, ownerResult, followResult] = await Promise.all([
     supabase.from("users").select("name").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("providers")
-      .select("id")
-      .eq("id", providerId)
-      .eq("user_id", user.id)
-      .maybeSingle(),
+    knownOwnedProviderId === undefined
+      ? supabase
+          .from("providers")
+          .select("id")
+          .eq("id", providerId)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({
+          data: knownOwnedProviderId === providerId ? { id: providerId } : null,
+          error: null,
+        }),
     supabase
       .from("provider_follows")
       .select("notify_enabled")

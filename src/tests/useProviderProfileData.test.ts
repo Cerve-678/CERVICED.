@@ -162,6 +162,25 @@ describe("useProviderProfileData", () => {
     expect(result.current.isOwnProvider).toBe(false);
   });
 
+  it("reuses a resolved session ownership answer for viewer context", async () => {
+    (getProviderBySlug as jest.Mock).mockResolvedValue({
+      id: "provider-1",
+      slug: "studio-a",
+      display_name: "Studio A",
+      service_category: "HAIR",
+    });
+    (mapProviderProfileData as jest.Mock).mockReturnValue({ id: "studio-a" });
+
+    renderHook(() => useProviderProfileData("studio-a", "provider-1"));
+
+    await waitFor(() =>
+      expect(getProviderProfileViewerContext).toHaveBeenCalledWith(
+        "provider-1",
+        "provider-1",
+      ),
+    );
+  });
+
   it("ignores a stale profile response after the route slug changes", async () => {
     const oldProfile = deferred<Record<string, unknown>>();
     (getProviderBySlug as jest.Mock).mockImplementation((slug: string) =>

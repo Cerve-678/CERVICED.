@@ -80,8 +80,15 @@ export interface ProviderProfileDataState {
  */
 export function useProviderProfileData(
   providerSlug: string,
+  knownOwnedProviderId?: string | null,
 ): ProviderProfileDataState {
   const profileGenerationRef = useRef(0);
+  // Keep this current without making a settled AuthContext update restart the
+  // public-profile load. `undefined` means the ownership lookup is not ready.
+  const knownOwnedProviderIdRef = useRef<string | null | undefined>(
+    knownOwnedProviderId,
+  );
+  knownOwnedProviderIdRef.current = knownOwnedProviderId;
   const [provider, setProvider] = useState<ProviderProfileData | null>(null);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -247,7 +254,13 @@ export function useProviderProfileData(
           if (!cancelled) setViewerChecked(true);
         }, 1500);
 
-        void getProviderProfileViewerContext(data.id)
+        const viewerContextRequest = knownOwnedProviderIdRef.current === undefined
+          ? getProviderProfileViewerContext(data.id)
+          : getProviderProfileViewerContext(
+              data.id,
+              knownOwnedProviderIdRef.current,
+            );
+        void viewerContextRequest
           .then((viewer) => {
             if (cancelled) return;
             if (viewer) {
