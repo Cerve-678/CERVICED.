@@ -1267,10 +1267,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         onPress={handleBookingPress}
         isHighlighted={highlightedBookingId === booking.id}
         isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
-        actionCount={bookingActionItems[booking.id] ?? 0}
       />
     </View>
-  ), [handleBookingPress, highlightedBookingId, recentlyAddedBookings, bookingActionItems, styles.pastBookingRowWrap]);
+  ), [handleBookingPress, highlightedBookingId, recentlyAddedBookings, styles.pastBookingRowWrap]);
 
   const handleBookWaitlistEntry = useCallback((entry: WaitlistEntry) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
