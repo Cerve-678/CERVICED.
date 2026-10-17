@@ -2126,13 +2126,20 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     );
   }, [items, itemsByProvider]);
 
-  // Keyed on the sorted, deduped provider-name SET rather than `items`
-  // itself — editing one item's time/notes/add-ons/deposit choice produces a
-  // new `items` array reference without changing which providers are in the
-  // cart, and used to retrigger this fetch anyway.
+  // Keyed on the sorted, deduped [provider-name, providerId] pairs rather
+  // than `items` itself — editing one item's time/notes/add-ons/deposit
+  // choice produces a new `items` array reference without changing which
+  // providers are in the cart, and used to retrigger this fetch anyway.
+  // The name is still what the fetch result gets keyed back under (it's the
+  // grouping key used everywhere else in this screen), but the providerId
+  // rides along so the actual lookup doesn't depend on that name still
+  // matching the provider's CURRENT display_name — see
+  // getProviderCheckoutMetadata's doc comment for why an exact-name match
+  // alone false-flags a live, bookable provider who has since renamed.
   const providerNamesKey = useMemo(
     () => JSON.stringify(
-      [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))].sort(),
+      [...new Map(items.map(i => [i.providerDisplayName ?? i.providerName, i.providerId ?? null] as const))]
+        .sort(([a], [b]) => a.localeCompare(b)),
     ),
     [items],
   );
@@ -2140,8 +2147,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Fetch checkout-facing provider metadata in one bounded request whenever
   // the providers represented in the cart change.
   useEffect(() => {
-    const names: string[] = JSON.parse(providerNamesKey);
-    if (names.length === 0) {
+    const entries: [string, string | null][] = JSON.parse(providerNamesKey);
+    const names = entries.map(([key]) => key);
+    if (entries.length === 0) {
       setProviderDepositPolicies({});
       setMobileProviderNames([]);
       setCheckoutMetadataError(false);
@@ -2149,7 +2157,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       return;
     }
     let cancelled = false;
-    getProviderCheckoutMetadata(names)
+    const queries = entries.map(([key, providerId]) => ({ key, providerId: providerId ?? undefined }));
+    getProviderCheckoutMetadata(queries)
       .then(({ depositPolicies, mobileProviderNames }) => {
         if (cancelled) return;
         setProviderDepositPolicies(depositPolicies);

@@ -48,7 +48,7 @@ describe('client screen performance contracts', () => {
   it('loads cart provider checkout metadata in one request', () => {
     const source = readScreen('CartScreen');
 
-    expect(source).toContain('getProviderCheckoutMetadata(names)');
+    expect(source).toContain('getProviderCheckoutMetadata(queries)');
     expect(source).not.toContain('getMobileProviderDisplayNames(names)');
     expect(source).not.toContain(
       'getProviderDepositPoliciesByDisplayNames(names)',

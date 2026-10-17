@@ -6882,27 +6882,65 @@ type ProviderCheckoutMetadata = {
   mobileProviderNames: Set<string>;
 };
 
-/** Cart-facing provider metadata in one query rather than one request per concern. */
+/** One cart-side provider to resolve: `key` is whatever the caller groups
+ *  cart items by (the display name at add-to-cart time) and is also what
+ *  the result maps are keyed by — `providerId`, when the item carries one,
+ *  is what actually gets looked up. */
+export interface ProviderCheckoutMetadataQuery {
+  key: string;
+  providerId?: string | undefined;
+}
+
+/**
+ * Cart-facing provider metadata in one query rather than one request per
+ * concern. Looks providers up by `providerId` when the caller has one —
+ * `display_name` is a mutable field a provider can legitimately rename
+ * (see providers_display_name_cooldown), so a cart item added before a
+ * rename would exact-match nothing under the new name and read as
+ * "no longer available" for a provider who never stopped taking bookings.
+ * Falls back to a `display_name` match only for legacy cart items that
+ * predate `providerId` being carried on the cart item at all. Either way,
+ * a resolved provider is written back under the caller's own `key`, not
+ * whatever name is currently live, so callers never need to know which
+ * path resolved it.
+ */
 export async function getProviderCheckoutMetadata(
-  displayNames: string[],
+  queries: ProviderCheckoutMetadataQuery[],
 ): Promise<ProviderCheckoutMetadata> {
-  if (displayNames.length === 0) {
+  if (queries.length === 0) {
     return { depositPolicies: {}, mobileProviderNames: new Set() };
   }
 
-  const { data, error } = await supabase
-    .from("providers")
-    .select("display_name, booking_policies, business_type")
-    .eq("has_gone_live", true)
-    .eq("is_active", true)
-    .in("display_name", [...new Set(displayNames)].slice(0, 50));
-  if (error) throw error;
+  const byId = queries.filter((q): q is ProviderCheckoutMetadataQuery & { providerId: string } => Boolean(q.providerId));
+  const byName = queries.filter(q => !q.providerId);
+
+  const idList = [...new Set(byId.map(q => q.providerId))].slice(0, 50);
+  const nameList = [...new Set(byName.map(q => q.key))].slice(0, 50);
+
+  const selectCols = "id, display_name, booking_policies, business_type";
+  const [idResult, nameResult] = await Promise.all([
+    idList.length > 0
+      ? supabase.from("providers").select(selectCols).eq("has_gone_live", true).eq("is_active", true).in("id", idList)
+      : Promise.resolve({ data: [], error: null }),
+    nameList.length > 0
+      ? supabase.from("providers").select(selectCols).eq("has_gone_live", true).eq("is_active", true).in("display_name", nameList)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (idResult.error) throw idResult.error;
+  if (nameResult.error) throw nameResult.error;
+
+  type ProviderRow = { id: string; display_name: string; booking_policies: unknown; business_type: string | null };
+  const rowsById = new Map<string, ProviderRow>((idResult.data ?? []).map((p: ProviderRow) => [p.id, p]));
+  const rowsByName = new Map<string, ProviderRow>((nameResult.data ?? []).map((p: ProviderRow) => [p.display_name, p]));
 
   const depositPolicies: Record<string, ProviderDepositPolicy> = {};
   const mobileProviderNames = new Set<string>();
-  for (const provider of data ?? []) {
+  for (const q of queries) {
+    const provider = q.providerId ? rowsById.get(q.providerId) : rowsByName.get(q.key);
+    if (!provider) continue;
+
     if (provider.business_type === "mobile") {
-      mobileProviderNames.add(provider.display_name);
+      mobileProviderNames.add(q.key);
     }
     const policies = provider.booking_policies as {
       depositMode?: string;
@@ -6913,7 +6951,7 @@ export async function getProviderCheckoutMetadata(
     } | null;
     const mode = resolveDepositMode(policies);
     if (mode === "full_only") {
-      depositPolicies[provider.display_name] = {
+      depositPolicies[q.key] = {
         depositType: "percentage",
         depositAmount: 0,
         depositAvailable: false,
@@ -6921,14 +6959,14 @@ export async function getProviderCheckoutMetadata(
       };
     } else if (mode && policies?.depositAmount) {
       const amount = Number(policies.depositAmount);
-      depositPolicies[provider.display_name] = {
+      depositPolicies[q.key] = {
         depositType: policies.depositType === "fixed" ? "fixed" : "percentage",
         depositAmount: amount > 0 ? amount : 20,
         depositAvailable: true,
         depositOnly: mode === "deposit_required",
       };
     } else {
-      depositPolicies[provider.display_name] = {
+      depositPolicies[q.key] = {
         depositType: "percentage",
         depositAmount: 0,
         depositAvailable: false,
