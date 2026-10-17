@@ -108,7 +108,7 @@ Curated: [[Payments]] · **129 files**
 - … +99 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **254 files**
+Curated: [[Booking Flow]] · **255 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/services/databaseService.ts` _(684)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **254 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +224 more
+- … +225 more
 
 ## Notifications
 Curated: [[Notifications]] · **152 files**
@@ -278,11 +278,11 @@ Curated: [[Booking Flow]] · **163 files**
 - … +133 more
 
 ## Auth
-Curated: [[Contexts]] · **174 files**
+Curated: [[Contexts]] · **175 files**
 - `src/services/databaseService.ts` _(255)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(142)_
-- `src/screens/auth/LoginScreen.tsx` _(128)_
+- `src/screens/auth/LoginScreen.tsx` _(119)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_
 - `src/screens/shared/ChangeCredentialsScreen.tsx` _(54)_
@@ -290,7 +290,7 @@ Curated: [[Contexts]] · **174 files**
 - `src/screens/auth/AuthScreen.tsx` _(42)_
 - `src/screens/auth/NewPasswordScreen.tsx` _(42)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(41)_
-- `src/screens/auth/SignUpStep2Screen.tsx` _(37)_
+- `src/screens/auth/SignUpStep2Screen.tsx` _(39)_
 - `src/navigation/RootNavigation.tsx` _(36)_
 - `supabase/phase1_schema.sql` _(32)_
 - `src/services/beccaStorageService.ts` _(30)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **174 files**
 - `src/screens/provider/InfoRegScreen.tsx` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- … +144 more
+- … +145 more
 
 ## Becca / AI
 Curated: [[Services]] · **44 files**

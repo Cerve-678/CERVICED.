@@ -4,7 +4,6 @@ import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,6 +18,8 @@ import { sendPasswordReset } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { Ionicons } from '@expo/vector-icons';
+import { FieldRow, FormCard, ScreenTitle, useFieldInputStyle } from '../../components/signup/FormKit';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 
@@ -50,31 +51,41 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     }
   };
 
+  const inputStyle = useFieldInputStyle();
+
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
+          <View style={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]}>
+            <TouchableOpacity
+              style={[styles.backBtn, { backgroundColor: t.card, borderColor: t.border }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
+              <Ionicons name="chevron-back" size={20} color={t.text} />
+            </TouchableOpacity>
 
-            <Text style={[styles.title, { color: t.text }]}>Forgot password?</Text>
-            <Text style={[styles.subtitle, { color: t.sub }]}>
-              Enter your email and we'll send you a code to reset your password.
-            </Text>
-
-            <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
-              <TextInput
-                style={[styles.input, { color: t.text }]}
-                placeholder="Email address"
-                placeholderTextColor={t.sub}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                selectionColor={t.accent}
-              />
+            <View style={[styles.iconTile, { backgroundColor: t.accentDim }]}>
+              <Ionicons name="key-outline" size={28} color={t.accentText} />
             </View>
+            <ScreenTitle title="Forgot password?" subtitle="Enter your email and we'll send you a code to reset your password." />
+
+            <FormCard>
+              <FieldRow label="EMAIL">
+                <TextInput
+                  style={inputStyle} value={email} onChangeText={setEmail}
+                  placeholder="sarah@example.com" placeholderTextColor={t.sub}
+                  keyboardType="email-address" autoCapitalize="none" autoFocus textContentType="emailAddress"
+                  returnKeyType="send" onSubmitEditing={handleSend}
+                />
+              </FieldRow>
+            </FormCard>
+
+            <View style={{ flex: 1 }} />
 
             <TouchableOpacity
               style={[styles.primaryBtn, { backgroundColor: t.accent }]}
@@ -82,18 +93,10 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
               activeOpacity={0.75}
               disabled={loading}
             >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.primaryBtnText}>SEND RESET CODE</Text>
-              )}
+              {loading ? <ActivityIndicator color={t.onAccent} /> : <Text style={[styles.primaryBtnText, { color: t.onAccent }]}>SEND RESET CODE</Text>}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.backLink}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
-              activeOpacity={0.6}
-            >
+            <TouchableOpacity style={styles.backLink} onPress={() => navigation.goBack()} activeOpacity={0.6}>
               <Text style={[styles.backLinkText, { color: t.sub }]}>Back to log in</Text>
             </TouchableOpacity>
           </View>
@@ -104,57 +107,11 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontFamily: 'BakbakOne-Regular',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-  },
-  inputWrap: {
-    width: '100%',
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'android' ? 12 : 14,
-    marginBottom: 16,
-  },
-  input: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    padding: 0,
-  },
-  primaryBtn: {
-    width: '100%',
-    minHeight: 52,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  primaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    letterSpacing: 1,
-    color: '#FFFFFF',
-  },
-  backLink: { paddingVertical: 8 },
-  backLinkText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 14,
-  },
+  content: { flex: 1, paddingHorizontal: 16 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
+  iconTile: { width: 60, height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  primaryBtn: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
+  primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
+  backLink: { alignSelf: 'center', paddingVertical: 14 },
+  backLinkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
 });

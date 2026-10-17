@@ -115,17 +115,17 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const chipStyle = (isSelected: boolean) => ({
     borderRadius: 100,
     borderWidth: 1,
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-    backgroundColor: isSelected ? t.accent : t.surface,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: isSelected ? t.accent : t.card,
     borderColor: isSelected ? t.accent : t.border,
   });
 
   const chipTextStyle = (isSelected: boolean) => ({
-    fontFamily: 'BakbakOne-Regular' as const,
+    fontFamily: 'Jura-VariableFont_wght' as const,
     fontSize: 13,
-    letterSpacing: 0.8,
-    color: isSelected ? '#FFFFFF' : t.sub,
+    fontWeight: '700' as const,
+    color: isSelected ? t.onAccent : t.text,
   });
 
   const pickHair = (type: string) => {
@@ -299,7 +299,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           <>
             {/* Hair Type */}
             <View onLayout={(e: LayoutChangeEvent) => { hairY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedHairType ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedHairType ? '#DC2626' : t.accentText }]}>
                 HAIR TYPE{showErrors && !selectedHairType ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>What's your hair texture?</Text>
@@ -314,7 +314,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Skin Type */}
             <View onLayout={(e: LayoutChangeEvent) => { skinY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedSkinType ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedSkinType ? '#DC2626' : t.accentText }]}>
                 SKIN TYPE{showErrors && !selectedSkinType ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>How would you describe your skin?</Text>
@@ -329,7 +329,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Skin Concerns */}
             <View onLayout={(e: LayoutChangeEvent) => { skinConcernsY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedConcerns.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedConcerns.length ? '#DC2626' : t.accentText }]}>
                 SKIN CONCERNS{showErrors && !selectedConcerns.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>Any specific concerns you'd like addressed?</Text>
@@ -344,7 +344,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Style Vibe */}
             <View onLayout={(e: LayoutChangeEvent) => { styleVibeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedStyleVibe ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedStyleVibe ? '#DC2626' : t.accentText }]}>
                 STYLE VIBE{showErrors && !selectedStyleVibe ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>What best describes your aesthetic?</Text>
@@ -359,7 +359,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Allergies */}
             <View onLayout={(e: LayoutChangeEvent) => { allergyY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedAllergens.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedAllergens.length ? '#DC2626' : t.accentText }]}>
                 ALLERGIES{showErrors && !selectedAllergens.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>
@@ -386,7 +386,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Treatment History */}
             <View onLayout={(e: LayoutChangeEvent) => { treatmentY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedTreatments.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedTreatments.length ? '#DC2626' : t.accentText }]}>
                 TREATMENT HISTORY{showErrors && !selectedTreatments.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>What treatments have you had before?</Text>
@@ -401,11 +401,11 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Medical Notes */}
             <View onLayout={(e: LayoutChangeEvent) => { medicalY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: t.text }]}>MEDICAL NOTES</Text>
+              <Text style={[styles.sectionLabel, { color: t.accentText }]}>MEDICAL NOTES</Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>
                 Any conditions your provider should know about (optional)
               </Text>
-              <View style={[styles.textAreaWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+              <View style={[styles.textAreaWrap, { backgroundColor: t.card, borderColor: t.border }]}>
                 <TextInput
                   style={[styles.textArea, { color: t.text }]}
                   value={medicalNotes}
@@ -442,7 +442,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           <>
             {/* Services you offer */}
             <View onLayout={(e: LayoutChangeEvent) => { servicesY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedServices.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedServices.length ? '#DC2626' : t.accentText }]}>
                 SERVICES YOU OFFER{showErrors && !selectedServices.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>Select all categories that apply to your business</Text>
@@ -457,7 +457,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Business type */}
             <View onLayout={(e: LayoutChangeEvent) => { businessTypeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedBusinessType ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedBusinessType ? '#DC2626' : t.accentText }]}>
                 BUSINESS TYPE{showErrors && !selectedBusinessType ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>How do you run your business?</Text>
@@ -475,7 +475,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               onLayout={(e: LayoutChangeEvent) => { locationY.current = e.nativeEvent.layout.y; }}
               style={{ marginBottom: 32 }}
             >
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLocation.trim() ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLocation.trim() ? '#DC2626' : t.accentText }]}>
                 WHERE YOU WORK{showErrors && !selectedLocation.trim() ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>Where's your business based?</Text>
@@ -489,7 +489,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Price range */}
             <View onLayout={(e: LayoutChangeEvent) => { priceRangeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPriceRange ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPriceRange ? '#DC2626' : t.accentText }]}>
                 PRICE RANGE{showErrors && !selectedPriceRange ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>Where do most of your services sit?</Text>
@@ -504,9 +504,9 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Years of experience (optional) */}
             <View>
-              <Text style={[styles.sectionLabel, { color: t.text }]}>YEARS OF EXPERIENCE</Text>
+              <Text style={[styles.sectionLabel, { color: t.accentText }]}>YEARS OF EXPERIENCE</Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>How long have you been working in your field? (optional)</Text>
-              <View style={[styles.textAreaWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+              <View style={[styles.textAreaWrap, { backgroundColor: t.card, borderColor: t.border }]}>
                 <TextInput
                   style={[styles.yearsInput, { color: t.text }]}
                   value={yearsExperience}
@@ -528,7 +528,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
             {/* Contact preferences */}
             <View onLayout={(e: LayoutChangeEvent) => { contactMethodsY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedContactMethods.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedContactMethods.length ? '#DC2626' : t.accentText }]}>
                 CONTACT PREFERENCES{showErrors && !selectedContactMethods.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>How should clients reach you?</Text>
@@ -545,7 +545,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
                 professional's own booking page; that page owns payment. */}
             {!usesOwnLink && (
             <View onLayout={(e: LayoutChangeEvent) => { paymentMethodsY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPaymentMethods.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPaymentMethods.length ? '#DC2626' : t.accentText }]}>
                 PREFERRED PAYMENT TYPE{showErrors && !selectedPaymentMethods.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>How do you take payment for off-app services?</Text>
@@ -586,11 +586,11 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  header: { marginBottom: 28 },
-  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 32, letterSpacing: 1 },
-  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, marginTop: 8, lineHeight: 20 },
-  sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 2, marginBottom: 4 },
-  sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 12, lineHeight: 18 },
+  header: { marginBottom: 22 },
+  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 36, letterSpacing: 0.5 },
+  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, marginTop: 4, lineHeight: 21 },
+  sectionLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
+  sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 10, lineHeight: 18 },
   allergyNote: {
     borderRadius: 10,
     borderWidth: 1,
@@ -599,9 +599,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   allergyNoteText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18 },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 32 },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 24 },
   textAreaWrap: {
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -623,16 +623,16 @@ const styles = StyleSheet.create({
   consentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     padding: 16,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   consentTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3, marginBottom: 4 },
   consentSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
   actionsSection: { alignItems: 'center' },
-  continueBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center', width: '100%' },
-  continueBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' },
+  continueBtn: { borderRadius: 100, minHeight: 56, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  continueBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5, color: '#FFFFFF' },
   skipBtn: { marginTop: 16, paddingVertical: 8 },
   skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
 });
