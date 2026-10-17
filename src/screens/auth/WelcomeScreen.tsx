@@ -21,31 +21,16 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, {
-  Extrapolation,
-  interpolate,
-  useAnimatedStyle,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FlipInEasyX,
   useReducedMotion,
-  useSharedValue,
-  withDelay,
-  withSpring,
-  withTiming,
-  type SharedValue,
 } from 'react-native-reanimated';
 import WelcomeIntro, { WELCOME_INTRO_TOP_MARGIN } from '../../components/WelcomeIntro';
 import { STORAGE_KEYS } from '../../utils/storageKeys';
 
 type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
-
-/** Each headline row rises a little after the one above it. */
-function useRowReveal(reveal: SharedValue<number>, row: number) {
-  return useAnimatedStyle(() => {
-    const start = row * 0.18;
-    return {
-      opacity: interpolate(reveal.value, [start, start + 0.45], [0, 1], Extrapolation.CLAMP),
-      transform: [{ translateY: interpolate(reveal.value, [start, start + 0.45], [14, 0], Extrapolation.CLAMP) }],
-    };
-  });
-}
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
@@ -108,47 +93,12 @@ export default function WelcomeScreen({ navigation }: Props) {
   // picks up where the glide left off: the wordmark is already in place and
   // "sorted." gets the intro's flip. Returning users get a short plain fade.
   const [cameFromIntro, setCameFromIntro] = useState(false);
-  const fromIntro = useSharedValue(0);
-  const reveal = useSharedValue(0);
-  const sortedFlip = useSharedValue(0);
-  const sortedDot = useSharedValue(0);
-
-  useEffect(() => {
-    if (introState !== 'done') return;
-    if (reduceMotion) {
-      reveal.value = 1;
-      sortedFlip.value = 1;
-      sortedDot.value = 1;
-      return;
-    }
-    if (cameFromIntro) {
-      fromIntro.value = 1;
-      reveal.value = withTiming(1, { duration: 900 });
-      sortedFlip.value = withDelay(350, withTiming(1, { duration: 600 }));
-      sortedDot.value = withDelay(850, withSpring(1, { damping: 9, stiffness: 180 }));
-    } else {
-      reveal.value = withTiming(1, { duration: 450 });
-      sortedFlip.value = 1;
-      sortedDot.value = 1;
-    }
-  }, [introState, reduceMotion, cameFromIntro, fromIntro, reveal, sortedFlip, sortedDot]);
-
-  const wordmarkStyle = useAnimatedStyle(() => ({
-    opacity: Math.max(fromIntro.value, reveal.value),
-  }));
-  const beautyStyle = useRowReveal(reveal, 0);
-  const maintenanceStyle = useRowReveal(reveal, 1);
-  const sortedRowStyle = useRowReveal(reveal, 2);
-  const wordsStyle = useRowReveal(reveal, 3);
-  // Same over-the-top flip as the intro's S → C, for the whole word.
-  const sortedStyle = useAnimatedStyle(() => ({
-    opacity: sortedFlip.value > 0.02 ? 1 : 0,
-    transform: [{ perspective: 400 }, { rotateX: `${interpolate(sortedFlip.value, [0, 1], [-90, 0])}deg` }],
-  }));
-  const sortedDotStyle = useAnimatedStyle(() => ({
-    opacity: sortedDot.value > 0.02 ? 1 : 0,
-    transform: [{ translateY: interpolate(sortedDot.value, [0, 1], [-26, 0]) }],
-  }));
+  // Entrance animations rather than shared values the screen has to drive to
+  // 1: they always finish visible, so the headline can never be left at
+  // opacity 0, and they skip themselves when Reduce Motion is on.
+  const rise = (row: number) => (cameFromIntro
+    ? FadeInDown.duration(550).delay(row * 160)
+    : FadeInDown.duration(400).delay(row * 70));
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -159,18 +109,28 @@ export default function WelcomeScreen({ navigation }: Props) {
           <View style={{ marginTop: WELCOME_INTRO_TOP_MARGIN }}>
             <WelcomeIntro palette={t} onFinished={() => { setCameFromIntro(true); setIntroState('done'); }} />
           </View>
-        ) : (
+        ) : introState === 'checking' ? null : (
           <View accessible accessibilityLabel="CERVICED. Beauty maintenance, sorted.">
-            <Animated.Text style={[styles.wordmark, { color: t.text }, wordmarkStyle]}>CERVICED.</Animated.Text>
+            <Animated.Text {...(cameFromIntro ? {} : { entering: FadeIn.duration(400) })} style={[styles.wordmark, { color: t.text }]}>CERVICED.</Animated.Text>
             <View style={styles.headlineBlock}>
-              <Animated.Text style={[styles.headline, { color: t.text }, beautyStyle]}>Beauty</Animated.Text>
-              <Animated.Text style={[styles.headline, { color: t.text }, maintenanceStyle]}>maintenance,</Animated.Text>
-              <Animated.View style={[styles.sortedRow, sortedRowStyle]}>
-                <Animated.Text style={[styles.headline, { color: t.accent }, sortedStyle]}>sorted</Animated.Text>
-                <Animated.Text style={[styles.headline, { color: t.accent }, sortedDotStyle]}>.</Animated.Text>
+              <Animated.Text entering={rise(0)} style={[styles.headline, { color: t.text }]}>Beauty</Animated.Text>
+              <Animated.Text entering={rise(1)} style={[styles.headline, { color: t.text }]}>maintenance,</Animated.Text>
+              <Animated.View {...(cameFromIntro ? {} : { entering: rise(2) })} style={styles.sortedRow}>
+                <Animated.Text
+                  {...(cameFromIntro ? { entering: FlipInEasyX.duration(600).delay(350) } : {})}
+                  style={[styles.headline, { color: t.accent }]}
+                >
+                  sorted
+                </Animated.Text>
+                <Animated.Text
+                  {...(cameFromIntro ? { entering: FadeInUp.springify().damping(9).stiffness(180).delay(850) } : {})}
+                  style={[styles.headline, { color: t.accent }]}
+                >
+                  .
+                </Animated.Text>
               </Animated.View>
             </View>
-            <Animated.View style={[styles.wordsRow, wordsStyle]}>
+            <Animated.View entering={rise(3)} style={styles.wordsRow}>
               {SERVICE_WORDS.map(w => (
                 <Text key={w} style={[styles.word, { color: t.sub }]}>{w}</Text>
               ))}
