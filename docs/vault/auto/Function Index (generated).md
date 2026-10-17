@@ -53,7 +53,7 @@
 - `ThemedBackground.tsx` — **ThemedBackground**
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
-- `WelcomeIntro.tsx` — DealtCard · DroppingLetter · WelcomeIntro
+- `WelcomeIntro.tsx` — DealtCard · DroppingLetter · onWordLayout · WelcomeIntro
 
 ### `src/components/signup/` (1)
 - `FormKit.tsx` — **Chip** · **ChipWrap** · **FieldRow** · **FormCard** · **PrimaryButton** · **ScreenTitle** · **SectionLabel** · **useFieldInputStyle**
@@ -182,7 +182,7 @@
 - `SignUpStep3Screen.tsx` — fieldError · handleContinue · handleRow · markTouched · SignUpStep3Screen · validate
 - `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
 - `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · finishHatSwitch · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
-- `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · WelcomeScreen
+- `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · useRowReveal · WelcomeScreen
 
 ### `src/screens/client/` (21)
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
