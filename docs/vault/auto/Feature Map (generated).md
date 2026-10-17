@@ -108,7 +108,7 @@ Curated: [[Payments]] · **129 files**
 - … +99 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **253 files**
+Curated: [[Booking Flow]] · **254 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/services/databaseService.ts` _(684)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **253 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +223 more
+- … +224 more
 
 ## Notifications
 Curated: [[Notifications]] · **152 files**
@@ -346,7 +346,7 @@ Curated: [[Services]] · **44 files**
 - … +14 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **69 files**
+Curated: [[Payments]] · **70 files**
 - `src/screens/client/CartScreen.tsx` _(383)_
 - `src/services/databaseService.ts` _(71)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -372,9 +372,9 @@ Curated: [[Payments]] · **69 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
+- `src/components/WelcomeIntro.tsx` _(3)_
 - `src/constants/featureFlags.ts` _(3)_
 - `src/features/cart/platformFee.ts` _(3)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(3)_
 - `src/types/database.ts` _(3)_
-- `src/utils/policyDisplay.ts` _(3)_
-- … +39 more
+- … +40 more

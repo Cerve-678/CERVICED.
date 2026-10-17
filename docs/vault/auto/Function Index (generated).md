@@ -5,9 +5,9 @@
 
 #generated
 
-**2299 functions** across **317 files**.
+**2302 functions** across **318 files**.
 
-### `src/components/` (45)
+### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -53,6 +53,7 @@
 - `ThemedBackground.tsx` — **ThemedBackground**
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
+- `WelcomeIntro.tsx` — DealtCard · DroppingLetter · WelcomeIntro
 
 ### `src/constants/` (6)
 - `PlatformDimensions.ts` — for
