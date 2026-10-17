@@ -21,6 +21,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import SignUpHeader from '../../components/SignUpHeader';
+import { Ionicons } from '@expo/vector-icons';
 import { invokeSendAccountEmail, signUpWithEmail } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -162,17 +163,17 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const chipStyle = (isSelected: boolean) => ({
     borderRadius: 100,
     borderWidth: 1,
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-    backgroundColor: isSelected ? t.accent : t.surface,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: isSelected ? t.accent : t.card,
     borderColor: isSelected ? t.accent : t.border,
   });
 
   const chipTextStyle = (isSelected: boolean) => ({
-    fontFamily: 'BakbakOne-Regular' as const,
+    fontFamily: 'Jura-VariableFont_wght' as const,
     fontSize: 13,
-    letterSpacing: 0.8,
-    color: isSelected ? '#FFFFFF' : t.sub,
+    fontWeight: '700' as const,
+    color: isSelected ? t.onAccent : t.text,
   });
 
   const scrollTo = (yRef: React.MutableRefObject<number>) => {
@@ -401,7 +402,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     required: boolean,
   ) => (
     <View onLayout={(e: LayoutChangeEvent) => { yRef.current = e.nativeEvent.layout.y; }}>
-      <Text style={[styles.sectionLabel, { color: showErrors && required && !items.find(isSelectedFn) ? '#DC2626' : t.text }]}>
+      <Text style={[styles.sectionLabel, { color: showErrors && required && !items.find(isSelectedFn) ? '#DC2626' : t.accentText }]}>
         {label}{showErrors && required && !items.find(isSelectedFn) ? '  — required' : ''}
       </Text>
       <Text style={[styles.sectionSub, { color: t.sub }]}>{sub}</Text>
@@ -443,7 +444,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                 pattern as Specialties below, so a language outside the
                 fixed list can still be added instead of being lost. */}
             <View onLayout={(e: LayoutChangeEvent) => { languagesY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLanguages.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLanguages.length ? '#DC2626' : t.accentText }]}>
                 LANGUAGES SPOKEN{showErrors && !selectedLanguages.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>Which languages can you offer appointments in?</Text>
@@ -455,7 +456,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                 ))}
               </View>
               {selectedLanguages.includes('Other') && (
-                <View style={[styles.otherInputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                <View style={[styles.otherInputWrap, { backgroundColor: t.card, borderColor: t.border }]}>
                   <TextInput
                     style={[styles.otherInput, { color: t.text }]}
                     value={languagesOther}
@@ -469,7 +470,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
             {/* Specialties — options depend on the service categories picked in Step 4 */}
             <View onLayout={(e: LayoutChangeEvent) => { specialtiesY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedSpecialties.length ? '#DC2626' : t.text }]}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedSpecialties.length ? '#DC2626' : t.accentText }]}>
                 SPECIALTIES{showErrors && !selectedSpecialties.length ? '  — required' : ''}
               </Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>
@@ -485,7 +486,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                 ))}
               </View>
               {selectedSpecialties.includes('Other') && (
-                <View style={[styles.otherInputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                <View style={[styles.otherInputWrap, { backgroundColor: t.card, borderColor: t.border }]}>
                   <TextInput
                     style={[styles.otherInput, { color: t.text }]}
                     value={specialtiesOther}
@@ -508,7 +509,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
             {/* Gender — optional, personalises the home feed */}
             <View>
-              <Text style={[styles.sectionLabel, { color: t.text }]}>GENDER  <Text style={[styles.skipText, { color: t.sub, fontSize: 11 }]}>optional</Text></Text>
+              <Text style={[styles.sectionLabel, { color: t.accentText }]}>GENDER  <Text style={[styles.skipText, { color: t.sub, fontSize: 11 }]}>optional</Text></Text>
               <Text style={[styles.sectionSub, { color: t.sub }]}>Helps us show you relevant services</Text>
               <View style={styles.chipsContainer}>
                 {(['female', 'male', 'non-binary', 'prefer-not-to-say'] as const).map(g => {
@@ -517,11 +518,11 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                   return (
                     <TouchableOpacity
                       key={g}
-                      style={{ borderRadius: 100, borderWidth: 1, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: isSelected ? t.accent : t.surface, borderColor: isSelected ? t.accent : t.border }}
+                      style={chipStyle(isSelected)}
                       onPress={() => { Haptics.selectionAsync().catch(() => {}); setSelectedGender(isSelected ? null : g); }}
                       activeOpacity={0.6}
                     >
-                      <Text style={{ fontFamily: 'BakbakOne-Regular' as const, fontSize: 13, letterSpacing: 0.8, color: isSelected ? '#FFFFFF' : t.sub }}>{label[g]}</Text>
+                      <Text style={chipTextStyle(isSelected)}>{label[g]}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -587,7 +588,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
               },
             ]}
           >
-            <Text style={styles.celebrateEmoji}>🎉</Text>
+            <Ionicons name="sparkles-outline" size={44} color={t.accent} />
             <Text style={[styles.celebrateTitle, { color: t.text }]}>
               {celebratedHat ? HAT_CELEBRATION[celebratedHat].title : ''}
             </Text>
@@ -611,12 +612,12 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  header: { marginBottom: 28 },
-  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 32, letterSpacing: 1 },
-  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, marginTop: 8, lineHeight: 20 },
-  sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 2, marginBottom: 4 },
-  sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 14, lineHeight: 18 },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 32 },
+  header: { marginBottom: 22 },
+  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 36, letterSpacing: 0.5 },
+  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, marginTop: 4, lineHeight: 21 },
+  sectionLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
+  sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 10, lineHeight: 18 },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 24 },
   otherInputWrap: {
     borderRadius: 12,
     borderWidth: 1,
@@ -627,8 +628,8 @@ const styles = StyleSheet.create({
   },
   otherInput: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, letterSpacing: 0.3, padding: 0 },
   actionsSection: { alignItems: 'center' },
-  completeBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center', width: '100%' },
-  completeBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' },
+  completeBtn: { borderRadius: 100, minHeight: 56, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  completeBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5, color: '#FFFFFF' },
   skipBtn: { marginTop: 16, paddingVertical: 8 },
   skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
   // Second-hat celebration. Typography follows this screen's fonts rather than
@@ -647,7 +648,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 340,
   },
-  celebrateEmoji: { fontSize: 44 },
   celebrateTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 22,
@@ -679,9 +679,9 @@ const styles = StyleSheet.create({
   kidsToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     padding: 16,
-    marginBottom: 32,
+    marginBottom: 24,
   },
 });

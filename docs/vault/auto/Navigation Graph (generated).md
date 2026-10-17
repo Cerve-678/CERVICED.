@@ -5,7 +5,7 @@
 
 #generated
 
-**132 edges** across **43 screens**. Node-graph version: [[Screen Flow (generated)]].
+**134 edges** across **43 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -119,7 +119,9 @@ graph LR
   SearchScreen --> ProviderProfileScreen
   ServicesPricingScreen --> BusinessInfoScreen
   SignUpStep1Screen --> SignUpStep2
+  SignUpStep2Screen --> Login
   SignUpStep2Screen --> SignUpStep3
+  SignUpStep3Screen --> SignUpStep1
   SignUpStep3Screen --> SignUpStep4
   SignUpStep4Screen --> SignUpStep5
   SignUpStep5Screen --> EmailVerification
@@ -154,8 +156,8 @@ graph LR
 - `auth/NewPasswordScreen` → `Login`
 - `auth/ResetPasswordOTPScreen` → `Login`, `NewPassword`
 - `auth/SignUpStep1Screen` → `SignUpStep2`
-- `auth/SignUpStep2Screen` → `SignUpStep3`
-- `auth/SignUpStep3Screen` → `SignUpStep4`
+- `auth/SignUpStep2Screen` → `Login`, `SignUpStep3`
+- `auth/SignUpStep3Screen` → `SignUpStep1`, `SignUpStep4`
 - `auth/SignUpStep4Screen` → `SignUpStep5`
 - `auth/SignUpStep5Screen` → `EmailVerification`, `Login`
 - `auth/WelcomeScreen` → `ClaimProvider`, `Login`, `SignUpStep1`

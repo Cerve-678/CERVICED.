@@ -8,6 +8,7 @@ tags: [screen, client]
 
 ## → Navigates to
 - `SignUpStep3` _(navigator / dynamic)_
+- `Login` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

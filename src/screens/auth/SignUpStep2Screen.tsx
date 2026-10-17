@@ -3,7 +3,6 @@ import React, { useState, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   Alert,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -16,7 +15,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import SignUpHeader from '../../components/SignUpHeader';
-import { validateEmail, validatePassword, validatePhone, validateDob, getPasswordStrength } from '../../utils/validation';
+import { FieldRow, FormCard, PrimaryButton, ScreenTitle, useFieldInputStyle } from '../../components/signup/FormKit';
+import { Ionicons } from '@expo/vector-icons';
+import { validateEmail, validatePassword, validatePhone, validateDob } from '../../utils/validation';
 import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
@@ -81,11 +82,6 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     setErrors(validate());
   };
 
-  const renderError = (field: keyof FormErrors) => {
-    if (!touched[field] || !errors[field]) return null;
-    return <Text style={styles.errorText}>{errors[field]}</Text>;
-  };
-
   const handleContinue = () => {
     const errs = validate();
     setErrors(errs);
@@ -132,10 +128,8 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     navigation.navigate('SignUpStep3');
   };
 
-  const strength = getPasswordStrength(password);
-
-  const inputBorder = (field: keyof FormErrors) =>
-    touched[field] && errors[field] ? '#DC2626' : t.border;
+  const inputStyle = useFieldInputStyle();
+  const fieldError = (field: keyof FormErrors) => (touched[field] ? errors[field] : undefined);
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -143,147 +137,97 @@ export default function SignUpStep2Screen({ navigation }: Props) {
 
       <KeyboardDismissView style={styles.flex}>
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: 120 }]}
+          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           <SignUpHeader onBack={() => navigation.goBack()} currentStep={2} totalSteps={totalSteps} />
+          <ScreenTitle title="Create your login" subtitle="What you'll log in with." />
 
-          <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: t.text }]}>Create your login</Text>
-            <Text style={[styles.headerSubtitle, { color: t.sub }]}>What you'll log in with.</Text>
-          </View>
-
-          <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.border }]}>
-            {/* Name */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: t.sub }]}>YOUR NAME</Text>
-              <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('name') }]}>
-                <TextInput
-                  style={[styles.input, { color: t.text }]}
-                  value={name}
-                  onChangeText={setName}
-                  onBlur={() => markTouched('name')}
-                  placeholder="Sarah Johnson"
-                  placeholderTextColor={t.sub}
-                />
-              </View>
-              {renderError('name')}
-            </View>
-
-            {/* Email */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: t.sub }]}>
-                {data.accountType === 'provider' ? 'PERSONAL EMAIL' : 'EMAIL'}
-              </Text>
-              <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('email') }]}>
-                <TextInput
-                  style={[styles.input, { color: t.text }]}
-                  value={email}
-                  onChangeText={setEmail}
-                  onBlur={() => markTouched('email')}
-                  placeholder="sarah@example.com"
-                  placeholderTextColor={t.sub}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              {renderError('email')}
-            </View>
-
-            {/* Phone */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: t.sub }]}>PHONE NUMBER</Text>
-              <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('phone') }]}>
-                <TextInput
-                  style={[styles.input, { color: t.text }]}
-                  value={phone}
-                  onChangeText={setPhone}
-                  onBlur={() => markTouched('phone')}
-                  placeholder="+44 7700 900000"
-                  placeholderTextColor={t.sub}
-                  keyboardType="phone-pad"
-                />
-              </View>
-              {renderError('phone')}
-            </View>
-
-            {/* Date of birth — providers only; client DOB is collected on Step 3 */}
+          <FormCard>
+            <FieldRow label="YOUR NAME" error={fieldError('name')}>
+              <TextInput
+                style={inputStyle} value={name} onChangeText={setName} onBlur={() => markTouched('name')}
+                placeholder="Sarah Johnson" placeholderTextColor={t.sub} textContentType="name"
+              />
+            </FieldRow>
+            <FieldRow label={isProvider ? 'PERSONAL EMAIL' : 'EMAIL'} error={fieldError('email')}>
+              <TextInput
+                style={inputStyle} value={email} onChangeText={setEmail} onBlur={() => markTouched('email')}
+                placeholder="sarah@example.com" placeholderTextColor={t.sub}
+                keyboardType="email-address" autoCapitalize="none" textContentType="emailAddress"
+              />
+            </FieldRow>
+            <FieldRow label="MOBILE" error={fieldError('phone')}>
+              <TextInput
+                style={inputStyle} value={phone} onChangeText={setPhone} onBlur={() => markTouched('phone')}
+                placeholder="+44 7700 900000" placeholderTextColor={t.sub} keyboardType="phone-pad" textContentType="telephoneNumber"
+              />
+            </FieldRow>
+            {/* Providers only; client DOB is collected on Step 3 */}
             {isProvider && (
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: t.sub }]}>DATE OF BIRTH</Text>
+              <FieldRow label="DATE OF BIRTH" error={fieldError('dob')}>
                 <View style={styles.dobRow}>
                   {[
-                    { value: dobDay, set: setDobDay, ph: 'DD', max: 2, flex: 1 },
-                    { value: dobMonth, set: setDobMonth, ph: 'MM', max: 2, flex: 1 },
-                    { value: dobYear, set: setDobYear, ph: 'YYYY', max: 4, flex: 1.5 },
+                    { value: dobDay, set: setDobDay, ph: 'DD', max: 2, width: 34 },
+                    { value: dobMonth, set: setDobMonth, ph: 'MM', max: 2, width: 34 },
+                    { value: dobYear, set: setDobYear, ph: 'YYYY', max: 4, width: 56 },
                   ].map((f, i) => (
-                    <View key={f.ph} style={{ flex: f.flex, flexDirection: 'row', alignItems: 'center' }}>
+                    <View key={f.ph} style={styles.dobPart}>
                       {i > 0 && <Text style={[styles.dobSlash, { color: t.sub }]}>/</Text>}
-                      <View style={[styles.inputWrap, styles.dobField, { backgroundColor: t.surface, borderColor: inputBorder('dob') }]}>
-                        <TextInput
-                          style={[styles.input, { color: t.text, textAlign: 'center' }]}
-                          value={f.value}
-                          onChangeText={v => { if (v.length <= f.max) f.set(v.replace(/[^0-9]/g, '')); }}
-                          onBlur={() => markTouched('dob')}
-                          placeholder={f.ph}
-                          placeholderTextColor={t.sub}
-                          keyboardType="number-pad"
-                          maxLength={f.max}
-                        />
-                      </View>
+                      <TextInput
+                        style={[inputStyle, { width: f.width }]}
+                        value={f.value}
+                        onChangeText={v => { if (v.length <= f.max) f.set(v.replace(/[^0-9]/g, '')); }}
+                        onBlur={() => markTouched('dob')}
+                        placeholder={f.ph}
+                        placeholderTextColor={t.sub}
+                        keyboardType="number-pad"
+                        maxLength={f.max}
+                      />
                     </View>
                   ))}
                 </View>
-                {renderError('dob')}
-              </View>
+              </FieldRow>
             )}
+          </FormCard>
 
-            {/* Password */}
-            {!isClientSwitch && (
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: t.sub }]}>PASSWORD</Text>
-                <View style={[styles.inputWrap, styles.inputWrapRow, { backgroundColor: t.surface, borderColor: inputBorder('password') }]}>
+          {!isClientSwitch && (
+            <FormCard style={styles.passwordCard}>
+              <View style={styles.passwordInner}>
+                <FieldRow
+                  label="PASSWORD"
+                  error={fieldError('password')}
+                  right={(
+                    <TouchableOpacity
+                      onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
+                      activeOpacity={0.7}
+                      hitSlop={10}
+                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.sub} />
+                    </TouchableOpacity>
+                  )}
+                >
                   <TextInput
-                    style={[styles.input, styles.inputWithEye, { color: t.text }]}
-                    value={password}
-                    onChangeText={setPassword}
-                    onBlur={() => markTouched('password')}
-                    placeholder="••••••••"
-                    placeholderTextColor={t.sub}
-                    secureTextEntry={!showPassword}
+                    style={inputStyle} value={password} onChangeText={setPassword} onBlur={() => markTouched('password')}
+                    placeholder="••••••••" placeholderTextColor={t.sub} secureTextEntry={!showPassword} textContentType="newPassword"
                   />
-                  <TouchableOpacity
-                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
-                  </TouchableOpacity>
+                </FieldRow>
+                <View style={styles.rules}>
+                  <PasswordRequirements password={password} layout="chips" goodColor={t.accentText} goodFill={t.accentDim} pendingColor={t.sub} />
                 </View>
-                {renderError('password')}
-                {password.length > 0 && (
-                  <>
-                    <View style={styles.strengthRow}>
-                      <View style={[styles.strengthTrack, { backgroundColor: t.border }]}>
-                        <View style={[styles.strengthFill, { width: strength.width as any, backgroundColor: strength.color }]} />
-                      </View>
-                      <Text style={[styles.strengthText, { color: t.sub }]}>{strength.label}</Text>
-                    </View>
-                    <PasswordRequirements password={password} goodColor={t.accent} pendingColor={t.sub} />
-                  </>
-                )}
               </View>
-            )}
+            </FormCard>
+          )}
 
-            {/* Continue */}
-            <TouchableOpacity
-              style={[styles.continueBtn, { backgroundColor: t.accent }]}
-              onPress={handleContinue}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.continueBtnText}>CONTINUE</Text>
-            </TouchableOpacity>
-          </View>
+          <PrimaryButton label="CONTINUE" onPress={handleContinue} style={styles.continueBtn} />
+          {!user && (
+            <Text style={[styles.loginLink, { color: t.sub }]}>
+              Already have an account?{' '}
+              <Text style={{ color: t.accentText, fontWeight: '700' }} onPress={() => navigation.navigate('Login')}>Log in</Text>
+            </Text>
+          )}
         </ScrollView>
       </KeyboardDismissView>
     </ThemedBackground>
@@ -291,92 +235,14 @@ export default function SignUpStep2Screen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
   flex: { flex: 1 },
-  scroll: { paddingHorizontal: 16 },
-  header: { marginBottom: 28 },
-  headerTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 32,
-    letterSpacing: 1,
-  },
-  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, marginTop: 6, lineHeight: 21 },
-  formCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 20,
-  },
-  fieldGroup: { marginBottom: 16 },
-  fieldLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  inputWrap: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'android' ? 10 : 13,
-  },
-  inputWrapRow: { flexDirection: 'row', alignItems: 'center' },
-  inputWithEye: { flex: 1, paddingRight: 8 },
-  eyeText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  scroll: { paddingHorizontal: 16, flexGrow: 1 },
   dobRow: { flexDirection: 'row', alignItems: 'center' },
-  dobField: { flex: 1, paddingHorizontal: 8 },
-  dobSlash: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 16,
-    marginHorizontal: 6,
-  },
-  input: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    letterSpacing: 0.3,
-    padding: 0,
-  },
-  errorText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    color: '#DC2626',
-    marginTop: 5,
-    marginLeft: 2,
-  },
-  strengthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 10,
-  },
-  strengthTrack: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  strengthFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  strengthText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  continueBtn: {
-    borderRadius: 100,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  continueBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    letterSpacing: 1,
-    color: '#FFFFFF',
-  },
+  dobPart: { flexDirection: 'row', alignItems: 'center' },
+  dobSlash: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '600', marginHorizontal: 6 },
+  passwordCard: { marginTop: 12 },
+  passwordInner: { paddingBottom: 12 },
+  rules: { paddingHorizontal: 16, marginTop: -6 },
+  continueBtn: { marginTop: 24 },
+  loginLink: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, textAlign: 'center', marginTop: 16 },
 });

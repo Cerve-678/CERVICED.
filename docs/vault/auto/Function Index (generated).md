@@ -5,7 +5,7 @@
 
 #generated
 
-**2302 functions** across **318 files**.
+**2309 functions** across **319 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -54,6 +54,9 @@
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
 - `WelcomeIntro.tsx` — DealtCard · DroppingLetter · WelcomeIntro
+
+### `src/components/signup/` (1)
+- `FormKit.tsx` — **Chip** · **ChipWrap** · **FieldRow** · **FormCard** · **PrimaryButton** · **ScreenTitle** · **SectionLabel** · **useFieldInputStyle**
 
 ### `src/constants/` (6)
 - `PlatformDimensions.ts` — for
@@ -170,13 +173,13 @@
 - `ClaimProviderScreen.tsx` — ClaimProviderScreen · friendlyClaimError · handleConfirmCode · handlePickResult · handleRequestCode
 - `EmailVerificationScreen.tsx` — EmailVerificationScreen · handleKeyPress · handleOtpChange · handleResend · handleVerify
 - `ForgotPasswordScreen.tsx` — ForgotPasswordScreen · handleSend
-- `LoginScreen.tsx` — handleAppleLogin · handleBiometricLogin · handleLogin · handleSocialLogin · LoginScreen · markTouched · maybePromptEnableBiometric · renderError · validate
+- `LoginScreen.tsx` — fieldError · handleAppleLogin · handleBiometricLogin · handleLogin · handleSocialLogin · LoginScreen · markTouched · maybePromptEnableBiometric · validate
 - `NewPasswordScreen.tsx` — handleSave · NewPasswordScreen
 - `ReactivateAccountScreen.tsx` — formatDeletionDate · handleDecline · handleReactivate · ReactivateAccountScreen
 - `ResetPasswordOTPScreen.tsx` — handleKeyPress · handleOtpChange · handleResend · handleVerify · ResetPasswordOTPScreen
 - `SignUpStep1Screen.tsx` — handleContinue · pick · SignUpStep1Screen · tile
-- `SignUpStep2Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep2Screen · validate
-- `SignUpStep3Screen.tsx` — handleContinue · inputBorder · markTouched · renderError · SignUpStep3Screen · validate
+- `SignUpStep2Screen.tsx` — fieldError · handleContinue · markTouched · SignUpStep2Screen · validate
+- `SignUpStep3Screen.tsx` — fieldError · handleContinue · handleRow · markTouched · SignUpStep3Screen · validate
 - `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
 - `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · finishHatSwitch · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
 - `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · WelcomeScreen
