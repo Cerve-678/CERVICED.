@@ -17,6 +17,9 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 
 ## What they get
 
+> **Default is "yes" (product owner, 2026-10-17).** Link-only providers can use the app like any CERVICED provider. Only the exclusions named on this page are off: CERVICED's own booking flow (they book via their link), the price list on their profile, star ratings, and teams. Anything not listed here, **ask the product owner** whether they can use it before building — don't assume either way. The "locked until switched on" line below is superseded by this.
+
+
 - **Searchable** on CERVICED (Search, Explore) like any live provider.
 - **Profile:** hero with their speciality chips, About + Policies, logo, portfolio. **No price list, no star rating.** The availability pill is replaced by the **Book** button with their social icons beside it in the accent colour.
 - **Portfolio** and **in-app messages** with clients.
