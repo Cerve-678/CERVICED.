@@ -1074,3 +1074,49 @@ locked. Run `cerviced-legal-flagger` / `cerviced-security-review` on it, and
 consider a note in `LEGAL-COMPLIANCE-NOTES.md`.
 
 Build on its own branch (`feat/home-screen-widgets`) off `main`.
+
+---
+
+## 22. Instagram handles aren't verified — anyone can claim someone else's (2026-10-17)
+
+**The gap.** A provider's Instagram handle (signup, Business Info, Business
+Details) is free text that nothing checks. Anyone can type
+`@somefamoussalon` and clients see it on their profile as if it were theirs.
+Separately, claiming a scraped listing (`providerClaimService.ts`) verifies by
+emailing a code to the listing's contact email — but a listing with **no**
+email dead-ends at "needs manual review"
+(`supabase/functions/request-claim-verification/index.ts`), and nothing does
+that review.
+
+**Decided direction (not built): bio-code verification, approved by hand.**
+No Meta API needed.
+1. CERVICED issues the provider a short code (e.g. `CERVICED-4821`).
+2. They paste it into their Instagram bio for a few minutes.
+3. An admin opens the profile, sees the code, taps approve. They then remove it.
+- Every handle starts **unverified**; only approved handles get a tick and an
+  official link on the client-facing profile. Unverified handles are shown
+  as plain text (or hidden — decide at build time).
+- Works for personal, Business and Creator accounts.
+- Pieces: a migration (code, status, verified-at, verified handle — changing
+  the handle resets status), a provider "Verify your Instagram" step, and an
+  admin approve/reject list. Code-issuing and approval go through
+  SECURITY DEFINER RPCs, never client-side status writes.
+- Do **not** have the server fetch the bio automatically: scraping
+  instagram.com breaks its terms and is blocked often.
+
+**Considered and set aside for now:**
+- *Sign in with Instagram* (Meta's "Instagram API with Instagram Login",
+  `instagram_business_basic`): proper proof, but Business/Creator accounts
+  only (personal-account login was shut down Dec 2024), and needs a Meta
+  developer app plus 2–4 weeks of App Review. The upgrade path if manual
+  approval stops scaling.
+- *Code by DM* to CERVICED's Instagram: same manual check, less visible;
+  a fallback for providers who won't edit their bio.
+
+**Open question:** should a verified Instagram also unlock claiming a scraped
+listing with no email (when the listing's handle matches)? Recommended yes —
+it closes the "manual review" dead end.
+
+Build on its own branch (`feat/instagram-verification`) off `main`. Run
+`cerviced-security-review` on the RPCs and `cerviced-legal-flagger` on any
+copy that implies CERVICED vouches for the account.
