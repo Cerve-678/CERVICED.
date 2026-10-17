@@ -21,6 +21,8 @@ export const STORAGE_KEYS = {
   USER_LEARNING:      '@cerviced_learning',
   /** Cart items — survives app close/kill so an in-progress checkout isn't lost */
   CART_ITEMS:          '@cerviced_cart',
+  /** Set once the Welcome screen's full intro animation has played on this device */
+  WELCOME_INTRO_SEEN:  '@cerviced_welcome_intro_seen',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];

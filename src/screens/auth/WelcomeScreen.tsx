@@ -1,5 +1,5 @@
 // src/screens/auth/WelcomeScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,18 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
+import WelcomeIntro from '../../components/WelcomeIntro';
+import { STORAGE_KEYS } from '../../utils/storageKeys';
 
 type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 
@@ -74,21 +86,85 @@ export default function WelcomeScreen({ navigation }: Props) {
 
   const SERVICE_WORDS = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS'];
 
+  // The full intro plays once per device; afterwards the headline just fades
+  // in. 'checking' holds the headline back for the one AsyncStorage read so a
+  // first-time user doesn't see it flash before the intro starts.
+  const reduceMotion = useReducedMotion();
+  const [introState, setIntroState] = useState<'checking' | 'playing' | 'done'>('checking');
+  const reveal = useSharedValue(0);
+  const sortedFlip = useSharedValue(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(STORAGE_KEYS.WELCOME_INTRO_SEEN)
+      .catch(() => null)
+      .then(seen => {
+        if (cancelled) return;
+        if (seen || reduceMotion) {
+          setIntroState('done');
+          return;
+        }
+        setIntroState('playing');
+        AsyncStorage.setItem(STORAGE_KEYS.WELCOME_INTRO_SEEN, '1').catch(() => {});
+      });
+    return () => { cancelled = true; };
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    if (introState !== 'done') return;
+    if (reduceMotion) {
+      reveal.value = 1;
+      sortedFlip.value = 1;
+      return;
+    }
+    reveal.value = withTiming(1, { duration: 450 });
+    sortedFlip.value = withDelay(500, withTiming(1, { duration: 520 }));
+  }, [introState, reduceMotion, reveal, sortedFlip]);
+
+  const revealStyle = useAnimatedStyle(() => ({
+    opacity: reveal.value,
+    transform: [{ translateY: interpolate(reveal.value, [0, 1], [12, 0]) }],
+  }));
+  // Same over-the-top flip as the intro's S → C, landing in the accent colour.
+  const sortedSStyle = useAnimatedStyle(() => ({
+    opacity: sortedFlip.value < 0.5 ? 1 : 0,
+    transform: [{ perspective: 400 }, { rotateX: `${interpolate(sortedFlip.value, [0, 0.5], [0, 90], Extrapolation.CLAMP)}deg` }],
+  }));
+  const sortedSAccentStyle = useAnimatedStyle(() => ({
+    opacity: sortedFlip.value >= 0.5 ? 1 : 0,
+    transform: [{ perspective: 400 }, { rotateX: `${interpolate(sortedFlip.value, [0.5, 1], [-90, 0], Extrapolation.CLAMP)}deg` }],
+  }));
+
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
       <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 20 }]}>
-        <Text style={[styles.wordmark, { color: t.text }]}>CERVICED.</Text>
-
-        <Text style={[styles.headline, { color: t.text }]}>
-          Beauty{'\n'}maintenance,{'\n'}<Text style={{ color: t.accent }}>sorted.</Text>
-        </Text>
-        <View style={styles.wordsRow}>
-          {SERVICE_WORDS.map(w => (
-            <Text key={w} style={[styles.word, { color: t.sub }]}>{w}</Text>
-          ))}
-        </View>
+        {introState === 'playing' ? (
+          <View style={styles.introArea}>
+            <WelcomeIntro palette={t} onFinished={() => setIntroState('done')} />
+          </View>
+        ) : (
+          <Animated.View style={revealStyle} accessible accessibilityLabel="CERVICED. Beauty maintenance, sorted.">
+            <Text style={[styles.wordmark, { color: t.text }]}>CERVICED.</Text>
+            <View style={styles.headlineBlock}>
+              <Text style={[styles.headline, { color: t.text }]}>Beauty</Text>
+              <Text style={[styles.headline, { color: t.text }]}>maintenance,</Text>
+              <View style={styles.sortedRow}>
+                <View>
+                  <Animated.Text style={[styles.headline, { color: t.text }, sortedSStyle]}>s</Animated.Text>
+                  <Animated.Text style={[styles.headline, styles.letterOverlay, { color: t.accent }, sortedSAccentStyle]}>s</Animated.Text>
+                </View>
+                <Text style={[styles.headline, { color: t.accent }]}>orted.</Text>
+              </View>
+            </View>
+            <View style={styles.wordsRow}>
+              {SERVICE_WORDS.map(w => (
+                <Text key={w} style={[styles.word, { color: t.sub }]}>{w}</Text>
+              ))}
+            </View>
+          </Animated.View>
+        )}
 
         <View style={{ flex: 1 }} />
 
@@ -160,7 +236,11 @@ export default function WelcomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: 24 },
   wordmark: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 2 },
-  headline: { fontFamily: 'BakbakOne-Regular', fontSize: 48, lineHeight: 50, letterSpacing: 0.5, marginTop: 64 },
+  introArea: { marginTop: 40 },
+  headlineBlock: { marginTop: 64 },
+  headline: { fontFamily: 'BakbakOne-Regular', fontSize: 48, lineHeight: 50, letterSpacing: 0.5 },
+  sortedRow: { flexDirection: 'row' },
+  letterOverlay: { position: 'absolute', left: 0, top: 0 },
   wordsRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 20 },
   word: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1.5 },
   actions: { gap: 10 },
