@@ -372,9 +372,9 @@ Curated: [[Payments]] · **70 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
-- `src/components/WelcomeIntro.tsx` _(3)_
 - `src/constants/featureFlags.ts` _(3)_
 - `src/features/cart/platformFee.ts` _(3)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(3)_
 - `src/types/database.ts` _(3)_
+- `src/utils/policyDisplay.ts` _(3)_
 - … +40 more
