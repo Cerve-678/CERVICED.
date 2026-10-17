@@ -1303,3 +1303,57 @@ matching are all unaffected and stay live.
 Flip `AUDIENCE_SERVICE_PHOTOS_ENABLED` to `true` in
 `src/constants/featureFlags.ts`. No other changes needed unless
 `getDiscoverServices` or `PortfolioCard` have drifted in the meantime.
+
+---
+
+## Welcome + booking-confirmed motion — designed, not built (2026-10-17)
+
+### What it means
+
+Two animations that share one idea, "booked → serviced → CERVICED.", so the
+brand name's pun is told in motion at the two moments that matter most:
+the first time someone opens the app, and the moment they've paid.
+
+1. **Welcome screen intro** (`src/screens/auth/WelcomeScreen.tsx`, ~4.5s).
+   Three example booking cards deal in and fan out, collapse into a circle
+   where a tick draws itself above "BOOKED.", that gives way to "SERVICED",
+   the S flips (rotateX) into a C in the accent colour, and the full stop
+   drops in. Tagline and buttons follow.
+2. **Post-payment confirmation** (replaces the "Success!" modal in
+   `src/screens/client/CartScreen.tsx`, `showPaymentSuccessModal`). Full
+   screen in the client-hat palette. Paid services fold into the tick, the
+   status word lands, then each booking is listed with a status chip, a
+   quiet "Total paid" line, and the existing View Bookings / Continue
+   Shopping buttons. A success haptic fires as the tick finishes. Two
+   variants were liked: **with the card deal** and **Booked only** (tick +
+   word, no cards, ~1s faster).
+
+Mockups (private Artifacts):
+- Welcome concepts (the mix is "Booked, serviced, CERVICED." at the top):
+  https://claude.ai/artifact/UknyQyUnfeYL55QoLwCBjf
+- Booking confirmed: https://claude.ai/artifact/LgGmDPNba2fj2aLydM4bbh
+
+### Rules the build has to keep
+
+- **The headline must match the real booking status.** A booking is only
+  confirmed on payment when the provider has `auto_accept_bookings` on (see
+  `BookingContext.tsx` `initialStatus`; emergency requests never
+  auto-confirm). So: all confirmed → "BOOKED."; some waiting → "BOOKED."
+  plus which provider still has to accept; none confirmed → clock icon and
+  "REQUESTED.". Never show "BOOKED." for a pending booking.
+- The waiting copy promises a notification when each provider accepts —
+  verify the accept-notification trigger actually fires for every path
+  before shipping that sentence.
+- Welcome intro plays in full on first launch only; returning users get a
+  short fade. Buttons stay tappable from the start.
+- Respect Reduce Motion (show the final state, no animation).
+- Welcome uses the screen's current palette; the confirmation uses
+  `useTheme().palette` (client hat), not the green `#34C759` tick.
+
+### How to build it
+
+Reanimated timeline: staggered springs for the cards, `react-native-svg`
+`Circle`/`Path` with animated `strokeDashoffset` for the tick/clock, two
+stacked `Text` layers with `rotateX` for the S→C flip, per-letter
+`translateY` for the word. No new dependencies beyond what's installed
+(check `react-native-svg` is present before starting).
