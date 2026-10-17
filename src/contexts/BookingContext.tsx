@@ -476,6 +476,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   // Paging state for history beyond getMyBookings()'s default recent window.
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
+  // Cached bookings paint synchronously; only the very first server-side
+  // reschedule reconciliation is delayed so it does not compete with Home.
+  const initialLoadRef = useRef(true);
   // When loadBookings last ran, for reloadBookingsIfStale's skip check.
   const lastLoadedAtRef = useRef<number>(0);
 
@@ -631,6 +634,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         // isPendingReschedule to decide whether a booking is exempt from
         // date-based expiry.
         try {
+          if (initialLoadRef.current) {
+            await new Promise<void>(resolve => setTimeout(resolve, 1_500));
+          }
           const rescheduleRows = await getActiveRescheduleRequestsForBookings(
             mergedBookings.map((b: ConfirmedBooking) => b.id)
           );
@@ -707,6 +713,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     // failed look "fresh" and mask the error from a screen mounting shortly
     // after.
     lastLoadedAtRef.current = Date.now();
+    initialLoadRef.current = false;
   }, []);
 
   useEffect(() => {

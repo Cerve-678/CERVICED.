@@ -8983,10 +8983,14 @@ export async function clearBeccaSessions(
  *
  * Returns true if a write actually happened.
  */
+const knownPushTokens = new Map<string, string | null>();
+
 export async function setPushTokenIfChanged(
   userId: string,
   token: string | null,
 ): Promise<boolean> {
+  if (knownPushTokens.get(userId) === token) return false;
+
   const { data, error: readError } = await supabase
     .from("users")
     .select("push_token")
@@ -8994,7 +8998,10 @@ export async function setPushTokenIfChanged(
     .maybeSingle();
 
   if (readError) throw readError;
-  if (data?.push_token === token) return false;
+  if (data?.push_token === token) {
+    knownPushTokens.set(userId, token);
+    return false;
+  }
 
   const { error: writeError } = await supabase
     .from("users")
@@ -9002,6 +9009,7 @@ export async function setPushTokenIfChanged(
     .eq("id", userId);
 
   if (writeError) throw writeError;
+  knownPushTokens.set(userId, token);
   return true;
 }
 

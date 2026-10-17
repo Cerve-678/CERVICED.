@@ -16,7 +16,7 @@ interface BookmarkStore {
   isBookmarked: (id: string) => boolean;
   addBookmark: (id: string) => Promise<void>;
   removeBookmark: (id: string) => Promise<void>;
-  loadBookmarks: () => Promise<void>;
+  loadBookmarks: (options?: { deferRemote?: boolean }) => Promise<void>;
 
   // Portfolio/image bookmarks (new)
   savedPortfolioIds: string[];
@@ -56,9 +56,18 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
     }
   },
 
-  loadBookmarks: async () => {
+  loadBookmarks: async (options = {}) => {
     try {
-      // Try Supabase first, fall back to AsyncStorage
+      // Paint the remembered state before competing for a network connection.
+      // The server refresh below remains authoritative and corrects it when it
+      // returns, but a slow connection must not make the Home rail look empty.
+      const local = await storage.getItem<string[]>(STORAGE_KEYS.BOOKMARKED_VIDEOS) || [];
+      const localIds = [...new Set(local)];
+      set({ bookmarkedIds: localIds });
+
+      if (options.deferRemote) {
+        await new Promise<void>(resolve => setTimeout(resolve, 1_500));
+      }
       const dbProviders = await getBookmarkedProviders().catch(() => null);
       if (dbProviders && dbProviders.length > 0) {
         const ids = dbProviders.map(p => p.id);
@@ -68,11 +77,7 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
         logger.log('Loaded bookmarks from Supabase:', unique.length);
         return;
       }
-      // Fallback to local cache
-      const local = await storage.getItem<string[]>(STORAGE_KEYS.BOOKMARKED_VIDEOS) || [];
-      const unique = [...new Set(local)];
-      set({ bookmarkedIds: unique });
-      logger.log('Loaded bookmarks from local:', unique.length);
+      logger.log('Loaded bookmarks from local:', localIds.length);
     } catch (error) {
       logger.error('Failed to load bookmarks:', error);
       set({ bookmarkedIds: [] });

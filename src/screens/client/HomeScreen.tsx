@@ -370,8 +370,15 @@ export default function HomeScreen() {
   // Refresh count when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadUnreadCount();
-    }, [loadUnreadCount])
+      // The bell badge is secondary to Home's provider rail. Starting its
+      // count query while the primary rail is still establishing a connection
+      // makes both waits longer on a slow mobile network.
+      if (providersLoading) return;
+      const timer = setTimeout(() => {
+        void loadUnreadCount();
+      }, 350);
+      return () => clearTimeout(timer);
+    }, [loadUnreadCount, providersLoading])
   );
 
   const [services, setServices] = useState(['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS']);
@@ -410,7 +417,7 @@ export default function HomeScreen() {
 
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
-    loadBookmarks();
+    void loadBookmarks({ deferRemote: true });
 
     // Inject beauty profile so provider scoring uses static preferences from day one
     if (user) {
@@ -482,12 +489,46 @@ export default function HomeScreen() {
     // The visible provider rail does not depend on the owner-id guard. Let it
     // paint as soon as its own query lands; the guard can reconcile quietly
     // afterwards instead of holding the whole Home screen behind it.
+    let locationRunCancelled = false;
+    let deferredRails: ReturnType<typeof setTimeout> | undefined;
+    const loadSecondaryRails = () => {
+      // Do not create a startup request storm. These sections are additive;
+      // wait until the primary provider list has painted and the device has
+      // had a moment to release its initial connection work.
+      deferredRails = setTimeout(() => {
+        if (locationRunCancelled) return;
+        // This only affects personalised recommendations. It is deliberately
+        // deferred with the non-critical rails rather than competing with the
+        // first visible provider list.
+        void getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
+        if (OFFERS_ENABLED) {
+          getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
+        }
+        void Promise.allSettled([
+          getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
+          getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
+          getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
+          getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
+          getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
+          ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
+            getDiscoverServices(undefined, 15, 'men').then(data =>
+              setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+            ),
+            getDiscoverServices(undefined, 15, 'kids').then(data =>
+              setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+            ),
+          ] : []),
+        ]);
+      }, 750);
+    };
+
     getProviders()
       .then(data => setLiveProviders(data.map(mapDbProvider)))
       .catch(() => {})
-      .finally(() => setProvidersLoading(false));
-    getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
-
+      .finally(() => {
+        setProvidersLoading(false);
+        loadSecondaryRails();
+      });
     // Ask for location once on mount — same permission string already
     // declared in app.json ("...show nearby beauty service providers").
     // If GPS is denied/unavailable, fall back to a previously-picked city
@@ -501,7 +542,6 @@ export default function HomeScreen() {
     // replace a precise position with a city centroid, or the reverse. Either
     // way Near You visibly re-sorts under the client for no reason they can
     // see. Same sequence-guard shape as the calendar's week paging.
-    let locationRunCancelled = false;
     (async () => {
       const location = await resolveClientLocation();
       if (locationRunCancelled || !location.coords) return;
@@ -513,32 +553,9 @@ export default function HomeScreen() {
       setLocationIsCoarse(location.isCoarse);
     })();
 
-    // Secondary rails must not compete with the first provider list and its
-    // images. Start them after the initial transition/interaction has settled.
-    const deferredRails = setTimeout(() => {
-      if (locationRunCancelled) return;
-      if (OFFERS_ENABLED) {
-        getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
-      }
-      void Promise.allSettled([
-        getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
-        getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
-        getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
-        getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
-        getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
-        ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
-          getDiscoverServices(undefined, 15, 'men').then(data =>
-            setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-          ),
-          getDiscoverServices(undefined, 15, 'kids').then(data =>
-            setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-          ),
-        ] : []),
-      ]);
-    });
     return () => {
       locationRunCancelled = true;
-      clearTimeout(deferredRails);
+      if (deferredRails) clearTimeout(deferredRails);
     };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself

@@ -51,11 +51,49 @@ export function formatTimingLine(
 
 type Fetch = typeof fetch;
 
+function getRequestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  return init?.method ?? (typeof input === 'object' && 'method' in input ? input.method : 'GET');
+}
+
+function getRequestUrl(input: RequestInfo | URL): string {
+  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
+
+/**
+ * Shares an in-flight safe read with every caller requesting the exact same
+ * resource. This is deliberately not a response cache: once the request
+ * settles, the next read goes to the server as usual. Each caller gets a
+ * cloned response because a Response body may only be read once.
+ */
+export function createCoalescingFetch(baseFetch: Fetch): Fetch {
+  const inFlight = new Map<string, Promise<Response>>();
+
+  return async (input, init) => {
+    const method = getRequestMethod(input, init).toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD') return baseFetch(input, init);
+
+    const url = getRequestUrl(input);
+    const authorization = new Headers(init?.headers).get('authorization') ?? '';
+    const key = `${method} ${url} ${authorization}`;
+    let request = inFlight.get(key);
+
+    if (!request) {
+      request = baseFetch(input, init);
+      inFlight.set(key, request);
+      void request.finally(() => {
+        if (inFlight.get(key) === request) inFlight.delete(key);
+      }).catch(() => {});
+    }
+
+    return (await request).clone();
+  };
+}
+
 /** Wraps `baseFetch` so every request reports one timing line via `report`. */
 export function createTimedFetch(baseFetch: Fetch, report: (line: string) => void): Fetch {
   return async (input, init) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const method = init?.method ?? (typeof input === 'object' && 'method' in input ? input.method : 'GET');
+    const url = getRequestUrl(input);
+    const method = getRequestMethod(input, init);
     const label = labelSupabaseRequest(url);
     const started = Date.now();
     try {

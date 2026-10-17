@@ -1,4 +1,4 @@
-import { createTimedFetch, formatTimingLine, labelSupabaseRequest } from '../utils/requestTiming';
+import { createCoalescingFetch, createTimedFetch, formatTimingLine, labelSupabaseRequest } from '../utils/requestTiming';
 
 const BASE = 'https://abc.supabase.co';
 
@@ -43,5 +43,33 @@ describe('createTimedFetch', () => {
     const timed = createTimedFetch((async () => { throw new Error('offline'); }) as typeof fetch, (l) => lines.push(l));
     await expect(timed(`${BASE}/rest/v1/notifications`)).rejects.toThrow('offline');
     expect(lines[0]).toContain('(failed)');
+  });
+});
+
+describe('createCoalescingFetch', () => {
+  it('shares simultaneous identical reads while giving callers independent bodies', async () => {
+    const baseFetch = jest.fn(async () => new Response(JSON.stringify({ ok: true })));
+    const coalesced = createCoalescingFetch(baseFetch as typeof fetch);
+
+    const [first, second] = await Promise.all([
+      coalesced(`${BASE}/rest/v1/providers?select=id`),
+      coalesced(`${BASE}/rest/v1/providers?select=id`),
+    ]);
+
+    expect(baseFetch).toHaveBeenCalledTimes(1);
+    await expect(first.json()).resolves.toEqual({ ok: true });
+    await expect(second.json()).resolves.toEqual({ ok: true });
+  });
+
+  it('does not coalesce writes', async () => {
+    const baseFetch = jest.fn(async () => new Response(null, { status: 204 }));
+    const coalesced = createCoalescingFetch(baseFetch as typeof fetch);
+
+    await Promise.all([
+      coalesced(`${BASE}/rest/v1/users`, { method: 'PATCH' }),
+      coalesced(`${BASE}/rest/v1/users`, { method: 'PATCH' }),
+    ]);
+
+    expect(baseFetch).toHaveBeenCalledTimes(2);
   });
 });

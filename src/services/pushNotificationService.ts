@@ -20,6 +20,7 @@ import {
 // backend is configured. startExpoGoNotificationBridge() below is the only way
 // to see notification content while testing in Expo Go.
 export const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+let registrationInFlight: Promise<string | null> | null = null;
 
 // Realtime can briefly redeliver an INSERT after reconnecting. Keep a bounded
 // process-local record of rows already mirrored so Expo Go schedules each row
@@ -53,6 +54,17 @@ Notifications.setNotificationHandler({
  * Safe to call multiple times — bails silently on simulators or permission denial.
  */
 export async function registerForPushNotifications(): Promise<string | null> {
+  if (registrationInFlight) return registrationInFlight;
+
+  registrationInFlight = registerForPushNotificationsOnce();
+  try {
+    return await registrationInFlight;
+  } finally {
+    registrationInFlight = null;
+  }
+}
+
+async function registerForPushNotificationsOnce(): Promise<string | null> {
   // Push tokens only work on real devices
   if (!Device.isDevice) {
     logger.log('[Push] Skipping — not a real device');

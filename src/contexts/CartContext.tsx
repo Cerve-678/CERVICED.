@@ -505,6 +505,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // can't overwrite the stored cart with the empty initialState first.
   const hydratedRef = useRef(false);
   useEffect(() => {
+    let cancelled = false;
+    let reconciliationTimer: ReturnType<typeof setTimeout> | undefined;
+
     (async () => {
       try {
         const stored = await storage.getItem<CartItem[]>(STORAGE_KEYS.CART_ITEMS);
@@ -522,23 +525,31 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // and skipped, so this is a no-op DB call in the common case.
           const needLink = stored.filter(i => !i.providerId);
           if (needLink.length > 0) {
-            const removedNames: string[] = [];
-            for (const it of needLink) {
-              const resolvedId = await resolveCartItemProviderId(it).catch(() => null);
-              if (resolvedId) {
-                dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
-              } else {
-                dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } });
-                removedNames.push(it.providerDisplayName ?? it.providerName);
-              }
-            }
-            if (removedNames.length > 0) {
-              const names = [...new Set(removedNames)].join(', ');
-              Alert.alert(
-                'Some items removed',
-                `${names} ${removedNames.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removedNames.length > 1 ? 'them' : 'it'} from your cart.`
-              );
-            }
+            // A legacy cart is already visible locally. Repair its provider
+            // links after first paint instead of adding one provider request
+            // per item to the login/Home request burst.
+            reconciliationTimer = setTimeout(() => {
+              void (async () => {
+                const removedNames: string[] = [];
+                for (const it of needLink) {
+                  const resolvedId = await resolveCartItemProviderId(it).catch(() => null);
+                  if (cancelled) return;
+                  if (resolvedId) {
+                    dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
+                  } else {
+                    dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } });
+                    removedNames.push(it.providerDisplayName ?? it.providerName);
+                  }
+                }
+                if (removedNames.length > 0 && !cancelled) {
+                  const names = [...new Set(removedNames)].join(', ');
+                  Alert.alert(
+                    'Some items removed',
+                    `${names} ${removedNames.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removedNames.length > 1 ? 'them' : 'it'} from your cart.`
+                  );
+                }
+              })();
+            }, 1_500);
           }
         }
       } catch (error) {
@@ -547,6 +558,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         hydratedRef.current = true;
       }
     })();
+
+    return () => {
+      cancelled = true;
+      if (reconciliationTimer) clearTimeout(reconciliationTimer);
+    };
   }, []);
 
   useEffect(() => {
