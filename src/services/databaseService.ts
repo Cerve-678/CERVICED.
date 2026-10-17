@@ -4108,17 +4108,28 @@ export async function insertProviderNotification(params: {
 }
 
 /** Count unread notifications for the given recipient role */
+const unreadNotificationCountCache = new Map<"provider" | "client", {
+  value: number;
+  fetchedAt: number;
+}>();
+const UNREAD_NOTIFICATION_COUNT_TTL_MS = 15_000;
+
 export async function getUnreadNotificationCount(
   role: "provider" | "client",
 ): Promise<number> {
+  const cached = unreadNotificationCountCache.get(role);
+  if (cached && Date.now() - cached.fetchedAt < UNREAD_NOTIFICATION_COUNT_TTL_MS) {
+    return cached.value;
+  }
   const { count, error } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("is_read", false)
     .eq("recipient_role", role);
-
   if (error) return 0;
-  return count ?? 0;
+  const value = count ?? 0;
+  unreadNotificationCountCache.set(role, { value, fetchedAt: Date.now() });
+  return value;
 }
 
 // ─────────────────────────────────────────────────────────

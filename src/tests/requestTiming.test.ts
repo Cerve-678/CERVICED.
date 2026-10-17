@@ -1,4 +1,4 @@
-import { createTimedFetch, formatTimingLine, labelSupabaseRequest } from '../utils/requestTiming';
+import { createCoalescingFetch, createTimedFetch, formatTimingLine, labelSupabaseRequest } from '../utils/requestTiming';
 
 const BASE = 'https://abc.supabase.co';
 
@@ -43,5 +43,36 @@ describe('createTimedFetch', () => {
     const timed = createTimedFetch((async () => { throw new Error('offline'); }) as typeof fetch, (l) => lines.push(l));
     await expect(timed(`${BASE}/rest/v1/notifications`)).rejects.toThrow('offline');
     expect(lines[0]).toContain('(failed)');
+  });
+});
+
+describe('createCoalescingFetch', () => {
+  it('shares simultaneous identical reads while giving each consumer a body-safe response', async () => {
+    const response = new Response(JSON.stringify({ ok: true }), { status: 200 });
+    const base = jest.fn(async () => response) as unknown as typeof fetch;
+    const coalesced = createCoalescingFetch(base);
+
+    const [first, second] = await Promise.all([
+      coalesced(`${BASE}/rest/v1/providers?select=id`, { headers: { Authorization: 'Bearer one' } }),
+      coalesced(`${BASE}/rest/v1/providers?select=id`, { headers: { Authorization: 'Bearer one' } }),
+    ]);
+
+    expect(base).toHaveBeenCalledTimes(1);
+    await expect(first.json()).resolves.toEqual({ ok: true });
+    await expect(second.json()).resolves.toEqual({ ok: true });
+  });
+
+  it('does not coalesce writes or reads with different credentials', async () => {
+    const base = jest.fn(async () => new Response('{}', { status: 200 })) as unknown as typeof fetch;
+    const coalesced = createCoalescingFetch(base);
+
+    await Promise.all([
+      coalesced(`${BASE}/rest/v1/providers`, { method: 'POST' }),
+      coalesced(`${BASE}/rest/v1/providers`, { method: 'POST' }),
+      coalesced(`${BASE}/rest/v1/providers`, { headers: { Authorization: 'Bearer one' } }),
+      coalesced(`${BASE}/rest/v1/providers`, { headers: { Authorization: 'Bearer two' } }),
+    ]);
+
+    expect(base).toHaveBeenCalledTimes(4);
   });
 });

@@ -478,14 +478,63 @@ export default function HomeScreen() {
       };
     };
 
-    // Fetch live providers — shows empty state if DB has no data
+    // These lower-priority rails used to begin in the same tick as the main
+    // provider list. On a constrained/slow Supabase API that made Home issue
+    // 7+ independent queries before it had painted a single useful card.
+    // Start only after the main list has arrived and the navigation animation
+    // has settled; a client can browse immediately, while the extra rails
+    // progressively fill in behind it.
+    let secondaryRailsTimer: ReturnType<typeof setTimeout> | null = null;
+    const loadSecondaryRails = () => {
+      // getProviders() has just resolved and committed its cards. This delay
+      // gives React Native a frame to render them before lower-priority work
+      // starts, without relying on deprecated InteractionManager scheduling.
+      secondaryRailsTimer = setTimeout(() => {
+        if (locationRunCancelled) return;
+        void (async () => {
+          if (OFFERS_ENABLED) {
+            getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
+          }
+
+          // Provider-based secondary rails first. They do not compete with
+          // the primary list, and keeping this group separate from service
+          // discovery avoids another burst of joined services queries.
+          await Promise.allSettled([
+            getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
+            getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
+            getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
+          ]);
+          if (locationRunCancelled) return;
+
+          // Service-audience rails are optional enrichment. They come last
+          // because neither is required for the Home screen to be useful.
+          await Promise.allSettled([
+            getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
+            getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
+            ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
+              getDiscoverServices(undefined, 15, 'men').then(data =>
+                setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+              ),
+              getDiscoverServices(undefined, 15, 'kids').then(data =>
+                setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+              ),
+            ] : []),
+          ]);
+        })();
+      }, 750);
+    };
+
+    // Fetch live providers — shows empty state if DB has no data.
     // The visible provider rail does not depend on the owner-id guard. Let it
     // paint as soon as its own query lands; the guard can reconcile quietly
     // afterwards instead of holding the whole Home screen behind it.
     getProviders()
       .then(data => setLiveProviders(data.map(mapDbProvider)))
       .catch(() => {})
-      .finally(() => setProvidersLoading(false));
+      .finally(() => {
+        setProvidersLoading(false);
+        loadSecondaryRails();
+      });
     getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
 
     // Ask for location once on mount — same permission string already
@@ -513,32 +562,9 @@ export default function HomeScreen() {
       setLocationIsCoarse(location.isCoarse);
     })();
 
-    // Secondary rails must not compete with the first provider list and its
-    // images. Start them after the initial transition/interaction has settled.
-    const deferredRails = setTimeout(() => {
-      if (locationRunCancelled) return;
-      if (OFFERS_ENABLED) {
-        getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
-      }
-      void Promise.allSettled([
-        getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
-        getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
-        getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
-        getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
-        getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
-        ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
-          getDiscoverServices(undefined, 15, 'men').then(data =>
-            setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-          ),
-          getDiscoverServices(undefined, 15, 'kids').then(data =>
-            setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-          ),
-        ] : []),
-      ]);
-    });
     return () => {
       locationRunCancelled = true;
-      clearTimeout(deferredRails);
+      if (secondaryRailsTimer) clearTimeout(secondaryRailsTimer);
     };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself
