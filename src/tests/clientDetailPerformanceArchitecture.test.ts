@@ -50,7 +50,7 @@ describe('client detail screen performance and safety contracts', () => {
     const source = read('screens', 'client', 'BeautyProfileScreen.tsx');
 
     expect(source).toContain('getUserBeautyProfile(userId)');
-    expect(source).toContain('upsertUserBeautyProfile(userId');
+    expect(source).toContain('updateUserBeautyProfile(userId');
     expect(source).not.toContain("from '../../lib/supabase'");
     expect(source).not.toContain('supabase.auth.updateUser');
     expect(source).toContain("We couldn't load your beauty profile.");

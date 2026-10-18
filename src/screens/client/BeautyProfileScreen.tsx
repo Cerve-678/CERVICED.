@@ -13,7 +13,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../i18n';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAppDialog } from '../../components/AppDialog';
-import { getUserBeautyProfile, upsertUserBeautyProfile, getMaintenanceRebookTarget } from '../../services/databaseService';
+import { getUserBeautyProfile, updateUserBeautyProfile, getMaintenanceRebookTarget } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
 import type { ProfileScreenProps } from '../../navigation/types';
 import { navigateNested } from '../../navigation/rootNavigate';
@@ -171,7 +171,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
       syncError = new Error('Not authenticated');
     } else {
       try {
-        await upsertUserBeautyProfile(userId, {
+        await updateUserBeautyProfile(userId, {
           hair_type:           draftSnapshot.hairType            || null,
           scalp_condition:     draftSnapshot.scalpCondition      || null,
           hair_goals:          draftSnapshot.hairGoals,
@@ -200,7 +200,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
         });
       } catch (err) {
         syncError = err;
-        logger.error('upsertUserBeautyProfile failed:', err);
+        logger.error('updateUserBeautyProfile failed:', err);
       }
     }
 

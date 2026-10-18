@@ -8040,7 +8040,16 @@ export async function updateUserBusinessInfo(
 }
 
 /** Sync beauty profile fields to the users table so providers can read them */
-export async function upsertUserBeautyProfile(
+/**
+ * Saves the Beauty Profile onto the signed-in client's own users row.
+ *
+ * An UPDATE, not an upsert: users.email and users.name are NOT NULL, and
+ * Postgres checks those on the proposed insert row before ON CONFLICT ever
+ * finds the existing one, so a partial upsert fails with 23502 for every
+ * account. The row always exists by this point (signup creates it); zero rows
+ * updated means RLS refused or the row is gone, which is a real failure.
+ */
+export async function updateUserBeautyProfile(
   userId: string,
   data: {
     hair_type?: string | null;
@@ -8070,10 +8079,15 @@ export async function upsertUserBeautyProfile(
     has_kids?: boolean | null;
   },
 ): Promise<void> {
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from("users")
-    .upsert({ id: userId, ...data }, { onConflict: "id" });
+    .update(data)
+    .eq("id", userId)
+    .select("id");
   if (error) throw error;
+  if (!rows || rows.length === 0) {
+    throw new Error("Beauty profile not saved: no users row was updated for this account");
+  }
 }
 
 export interface UserBeautyProfileRow {
