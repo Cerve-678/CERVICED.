@@ -1357,3 +1357,61 @@ Reanimated timeline: staggered springs for the cards, `react-native-svg`
 stacked `Text` layers with `rotateX` for the S→C flip, per-letter
 `translateY` for the word. No new dependencies beyond what's installed
 (check `react-native-svg` is present before starting).
+
+---
+
+## Personalised Beauty Maintenance, Concept A "Your rhythm" — designed, not built (2026-10-19)
+
+### What it means
+
+Beauty Maintenance today leans on hair. `buildMaintenanceSuggestions`
+(`src/utils/maintenanceSuggestions.ts`) offers wash and go, silk press and
+deep conditioning only for textured hair types. Nails, lashes, brows and
+skin each get one generic "appointment" type, and waxing and makeup get
+nothing. "Add my own" (`src/features/maintenance/AddReminderSheet.tsx`) is a
+name, one of six broad types, and a repeat or single date. Concept A makes
+the whole thing feel like the client's own:
+
+1. **Your rhythm (landing).** A "Next up" card says how often the client
+   really goes, worked out from their own past bookings ("every 3½ weeks,
+   from your last 5 bookings"), with Rebook and Snooze. Below it is one list
+   across every category, with filter chips. Each row shows the provider and
+   the client's own note.
+2. **Picked for you.** Suggestions come from every section of the Beauty
+   Card, not just hair: brow style → lamination, sensitive areas → waxing,
+   protective styling → take-down, lash style → lash lift, nail shape →
+   pedicure. Each still shows "From your answer: …". A three-way choice
+   (Essentials / My regulars / Everything) sets how many are offered.
+3. **Add your own.** Free text plus quick-pick chips (wig install,
+   Brazilian, threading, spray tan, barber cut, massage…). Three timing
+   modes: Repeats / Before an event / Just once. Repeats count from "Last
+   done", so the next date is right on day one. Optional provider (past
+   providers or "Someone new"), and a private "Note to self".
+4. **Event plan.** An event becomes an ordered checklist (trial → brows →
+   nails → makeup) with a countdown and a "2 of 4 booked" progress bar. Each
+   step is marked booked or has a booking button.
+
+Mockup (private Artifact, Design canvas):
+https://claude.ai/artifact/QFA6Yjp9FZtbwEpBr3ttTH
+
+### Conflicts with decisions already made (resolve before building)
+
+These go against the 2026-10-10 Beauty Maintenance decisions (auto-memory
+`beauty-maintenance-feature`) and need the user's call first:
+
+- **Learned intervals.** The current rule is one neutral interval per type,
+  and no profile answer changes it. Learning from the client's *own*
+  booking history doesn't break that rule, but run it past
+  `cerviced-legal-flagger` before building.
+- **New service types** (waxing, lash lift, brow lamination, pedicure, spray
+  tan…) have to go into both `src/constants/maintenanceServiceTypes.ts` and
+  the SQL seed `public.maintenance_service_types`. A test fails if the two
+  disagree. Adding them takes a migration, which needs the
+  `supabase/MIGRATION_OWNER.md` lock.
+- **Event plan steps.** Today an event has one "book by" date, 4 weeks
+  before (`EVENT_BOOK_BY_WEEKS`). Several steps would mean several
+  reminders, against the "one ping per question" rule. Suggested fix: one
+  push per event that lists whatever isn't booked yet.
+- **Still out:** at-home routines, product restock, patch-test timing (the
+  app has no basis to say when one is due), and anything that reads skin
+  tone or skin concerns.
