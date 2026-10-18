@@ -989,20 +989,29 @@ export default function SearchScreen({ navigation, route }: Props) {
     return list;
   }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
 
-  // "In search" on a link-only provider's Analytics: one count each time they
-  // appear in a distinct result set, not on every re-render of the same one.
-  // The server skips the viewer's own profile and anyone not live.
-  const lastAppearanceKeyRef = useRef('');
+  // "In search" on a link-only provider's Analytics. Counted once per provider
+  // per search (query + category), and only once the result set has settled —
+  // re-sorts and progressive loading reshuffle the same providers, which must
+  // not count again. The server also counts each viewer once a day.
+  const countedAppearancesRef = useRef<{ searchKey: string; ids: Set<string> }>({ searchKey: '', ids: new Set() });
+  const resultsSettled = !availabilityLoading && !priceRangeLoading && !providersLoading;
   useEffect(() => {
-    const ids = filteredProviders.filter(p => p.isLinkOnly).map(p => p.providerId);
-    if (ids.length === 0) return;
-    const key = ids.join(',');
-    if (key === lastAppearanceKeyRef.current) return;
-    lastAppearanceKeyRef.current = key;
-    recordProviderStat(ids, 'search_appearance').catch((error: unknown) => {
+    if (!resultsSettled) return;
+    const searchKey = `${searchQuery.trim().toLowerCase()}|${selectedFilter}`;
+    const counted = countedAppearancesRef.current;
+    if (counted.searchKey !== searchKey) {
+      countedAppearancesRef.current = { searchKey, ids: new Set() };
+    }
+    const seen = countedAppearancesRef.current.ids;
+    const fresh = filteredProviders
+      .filter(p => p.isLinkOnly && !seen.has(p.providerId))
+      .map(p => p.providerId);
+    if (fresh.length === 0) return;
+    fresh.forEach(id => seen.add(id));
+    recordProviderStat(fresh, 'search_appearance').catch((error: unknown) => {
       logger.warn('[Search] could not record search appearances', error);
     });
-  }, [filteredProviders]);
+  }, [filteredProviders, resultsSettled, searchQuery, selectedFilter]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete

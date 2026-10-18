@@ -6839,13 +6839,24 @@ export async function getMyProviderDailyStats(days: number): Promise<DbProviderD
   return (data ?? []) as DbProviderDailyStat[];
 }
 
-/** Clients who saved (bookmarked) the calling provider — the audience for a
- *  link-only provider's announcements, and their Analytics "Saves" count.
- *  Server-side because bookmarks RLS only shows a user their own rows. */
-export async function getMyProviderSaverIds(): Promise<string[]> {
-  const { data, error } = await supabase.rpc("get_my_provider_saver_ids");
+/** How many clients saved (bookmarked) the calling provider. Server-side
+ *  because bookmarks RLS only shows a user their own rows. */
+export async function getMyProviderSaverCount(): Promise<number> {
+  const { data, error } = await supabase.rpc("get_my_provider_saver_count");
   if (error) throw error;
-  return ((data ?? []) as unknown[]).filter((id): id is string => typeof id === "string");
+  return typeof data === "number" ? data : 0;
+}
+
+/** A link-only provider's announcement to the clients who saved them. The
+ *  audience is resolved in the database and never reaches this device.
+ *  Returns how many clients it was sent to. */
+export async function sendAnnouncementToMySavers(title: string, message: string): Promise<number> {
+  const { data, error } = await supabase.rpc("send_announcement_to_my_savers", {
+    p_title: title,
+    p_message: message,
+  });
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
 }
 
 // ─────────────────────────────────────────────────────────

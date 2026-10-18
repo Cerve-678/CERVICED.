@@ -6,9 +6,9 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { getMyProviderSaverIds, sendAnnouncement } from '../../services/databaseService';
+import { getMyProviderSaverCount, sendAnnouncementToMySavers } from '../../services/databaseService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
-import { toUserMessage } from '../../utils/userFacingError';
+import { toUserMessageAllowingDbGuard, toUserMessage } from '../../utils/userFacingError';
 import type { DiaryPalette } from './DiaryCard';
 
 interface Props {
@@ -22,7 +22,7 @@ export function LinkOnlyAnnouncementSheet({ visible, P, onClose, onSent }: Props
   const bottomInset = useSystemBottomInset();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [audience, setAudience] = useState<string[] | null>(null);
+  const [count, setCount] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -32,28 +32,27 @@ export function LinkOnlyAnnouncementSheet({ visible, P, onClose, onSent }: Props
     setBody('');
     setError('');
     setSending(false);
-    setAudience(null);
-    getMyProviderSaverIds()
-      .then(setAudience)
+    setCount(null);
+    getMyProviderSaverCount()
+      .then(setCount)
       .catch((e: unknown) => {
-        setAudience([]);
+        setCount(0);
         setError(toUserMessage(e, "Couldn't load who's saved you. Please try again.", 'LinkOnlyAnnouncement.audience'));
       });
   }, [visible]);
 
-  const count = audience?.length ?? 0;
-  const canSend = !!audience && count > 0 && title.trim().length > 0 && body.trim().length > 0 && !sending;
+  const canSend = count != null && count > 0 && title.trim().length > 0 && body.trim().length > 0 && !sending;
 
   const handleSend = async () => {
-    if (!audience || !canSend) return;
+    if (!canSend) return;
     setSending(true);
     setError('');
     try {
-      const { sent } = await sendAnnouncement(title.trim(), body.trim(), audience);
+      const sent = await sendAnnouncementToMySavers(title.trim(), body.trim());
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       onSent(sent);
     } catch (e) {
-      setError(toUserMessage(e, "That didn't send. Please try again.", 'LinkOnlyAnnouncement.send'));
+      setError(toUserMessageAllowingDbGuard(e, "That didn't send. Please try again.", 'LinkOnlyAnnouncement.send'));
       setSending(false);
     }
   };
@@ -69,7 +68,7 @@ export function LinkOnlyAnnouncementSheet({ visible, P, onClose, onSent }: Props
             <View style={[styles.grabber, { backgroundColor: P.border }]} />
             <Text style={[styles.title, { color: P.text }]}>New announcement</Text>
             <Text style={[styles.sub, { color: P.sub }]}>
-              {audience == null
+              {count == null
                 ? 'Checking who has saved you…'
                 : count === 0
                   ? "Nobody has saved your profile yet. Once clients save you, announcements reach them here."

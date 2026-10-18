@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getMyProviderDailyStats, getMyProviderSaverIds } from '../../services/databaseService';
+import { getMyProviderDailyStats, getMyProviderSaverCount } from '../../services/databaseService';
 import type { DbProviderDailyStat } from '../../types/database';
 import {
   LINK_ONLY_PERIOD_DAYS,
@@ -36,7 +36,6 @@ export default function LinkOnlyAnalyticsScreen() {
   const styles = useMemo(() => createStyles(P), [P]);
   const [period, setPeriod] = useState<LinkOnlyPeriod>('7d');
   const [rows, setRows] = useState<DbProviderDailyStat[] | null>(null);
-  const [weekRows, setWeekRows] = useState<DbProviderDailyStat[]>([]);
   const [saves, setSaves] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -45,16 +44,13 @@ export default function LinkOnlyAnalyticsScreen() {
       let active = true;
       setRows(null);
       setFailed(false);
-      // The bar chart is always the last seven days, whatever the period.
       Promise.all([
         getMyProviderDailyStats(LINK_ONLY_PERIOD_DAYS[period]),
-        period === '7d' ? Promise.resolve(null) : getMyProviderDailyStats(7),
-        getMyProviderSaverIds().then(ids => ids.length),
+        getMyProviderSaverCount(),
       ])
-        .then(([periodRows, sevenDayRows, saveCount]) => {
+        .then(([periodRows, saveCount]) => {
           if (!active) return;
           setRows(periodRows);
-          setWeekRows(sevenDayRows ?? periodRows);
           setSaves(saveCount);
         })
         .catch(error => {
@@ -66,7 +62,9 @@ export default function LinkOnlyAnalyticsScreen() {
   );
 
   const totals = useMemo(() => sumLinkOnlyStats(rows ?? []), [rows]);
-  const bars = useMemo(() => lastSevenDaysOfBookTaps(weekRows, new Date()), [weekRows]);
+  // Every period covers at least the last seven days, so the chart reads
+  // them out of the same rows.
+  const bars = useMemo(() => lastSevenDaysOfBookTaps(rows ?? [], new Date()), [rows]);
   const maxBar = Math.max(1, ...bars.map(bar => bar.value));
   const ratio = bookTapRatio(totals);
 

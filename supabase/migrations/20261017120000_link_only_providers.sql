@@ -19,11 +19,12 @@
 -- 6. provider_daily_stats + two RPCs — per-day counters for the link-only
 --    Analytics screen (Book taps, profile views, search appearances,
 --    Instagram taps). One row per provider per day, never one per event.
--- 7. get_my_provider_saver_ids() — the clients who saved (bookmarked) the
---    calling provider. bookmarks RLS is own-rows-only, so a provider can't
---    read this directly; link-only Announcements go to exactly this audience
---    (send_provider_client_notifications already accepts a bookmark
---    relationship) and Analytics shows its count.
+-- 7. get_my_provider_saver_count() + send_announcement_to_my_savers() — the
+--    clients who saved (bookmarked) the calling provider. bookmarks RLS is
+--    own-rows-only, so this has to be server-side; the audience is resolved
+--    in the database and never sent to the provider's device.
+-- 8. A provider can't switch to link-only while CERVICED bookings of theirs
+--    are still pending or upcoming.
 --
 -- Frontier at authoring: 20261011102423.
 
@@ -42,7 +43,7 @@ alter table public.providers
   drop constraint if exists providers_external_mode_needs_link;
 alter table public.providers
   add constraint providers_external_mode_needs_link
-  check (booking_mode <> 'external' or btrim(coalesce(external_booking_url, '')) <> '');
+  check (booking_mode <> 'external' or external_booking_url ~* '^https?://[^[:space:]]+\.[^[:space:]]+');
 
 -- ── 2. go-live gate ────────────────────────────────────────────────────────
 create or replace function public.check_and_set_provider_live(p_provider_id uuid)
@@ -53,12 +54,12 @@ create or replace function public.check_and_set_provider_live(p_provider_id uuid
 as $function$
 declare
   v_mode text;
+  v_live boolean;
 begin
   select booking_mode into v_mode from public.providers where id = p_provider_id;
 
   if v_mode = 'external' then
-    update public.providers p
-    set has_gone_live = (
+    select
       btrim(coalesce(p.logo_url, '')) <> ''
       and btrim(coalesce(p.about_text, '')) <> ''
       and exists (
@@ -69,8 +70,15 @@ begin
         select 1 from public.portfolio_items pi
         where pi.provider_id = p_provider_id
       )
-    )
+    into v_live
+    from public.providers p
     where p.id = p_provider_id;
+
+    -- Only write when it changes: the portfolio trigger runs this once per
+    -- uploaded photo, and an unchanged UPDATE still rewrites the row.
+    update public.providers
+    set has_gone_live = v_live
+    where id = p_provider_id and has_gone_live is distinct from v_live;
     return;
   end if;
 
@@ -122,7 +130,9 @@ drop trigger if exists on_provider_about_or_mode_change on public.providers;
 create trigger on_provider_about_or_mode_change
   after update of about_text, booking_mode on public.providers
   for each row
-  when (new.about_text is distinct from old.about_text
+  -- About only gates link-only providers. Re-running the CERVICED gate on a
+  -- full provider's About edit could unlist one published under older rules.
+  when ((new.booking_mode = 'external' and new.about_text is distinct from old.about_text)
         or new.booking_mode is distinct from old.booking_mode)
   execute function public.handle_provider_about_or_mode_change();
 
@@ -206,6 +216,7 @@ create policy client_external_bookings_insert_own
   on public.client_external_bookings for insert to authenticated
   with check (
     client_id = auth.uid()
+    and booking_date between current_date - 365 and current_date + 730
     and exists (
       select 1 from public.providers p
       where p.id = provider_id
@@ -213,6 +224,10 @@ create policy client_external_bookings_insert_own
         and p.has_gone_live = true
         and p.is_active = true
     )
+    and (
+      select count(*) from public.client_external_bookings mine
+      where mine.client_id = auth.uid()
+    ) < 500
   );
 
 -- Remove only. No UPDATE policy: entries can't be edited (product decision).
@@ -239,9 +254,24 @@ create table if not exists public.provider_daily_stats (
 alter table public.provider_daily_stats enable row level security;
 revoke all on public.provider_daily_stats from anon, authenticated;
 
+-- One row per viewer, provider, day and kind: each person counts once a day
+-- per counter, so re-renders, re-sorts and a determined tapper can't inflate
+-- anyone's numbers. Rows older than 2 days serve no purpose and can be
+-- pruned (left to a later cleanup job; at most ~200 rows per viewer per day).
+create table if not exists public.provider_stat_viewers (
+  viewer_id   uuid not null references auth.users(id) on delete cascade,
+  provider_id uuid not null references public.providers(id) on delete cascade,
+  day         date not null,
+  kind        text not null,
+  primary key (viewer_id, provider_id, day, kind)
+);
+alter table public.provider_stat_viewers enable row level security;
+revoke all on public.provider_stat_viewers from anon, authenticated;
+
 -- Counts one event for each live provider in p_provider_ids (a search page
--- passes all its results at once). The caller's own provider is skipped so a
--- professional can't inflate their own numbers by browsing themselves.
+-- passes all its results at once) — at most once per viewer per provider per
+-- day per kind. The caller's own provider is skipped so a professional can't
+-- inflate their own numbers by browsing themselves.
 create or replace function public.record_provider_stat(p_provider_ids uuid[], p_kind text)
  returns void
  language plpgsql
@@ -265,18 +295,29 @@ begin
     raise exception 'Too many providers in one stat call' using errcode = '22023';
   end if;
 
+  with first_today as (
+    insert into public.provider_stat_viewers (viewer_id, provider_id, day, kind)
+    select v_uid, p.id, v_day, p_kind
+    from public.providers p
+    where p.id = any (p_provider_ids)
+      and p.has_gone_live = true
+      and p.is_active = true
+      and p.user_id is distinct from v_uid
+    order by p.id
+    on conflict do nothing
+    returning provider_id
+  )
   insert into public.provider_daily_stats as s
     (provider_id, day, profile_views, book_taps, search_appearances, instagram_taps)
-  select p.id, v_day,
+  select f.provider_id, v_day,
          (p_kind = 'profile_view')::int,
          (p_kind = 'book_tap')::int,
          (p_kind = 'search_appearance')::int,
          (p_kind = 'instagram_tap')::int
-  from public.providers p
-  where p.id = any (p_provider_ids)
-    and p.has_gone_live = true
-    and p.is_active = true
-    and p.user_id <> v_uid
+  from first_today f
+  -- A fixed order, so two searches touching the same providers can't
+  -- deadlock on each other's rows.
+  order by f.provider_id
   on conflict (provider_id, day) do update set
     profile_views      = s.profile_views      + excluded.profile_views,
     book_taps          = s.book_taps          + excluded.book_taps,
@@ -319,20 +360,106 @@ revoke execute on function public.handle_portfolio_change_for_go_live() from pub
 revoke execute on function public.refuse_booking_for_external_provider() from public, anon, authenticated;
 
 -- ── 7. who saved me ───────────────────────────────────────────────────────
-create or replace function public.get_my_provider_saver_ids()
- returns setof uuid
+create or replace function public.get_my_provider_saver_count()
+ returns integer
  language sql
  stable
  security definer
  set search_path to 'public', 'pg_temp'
 as $function$
-  select distinct b.user_id
+  select count(distinct b.user_id)::int
   from public.bookmarks b
   join public.providers p on p.id = b.provider_id
   where p.user_id = auth.uid()
-    and b.user_id <> auth.uid()
-  limit 5000;
+    and b.user_id <> auth.uid();
 $function$;
 
-revoke execute on function public.get_my_provider_saver_ids() from public, anon;
-grant execute on function public.get_my_provider_saver_ids() to authenticated;
+-- A link-only provider's announcement, to the clients who saved them. The
+-- audience never leaves the database; send_provider_client_notifications
+-- re-checks every recipient's relationship to the caller.
+create or replace function public.send_announcement_to_my_savers(p_title text, p_message text)
+ returns integer
+ language plpgsql
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_provider record;
+  v_ids uuid[];
+begin
+  if auth.uid() is null then
+    raise exception 'Not signed in' using errcode = '42501';
+  end if;
+  if btrim(coalesce(p_title, '')) = '' or btrim(coalesce(p_message, '')) = '' then
+    raise exception 'An announcement needs a title and a message.' using errcode = 'P0001';
+  end if;
+  if char_length(p_title) > 60 or char_length(p_message) > 400 then
+    raise exception 'That announcement is too long.' using errcode = 'P0001';
+  end if;
+
+  select id, display_name, booking_mode, has_gone_live into v_provider
+  from public.providers
+  where user_id = auth.uid()
+  order by is_active desc, created_at asc
+  limit 1;
+  if not found then
+    raise exception 'Provider profile not found' using errcode = 'P0001';
+  end if;
+  if v_provider.booking_mode <> 'external' then
+    raise exception 'Announcements to savers are for link-only professionals.' using errcode = 'P0001';
+  end if;
+  if not v_provider.has_gone_live then
+    raise exception 'Go live first — clients can only save you once you are.' using errcode = 'P0001';
+  end if;
+
+  select array_agg(distinct b.user_id) into v_ids
+  from public.bookmarks b
+  where b.provider_id = v_provider.id
+    and b.user_id <> auth.uid();
+  if v_ids is null then
+    return 0;
+  end if;
+
+  return public.send_provider_client_notifications(
+    v_ids,
+    'announcement',
+    coalesce(nullif(btrim(v_provider.display_name), ''), 'Your provider') || ' — ' || btrim(p_title),
+    btrim(p_message)
+  );
+end;
+$function$;
+
+revoke execute on function public.get_my_provider_saver_count() from public, anon;
+grant execute on function public.get_my_provider_saver_count() to authenticated;
+revoke execute on function public.send_announcement_to_my_savers(text, text) from public, anon;
+grant execute on function public.send_announcement_to_my_savers(text, text) to authenticated;
+
+-- ── 8. no switch to link-only with CERVICED bookings still to come ─────────
+create or replace function public.guard_booking_mode_switch()
+ returns trigger
+ language plpgsql
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+begin
+  if new.booking_mode = 'external' and old.booking_mode = 'cerviced' and exists (
+    select 1 from public.bookings b
+    where b.provider_id = new.id
+      and b.status in ('pending', 'confirmed', 'on_hold', 'in_progress')
+      and b.booking_date >= current_date
+  ) then
+    raise exception 'You still have upcoming bookings through CERVICED. Finish or cancel them before switching to your own booking link.'
+      using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists guard_booking_mode_switch on public.providers;
+create trigger guard_booking_mode_switch
+  before update of booking_mode on public.providers
+  for each row
+  when (new.booking_mode is distinct from old.booking_mode)
+  execute function public.guard_booking_mode_switch();
+
+revoke execute on function public.guard_booking_mode_switch() from public, anon, authenticated;
