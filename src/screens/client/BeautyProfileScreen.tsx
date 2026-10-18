@@ -358,6 +358,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     default:
       content = (
         <BeautyLanding
+          profile={draft}
           stats={stats}
           maintenance={maintenance}
           onBack={() => navigation.goBack()}

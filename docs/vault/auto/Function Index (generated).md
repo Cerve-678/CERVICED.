@@ -5,7 +5,7 @@
 
 #generated
 
-**2414 functions** across **335 files**.
+**2423 functions** across **336 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -81,10 +81,11 @@
 - `languages.ts` — **recognizeLanguage**
 - `portfolioFeed.ts` — **getAllPortfolioItems** · **getPortfolioByCategory** · **getPortfolioByProvider** · **getPortfolioItemById** · **getProviderForItem** · **searchPortfolio**
 
-### `src/features/beauty-profile/` (3)
-- `BeautyLanding.tsx` — **BeautyLanding** · go · groups · maintenanceCard · S
+### `src/features/beauty-profile/` (4)
+- `BeautyLanding.tsx` — **BeautyLanding** · go · groups · maintenanceBody · S · stubs · traits
 - `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · sectionHead · setSingle · sub · toggleAllergen · toggleMulti
-- `MyProfileView.tsx` — editToggle · **MyProfileView** · Ring · tapLight
+- `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
+- `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 
 ### `src/features/bookings/` (10)
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
@@ -121,7 +122,7 @@
 - `ItemMenuSheet.tsx` — addWeeksYMD · **ItemMenuSheet** · markDone · onPickDate · run · saveSchedule
 - `MaintenanceItemCard.tsx` — iconFor · **itemPill** · MaintenanceItemCardImpl · **primaryActionFor** · subline
 - `MaintenanceView.tsx` — groups · **MaintenanceView** · onPickPatch · openMenu · renderItems · renderNote · S · tryScroll · turnOnReminders · visibleItems
-- `presentation.ts` — byDue · **countDueItems** · dayDiff · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **needsAttention** · **presentMaintenanceItem**
+- `presentation.ts` — byDue · **countdownFor** · **countDueItems** · dayDiff · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **needsAttention** · **presentMaintenanceItem**
 - `SetupFlow.tsx` — datePill · finish · header · onPickEvent · onPickPatch · profileAnswers · question · S · **SetupFlow** · suggestions · today · toggle
 - `ui.tsx` — **Chip** · **GhostButton** · **hapticError** · **hapticLight** · **hapticMedium** · **hapticSelection** · **hapticSuccess** · **Note** · **Pill** · **PrimaryButton** · **ProgressBar** · **SectionLabel** · **semanticColors** · **Sheet** · step · **SwitchRow** · **WeekStepper**
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**

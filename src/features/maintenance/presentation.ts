@@ -153,3 +153,43 @@ export function groupMaintenanceItems(
     next: [...attention, ...eventsDue].sort(byDue)[0] ?? null,
   };
 }
+
+export type CountdownUnit =
+  | 'daysOver' | 'dayOver' | 'today' | 'day' | 'days' | 'weeks' | 'booked' | 'bookNow' | 'noDate';
+
+/** The big-number stub on the Beauty Profile landing: a number (or none, for
+ *  "today"/"booked") plus what it counts, and the tone to draw it in. */
+export interface Countdown {
+  value: number | null;
+  unit: CountdownUnit;
+  tone: 'bad' | 'warn' | 'ok' | 'mute';
+}
+
+export function countdownFor({ item, view }: PresentedItem): Countdown {
+  const d = view.daysUntilDue;
+  switch (view.state) {
+    case 'booked': return { value: null, unit: 'booked', tone: 'ok' };
+    case 'overdue':
+      if (item.kind === 'event') return { value: null, unit: 'bookNow', tone: 'warn' };
+      return { value: -(d ?? 0), unit: d === -1 ? 'dayOver' : 'daysOver', tone: 'bad' };
+    case 'due_today':
+      return item.kind === 'event'
+        ? { value: null, unit: 'bookNow', tone: 'warn' }
+        : { value: null, unit: 'today', tone: 'warn' };
+    case 'due_soon': return { value: d, unit: d === 1 ? 'day' : 'days', tone: 'warn' };
+    case 'on_track':
+      return d !== null && d >= 14
+        ? { value: Math.round(d / 7), unit: 'weeks', tone: 'mute' }
+        : { value: d, unit: d === 1 ? 'day' : 'days', tone: 'mute' };
+    default: return { value: null, unit: 'noDate', tone: 'mute' };
+  }
+}
+
+/** The items the landing shows as stubs: what needs the client first, then
+ *  what's coming up, each by due date. Paused items never appear. */
+export function landingStubs(groups: MaintenanceGroups, limit = 3): PresentedItem[] {
+  const due = (p: PresentedItem) => needsAttention(p.view.state);
+  const first = [...groups.needsAttention, ...groups.events.filter(due)].sort(byDue);
+  const later = [...groups.comingUp, ...groups.events.filter(p => !due(p))].sort(byDue);
+  return [...first, ...later].slice(0, limit);
+}

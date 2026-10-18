@@ -1,28 +1,28 @@
 // src/features/beauty-profile/MyProfileView.tsx
 //
 // "My Profile" inside Beauty Profile: one quiet completeness line, a Health &
-// Safety row, and 2-up tiles with a ring each. Tapping a tile swaps to that
+// Safety row, and a two-column mosaic of tiles, each led by the client's own
+// headline answer (Beauty Card layout, 2026-10-18). Tapping a tile swaps to that
 // category (selectedCategory — screen state owned by BeautyProfileScreen, so
 // SAVE PROFILE stays one transaction). Every number comes from
 // computeBeautyProfileStats; its three counting rules are unchanged.
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../i18n';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import type { AppTheme } from '../../constants/theme';
 import type { BeautyData, CategoryKey } from '../../types/beautyProfile';
 import {
-  CATEGORY_LABELS, CATEGORY_ORDER, type BeautyProfileStats, type CategoryStats,
+  CATEGORY_LABELS, CATEGORY_ORDER, type BeautyProfileStats,
 } from '../../utils/beautyProfileStats';
 import { ALLERGENS } from './options';
 import { semanticColors } from '../maintenance/ui';
 import { CategoryEditor } from './CategoryEditor';
+import { highlightCategory, leadingCategory, type CategoryHighlight, type HighlightLabels } from './highlights';
 
 /** Categories whose answers the maintenance suggestions read
  *  (src/utils/maintenanceSuggestions.ts). Skin feeds only via skin TYPE. */
@@ -44,25 +44,6 @@ interface Props {
   onSave: () => void;
 }
 
-function Ring({ percent, label, P, size = 52 }: { percent: number; label: string; P: AppTheme; size?: number }) {
-  const r = (size - 6) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <View style={{ width: size, height: size }}>
-      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-        <Circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={P.sep} strokeWidth={4} />
-        <Circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={percent >= 100 ? SUCCESS : P.accentText}
-          strokeWidth={4} strokeLinecap="round" strokeDasharray={`${c}`} strokeDashoffset={c * (1 - percent / 100)}
-        />
-      </Svg>
-      <View style={[StyleSheet.absoluteFill, styles.ringLabelWrap]}>
-        <Text style={[styles.ringLabel, { color: P.text }]}>{label}</Text>
-      </View>
-    </View>
-  );
-}
-
 export function MyProfileView({
   draft, setDraft, stats, editing, saving, selectedCategory,
   onBack, onOpenCategory, onCloseCategory, onToggleEdit, onSave,
@@ -72,6 +53,13 @@ export function MyProfileView({
   const tapLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+
+  const labels = useMemo<HighlightLabels>(() => ({
+    scalp: condition => t('beautyProfile.card.scalp', { condition }),
+    medicalNote: t('beautyProfile.card.medicalNote'),
+    photosOn: t('beautyProfile.photosOn'),
+    photosOff: t('beautyProfile.photosOff'),
+  }), [t]);
 
   const editToggle = (
     <TouchableOpacity onPress={() => { tapLight(); onToggleEdit(); }} activeOpacity={0.5} accessibilityRole="button">
@@ -134,13 +122,64 @@ export function MyProfileView({
 
   // ── Tile view ────────────────────────────────────────────────────────────
   const health = stats.byCategory.health;
-  const tiles = CATEGORY_ORDER.filter(k => k !== 'health');
+  const lead = leadingCategory(stats, CATEGORY_ORDER);
+  const tiles = CATEGORY_ORDER.filter(k => k !== 'health').map(k => highlightCategory(k, draft, labels));
 
-  const tileDetail = (c: CategoryStats): string => {
-    if (c.key === 'consent') return t(draft.photographyConsent ? 'beautyProfile.photosOn' : 'beautyProfile.photosOff');
-    return c.started
-      ? t('beautyProfile.fieldsSet', { set: c.fieldsSet, total: c.fieldsTotal })
-      : t('beautyProfile.notStarted');
+  // Two columns, each tile placed in whichever is shorter so far. Weights are
+  // a rough height estimate: the filled lead tile is tallest, an unstarted
+  // tile is just a label and "+ Add".
+  const weight = (h: CategoryHighlight) =>
+    h.key === lead ? 3 : h.lead === null ? 1 : h.details.length > 0 ? 2 : 1.5;
+  const columns: [CategoryHighlight[], CategoryHighlight[]] = [[], []];
+  const heights: [number, number] = [0, 0];
+  for (const h of tiles) {
+    const col = heights[0] <= heights[1] ? 0 : 1;
+    columns[col].push(h);
+    heights[col] += weight(h);
+  }
+
+  const renderTile = (h: CategoryHighlight) => {
+    const c = stats.byCategory[h.key];
+    const strong = h.key === lead;
+    const empty = h.lead === null;
+    const fg = strong ? P.onAccent : P.text;
+    const soft = strong ? { color: P.onAccent, opacity: 0.72 } : { color: P.sub };
+    const count = h.key === 'consent' ? '' : c.complete ? '✓' : c.started ? `${c.fieldsSet}/${c.fieldsTotal}` : '';
+    return (
+      <TouchableOpacity
+        key={h.key}
+        style={[
+          styles.tile,
+          strong ? { backgroundColor: P.accent }
+            : empty ? [styles.tileEmpty, { borderColor: P.border }]
+            : { backgroundColor: P.accentDim },
+        ]}
+        onPress={() => onOpenCategory(h.key)}
+        activeOpacity={0.5}
+        accessibilityRole="button"
+        accessibilityLabel={`${CATEGORY_LABELS[h.key]}, ${h.lead ?? t('beautyProfile.notStarted')}`}
+      >
+        <View style={styles.tileHead}>
+          <View style={styles.tileLabelRow}>
+            <Text style={[styles.tileLabel, soft]} numberOfLines={2}>{CATEGORY_LABELS[h.key]}</Text>
+            {FEEDS_MAINTENANCE.has(h.key) && <Ionicons name="sync" size={10} color={strong ? P.onAccent : P.accentText} />}
+          </View>
+          {count ? <Text style={[styles.tileLabel, soft]}>{count}</Text> : null}
+        </View>
+        {empty ? (
+          <Text style={[styles.tileAdd, { color: P.accentText }]}>+ {t('beautyProfile.card.add').toUpperCase()}</Text>
+        ) : (
+          <>
+            <Text style={[styles.tileValue, { color: fg }, h.lead!.length > 9 && styles.tileValueSm]} numberOfLines={2}>
+              {h.lead!.toUpperCase()}
+            </Text>
+            {h.details.length > 0 && (
+              <Text style={[styles.tileDetail, soft]} numberOfLines={3}>{h.details.join(' · ')}</Text>
+            )}
+          </>
+        )}
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -195,33 +234,13 @@ export function MyProfileView({
           <Ionicons name="chevron-forward" size={16} color={P.sub} />
         </TouchableOpacity>
 
-        <View style={styles.grid}>
-          {tiles.map(key => {
-            const c = stats.byCategory[key];
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[styles.tile, { backgroundColor: P.card, borderColor: P.border }]}
-                onPress={() => onOpenCategory(key)}
-                activeOpacity={0.5}
-                accessibilityRole="button"
-                accessibilityLabel={`${CATEGORY_LABELS[key]}, ${tileDetail(c)}`}
-              >
-                {FEEDS_MAINTENANCE.has(key) && <View style={[styles.feeds, { backgroundColor: P.accentText }]} />}
-                <Ring
-                  P={P}
-                  percent={key === 'consent' ? 100 : c.percent}
-                  label={key === 'consent' ? '✓' : c.started ? `${c.percent}%` : 'NEW'}
-                />
-                <Text style={[styles.tileLabel, { color: P.text }]} numberOfLines={2}>{CATEGORY_LABELS[key]}</Text>
-                <Text style={[styles.tileDetail, { color: P.sub }]} numberOfLines={1}>{tileDetail(c)}</Text>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.mosaic}>
+          <View style={styles.mosaicCol}>{columns[0].map(renderTile)}</View>
+          <View style={styles.mosaicCol}>{columns[1].map(renderTile)}</View>
         </View>
 
         <View style={styles.legend}>
-          <View style={[styles.legendDot, { backgroundColor: P.accentText }]} />
+          <Ionicons name="sync" size={11} color={P.accentText} />
           <Text style={[styles.legendText, { color: P.sub }]}>{t('beautyProfile.feedsLegend')}</Text>
         </View>
 
@@ -251,19 +270,19 @@ const styles = StyleSheet.create({
   hsTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1 },
   hsSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16, marginTop: 2 },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
-  tile: {
-    width: '48.5%', borderRadius: 16, borderWidth: 1, padding: 14, gap: 8,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1,
-  },
-  feeds: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4 },
-  ringLabelWrap: { alignItems: 'center', justifyContent: 'center' },
-  ringLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11 },
-  tileLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.1 },
-  tileDetail: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12 },
+  mosaic: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  mosaicCol: { flex: 1, gap: 10 },
+  tile: { borderRadius: 18, padding: 14, gap: 6 },
+  tileEmpty: { borderWidth: 1.5, borderStyle: 'dashed' },
+  tileHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 },
+  tileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  tileLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.4 },
+  tileValue: { fontFamily: 'BakbakOne-Regular', fontSize: 22, lineHeight: 25 },
+  tileValueSm: { fontSize: 16, lineHeight: 19 },
+  tileDetail: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16 },
+  tileAdd: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1 },
 
   legend: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
-  legendDot: { width: 9, height: 9, borderRadius: 5 },
   legendText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11.5 },
 
   focusTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 10, marginBottom: 6 },
