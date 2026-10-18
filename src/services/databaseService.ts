@@ -1,4 +1,5 @@
 import { getPaymentRequestError } from '../utils/paymentRequestError';
+import type { PaymentEstimateInput } from '../utils/payoutEstimate';
 import type {
   MaintenanceBookingContext,
   MaintenanceBookingNote,
@@ -10325,6 +10326,18 @@ export async function getProviderFinance(cursor?: string): Promise<ProviderFinan
   const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'finance', ...(cursor ? { cursor } : {}) } });
   if (error || !data || !Array.isArray(data.available) || !Array.isArray(data.pending) || !Array.isArray(data.payouts)) {
     throw new Error('Could not load your balances and bank payouts.');
+  }
+  return data;
+}
+/**
+ * Stripe's dates for one of the provider's own booking payments, for the
+ * "expected in your bank" line. Turn it into dates with estimatePaymentArrival.
+ */
+export async function getPaymentArrivalEstimate(payoutId: string): Promise<PaymentEstimateInput> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'payment-estimate', payoutId } });
+  if (error || !data || typeof data.status !== 'string' || typeof data.releaseAfter !== 'string'
+      || !(data.availableOn === null || typeof data.availableOn === 'number')) {
+    throw await getPaymentRequestError(error, data, 'The bank date could not load.');
   }
   return data;
 }

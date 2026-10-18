@@ -8,7 +8,9 @@ import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, Vi
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import { newRequestId } from '../utils/requestId';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getPaymentArrivalEstimate, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { estimatePaymentArrival, paymentArrivalSentence } from '../utils/payoutEstimate';
+import { logger } from '../utils/logger';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
@@ -362,6 +364,29 @@ const date = (value: number) => new Date(value).toLocaleDateString('en-GB', { da
 function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: boolean; onRefund: () => void }) {
   const C = useBusinessPalette();
   const [expanded, setExpanded] = useState(false);
+  // Loaded when the payment is first opened (one Stripe lookup per tap, not 50
+  // on every visit). '' = not loaded yet.
+  const [arrival, setArrival] = useState('');
+  const [arrivalLoading, setArrivalLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const canEstimate = row.status === 'held' || row.status === 'transferred';
+  useEffect(() => {
+    if (!expanded || !canEstimate || arrivalLoading) return;
+    // A failed load retries on the next open; a loaded one doesn't refetch.
+    if (arrival && !failed) return;
+    setFailed(false);
+    // Not cancelled on collapse: the answer is still wanted when reopened.
+    setArrivalLoading(true);
+    getPaymentArrivalEstimate(row.id).then(data => {
+      const estimate = estimatePaymentArrival(data);
+      setArrival(estimate ? paymentArrivalSentence(estimate, new Date()) : 'Stripe hasn’t given a date for this payment yet.');
+    }).catch(err => {
+      logger.error('[payments] bank date estimate failed', err);
+      setFailed(true);
+      setArrival('The expected bank date couldn’t load. Close and reopen to try again.');
+    }).finally(() => setArrivalLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded]);
   return <View style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
     <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.bookingHead}>
       <View style={{ flex: 1 }}>
@@ -377,6 +402,9 @@ function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: bo
         <Text style={[styles.description, { color: C.text }]}>{label}</Text><Text style={[styles.label, { color: C.text }]}>{money(Number(amount), row.currency)}</Text>
       </View>)}
       <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{row.status === 'held' ? `Eligible for release from ${date(new Date(row.release_after).getTime())}. This is not a bank arrival date.` : row.status === 'transferred' ? 'Your share has been released to Stripe. See Payouts for bank transfers.' : row.status === 'failed' ? 'Your share needs attention before it can be released. Contact support if this continues.' : 'This booking’s payout has been cancelled or returned.'}</Text>
+      {canEstimate && (arrivalLoading
+        ? <ActivityIndicator size="small" color={C.accentText} style={{ alignSelf: 'flex-start', marginTop: 8 }} />
+        : !!arrival && <Text style={[styles.caption, { color: C.text, marginTop: 8 }]}>{arrival}</Text>)}
       {['held', 'transferred', 'failed'].includes(row.status) && <PaymentAction secondary disabled={busy} label="Refund client" onPress={onRefund} />}
     </View>}
   </View>;

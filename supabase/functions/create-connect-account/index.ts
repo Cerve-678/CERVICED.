@@ -1,4 +1,5 @@
 import { readProviderFinance } from '../_shared/providerFinance.ts';
+import { readPaymentEstimate } from '../_shared/paymentEstimate.ts';
 import { createConnectedAccount } from '../_shared/createConnectedAccount.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
@@ -25,8 +26,10 @@ interface RequestBody {
   // Deep links the app registers so Stripe can bounce the provider back into
   // it. `refreshUrl` is hit if the link expired before completion; `returnUrl`
   // when they finish (or bail) — the app then re-reads the account status.
-  action?: 'onboard' | 'status' | 'dashboard' | 'finance';
+  action?: 'onboard' | 'status' | 'dashboard' | 'finance' | 'payment-estimate';
   cursor?: string;
+  // payment-estimate: one of the caller's own provider_payouts rows.
+  payoutId?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -97,6 +100,13 @@ Deno.serve(async (req: Request) => {
         return json({ error: 'Invalid payout cursor' }, 400);
       }
       return json(await readProviderFinance(stripe, accountId, body.cursor));
+    }
+    if (body.action === 'payment-estimate') {
+      if (typeof body.payoutId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.payoutId)) {
+        return json({ error: 'Invalid payment' }, 400);
+      }
+      const estimate = await readPaymentEstimate(stripe, supabase, admin, provider.id, accountId, body.payoutId);
+      return estimate ? json(estimate) : json({ error: 'Payment not found' }, 404);
     }
     if (body.action === 'dashboard') {
       if (!accountId) throw new Error('No connected account');

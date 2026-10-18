@@ -24,6 +24,7 @@ Last updated: 18 October 2026.
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
+| Expected bank date on each booking payment | No | Built on `feat/payment-bank-estimate`, unmerged; `create-connect-account` not redeployed |
 
 ---
 
@@ -91,6 +92,15 @@ Payment settings.
   total, or CERVICED revenue. Providers see their own share, refunds and
   release status.
 - Fee earnings (late/no-show) are listed on the Payments tab.
+- **Expected bank date** (Booking payments, on opening a payment): "In your
+  Stripe balance from X. Expected in your bank around Y." Stripe holds a UK
+  card payment ~3 working days from when the **client paid**, and a transfer
+  made with `source_transaction` inherits that date, so the hold choice alone
+  doesn't say when money arrives. X is the later of our `release_after` and
+  the client charge's `available_on` (held), or the provider-side payment's
+  own `available_on` (released). Y adds the provider's Stripe payout schedule
+  and one working day. Weekends are skipped; UK bank holidays aren't, hence
+  "around". Fetched per payment on tap, not for the whole list.
 
 ## 5. Refunds
 

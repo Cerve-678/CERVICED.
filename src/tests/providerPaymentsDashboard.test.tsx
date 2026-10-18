@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderStripePayments from '../components/ProviderStripePayments';
-import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays } from '../services/providerPaymentService';
+import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, getPaymentArrivalEstimate } from '../services/providerPaymentService';
 
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'dismiss' }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
@@ -10,7 +10,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../services/providerPaymentService', () => ({
   getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(),
   getConnectLink: jest.fn(), refundProviderBooking: jest.fn(),
-  getPayoutHoldDays: jest.fn(), setPayoutHoldDays: jest.fn(),
+  getPayoutHoldDays: jest.fn(), setPayoutHoldDays: jest.fn(), getPaymentArrivalEstimate: jest.fn(),
 }));
 jest.mock('../features/business-details/BusinessDetailsKit', () => {
   // Jest factories need local imports because mocks are hoisted.
@@ -29,6 +29,7 @@ beforeEach(() => {
   (getProviderFeeEarnings as jest.Mock).mockResolvedValue([]);
   (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: true, detailsSubmitted: true });
   (getPayoutHoldDays as jest.Mock).mockResolvedValue(1);
+  (getPaymentArrivalEstimate as jest.Mock).mockResolvedValue({ status: 'held', releaseAfter: '2026-10-03T10:00:00Z', availableOn: Date.parse('2026-10-06T00:00:00Z') / 1000, schedule: { interval: 'daily', weeklyAnchor: null, monthlyAnchor: null } });
   (getProviderPayouts as jest.Mock).mockResolvedValue([{
     id: 'payment', booking_id: 'booking', gross_amount: 10000, platform_fee: 1000, payout_amount: 9000,
     currency: 'gbp', status: 'held', created_at: '2026-10-01T10:00:00Z', release_after: '2026-10-03T10:00:00Z',
@@ -156,4 +157,27 @@ test("shows the server's own reason when it refuses a timing change", async () =
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
   fireEvent.press(ui.getByText('7 days'));
   await waitFor(() => expect(ui.getByText('Only a professional account can change payout timing.')).toBeTruthy());
+});
+
+test('opening a booking payment shows when it reaches Stripe and roughly when it reaches the bank', async () => {
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
+  expect(getPaymentArrivalEstimate).not.toHaveBeenCalled();
+  fireEvent.press(ui.getByText('Hair appointment'));
+  // Held until 3 Oct, but Stripe's date for the client's payment is Tue 6 Oct: the later one wins.
+  await waitFor(() => expect(ui.getByText(/Stripe balance (from|since) Tue 6 Oct.*bank around Wed 7 Oct/)).toBeTruthy());
+  expect(getPaymentArrivalEstimate).toHaveBeenCalledWith('payment');
+});
+
+test('a bank date that fails to load says so and retries on the next open', async () => {
+  (getPaymentArrivalEstimate as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
+  fireEvent.press(ui.getByText('Hair appointment'));
+  await waitFor(() => expect(ui.getByText(/couldn’t load/)).toBeTruthy());
+  fireEvent.press(ui.getByText('Hair appointment'));
+  fireEvent.press(ui.getByText('Hair appointment'));
+  await waitFor(() => expect(ui.getByText(/bank around Wed 7 Oct/)).toBeTruthy());
 });
