@@ -281,7 +281,7 @@ Curated: [[Booking Flow]] · **166 files**
 Curated: [[Contexts]] · **176 files**
 - `src/services/databaseService.ts` _(269)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(142)_
+- `src/contexts/AuthContext.tsx` _(144)_
 - `src/screens/auth/LoginScreen.tsx` _(119)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_

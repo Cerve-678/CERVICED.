@@ -20,7 +20,7 @@ import {
   subscribeToAuthStateChanges,
   getProviderIdForUserId,
 } from '../services/databaseService';
-import { STORAGE_KEYS } from '../utils/storageKeys';
+import { accountHatsKey, STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/withTimeout';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
@@ -58,6 +58,34 @@ export interface UserData {
   has_kids?: boolean | null;
   birth_year?: number | null;
   service_interests?: string[] | null;
+}
+
+type CachedAccountHats = Pick<UserData, 'accountType' | 'hasClientProfile'>;
+
+/**
+ * The users row remains the source of truth. This small, user-scoped cache is
+ * only a continuity fallback for the short period where a valid session cannot
+ * read that row. In particular, auth metadata mirrors `role` but intentionally
+ * has no client-hat field, so using metadata alone made dual-role providers
+ * intermittently see “Become a Client”.
+ */
+async function readCachedAccountHats(userId: string): Promise<CachedAccountHats | null> {
+  try {
+    const raw = await AsyncStorage.getItem(accountHatsKey(userId));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as CachedAccountHats;
+    if (
+      (cached.accountType !== 'user' && cached.accountType !== 'provider')
+      || typeof cached.hasClientProfile !== 'boolean'
+    ) return null;
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+function cacheAccountHats(userId: string, hats: CachedAccountHats): void {
+  AsyncStorage.setItem(accountHatsKey(userId), JSON.stringify(hats)).catch(() => {});
 }
 
 export interface ClientProfileData {
@@ -366,10 +394,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // completes, RLS policy, etc. Session is valid; keep the user logged in
         // using whatever is known from session metadata.
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
-        const role = (meta?.['role'] as AccountType) ?? 'user';
+        const cachedHats = await readCachedAccountHats(session.user.id);
+        const role = cachedHats?.accountType ?? (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         if (!isCurrent()) return;
-        setActiveMode(resolveRestoredMode(savedMode, role));
+        setActiveMode(resolveRestoredMode(savedMode, role, cachedHats?.hasClientProfile));
         setUser({
           id: session.user.id,
           name: meta?.['name'] ?? session.user.email?.split('@')[0] ?? '',
@@ -380,11 +409,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loginMethod: 'email',
           businessName: meta?.['business_name'],
           businessEmail: meta?.['business_email'],
-          // hasClientProfile is deliberately absent: session metadata doesn't
-          // carry it, and this branch only runs when the profile row couldn't be
-          // read. Leaving it falsy means a provider briefly sees no client hat
-          // rather than one the database hasn't confirmed — don't "fix" this by
-          // guessing from role or dob, which is the inference the column replaced.
+          ...(cachedHats ? { hasClientProfile: cachedHats.hasClientProfile } : {}),
         });
         setIsLoggedIn(true);
         registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
@@ -451,6 +476,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (!isCurrent()) return;
         setUser(userData);
+        cacheAccountHats(profile.id, {
+          accountType: role,
+          hasClientProfile: profile.has_client_profile === true,
+        });
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
         registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
@@ -603,6 +632,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       businessEmail,
     };
     setUser(upgraded);
+    cacheAccountHats(user.id, {
+      accountType: 'provider',
+      // The provider upgrade preserves the client hat; `user` is the latest
+      // confirmed state while this in-place mutation is in flight.
+      hasClientProfile: user.hasClientProfile === true,
+    });
     setActiveMode('provider');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'provider').catch(() => {});
   }, [user]);
@@ -642,6 +677,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // (Metro/console only) so any future failure here is diagnosable at a glance.
     } catch (error) { logger.error('addClientProfile failed:', error); throw error; }
     setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
+    cacheAccountHats(user.id, { accountType: user.accountType, hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
   }, [user]);
@@ -698,6 +734,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // next account that logs in on this device.
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
+      ...(loggedOutUserId ? [accountHatsKey(loggedOutUserId)] : []),
     ]).catch(() => {});
     await unregisterPushToken().catch(() => {});
     // Biometric enrollment intentionally survives logout — the entire point
@@ -753,6 +790,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await deleteClientAccountProfile();
     if (data.ok === false) throw accountDeletionError(data);
 
+    // The next profile read will repopulate this from the server. Never let a
+    // pre-deletion cache resurrect a hat that was just removed if that read
+    // happens to fail in transit.
+    await AsyncStorage.removeItem(accountHatsKey(user.id)).catch(() => {});
+
     await clearStorageFolder('avatars', user.id);
 
     if ((data as any).full_account_deleted) {
@@ -772,6 +814,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) throw new Error('No logged-in user');
     const data = await deleteProviderAccountProfile();
     if (data.ok === false) throw accountDeletionError(data);
+
+    // See deleteClientProfile: this cache is continuity-only and must not
+    // outlive a server-confirmed hat deletion.
+    await AsyncStorage.removeItem(accountHatsKey(user.id)).catch(() => {});
 
     await Promise.all([
       clearStorageFolder('provider-logos', user.id),

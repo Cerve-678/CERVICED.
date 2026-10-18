@@ -1,6 +1,7 @@
 import React from 'react';
-import { act, renderHook } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 let mockListener: (event: AuthChangeEvent, session: Session | null) => Promise<void>;
@@ -58,4 +59,29 @@ test('the latest session wins when profile requests finish out of order', async 
   await act(async () => { finishFirst(profile('first')); await first; });
   expect(result.current.user?.id).toBe('second');
   expect(result.current.isLoggedIn).toBe(true);
+});
+
+test('uses the last confirmed hats when a profile read temporarily fails', async () => {
+  const hatsKey = '@cerviced_account_hats_dual-role';
+  await AsyncStorage.setItem(hatsKey, JSON.stringify({ accountType: 'provider', hasClientProfile: true }));
+  mockProfile.mockRejectedValue(new Error('temporary network failure'));
+  const dualRoleSession = {
+    user: {
+      id: 'dual-role', email: 'dual-role@example.com', email_confirmed_at: '2026-01-01',
+      // This is deliberately incomplete: auth metadata has a role mirror but
+      // does not carry the client-hat fact.
+      user_metadata: { role: 'provider' },
+    },
+  } as unknown as Session;
+  const { result } = renderHook(useAuth, { wrapper });
+
+  await act(async () => { await mockListener('INITIAL_SESSION', dualRoleSession); });
+
+  await waitFor(() => expect(result.current.isLoggedIn).toBe(true));
+  expect(result.current.user).toMatchObject({ accountType: 'provider', hasClientProfile: true });
+  expect(result.current.hatState).toMatchObject({
+    owned: { client: true, provider: true },
+    canSwitch: true,
+  });
+  await AsyncStorage.removeItem(hatsKey);
 });

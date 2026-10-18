@@ -11,6 +11,10 @@ export const STORAGE_KEYS = {
   BOOKINGS_STORE_LEGACY: '@cerviced_bookings',
   /** Active mode: 'client' | 'provider' */
   ACTIVE_MODE:        '@active_mode',
+  /** Last database-confirmed account hats, scoped by user id. Used only while
+   *  a valid session cannot read its profile row (for example, a brief
+   *  network timeout during startup). */
+  ACCOUNT_HATS_PREFIX: '@cerviced_account_hats_',
   /** User theme preference */
   THEME_PREFERENCE:   '@theme_preference',
   /** Bookmarked provider IDs */
@@ -26,6 +30,9 @@ export const STORAGE_KEYS = {
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
+
+export const accountHatsKey = (userId: string): string =>
+  `${STORAGE_KEYS.ACCOUNT_HATS_PREFIX}${userId}`;
 
 /**
  * Per-user "which version of this coach-mark tour has been shown" cache.
