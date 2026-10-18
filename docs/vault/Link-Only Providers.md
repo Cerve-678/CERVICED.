@@ -43,7 +43,7 @@ Exactly four things: **logo**, **About**, **opening hours**, **at least one port
 
 ## Client side
 
-1. Client taps **Book** → a "You're leaving CERVICED" notice says they're booking with the provider on their site, and that the provider's own terms cover the booking, payment and any cancellation or refund (product owner, 2026-10-18). **Continue** opens the page in an in-app browser sheet.
+1. Client taps **Book** → the provider's page opens straight away in an in-app browser sheet. No "you're leaving CERVICED" step (product owner, 2026-10-18 — briefly built, then removed).
 2. When they come back: "Did you book with *X*?" → **Yes, I booked** / **Not yet**.
 3. Yes asks **day, time and service** (from the provider's specialities, or "Something else") → saved to `client_external_bookings` and shown under **BOOKED ELSEWHERE** in Bookings, with a "Booked on Fresha" tag and the note *"CERVICED doesn't handle bookings made on other sites — we just keep track of them, so your beauty life stays organised."*
 4. **Booking details:** "Check your email" for the confirmation, "Need to change or cancel? That goes through *X*", buttons to open their booking page, message them, or add it to the phone's calendar, and a quiet **Remove from my bookings**. No editing.
