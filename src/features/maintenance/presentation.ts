@@ -6,7 +6,7 @@
 //
 // The state here is display-only. Whether a PUSH goes out is decided
 // server-side by process_maintenance_reminders(), which applies the same
-// "already booked" rule (see supabase/migrations/20261010120000_beauty_maintenance.sql).
+// "already booked" rule (see supabase/migrations/20261018180000_beauty_maintenance.sql).
 
 import type { MaintenanceItem } from '../../types/maintenance';
 import { toLocalDate } from '../../utils/dateUtils';

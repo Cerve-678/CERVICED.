@@ -1,7 +1,7 @@
 // src/types/maintenance.ts
 //
 // Shared shape of the client's Beauty Maintenance data, mirroring the two
-// owner-only tables in supabase/migrations/20261010120000_beauty_maintenance.sql.
+// owner-only tables in supabase/migrations/20261018180000_beauty_maintenance.sql.
 // Lives here, not in a screen, so the service mappers, the pure rules in
 // src/utils/ and the UI can't drift apart.
 //

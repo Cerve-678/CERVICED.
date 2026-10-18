@@ -1117,6 +1117,6 @@ deploy from a fresh copy of `main`.
 - [ ] Provider terms must say a bank chargeback is taken back from their payout.
 - [ ] Rescheduled bookings pick up the provider's current fees, not the ones
       originally agreed. Decide whether that's acceptable.
-- [ ] Beauty Maintenance migration `20261010120000` is below the applied
-      frontier. Renumber it before applying (its constraint list already keeps
-      the fee notification types).
+- [x] Beauty Maintenance migration renumbered to `20261018180000` (above the
+      frontier) and re-verified against live on 2026-10-18; its constraint list
+      keeps the fee and refund-request notification types.

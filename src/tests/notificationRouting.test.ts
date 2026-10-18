@@ -233,7 +233,7 @@ describe('notification preferences gate the push', () => {
 
 describe('notification routing — Beauty Maintenance', () => {
   const migration = () =>
-    read('supabase', 'migrations', '20261010120000_beauty_maintenance.sql');
+    read('supabase', 'migrations', '20261018180000_beauty_maintenance.sql');
   const types = ['maintenance_due', 'aftercare_available'];
 
   it('declares both types everywhere a notification type has to exist', () => {

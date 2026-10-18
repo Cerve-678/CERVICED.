@@ -22,7 +22,7 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session e283bace, 2026-10-18 — 20261018180000_beauty_maintenance (renumbered from 20261010120000, re-verified; awaiting SQL-editor paste)
 ```
 
 ### Applied 2026-10-18 (late and no-show fees)

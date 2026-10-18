@@ -7944,7 +7944,7 @@ export async function getUserBeautyProfile(
 
 // ─────────────────────────────────────────────────────────
 // BEAUTY MAINTENANCE (client hat) — owner-only tables from
-// supabase/migrations/20261010120000_beauty_maintenance.sql.
+// supabase/migrations/20261018180000_beauty_maintenance.sql.
 // None of this is readable by providers, and none of it feeds Becca,
 // analytics, search or any provider-facing path.
 // ─────────────────────────────────────────────────────────
