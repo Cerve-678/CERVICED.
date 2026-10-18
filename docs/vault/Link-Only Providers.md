@@ -10,7 +10,7 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 |---|---|
 | Book button opens their page **inside** the app | Merged (#66) — `src/features/providers/externalBookingLink.ts` |
 | Sign-up asks for the link (Step 1, "I use my own booking link") | Merged (#67). Migration `20261011102423_users_external_booking_url` applied 2026-10-11 |
-| `providers.booking_mode`, go-live branch, booking guard, booked-elsewhere table, daily stats | Built on `feat/link-only-provider`. Migration `20261018200000_link_only_providers` **written, not applied** (renumbered from 20261017120000 above the 2026-10-18 frontier) |
+| `providers.booking_mode`, go-live branch, booking guard, booked-elsewhere table, daily stats | Built on `feat/link-only-provider`. Migration `20261018200000_link_only_providers` **applied 2026-10-18** |
 | Provider tabs (Home, Portfolio, Messages, Profile), Home, Analytics | Built on `feat/link-only-provider` |
 | Client profile (Book + socials, no price list / rating / reviews), "Did you book?", Booked elsewhere in Bookings | Built on `feat/link-only-provider` |
 | Calendar: provider diary from the phone's calendar; client "Add to my calendar" | Built on `feat/link-only-provider` (expo-calendar legacy API) |
