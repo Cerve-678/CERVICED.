@@ -753,6 +753,11 @@ export interface ProviderServiceFacets {
    *  against this set, so casing/spacing/spelling need not agree across the
    *  three. Absent means nothing to match. */
   specialityText: Map<string, Set<string>>;
+  /** The same as specialityText minus service names: just the business
+   *  specialities and service tags. What the Speciality filter may OFFER as
+   *  extra options. A service name ("Knotless braids — medium") is fine to
+   *  match against but reads as noise as a filter option. */
+  specialityLabels: Map<string, Set<string>>;
 }
 
 /**
@@ -777,15 +782,26 @@ export async function getProviderServiceFacets(
   const audiences = new Map<string, Set<string>>();
   const skinTones = new Map<string, Set<string>>();
   const specialityText = new Map<string, Set<string>>();
+  const specialityLabels = new Map<string, Set<string>>();
   if (providerIds.length === 0) {
-    return { priceRanges, audiences, skinTones, specialityText };
+    return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
   }
 
+  const addTo = (map: Map<string, Set<string>>, providerId: string, value: string) => {
+    const set = map.get(providerId) ?? new Set<string>();
+    set.add(value);
+    map.set(providerId, set);
+  };
+  // Matchable only (service names).
   const addSpeciality = (providerId: string, value: string | null | undefined) => {
     if (!value) return;
-    const set = specialityText.get(providerId) ?? new Set<string>();
-    set.add(value);
-    specialityText.set(providerId, set);
+    addTo(specialityText, providerId, value);
+  };
+  // Matchable AND offerable as a filter option (specialities, tags).
+  const addSpecialityLabel = (providerId: string, value: string | null | undefined) => {
+    if (!value) return;
+    addTo(specialityText, providerId, value);
+    addTo(specialityLabels, providerId, value);
   };
 
   // The services scan and the provider_specialties scan are independent reads
@@ -853,15 +869,15 @@ export async function getProviderServiceFacets(
       ...(row.occasion_tags ?? []),
       ...(row.trend_names ?? []),
     ]) {
-      addSpeciality(providerId, tag as string);
+      addSpecialityLabel(providerId, tag as string);
     }
   }
 
   for (const row of specialtiesRes.data ?? []) {
-    addSpeciality(row.provider_id as string, row.specialty as string | null);
+    addSpecialityLabel(row.provider_id as string, row.specialty as string | null);
   }
 
-  return { priceRanges, audiences, skinTones, specialityText };
+  return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
