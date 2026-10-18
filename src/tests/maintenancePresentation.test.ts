@@ -1,5 +1,7 @@
 import {
+  countdownFor,
   countDueItems,
+  landingStubs,
   groupMaintenanceItems,
   presentMaintenanceItem,
 } from '../features/maintenance/presentation';
@@ -69,5 +71,30 @@ describe('countDueItems / groupMaintenanceItems', () => {
     expect(g.paused.map(p => p.item.id)).toEqual(['d']);
     expect(g.summary).toEqual({ overdue: 1, dueSoon: 1, onTrack: 2 });
     expect(g.next?.item.id).toBe('a');
+  });
+});
+
+describe('countdownFor / landingStubs', () => {
+  const present = (p: Partial<MaintenanceItem>) => {
+    const i = item(p);
+    return { item: i, view: presentMaintenanceItem(i, TODAY) };
+  };
+
+  it('counts days over, days left and weeks out', () => {
+    expect(countdownFor(present({ dueOn: '2026-10-08' }))).toEqual({ value: 2, unit: 'daysOver', tone: 'bad' });
+    expect(countdownFor(present({ dueOn: '2026-10-09' }))).toEqual({ value: 1, unit: 'dayOver', tone: 'bad' });
+    expect(countdownFor(present({ dueOn: '2026-10-14' }))).toEqual({ value: 4, unit: 'days', tone: 'warn' });
+    expect(countdownFor(present({ dueOn: TODAY }))).toEqual({ value: null, unit: 'today', tone: 'warn' });
+    expect(countdownFor(present({ dueOn: '2026-11-07' }))).toEqual({ value: 4, unit: 'weeks', tone: 'mute' });
+  });
+
+  it('puts what needs the client first and leaves paused items out', () => {
+    const items = [
+      item({ id: 'later', title: 'Later', dueOn: '2026-12-01' }),
+      item({ id: 'paused', title: 'Paused', dueOn: '2026-10-01', paused: true }),
+      item({ id: 'soon', title: 'Soon', dueOn: '2026-10-12' }),
+      item({ id: 'over', title: 'Over', dueOn: '2026-10-02' }),
+    ];
+    expect(landingStubs(groupMaintenanceItems(items, TODAY)).map(p => p.item.id)).toEqual(['over', 'soon', 'later']);
   });
 });
