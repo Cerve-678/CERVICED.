@@ -183,7 +183,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **75 files**
 - `src/features/providers/goLiveStatus.ts` _(46)_
 - `src/screens/provider/InfoRegScreen.tsx` _(34)_
 - `src/services/providerRegistrationService.ts` _(30)_
-- `src/contexts/RegistrationContext.tsx` _(27)_
+- `src/contexts/RegistrationContext.tsx` _(28)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(14)_
