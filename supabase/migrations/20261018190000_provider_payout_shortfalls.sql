@@ -1,4 +1,4 @@
--- NOT APPLIED. Written 2026-10-18 on feat/refund-payout-protection.
+-- APPLIED 2026-10-18 (SQL editor, recorded as 20261018190000). Written 2026-10-18 on feat/refund-payout-protection.
 -- Apply AFTER 20261018180000_beauty_maintenance, and after 20261018165835 (payout timing) and 20261018165847 (refund
 -- requests): the release job deployed with this reads refund_requests.
 --
