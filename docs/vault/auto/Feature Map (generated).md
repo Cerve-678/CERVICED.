@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **166 files**
 - … +136 more
 
 ## Payments
-Curated: [[Payments]] · **131 files**
+Curated: [[Payments]] · **132 files**
 - `src/screens/client/CartScreen.tsx` _(509)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/databaseService.ts` _(171)_
@@ -82,7 +82,7 @@ Curated: [[Payments]] · **131 files**
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
-- `src/components/ProviderStripePayments.tsx` _(99)_
+- `src/components/ProviderStripePayments.tsx` _(103)_
 - `src/features/bookings/receipt.ts` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(63)_
@@ -105,12 +105,12 @@ Curated: [[Payments]] · **131 files**
 - `supabase/fix_waitlist_selection_method_hook.sql` _(24)_
 - `src/features/cart/pricing.ts` _(23)_
 - `src/screens/client/PointsScreen.tsx` _(23)_
-- … +101 more
+- … +102 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **267 files**
+Curated: [[Booking Flow]] · **268 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
-- `src/services/databaseService.ts` _(812)_
+- `src/services/databaseService.ts` _(814)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(611)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(560)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **267 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +237 more
+- … +238 more
 
 ## Notifications
 Curated: [[Notifications]] · **162 files**
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **166 files**
 
 ## Auth
 Curated: [[Contexts]] · **176 files**
-- `src/services/databaseService.ts` _(265)_
+- `src/services/databaseService.ts` _(269)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(142)_
 - `src/screens/auth/LoginScreen.tsx` _(119)_

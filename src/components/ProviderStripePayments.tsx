@@ -7,7 +7,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import { newRequestId } from '../utils/requestId';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
@@ -32,6 +33,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [payoutError, setPayoutError] = useState('');
+  const [holdDays, setHoldDays] = useState<PayoutHoldDays | null>(null);
+  const [holdSaving, setHoldSaving] = useState(false);
+  const [holdError, setHoldError] = useState('');
   const opening = useRef(false);
   const handledReturn = useRef<StripeConnectReturn | undefined>(undefined);
   const loadSequence = useRef(0);
@@ -55,6 +59,12 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         setPayouts(rows); setPayoutError('');
       }).catch(() => {
         if (sequence === loadSequence.current) setPayoutError('Booking payments could not load. Refresh to try again.');
+      }),
+      getPayoutHoldDays().then(days => {
+        if (sequence !== loadSequence.current) return;
+        setHoldDays(days); setHoldError('');
+      }).catch(() => {
+        if (sequence === loadSequence.current) setHoldError('Your payout timing could not load. Refresh to try again.');
       }),
       // Fees are a secondary list: a failed read leaves it empty rather than
       // replacing the booking payments error above.
@@ -117,6 +127,21 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stripeReturn.result === 'refresh') void openStripe('onboard');
   }, [stripeReturn, load, openStripe]);
+  const chooseHoldDays = async (days: PayoutHoldDays) => {
+    if (days === holdDays || holdSaving) return;
+    void Haptics.selectionAsync().catch(() => {});
+    setHoldSaving(true); setHoldError('');
+    try {
+      setHoldDays(await setPayoutHoldDays(days));
+      // Held rows were re-timed server-side; reread them so "Eligible for release from" matches.
+      void load();
+    } catch {
+      setHoldError('Your payout timing was not changed. Please try again.');
+    } finally {
+      setHoldSaving(false);
+    }
+  };
+
   const requestRefund = (row: ProviderPayout) => {
     const share = new Intl.NumberFormat('en-GB', { style: 'currency', currency: row.currency }).format(row.payout_amount / 100);
     Alert.alert('Refund this payment?', `This refunds ${row.booking?.customer_name || 'the client'} in full for ${row.booking?.service_name_snapshot || 'this booking'} and reverses your ${share} share. It does not cancel their appointment.`, [
@@ -266,7 +291,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       <Text style={[styles.sectionTitle, { color: C.text }]}>From booking to bank</Text>
       <View style={[styles.journey, { backgroundColor: C.surface }]}>
         {[
-          ['1', 'Booking completed', 'Funds normally become eligible 24 hours after the appointment ends.'],
+          ['1', 'Booking completed', `${holdDays ? payoutHoldSentence(holdDays) : 'Your share is held for the payout timing you choose.'} Change this in Payment settings.`],
           ['2', 'Released to Stripe', 'Your share moves to Stripe and clears into your available balance.'],
           ['3', 'Paid to your bank', 'Stripe sends a payout according to your payout schedule.'],
         ].map(([step, title, detail]) => <View key={step} style={styles.step}>
@@ -288,7 +313,23 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         {account?.connected && <PaymentAction disabled={busy} label="Manage payout account" onPress={() => void openStripe('dashboard')} />}
       </Card>
     </>}
-    {section === 'settings' && children}
+    {section === 'settings' && <>
+      <Card title="When you get paid" sub="How long after an appointment your share is released to Stripe. Stripe then pays it into your bank, which usually takes a few more working days.">
+        {!!holdError && <Notice text={holdError} />}
+        <View style={styles.holdOptions}>
+          {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
+            const selected = days === holdDays;
+            return <TouchableOpacity key={days} accessibilityRole="radio" accessibilityState={{ selected, disabled: holdSaving || !holdDays }}
+              disabled={holdSaving || !holdDays} onPress={() => void chooseHoldDays(days)} activeOpacity={0.75}
+              style={[styles.holdOption, { backgroundColor: selected ? C.accent : C.surface, borderColor: C.border }]}>
+              <Text style={[styles.label, { color: selected ? C.bg : C.text }]}>{payoutHoldLabel(days)}</Text>
+            </TouchableOpacity>;
+          })}
+        </View>
+        <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
+      </Card>
+      {children}
+    </>}
   </>;
 }
 
@@ -411,5 +452,7 @@ const styles = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   notice: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 14, marginBottom: 14 },
   empty: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 10, gap: 12 },
+  holdOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  holdOption: { paddingVertical: 10, paddingHorizontal: 14, minHeight: 44, justifyContent: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   action: { padding: 14, minHeight: 48, borderRadius: 14, marginTop: 12 },
 });
