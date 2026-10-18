@@ -2,6 +2,7 @@ import { reconcileRefund } from '../_shared/reconcileRefund.ts';
 import { settleCheckout } from '../_shared/settleCheckout.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
+import { takeBackFromProvider } from '../_shared/takeBack.ts';
 
 // Signed Stripe events reconcile checkout capture, refunds, connected-account
 // capabilities, and provider transfers. Always retrieve current Stripe state:
@@ -191,14 +192,24 @@ async function handleTransfer(eventTransfer: Stripe.Transfer): Promise<void> {
   const payoutId = transfer.metadata.payout_id;
   if (!payoutId) return;
   const { data: payout, error } = await admin.from('provider_payouts')
-    .select('id, booking_id, stripe_account_id, payout_amount, status').eq('id', payoutId).single();
+    .select('id, booking_id, stripe_account_id, payout_amount, deducted_pence, status').eq('id', payoutId).single();
   if (error) throw error;
   if (payout.status === 'reversed') return;
   const destination = typeof transfer.destination === 'string' ? transfer.destination : transfer.destination?.id;
   // A partial refund lowers payout_amount by reversing part of the transfer,
-  // so compare against what is left of it, not its original amount.
+  // so compare against what is left of it, not its original amount. Anything
+  // deducted for an earlier shortfall never went into the transfer.
   const netTransferred = transfer.amount - (transfer.amount_reversed ?? 0);
-  if (destination !== payout.stripe_account_id || netTransferred !== payout.payout_amount) throw new Error('Transfer mismatch');
+  // A take-back Stripe couldn't reverse lowered payout_amount but left the
+  // transfer whole; it is recorded as a shortfall against this transfer.
+  const { data: owed, error: owedError } = await admin.from('provider_shortfalls')
+    .select('unreversed_pence').eq('stripe_transfer_id', transfer.id)
+    // Only these also lowered payout_amount; a bank-dispute shortfall didn't.
+    .in('source', ['refund', 'cancellation']).limit(50);
+  if (owedError) throw owedError;
+  const unreversed = (owed ?? []).reduce((sum, r) => sum + Number(r.unreversed_pence), 0);
+  const expected = payout.payout_amount - Number(payout.deducted_pence ?? 0) + unreversed;
+  if (destination !== payout.stripe_account_id || netTransferred !== expected) throw new Error('Transfer mismatch');
   const { error: writeError } = await admin.from('provider_payouts')
     .update({ status: 'transferred', stripe_transfer_id: transfer.id, failure_reason: null })
     .eq('id', payout.id).neq('status', 'reversed');
@@ -241,12 +252,15 @@ async function passDisputeToProvider(dispute: Stripe.Dispute): Promise<void> {
   if (!intentId) return;
 
   const { data: fees, error: feeError } = await admin.from('booking_fee_charges')
-    .select('id, stripe_transfer_id').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
+    .select('id, booking_id, provider_id, stripe_transfer_id').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
   if (feeError) throw feeError;
   for (const fee of fees ?? []) {
     if (!fee.stripe_transfer_id) continue;
-    await stripe.transfers.createReversal(fee.stripe_transfer_id, { metadata: { dispute_id: dispute.id } },
-      { idempotencyKey: `dispute_reversal_fee_${fee.id}` });
+    await takeBackFromProvider(admin, stripe, {
+      providerId: fee.provider_id, bookingId: fee.booking_id, source: 'bank_dispute',
+      transferId: fee.stripe_transfer_id, key: `dispute_reversal_fee_${fee.id}`,
+      metadata: { dispute_id: dispute.id },
+    });
     const { error } = await admin.from('booking_fee_charges')
       .update({ payout_status: 'reversed', payout_failure_reason: `bank dispute ${dispute.id}` }).eq('id', fee.id);
     if (error) throw error;
@@ -258,12 +272,14 @@ async function passDisputeToProvider(dispute: Stripe.Dispute): Promise<void> {
   const ids = (bookings ?? []).map(b => b.id);
   if (ids.length === 0) return;
   const { data: payouts, error: payoutError } = await admin.from('provider_payouts')
-    .select('id, stripe_transfer_id').in('booking_id', ids).eq('status', 'transferred');
+    .select('id, booking_id, provider_id, stripe_transfer_id').in('booking_id', ids).eq('status', 'transferred');
   if (payoutError) throw payoutError;
   for (const payout of payouts ?? []) {
-    if (!payout.stripe_transfer_id) continue;
-    await stripe.transfers.createReversal(payout.stripe_transfer_id, { metadata: { dispute_id: dispute.id } },
-      { idempotencyKey: `dispute_reversal_payout_${payout.id}` });
+    await takeBackFromProvider(admin, stripe, {
+      providerId: payout.provider_id, bookingId: payout.booking_id, source: 'bank_dispute',
+      transferId: payout.stripe_transfer_id, key: `dispute_reversal_payout_${payout.id}`,
+      metadata: { dispute_id: dispute.id },
+    });
     // transfer.reversed then marks the row reversed (handleTransferReversed).
   }
 }

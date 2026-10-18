@@ -1,4 +1,5 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
+import { takeBackFromProvider } from '../_shared/takeBack.ts';
 import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import {
   computeCancellationSettlement,
@@ -146,7 +147,7 @@ Deno.serve(async (req: Request) => {
     // The provider's payout row for this booking (its stored share, in pence).
     const { data: payout, error: payoutErr } = await admin
       .from('provider_payouts')
-      .select('id, status, payout_amount, stripe_transfer_id, stripe_account_id, currency')
+      .select('id, provider_id, status, payout_amount, deducted_pence, stripe_transfer_id, stripe_account_id, currency')
       .eq('booking_id', booking.id)
       .maybeSingle();
     if (payoutErr) throw payoutErr;
@@ -169,19 +170,35 @@ Deno.serve(async (req: Request) => {
       if (payout.status === 'held') {
         if (settlement.providerKeepPence > 0) {
           if (!chargeId) throw new Error('No charge to settle the provider from');
-          const transfer = await stripe.transfers.create(
-            {
-              amount: settlement.providerKeepPence,
-              currency: payout.currency ?? 'gbp',
-              destination: payout.stripe_account_id,
-              source_transaction: chargeId,
-              transfer_group: `payout_${payout.id}`,
-              metadata: { payout_id: payout.id, booking_id: booking.id, reason: 'cancellation_penalty_retained' },
-            },
-            { idempotencyKey: `cancelpay_${payout.id}` },
-          );
+          // Anything the provider still owes from an earlier refund comes out
+          // of what they keep here, exactly as at a normal release.
+          const { error: keepErr } = await admin.from('provider_payouts')
+            .update({ payout_amount: settlement.providerKeepPence }).eq('id', payout.id).eq('status', 'held');
+          if (keepErr) throw keepErr;
+          const { data: net, error: shortErr } = await admin.rpc('apply_provider_shortfalls', { p_payout_id: payout.id });
+          if (shortErr) throw shortErr;
+          const transferPence = Number(net ?? 0);
+          let transfer: Stripe.Transfer | null;
+          try {
+            transfer = transferPence <= 0 ? null : await stripe.transfers.create(
+              {
+                amount: transferPence,
+                currency: payout.currency ?? 'gbp',
+                destination: payout.stripe_account_id,
+                source_transaction: chargeId,
+                transfer_group: `payout_${payout.id}`,
+                metadata: { payout_id: payout.id, booking_id: booking.id, reason: 'cancellation_penalty_retained' },
+              },
+              { idempotencyKey: `cancelpay_${payout.id}` },
+            );
+          } catch (err) {
+            // No transfer went out: give the deduction back so the provider still owes it.
+            const { error: releaseErr } = await admin.rpc('release_provider_shortfalls', { p_payout_id: payout.id });
+            if (releaseErr) console.error(`[apply-cancellation-refund] could not give back shortfall deductions on ${payout.id}: ${String(releaseErr)}`);
+            throw err;
+          }
           const { error: upErr } = await admin.from('provider_payouts')
-            .update({ status: 'transferred', payout_amount: settlement.providerKeepPence, stripe_transfer_id: transfer.id, failure_reason: 'cancellation penalty: provider keeps retained share' })
+            .update({ status: 'transferred', payout_amount: settlement.providerKeepPence, stripe_transfer_id: transfer?.id ?? null, failure_reason: transfer ? 'cancellation penalty: provider keeps retained share' : 'cancellation penalty: retained share settled an earlier shortfall' })
             .eq('id', payout.id).eq('status', 'held');
           if (upErr) throw upErr;
         } else {
@@ -194,20 +211,23 @@ Deno.serve(async (req: Request) => {
       } else if (payout.status === 'transferred' && settlement.reverseFromPayoutPence > 0) {
         // Already paid out (cancel after the hold released) — claw back only the
         // part the provider doesn't keep.
-        if (payout.stripe_transfer_id) {
-          await stripe.transfers.createReversal(
-            payout.stripe_transfer_id,
-            { amount: settlement.reverseFromPayoutPence, metadata: { booking_id: booking.id, reason: 'cancellation_penalty_partial_reversal' } },
-            { idempotencyKey: `cancelrev_${payout.id}` },
-          );
-          const fullyReversed = settlement.providerKeepPence <= 0;
-          const { error: upErr } = await admin.from('provider_payouts')
-            .update(fullyReversed
-              ? { status: 'reversed' }
-              : { payout_amount: settlement.providerKeepPence, failure_reason: 'cancellation penalty: partial reversal, provider keeps retained share' })
-            .eq('id', payout.id);
-          if (upErr) throw upErr;
-        }
+        await takeBackFromProvider(admin, stripe, {
+          providerId: payout.provider_id,
+          bookingId: booking.id,
+          source: 'cancellation',
+          transferId: payout.stripe_transfer_id,
+          wantPence: settlement.reverseFromPayoutPence,
+          reversiblePence: Number(payout.payout_amount) - Number(payout.deducted_pence ?? 0),
+          key: `cancelrev_${payout.id}`,
+          metadata: { booking_id: booking.id, reason: 'cancellation_penalty_partial_reversal' },
+        });
+        const fullyReversed = settlement.providerKeepPence <= 0;
+        const { error: upErr } = await admin.from('provider_payouts')
+          .update(fullyReversed
+            ? { status: 'reversed' }
+            : { payout_amount: settlement.providerKeepPence, failure_reason: 'cancellation penalty: partial reversal, provider keeps retained share' })
+          .eq('id', payout.id);
+        if (upErr) throw upErr;
       }
     }
 
