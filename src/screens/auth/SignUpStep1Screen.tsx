@@ -143,7 +143,7 @@ export default function SignUpStep1Screen({ navigation }: Props) {
                   <View style={[styles.caveat, { backgroundColor: t.accentDim }]} accessibilityRole="text">
                     <Ionicons name="information-circle-outline" size={18} color={t.accentText} style={styles.caveatIcon} />
                     <Text style={[styles.caveatText, { color: t.text }]}>
-                      Some of CERVICED is limited with your own booking link. Bookings and payments go through your link, and reviews, offers and client-care tools aren't available. Taking bookings through CERVICED gives you the full experience.
+                      Some features are limited with your own link. Book through CERVICED for the full experience.
                     </Text>
                   </View>
                 </>
