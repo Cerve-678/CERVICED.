@@ -33,7 +33,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking } from '../../services/databaseService';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -44,6 +44,8 @@ import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
 import type { GroupedListItem } from '../../features/bookings/presentationTypes';
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
+import { ExternalBookingCard } from '../../features/bookings/ExternalBookingCard';
+import { externalBookingStart, splitExternalBookings } from '../../features/bookings/externalBookings';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
@@ -58,7 +60,9 @@ type BookingsListRow =
   | GroupedListItem
   | { kind: 'past-booking'; booking: ConfirmedBooking }
   | { kind: 'waitlist-header' }
-  | { kind: 'waitlist'; entry: WaitlistEntry };
+  | { kind: 'waitlist'; entry: WaitlistEntry }
+  | { kind: 'external-header' }
+  | { kind: 'external'; entry: ClientExternalBookingWithProvider };
 
 const IN_PROGRESS_PURPLE = '#7B2FBE';
 
@@ -326,6 +330,24 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // at one; see the route-params effect below.
   const [waitlistHold, setWaitlistHold] = useState<RawBooking | null>(null);
   const [waitlistHoldBusy, setWaitlistHoldBusy] = useState(false);
+
+  // "Booked elsewhere" entries — the client's own notes of bookings made on a
+  // link-only provider's page. Reloaded on focus, since they're added from a
+  // provider's profile in another stack.
+  const [externalBookings, setExternalBookings] = useState<ClientExternalBookingWithProvider[]>([]);
+  useFocusEffect(useCallback(() => {
+    if (!user?.id) return;
+    let active = true;
+    getMyExternalBookings()
+      .then(rows => { if (active) setExternalBookings(rows); })
+      .catch((error: unknown) => logger.warn('[Bookings] booked-elsewhere entries failed to load', error));
+    return () => { active = false; };
+  }, [user?.id]));
+  const externalSplit = useMemo(() => {
+    const { upcoming, past } = splitExternalBookings(externalBookings, new Date());
+    const cutoff = Date.now() - PAST_BOOKINGS_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
+    return { upcoming, past: past.filter(entry => externalBookingStart(entry).getTime() >= cutoff) };
+  }, [externalBookings]);
 
   // Load waitlist entries for this user
   useEffect(() => {
@@ -1189,17 +1211,27 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const virtualizedListRows = useMemo((): BookingsListRow[] => {
     let rows: BookingsListRow[] = [];
-    if (activeFilters.has('past')) {
+    const isPast = activeFilters.has('past');
+    if (isPast) {
       rows = pastBookingsFiltered.map(booking => ({ kind: 'past-booking' as const, booking }));
     } else if (isFilterView) {
       rows = [...listItems];
+    }
+    // Past keeps its category filter honest: booked-elsewhere entries carry
+    // free text, not a category, so they only join the unfiltered list.
+    const externalRows = isPast
+      ? (pastCategoryFilter ? [] : externalSplit.past)
+      : isFilterView ? externalSplit.upcoming : [];
+    if (externalRows.length > 0) {
+      rows.push({ kind: 'external-header' });
+      rows.push(...externalRows.map(entry => ({ kind: 'external' as const, entry })));
     }
     if (waitlistEntries.length > 0) {
       rows.push({ kind: 'waitlist-header' });
       rows.push(...waitlistEntries.map(entry => ({ kind: 'waitlist' as const, entry })));
     }
     return rows;
-  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries]);
+  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries, externalSplit, pastCategoryFilter]);
 
   // The notification-driven scroll above fires on a timer, after the filter
   // switch has re-rendered this list, so it needs the rows as they are at that
@@ -1283,8 +1315,22 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }).catch(() => {});
   }, []);
 
+  const handleExternalBookingPress = useCallback((entry: ClientExternalBookingWithProvider) => {
+    navigation.navigate('ExternalBookingDetail', { externalBookingId: entry.id });
+  }, [navigation]);
+
   const renderBookingsListRow = useCallback(({ item }: { item: BookingsListRow }) => {
     if (item.kind === 'category') return renderServiceCategoryRow({ item });
+    if (item.kind === 'external-header') {
+      return (
+        <View style={{ paddingHorizontal: 16 }}>
+          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>BOOKED ELSEWHERE</Text>
+        </View>
+      );
+    }
+    if (item.kind === 'external') {
+      return <ExternalBookingCard entry={item.entry} onPress={handleExternalBookingPress} />;
+    }
     if (item.kind === 'past-booking') return renderPastBookingRow({ item: item.booking });
     if (item.kind === 'waitlist-header') {
       return (
@@ -1300,12 +1346,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         onLeave={handleLeaveWaitlistEntry}
       />
     );
-  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
+  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, handleExternalBookingPress, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
 
   const bookingListKeyExtractor = useCallback((item: BookingsListRow) => {
     if (item.kind === 'category') return `category-${item.serviceType}`;
     if (item.kind === 'past-booking') return `past-${item.booking.id}`;
     if (item.kind === 'waitlist-header') return 'waitlist-header';
+    if (item.kind === 'external-header') return 'external-header';
+    if (item.kind === 'external') return `external-${item.entry.id}`;
     return `waitlist-${item.entry.id}`;
   }, []);
 
@@ -1927,7 +1975,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     )}
                   </View>
                 )}
-                {(activeFilters.has('past') ? pastBookingsFiltered.length === 0 : listItems.length === 0) ? (
+                {(activeFilters.has('past')
+                  ? pastBookingsFiltered.length === 0 && (pastCategoryFilter || externalSplit.past.length === 0)
+                  : listItems.length === 0 && externalSplit.upcoming.length === 0) ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>
                       {activeFilters.has('past')

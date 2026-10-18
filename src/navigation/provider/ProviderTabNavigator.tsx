@@ -10,17 +10,28 @@ import ProviderBeccaNavigator from "./tabs/ProviderBeccaNavigator";
 import ProviderHomeNavigator from "./tabs/ProviderHomeNavigator";
 import ProviderServicesNavigator from "./tabs/ProviderServicesNavigator";
 import ProviderAccountNavigator from "./tabs/ProviderAccountNavigator";
+import LinkOnlyPortfolioNavigator from "./tabs/LinkOnlyPortfolioNavigator";
+import LinkOnlyMessagesNavigator from "./tabs/LinkOnlyMessagesNavigator";
 
 // Components
 import TabIcon from "../../components/TabIcon";
 import IslandPillTabBar from "../../components/IslandPillTabBar";
 import ErrorBoundary from "../../components/ErrorBoundary";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useAuth } from "../../contexts/AuthContext";
 
 const Tab = createBottomTabNavigator<ProviderTabParamList>();
 
 export default function ProviderTabNavigation() {
   const { theme } = useTheme();
+  const { myBookingMode } = useAuth();
+
+  // A link-only provider (booking_mode 'external') takes bookings on their own
+  // page, so they get Home, Portfolio, Messages and Profile — no booking
+  // calendar, no service catalogue, and Becca lives on their Home.
+  if (myBookingMode === "external") {
+    return <LinkOnlyProviderTabs />;
+  }
 
   return (
     <Tab.Navigator
@@ -111,6 +122,56 @@ export default function ProviderTabNavigation() {
         {() => (
           <ErrorBoundary>
             <ProviderAccountNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
+    </Tab.Navigator>
+  );
+}
+
+function LinkOnlyProviderTabs() {
+  const { theme } = useTheme();
+  const icon = (name: string) => ({ focused }: { focused: boolean }) => (
+    <TabIcon name={name} focused={focused} color={theme.text} size={26} />
+  );
+
+  return (
+    <Tab.Navigator
+      initialRouteName="ProviderHome"
+      backBehavior="initialRoute"
+      tabBar={(props) => <IslandPillTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: "#007AFF",
+        tabBarInactiveTintColor: "#8E8E93",
+        tabBarHideOnKeyboard: true,
+      }}
+    >
+      <Tab.Screen name="ProviderHome" options={{ title: "Home", tabBarIcon: icon("house") }}>
+        {() => (
+          <ErrorBoundary>
+            <ProviderHomeNavigator linkOnly />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="LinkOnlyPortfolio" options={{ title: "Portfolio", tabBarIcon: icon("grid-layout") }}>
+        {() => (
+          <ErrorBoundary>
+            <LinkOnlyPortfolioNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="LinkOnlyMessages" options={{ title: "Messages", tabBarIcon: icon("chat-dots") }}>
+        {() => (
+          <ErrorBoundary>
+            <LinkOnlyMessagesNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Profile" options={{ tabBarIcon: icon("user") }}>
+        {() => (
+          <ErrorBoundary>
+            <ProviderAccountNavigator linkOnly />
           </ErrorBoundary>
         )}
       </Tab.Screen>

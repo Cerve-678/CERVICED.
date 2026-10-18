@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-18 (link-only providers)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018200000 | `link_only_providers` | **Applied 2026-10-18** by the user pasting it into the SQL editor; the paste recorded the version. Renumbered from 20261017120000 as five other migrations landed ahead of it; cleared with cerviced-56, -c3, -a9, -d6 first. Verified live: `providers.booking_mode` + both constraints, `client_external_bookings` / `provider_daily_stats` / `provider_stat_viewers` with RLS, four triggers, four RPCs executable by authenticated only, external branch in `check_and_set_provider_live`, `delete_client_profile` keeping beauty_maintenance's deletes. Frontier before apply: `20261018190000`. File is on `feat/link-only-provider`. |
+
 ### Applied 2026-10-18 (Beauty Maintenance)
 
 | Authored version | Name | Status |

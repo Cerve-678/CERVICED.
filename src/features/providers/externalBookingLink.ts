@@ -1,3 +1,4 @@
+import { AppState } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 
 /**
@@ -32,13 +33,36 @@ export function normalizeExternalBookingUrl(raw: string | null | undefined): str
  * website) deliberately keep opening in their own apps via Linking.
  *
  * Throws if the link isn't a usable web address or the browser can't open.
+ *
+ * Resolves when the page is CLOSED on iOS (`type: 'cancel' | 'dismiss'`).
+ * Android's Custom Tab resolves as soon as it OPENS (`type: 'opened'`), so a
+ * caller that needs "the client came back" waits for the app to be active
+ * again there instead — see waitUntilBackFromBrowser.
  */
-export async function openExternalBookingPage(raw: string): Promise<void> {
+export async function openExternalBookingPage(raw: string): Promise<WebBrowser.WebBrowserResult> {
   const url = normalizeExternalBookingUrl(raw);
   if (!url) throw new Error(`Invalid external booking URL: ${raw}`);
-  await WebBrowser.openBrowserAsync(url, {
+  return WebBrowser.openBrowserAsync(url, {
     dismissButtonStyle: "done",
     showTitle: true,
     presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+  });
+}
+
+/**
+ * Resolves once the client is back in CERVICED after their booking page
+ * closes. On iOS the browser result already means that; on Android the
+ * Custom Tab result arrives at open time, so wait for the app to come back
+ * to the foreground.
+ */
+export function waitUntilBackFromBrowser(result: WebBrowser.WebBrowserResult): Promise<void> {
+  if (result.type !== 'opened') return Promise.resolve();
+  return new Promise(resolve => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        subscription.remove();
+        resolve();
+      }
+    });
   });
 }

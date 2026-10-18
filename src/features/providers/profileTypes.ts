@@ -74,6 +74,9 @@ export interface ProviderProfileData {
   website: string;
   tiktok: string;
   externalBookingUrl: string | null;
+  /** True for a link-only provider (booking_mode 'external'): Book opens
+   *  externalBookingUrl, and there's no price list, rating or reviews. */
+  isLinkOnly: boolean;
   yearsExperience: string;
   specialties: string[];
   customServiceType: string;

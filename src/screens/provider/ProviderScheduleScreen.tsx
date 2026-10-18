@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDialog } from '../../components/AppDialog';
+import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   getMyProviderProfile,
@@ -129,6 +130,11 @@ export default function ProviderScheduleScreen() {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
+  // A link-only provider's hours are their public opening hours (shown on
+  // their profile, and one of their go-live steps). Blocked dates only mean
+  // something to CERVICED's own booking flow, so that tab isn't offered.
+  const { myBookingMode } = useAuth();
+  const hoursOnly = myBookingMode === 'external';
 
   const [tab, setTab] = useState<'hours' | 'blocked'>('hours');
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -425,7 +431,7 @@ export default function ProviderScheduleScreen() {
         <KeyboardDismissView style={s.keyboardView}>
         {/* Header */}
         <View style={s.header}>
-          <Text style={[s.headerTitle, { color: P.text }]}>My Schedule</Text>
+          <Text style={[s.headerTitle, { color: P.text }]}>{hoursOnly ? 'Opening Hours' : 'My Schedule'}</Text>
           <View style={s.headerActions}>
             <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel="Close schedule">
               <Ionicons name="close" size={22} color={P.sub} />
@@ -434,6 +440,7 @@ export default function ProviderScheduleScreen() {
         </View>
 
         {/* Segmented control */}
+        {!hoursOnly && (
         <View style={[s.segWrap, { backgroundColor: P.surface }]}>
           <SlidingTabs
             tabs={SCHEDULE_TABS}
@@ -445,6 +452,7 @@ export default function ProviderScheduleScreen() {
             scrollable={false}
           />
         </View>
+        )}
 
         {/* ── Hours tab ───────────────────────────────────────────────────── */}
         {tab === 'hours' && (

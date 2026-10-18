@@ -187,6 +187,8 @@ export interface DbUser {
   deletion_requested_at: string | null;
 }
 
+export type ProviderBookingMode = "cerviced" | "external";
+
 export interface DbProvider {
   id: string;
   // Nullable for unclaimed/scraped rows (see is_claimed below) — a provider
@@ -225,10 +227,16 @@ export interface DbProvider {
   tiktok: string | null;
   preferred_contact_methods: string[] | null;
   whatsapp_number: string | null;
-  // When set, client-facing "Book" CTAs open this URL (Fresha, Treatwell,
-  // Acuity, etc.) instead of Cerviced's in-app booking flow. Null/empty =
-  // book entirely in-app, unchanged from before this column existed.
+  // The provider's own booking page (Fresha, Treatwell, Acuity, etc.). Only
+  // used for booking when booking_mode is 'external' — a CERVICED-mode
+  // provider can have one filled in and still takes bookings in-app.
   external_booking_url: string | null;
+  /** Who takes this provider's bookings. 'external' = a link-only provider:
+   *  their Book button opens external_booking_url, and the price list,
+   *  ratings and CERVICED's booking flow don't apply. Never infer this from
+   *  external_booking_url being filled in — read this column. The DB requires
+   *  a link whenever this is 'external' and refuses bookings rows for them. */
+  booking_mode: ProviderBookingMode;
   rating: number;
   review_count: number;
   years_experience: number | null;
@@ -876,6 +884,7 @@ export type ProviderWithServices = Pick<
   | "preferred_contact_methods"
   | "whatsapp_number"
   | "external_booking_url"
+  | "booking_mode"
   | "rating"
   | "years_experience"
   | "is_verified"
@@ -954,7 +963,39 @@ export type PublicProviderSummary = Pick<
   | 'vegan_cruelty_free'
   | 'is_featured'
   | 'created_at'
+  | 'booking_mode'
 >;
+
+/** A client's own record of a booking they made on a link-only provider's
+ *  booking page ("Did you book?"). CERVICED doesn't handle the booking itself;
+ *  only the client can read or remove the row, and it can't be edited. */
+export interface DbClientExternalBooking {
+  id: string;
+  client_id: string;
+  provider_id: string;
+  /** YYYY-MM-DD, the client's UK local date. */
+  booking_date: string;
+  /** HH:MM:SS as Postgres returns a `time`. */
+  start_time: string;
+  service_label: string;
+  created_at: string;
+}
+
+/** One day of a provider's own profile counters (UK date). Days with no
+ *  activity have no row. */
+export interface DbProviderDailyStat {
+  day: string;
+  profile_views: number;
+  book_taps: number;
+  search_appearances: number;
+  instagram_taps: number;
+}
+
+export type ProviderStatKind =
+  | 'profile_view'
+  | 'book_tap'
+  | 'search_appearance'
+  | 'instagram_tap';
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {

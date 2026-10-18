@@ -11,7 +11,7 @@ jest.mock('../services/databaseService', () => ({
     return jest.fn();
   },
   getUserProfileById: (...args: unknown[]) => mockProfile(...args),
-  getProviderIdForUserId: jest.fn().mockResolvedValue(null),
+  getProviderOwnershipForUserId: jest.fn().mockResolvedValue({ providerId: null, bookingMode: null }),
 }));
 jest.mock('../services/pushNotificationService', () => ({
   registerForPushNotifications: jest.fn().mockResolvedValue(null),

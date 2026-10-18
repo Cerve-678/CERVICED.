@@ -28,7 +28,7 @@ import {
   updateProviderRegistrationRow,
   uploadPublicStorageObject,
 } from './databaseService';
-import type { DbProvider, BusinessType } from '../types/database';
+import type { DbProvider, BusinessType, ProviderBookingMode } from '../types/database';
 import {
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
@@ -136,6 +136,10 @@ export interface ProviderRegistrationData {
   // When set, clients booking this provider are sent to this URL (Fresha,
   // Treatwell, Acuity, etc.) instead of Cerviced's in-app booking flow.
   externalBookingUrl: string;
+  /** Written only when the providers row is first created — from the
+   *  sign-up answer. Switching mode later is its own action, not a side
+   *  effect of an ordinary profile save. Omitted = 'cerviced'. */
+  bookingMode?: ProviderBookingMode;
   yearsExperience: string;
   // Address privacy
   // '' is this form's "not answered yet"; the four real values are the
@@ -638,6 +642,7 @@ export async function saveProviderToSupabase(
         automation_settings: mergedAutomationSettings,
         is_active: true,
         terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
+        booking_mode: data.bookingMode ?? 'cerviced',
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown database error';

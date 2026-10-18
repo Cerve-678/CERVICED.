@@ -403,13 +403,20 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
 
         {/* ── Header ─────────────────────────────────────────────── */}
         <Animated.View style={[s.header, { opacity: headerFade, transform: [{ translateY: headerY }] }]}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={[s.iconBtn, { backgroundColor: P.iconBg }]}
-          >
-            <Ionicons name="chevron-back" size={18} color={P.text} />
-          </TouchableOpacity>
+          {/* A link-only provider's Messages tab opens this as its root, where
+              there's nothing to go back to — keep the slot so the title stays
+              centred. */}
+          {navigation.canGoBack() ? (
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={[s.iconBtn, { backgroundColor: P.iconBg }]}
+            >
+              <Ionicons name="chevron-back" size={18} color={P.text} />
+            </TouchableOpacity>
+          ) : (
+            <View style={s.iconBtn} />
+          )}
 
           <View style={s.headerCenter}>
             <Text style={[s.title, { color: P.text }]}>Inbox</Text>

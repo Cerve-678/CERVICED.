@@ -12,6 +12,7 @@ tags: [screen, client]
 - [[BookingDetailScreen\|BookingDetail]]
 - [[RescheduleScreen\|Reschedule]]
 - [[ProviderProfileScreen\|ProviderProfile]]
+- [[ExternalBookingDetailScreen\|ExternalBookingDetail]]
 - `Cart` _(navigator / dynamic)_
 
 ## Map
