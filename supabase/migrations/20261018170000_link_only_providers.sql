@@ -26,7 +26,9 @@
 -- 8. A provider can't switch to link-only while CERVICED bookings of theirs
 --    are still pending or upcoming.
 --
--- Frontier at authoring: 20261011102423.
+-- Frontier at authoring: 20261018165847 (renumbered from 20261017120000 on 2026-10-18,
+-- after late_and_no_show_fees, provider_payout_hold_choice and
+-- refund_requests_timeline were applied ahead of it).
 
 -- ── 1. booking_mode ────────────────────────────────────────────────────────
 alter table public.providers
