@@ -22,7 +22,7 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session cerviced-c3 (efbc0489), branch feat/refund-payout-protection, since 2026-10-18 — 20261018190000_provider_payout_shortfalls (written, applying via psql script)
 ```
 
 ### Applied 2026-10-18 (Beauty Maintenance)
