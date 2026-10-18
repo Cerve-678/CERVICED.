@@ -114,13 +114,14 @@ test('a provider can choose how long after the appointment their share is releas
   expect(ui.getByText(/released to Stripe 7 days after the appointment ends/)).toBeTruthy();
 });
 
-test('a failed timing change keeps the old choice and says it was not changed', async () => {
+test('a failed timing change keeps the old choice and says why it failed', async () => {
   (setPayoutHoldDays as jest.Mock).mockRejectedValue(new Error('offline'));
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
   fireEvent.press(ui.getByText('30 days'));
-  await waitFor(() => expect(ui.getByText('Your payout timing was not changed. Please try again.')).toBeTruthy());
+  // An offline failure says so; any other unexplained one gets the retry line.
+  await waitFor(() => expect(ui.getByText('No internet connection. Please check your network and try again.')).toBeTruthy());
   expect(ui.getByRole('radio', { name: '24 hours', selected: true })).toBeTruthy();
 });
 
@@ -136,4 +137,23 @@ test('lists late and no-show fees with the provider\'s share and where the money
   expect(ui.getByText('No-show fee · Hair appointment')).toBeTruthy();
   expect(ui.getByText('£19.50')).toBeTruthy();
   expect(ui.getByText('Released to Stripe')).toBeTruthy();
+});
+
+test('an account with no professional profile is told to finish setting one up, not offered a choice that cannot save', async () => {
+  (getPayoutHoldDays as jest.Mock).mockResolvedValue(null);
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
+  expect(ui.getByText('Finish setting up your professional profile to choose when you get paid.')).toBeTruthy();
+  expect(ui.queryByText('7 days')).toBeNull();
+  expect(setPayoutHoldDays).not.toHaveBeenCalled();
+});
+
+test("shows the server's own reason when it refuses a timing change", async () => {
+  (setPayoutHoldDays as jest.Mock).mockRejectedValue({ code: 'P0001', message: 'Only a professional account can change payout timing.' });
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
+  fireEvent.press(ui.getByText('7 days'));
+  await waitFor(() => expect(ui.getByText('Only a professional account can change payout timing.')).toBeTruthy());
 });

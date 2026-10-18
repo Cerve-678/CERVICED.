@@ -10142,14 +10142,18 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
 }
 
-/** The provider's own payout timing (provider reading their own record). */
-export async function getPayoutHoldDays(): Promise<PayoutHoldDays> {
+/**
+ * The provider's own payout timing (provider reading their own record). null
+ * when the account has no professional profile yet, so there's nothing to set.
+ */
+export async function getPayoutHoldDays(): Promise<PayoutHoldDays | null> {
   const { data: { user }, error: authError } = await getSessionUser();
   if (authError || !user) throw new Error('Please sign in again.');
   const { data, error } = await supabase.from('providers')
     .select('payout_hold_days').eq('user_id', user.id).maybeSingle();
   if (error) throw error;
-  return isPayoutHoldDays(data?.payout_hold_days) ? data.payout_hold_days : DEFAULT_PAYOUT_HOLD_DAYS;
+  if (!data) return null;
+  return isPayoutHoldDays(data.payout_hold_days) ? data.payout_hold_days : DEFAULT_PAYOUT_HOLD_DAYS;
 }
 
 /**
