@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import { newRequestId } from '../utils/requestId';
+import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
 import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 
@@ -36,6 +37,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [holdDays, setHoldDays] = useState<PayoutHoldDays | null>(null);
   const [holdSaving, setHoldSaving] = useState(false);
   const [holdError, setHoldError] = useState('');
+  // No professional profile yet: there's no payout to time, so no picker.
+  const [holdUnavailable, setHoldUnavailable] = useState(false);
   const opening = useRef(false);
   const handledReturn = useRef<StripeConnectReturn | undefined>(undefined);
   const loadSequence = useRef(0);
@@ -62,7 +65,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       }),
       getPayoutHoldDays().then(days => {
         if (sequence !== loadSequence.current) return;
-        setHoldDays(days); setHoldError('');
+        setHoldDays(days); setHoldUnavailable(days === null); setHoldError('');
       }).catch(() => {
         if (sequence === loadSequence.current) setHoldError('Your payout timing could not load. Refresh to try again.');
       }),
@@ -135,8 +138,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       setHoldDays(await setPayoutHoldDays(days));
       // Held rows were re-timed server-side; reread them so "Eligible for release from" matches.
       void load();
-    } catch {
-      setHoldError('Your payout timing was not changed. Please try again.');
+    } catch (err) {
+      // The server's own guard wording ("Choose 24 hours, 3, 7, 14 or 30
+      // days.") says what to do; anything else gets the generic retry line.
+      setHoldError(toUserMessageAllowingDbGuard(err, 'Your payout timing was not changed. Please try again.', 'setPayoutHoldDays'));
     } finally {
       setHoldSaving(false);
     }
@@ -316,17 +321,21 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     {section === 'settings' && <>
       <Card title="When you get paid" sub="How long after an appointment your share is released to Stripe. Stripe then pays it into your bank, which usually takes a few more working days.">
         {!!holdError && <Notice text={holdError} />}
-        <View style={styles.holdOptions}>
-          {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
-            const selected = days === holdDays;
-            return <TouchableOpacity key={days} accessibilityRole="radio" accessibilityState={{ selected, disabled: holdSaving || !holdDays }}
-              disabled={holdSaving || !holdDays} onPress={() => void chooseHoldDays(days)} activeOpacity={0.75}
-              style={[styles.holdOption, { backgroundColor: selected ? C.accent : C.surface, borderColor: C.border }]}>
-              <Text style={[styles.label, { color: selected ? C.bg : C.text }]}>{payoutHoldLabel(days)}</Text>
-            </TouchableOpacity>;
-          })}
-        </View>
-        <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
+        {holdUnavailable
+          ? <Notice text="Finish setting up your professional profile to choose when you get paid." />
+          : <>
+            <View style={styles.holdOptions}>
+              {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
+                const selected = days === holdDays;
+                return <TouchableOpacity key={days} accessibilityRole="radio" accessibilityState={{ selected, disabled: holdSaving || !holdDays }}
+                  disabled={holdSaving || !holdDays} onPress={() => void chooseHoldDays(days)} activeOpacity={0.75}
+                  style={[styles.holdOption, { backgroundColor: selected ? C.accent : C.surface, borderColor: C.border }]}>
+                  <Text style={[styles.label, { color: selected ? C.bg : C.text }]}>{payoutHoldLabel(days)}</Text>
+                </TouchableOpacity>;
+              })}
+            </View>
+            <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
+          </>}
       </Card>
       {children}
     </>}
