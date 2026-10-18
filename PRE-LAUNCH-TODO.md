@@ -1074,3 +1074,45 @@ locked. Run `cerviced-legal-flagger` / `cerviced-security-review` on it, and
 consider a note in `LEGAL-COMPLIANCE-NOTES.md`.
 
 Build on its own branch (`feat/home-screen-widgets`) off `main`.
+
+---
+
+## 23. Saved cards — built on `feat/saved-payment-methods`, not live (2026-10-18)
+
+(Numbered 23 because §22, Instagram handle verification, is on another branch.)
+
+Clients can save cards on Payment Methods and reuse them at checkout. Stripe
+holds the card; CERVICED stores only `users.stripe_customer_id`. Scope is
+**on-session only**: the client is always present and taps Pay. Nothing charges
+a saved card without them — late / no-show fees need their own consent record,
+failed-authentication handling and dispute route first (legal-flagger report,
+2026-10-18; add these to `LEGAL-COMPLIANCE-NOTES.md`).
+
+Inert until all of these happen, in order:
+
+1. Apply `20261018120000_client_stripe_customer_id.sql` (check
+   `supabase/MIGRATION_OWNER.md`; frontier at authoring 20261011102423).
+2. Deploy `client-saved-cards` and the updated `create-payment-intent`, outside
+   peak hours: the PaymentIntent idempotency key was renamed, so a checkout
+   mid-flight at deploy time can leave one orphaned, uncaptured intent.
+3. `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED=true` (§1). Until then Payment Methods
+   shows the old explainer and checkout doesn't use saved cards.
+
+Before turning it on:
+
+- **Verify in Stripe test mode which `setup_future_usage` a card saved from the
+  checkout sheet ends up with.** The ephemeral-key Payment Sheet's own "save"
+  checkbox may save it as `off_session`, which contradicts the on-session scope.
+  If so, move checkout to a Customer Session with
+  `payment_method_save_usage: 'on_session'` (needs a newer Stripe API version
+  than the `2024-12-18.acacia` the functions pin). "Add a card" on Payment
+  Methods is on-session by construction (SetupIntent `usage: 'on_session'`).
+- **Account deletion doesn't delete the Stripe Customer.** When the deletion
+  grace period completes, call `stripe.customers.del(stripe_customer_id)` from a
+  service-role function.
+- **Privacy Policy** doesn't name Stripe or say a Stripe Customer is kept for
+  saved cards. Wording is the user's call.
+- Confirm live `pg_policies` on `users` has no SELECT policy beyond own-row
+  before deploy, so `stripe_customer_id` stays private.
+- Apple Pay still needs a real Apple merchant ID (`merchant.com.cerviced` is a
+  placeholder) before the "Also at checkout" row is true on iOS.

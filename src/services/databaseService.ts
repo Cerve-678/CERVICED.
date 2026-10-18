@@ -1,4 +1,5 @@
 import { getPaymentRequestError } from '../utils/paymentRequestError';
+import type { SavedCard } from '../features/payments/savedCards';
 import { supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
@@ -9216,7 +9217,15 @@ export async function lookupPostcodeAddress(addressId: string): Promise<Postcode
 export async function createCheckoutPaymentIntent(
   checkoutBatchId: string,
   currency: string,
-): Promise<{ clientSecret: string; paymentIntentId: string }> {
+): Promise<{
+  clientSecret: string;
+  paymentIntentId: string;
+  // The client's Stripe Customer + a short-lived ephemeral key, so the Payment
+  // Sheet can list their saved cards and offer to save a new one. Undefined
+  // only from an older deployed function; the sheet then works without them.
+  customerId?: string;
+  ephemeralKeySecret?: string;
+}> {
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
   });
@@ -9228,7 +9237,69 @@ export async function createCheckoutPaymentIntent(
   if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
     throw new Error('Payment configuration does not match this app. Please contact support.');
   }
-  return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId };
+  return {
+    clientSecret: data.clientSecret,
+    paymentIntentId: data.paymentIntentId,
+    customerId: typeof data.customerId === 'string' ? data.customerId : undefined,
+    ephemeralKeySecret: typeof data.ephemeralKeySecret === 'string' ? data.ephemeralKeySecret : undefined,
+  };
+}
+
+/** The signed-in client's saved cards, read live from Stripe (CERVICED stores
+ *  no card details). Empty until they save one. */
+export async function listSavedCards(): Promise<SavedCard[]> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'list' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not load your saved cards. Please try again.');
+  if (!Array.isArray(data?.cards)) throw new Error('Could not load your saved cards. Please try again.');
+  return (data.cards as unknown[]).flatMap((raw): SavedCard[] => {
+    const c = raw as Partial<SavedCard>;
+    if (typeof c.id !== 'string' || typeof c.last4 !== 'string' ||
+        typeof c.expMonth !== 'number' || typeof c.expYear !== 'number') return [];
+    return [{
+      id: c.id,
+      brand: typeof c.brand === 'string' ? c.brand : 'unknown',
+      last4: c.last4,
+      expMonth: c.expMonth,
+      expYear: c.expYear,
+      wallet: typeof c.wallet === 'string' ? c.wallet : null,
+    }];
+  });
+}
+
+/** What the Payment Sheet needs to save a new card: the Customer (got or
+ *  created server-side), an ephemeral key over it, and a SetupIntent secret. */
+export async function createSavedCardSetup(): Promise<{
+  customerId: string;
+  ephemeralKeySecret: string;
+  setupIntentClientSecret: string;
+}> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'setup' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not open card setup. Please try again.');
+  if (typeof data?.customerId !== 'string' || typeof data?.ephemeralKeySecret !== 'string' ||
+      typeof data?.setupIntentClientSecret !== 'string') {
+    throw new Error('Could not open card setup. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return {
+    customerId: data.customerId,
+    ephemeralKeySecret: data.ephemeralKeySecret,
+    setupIntentClientSecret: data.setupIntentClientSecret,
+  };
+}
+
+/** Removes one of the signed-in client's own saved cards from Stripe. */
+export async function removeSavedCard(paymentMethodId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'remove', paymentMethodId },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not remove that card. Please try again.');
 }
 
 export async function finalizeCheckoutPaymentIntent(

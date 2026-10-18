@@ -1,13 +1,18 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
+import { getOrCreateStripeCustomer } from '../_shared/stripeCustomer.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Must match client-saved-cards: the ephemeral keys both return are read by
+// the same mobile SDK.
+const STRIPE_API_VERSION = '2024-12-18.acacia';
+
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: STRIPE_API_VERSION,
   httpClient: Stripe.createFetchHttpClient(),
 });
 
@@ -91,18 +96,36 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const paymentIntent = batch.payment_intent_id
+    // The client's Stripe Customer lets the Payment Sheet list their saved
+    // cards and offer "save this card" for next time. No code path charges a
+    // saved card without the client present. UNVERIFIED: with the
+    // ephemeral-key Payment Sheet, the sheet's own "save" checkbox may confirm
+    // with setup_future_usage=off_session. Check a checkout-saved card in
+    // Stripe test mode before enabling payments; if so, move to a Customer
+    // Session with payment_method_save_usage='on_session'.
+    const customerId = await getOrCreateStripeCustomer(supabase, admin, stripe, {
+      id: user.id, email: user.email,
+    });
+
+    let paymentIntent = batch.payment_intent_id
       ? await stripe.paymentIntents.retrieve(batch.payment_intent_id)
       : await stripe.paymentIntents.create({
       amount: amountInPence,
       currency: batch.currency,
+      customer: customerId,
       metadata: { user_id: user.id, checkout_batch_id: batch.id },
       payment_method_types: ['card'],
       // The sheet authorises only. Server settlement captures, then confirms
       // the reserved bookings; signed webhooks recover interrupted requests
       // and refund captured payments whose reservations became unavailable.
       capture_method: 'manual',
-    }, { idempotencyKey: `checkout_create_${batch.id}` });
+    }, { idempotencyKey: `checkout_create_saved_cards_${batch.id}` });
+
+    // An intent started before saved cards shipped has no Customer; attach it
+    // while it can still change, so the sheet's saved cards line up.
+    if (!paymentIntent.customer && paymentIntent.status === 'requires_payment_method') {
+      paymentIntent = await stripe.paymentIntents.update(paymentIntent.id, { customer: customerId });
+    }
 
     if (paymentIntent.status === 'canceled' || paymentIntent.status === 'succeeded') {
       return new Response(JSON.stringify({ error: 'This payment is already closed. Check your bookings.' }), {
@@ -121,11 +144,17 @@ Deno.serve(async (req: Request) => {
       throw new Error('Checkout is no longer available');
     }
 
+    const ephemeralKey = await stripe.ephemeralKeys.create(
+      { customer: customerId }, { apiVersion: STRIPE_API_VERSION },
+    );
+
     return new Response(
       JSON.stringify({
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         livemode: paymentIntent.livemode,
+        customerId,
+        ephemeralKeySecret: ephemeralKey.secret,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

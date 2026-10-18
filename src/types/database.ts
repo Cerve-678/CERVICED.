@@ -171,6 +171,12 @@ export interface DbUser {
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
   is_verified: boolean;
+  // The client's Stripe Customer id (cus_...) that their saved cards hang off.
+  // NULL until first save/checkout. Server-only: written by client-saved-cards /
+  // create-payment-intent with the service role; a client write is rejected by
+  // enforce_user_stripe_customer_server_only (20261018120000). Never write it
+  // from the app.
+  stripe_customer_id: string | null;
   created_at: string;
   updated_at: string;
   deletion_requested_at: string | null;

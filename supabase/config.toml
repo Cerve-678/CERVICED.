@@ -457,5 +457,8 @@ verify_jwt = true
 [functions.create-payment-intent]
 verify_jwt = true
 
+[functions.client-saved-cards]
+verify_jwt = true
+
 [functions.finalize-payment-intent]
 verify_jwt = true
