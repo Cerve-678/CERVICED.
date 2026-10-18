@@ -46,7 +46,11 @@
 --    told the client about the same money a moment ago.
 --
 -- notifications_type_check is rebuilt from the LIVE constraint (verified
--- 2026-10-11 via pg_get_constraintdef) plus the two new values.
+-- 2026-10-11 via pg_get_constraintdef) plus the two new values. It also
+-- keeps the three fee types from 20261018100000_late_and_no_show_fees, which
+-- must be applied FIRST: renumbered from 20261011100000 on 2026-10-18 because
+-- that version had fallen below the applied frontier (20261011102423), and a
+-- list without the fee types would have silently dropped them.
 --
 -- Contains function bodies: apply in the Supabase SQL editor (apply_migration
 -- mis-parses bodies — see MIGRATION_OWNER.md).
@@ -117,7 +121,9 @@ ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check
     'waitlist_slot_available', 'new_message', 'address_released', 'birthday_greeting',
     'post_appt_check_in', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked',
     'pending_booking_reminder', 'provider_no_show', 'no_show_disputed', 'points_earned',
-    'cancellation_settled', 'refund_requested', 'refund_request_updated'
+    'cancellation_settled',
+    'fee_charged', 'fee_disputed', 'fee_dispute_resolved',
+    'refund_requested', 'refund_request_updated'
   ]::text[]));
 
 -- ── 2. The client files a request ─────────────────────────────────────────
