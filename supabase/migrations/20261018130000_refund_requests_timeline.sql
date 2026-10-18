@@ -48,7 +48,7 @@
 -- notifications_type_check is rebuilt from the LIVE constraint (verified
 -- 2026-10-11 via pg_get_constraintdef) plus the two new values. It also
 -- keeps the three fee types from 20261018100000_late_and_no_show_fees, which
--- must be applied FIRST: renumbered from 20261011100000 on 2026-10-18 because
+-- must be applied FIRST: renumbered from 20261011100000 (then 20261018120000, which saved-cards also uses) on 2026-10-18 because
 -- that version had fallen below the applied frontier (20261011102423), and a
 -- list without the fee types would have silently dropped them.
 --
