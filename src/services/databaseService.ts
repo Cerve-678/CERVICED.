@@ -55,6 +55,7 @@ import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
+import { overridesFromDate } from "../utils/dateUtils";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -1459,6 +1460,74 @@ export async function getMyProviderProfile(): Promise<DbProvider | null> {
   if (error) throw error;
   if (!user) return null;
   return getProviderProfileForUserId(user.id);
+}
+
+/**
+ * Provider Home's first-paint data. The profile and every schedule collection
+ * belong to the same provider row, so embed them in one PostgREST response
+ * instead of starting five independent mobile requests during app launch.
+ */
+export async function getMyProviderHomeBundle(): Promise<{
+  profile: DbProvider;
+  availability: DbProviderAvailability[];
+  blockedDates: DbProviderBlockedDate[];
+  availabilityWindows: DbProviderAvailabilityWindow[];
+  availabilityOverrides: DbProviderAvailabilityOverride[];
+} | null> {
+  const {
+    data: { user },
+    error: authError,
+  } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("providers")
+    .select(`
+      *,
+      provider_availability (*),
+      provider_blocked_dates (*),
+      provider_availability_windows (*),
+      provider_availability_overrides (*)
+    `)
+    .eq("user_id", user.id)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as DbProvider & {
+    provider_availability: DbProviderAvailability[] | null;
+    provider_blocked_dates: DbProviderBlockedDate[] | null;
+    provider_availability_windows: DbProviderAvailabilityWindow[] | null;
+    provider_availability_overrides: DbProviderAvailabilityOverride[] | null;
+  };
+  const {
+    provider_availability,
+    provider_blocked_dates,
+    provider_availability_windows,
+    provider_availability_overrides,
+    ...profile
+  } = row;
+
+  return {
+    profile,
+    availability: [...(provider_availability ?? [])].sort((a, b) => a.day_of_week - b.day_of_week),
+    blockedDates: [...(provider_blocked_dates ?? [])].sort(
+      (a, b) => a.blocked_date.localeCompare(b.blocked_date),
+    ),
+    availabilityWindows: [...(provider_availability_windows ?? [])].sort(
+      (a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time),
+    ),
+    availabilityOverrides: [...(provider_availability_overrides ?? [])]
+      .filter(override => override.availability_date >= overridesFromDate())
+      .sort(
+        (a, b) => a.availability_date.localeCompare(b.availability_date)
+          || (a.start_time ?? '').localeCompare(b.start_time ?? ''),
+      ),
+  };
 }
 
 /** Owner profile plus legacy auth metadata, resolved with one auth lookup. */
