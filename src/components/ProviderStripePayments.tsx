@@ -8,7 +8,9 @@ import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, Vi
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import { newRequestId } from '../utils/requestId';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getInstantPayoutAvailability, createInstantPayout, type InstantPayoutAvailability, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { instantPayoutButtonLabel, instantPayoutConfirmation, instantPayoutFeeLine } from '../utils/instantPayout';
+import { logger } from '../utils/logger';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
@@ -37,6 +39,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [holdDays, setHoldDays] = useState<PayoutHoldDays | null>(null);
   const [holdSaving, setHoldSaving] = useState(false);
   const [holdError, setHoldError] = useState('');
+  // Only money already released to Stripe can go out instantly; null = not loaded.
+  const [instant, setInstant] = useState<InstantPayoutAvailability | null>(null);
+  const [instantNotice, setInstantNotice] = useState('');
   // No professional profile yet: there's no payout to time, so no picker.
   const [holdUnavailable, setHoldUnavailable] = useState(false);
   const opening = useRef(false);
@@ -68,6 +73,14 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         setHoldDays(days); setHoldUnavailable(days === null); setHoldError('');
       }).catch(() => {
         if (sequence === loadSequence.current) setHoldError('Your payout timing could not load. Refresh to try again.');
+      }),
+      // Instant payout is an extra: if it can't load, the button just isn't
+      // offered and the scheduled payout carries on as normal.
+      getInstantPayoutAvailability().then(data => {
+        if (sequence === loadSequence.current) setInstant(data);
+      }).catch(err => {
+        logger.error('[payments] instant payout availability failed', err);
+        if (sequence === loadSequence.current) setInstant(null);
       }),
       // Fees are a secondary list: a failed read leaves it empty rather than
       // replacing the booking payments error above.
@@ -147,6 +160,30 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     }
   };
 
+  const instantTarget = instant?.destinations[0];
+  const payOutInstantly = () => {
+    if (!instantTarget) return;
+    const { title, body } = instantPayoutConfirmation(instantTarget);
+    Alert.alert(title, body, [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Pay out now', onPress: async () => {
+        if (opening.current) return;
+        opening.current = true;
+        setBusy(true); setInstantNotice('');
+        try {
+          const sent = await createInstantPayout({ destination: instantTarget.id, netPence: instantTarget.netPence, requestId: newRequestId() });
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          setInstantNotice(`${money(sent.netPence, instantTarget.currency)} is on its way to ${instantTarget.label}. It typically arrives within 30 minutes.`);
+          await load();
+        } catch (err) {
+          logger.error('[payments] instant payout failed', err);
+          setInstantNotice(err instanceof PaymentRequestError ? err.message : 'The instant payout could not be confirmed. Refresh before trying again.');
+          await load();
+        } finally { opening.current = false; setBusy(false); }
+      } },
+    ]);
+  };
+
   const requestRefund = (row: ProviderPayout) => {
     const share = new Intl.NumberFormat('en-GB', { style: 'currency', currency: row.currency }).format(row.payout_amount / 100);
     Alert.alert('Refund this payment?', `This refunds ${row.booking?.customer_name || 'the client'} in full for ${row.booking?.service_name_snapshot || 'this booking'} and reverses your ${share} share. It does not cancel their appointment.`, [
@@ -219,6 +256,12 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <Text style={[styles.heroPending, { color: C.bg }]}>{finance?.connected ? balances(finance.pending) : '—'}</Text>
         </View>
       </View>
+
+      {!!instantNotice && <Notice text={instantNotice} />}
+      {instantTarget && <IconCard icon="flash-outline" title="Need it sooner?" sub="Send what’s in your Stripe balance to your card or bank now.">
+        <PaymentAction disabled={busy || loading} label={instantPayoutButtonLabel(instantTarget)} onPress={payOutInstantly} />
+        <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>{instantPayoutFeeLine(instantTarget)}</Text>
+      </IconCard>}
 
       {account && <>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? 'Manage payout account' : 'Continue with Stripe'}`}

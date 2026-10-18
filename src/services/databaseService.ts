@@ -10328,6 +10328,34 @@ export async function getProviderFinance(cursor?: string): Promise<ProviderFinan
   }
   return data;
 }
+/** One of the provider's own debit cards/banks that can take an instant payout, with Stripe's after-fee figure. */
+export interface InstantPayoutDestination {
+  id: string;
+  label: string;
+  currency: string;
+  grossPence: number;
+  netPence: number;
+}
+export interface InstantPayoutAvailability {
+  /** Has at least one instant-capable card or bank, whether or not there's money to send. */
+  eligible: boolean;
+  destinations: InstantPayoutDestination[];
+}
+export async function getInstantPayoutAvailability(): Promise<InstantPayoutAvailability> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'instant-status' } });
+  if (error || !data || typeof data.eligible !== 'boolean' || !Array.isArray(data.destinations)) {
+    throw await getPaymentRequestError(error, data, 'Instant payout could not load. Refresh to try again.');
+  }
+  return data;
+}
+/** Sends the provider's whole instant balance to one destination. Returns Stripe's estimated arrival (unix seconds). */
+export async function createInstantPayout(input: { destination: string; netPence: number; requestId: string }): Promise<{ netPence: number; arrivalDate: number }> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'instant-payout', ...input } });
+  if (error || !data?.ok || typeof data.netPence !== 'number' || typeof data.arrivalDate !== 'number') {
+    throw await getPaymentRequestError(error, data, 'The instant payout could not be confirmed. Refresh before trying again.');
+  }
+  return { netPence: data.netPence, arrivalDate: data.arrivalDate };
+}
 export interface ProviderPayout {
   id: string;
   booking_id: string;

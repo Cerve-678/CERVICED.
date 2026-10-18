@@ -24,6 +24,7 @@ Last updated: 18 October 2026.
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
+| Instant payouts (provider pays 1.5%) | No | Built on `feat/instant-payouts`, unmerged; `create-connect-account` not redeployed; fee not yet set in Stripe |
 
 ---
 
@@ -91,6 +92,25 @@ Payment settings.
   total, or CERVICED revenue. Providers see their own share, refunds and
   release status.
 - Fee earnings (late/no-show) are listed on the Payments tab.
+- **Instant payout** (Overview, "Need it sooner?"): only shown when Stripe
+  reports an instant-capable debit card or bank AND money in the provider's
+  Stripe balance. It pays out that balance only, so it can never send money
+  still in CERVICED's hold. The button shows the amount that arrives, the line
+  under it shows the fee, and a confirmation lists balance → fee → amount
+  before anything is sent. The app sends the after-fee amount it showed; the
+  server refuses if Stripe's figure has changed since.
+
+### Instant payout fee
+
+- The provider pays 1.5% of the payout. Stripe charges CERVICED 1%, so
+  CERVICED keeps 0.5% (decided 18 Oct).
+- The rate lives in **Stripe**, not in code: Dashboard → Connect → Platform
+  pricing → Instant Payouts, set to 1.5%. Stripe takes it as an application
+  fee on each payout, and `instant_available.net_available` is Stripe's
+  after-fee figure, so the app always shows the fee actually charged.
+- If no fee is set there, the server offers no destinations, so CERVICED
+  never silently pays Stripe's 1% itself.
+- GB minimum £0.40 per payout. Stripe sets a daily platform-wide instant limit.
 
 ## 5. Refunds
 
@@ -147,6 +167,7 @@ estimate of loss, not a penalty.
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |
 | CERVICED's fee on a partial refund | Kept; returned on a full refund |
 | Off-app payments | Never tracked by the app |
+| Instant payouts | Offered; provider pays 1.5% total, CERVICED keeps 0.5% after Stripe's 1% (18 Oct) |
 
 ## 9. Known gaps and launch blockers
 
@@ -154,6 +175,16 @@ estimate of loss, not a penalty.
   Terms or LEGAL-COMPLIANCE-NOTES, and Stripe Connect may limit how long a
   platform can delay transfers. Ask a solicitor and Stripe before the 14/30-day
   options go live.
+- **Legal flag:** instant payouts add a new fee charged to providers. Stripe
+  requires it to be disclosed clearly; the provider Terms don't mention it
+  yet. Add it before release.
+- **Risk:** card money can be paid out instantly before Stripe's usual ~3
+  working days are up. If that booking is later refunded or disputed, the
+  provider's balance goes negative; if Stripe can't recover it, CERVICED is
+  liable. Consider only offering instant payouts to established providers.
+- **Before instant payouts go live:** set 1.5% in Platform pricing, turn on
+  Instant Payouts (and debit cards for payouts) in Connect settings, merge,
+  then redeploy `create-connect-account`.
 - Late/no-show fee payouts aren't netted against shortfalls.
 - A reschedule to a later date may not move the payout release date (per 3 Oct;
   not re-verified).

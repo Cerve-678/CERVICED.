@@ -1,4 +1,5 @@
 import { readProviderFinance } from '../_shared/providerFinance.ts';
+import { readInstantAvailability, createInstantPayout } from '../_shared/instantPayout.ts';
 import { createConnectedAccount } from '../_shared/createConnectedAccount.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
@@ -25,8 +26,13 @@ interface RequestBody {
   // Deep links the app registers so Stripe can bounce the provider back into
   // it. `refreshUrl` is hit if the link expired before completion; `returnUrl`
   // when they finish (or bail) — the app then re-reads the account status.
-  action?: 'onboard' | 'status' | 'dashboard' | 'finance';
+  action?: 'onboard' | 'status' | 'dashboard' | 'finance' | 'instant-status' | 'instant-payout';
   cursor?: string;
+  // instant-payout: which of the provider's own instant-capable destinations,
+  // the after-fee amount they confirmed, and a one-off id for idempotency.
+  destination?: string;
+  netPence?: number;
+  requestId?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -97,6 +103,29 @@ Deno.serve(async (req: Request) => {
         return json({ error: 'Invalid payout cursor' }, 400);
       }
       return json(await readProviderFinance(stripe, accountId, body.cursor));
+    }
+    if (body.action === 'instant-status') {
+      return json(await readInstantAvailability(stripe, accountId));
+    }
+    if (body.action === 'instant-payout') {
+      if (!accountId) return json({ code: 'instant_unavailable', error: 'No connected account' }, 409);
+      // The destination is only ever matched against the caller's own
+      // account's instant-capable list, never trusted on its own.
+      if (typeof body.destination !== 'string' || !/^(ba|card)_[A-Za-z0-9]+$/.test(body.destination)
+          || !Number.isInteger(body.netPence) || (body.netPence as number) <= 0
+          || typeof body.requestId !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(body.requestId)) {
+        return json({ error: 'Invalid instant payout' }, 400);
+      }
+      try {
+        const result = await createInstantPayout(stripe, accountId, provider.id, body.destination, body.netPence as number, body.requestId);
+        return result.ok ? json(result) : json({ code: result.code }, result.status);
+      } catch (err) {
+        // Stripe refused, or the response was lost after the payout was made
+        // (a second tap's payout also lands here once the balance is spent).
+        // Not "setup is unavailable": tell them to check the balance first.
+        console.error(`[create-connect-account] instant payout failed: ${String(err)}`);
+        return json({ code: 'instant_failed' }, 502);
+      }
     }
     if (body.action === 'dashboard') {
       if (!accountId) throw new Error('No connected account');

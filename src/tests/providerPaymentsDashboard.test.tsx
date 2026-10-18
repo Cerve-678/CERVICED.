@@ -1,16 +1,17 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderStripePayments from '../components/ProviderStripePayments';
-import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays } from '../services/providerPaymentService';
+import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, getInstantPayoutAvailability, createInstantPayout } from '../services/providerPaymentService';
 
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'dismiss' }) }));
-jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined), notificationAsync: jest.fn().mockResolvedValue(undefined), NotificationFeedbackType: { Success: 'success' } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../services/providerPaymentService', () => ({
   getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(),
   getConnectLink: jest.fn(), refundProviderBooking: jest.fn(),
   getPayoutHoldDays: jest.fn(), setPayoutHoldDays: jest.fn(),
+  getInstantPayoutAvailability: jest.fn(), createInstantPayout: jest.fn(),
 }));
 jest.mock('../features/business-details/BusinessDetailsKit', () => {
   // Jest factories need local imports because mocks are hoisted.
@@ -29,6 +30,7 @@ beforeEach(() => {
   (getProviderFeeEarnings as jest.Mock).mockResolvedValue([]);
   (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: true, detailsSubmitted: true });
   (getPayoutHoldDays as jest.Mock).mockResolvedValue(1);
+  (getInstantPayoutAvailability as jest.Mock).mockResolvedValue({ eligible: false, destinations: [] });
   (getProviderPayouts as jest.Mock).mockResolvedValue([{
     id: 'payment', booking_id: 'booking', gross_amount: 10000, platform_fee: 1000, payout_amount: 9000,
     currency: 'gbp', status: 'held', created_at: '2026-10-01T10:00:00Z', release_after: '2026-10-03T10:00:00Z',
@@ -156,4 +158,41 @@ test("shows the server's own reason when it refuses a timing change", async () =
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
   fireEvent.press(ui.getByText('7 days'));
   await waitFor(() => expect(ui.getByText('Only a professional account can change payout timing.')).toBeTruthy());
+});
+
+const instantMonzo = { id: 'ba_monzo', label: 'Monzo ••1234', currency: 'gbp', grossPence: 2000, netPence: 1970 };
+
+test('instant payout is only offered when Stripe has money and a card or bank that can take it', async () => {
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  expect(ui.queryByText(/now$/)).toBeNull();
+  expect(ui.queryByText('Need it sooner?')).toBeNull();
+});
+
+test('a failed instant availability check leaves the rest of Payments working', async () => {
+  (getInstantPayoutAvailability as jest.Mock).mockRejectedValue(new Error('offline'));
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  expect(ui.queryByText('Need it sooner?')).toBeNull();
+  expect(ui.getByText('Your payout account is connected')).toBeTruthy();
+});
+
+test('instant payout shows its fee before tapping and sends exactly the amount confirmed', async () => {
+  (getInstantPayoutAvailability as jest.Mock).mockResolvedValue({ eligible: true, destinations: [instantMonzo] });
+  (createInstantPayout as jest.Mock).mockResolvedValue({ netPence: 1970, arrivalDate: 1791021600 });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('Pay out £19.70 now')).toBeTruthy());
+  expect(ui.getByText(/Instant fee £0.30/)).toBeTruthy();
+
+  fireEvent.press(ui.getByText('Pay out £19.70 now'));
+  const [, body, buttons] = alert.mock.calls[0]!;
+  expect(body).toContain('Instant fee: £0.30');
+  expect(body).toContain('To Monzo ••1234: £19.70');
+  expect(createInstantPayout).not.toHaveBeenCalled();
+  await buttons!.find(b => b.text === 'Pay out now')!.onPress!();
+
+  expect(createInstantPayout).toHaveBeenCalledWith(expect.objectContaining({ destination: 'ba_monzo', netPence: 1970 }));
+  await waitFor(() => expect(ui.getByText(/is on its way to Monzo ••1234/)).toBeTruthy());
+  alert.mockRestore();
 });
