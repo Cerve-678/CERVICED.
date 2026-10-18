@@ -5,7 +5,7 @@
 
 #generated
 
-**144 edges** across **46 screens**. Node-graph version: [[Screen Flow (generated)]].
+**147 edges** across **47 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
