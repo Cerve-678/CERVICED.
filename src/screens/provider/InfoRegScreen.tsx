@@ -178,7 +178,7 @@ type CancelNotice     = 'none' | '24h' | '48h' | '72h';
 type CancelPenalty    = 'none' | 'deposit' | 'full';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
-type NoShowAction     = 'none' | 'warn' | 'charge_deposit' | 'charge_full';
+type NoShowAction     = 'none' | 'warn' | 'charge_deposit';
 type WaitlistSelectionMethod = 'fifo' | 'manual';
 
 interface ProviderPolicies {

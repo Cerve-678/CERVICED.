@@ -35,7 +35,9 @@ import {
   ProviderDepositPolicy,
   validatePromoCode,
   getServiceSafetyFlags,
-  prepareCheckout, cancelCheckout, getMyLastClientAddress } from '../../services/databaseService';
+  prepareCheckout, cancelCheckout, getMyLastClientAddress,
+  getCheckoutFees, acceptCheckoutFees, type CheckoutFee } from '../../services/databaseService';
+import { FEE_CONSENT_LINE, FEE_TERMS_BODY, FEE_TERMS_HEADING } from '../../constants/feeTerms';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -630,6 +632,29 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     const { initPaymentSheet, presentPaymentSheet } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
     const processingRef = useRef(false);
+    // Late/no-show fees the client must agree to before their card is saved
+    // for them. null = still loading; [] = this checkout has none.
+    const [fees, setFees] = useState<CheckoutFee[] | null>(null);
+    const [feesError, setFeesError] = useState(false);
+    const [agreedToFees, setAgreedToFees] = useState(false);
+    const [feesAttempt, setFeesAttempt] = useState(0);
+    const [showFeeTerms, setShowFeeTerms] = useState(false);
+
+    useEffect(() => {
+      if (!isVisible || !checkoutBatchId) return;
+      let cancelled = false;
+      setFees(null); setFeesError(false); setAgreedToFees(false);
+      getCheckoutFees(checkoutBatchId)
+        .then(rows => { if (!cancelled) setFees(rows); })
+        .catch(err => {
+          logger.error('[checkout] could not load provider fees', err);
+          if (!cancelled) setFeesError(true);
+        });
+      return () => { cancelled = true; };
+    }, [isVisible, checkoutBatchId, feesAttempt]);
+
+    const hasFees = (fees?.length ?? 0) > 0;
+    const canPay = fees !== null && (!hasFees || agreedToFees);
 
     const handlePayment = useCallback(async () => {
       const timestamp = () => new Date().toISOString().split('T')[1];
@@ -647,6 +672,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
         }
+        if (hasFees) await acceptCheckoutFees(checkoutBatchId);
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
         const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
@@ -745,7 +771,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, P, theme]);
+    }, [checkoutBatchId, hasFees, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, P, theme]);
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
@@ -787,6 +813,52 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   </View>
                 </View>
 
+                {feesError && (
+                  <TouchableOpacity accessibilityRole="button" onPress={() => setFeesAttempt(n => n + 1)}
+                    style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[styles.paymentMethodName, { color: theme.text }]}>
+                      We couldn't load this booking's fees. Tap to try again.
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {hasFees && (
+                  <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Late & no-show fees</Text>
+                    {fees!.map(fee => (
+                      <View key={fee.providerId} style={styles.orderItem}>
+                        <Text style={[styles.orderItemName, { color: theme.text }]}>
+                          {fee.providerName}
+                          {fee.lateFeePence != null && `\n£${(fee.lateFeePence / 100).toFixed(2)} if you arrive more than ${fee.graceMinutes} minutes late`}
+                          {fee.noShowFeePence != null && `\n£${(fee.noShowFeePence / 100).toFixed(2)} if you don't turn up`}
+                        </Text>
+                      </View>
+                    ))}
+                    <TouchableOpacity accessibilityRole="button" onPress={() => setShowFeeTerms(v => !v)} activeOpacity={0.7}>
+                      <Text style={[styles.paymentMethodName, { color: P.accent, marginTop: 6 }]}>
+                        {showFeeTerms ? 'Hide the terms' : `Read the ${FEE_TERMS_HEADING} terms`}
+                      </Text>
+                    </TouchableOpacity>
+                    {showFeeTerms && (
+                      <Text style={[styles.paymentMethodName, { color: P.sub, marginTop: 6 }]}>{FEE_TERMS_BODY}</Text>
+                    )}
+                    <TouchableOpacity
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: agreedToFees }}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setAgreedToFees(v => !v);
+                      }}
+                      activeOpacity={0.7}
+                      style={[styles.orderItem, { alignItems: 'flex-start', marginTop: 8 }]}
+                    >
+                      <Ionicons name={agreedToFees ? 'checkbox' : 'square-outline'} size={20} color={P.accent} />
+                      <Text style={[styles.paymentMethodName, { color: theme.text, marginLeft: 8 }]}>
+                        {FEE_CONSENT_LINE}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* Card entry, Apple Pay, and Google Pay all happen inside
                     Stripe's own Payment Sheet (opened by the button below) —
                     never in this component's state. */}
@@ -799,12 +871,12 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
               </ScrollView>
 
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: isProcessing ? P.accentDim : P.accent }]}
+                style={[styles.payButton, { backgroundColor: isProcessing || !canPay ? P.accentDim : P.accent }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   handlePayment();
                 }}
-                disabled={isProcessing}
+                disabled={isProcessing || !canPay}
               >
                 {isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />

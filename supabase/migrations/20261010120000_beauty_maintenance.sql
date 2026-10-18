@@ -234,6 +234,10 @@ ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check CHECK (
   'daily_recap'::text, 'schedule_fully_booked'::text, 'pending_booking_reminder'::text,
   'provider_no_show'::text, 'no_show_disputed'::text, 'points_earned'::text,
   'cancellation_settled'::text,
+  -- Added 2026-10-18 by the late/no-show fees merge: 20261018100000 is
+  -- applied live with these three; rebuilding without them would make every
+  -- fee notification (and so dispute_booking_fee) fail.
+  'fee_charged'::text, 'fee_disputed'::text, 'fee_dispute_resolved'::text,
   'maintenance_due'::text, 'aftercare_available'::text
 ])));
 

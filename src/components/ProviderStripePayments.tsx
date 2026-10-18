@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import { newRequestId } from '../utils/requestId';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, type ConnectStatus, type ProviderPayout } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
@@ -27,6 +27,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [moreLoading, setMoreLoading] = useState(false);
   const [account, setAccount] = useState<ConnectStatus | null>(null);
   const [payouts, setPayouts] = useState<ProviderPayout[]>([]);
+  const [feeEarnings, setFeeEarnings] = useState<ProviderFeeEarning[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -55,6 +56,11 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       }).catch(() => {
         if (sequence === loadSequence.current) setPayoutError('Booking payments could not load. Refresh to try again.');
       }),
+      // Fees are a secondary list: a failed read leaves it empty rather than
+      // replacing the booking payments error above.
+      getProviderFeeEarnings().then(rows => {
+        if (sequence === loadSequence.current) setFeeEarnings(rows);
+      }).catch(() => {}),
     ]);
     if (sequence === loadSequence.current) setLoading(false);
   }, []);
@@ -239,6 +245,21 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       {!!payoutError && <Notice text={payoutError} />}
       {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
       {payouts.map(row => <BookingPayment key={row.id} row={row} busy={busy} onRefund={() => requestRefund(row)} />)}
+      {feeEarnings.length > 0 && <>
+        <Text style={[styles.sectionTitle, { color: C.text }]}>Late & no-show fees</Text>
+        <Text style={[styles.sectionNote, { color: C.sub }]}>Your share after Stripe's card fee. Refund or answer a dispute from the booking itself.</Text>
+        {feeEarnings.map(fee => <View key={fee.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={styles.bookingHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: C.text }]}>{fee.kind === 'late' ? 'Late arrival fee' : 'No-show fee'}{fee.serviceName ? ` · ${fee.serviceName}` : ''}</Text>
+              <Text style={[styles.description, { color: C.text }]}>{fee.customerName || 'Client'}</Text>
+              {!!fee.chargedAt && <Text style={[styles.caption, { color: C.sub }]}>Charged {date(new Date(fee.chargedAt).getTime())}</Text>}
+            </View>
+            <Text style={[styles.amountSmall, { color: C.text }]}>{fee.payoutPence != null ? money(fee.payoutPence, 'gbp') : money(fee.amountPence, 'gbp')}</Text>
+          </View>
+          <StatusBadge label={feeStatusLabel(fee)} attention={fee.openDispute || fee.payoutStatus === 'failed'} />
+        </View>)}
+      </>}
     </>}
 
     {section === 'payouts' && <>
@@ -271,6 +292,18 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   </>;
 }
 
+function feeStatusLabel(fee: ProviderFeeEarning): string {
+  if (fee.status === 'refunded') return 'Refunded to client';
+  if (fee.openDispute) return 'Disputed — waiting on your answer';
+  switch (fee.payoutStatus) {
+    case 'held': return fee.releaseAfter ? `Released from ${date(new Date(fee.releaseAfter).getTime())}` : 'Held';
+    case 'transferred': return 'Released to Stripe';
+    case 'reversed': return 'Taken back after a bank dispute';
+    case 'failed': return 'Needs attention';
+    case 'cancelled': return 'Cancelled';
+    default: return 'Processing';
+  }
+}
 const bankLabels: Record<string, string> = { pending: 'Scheduled', in_transit: 'On the way', paid: 'Paid', failed: 'Needs attention', canceled: 'Cancelled' };
 const money = (amount: number, currency: string) => new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(amount / 100);
 const balances = (rows: { amount: number; currency: string }[]) => rows.length ? rows.map(row => money(row.amount, row.currency)).join('\n') : '£0.00';

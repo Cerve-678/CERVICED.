@@ -28,6 +28,7 @@ import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingSta
 import { canDisputeNoShow, PaymentStatus } from '../../types/booking';
 import { newRequestId } from '../../utils/requestId';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
@@ -155,7 +156,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
-  const { showAlert, DialogHost } = useAppDialog();
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   // Deliberately NOT wired to BookingContext: that cache is the client hat's
   // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
   // come from the client_bookings view where the address is masked until
@@ -2112,6 +2113,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <ActionButton color="#FF3B30" label="Cancel" onPress={handleCancel} ghost />
             </View>
           </View>
+        )}
+
+        {!!(booking.id || bookingId) && (
+          <BookingFeeCard
+            bookingId={booking.id || bookingId}
+            role="provider"
+            otherName={booking.customerName?.split(' ')[0]}
+            refreshKey={String(booking.status)}
+            colors={{ card: P.card, text: P.text, sub: P.sub, border: P.border, accent: P.accent, onAccent: P.ice }}
+            showConfirm={showConfirm}
+            showAlert={showAlert}
+          />
         )}
 
         {/* A no-show the CLIENT recorded against this provider. Terminal, so

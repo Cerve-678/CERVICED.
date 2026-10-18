@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
+import { getOrCreateStripeCustomer } from '../_shared/stripeCustomer.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,7 +57,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: batch, error: batchError } = await supabase
       .from('checkout_batches')
-      .select('id, amount_due, currency, status, expires_at, payment_intent_id')
+      .select('id, amount_due, currency, status, expires_at, payment_intent_id, fee_consent_at')
       .eq('id', body.checkoutBatchId)
       .eq('user_id', user.id)
       .single();
@@ -70,7 +71,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
     const { data: holds, error: holdsError } = await admin.from('bookings')
-      .select('provider_id').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
+      .select('provider_id, late_fee_pence, no_show_fee_pence').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
     if (holdsError || !holds?.length) throw new Error('No active reservations');
     const providerIds = [...new Set(holds.map(row => row.provider_id))];
     const { data: providers, error: providersError } = await admin.from('providers')
@@ -81,6 +82,19 @@ Deno.serve(async (req: Request) => {
         status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // A provider with a late or no-show fee needs the card saved for an
+    // off-session charge after the appointment — and the client's agreement,
+    // stamped by accept_checkout_fees before this call, or nothing is saved.
+    const hasFees = holds.some(row => (row.late_fee_pence ?? 0) > 0 || (row.no_show_fee_pence ?? 0) > 0);
+    if (hasFees && !batch.fee_consent_at) {
+      return new Response(JSON.stringify({ code: 'fee_consent_required', error: 'Please agree to the provider\'s late and no-show fees to continue.' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const customerId = hasFees
+      ? await getOrCreateStripeCustomer(supabase, admin, stripe, { id: user.id, email: user.email })
+      : null;
 
     // Stripe only ever receives the database-calculated amount.
     const amountInPence = Math.round(Number(batch.amount_due) * 100);
@@ -98,6 +112,7 @@ Deno.serve(async (req: Request) => {
       currency: batch.currency,
       metadata: { user_id: user.id, checkout_batch_id: batch.id },
       payment_method_types: ['card'],
+      ...(customerId ? { customer: customerId, setup_future_usage: 'off_session' as const } : {}),
       // The sheet authorises only. Server settlement captures, then confirms
       // the reserved bookings; signed webhooks recover interrupted requests
       // and refund captured payments whose reservations became unavailable.

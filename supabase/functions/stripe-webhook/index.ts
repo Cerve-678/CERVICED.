@@ -71,6 +71,8 @@ Deno.serve(async (req: Request) => {
       case 'refund.created':
       case 'refund.updated': {
         const refund = await stripe.refunds.retrieve((event.data.object as Stripe.Refund).id);
+        // A late/no-show fee refund is recorded by booking-fee itself.
+        if (refund.metadata?.fee_charge_id) break;
         await reconcileRefund(admin, stripe, refund);
         break;
       }
@@ -90,8 +92,12 @@ Deno.serve(async (req: Request) => {
       case 'charge.dispute.created':
       case 'charge.dispute.updated':
       case 'charge.dispute.closed': {
-        // Not auto-resolved in v1 — surfaced for admin/legal follow-up.
+        // CERVICED doesn't take a side (user decision 2026-10-17): the bank
+        // decides, and the provider carries the cost — a payout not yet sent
+        // waits (release-payouts skips disputed charges), one already sent is
+        // reversed when the dispute opens.
         const dispute = event.data.object as Stripe.Dispute;
+        if (event.type === 'charge.dispute.created') await passDisputeToProvider(dispute);
         console.warn(
           `[stripe-webhook] ${event.type} dispute=${dispute.id} charge=${String(dispute.charge)} ` +
           `amount=${dispute.amount} status=${dispute.status} reason=${dispute.reason} — needs manual review`,
@@ -225,3 +231,39 @@ async function handleTransferReversed(transfer: Stripe.Transfer): Promise<void> 
   console.log(`[stripe-webhook] payout row(s) ${rows.map((r) => r.id).join(',')} marked reversed (transfer=${transfer.id})`);
 }
 
+// Take back what the provider was already paid from a charge the client has
+// disputed with their bank. Booking payouts and late/no-show fee payouts both;
+// one reversal per payout, keyed so a redelivered event can't reverse twice.
+async function passDisputeToProvider(dispute: Stripe.Dispute): Promise<void> {
+  const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
+  const charge = await stripe.charges.retrieve(chargeId);
+  const intentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+  if (!intentId) return;
+
+  const { data: fees, error: feeError } = await admin.from('booking_fee_charges')
+    .select('id, stripe_transfer_id').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
+  if (feeError) throw feeError;
+  for (const fee of fees ?? []) {
+    if (!fee.stripe_transfer_id) continue;
+    await stripe.transfers.createReversal(fee.stripe_transfer_id, { metadata: { dispute_id: dispute.id } },
+      { idempotencyKey: `dispute_reversal_fee_${fee.id}` });
+    const { error } = await admin.from('booking_fee_charges')
+      .update({ payout_status: 'reversed', payout_failure_reason: `bank dispute ${dispute.id}` }).eq('id', fee.id);
+    if (error) throw error;
+  }
+
+  const { data: bookings, error: bookingError } = await admin.from('bookings')
+    .select('id').eq('payment_intent_id', intentId).limit(50);
+  if (bookingError) throw bookingError;
+  const ids = (bookings ?? []).map(b => b.id);
+  if (ids.length === 0) return;
+  const { data: payouts, error: payoutError } = await admin.from('provider_payouts')
+    .select('id, stripe_transfer_id').in('booking_id', ids).eq('status', 'transferred');
+  if (payoutError) throw payoutError;
+  for (const payout of payouts ?? []) {
+    if (!payout.stripe_transfer_id) continue;
+    await stripe.transfers.createReversal(payout.stripe_transfer_id, { metadata: { dispute_id: dispute.id } },
+      { idempotencyKey: `dispute_reversal_payout_${payout.id}` });
+    // transfer.reversed then marks the row reversed (handleTransferReversed).
+  }
+}

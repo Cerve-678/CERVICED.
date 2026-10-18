@@ -196,9 +196,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length}`);
+    const fees = await releaseFeePayouts();
+
+    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)}`);
     return new Response(
-      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length }),
+      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   } catch (err) {
@@ -209,3 +211,68 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+// Late/no-show fee payouts (booking_fee_charges, not provider_payouts — see the
+// fees migration for why). Same money-safety rules as above: re-check the fee
+// is still owed, never fund one from a refunded or bank-disputed charge, one
+// transfer per fee via its idempotency key + transfer group. A fee with an open
+// in-app dispute waits until the provider answers it.
+async function releaseFeePayouts() {
+  const counts = { transferred: 0, cancelled: 0, failed: 0, skipped: 0, considered: 0 };
+  const { data: due, error } = await admin.from('booking_fee_charges')
+    .select('id, booking_id, provider_id, stripe_account_id, payout_pence, currency, status, payment_intent_id, disputed_at, dispute_resolved_at')
+    .eq('payout_status', 'held')
+    .lte('release_after', new Date().toISOString())
+    .order('release_after', { ascending: true })
+    .limit(BATCH_LIMIT);
+  if (error) throw error;
+  counts.considered = due?.length ?? 0;
+
+  for (const fee of due ?? []) {
+    if (fee.status !== 'succeeded' || !fee.payment_intent_id || !fee.stripe_account_id) {
+      const { error: cancelErr } = await admin.from('booking_fee_charges')
+        .update({ payout_status: 'cancelled', payout_failure_reason: `fee status ${fee.status} at release` })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      if (cancelErr) console.error(`[release-payouts] fee cancel write failed for ${fee.id}: ${String(cancelErr)}`);
+      else counts.cancelled++;
+      continue;
+    }
+    if (fee.disputed_at && !fee.dispute_resolved_at) { counts.skipped++; continue; }
+    if (!fee.payout_pence || fee.payout_pence <= 0) {
+      await admin.from('booking_fee_charges').update({ payout_status: 'cancelled', payout_failure_reason: 'zero payout amount' })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      counts.cancelled++;
+      continue;
+    }
+
+    try {
+      const intent = await stripe.paymentIntents.retrieve(fee.payment_intent_id);
+      const chargeId = typeof intent.latest_charge === 'string' ? intent.latest_charge : intent.latest_charge?.id;
+      if (intent.status !== 'succeeded' || !chargeId) { counts.skipped++; continue; }
+      const charge = await stripe.charges.retrieve(chargeId);
+      if (charge.disputed || charge.amount_refunded > 0) { counts.skipped++; continue; }
+
+      const previous = await stripe.transfers.list({ transfer_group: `fee_payout_${fee.id}`, limit: 1 });
+      const transfer = previous.data[0] ?? await stripe.transfers.create({
+        amount: fee.payout_pence,
+        currency: fee.currency ?? 'gbp',
+        destination: fee.stripe_account_id,
+        source_transaction: chargeId,
+        transfer_group: `fee_payout_${fee.id}`,
+        metadata: { fee_charge_id: fee.id, booking_id: fee.booking_id, provider_id: fee.provider_id },
+      }, { idempotencyKey: `fee_payout_${fee.id}` });
+
+      const { error: writeErr } = await admin.from('booking_fee_charges')
+        .update({ payout_status: 'transferred', stripe_transfer_id: transfer.id, payout_failure_reason: null })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      if (writeErr) console.error(`[release-payouts] fee transfer ${transfer.id} succeeded but write failed for ${fee.id}: ${String(writeErr)}`);
+      counts.transferred++;
+    } catch (err) {
+      await admin.from('booking_fee_charges')
+        .update({ payout_status: 'failed', payout_failure_reason: String(err).slice(0, 500) })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      console.error(`[release-payouts] fee transfer failed for ${fee.id}: ${String(err)}`);
+      counts.failed++;
+    }
+  }
+  return counts;
+}
