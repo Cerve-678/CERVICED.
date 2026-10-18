@@ -22,8 +22,26 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  session cerviced-ea (e283bace), branch feat/late-no-show-fees, since 2026-10-18 — 20261018100000_late_and_no_show_fees (written, awaiting SQL-editor paste)
+OWNER:  (none)
 ```
+
+### Applied 2026-10-18 (Beauty Maintenance)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018180000 | `beauty_maintenance` | **Applied 2026-10-18** by the user pasting it into the SQL editor; version recorded in `schema_migrations` by hand afterwards. Renumbered from 20261010120000, which sat below the frontier. Post-apply verified: maintenance_items / maintenance_settings / maintenance_service_types (15 rows), RLS on, both triggers, the `client-maintenance-reminders` cron job, notifications_type_check keeping the fee, refund-request and maintenance types, and process_rebooking_nudges reading maintenance_items. Frontier before apply: `20261018165847`. Next in queue: cerviced-c3's `20261018190000` (refund payout protection). |
+
+### Applied 2026-10-18 (provider payout shortfalls)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018190000 | `provider_payout_shortfalls` | **APPLIED 2026-10-18** (SQL editor paste, verified live, recorded by hand). File is on feat/refund-payout-protection. Deploy release-payouts, stripe-webhook, apply-cancellation-refund, booking-fee and refund-payment from that branch. |
+
+### Applied 2026-10-18 (late and no-show fees)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018100000 | `late_and_no_show_fees` | **Applied 2026-10-18** by the user pasting the file into the SQL editor (branch `feat/late-no-show-fees`); version recorded in `schema_migrations` by hand afterwards. Post-apply verified: `bookings.late_fee_pence/no_show_fee_pence`, `checkout_batches.fee_consent_at`, `users.stripe_customer_id` + both guard triggers, `booking_fee_charges` (RLS on, client/provider read policies only, no client writes), the six functions (anon EXECUTE = false), `notifications_type_check` with the three fee types, `process_due_payouts` checking fee payouts. Includes the saved-cards branch's `20261018120000` column + guard verbatim (idempotent), so that file is now a no-op when applied. Frontier before apply: `20261011102423`. |
 
 ### Applied 2026-10-11 (sign-up booking link staged on users)
 

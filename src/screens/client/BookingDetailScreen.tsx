@@ -21,7 +21,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus } from '../../types/booking';
+import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus, type RefundRequest } from '../../types/booking';
+import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import {
   describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
@@ -44,7 +45,9 @@ import {
   getRebookableService,
   setBookingTip,
   getBookingTip,
+  getRefundRequestsForBooking,
 } from '../../services/databaseService';
+import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
@@ -186,6 +189,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [supportMessage, setSupportMessage] = useState('');
   const supportFormScrollRef = useRef<ScrollView>(null);
   const [supportBusy, setSupportBusy] = useState(false);
+  // This booking's refund requests, newest first — the latest drives the
+  // timeline in the payment section. Reloaded on focus, so returning from a
+  // "your refund request moved" notification shows where it is now.
+  const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
+  const [refundRequestsNonce, setRefundRequestsNonce] = useState(0);
   const [cooldownMessage, setCooldownMessage] = useState('');
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
@@ -241,6 +249,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
     return () => { active = false; };
   }, [bookingId, todoRetryNonce]));
+
+  useFocusEffect(useCallback(() => {
+    void refundRequestsNonce;
+    if (!bookingId) return undefined;
+    let active = true;
+    getRefundRequestsForBooking(bookingId)
+      .then(rows => { if (active) setRefundRequests(rows); })
+      // No timeline is the honest fallback: the request itself is safe server-side.
+      .catch(err => logger.error('[BookingDetail] refund requests failed to load:', err));
+    return () => { active = false; };
+  }, [bookingId, refundRequestsNonce]));
 
   // Hydrate rated/tipped state from the DB. These were local-only, so after any
   // remount an already-rated booking showed an active "Rate" button again (the
@@ -428,6 +447,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const refundScope = booking ? getRefundRequestScope(booking) : 'settled';
   const refundScopeCopy = useMemo(() => (booking ? describeRefundScope(booking) : null), [booking]);
   const isOffAppRefund = supportKind === 'refund' && refundScope === 'off_app';
+  const latestRefundRequest = refundRequests[0] ?? null;
+  const hasOpenRefundRequest = !!latestRefundRequest && isRefundRequestOpen(latestRefundRequest);
+  const refundTimeline = useMemo(
+    () => (latestRefundRequest && booking ? describeRefundRequestTimeline(latestRefundRequest, booking.providerName) : null),
+    [latestRefundRequest, booking],
+  );
 
   // Whether cancelling right now would fall inside the provider's notice
   // window — purely informational (drives the modal's warning copy below).
@@ -558,9 +583,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setSupportKind(null);
       setSupportReason(null);
       setSupportMessage('');
+      if (supportKind === 'refund') setRefundRequestsNonce(n => n + 1);
+      // ticketNumber null = the refund request is recorded and the provider
+      // has it, but the support copy didn't file (see fileBookingSupportRequest).
       setSuccessMessage(
         supportKind === 'refund'
-          ? `Your refund request is with Cerviced support. Your reference is #${ticketNumber}. We'll get back to you by email.`
+          ? ticketNumber
+            ? `${booking.providerName} has your refund request, and Cerviced support has a copy (#${ticketNumber}). You can follow it on this booking.`
+            : `${booking.providerName} has your refund request. You can follow it on this booking. We couldn't reach support just now, so email ${SUPPORT_EMAIL} if you need us.`
           : `Your complaint is with Cerviced support. Your reference is #${ticketNumber}. We'll get back to you by email.`,
       );
       setSuccessIcon('✓');
@@ -867,6 +897,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             </View>
           </View>
 
+          <BookingFeeCard
+            bookingId={booking.id}
+            role="client"
+            otherName={booking.providerName}
+            refreshKey={String(booking.status)}
+            colors={{ card: C.card, text: C.text, sub: C.sub, border: C.border, accent: C.accent, onAccent: C.onAccent }}
+            showConfirm={(title, message, buttons) => Alert.alert(title, message, buttons)}
+            showAlert={(title, message) => Alert.alert(title, message)}
+          />
+
           {/* Appointment Details */}
           <View style={st.section}>
             <Text style={[st.sectionTitle, { color: C.sub }]}>APPOINTMENT DETAILS</Text>
@@ -1032,6 +1072,40 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>{r.amount < 0 ? '−' : ''}£{Math.abs(r.amount).toFixed(2)}</Text>
                   </View>
                 ))}
+              </View>
+            )}
+            {refundTimeline && (
+              <View style={[st.refundNotice, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Text style={{ color: C.text, fontWeight: '700', fontSize: 14, marginBottom: 4 }}>Your refund request</Text>
+                <View>
+                {refundTimeline.map((step, i) => {
+                  const last = i === refundTimeline.length - 1;
+                  const dot = step.state === 'done' ? '#34C759'
+                    : step.state === 'declined' ? '#F44336'
+                    : step.state === 'current' ? '#FF9500'
+                    : C.border;
+                  return (
+                    <View key={step.key} style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={{ alignItems: 'center', width: 16 }}>
+                        <View style={[st.refundStepDot, step.state === 'upcoming'
+                          ? { borderColor: dot, borderWidth: 2, backgroundColor: 'transparent' }
+                          : { backgroundColor: dot }]}>
+                          {step.state === 'done' && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
+                          {step.state === 'declined' && <Ionicons name="close" size={10} color="#FFFFFF" />}
+                        </View>
+                        {!last && <View style={[st.refundStepLine, { backgroundColor: C.border }]} />}
+                      </View>
+                      <View style={{ flex: 1, paddingBottom: last ? 0 : 12 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                          <Text style={{ color: step.state === 'upcoming' ? C.sub : C.text, fontWeight: '600', fontSize: 13, flex: 1 }}>{step.title}</Text>
+                          {step.date && <Text style={{ color: C.sub, fontSize: 12 }}>{step.date}</Text>}
+                        </View>
+                        {step.detail && <Text style={{ color: C.sub, fontSize: 12, lineHeight: 17, marginTop: 2 }}>{step.detail}</Text>}
+                      </View>
+                    </View>
+                  );
+                })}
+                </View>
               </View>
             )}
             {!showReceipt ? (
@@ -1636,11 +1710,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 {/* Offered unless a refund already happened: an off-app booking
                     opens to an explanation that it's between them and the
                     provider, rather than hiding the option with no reason. */}
-                {refundScope !== 'settled' && (
+                {refundScope !== 'settled' && !hasOpenRefundRequest && (
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openSupportForm('refund'); }}>
                     <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}><Ionicons name="arrow-undo-outline" size={20} color={C.accentText} /></View>
-                    <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Request a refund</Text><Text style={{ color: C.sub, fontSize: 12 }}>Ask Cerviced support to review a refund</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Request a refund</Text><Text style={{ color: C.sub, fontSize: 12 }}>Ask {booking.providerName} for a refund</Text></View>
                     <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                   </TouchableOpacity>
                 )}
@@ -1659,9 +1733,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Refund request / complaint sheet ───────────────────────────
             A bottom sheet, same shape as the provider's Issue Refund sheet.
             The reason leads the support ticket; the note is the detail and is
-            only required for "Something else". The copy promises a human
-            review, never a refund, and doesn't claim the provider was told —
-            nothing notifies them. */}
+            only required for "Something else". The copy promises a review,
+            never a refund. A refund request goes to the provider (note
+            included) as well as support, so it says so; a complaint goes to
+            support only. */}
         <Modal visible={supportKind !== null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!supportBusy) setSupportKind(null); }}>
           {/* Keep the form above the keyboard; the body scrolls to its focused
               note without hiding it behind the keyboard. */}
@@ -1751,7 +1826,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Ionicons name="information-circle-outline" size={16} color={C.accentText} style={{ marginTop: 1 }} />
                   <Text style={{ color: C.text, fontSize: 13, lineHeight: 18, flex: 1 }}>
                     {supportKind === 'refund'
-                      ? `This is a request, not a refund. Cerviced support will review it against ${booking.providerName}'s policy and reply by email.`
+                      ? `This is a request, not a refund. ${booking.providerName} will see it, including your note, and can refund you. If they don't, Cerviced support reviews it against their policy.`
                       : 'This goes to Cerviced support, who will look into it and reply by email.'}
                   </Text>
                 </View>
@@ -2095,6 +2170,8 @@ const st = StyleSheet.create({
   // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
   sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
   refundNotice: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6, marginBottom: 10 },
+  refundStepDot: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  refundStepLine: { width: 2, flex: 1, marginTop: 2 },
   disputeInput: {
     width: '100%', minHeight: 96, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14,

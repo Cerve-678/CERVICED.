@@ -459,3 +459,7 @@ verify_jwt = true
 
 [functions.finalize-payment-intent]
 verify_jwt = true
+
+# Provider-only (their JWT): charge or refund a late/no-show fee.
+[functions.booking-fee]
+verify_jwt = true

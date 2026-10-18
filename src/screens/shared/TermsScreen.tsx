@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { FEE_TERMS_BODY, FEE_TERMS_HEADING } from '../../constants/feeTerms';
 
 const SECTIONS = [
   {
@@ -34,23 +35,27 @@ const SECTIONS = [
     body: 'Some providers accept a deposit through the app instead of full payment. Any remaining balance is owed directly to the provider and is settled between you and the provider in person — Cerviced does not collect, hold, verify, or guarantee payment of that balance, and is not responsible for resolving disputes about whether or how much was paid at the appointment.',
   },
   {
-    heading: '6. Prohibited Conduct',
+    heading: `6. ${FEE_TERMS_HEADING}`,
+    body: FEE_TERMS_BODY,
+  },
+  {
+    heading: '7. Prohibited Conduct',
     body: 'You agree not to misuse the platform, post false reviews, or engage in fraudulent activity. Violations may result in account suspension.',
   },
   {
-    heading: '7. Intellectual Property',
+    heading: '8. Intellectual Property',
     body: 'All content, logos, and branding on Cerviced are owned by or licensed to Cerviced Ltd. You may not reproduce or distribute them without written permission.',
   },
   {
-    heading: '8. Limitation of Liability',
+    heading: '9. Limitation of Liability',
     body: 'To the fullest extent permitted by law, Cerviced is not liable for indirect, incidental, or consequential damages arising from your use of the platform.',
   },
   {
-    heading: '9. Changes to Terms',
+    heading: '10. Changes to Terms',
     body: 'We may update these terms from time to time. Continued use of the app after changes constitutes acceptance of the updated terms.',
   },
   {
-    heading: '10. Contact',
+    heading: '11. Contact',
     body: 'For questions about these terms, contact us at legal@cerviced.app.',
   },
 ];
@@ -75,7 +80,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: July 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: October 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>

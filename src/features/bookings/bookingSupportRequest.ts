@@ -1,18 +1,27 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { invokeSendSupportRequest } from '../../services/databaseService';
+import { invokeSendSupportRequest, passRefundRequestToCerviced, requestBookingRefund } from '../../services/databaseService';
 import { formatBookingRef } from './presentation';
-import { PaymentStatus, type ConfirmedBooking } from '../../types/booking';
+import { logger } from '../../utils/logger';
+import { PaymentStatus, type ConfirmedBooking, type RefundRequest } from '../../types/booking';
 
 /**
- * A client asking CERVICED support about one booking, from the ⋯ menu on
- * BookingDetailScreen: a refund request or a complaint.
+ * A client asking about one booking, from the ⋯ menu on BookingDetailScreen:
+ * a refund request or a complaint. Neither moves money.
  *
- * Unlike fileNoShowDispute, the support ticket IS the whole record here —
- * nothing is stamped on the booking and the provider is not notified, so a
- * failed ticket means nothing happened and the caller must say so (this
- * throws). It also deliberately moves no money: a refund request is a person
- * reading the ticket against the booking's policy, never an automatic refund.
+ * A REFUND REQUEST works like fileNoShowDispute — two steps, not equal in
+ * weight:
+ *  1. request_booking_refund() is THE record. It tells the provider (who can
+ *     refund it) and is what the booking's timeline reads. If it fails,
+ *     nothing happened and this throws.
+ *  2. The support ticket is how Cerviced sees it, and it emails the provider.
+ *     Its failing doesn't undo step 1, so it returns `ticketNumber: null`
+ *     rather than throwing.
+ *
+ * A COMPLAINT goes to support only, never to the provider: some of them
+ * (hygiene, how the client was treated) aren't safe to hand to the person
+ * they're about. The ticket is the whole record there, so a failed ticket
+ * throws.
  */
 export type BookingSupportKind = 'refund' | 'complaint';
 
@@ -136,20 +145,86 @@ export function buildBookingSupportDescription(
   ].join('\n');
 }
 
+export interface BookingSupportResult {
+  /** Null only for a refund request whose ticket didn't file (the request
+   *  itself is recorded and the provider told). */
+  ticketNumber: number | null;
+}
+
 export async function fileBookingSupportRequest(
   booking: ConfirmedBooking,
   kind: BookingSupportKind,
   reason: string,
   message: string,
   activeMode: string,
-): Promise<{ ticketNumber: number }> {
-  const { ticketNumber } = await invokeSendSupportRequest({
+): Promise<BookingSupportResult> {
+  const refundRequestId = kind === 'refund'
+    ? await requestBookingRefund(booking.id, reason, message.trim())
+    : undefined;
+
+  const ticket = () => invokeSendSupportRequest({
     // Must be one of send-support-request's CATEGORIES or it is rejected.
     category: kind === 'refund' ? 'Payment' : 'Provider Issue',
     description: buildBookingSupportDescription(booking, kind, reason, message),
     platform: `${Platform.OS} ${String(Platform.Version)}`,
     appVersion: Constants.expoConfig?.version ?? 'unknown',
     activeMode,
+    ...(refundRequestId ? { refundRequestId } : {}),
   });
-  return { ticketNumber };
+
+  if (!refundRequestId) {
+    const { ticketNumber } = await ticket();
+    return { ticketNumber };
+  }
+  try {
+    const { ticketNumber } = await ticket();
+    return { ticketNumber };
+  } catch (e) {
+    // Swallowed on purpose, and only here: the request above already exists
+    // and the provider has it, so throwing would say it failed when it didn't.
+    logger.error('[bookingSupportRequest] refund request recorded but support ticket failed:', e);
+    return { ticketNumber: null };
+  }
+}
+
+/**
+ * The provider isn't refunding a client's request, so it goes to Cerviced.
+ * Same two steps as a client's request: pass_refund_request_to_cerviced() is
+ * the record (and tells the client); the ticket gives support the provider's
+ * side, and its failing returns `ticketNumber: null` rather than throwing.
+ */
+export async function passRefundRequestOn(
+  booking: ConfirmedBooking,
+  request: Pick<RefundRequest, 'id' | 'reason'>,
+  note: string,
+  activeMode: string,
+): Promise<BookingSupportResult> {
+  await passRefundRequestToCerviced(request.id, note.trim());
+  try {
+    const { ticketNumber } = await invokeSendSupportRequest({
+      category: 'Payment',
+      description: [
+        `REFUND REQUEST PASSED TO CERVICED — ${formatBookingRef(booking)}`,
+        '',
+        `The provider is not refunding this and asks Cerviced to review it.`,
+        '',
+        `Booking: ${booking.serviceName} for ${booking.customerName || 'the client'}`,
+        `Date: ${booking.bookingDate} ${booking.bookingTime}`,
+        `Payment: ${booking.paymentStatus}`,
+        `Booking id: ${booking.id}`,
+        `Refund request: ${request.id}`,
+        `Client's reason: ${request.reason}`,
+        '',
+        "Provider's reason:",
+        note.trim(),
+      ].join('\n'),
+      platform: `${Platform.OS} ${String(Platform.Version)}`,
+      appVersion: Constants.expoConfig?.version ?? 'unknown',
+      activeMode,
+    });
+    return { ticketNumber };
+  } catch (e) {
+    logger.error('[bookingSupportRequest] refund request passed on but support ticket failed:', e);
+    return { ticketNumber: null };
+  }
 }

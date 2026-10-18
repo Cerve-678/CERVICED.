@@ -117,6 +117,10 @@ terms. Do not have multiple agents edit the same feature or migration.
   that's a liability boundary the product has deliberately drawn (see the
   Terms & Conditions "Deposits & Remaining Balances" clause, and the
   removed "mark balance collected" feature).
+- `docs/PAYMENTS_AND_LOGIC.md` is the single description of how money moves
+  (fees, holds, payouts, refunds, disputes, late/no-show fees). Any change to
+  money logic updates it in the same change, including what is live vs only
+  on a branch.
 - The in-app payment form (`CartScreen.tsx`'s `PaymentModal`) currently
   collects raw card fields itself rather than tokenizing through a
   PCI-DSS-compliant processor (Stripe/Adyen/etc.) — before this ever

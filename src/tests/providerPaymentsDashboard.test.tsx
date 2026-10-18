@@ -2,14 +2,15 @@ import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderStripePayments from '../components/ProviderStripePayments';
-import { getConnectStatus, getProviderPayouts, getProviderFinance } from '../services/providerPaymentService';
+import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays } from '../services/providerPaymentService';
 
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'dismiss' }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../services/providerPaymentService', () => ({
-  getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(),
+  getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(),
   getConnectLink: jest.fn(), refundProviderBooking: jest.fn(),
+  getPayoutHoldDays: jest.fn(), setPayoutHoldDays: jest.fn(),
 }));
 jest.mock('../features/business-details/BusinessDetailsKit', () => {
   // Jest factories need local imports because mocks are hoisted.
@@ -25,7 +26,9 @@ jest.mock('../features/business-details/BusinessDetailsKit', () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (getProviderFeeEarnings as jest.Mock).mockResolvedValue([]);
   (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: true, detailsSubmitted: true });
+  (getPayoutHoldDays as jest.Mock).mockResolvedValue(1);
   (getProviderPayouts as jest.Mock).mockResolvedValue([{
     id: 'payment', booking_id: 'booking', gross_amount: 10000, platform_fee: 1000, payout_amount: 9000,
     currency: 'gbp', status: 'held', created_at: '2026-10-01T10:00:00Z', release_after: '2026-10-03T10:00:00Z',
@@ -89,4 +92,48 @@ test('names the bank payouts land in, and points to Manage to change it', async 
     bankAccount: { bankName: 'BARCLAYS BANK PLC', last4: '6789' } });
   const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
   await waitFor(() => expect(ui.getByText('Paid to BARCLAYS BANK PLC ••6789. Tap Manage to change it.')).toBeTruthy());
+});
+
+test('a provider can choose how long after the appointment their share is released', async () => {
+  // Like the server: once saved, the refresh after the change reads the new value back.
+  (setPayoutHoldDays as jest.Mock).mockImplementation(async (days: number) => {
+    (getPayoutHoldDays as jest.Mock).mockResolvedValue(days);
+    return days;
+  });
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  // The choice lives in Payment settings; Payouts says what's set and where to change it.
+  fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
+  expect(ui.getByText(/released to Stripe 24 hours after the appointment ends\. Change this in Payment settings\./)).toBeTruthy();
+  expect(ui.queryByText('7 days')).toBeNull();
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
+  fireEvent.press(ui.getByText('7 days'));
+  await waitFor(() => expect(setPayoutHoldDays).toHaveBeenCalledWith(7));
+  await waitFor(() => expect(ui.getByRole('radio', { name: '7 days', selected: true })).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
+  expect(ui.getByText(/released to Stripe 7 days after the appointment ends/)).toBeTruthy();
+});
+
+test('a failed timing change keeps the old choice and says it was not changed', async () => {
+  (setPayoutHoldDays as jest.Mock).mockRejectedValue(new Error('offline'));
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
+  fireEvent.press(ui.getByText('30 days'));
+  await waitFor(() => expect(ui.getByText('Your payout timing was not changed. Please try again.')).toBeTruthy());
+  expect(ui.getByRole('radio', { name: '24 hours', selected: true })).toBeTruthy();
+});
+
+test('lists late and no-show fees with the provider\'s share and where the money is', async () => {
+  (getProviderFeeEarnings as jest.Mock).mockResolvedValue([{
+    id: 'fee', bookingId: 'booking', kind: 'no_show', amountPence: 2000, payoutPence: 1950, status: 'succeeded',
+    payoutStatus: 'transferred', releaseAfter: null, chargedAt: '2026-10-01T10:00:00Z', openDispute: false,
+    serviceName: 'Hair appointment', customerName: 'Test client',
+  }]);
+  const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
+  expect(ui.getByText('No-show fee · Hair appointment')).toBeTruthy();
+  expect(ui.getByText('£19.50')).toBeTruthy();
+  expect(ui.getByText('Released to Stripe')).toBeTruthy();
 });

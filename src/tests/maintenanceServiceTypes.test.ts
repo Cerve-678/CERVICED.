@@ -9,7 +9,7 @@ import { MAINTENANCE_SERVICE_TYPES } from '../constants/maintenanceServiceTypes'
  * reject every insert while both were green (memory: new-notification-type-is-four-places).
  */
 const migration = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'supabase', 'migrations', '20261010120000_beauty_maintenance.sql'),
+  path.join(__dirname, '..', '..', 'supabase', 'migrations', '20261018180000_beauty_maintenance.sql'),
   'utf8',
 );
 const fn = (name: string): string => {

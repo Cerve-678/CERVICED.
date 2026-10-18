@@ -71,7 +71,21 @@ Deno.serve(async (req: Request) => {
     let failed = 0;
     let skipped = 0;
 
+    // A booking with a refund request still open (with the provider, or under
+    // review by Cerviced) keeps its payout held until the request is closed,
+    // so a refund can come out of money Cerviced still has. One query for the
+    // whole batch; the row is simply picked up again on a later run.
+    const dueBookingIds = (due ?? []).map(row => row.booking_id);
+    const { data: openRequests, error: requestError } = dueBookingIds.length
+      ? await admin.from('refund_requests').select('booking_id')
+        .in('booking_id', dueBookingIds).in('status', ['with_provider', 'under_review'])
+      : { data: [], error: null };
+    if (requestError) throw requestError;
+    const awaitingRefundDecision = new Set((openRequests ?? []).map(r => r.booking_id));
+
     for (const row of due ?? []) {
+      if (awaitingRefundDecision.has(row.booking_id)) { skipped++; continue; }
+
       // Re-check the booking is still genuinely owed before moving money.
       const { data: booking, error: bookingError } = await admin
         .from('bookings')
@@ -148,13 +162,34 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      let madeTransfer = false;
       try {
         // Stripe may prune idempotency keys after 24 hours. The transfer group
-        // makes recovery durable when a successful transfer's DB write failed.
-        const previous = await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 });
-        const transfer = previous.data[0] ?? await stripe.transfers.create(
+        // makes recovery durable when a successful transfer's DB write failed:
+        // that transfer is recorded as it is, with no new deduction.
+        const previous = (await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 })).data[0];
+        let transferPence = 0;
+        if (!previous) {
+          // Take anything the provider still owes from an earlier refund or
+          // dispute (a reversal their Stripe balance couldn't cover) out of
+          // this payout first. Returns what is left to send, read under the
+          // payout's row lock.
+          const { data: net, error: shortfallErr } = await admin.rpc('apply_provider_shortfalls', { p_payout_id: row.id });
+          if (shortfallErr) throw shortfallErr;
+          transferPence = Number(net ?? 0);
+          if (transferPence <= 0) {
+            // All of it settled what the provider owed; nothing to send.
+            const { error: settleErr } = await admin.from('provider_payouts')
+              .update({ status: 'transferred', failure_reason: 'settled an earlier shortfall in full' })
+              .eq('id', row.id).eq('status', 'held');
+            if (settleErr) throw settleErr;
+            transferred++;
+            continue;
+          }
+        }
+        const transfer = previous ?? await stripe.transfers.create(
           {
-            amount: row.payout_amount,
+            amount: transferPence,
             currency: row.currency ?? 'gbp',
             destination: row.stripe_account_id,
             source_transaction: chargeId,
@@ -167,6 +202,7 @@ Deno.serve(async (req: Request) => {
           // second one, if this row is ever retried.
           { idempotencyKey: `payout_${row.id}` },
         );
+        madeTransfer = true;
 
         const { error: writeErr } = await admin
           .from('provider_payouts')
@@ -184,7 +220,18 @@ Deno.serve(async (req: Request) => {
       } catch (err) {
         // A real transfer failure (e.g. insufficient platform balance, account
         // restricted). Mark failed with the real reason for admin follow-up;
-        // it won't be auto-retried (status leaves 'held').
+        // it won't be auto-retried (status leaves 'held'). If no transfer was
+        // made, whatever was deducted for shortfalls goes back on the provider's
+        // balance owed, so it isn't forgiven by a payout that never went out.
+        // A timeout can hide a transfer Stripe did make, so look before giving back.
+        if (!madeTransfer) {
+          const late = await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 }).catch(() => null);
+          madeTransfer = !!late?.data[0] || late === null;
+        }
+        if (!madeTransfer) {
+          const { error: releaseErr } = await admin.rpc('release_provider_shortfalls', { p_payout_id: row.id });
+          if (releaseErr) console.error(`[release-payouts] could not give back shortfall deductions on ${row.id}: ${String(releaseErr)}`);
+        }
         const { error: failWriteErr } = await admin
           .from('provider_payouts')
           .update({ status: 'failed', failure_reason: String(err).slice(0, 500) })
@@ -196,9 +243,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length}`);
+    const fees = await releaseFeePayouts();
+
+    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)}`);
     return new Response(
-      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length }),
+      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   } catch (err) {
@@ -209,3 +258,68 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+// Late/no-show fee payouts (booking_fee_charges, not provider_payouts — see the
+// fees migration for why). Same money-safety rules as above: re-check the fee
+// is still owed, never fund one from a refunded or bank-disputed charge, one
+// transfer per fee via its idempotency key + transfer group. A fee with an open
+// in-app dispute waits until the provider answers it.
+async function releaseFeePayouts() {
+  const counts = { transferred: 0, cancelled: 0, failed: 0, skipped: 0, considered: 0 };
+  const { data: due, error } = await admin.from('booking_fee_charges')
+    .select('id, booking_id, provider_id, stripe_account_id, payout_pence, currency, status, payment_intent_id, disputed_at, dispute_resolved_at')
+    .eq('payout_status', 'held')
+    .lte('release_after', new Date().toISOString())
+    .order('release_after', { ascending: true })
+    .limit(BATCH_LIMIT);
+  if (error) throw error;
+  counts.considered = due?.length ?? 0;
+
+  for (const fee of due ?? []) {
+    if (fee.status !== 'succeeded' || !fee.payment_intent_id || !fee.stripe_account_id) {
+      const { error: cancelErr } = await admin.from('booking_fee_charges')
+        .update({ payout_status: 'cancelled', payout_failure_reason: `fee status ${fee.status} at release` })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      if (cancelErr) console.error(`[release-payouts] fee cancel write failed for ${fee.id}: ${String(cancelErr)}`);
+      else counts.cancelled++;
+      continue;
+    }
+    if (fee.disputed_at && !fee.dispute_resolved_at) { counts.skipped++; continue; }
+    if (!fee.payout_pence || fee.payout_pence <= 0) {
+      await admin.from('booking_fee_charges').update({ payout_status: 'cancelled', payout_failure_reason: 'zero payout amount' })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      counts.cancelled++;
+      continue;
+    }
+
+    try {
+      const intent = await stripe.paymentIntents.retrieve(fee.payment_intent_id);
+      const chargeId = typeof intent.latest_charge === 'string' ? intent.latest_charge : intent.latest_charge?.id;
+      if (intent.status !== 'succeeded' || !chargeId) { counts.skipped++; continue; }
+      const charge = await stripe.charges.retrieve(chargeId);
+      if (charge.disputed || charge.amount_refunded > 0) { counts.skipped++; continue; }
+
+      const previous = await stripe.transfers.list({ transfer_group: `fee_payout_${fee.id}`, limit: 1 });
+      const transfer = previous.data[0] ?? await stripe.transfers.create({
+        amount: fee.payout_pence,
+        currency: fee.currency ?? 'gbp',
+        destination: fee.stripe_account_id,
+        source_transaction: chargeId,
+        transfer_group: `fee_payout_${fee.id}`,
+        metadata: { fee_charge_id: fee.id, booking_id: fee.booking_id, provider_id: fee.provider_id },
+      }, { idempotencyKey: `fee_payout_${fee.id}` });
+
+      const { error: writeErr } = await admin.from('booking_fee_charges')
+        .update({ payout_status: 'transferred', stripe_transfer_id: transfer.id, payout_failure_reason: null })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      if (writeErr) console.error(`[release-payouts] fee transfer ${transfer.id} succeeded but write failed for ${fee.id}: ${String(writeErr)}`);
+      counts.transferred++;
+    } catch (err) {
+      await admin.from('booking_fee_charges')
+        .update({ payout_status: 'failed', payout_failure_reason: String(err).slice(0, 500) })
+        .eq('id', fee.id).eq('payout_status', 'held');
+      console.error(`[release-payouts] fee transfer failed for ${fee.id}: ${String(err)}`);
+      counts.failed++;
+    }
+  }
+  return counts;
+}

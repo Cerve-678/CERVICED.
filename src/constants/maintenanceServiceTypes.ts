@@ -17,7 +17,7 @@
 // THIS TABLE IS MIRRORED IN SQL. The completion trigger has to choose an
 // interval server-side, so `public.maintenance_service_types` is seeded with
 // exactly these rows in
-// supabase/migrations/20261010120000_beauty_maintenance.sql.
+// supabase/migrations/20261018180000_beauty_maintenance.sql.
 // src/tests/maintenanceServiceTypes.test.ts parses that seed and fails if the
 // two copies ever disagree. Change both, in the same commit.
 

@@ -18,6 +18,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
+import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -33,26 +34,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-}
-
-/** "2026-08-26" -> "Wednesday, 26 August 2026", matching the app's formatLongDate. */
-function formatLongDate(ymd: string): string {
-  const [y, m, d] = ymd.split('-').map(Number);
-  if (!y || !m || !d) return ymd;
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-  });
-}
-
-/** "14:30:00" -> "2:30pm", matching the app's formatTime12. */
-function formatTime12(value: string): string {
-  const [hRaw, minRaw] = value.split(':');
-  const h = Number(hRaw);
-  if (Number.isNaN(h)) return value;
-  const suffix = h >= 12 ? 'pm' : 'am';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  const displayHour = h >= 12 ? String(hour12) : String(hour12).padStart(2, '0');
-  return `${displayHour}:${minRaw ?? '00'}${suffix}`;
 }
 
 /** Same shape as the app's formatBookingRef: "CRV-" + the stored ref, else

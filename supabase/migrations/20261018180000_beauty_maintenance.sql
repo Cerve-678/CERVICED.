@@ -1,5 +1,10 @@
 -- Beauty Maintenance (client hat)
 --
+-- Renumbered 2026-10-18 from 20261010120000 to sit above the applied frontier
+-- (20261018165847). Re-verified against live that day: notifications_type_check
+-- now keeps the fee and refund-request types; process_client_appointment_reminders
+-- and process_rebooking_nudges are the live bodies plus this file's additions,
+-- and delete_client_profile's live body matches 20260823110027 exactly.
 -- Frontier at authoring: 20261003120000 (max(version) in
 -- supabase_migrations.schema_migrations, read live 2026-10-10).
 -- NOT APPLIED. Written for the user to approve and apply.
@@ -234,6 +239,12 @@ ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check CHECK (
   'daily_recap'::text, 'schedule_fully_booked'::text, 'pending_booking_reminder'::text,
   'provider_no_show'::text, 'no_show_disputed'::text, 'points_earned'::text,
   'cancellation_settled'::text,
+  -- Added 2026-10-18 by the late/no-show fees merge: 20261018100000 is
+  -- applied live with these three; rebuilding without them would make every
+  -- fee notification (and so dispute_booking_fee) fail.
+  'fee_charged'::text, 'fee_disputed'::text, 'fee_dispute_resolved'::text,
+  -- and refund_requests_timeline (20261018165847), applied the same day.
+  'refund_requested'::text, 'refund_request_updated'::text,
   'maintenance_due'::text, 'aftercare_available'::text
 ])));
 

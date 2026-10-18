@@ -468,3 +468,22 @@ See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
    the App Store / Play billing rules for in-app subscriptions.
 
 **Not changed unilaterally** — flagged for the product owner.
+
+## 17. Late arrival and no-show fees charged after the appointment (2026-10-18)
+
+Branch `feat/late-no-show-fees`. Providers can charge a client's saved card a
+fixed late or no-show fee within 24 hours of the appointment, capped at half
+the booking price; the client ticks a box at checkout. Drafted at the user's
+direction and **not lawyer-reviewed**:
+
+- Terms §6 "Late Arrival & No-Show Fees" and the checkout tick-box line, both
+  from `src/constants/feeTerms.ts`; a Privacy Policy paragraph on saved cards
+  being used for agreed fees (AboutScreen).
+- Things to raise: whether a 50% cap is proportionate under the Consumer Rights
+  Act 2015 unfair-terms test; whether the tick box is a sufficient mandate for
+  merchant-initiated (off-session) charges under SCA; provider terms must say a
+  bank chargeback is taken back from the provider's payout (the webhook now does
+  this for booking payments and fees); the client fee disputes go to the
+  provider, never to Cerviced, so the Terms say Cerviced doesn't decide them.
+
+**Not changed unilaterally** — flagged for the product owner and a lawyer.

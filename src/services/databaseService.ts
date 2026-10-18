@@ -55,6 +55,8 @@ import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
+import type { RefundRequest, RefundRequestStatus } from "../types/booking";
+import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -7944,7 +7946,7 @@ export async function getUserBeautyProfile(
 
 // ─────────────────────────────────────────────────────────
 // BEAUTY MAINTENANCE (client hat) — owner-only tables from
-// supabase/migrations/20261010120000_beauty_maintenance.sql.
+// supabase/migrations/20261018180000_beauty_maintenance.sql.
 // None of this is readable by providers, and none of it feeds Becca,
 // analytics, search or any provider-facing path.
 // ─────────────────────────────────────────────────────────
@@ -9547,6 +9549,9 @@ export interface SupportRequestInput {
   platform: string;
   appVersion: string;
   activeMode: string;
+  /** Set for a refund request: the ticket is linked to it and the provider
+   *  is emailed (see send-support-request). */
+  refundRequestId?: string;
 }
 
 export interface SupportRequestResult {
@@ -9645,6 +9650,147 @@ export async function createCheckoutPaymentIntent(
     throw new Error('Payment configuration does not match this app. Please contact support.');
   }
   return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId };
+}
+
+/** A provider's late-arrival and no-show fees for one checkout, frozen on the
+ *  held bookings by the database — what the client is agreeing to. */
+export interface CheckoutFee {
+  providerId: string;
+  providerName: string;
+  lateFeePence: number | null;
+  noShowFeePence: number | null;
+  graceMinutes: number;
+}
+
+interface CheckoutFeeRow {
+  provider_id: string;
+  provider_name: string | null;
+  late_fee_pence: number | null;
+  no_show_fee_pence: number | null;
+  grace_minutes: number | null;
+}
+
+export async function getCheckoutFees(checkoutBatchId: string): Promise<CheckoutFee[]> {
+  const { data, error } = await supabase.rpc('get_checkout_fees', { p_checkout_batch_id: checkoutBatchId });
+  if (error) throw error;
+  return ((data ?? []) as CheckoutFeeRow[]).map(row => ({
+    providerId: row.provider_id,
+    providerName: row.provider_name?.trim() || 'This provider',
+    lateFeePence: row.late_fee_pence,
+    noShowFeePence: row.no_show_fee_pence,
+    graceMinutes: row.grace_minutes ?? 0,
+  }));
+}
+
+/** Stamps the client's agreement to those fees with the database clock. The
+ *  payment function refuses to save a card for fees without it. */
+export async function acceptCheckoutFees(checkoutBatchId: string): Promise<void> {
+  const { error } = await supabase.rpc('accept_checkout_fees', { p_checkout_batch_id: checkoutBatchId });
+  if (error) throw error;
+}
+
+export type BookingFeeKind = 'late' | 'no_show';
+
+/** One late/no-show fee attempt on a booking, as either party may read it (RLS). */
+export interface BookingFeeCharge {
+  id: string;
+  kind: BookingFeeKind;
+  amountPence: number;
+  status: 'processing' | 'succeeded' | 'failed' | 'refunded';
+  chargedAt: string | null;
+  createdAt: string;
+  disputedAt: string | null;
+  disputeReason: string | null;
+  disputeOutcome: 'refunded' | 'kept' | null;
+  disputeResponse: string | null;
+  disputeResolvedAt: string | null;
+}
+
+interface BookingFeeChargeRow {
+  id: string;
+  kind: BookingFeeKind;
+  amount_pence: number;
+  status: BookingFeeCharge['status'];
+  charged_at: string | null;
+  created_at: string;
+  disputed_at: string | null;
+  dispute_reason: string | null;
+  dispute_outcome: BookingFeeCharge['disputeOutcome'];
+  dispute_response: string | null;
+  dispute_resolved_at: string | null;
+}
+
+/** Newest first. A booking has at most one live fee plus any failed attempts. */
+export async function getBookingFeeCharges(bookingId: string): Promise<BookingFeeCharge[]> {
+  const { data, error } = await supabase.from('booking_fee_charges')
+    .select('id, kind, amount_pence, status, charged_at, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  return ((data ?? []) as BookingFeeChargeRow[]).map(row => ({
+    id: row.id,
+    kind: row.kind,
+    amountPence: row.amount_pence,
+    status: row.status,
+    chargedAt: row.charged_at,
+    createdAt: row.created_at,
+    disputedAt: row.disputed_at,
+    disputeReason: row.dispute_reason,
+    disputeOutcome: row.dispute_outcome,
+    disputeResponse: row.dispute_response,
+    disputeResolvedAt: row.dispute_resolved_at,
+  }));
+}
+
+/** The fees a client agreed to on a booking, and its timing — the provider's
+ *  own booking only (bookings RLS). */
+export interface BookingFeeTerms {
+  status: string;
+  bookingDate: string;
+  bookingTime: string;
+  endTime: string | null;
+  lateFeePence: number | null;
+  noShowFeePence: number | null;
+}
+
+export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
+  const { data, error } = await supabase.from('bookings')
+    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence')
+    .eq('id', bookingId)
+    .single();
+  if (error) throw error;
+  return {
+    status: data.status,
+    bookingDate: data.booking_date,
+    bookingTime: data.booking_time,
+    endTime: data.end_time,
+    lateFeePence: data.late_fee_pence,
+    noShowFeePence: data.no_show_fee_pence,
+  };
+}
+
+async function bookingFeeAction(body: Record<string, string>, fallback: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('booking-fee', { body });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, fallback);
+}
+
+export async function chargeBookingFee(bookingId: string, kind: BookingFeeKind): Promise<void> {
+  return bookingFeeAction({ action: 'charge', bookingId, kind }, 'Could not charge this fee. Please try again.');
+}
+
+export async function refundBookingFee(chargeId: string): Promise<void> {
+  return bookingFeeAction({ action: 'refund', chargeId }, 'Could not refund this fee. Please try again.');
+}
+
+export async function disputeBookingFee(chargeId: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc('dispute_booking_fee', { p_charge_id: chargeId, p_reason: reason });
+  if (error) throw error;
+}
+
+export async function keepDisputedBookingFee(chargeId: string, response: string): Promise<void> {
+  const { error } = await supabase.rpc('keep_disputed_booking_fee', { p_charge_id: chargeId, p_response: response });
+  if (error) throw error;
 }
 
 export async function finalizeCheckoutPaymentIntent(
@@ -9996,6 +10142,83 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
 }
 
+/** The provider's own payout timing (provider reading their own record). */
+export async function getPayoutHoldDays(): Promise<PayoutHoldDays> {
+  const { data: { user }, error: authError } = await getSessionUser();
+  if (authError || !user) throw new Error('Please sign in again.');
+  const { data, error } = await supabase.from('providers')
+    .select('payout_hold_days').eq('user_id', user.id).maybeSingle();
+  if (error) throw error;
+  return isPayoutHoldDays(data?.payout_hold_days) ? data.payout_hold_days : DEFAULT_PAYOUT_HOLD_DAYS;
+}
+
+/**
+ * Changes how long after an appointment the provider's share is held. A longer
+ * choice also pushes back payouts still held; a shorter one applies to new
+ * bookings only.
+ */
+export async function setPayoutHoldDays(days: PayoutHoldDays): Promise<PayoutHoldDays> {
+  const { data, error } = await supabase.rpc('set_payout_hold_days', { p_days: days });
+  if (error) throw error;
+  if (!isPayoutHoldDays(data)) throw new Error('Payout timing could not be confirmed. Refresh to check it.');
+  return data;
+}
+
+/** A late/no-show fee this provider charged, with their share after Stripe's card fee. */
+export interface ProviderFeeEarning {
+  id: string;
+  bookingId: string;
+  kind: BookingFeeKind;
+  amountPence: number;
+  payoutPence: number | null;
+  status: BookingFeeCharge['status'];
+  payoutStatus: 'pending' | 'held' | 'transferred' | 'cancelled' | 'reversed' | 'failed';
+  releaseAfter: string | null;
+  chargedAt: string | null;
+  openDispute: boolean;
+  serviceName: string | null;
+  customerName: string | null;
+}
+
+interface ProviderFeeEarningRow {
+  id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; payout_pence: number | null;
+  status: BookingFeeCharge['status']; payout_status: ProviderFeeEarning['payoutStatus'];
+  release_after: string | null; charged_at: string | null; disputed_at: string | null; dispute_resolved_at: string | null;
+}
+
+/** Latest 50 charged fees (RLS scopes booking_fee_charges to the caller's own). */
+export async function getProviderFeeEarnings(): Promise<ProviderFeeEarning[]> {
+  const { data, error } = await supabase.from('booking_fee_charges')
+    .select('id, booking_id, kind, amount_pence, payout_pence, status, payout_status, release_after, charged_at, disputed_at, dispute_resolved_at')
+    .in('status', ['succeeded', 'refunded'])
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = (data ?? []) as ProviderFeeEarningRow[];
+  if (rows.length === 0) return [];
+  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
+    .select('id, service_name_snapshot, customer_name')
+    .in('id', rows.map(row => row.booking_id));
+  if (bookingsError) throw bookingsError;
+  return rows.map(row => {
+    const booking = bookings?.find(b => b.id === row.booking_id);
+    return {
+      id: row.id,
+      bookingId: row.booking_id,
+      kind: row.kind,
+      amountPence: row.amount_pence,
+      payoutPence: row.payout_pence,
+      status: row.status,
+      payoutStatus: row.payout_status,
+      releaseAfter: row.release_after,
+      chargedAt: row.charged_at,
+      openDispute: !!row.disputed_at && !row.dispute_resolved_at,
+      serviceName: booking?.service_name_snapshot ?? null,
+      customerName: booking?.customer_name ?? null,
+    };
+  });
+}
+
 export interface RefundRequestInput {
   bookingId: string;
   reason: string;
@@ -10107,6 +10330,81 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
         }
       : null,
   };
+}
+
+interface RefundRequestRow {
+  id: string;
+  booking_id: string;
+  status: RefundRequestStatus;
+  reason: string;
+  message: string | null;
+  outcome_note: string | null;
+  refunded_amount: number | string | null;
+  created_at: string;
+  passed_to_cerviced_at: string | null;
+  resolved_at: string | null;
+}
+
+// provider_note is deliberately absent: its column isn't granted to app users
+// (the provider's reason for passing a request on is for Cerviced only).
+const REFUND_REQUEST_COLUMNS =
+  'id, booking_id, status, reason, message, outcome_note, refunded_amount, created_at, passed_to_cerviced_at, resolved_at';
+
+function mapRefundRequest(r: RefundRequestRow): RefundRequest {
+  return {
+    id: r.id,
+    bookingId: r.booking_id,
+    status: r.status,
+    reason: r.reason,
+    message: r.message,
+    outcomeNote: r.outcome_note,
+    refundedAmount: r.refunded_amount == null ? null : Number(r.refunded_amount),
+    createdAt: r.created_at,
+    passedToCervicedAt: r.passed_to_cerviced_at,
+    resolvedAt: r.resolved_at,
+  };
+}
+
+/**
+ * A client asks for a refund on their own booking. The row is the record and
+ * request_booking_refund() notifies the provider; it refuses anything not
+ * paid through the app, or a second open request. Returns the request id.
+ */
+export async function requestBookingRefund(
+  bookingId: string,
+  reason: string,
+  message: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('request_booking_refund', {
+    p_booking_id: bookingId,
+    p_reason: reason,
+    p_message: message,
+  });
+  if (error) throw error;
+  if (typeof data !== 'string') throw new Error('Refund request returned no id.');
+  return data;
+}
+
+/** The provider isn't refunding: hand the request to Cerviced, with why. */
+export async function passRefundRequestToCerviced(requestId: string, note: string): Promise<void> {
+  const { error } = await supabase.rpc('pass_refund_request_to_cerviced', {
+    p_request_id: requestId,
+    p_note: note,
+  });
+  if (error) throw error;
+}
+
+/** A booking's refund requests, newest first. RLS lets the booking's client
+ *  and its provider read them. */
+export async function getRefundRequestsForBooking(bookingId: string): Promise<RefundRequest[]> {
+  const { data, error } = await supabase
+    .from('refund_requests')
+    .select(REFUND_REQUEST_COLUMNS)
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return (data as RefundRequestRow[] | null ?? []).map(mapRefundRequest);
 }
 
 /** The money half of a CLIENT cancellation: applies the provider's cancellation
