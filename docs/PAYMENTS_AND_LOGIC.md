@@ -83,9 +83,10 @@ be pulled forward past an open refund or no-show window.
 Payments & payouts has four sections: Overview, Booking payments, Payouts,
 Payment settings.
 
-- **Payouts** (on `feat/provider-payout-timing`): a "When you get paid" picker
-  (24 hours / 3 / 7 / 14 / 30 days). The copy says the money then reaches their
-  bank through Stripe a few working days later.
+- **Payment settings** (on `feat/provider-payout-timing`): a "When you get
+  paid" picker (24 hours / 3 / 7 / 14 / 30 days). The copy says the money then
+  reaches their bank through Stripe a few working days later. The **Payouts**
+  tab states the current timing and points to Payment settings to change it.
 - **Never shown to providers:** CERVICED's fee, the client's fee-inclusive
   total, or CERVICED revenue. Providers see their own share, refunds and
   release status.
