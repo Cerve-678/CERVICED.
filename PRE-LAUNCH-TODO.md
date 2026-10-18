@@ -1122,3 +1122,25 @@ deploy from a fresh copy of `main`.
 - [x] Beauty Maintenance migration renumbered to `20261018180000` (above the
       frontier) and re-verified against live on 2026-10-18; its constraint list
       keeps the fee and refund-request notification types.
+
+**Going live: option B, chosen by the user on 2026-10-18.** One Supabase project switches to live
+Stripe keys. Release builds (`preview`, `production` in eas.json) already use
+the real Stripe checkout with Apple Pay, on the TEST publishable key, so
+nothing real moves until this list is done. **Do not ship a public App Store
+build until it is**: a test key in a public build takes bookings with no money.
+- [ ] Stripe account fully activated for live payments (business details, bank).
+- [ ] Apple Pay certificate also uploaded for LIVE mode in Stripe, if Stripe
+      shows separate test and live Apple Pay settings.
+- [ ] Set the live secrets in Supabase (the user, never in chat):
+      `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`,
+      using the live webhook endpoints created in the Stripe dashboard.
+- [ ] Swap `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` in eas.json (preview +
+      production) and `.env.local` to the `pk_live_` key. The app refuses to pay
+      when the app key and server key are in different modes, so all of them
+      change together.
+- [ ] Providers re-onboard to Stripe Connect in live mode (test accounts don't carry over).
+- [ ] After the switch, every test is a real charge. Refund yourself, and
+      keep test bookings off real providers.
+- [ ] Security review and legal review of the Stripe flow (auto-memory
+      stripe-payment-intent-integration), and the fee terms (LEGAL-COMPLIANCE-NOTES §17).
+
