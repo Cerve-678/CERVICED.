@@ -78,6 +78,7 @@ import {
 import type { ProviderStatKind } from "../../types/database";
 import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
 import { toUserMessage } from "../../utils/userFacingError";
+import { bookingSiteName } from "../../features/bookings/externalBookings";
 import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
@@ -2584,10 +2585,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // from their page we ask whether they booked, so the booking can sit in
   // their Upcoming list. Not asked of the owner previewing their own link, or
   // of a signed-out browser (there's nowhere to save the answer).
-  const openLinkOnlyBooking = useCallback(() => {
-    const url = provider?.externalBookingUrl;
-    if (!url) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+  const continueToLinkOnlyBooking = useCallback((url: string) => {
     recordStat("book_tap");
     openExternalBookingPage(url)
       .then(waitUntilBackFromBrowser)
@@ -2601,7 +2599,34 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         logger.error('[ProviderProfile] external booking link failed to open', error);
         Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
       });
-  }, [provider?.externalBookingUrl, recordStat, canSaveProvider]);
+  }, [recordStat, canSaveProvider]);
+
+  const openLinkOnlyBooking = useCallback(() => {
+    const url = provider?.externalBookingUrl;
+    if (!url) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    // Said before the client leaves, not after: the booking, payment and any
+    // cancellation are between them and the provider, on the provider's own
+    // site (product owner, 2026-10-18). Not shown to the owner previewing
+    // their own link.
+    if (isOwnProvider) {
+      openExternalBookingPage(url).catch((error: unknown) => {
+        logger.error('[ProviderProfile] external booking link failed to open', error);
+        Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
+      });
+      return;
+    }
+    const site = bookingSiteName(url);
+    showConfirm(
+      "You're leaving CERVICED",
+      `You'll book with ${provider?.displayName ?? "this professional"} on ${site}. ` +
+        `Their own terms apply to the booking, the payment and any cancellation or refund — CERVICED isn't part of it.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Continue", onPress: () => continueToLinkOnlyBooking(url) },
+      ],
+    );
+  }, [provider?.externalBookingUrl, provider?.displayName, isOwnProvider, showConfirm, continueToLinkOnlyBooking]);
 
   const handleDidYouBookSubmit = useCallback(
     async (result: DidYouBookResult) => {
