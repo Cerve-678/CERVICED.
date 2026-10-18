@@ -23,6 +23,17 @@ export const DO_NOT_TRANSLATE: ReadonlySet<TranslationKey> = new Set<Translation
   'profile.appInfo.terms.sub', // legal reference
   'providerAccount.appInfo.terms.title', // legal reference
   'providerAccount.appInfo.terms.sub', // legal reference
+  // Beauty Maintenance: health-adjacent (patch test, prep, aftercare) and the
+  // UNREVIEWED reminders disclaimer.
+  'maintenance.disclaimer',
+  'maintenance.patch.title',
+  'maintenance.patch.recorded',
+  'maintenance.patch.check',
+  'maintenance.setup.q.patch',
+  'maintenance.setup.q.patchHint',
+  'maintenance.ctx.from',
+  'maintenance.ctx.currentNote',
+  'maintenance.ctx.aftercareWhen',
 ]);
 
 /** Registered language catalogs, keyed by language code. */

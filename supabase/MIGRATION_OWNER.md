@@ -31,6 +31,12 @@ OWNER:  session cerviced-ea (e283bace), branch feat/late-no-show-fees, since 202
 |---|---|---|
 | 20261011102423 | `users_external_booking_url` | **Applied 2026-10-11** via `apply_migration` (authored as 20261010120000, renamed to the version the tool recorded). Adds nullable `users.external_booking_url text` — the "I use my own booking link" answer from SignUpStep1, staged like the other sign-up answers and copied to `providers.external_booking_url` on the first InfoReg save. Additive only; table-level grants cover the new column. Frontier at authoring: `20261003120000`. Note: `wt-service-chips`' committed lock (session 4fe95792, since 2026-09-08, unrelated service-type cooldown migration) was found stale — main showed `(none)` and later migrations had already been applied over it. |
 
+### PENDING APPLY 2026-10-10 (Beauty Maintenance)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261010120000 | `beauty_maintenance` | **Written, NOT yet applied** (branch `feat/beauty-maintenance`). Frontier at authoring: `20261003120000`, re-checked 2026-10-11. New owner-only tables `maintenance_service_types` / `maintenance_settings` / `maintenance_items`; widens `notifications_type_check` (+`maintenance_due`, `aftercare_available`); new trigger `on_booking_completed_maintenance`; new cron `client-maintenance-reminders` (09:30 daily). Redefines three live functions, each reproduced from verified-live `pg_get_functiondef` with commented deltas: `process_client_appointment_reminders` (prep line), `process_rebooking_nudges` (maintenance skip; **gains** `SET search_path`), `delete_client_profile` (deletes the two new tables). Re-diff those three against live immediately before applying — another session may have redefined them since. Apply via the SQL editor (the MCP `apply_migration` stamps its own version; rename the file to match if used). |
+
 ### Applied 2026-10-03 (no info pack on a cancelled booking)
 
 | Authored version | Name | Status |

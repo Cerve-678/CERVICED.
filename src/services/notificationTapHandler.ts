@@ -220,6 +220,22 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Beauty Maintenance (client-only) ─────────────────────────────────────────
+  // The push is generic on purpose — no service, provider or health detail on
+  // a lock screen — so the tap is where the detail lives: the Maintenance view
+  // inside Beauty Profile (Profile tab), focused on the item when the payload
+  // carries its id. Not a booking deep-link even when booking_id is present.
+  if (type === 'maintenance_due' || type === 'aftercare_available') {
+    if (isProvider) {
+      openNotifications();
+      return;
+    }
+    const focusItemId =
+      typeof data['maintenance_item_id'] === 'string' ? data['maintenance_item_id'] : undefined;
+    navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId });
+    return;
+  }
+
   // ── Provider-destination types ───────────────────────────────────────────────
   // These point at a provider rather than a booking. Client-only: a provider
   // deep-linked into ProviderProfile would land in the client navigator.
