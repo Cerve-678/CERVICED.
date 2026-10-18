@@ -1,5 +1,5 @@
 -- NOT APPLIED. Written 2026-10-18 on feat/refund-payout-protection.
--- Apply AFTER 20261018165835 (payout timing) and 20261018165847 (refund
+-- Apply AFTER 20261018180000_beauty_maintenance, and after 20261018165835 (payout timing) and 20261018165847 (refund
 -- requests): the release job deployed with this reads refund_requests.
 --
 -- When Cerviced has to take money back from a provider who was already paid
