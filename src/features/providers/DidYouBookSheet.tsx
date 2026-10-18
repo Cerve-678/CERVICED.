@@ -5,7 +5,7 @@
 //   2. "When is it?" — day, time, what they're having → Add to my bookings
 // The entry is the client's own note (client_external_bookings). CERVICED
 // doesn't handle the booking itself, and the sheet says so before they add.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -89,22 +89,13 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
   const [step, setStep] = useState<'ask' | 'details'>('ask');
   const [day, setDay] = useState<Date>(startOfToday);
   const [time, setTime] = useState<Date | null>(null);
-  const [service, setService] = useState<string | null>(null);
+  // Fresh state per open: the caller remounts this sheet (a new `key`) each
+  // time it shows it, rather than resetting state from an effect.
+  const [service, setService] = useState<string | null>(() => (services.length === 1 ? services[0] ?? null : null));
   const [otherService, setOtherService] = useState('');
   const [picker, setPicker] = useState<'date' | 'time' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // A fresh question every time the sheet opens.
-  useEffect(() => {
-    if (!visible) return;
-    setStep('ask');
-    setDay(startOfToday());
-    setTime(null);
-    setService(services.length === 1 ? services[0] ?? null : null);
-    setOtherService('');
-    setPicker(null);
-    setSaving(false);
-  }, [visible, services]);
 
   const days = useMemo(() => {
     const today = startOfToday();

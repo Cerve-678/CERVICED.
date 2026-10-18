@@ -64,6 +64,8 @@ export default function LinkOnlyHomeScreen() {
   const [hasRow, setHasRow] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
+  // Bumped on every open so the sheet remounts empty.
+  const [announcementKey, setAnnouncementKey] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -226,6 +228,7 @@ export default function LinkOnlyHomeScreen() {
                   showAlert('Go live first', "Announcements go to clients who saved you, and they can only find you once you're live.");
                   return;
                 }
+                setAnnouncementKey(k => k + 1);
                 setAnnouncementOpen(true);
               }}
               activeOpacity={0.7}
@@ -239,6 +242,7 @@ export default function LinkOnlyHomeScreen() {
       </SafeAreaView>
 
       <LinkOnlyAnnouncementSheet
+        key={announcementKey}
         visible={announcementOpen}
         P={P}
         onClose={() => setAnnouncementOpen(false)}

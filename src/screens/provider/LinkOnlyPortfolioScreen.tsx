@@ -96,7 +96,7 @@ export default function LinkOnlyPortfolioScreen() {
     );
     setUploading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-  }, [user?.id, providerId]);
+  }, [user, providerId]);
 
   const handleRemove = useCallback((item: DbPortfolioItem) => {
     const isLast = (photos?.length ?? 0) <= 1;

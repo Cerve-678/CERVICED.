@@ -334,18 +334,20 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // "Booked elsewhere" entries — the client's own notes of bookings made on a
   // link-only provider's page. Reloaded on focus, since they're added from a
   // provider's profile in another stack.
-  const [externalBookings, setExternalBookings] = useState<ClientExternalBookingWithProvider[]>([]);
+  // Stamped with the time they loaded, so upcoming/past is decided once per
+  // load rather than by reading the clock during render.
+  const [externalBookings, setExternalBookings] = useState<{ rows: ClientExternalBookingWithProvider[]; loadedAt: number }>({ rows: [], loadedAt: 0 });
   useFocusEffect(useCallback(() => {
     if (!user?.id) return;
     let active = true;
     getMyExternalBookings()
-      .then(rows => { if (active) setExternalBookings(rows); })
+      .then(rows => { if (active) setExternalBookings({ rows, loadedAt: Date.now() }); })
       .catch((error: unknown) => logger.warn('[Bookings] booked-elsewhere entries failed to load', error));
     return () => { active = false; };
   }, [user?.id]));
   const externalSplit = useMemo(() => {
-    const { upcoming, past } = splitExternalBookings(externalBookings, new Date());
-    const cutoff = Date.now() - PAST_BOOKINGS_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
+    const { upcoming, past } = splitExternalBookings(externalBookings.rows, new Date(externalBookings.loadedAt));
+    const cutoff = externalBookings.loadedAt - PAST_BOOKINGS_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
     return { upcoming, past: past.filter(entry => externalBookingStart(entry).getTime() >= cutoff) };
   }, [externalBookings]);
 
