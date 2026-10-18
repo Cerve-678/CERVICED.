@@ -22,7 +22,7 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  session cerviced-c3 (efbc0489), branch feat/refund-payout-protection, since 2026-10-18 — 20261018190000_provider_payout_shortfalls (written, applying via psql script)
+OWNER:  (none)
 ```
 
 ### Applied 2026-10-18 (Beauty Maintenance)
@@ -30,6 +30,12 @@ OWNER:  session cerviced-c3 (efbc0489), branch feat/refund-payout-protection, si
 | Authored version | Name | Status |
 |---|---|---|
 | 20261018180000 | `beauty_maintenance` | **Applied 2026-10-18** by the user pasting it into the SQL editor; version recorded in `schema_migrations` by hand afterwards. Renumbered from 20261010120000, which sat below the frontier. Post-apply verified: maintenance_items / maintenance_settings / maintenance_service_types (15 rows), RLS on, both triggers, the `client-maintenance-reminders` cron job, notifications_type_check keeping the fee, refund-request and maintenance types, and process_rebooking_nudges reading maintenance_items. Frontier before apply: `20261018165847`. Next in queue: cerviced-c3's `20261018190000` (refund payout protection). |
+
+### Applied 2026-10-18 (provider payout shortfalls)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018190000 | `provider_payout_shortfalls` | **APPLIED 2026-10-18** (SQL editor paste, verified live, recorded by hand). File is on feat/refund-payout-protection. Deploy release-payouts, stripe-webhook, apply-cancellation-refund, booking-fee and refund-payment from that branch. |
 
 ### Applied 2026-10-18 (late and no-show fees)
 
