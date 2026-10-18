@@ -288,24 +288,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     </>}
 
     {section === 'payouts' && <>
-      <Card title="When you get paid" sub="How long after an appointment your share is released to Stripe. Stripe then pays it into your bank, which usually takes a few more working days.">
-        {!!holdError && <Notice text={holdError} />}
-        <View style={styles.holdOptions}>
-          {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
-            const selected = days === holdDays;
-            return <TouchableOpacity key={days} accessibilityRole="radio" accessibilityState={{ selected, disabled: holdSaving || !holdDays }}
-              disabled={holdSaving || !holdDays} onPress={() => void chooseHoldDays(days)} activeOpacity={0.75}
-              style={[styles.holdOption, { backgroundColor: selected ? C.accent : C.surface, borderColor: C.border }]}>
-              <Text style={[styles.label, { color: selected ? C.bg : C.text }]}>{payoutHoldLabel(days)}</Text>
-            </TouchableOpacity>;
-          })}
-        </View>
-        <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
-      </Card>
       <Text style={[styles.sectionTitle, { color: C.text }]}>From booking to bank</Text>
       <View style={[styles.journey, { backgroundColor: C.surface }]}>
         {[
-          ['1', 'Booking completed', holdDays ? payoutHoldSentence(holdDays) : 'Your share is held for the payout timing you choose above.'],
+          ['1', 'Booking completed', `${holdDays ? payoutHoldSentence(holdDays) : 'Your share is held for the payout timing you choose.'} Change this in Payment settings.`],
           ['2', 'Released to Stripe', 'Your share moves to Stripe and clears into your available balance.'],
           ['3', 'Paid to your bank', 'Stripe sends a payout according to your payout schedule.'],
         ].map(([step, title, detail]) => <View key={step} style={styles.step}>
@@ -327,7 +313,23 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         {account?.connected && <PaymentAction disabled={busy} label="Manage payout account" onPress={() => void openStripe('dashboard')} />}
       </Card>
     </>}
-    {section === 'settings' && children}
+    {section === 'settings' && <>
+      <Card title="When you get paid" sub="How long after an appointment your share is released to Stripe. Stripe then pays it into your bank, which usually takes a few more working days.">
+        {!!holdError && <Notice text={holdError} />}
+        <View style={styles.holdOptions}>
+          {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
+            const selected = days === holdDays;
+            return <TouchableOpacity key={days} accessibilityRole="radio" accessibilityState={{ selected, disabled: holdSaving || !holdDays }}
+              disabled={holdSaving || !holdDays} onPress={() => void chooseHoldDays(days)} activeOpacity={0.75}
+              style={[styles.holdOption, { backgroundColor: selected ? C.accent : C.surface, borderColor: C.border }]}>
+              <Text style={[styles.label, { color: selected ? C.bg : C.text }]}>{payoutHoldLabel(days)}</Text>
+            </TouchableOpacity>;
+          })}
+        </View>
+        <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
+      </Card>
+      {children}
+    </>}
   </>;
 }
 

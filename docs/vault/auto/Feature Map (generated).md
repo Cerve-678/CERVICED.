@@ -82,7 +82,7 @@ Curated: [[Payments]] · **132 files**
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
-- `src/components/ProviderStripePayments.tsx` _(102)_
+- `src/components/ProviderStripePayments.tsx` _(103)_
 - `src/features/bookings/receipt.ts` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(56)_

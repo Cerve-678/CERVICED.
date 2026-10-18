@@ -102,21 +102,26 @@ test('a provider can choose how long after the appointment their share is releas
   });
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  // The choice lives in Payment settings; Payouts says what's set and where to change it.
   fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
-  expect(ui.getByText('Your share is released to Stripe 24 hours after the appointment ends.')).toBeTruthy();
+  expect(ui.getByText(/released to Stripe 24 hours after the appointment ends\. Change this in Payment settings\./)).toBeTruthy();
+  expect(ui.queryByText('7 days')).toBeNull();
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
   fireEvent.press(ui.getByText('7 days'));
-  await waitFor(() => expect(ui.getByText('Your share is released to Stripe 7 days after the appointment ends.')).toBeTruthy());
-  expect(setPayoutHoldDays).toHaveBeenCalledWith(7);
+  await waitFor(() => expect(setPayoutHoldDays).toHaveBeenCalledWith(7));
+  await waitFor(() => expect(ui.getByRole('radio', { name: '7 days', selected: true })).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
+  expect(ui.getByText(/released to Stripe 7 days after the appointment ends/)).toBeTruthy();
 });
 
 test('a failed timing change keeps the old choice and says it was not changed', async () => {
   (setPayoutHoldDays as jest.Mock).mockRejectedValue(new Error('offline'));
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
-  fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
   fireEvent.press(ui.getByText('30 days'));
   await waitFor(() => expect(ui.getByText('Your payout timing was not changed. Please try again.')).toBeTruthy());
-  expect(ui.getByText('Your share is released to Stripe 24 hours after the appointment ends.')).toBeTruthy();
+  expect(ui.getByRole('radio', { name: '24 hours', selected: true })).toBeTruthy();
 });
 
 test('lists late and no-show fees with the provider\'s share and where the money is', async () => {
