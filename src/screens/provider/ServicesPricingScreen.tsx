@@ -147,7 +147,13 @@ export default function ServicesPricingScreen({ navigation }: any) {
     }
   }
 
-  const specialtyOptions = SPECIALTIES_MAP[serviceCategory] ?? Object.values(SPECIALTIES_MAP).flat();
+  // Unioned with what's already saved: specialities carried over from sign-up
+  // use sign-up's own wording, which isn't always in this list. Without the
+  // union they'd be invisible chips that still persist on every save.
+  const specialtyOptions = Array.from(new Set([
+    ...(SPECIALTIES_MAP[serviceCategory] ?? Object.values(SPECIALTIES_MAP).flat()),
+    ...specialties,
+  ]));
   // Named on screen, because this whole card is scoped by it. The specialty
   // list below is SPECIALTIES_MAP[serviceCategory] and the hair-types question
   // only appears for HAIR — so a provider reading this card was being shown a

@@ -6,6 +6,11 @@
  *
  * Upload and delete follow ProviderMyProfileScreen's portfolio grid exactly:
  * each photo uploads on its own so one failure doesn't drop the rest.
+ *
+ * Their specialities live here too. A link-only provider has no Services &
+ * Pricing screen, and these are what Search's Speciality filter and the
+ * profile hero's chips read, so this is the one place they can see and change
+ * how clients find them.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
@@ -24,7 +29,10 @@ import {
   deletePortfolioItem,
   getMyProviderProfile,
   getProviderPortfolio,
+  getProviderSpecialties,
+  replaceMyProviderSpecialties,
 } from '../../services/databaseService';
+import { SPECIALTIES_MAP } from '../../features/business-details/options';
 import { uploadToStorage } from '../../services/providerRegistrationService';
 import type { DbPortfolioItem } from '../../types/database';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -43,6 +51,12 @@ export default function LinkOnlyPortfolioScreen() {
   const [photos, setPhotos] = useState<DbPortfolioItem[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [serviceCategories, setServiceCategories] = useState<string[]>([]);
+  const [specialties, setSpecialties] = useState<string[]>([]);
+  // The set being edited, or null when not editing. Kept apart from the saved
+  // set so Cancel is a real undo and a failed save leaves the saved one intact.
+  const [draftSpecialties, setDraftSpecialties] = useState<string[] | null>(null);
+  const [savingSpecialties, setSavingSpecialties] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,8 +67,12 @@ export default function LinkOnlyPortfolioScreen() {
           if (!active) return;
           if (!profile) { setProviderId(null); setPhotos([]); return; }
           setProviderId(profile.id);
-          const { work } = await getProviderPortfolio(profile.id);
-          if (active) { setPhotos(work); setFailed(false); }
+          setServiceCategories(profile.service_categories ?? [profile.service_category]);
+          const [{ work }, savedSpecialties] = await Promise.all([
+            getProviderPortfolio(profile.id),
+            getProviderSpecialties(profile.id),
+          ]);
+          if (active) { setPhotos(work); setSpecialties(savedSpecialties); setFailed(false); }
         } catch (error) {
           logger.error('[LinkOnlyPortfolio] load failed', error);
           if (active) setFailed(true);
@@ -97,6 +115,41 @@ export default function LinkOnlyPortfolioScreen() {
     setUploading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [user, providerId]);
+
+  // Every speciality offered for the service types they do, plus any saved one
+  // outside that list (sign-up wording carried over) so it can be seen and
+  // removed rather than persisting invisibly.
+  const specialtyOptions = useMemo(
+    () => Array.from(new Set([
+      ...serviceCategories.flatMap(category => SPECIALTIES_MAP[category] ?? []),
+      ...specialties,
+    ])),
+    [serviceCategories, specialties],
+  );
+
+  const toggleDraftSpecialty = useCallback((specialty: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setDraftSpecialties(prev => {
+      const current = prev ?? [];
+      return current.includes(specialty) ? current.filter(s => s !== specialty) : [...current, specialty];
+    });
+  }, []);
+
+  const handleSaveSpecialties = useCallback(async () => {
+    if (!draftSpecialties) return;
+    setSavingSpecialties(true);
+    try {
+      await replaceMyProviderSpecialties(draftSpecialties);
+      setSpecialties(draftSpecialties);
+      setDraftSpecialties(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (error) {
+      logger.error('[LinkOnlyPortfolio] specialities save failed', error);
+      Alert.alert('Could not save', toUserMessage(error, "Your specialities didn't save. Please try again.", 'LinkOnlyPortfolio.specialities'));
+    } finally {
+      setSavingSpecialties(false);
+    }
+  }, [draftSpecialties]);
 
   const handleRemove = useCallback((item: DbPortfolioItem) => {
     const isLast = (photos?.length ?? 0) <= 1;
@@ -149,6 +202,80 @@ export default function LinkOnlyPortfolioScreen() {
         </View>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}>
           <Text style={styles.sub}>Your work shows on your profile and in Explore.</Text>
+          {providerId && !failed && photos != null && (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Your specialities</Text>
+                {draftSpecialties == null ? (
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setDraftSpecialties(specialties); }}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.cardAction}>{specialties.length ? 'Edit' : 'Add'}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setDraftSpecialties(null)}
+                    disabled={savingSpecialties}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.cardActionMuted}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={styles.cardSub}>
+                Clients find you by these in Search, and they show on your profile.
+              </Text>
+              {draftSpecialties == null ? (
+                specialties.length ? (
+                  <View style={styles.chips}>
+                    {specialties.map(specialty => (
+                      <View key={specialty} style={[styles.chip, styles.chipOn]}>
+                        <Text style={[styles.chipText, styles.chipTextOn]}>{specialty}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.cardSub}>None yet — add a few so clients searching for them find you.</Text>
+                )
+              ) : (
+                <>
+                  <View style={styles.chips}>
+                    {specialtyOptions.map(specialty => {
+                      const on = draftSpecialties.includes(specialty);
+                      return (
+                        <TouchableOpacity
+                          key={specialty}
+                          style={[styles.chip, on && styles.chipOn]}
+                          onPress={() => toggleDraftSpecialty(specialty)}
+                          activeOpacity={0.7}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: on }}
+                        >
+                          <Text style={[styles.chipText, on && styles.chipTextOn]}>{specialty}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.saveButton, savingSpecialties && styles.disabled]}
+                    onPress={handleSaveSpecialties}
+                    disabled={savingSpecialties}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                  >
+                    {savingSpecialties
+                      ? <ActivityIndicator color={P.onAccent} />
+                      : <Text style={styles.addText}>Save specialities</Text>}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
           {failed ? (
             <Text style={styles.sub}>Couldn't load your photos. Come back to this tab to try again.</Text>
           ) : photos == null ? (
@@ -208,5 +335,17 @@ const createStyles = (P: Palette) =>
     emptyTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
     photo: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: P.surface },
+    card: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, padding: 16, gap: 10 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    cardTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
+    cardAction: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.accent },
+    cardActionMuted: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.sub },
+    cardSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, color: P.sub },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip: { borderRadius: 100, borderWidth: 1, borderColor: P.border, backgroundColor: P.surface, paddingVertical: 8, paddingHorizontal: 12 },
+    chipOn: { backgroundColor: P.accent, borderColor: P.accent },
+    chipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.text },
+    chipTextOn: { color: P.onAccent },
+    saveButton: { height: 44, borderRadius: 22, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     removeBadge: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   });
