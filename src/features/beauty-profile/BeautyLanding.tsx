@@ -132,7 +132,7 @@ export function BeautyLanding({
         </View>
       )}
 
-      <View style={[styles.cardFoot, { borderTopColor: isDarkMode ? 'rgba(27,39,64,0.16)' : 'rgba(255,255,255,0.18)' }]}>
+      <View style={[styles.cardFoot, { borderTopColor: `${P.onAccent}${isDarkMode ? '40' : '2E'}` /* onAccent at 25% / 18% */ }]}>
         <TouchableOpacity
           style={styles.badge}
           onPress={go(onOpenHealth)}
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   go: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1.2 },
   goRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 
-  bcard: { borderRadius: 24, padding: 18, paddingBottom: 16, gap: 16, overflow: 'hidden' },
+  bcard: { borderRadius: 20, padding: 18, paddingBottom: 16, gap: 16, overflow: 'hidden' },
   halo: { position: 'absolute', right: -60, top: -60, width: 200, height: 200, borderRadius: 100, borderWidth: 28, opacity: 0.12 },
   newTitle: { fontFamily: FONT_DISPLAY, fontSize: 26, lineHeight: 30, letterSpacing: 0.5 },
   traits: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },
