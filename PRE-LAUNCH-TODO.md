@@ -1081,8 +1081,10 @@ Numbered 24 because §22 (Instagram handle verification) and §23 (saved cards)
 are on unmerged branches.
 
 **When to redeploy.** Nothing needs deploying right now: the live
-`booking-fee`, `create-payment-intent`, `release-payouts` and `stripe-webhook`
-match `main` as of `b6c0255` (late/no-show fees, merged 2026-10-18).
+`create-payment-intent` matches `main` as of `b6c0255` (late/no-show fees), and
+`release-payouts`, `stripe-webhook`, `apply-cancellation-refund`, `booking-fee`
+and `refund-payment` match `main` as of `38c6e8b9` (refund payout protection,
+deployed 2026-10-18).
 Redeploy only when:
 - a change touches anything under `supabase/functions/` (including `_shared/`,
   which every function that imports it needs redeployed);
