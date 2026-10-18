@@ -56,7 +56,7 @@ import type { ProviderRegistrationData, ServiceImageDraft } from '../../services
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem } from '../../types/database';
 
@@ -2913,6 +2913,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // link-only provider's policies are optional and theirs to write, so a first
   // save must not file CERVICED's defaults on their behalf.
   const [policiesOnFile, setPoliciesOnFile] = useState(false);
+  // Specialities picked at sign-up (users.specialties). Written to
+  // provider_specialties on the first save, which is the first moment a
+  // providers row exists for them to belong to.
+  const [signupSpecialties, setSignupSpecialties] = useState<string[]>([]);
 
   // True until the existing-provider fetch settles — without this the form
   // renders with empty defaults ('Provider Registration', blank fields, the
@@ -3065,6 +3069,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 const prefilledServiceTypes = (prefill.service_interests ?? []).filter(
                   (interest): interest is string =>
                     typeof interest === 'string' && SERVICE_CATEGORIES.includes(interest),
+                );
+                setSignupSpecialties(
+                  (prefill.specialties ?? []).filter(
+                    (specialty): specialty is string => typeof specialty === 'string' && specialty.trim() !== '',
+                  ),
                 );
                 setProviderData(prev => ({
                   ...prev,
@@ -3591,6 +3600,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         },
         !isEditMode && termsAccepted,
       );
+      // First save only: the providers row now exists, so the specialities
+      // answered at sign-up can finally be attached to it. Without this they
+      // never reached the profile hero or Search's Speciality filter.
+      // Best-effort — the profile itself is saved, and they can be set again
+      // in Services & Pricing (or the Portfolio tab for link-only).
+      if (!isEditMode && signupSpecialties.length) {
+        try {
+          await replaceMyProviderSpecialties(signupSpecialties);
+        } catch (error) {
+          logger.error('InfoReg: carrying sign-up specialities over failed', error);
+        }
+      }
       // Only round-trip booking_policies if it actually loaded successfully —
       // writing the in-memory `policies` back while it's still stuck at
       // DEFAULT_POLICIES (a failed load) would silently wipe out whatever a
@@ -3617,7 +3638,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, policiesLoaded, policiesOnFile, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
+  }, [providerData, user, policies, policiesLoaded, policiesOnFile, signupSpecialties, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
 
   // The pager owns swipe tracking; this callback is the single imperative
   // entry point used by timeline tabs, Next buttons and validation shortcuts.
