@@ -129,10 +129,11 @@ CarouselCard.displayName = 'CarouselCard';
 
 export default function ProviderAccountScreen({ navigation }: any) {
   const { user, logout, switchMode, hatState, myBookingMode } = useAuth();
-  // A link-only provider reaches this screen from their Profile tab, which
-  // already holds their profile and business rows; Analytics is on their
-  // Home. The CERVICED-booking shortcuts (Offers, Clientele, Schedule,
-  // Booking history) don't apply to them, so this is account settings only.
+  // This screen is a link-only provider's Profile tab. The CERVICED-booking
+  // shortcuts (Analytics, Offers, Clientele, Schedule, Booking history) don't
+  // apply to them — their analytics are on Home — so they get Edit profile and
+  // Branding in the hero, and a Your Business section of the parts of a
+  // profile they have, in place of those.
   const isLinkOnly = myBookingMode === 'external';
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
@@ -291,8 +292,28 @@ export default function ProviderAccountScreen({ navigation }: any) {
               minimumFontScale={0.7}
             />
             <Text style={[styles.previewSub, { color: P.sub }]}>
-              {t('providerAccount.hero.sub')}
+              {isLinkOnly ? t('providerAccount.linkOnly.hero.sub') : t('providerAccount.hero.sub')}
             </Text>
+            {isLinkOnly && (
+            <View style={styles.previewStats}>
+              <TouchableOpacity
+                style={[styles.previewStat, { backgroundColor: P.accent }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('EditProfile'); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.previewStatNum, { color: '#FFFFFF' }]}>{t('providerAccount.linkOnly.hero.edit')}</Text>
+                <Text style={[styles.previewStatLbl, { color: '#FFFFFF', opacity: 0.8 }]}>{t('providerAccount.linkOnly.hero.editSub')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Branding'); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.previewStatNum, { color: P.text }]}>{t('providerAccount.linkOnly.hero.branding')}</Text>
+                <Text style={[styles.previewStatLbl, { color: P.sub }]}>{t('providerAccount.linkOnly.hero.brandingSub')}</Text>
+              </TouchableOpacity>
+            </View>
+            )}
             {!isLinkOnly && (
             <View style={styles.previewStats}>
               <TouchableOpacity
@@ -381,6 +402,15 @@ export default function ProviderAccountScreen({ navigation }: any) {
               </View>
             </View>
             </>)}
+
+            {isLinkOnly && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.yourBusiness')}</Text>
+              <SettingsOption icon="storefront" title={t('providerAccount.linkOnly.businessInfo.title')} subtitle={t('providerAccount.linkOnly.businessInfo.sub')} onPress={() => navigation.navigate('BusinessInfo')} P={P} />
+              <SettingsOption icon="calendar-today" title={t('providerAccount.linkOnly.hours.title')} subtitle={t('providerAccount.linkOnly.hours.sub')} onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
+              <SettingsOption icon="receipt" title={t('providerAccount.linkOnly.policies.title')} subtitle={t('providerAccount.linkOnly.policies.sub')} onPress={() => navigation.navigate('Policies')} P={P} />
+            </View>
+            )}
 
             {/* ── Account: twin toggle cards + plain rows ────────────────── */}
             <View style={styles.twinRow}>

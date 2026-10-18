@@ -75,7 +75,6 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderServicesMain`
 - `BusinessInfo`
 - `ProviderAccountMain`
-- `LinkOnlyProfileMain`
 - `MyPublicProfile`
 - `AccountInfo`
 - `BusinessDetails`

@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `LinkOnlyPortfolioMain`
 
 ## → Navigates to
-- _— none —_
+- [[ProviderProfileScreen\|MyPublicProfile]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

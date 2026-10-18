@@ -7,6 +7,9 @@
  * Upload and delete follow ProviderMyProfileScreen's portfolio grid exactly:
  * each photo uploads on its own so one failure doesn't drop the rest.
  *
+ * It opens with a small preview of their profile as clients see it, which
+ * taps through to the real thing (MyPublicProfile).
+ *
  * Their specialities live here too. A link-only provider has no Services &
  * Pricing screen, and these are what Search's Speciality filter and the
  * profile hero's chips read, so this is the one place they can see and change
@@ -18,7 +21,8 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
@@ -32,7 +36,9 @@ import {
   getProviderSpecialties,
   replaceMyProviderSpecialties,
 } from '../../services/databaseService';
-import { SPECIALTIES_MAP } from '../../features/business-details/options';
+import { ALL_SERVICE_TYPE_OPTS, SPECIALTIES_MAP } from '../../features/business-details/options';
+import type { DbProvider } from '../../types/database';
+import type { LinkOnlyPortfolioStackParamList } from '../../navigation/types';
 import { uploadToStorage } from '../../services/providerRegistrationService';
 import type { DbPortfolioItem } from '../../types/database';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -40,14 +46,18 @@ import { logger } from '../../utils/logger';
 
 const GAP = 8;
 
+type Nav = NativeStackNavigationProp<LinkOnlyPortfolioStackParamList, 'LinkOnlyPortfolioMain'>;
+
 export default function LinkOnlyPortfolioScreen() {
   const { palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
   const { user } = useAuth();
+  const navigation = useNavigation<Nav>();
   const { width } = useWindowDimensions();
   const tileSize = (width - 32 - GAP * 2) / 3;
 
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<DbProvider | null>(null);
   const [photos, setPhotos] = useState<DbPortfolioItem[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -67,6 +77,7 @@ export default function LinkOnlyPortfolioScreen() {
           if (!active) return;
           if (!profile) { setProviderId(null); setPhotos([]); return; }
           setProviderId(profile.id);
+          setProfile(profile);
           setServiceCategories(profile.service_categories ?? [profile.service_category]);
           const [{ work }, savedSpecialties] = await Promise.all([
             getProviderPortfolio(profile.id),
@@ -126,6 +137,14 @@ export default function LinkOnlyPortfolioScreen() {
     ])),
     [serviceCategories, specialties],
   );
+
+  const serviceTypeLabel = profile
+    ? (profile.service_category === 'OTHER' && profile.custom_service_type
+      ? profile.custom_service_type
+      : ALL_SERVICE_TYPE_OPTS.find(o => o.value === profile.service_category)?.label ?? '')
+    : '';
+  const initials = (profile?.display_name ?? '')
+    .split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
 
   const toggleDraftSpecialty = useCallback((specialty: string) => {
     Haptics.selectionAsync().catch(() => {});
@@ -201,6 +220,63 @@ export default function LinkOnlyPortfolioScreen() {
           </TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}>
+          {profile && (
+            <>
+              <Text style={styles.sectionLabel}>How clients see you</Text>
+              <TouchableOpacity
+                style={styles.previewCard}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  navigation.navigate('MyPublicProfile', { providerId: profile.slug });
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Open your profile as clients see it"
+              >
+                <View style={styles.previewTop}>
+                  {profile.logo_url ? (
+                    <Image source={{ uri: profile.logo_url }} style={styles.previewLogo} contentFit="cover" transition={0} />
+                  ) : (
+                    <View style={[styles.previewLogo, styles.previewLogoEmpty]}>
+                      <Text style={styles.previewInitials}>{initials}</Text>
+                    </View>
+                  )}
+                  <View style={styles.flex}>
+                    <Text style={styles.previewName} numberOfLines={1}>{profile.display_name}</Text>
+                    <Text style={styles.previewMeta} numberOfLines={1}>
+                      {[serviceTypeLabel, profile.location_text].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                </View>
+                {specialties.length > 0 && (
+                  <View style={styles.chips}>
+                    {specialties.slice(0, 3).map(specialty => (
+                      <View key={specialty} style={styles.previewChip}>
+                        <Text style={styles.previewChipText}>{specialty}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.previewActions}>
+                  <View style={styles.previewBook}>
+                    <Text style={styles.addText}>Book</Text>
+                  </View>
+                  {!!profile.instagram && (
+                    <View style={styles.previewIcon}>
+                      <Ionicons name="logo-instagram" size={18} color={P.accent} />
+                    </View>
+                  )}
+                  <View style={styles.previewIcon}>
+                    <Ionicons name="chatbubble-outline" size={17} color={P.accent} />
+                  </View>
+                </View>
+                <View style={styles.previewFooter}>
+                  <Text style={styles.cardAction}>Open full preview</Text>
+                  <Ionicons name="chevron-forward" size={16} color={P.accent} />
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
           <Text style={styles.sub}>Your work shows on your profile and in Explore.</Text>
           {providerId && !failed && photos != null && (
             <View style={styles.card}>
@@ -335,6 +411,20 @@ const createStyles = (P: Palette) =>
     emptyTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
     photo: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: P.surface },
+    sectionLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1, color: P.sub },
+    previewCard: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, padding: 16, gap: 12 },
+    previewTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    previewLogo: { width: 52, height: 52, borderRadius: 26, backgroundColor: P.surface },
+    previewLogoEmpty: { backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+    previewInitials: { fontFamily: 'BakbakOne-Regular', fontSize: 20, color: P.onAccent },
+    previewName: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
+    previewMeta: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', color: P.sub },
+    previewChip: { borderRadius: 100, backgroundColor: P.accentDim, paddingVertical: 5, paddingHorizontal: 10 },
+    previewChipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.text },
+    previewActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    previewBook: { flex: 1, height: 40, borderRadius: 20, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+    previewIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
+    previewFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border, paddingTop: 12 },
     card: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, padding: 16, gap: 10 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     cardTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },

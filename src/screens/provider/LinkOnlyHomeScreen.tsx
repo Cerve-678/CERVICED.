@@ -4,16 +4,20 @@
  * CERVICED to be found. There's no booking calendar here, because CERVICED
  * doesn't hold their bookings. Instead:
  *
- *  - the go-live checklist: the four things the server publishes them on
- *    (logo, About, opening hours, a portfolio photo) — see goLiveStatus.ts
+ *  - once live, this week's numbers: Book taps (the headline, with a bar per
+ *    day), profile views, saves and search appearances — tapping through to
+ *    the full Analytics screen
+ *  - until then, the go-live checklist: the four things the server publishes
+ *    them on (logo, About, opening hours, a portfolio photo) — goLiveStatus.ts
  *  - their diary, read from the phone's own calendar (DiaryCard)
- *  - Analytics and Portfolio tiles
- *  - Becca and Announcements (to the clients who saved them)
+ *  - Announce (to the clients who saved them) and Add work
+ *  - Becca as a floating button, above the tab bar
  *
  * Product rules: docs/vault/Link-Only Providers.md.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -24,7 +28,8 @@ import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMyProviderProfile } from '../../services/databaseService';
+import { getMyProviderDailyStats, getMyProviderProfile, getMyProviderSaverCount } from '../../services/databaseService';
+import { lastSevenDaysOfBookTaps, sumLinkOnlyStats, type DayBar, type LinkOnlyTotals } from '../../features/providers/linkOnlyAnalytics';
 import {
   buildLinkOnlyGoLiveSteps,
   fetchLinkOnlyGoLiveStatus,
@@ -60,6 +65,9 @@ export default function LinkOnlyHomeScreen() {
   const styles = useMemo(() => createStyles(P), [P]);
 
   const [name, setName] = useState<string>(user?.businessName ?? '');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [week, setWeek] = useState<{ totals: LinkOnlyTotals; bars: DayBar[]; savers: number } | null>(null);
+  const [weekFailed, setWeekFailed] = useState(false);
   const [status, setStatus] = useState<LinkOnlyGoLiveStatus | null>(null);
   const [hasRow, setHasRow] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -77,8 +85,23 @@ export default function LinkOnlyHomeScreen() {
           setHasRow(!!profile);
           if (!profile) return;
           setName(profile.display_name);
+          setLogoUrl(profile.logo_url);
           const next = await fetchLinkOnlyGoLiveStatus(profile);
-          if (active) { setStatus(next); setLoadFailed(false); }
+          if (!active) return;
+          setStatus(next);
+          setLoadFailed(false);
+          // Counting starts once they're live, so there's nothing to show before.
+          if (!next?.isLive) return;
+          try {
+            const [rows, savers] = await Promise.all([getMyProviderDailyStats(7), getMyProviderSaverCount()]);
+            if (!active) return;
+            setWeek({ totals: sumLinkOnlyStats(rows), bars: lastSevenDaysOfBookTaps(rows, new Date()), savers });
+            setWeekFailed(false);
+          } catch (error) {
+            // The rest of Home still works without the numbers.
+            logger.error('[LinkOnlyHome] stats load failed', error);
+            if (active) setWeekFailed(true);
+          }
         } catch (error) {
           logger.error('[LinkOnlyHome] load failed', error);
           if (active) setLoadFailed(true);
@@ -106,25 +129,39 @@ export default function LinkOnlyHomeScreen() {
   );
 
   const live = status?.isLive ?? false;
+  const maxBar = Math.max(1, ...(week?.bars.map(bar => bar.value) ?? [0]));
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+
+  const openAnnouncement = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    if (!live) {
+      showAlert('Go live first', "Announcements go to clients who saved you, and they can only find you once you're live.");
+      return;
+    }
+    setAnnouncementKey(k => k + 1);
+    setAnnouncementOpen(true);
+  }, [live, showAlert]);
 
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}
+          // Extra room so the floating Becca button never sits over the last card.
+          contentContainerStyle={[styles.content, { paddingBottom: 96 + FLOATING_TAB_BAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={styles.avatar} contentFit="cover" transition={0} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarEmpty]}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+            )}
             <View style={styles.flex}>
               <Text style={styles.welcome}>Welcome,</Text>
               <Text style={styles.name} numberOfLines={1}>{name || 'your business'}</Text>
             </View>
-            {status && (
-              <View style={styles.livePill}>
-                <View style={[styles.liveDot, { backgroundColor: live ? '#3D8B5A' : '#B07A3C' }]} />
-                <Text style={styles.liveText}>{live ? 'Live' : 'Not live yet'}</Text>
-              </View>
-            )}
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Notifications'); }}
               style={styles.iconButton}
@@ -135,7 +172,75 @@ export default function LinkOnlyHomeScreen() {
             </TouchableOpacity>
           </View>
 
+          {status && (
+            <View style={styles.liveRow}>
+              <View style={styles.livePill}>
+                <View style={[styles.liveDot, { backgroundColor: live ? '#3D8B5A' : '#B07A3C' }]} />
+                <Text style={styles.liveText}>{live ? 'Live on CERVICED' : 'Not live yet'}</Text>
+              </View>
+              {live && <Text style={styles.liveSub}>Clients can find and book you</Text>}
+            </View>
+          )}
+
           {hasRow === null && !loadFailed && <ActivityIndicator color={P.accent} style={styles.loader} />}
+
+          {live && (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('LinkOnlyAnalytics'); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="This week's numbers. Open analytics"
+            >
+              <View style={styles.rowBetween}>
+                <Text style={styles.cardTitle}>This week</Text>
+                <Text style={styles.count}>All analytics</Text>
+              </View>
+              {weekFailed ? (
+                <Text style={styles.body}>Couldn't load your numbers. Come back to this screen to try again.</Text>
+              ) : !week ? (
+                <ActivityIndicator color={P.accent} style={styles.loader} />
+              ) : (
+                <>
+                  <View style={styles.headlineRow}>
+                    <View>
+                      <Text style={styles.headline}>{week.totals.bookTaps}</Text>
+                      <Text style={styles.headlineLabel}>Book taps</Text>
+                      <Text style={styles.stepHint}>Clients sent to your booking page</Text>
+                    </View>
+                    <View style={styles.bars}>
+                      {week.bars.map((bar, index) => (
+                        <View
+                          key={bar.ymd}
+                          style={[
+                            styles.bar,
+                            {
+                              height: `${Math.max(8, (bar.value / maxBar) * 100)}%`,
+                              backgroundColor: index === week.bars.length - 1 ? P.accent : P.accentDim,
+                            },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.miniStats}>
+                    <View style={styles.miniStat}>
+                      <Text style={styles.miniNum}>{week.totals.profileViews}</Text>
+                      <Text style={styles.miniLabel}>Profile views</Text>
+                    </View>
+                    <View style={styles.miniStat}>
+                      <Text style={styles.miniNum}>{week.savers}</Text>
+                      <Text style={styles.miniLabel}>Saved you</Text>
+                    </View>
+                    <View style={styles.miniStat}>
+                      <Text style={styles.miniNum}>{week.totals.searchAppearances}</Text>
+                      <Text style={styles.miniLabel}>In searches</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           {loadFailed && (
             <View style={styles.card}>
@@ -191,55 +296,34 @@ export default function LinkOnlyHomeScreen() {
             </View>
           )}
 
-          <View style={styles.tiles}>
-            <TouchableOpacity style={styles.tile} onPress={() => navigation.navigate('LinkOnlyAnalytics')} activeOpacity={0.85}>
-              <Ionicons name="stats-chart-outline" size={22} color={P.accent} />
-              <Text style={styles.tileTitle}>Analytics</Text>
-              <Text style={styles.tileSub}>{live ? 'Book taps, views, saves' : "Starts counting once you're live"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.tile} onPress={() => goToStep('portfolio')} activeOpacity={0.85}>
-              <Ionicons name="images-outline" size={22} color={P.accent} />
-              <Text style={styles.tileTitle}>Portfolio</Text>
-              <Text style={styles.tileSub}>
-                {status
-                  ? `${status.portfolioCount} photo${status.portfolioCount === 1 ? '' : 's'}${status.portfolioCount === 0 ? ' · add your best work' : ''}`
-                  : 'Your best work'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
           <DiaryCard P={P} />
 
-          <View style={styles.card}>
-            <TouchableOpacity
-              style={styles.listRow}
-              onPress={() => navigation.navigate('BeccaStack', { screen: 'BeccaMain', params: {} })}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="sparkles-outline" size={20} color={P.accent} />
-              <Text style={styles.listLabel}>Becca, your assistant</Text>
-              <Ionicons name="chevron-forward" size={16} color={P.sub} />
+          <View style={styles.tiles}>
+            <TouchableOpacity style={styles.tile} onPress={openAnnouncement} activeOpacity={0.85} accessibilityRole="button">
+              <View style={styles.tileIcon}><Ionicons name="megaphone-outline" size={20} color={P.accent} /></View>
+              <Text style={styles.tileTitle}>Announce</Text>
+              <Text style={styles.tileSub}>To clients who saved you</Text>
             </TouchableOpacity>
-            <View style={styles.divider} />
-            <TouchableOpacity
-              style={styles.listRow}
-              onPress={() => {
-                if (!live) {
-                  showAlert('Go live first', "Announcements go to clients who saved you, and they can only find you once you're live.");
-                  return;
-                }
-                setAnnouncementKey(k => k + 1);
-                setAnnouncementOpen(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="megaphone-outline" size={20} color={P.accent} />
-              <Text style={styles.listLabel}>Announcements to your clients</Text>
-              <Ionicons name="chevron-forward" size={16} color={P.sub} />
+            <TouchableOpacity style={styles.tile} onPress={() => goToStep('portfolio')} activeOpacity={0.85} accessibilityRole="button">
+              <View style={styles.tileIcon}><Ionicons name="camera-outline" size={20} color={P.accent} /></View>
+              <Text style={styles.tileTitle}>Add work</Text>
+              <Text style={styles.tileSub}>
+                {status ? `${status.portfolioCount} photo${status.portfolioCount === 1 ? '' : 's'} so far` : 'Your best work'}
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <TouchableOpacity
+        style={[styles.becca, { bottom: FLOATING_TAB_BAR_CLEARANCE + 12 }]}
+        onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('BeccaStack', { screen: 'BeccaMain', params: {} }); }}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Ask Becca"
+      >
+        <Ionicons name="sparkles" size={24} color={P.onAccent} />
+      </TouchableOpacity>
 
       <LinkOnlyAnnouncementSheet
         key={announcementKey}
@@ -265,7 +349,12 @@ const createStyles = (P: HomePalette) =>
   StyleSheet.create({
     flex: { flex: 1 },
     content: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: P.surface },
+    avatarEmpty: { backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.onAccent },
+    liveRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    liveSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub },
     welcome: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600', color: P.sub },
     name: { fontFamily: 'BakbakOne-Regular', fontSize: 26, color: P.text },
     livePill: { height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: P.accentDim, flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -288,11 +377,19 @@ const createStyles = (P: HomePalette) =>
     footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub },
     primary: { height: 48, borderRadius: 24, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
     primaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.onAccent },
+    headlineRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 14 },
+    headline: { fontFamily: 'BakbakOne-Regular', fontSize: 48, lineHeight: 52, color: P.text },
+    headlineLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.text },
+    bars: { flex: 1, height: 64, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
+    bar: { flex: 1, borderRadius: 4 },
+    miniStats: { flexDirection: 'row', gap: 8 },
+    miniStat: { flex: 1, backgroundColor: P.surface, borderRadius: 14, padding: 12 },
+    miniNum: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
+    miniLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', color: P.sub },
     tiles: { flexDirection: 'row', gap: 10 },
     tile: { flex: 1, backgroundColor: P.card, borderRadius: 20, borderWidth: 1, borderColor: P.border, padding: 14, gap: 6 },
+    tileIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
+    becca: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
     tileTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.text },
     tileSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16, color: P.sub },
-    listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
-    listLabel: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700', color: P.text },
-    divider: { height: StyleSheet.hairlineWidth, backgroundColor: P.border },
   });

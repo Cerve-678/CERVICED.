@@ -7,6 +7,8 @@ tags: [screen, provider]
 **Registered route(s):** `ProviderAccountMain`
 
 ## → Navigates to
+- [[InfoRegScreen\|EditProfile]]
+- [[BrandingScreen\|Branding]]
 - [[ProviderAnalyticsScreen\|Analytics]]
 - [[ProviderPromotionsScreen\|Promotions]]
 - [[ProviderClienteleScreen\|Clientele]]
@@ -14,6 +16,8 @@ tags: [screen, provider]
 - [[ProviderScheduleScreen\|ProviderSchedule]]
 - [[ProviderInboxScreen\|ProviderInbox]]
 - [[ProviderBookingHistoryScreen\|BookingHistory]]
+- [[BusinessInfoScreen\|BusinessInfo]]
+- [[PoliciesScreen\|Policies]]
 - [[ChangePasswordScreen\|ChangePassword]]
 - [[ProviderAccountInfoScreen\|AccountInfo]]
 - [[NotificationsScreen\|Notifications]]
