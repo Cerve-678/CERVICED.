@@ -156,6 +156,22 @@ export const en = {
   'providerAccount.hero.clientele': 'Clientele',
   'providerAccount.hero.clienteleSub': 'Loyal Clients',
 
+  // Link-only providers (book on their own page) — this screen is their
+  // Profile tab, so the hero leads with their profile instead of bookings.
+  'providerAccount.linkOnly.hero.sub':
+    'Your profile, how clients find you, and your account — all in one place.',
+  'providerAccount.linkOnly.hero.edit': 'Edit profile',
+  'providerAccount.linkOnly.hero.editSub': 'Logo, About, contact',
+  'providerAccount.linkOnly.hero.branding': 'Branding',
+  'providerAccount.linkOnly.hero.brandingSub': 'Colours & look',
+  'providerAccount.section.yourBusiness': 'YOUR BUSINESS',
+  'providerAccount.linkOnly.businessInfo.title': 'Business Info',
+  'providerAccount.linkOnly.businessInfo.sub': 'Name, service type, booking link, emails',
+  'providerAccount.linkOnly.hours.title': 'Opening Hours',
+  'providerAccount.linkOnly.hours.sub': 'Shown on your About tab',
+  'providerAccount.linkOnly.policies.title': 'Policies',
+  'providerAccount.linkOnly.policies.sub': 'Optional — shown on your profile if added',
+
   'providerAccount.businessProfile.title': 'Business Profile',
   'providerAccount.businessProfile.sub': 'Profile, details & communications',
 

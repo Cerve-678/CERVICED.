@@ -317,7 +317,6 @@ export type ProviderServicesStackParamList = {
 export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
   // Link-only providers' Profile tab root: their public profile + edit rows.
-  LinkOnlyProfileMain: undefined;
   // Their own public profile, exactly as clients see it.
   MyPublicProfile: { providerId: string };
   EditProfile: { transferProviderId?: string } | undefined;
@@ -389,6 +388,8 @@ export type ProviderTabParamList = {
 
 export type LinkOnlyPortfolioStackParamList = {
   LinkOnlyPortfolioMain: undefined;
+  /** Their own profile, as clients see it (ProviderProfileScreen). */
+  MyPublicProfile: { providerId: string };
 };
 
 export type LinkOnlyMessagesStackParamList = {

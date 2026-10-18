@@ -2,7 +2,7 @@
 
 Professionals who take bookings on **their own booking page** (Fresha, Treatwell, Booksy, Acuity…) but want to be found on CERVICED. Decided with the product owner on 2026-10-10, revised 2026-10-17. The original idea and its constraints are in `FUTURE_LOGIC.md` → "Signup Step 2b".
 
-Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoSpyoht8Hw7R5FLT3TDh (the provider Home mockup predates the 2026-10-17 answers — go-live is four steps, and Becca/Announcements are available).
+Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoSpyoht8Hw7R5FLT3TDh (the provider Home mockup predates the 2026-10-17 answers — go-live is four steps, and Becca/Announcements are available). Home / Portfolio / Profile redesign (2026-10-19, supersedes that canvas's provider tabs): https://claude.ai/artifact/GqfMewfVv6g8Vv317YwV5f
 
 ## Status
 
@@ -24,8 +24,10 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 
 **No:** CERVICED's own booking flow (they book via their link), the price list on their profile, star ratings and reviews (no reviews section at all), teams, Offers / promo codes, all client-care tools (info packs, intake / consultation forms, Clientele list, reminders), Automations.
 
-- **Tabs:** Home, Portfolio, Messages, Profile. Becca is opened from Home.
-- **Profile tab:** their public profile as clients see it, plus edit rows (profile, opening hours, business info, branding, policies) and a Settings row.
+- **Tabs:** Home, Portfolio, Messages, Profile. Becca is a floating button on Home.
+- **Home:** once live, This week (Book taps headline + a bar per day, profile views, saves, search appearances → Analytics); before that, the go-live checklist. Then their diary, then Announce and Add work.
+- **Portfolio tab:** a small preview of their profile as clients see it (taps through to the real one), their specialities (editable — Search's Speciality filter reads them), then the photo grid.
+- **Profile tab:** the shared Settings screen (ProviderAccountScreen). For link-only its hero has Edit profile + Branding, and a Your Business section has Business Info, Opening hours and Policies, above the usual account sections.
 - **InfoReg:** Identity, About & Portfolio, Contact only — with their booking link required. No Services or Address pages.
 - **Search:** they appear under **category, speciality, area, accessibility** only. Any availability, price, rating, hair-type, skin-tone, audience or practice filter drops them.
 - **Analytics:** Book-button taps (headline), profile views, search appearances, Instagram taps, saves.

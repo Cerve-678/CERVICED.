@@ -34,10 +34,8 @@ import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import ProviderAccountInfoScreen from '../../../screens/provider/ProviderAccountInfoScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
-import LinkOnlyProfileScreen from '../../../screens/provider/LinkOnlyProfileScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import { ProviderAccountStackParamList } from '../../types';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
 
@@ -48,32 +46,16 @@ const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
 const MyPublicProfileComponent = ProviderProfileScreen as React.ComponentType<any>;
 
 /**
- * `linkOnly` — a link-only provider's Profile tab starts on their public
- * profile + edit rows (LinkOnlyProfileMain), and Provider Settings is pushed
- * from there, so it gets a real back button instead of being the root.
+ * Also a link-only provider's Profile tab: the same Settings screen, where
+ * ProviderAccountScreen swaps in their own hero buttons and Your Business rows
+ * (see useAuth().myBookingMode).
  */
-export default function ProviderAccountNavigator({ linkOnly = false }: { linkOnly?: boolean }) {
-  const { theme } = useTheme();
-
+export default function ProviderAccountNavigator() {
   return (
-    <ProviderAccountStack.Navigator initialRouteName={linkOnly ? 'LinkOnlyProfileMain' : 'ProviderAccountMain'}>
+    <ProviderAccountStack.Navigator initialRouteName="ProviderAccountMain">
       <ProviderAccountStack.Screen
         name="ProviderAccountMain"
         component={ProviderAccountScreen}
-        options={linkOnly
-          ? {
-              headerShown: true,
-              headerTitle: '',
-              headerTransparent: true,
-              headerTintColor: theme.text,
-              headerBackButtonDisplayMode: 'minimal',
-            }
-          : { headerShown: false }}
-      />
-
-      <ProviderAccountStack.Screen
-        name="LinkOnlyProfileMain"
-        component={LinkOnlyProfileScreen}
         options={{ headerShown: false }}
       />
 

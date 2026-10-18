@@ -171,7 +171,7 @@ function LinkOnlyProviderTabs() {
       <Tab.Screen name="Profile" options={{ tabBarIcon: icon("user") }}>
         {() => (
           <ErrorBoundary>
-            <ProviderAccountNavigator linkOnly />
+            <ProviderAccountNavigator />
           </ErrorBoundary>
         )}
       </Tab.Screen>
