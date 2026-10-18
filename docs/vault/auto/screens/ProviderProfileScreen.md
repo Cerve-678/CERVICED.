@@ -8,6 +8,7 @@ tags: [screen, provider]
 
 ## → Navigates to
 - [[ProviderChatScreen\|ProviderChat]]
+- [[BookingsScreen\|Bookings]]
 - [[CartScreen\|CartMain]]
 - `Cart` _(navigator / dynamic)_
 - `ClaimProvider` _(navigator / dynamic)_

@@ -25,7 +25,7 @@ describe("ProviderProfileScreen data architecture", () => {
 
     expect(source).toContain("const { myProviderId, myProviderIdStatus } = useAuth()");
     expect(source).toContain("const canBookProvider = shouldShowBookingCta({");
-    expect(auth).toContain("getProviderIdForUserId");
+    expect(auth).toContain("getProviderOwnershipForUserId");
     expect(auth).toContain("}, [user?.id, user?.accountType]);");
     expect(gate).toContain('myProviderIdStatus === "resolved"');
     expect(source).not.toContain("const canBookProvider = viewerChecked && !isOwnProvider;");
@@ -106,7 +106,7 @@ describe("ProviderProfileScreen data architecture", () => {
       join(__dirname, "../contexts/AuthContext.tsx"),
       "utf8",
     );
-    expect(auth).toContain("getProviderIdForUserId");
+    expect(auth).toContain("getProviderOwnershipForUserId");
     // upgradeToProvider and the claim flow both create the provider row
     // mid-session and flip accountType; without it as a dep a new provider
     // keeps the null they resolved to at login and gets offered Book on their

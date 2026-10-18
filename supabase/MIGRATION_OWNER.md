@@ -22,7 +22,7 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session cerviced-17 (e32b92), branch feat/link-only-provider, since 2026-10-17
 ```
 
 ### Applied 2026-10-18 (Beauty Maintenance)

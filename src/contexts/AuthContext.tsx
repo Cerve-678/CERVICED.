@@ -18,12 +18,13 @@ import {
   setAuthAutoRefresh,
   signOutCurrentSession,
   subscribeToAuthStateChanges,
-  getProviderIdForUserId,
+  getProviderOwnershipForUserId,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/withTimeout';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
+import type { ProviderBookingMode } from '../types/database';
 
 export type AccountType = 'user' | 'provider';
 
@@ -99,6 +100,11 @@ interface AuthContextType {
    *  'resolved' means ownership is unknown, and callers must withhold whatever
    *  an owner is never allowed to see rather than assume non-ownership. */
   myProviderIdStatus: OwnedProviderLookupStatus;
+  /** Who takes this account's bookings as a provider: 'external' for a
+   *  link-only professional (their own booking page), 'cerviced' otherwise,
+   *  null for an account with no provider hat. Resolved with myProviderId,
+   *  and from the sign-up answer before the providers row exists. */
+  myBookingMode: ProviderBookingMode | null;
   switchMode: () => Promise<void>;
   upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
@@ -172,20 +178,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [myProviderId, setMyProviderId] = useState<string | null>(null);
   const [myProviderIdStatus, setMyProviderIdStatus] =
     useState<OwnedProviderLookupStatus>('pending');
+  const [myBookingMode, setMyBookingMode] = useState<ProviderBookingMode | null>(null);
   useEffect(() => {
     // Logged out: nobody owns anything, and there's nothing to look up.
     // Settled immediately so a signed-out browser isn't made to wait.
     if (!user?.id) {
       setMyProviderId(null);
+      setMyBookingMode(null);
       setMyProviderIdStatus('resolved');
       return;
     }
     let cancelled = false;
     setMyProviderIdStatus('pending');
-    void getProviderIdForUserId(user.id)
-      .then((id) => {
+    void getProviderOwnershipForUserId(user.id)
+      .then(({ providerId, bookingMode }) => {
         if (cancelled) return;
-        setMyProviderId(id);
+        setMyProviderId(providerId);
+        setMyBookingMode(bookingMode);
         setMyProviderIdStatus('resolved');
       })
       .catch((error: unknown) => {
@@ -198,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.warn('[AuthContext] Could not resolve owned provider id:', error);
         if (cancelled) return;
         setMyProviderId(null);
+        setMyBookingMode(null);
         setMyProviderIdStatus('failed');
       });
     return () => {
@@ -792,13 +802,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus,
+    myProviderId, myProviderIdStatus, myBookingMode,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus,
+    myProviderId, myProviderIdStatus, myBookingMode,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,

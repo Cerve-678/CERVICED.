@@ -109,6 +109,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     website: provider.website ?? '',
     tiktok: provider.tiktok ?? '',
     externalBookingUrl: provider.external_booking_url ?? null,
+    isLinkOnly: provider.booking_mode === 'external' && !!provider.external_booking_url,
     yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
     specialties: provider.specialties?.map(specialty => specialty.specialty) ?? [],
     customServiceType: provider.custom_service_type ?? '',

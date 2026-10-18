@@ -32,6 +32,10 @@ import type {
   NotificationType,
   PublicReviewWithUser,
   PublicProviderSummary,
+  ProviderBookingMode,
+  ProviderStatKind,
+  DbProviderDailyStat,
+  DbClientExternalBooking,
   ReviewWithUser,
   DbReview,
   DbEventPlan,
@@ -538,7 +542,7 @@ async function ownProviderIdExclusion(): Promise<string> {
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
+  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -1130,6 +1134,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   preferred_contact_methods,
   whatsapp_number,
   external_booking_url,
+  booking_mode,
   rating,
   years_experience,
   is_verified,
@@ -6806,6 +6811,156 @@ export async function trackUserInteraction(interaction: {
 }
 
 // ─────────────────────────────────────────────────────────
+// PROVIDER PROFILE STATS — link-only Analytics counters
+// ─────────────────────────────────────────────────────────
+
+/** Count one event for each provider. Search passes its whole result page in
+ *  one call (≤200). The server skips providers that aren't live and the
+ *  caller's own profile, and does nothing for a signed-out caller. */
+export async function recordProviderStat(
+  providerIds: readonly string[],
+  kind: ProviderStatKind,
+): Promise<void> {
+  const ids = Array.from(new Set(providerIds.filter((id) => UUID_RE.test(id)))).slice(0, 200);
+  if (ids.length === 0) return;
+  const { error } = await supabase.rpc("record_provider_stat", {
+    p_provider_ids: ids,
+    p_kind: kind,
+  });
+  if (error) throw error;
+}
+
+/** The calling provider's own daily counters for the last `days` days. */
+export async function getMyProviderDailyStats(days: number): Promise<DbProviderDailyStat[]> {
+  const { data, error } = await supabase.rpc("get_my_provider_daily_stats", {
+    p_days: days,
+  });
+  if (error) throw error;
+  return (data ?? []) as DbProviderDailyStat[];
+}
+
+// ─────────────────────────────────────────────────────────
+// CLIENT EXTERNAL BOOKINGS — "Did you book?" entries
+// ─────────────────────────────────────────────────────────
+
+/** The public provider fields a booked-elsewhere card and its detail need. */
+const EXTERNAL_BOOKING_SELECT =
+  "id, client_id, provider_id, booking_date, start_time, service_label, created_at, " +
+  "provider:providers(id, slug, display_name, logo_url, location_text, business_type, external_booking_url, has_gone_live, is_active)";
+
+export type ClientExternalBookingWithProvider = DbClientExternalBooking & {
+  /** Null once the provider is no longer live — their row stops being
+   *  readable, but the client's own note of the booking stays theirs. */
+  provider: Pick<
+    DbProvider,
+    "id" | "slug" | "display_name" | "logo_url" | "location_text" | "business_type" | "external_booking_url"
+  > | null;
+};
+
+function mapExternalBookingRow(row: unknown): ClientExternalBookingWithProvider {
+  const r = row as DbClientExternalBooking & {
+    provider: (ClientExternalBookingWithProvider["provider"] & {
+      has_gone_live: boolean;
+      is_active: boolean;
+    }) | null;
+  };
+  // Client-facing: a provider that has gone offline is not shown, even
+  // though their row may still be readable.
+  const live = r.provider && r.provider.has_gone_live && r.provider.is_active;
+  const provider = live && r.provider
+    ? {
+        id: r.provider.id,
+        slug: r.provider.slug,
+        display_name: r.provider.display_name,
+        logo_url: r.provider.logo_url,
+        location_text: r.provider.location_text,
+        business_type: r.provider.business_type,
+        external_booking_url: r.provider.external_booking_url,
+      }
+    : null;
+  return {
+    id: r.id,
+    client_id: r.client_id,
+    provider_id: r.provider_id,
+    booking_date: r.booking_date,
+    start_time: r.start_time,
+    service_label: r.service_label,
+    created_at: r.created_at,
+    provider,
+  };
+}
+
+/** Every booked-elsewhere entry the signed-in client has added, soonest first.
+ *  Callers split upcoming from past. */
+export async function getMyExternalBookings(): Promise<ClientExternalBookingWithProvider[]> {
+  const { data: { user } } = await getSessionUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .select(EXTERNAL_BOOKING_SELECT)
+    .eq("client_id", user.id)
+    .order("booking_date", { ascending: true })
+    .order("start_time", { ascending: true })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []).map(mapExternalBookingRow);
+}
+
+export async function getMyExternalBooking(
+  id: string,
+): Promise<ClientExternalBookingWithProvider | null> {
+  if (!UUID_RE.test(id)) return null;
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .select(EXTERNAL_BOOKING_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapExternalBookingRow(data) : null;
+}
+
+/** Add a "Did you book?" entry. The DB only accepts it for a live link-only
+ *  provider, for the signed-in client. */
+export async function addMyExternalBooking(entry: {
+  providerId: string;
+  /** YYYY-MM-DD */
+  bookingDate: string;
+  /** HH:MM or HH:MM:SS */
+  startTime: string;
+  serviceLabel: string;
+}): Promise<ClientExternalBookingWithProvider> {
+  const { data: { user } } = await getSessionUser();
+  if (!user) throw new Error("Not authenticated");
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .insert({
+      client_id: user.id,
+      provider_id: entry.providerId,
+      booking_date: entry.bookingDate,
+      start_time: entry.startTime,
+      service_label: entry.serviceLabel.trim(),
+    })
+    .select(EXTERNAL_BOOKING_SELECT)
+    .single();
+  if (error) throw error;
+  return mapExternalBookingRow(data);
+}
+
+/** Remove one of the client's own entries. Throws if nothing was removed, so
+ *  an RLS miss can't look like success. */
+export async function removeMyExternalBooking(id: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("Booked-elsewhere entry not found or not yours to remove");
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // PROVIDER FOLLOWS
 // ─────────────────────────────────────────────────────────
 
@@ -8403,6 +8558,44 @@ export async function getProviderIdForUserId(
 
   if (error) throw error;
   return data?.id ?? null;
+}
+
+/** The provider profile this user owns, plus who takes its bookings.
+ *
+ *  Before a link-only professional's providers row exists (it's created on
+ *  their first profile save) the mode comes from their sign-up answer:
+ *  users.external_booking_url is only ever written by sign-up Step 1's
+ *  "I use my own booking link" switch. Once the row exists, its
+ *  booking_mode column is the only answer. No has_gone_live filter — the
+ *  user reading their own records. */
+export async function getProviderOwnershipForUserId(userId: string): Promise<{
+  providerId: string | null;
+  bookingMode: ProviderBookingMode | null;
+}> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id, booking_mode")
+    .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as { id: string; booking_mode: ProviderBookingMode } | null;
+  if (row) return { providerId: row.id, bookingMode: row.booking_mode };
+
+  const { data: userRow, error: userError } = await supabase
+    .from("users")
+    .select("role, external_booking_url")
+    .eq("id", userId)
+    .maybeSingle();
+  if (userError) throw userError;
+  const signup = userRow as { role: string | null; external_booking_url: string | null } | null;
+  if (signup?.role !== "provider") return { providerId: null, bookingMode: null };
+  return {
+    providerId: null,
+    bookingMode: signup.external_booking_url?.trim() ? "external" : "cerviced",
+  };
 }
 
 /** Fetch branding fields for the provider owned by the given user (Branding screen).

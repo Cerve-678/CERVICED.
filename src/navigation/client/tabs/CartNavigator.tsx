@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CartScreen from '../../../screens/client/CartScreen';
 import BookingDetailScreen from '../../../screens/client/BookingDetailScreen';
+import ExternalBookingDetailScreen from '../../../screens/client/ExternalBookingDetailScreen';
 import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
@@ -82,6 +83,11 @@ export default function CartNavigator() {
       <CartStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
+        options={{ headerShown: true, presentation: 'card' }}
+      />
+      <CartStack.Screen
+        name="ExternalBookingDetail"
+        component={ExternalBookingDetailScreen}
         options={{ headerShown: true, presentation: 'card' }}
       />
 

@@ -60,6 +60,12 @@
       ],
       "expo-secure-store",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "CERVICED reads your calendar to show your appointments on your Home screen, and adds bookings to it when you ask."
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow CERVICED to use Face ID for faster sign-in."

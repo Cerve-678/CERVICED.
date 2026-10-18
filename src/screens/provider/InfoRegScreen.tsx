@@ -53,6 +53,7 @@ import { useAppDialog } from '../../components/AppDialog';
 // Supabase registration service
 import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
+import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
@@ -85,6 +86,7 @@ import { createServiceDraft } from '../../features/provider-registration/service
 import { InfoRegPager } from '../../features/provider-registration/InfoRegPager';
 import {
   INFO_REG_SECTIONS as EDITOR_SECTIONS,
+  LINK_ONLY_INFO_REG_SECTIONS as LINK_ONLY_EDITOR_SECTIONS,
   infoRegSectionIndex,
   type InfoRegSectionKey as EditorSectionKey,
 } from '../../features/provider-registration/infoRegSections';
@@ -2704,7 +2706,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // stay pale enough for dark status-bar content to read fine on top.
   const statusBarStyle = 'dark-content' as const;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
+  // Link-only providers (own booking page) only fill in Identity, About &
+  // Portfolio and Contact here. Mode comes from the providers row once it
+  // exists and from the sign-up answer before that — see AuthContext.
+  const isLinkOnly = myBookingMode === 'external';
   // Themed (not native Alert) specifically for the "this will pause your
   // account" warning on deleting the last service — everything else on this
   // screen still uses Alert.alert, left as-is.
@@ -3537,13 +3543,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Missing Information', 'Please enter your location.');
       return;
     }
-    if (!providerData.businessType) {
-      Alert.alert('Missing Information', 'Please choose your business type — it decides whether clients come to you or you travel to them, and which address-sharing options you get.');
-      return;
-    }
-    if (!providerData.fullAddress.trim()) {
-      Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
-      return;
+    // Business type and the private address drive CERVICED's own booking
+    // flow (who travels, when the address is released). A link-only
+    // provider's bookings happen on their own page, so neither is asked —
+    // but their booking link is, since it's the only way clients book them.
+    if (isLinkOnly) {
+      if (!normalizeExternalBookingUrl(providerData.externalBookingUrl)) {
+        Alert.alert('Missing Information', 'Please add your booking link — it\'s where clients go when they tap Book.');
+        return;
+      }
+    } else {
+      if (!providerData.businessType) {
+        Alert.alert('Missing Information', 'Please choose your business type — it decides whether clients come to you or you travel to them, and which address-sharing options you get.');
+        return;
+      }
+      if (!providerData.fullAddress.trim()) {
+        Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
+        return;
+      }
     }
     if (!user?.id) {
       Alert.alert('Not Logged In', 'Please log in to save your profile.');
@@ -3558,7 +3575,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     setIsSubmitting(true);
     try {
-      await saveProviderToSupabase(user.id, providerData, !isEditMode && termsAccepted);
+      await saveProviderToSupabase(
+        user.id,
+        {
+          ...providerData,
+          externalBookingUrl: isLinkOnly
+            ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
+            : providerData.externalBookingUrl,
+          bookingMode: isLinkOnly ? 'external' : 'cerviced',
+        },
+        !isEditMode && termsAccepted,
+      );
       // Only round-trip booking_policies if it actually loaded successfully —
       // writing the in-memory `policies` back while it's still stuck at
       // DEFAULT_POLICIES (a failed load) would silently wipe out whatever a
@@ -3585,7 +3612,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, policiesLoaded, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted]);
+  }, [providerData, user, policies, policiesLoaded, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
 
   // The pager owns swipe tracking; this callback is the single imperative
   // entry point used by timeline tabs, Next buttons and validation shortcuts.
@@ -3706,7 +3733,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         providerData.providerService === 'OTHER'
           ? filled(providerData.customServiceType)
           : filled(providerData.providerService);
-      return [
+      const summaries: {
+        section: EditorSectionKey;
+        title: string;
+        rows: { label: string; value: string; required?: boolean }[];
+      }[] = [
         {
           section: 'identity',
           title: 'Business identity',
@@ -3737,6 +3768,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             { label: 'Instagram', value: filled(providerData.instagram) },
             { label: 'Website', value: filled(providerData.website) },
             { label: 'TikTok', value: filled(providerData.tiktok) },
+            ...(isLinkOnly
+              ? [{ label: 'Booking link', value: filled(providerData.externalBookingUrl), required: true }]
+              : []),
           ],
         },
         {
@@ -3771,8 +3805,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           ],
         },
       ];
+      // Services and Address Confirmation aren't pages for a link-only
+      // provider, so nothing on them can be "still needed".
+      return isLinkOnly
+        ? summaries.filter(g => g.section !== 'services' && g.section !== 'policies')
+        : summaries;
     },
-    [providerData, workPhotos.length, serviceCount, categoryNames.length],
+    [providerData, workPhotos.length, serviceCount, categoryNames.length, isLinkOnly],
   );
 
   // Only genuinely-required, genuinely-empty fields — this is what the roll-up
@@ -3992,6 +4031,57 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     );
   }
 
+  // The closing note and the CERVICED terms row — the last thing before
+  // Publish. It ends whichever page is last: Address for a CERVICED provider,
+  // Contact for a link-only one (who has no Services or Address pages).
+  const documentEnd = (
+    <View style={styles.docEnd}>
+      <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
+      <Text style={styles.reviewFootnote}>
+        Publishing saves your profile and policies. You can come back and
+        change any of this at any time.
+      </Text>
+
+      {/* alignSelf:'stretch' is load-bearing. docEnd is
+          alignItems:'center', so without it this box sizes to its
+          content — and termsRowText's flex:1 inside an
+          unconstrained row collapses the label to zero width. The
+          checkbox rendered, the words didn't. */}
+      <View style={[styles.termsBox, { marginTop: 16, alignSelf: 'stretch' }]}>
+        <TouchableOpacity
+          style={styles.termsRow}
+          activeOpacity={0.75}
+          onPress={() => { tapSelect(); setTermsAccepted(prev => !prev); }}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: termsAccepted }}
+        >
+          <View
+            style={[
+              styles.termsCheckbox,
+              termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+            ]}
+          >
+            {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
+          </View>
+          <Text style={styles.termsRowText}>
+            I agree to the{' '}
+            {/* Its own onPress so tapping the words opens the terms
+                instead of toggling the box underneath. */}
+            <Text
+              style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
+              onPress={() => { tapSelect(); setShowTermsModal(true); }}
+            >
+              CERVICED Terms &amp; Conditions
+            </Text>
+            {providerData.termsAcceptedAt
+              ? ` — agreed ${formatLongDate(providerData.termsAcceptedAt)}`
+              : ''}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <InfoRegChromeContext.Provider value={chromeTheme}>
     <SafeAreaProvider>
@@ -4139,7 +4229,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
           <InfoRegPager
             ref={pagerRef}
-            sections={EDITOR_SECTIONS}
+            sections={isLinkOnly ? LINK_ONLY_EDITOR_SECTIONS : EDITOR_SECTIONS}
             activeIndex={activePage}
             pageWidth={screenWidth}
             scrollEnabled={!draggingCategory && !serviceDrag.draggingKey}
@@ -4653,11 +4743,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
+              {/* Only a link-only provider books through a link. A CERVICED
+                  provider takes bookings in-app, so a link here would be a
+                  setting nothing reads. */}
+              {isLinkOnly && (
               <View
                 style={styles.inputGroup}
                 ref={registerField('externalBookingUrl')}
               >
-                <Text style={styles.inputLabel}>External Booking Link (optional)</Text>
+                <Text style={styles.inputLabel}>Your booking link</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -4672,9 +4766,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   />
                 </View>
                 <Text style={styles.inputHint}>
-                  Already booking through Fresha, Treatwell, Acuity, or similar? Paste the link and clients will book directly there — Cerviced's in-app booking is skipped for your profile.
+                  Your Fresha, Treatwell, Acuity or similar page. When clients tap Book, it opens inside CERVICED.
                 </Text>
               </View>
+              )}
 
               {/* Years of Experience moved to Business Profile → Business
                   Details → Business Info — it's an ongoing business fact a
@@ -4683,17 +4778,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   screen untouched (hero preview reads it) so an existing
                   value is never lost by editing/saving here. */}
 
-              <TouchableOpacity
-                style={styles.docNextButton}
-                onPress={() => {
-                  tapSelect();
-                  goToSection('services');
-                }}
-                activeOpacity={0.55}
-              >
-                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Services</Text>
-                <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
-              </TouchableOpacity>
+              {isLinkOnly ? documentEnd : (
+                <TouchableOpacity
+                  style={styles.docNextButton}
+                  onPress={() => {
+                    tapSelect();
+                    goToSection('services');
+                  }}
+                  activeOpacity={0.55}
+                >
+                  <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Services</Text>
+                  <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
+                </TouchableOpacity>
+              )}
 
             </View>
               </View>
@@ -4701,6 +4798,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
             </View>
 
+            {/* ── 04 · Services ── and ── 05 · Policies ── CERVICED-booking
+                setup only; a link-only provider takes bookings on their own
+                page, so neither page exists for them. */}
+            {!isLinkOnly && (<>
             {/* ── 04 · Services ── */}
             <View style={{ width: screenWidth }}>
               {mountedPages.has(3) && (
@@ -5388,57 +5489,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   briefly drawn checked-but-disabled off isEditMode, which
                   meant the underlying value was still false and the first tap
                   did nothing visible. */}
-              <View style={styles.docEnd}>
-                <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
-                <Text style={styles.reviewFootnote}>
-                  Publishing saves your profile and policies. You can come back and
-                  change any of this at any time.
-                </Text>
-
-                {/* alignSelf:'stretch' is load-bearing. docEnd is
-                    alignItems:'center', so without it this box sizes to its
-                    content — and termsRowText's flex:1 inside an
-                    unconstrained row collapses the label to zero width. The
-                    checkbox rendered, the words didn't. */}
-                <View style={[styles.termsBox, { marginTop: 16, alignSelf: 'stretch' }]}>
-                  <TouchableOpacity
-                    style={styles.termsRow}
-                    activeOpacity={0.75}
-                    onPress={() => { tapSelect(); setTermsAccepted(prev => !prev); }}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: termsAccepted }}
-                  >
-                    <View
-                      style={[
-                        styles.termsCheckbox,
-                        termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
-                      ]}
-                    >
-                      {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
-                    </View>
-                    <Text style={styles.termsRowText}>
-                      I agree to the{' '}
-                      {/* Its own onPress so tapping the words opens the terms
-                          instead of toggling the box underneath. */}
-                      <Text
-                        style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-                        onPress={() => { tapSelect(); setShowTermsModal(true); }}
-                      >
-                        CERVICED Terms &amp; Conditions
-                      </Text>
-                      {providerData.termsAcceptedAt
-                        ? ` — agreed ${formatLongDate(providerData.termsAcceptedAt)}`
-                        : ''}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              {documentEnd}
             </View>
 
               </View>
               </ScrollView>
               )}
             </View>
+            </>)}
           </InfoRegPager>
 
           {/* Publish — the document's single commit action, and the only

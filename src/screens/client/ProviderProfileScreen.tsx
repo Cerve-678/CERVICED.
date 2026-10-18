@@ -72,7 +72,12 @@ import {
   leaveWaitlist,
   type WaitlistEntry,
   setProviderFollowNotify,
+  recordProviderStat,
+  addMyExternalBooking,
 } from "../../services/databaseService";
+import type { ProviderStatKind } from "../../types/database";
+import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
+import { toUserMessage } from "../../utils/userFacingError";
 import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
@@ -93,7 +98,7 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasPro
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
-import { openExternalBookingPage } from "../../features/providers/externalBookingLink";
+import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 import {
   ProviderAdditionalInfoSection,
@@ -1384,6 +1389,30 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   const canSaveProvider = viewerChecked && canBookProvider && providerDbId !== null;
 
+  // Link-only provider (booking_mode 'external'): Book opens their own page,
+  // and there's no price list, rating or reviews on this profile.
+  const isLinkOnly = provider?.isLinkOnly ?? false;
+  const [didYouBookVisible, setDidYouBookVisible] = useState(false);
+
+  // Counters behind a link-only provider's Analytics. Never for the owner
+  // looking at their own profile; a failed count is logged, never shown.
+  const recordStat = useCallback(
+    (kind: ProviderStatKind) => {
+      if (!providerDbId || isOwnProvider || !isLinkOnly) return;
+      recordProviderStat([providerDbId], kind).catch((error: unknown) => {
+        logger.warn(`[ProviderProfile] couldn't record ${kind}`, error);
+      });
+    },
+    [providerDbId, isOwnProvider, isLinkOnly],
+  );
+  const profileViewRecordedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLinkOnly || !viewerChecked || isOwnProvider || !providerDbId) return;
+    if (profileViewRecordedFor.current === providerDbId) return;
+    profileViewRecordedFor.current = providerDbId;
+    recordStat("profile_view");
+  }, [isLinkOnly, viewerChecked, isOwnProvider, providerDbId, recordStat]);
+
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
@@ -2551,6 +2580,61 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   /// UPDATED ProviderProfile Cart Handlers - Replace these functions in your ProviderProfileScreen
 
   // ===== UPDATED CART HANDLERS FOR COMPATIBILITY =====
+  // Every Book on a link-only profile lands here. When the client comes back
+  // from their page we ask whether they booked, so the booking can sit in
+  // their Upcoming list. Not asked of the owner previewing their own link, or
+  // of a signed-out browser (there's nowhere to save the answer).
+  const openLinkOnlyBooking = useCallback(() => {
+    const url = provider?.externalBookingUrl;
+    if (!url) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    recordStat("book_tap");
+    openExternalBookingPage(url)
+      .then(waitUntilBackFromBrowser)
+      .then(() => {
+        if (!canSaveProvider) return;
+        // Let the browser sheet finish dismissing — iOS drops a modal
+        // presented in the same tick another is closing.
+        setTimeout(() => setDidYouBookVisible(true), 400);
+      })
+      .catch((error: unknown) => {
+        logger.error('[ProviderProfile] external booking link failed to open', error);
+        Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
+      });
+  }, [provider?.externalBookingUrl, recordStat, canSaveProvider]);
+
+  const handleDidYouBookSubmit = useCallback(
+    async (result: DidYouBookResult) => {
+      if (!providerDbId) return;
+      try {
+        await addMyExternalBooking({ providerId: providerDbId, ...result });
+      } catch (error) {
+        showAlert(
+          "Couldn't add it",
+          toUserMessage(error, "Please try again in a moment.", "ProviderProfile.addExternalBooking"),
+        );
+        throw error;
+      }
+      setDidYouBookVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      const canOpenBookings = navigation.getState?.()?.routeNames?.includes("Bookings") ?? false;
+      // The sheet is a native modal; wait for it to close before the dialog.
+      setTimeout(() => {
+        showConfirm(
+          "Added to your bookings",
+          "You'll find it in your Upcoming bookings. Anything about it — changing or cancelling — goes through them.",
+          canOpenBookings
+            ? [
+                { text: "Done", style: "cancel" },
+                { text: "View bookings", onPress: () => navigation.navigate("Bookings" as never) },
+              ]
+            : [{ text: "Done", style: "cancel" }],
+        );
+      }, 400);
+    },
+    [providerDbId, showAlert, showConfirm, navigation],
+  );
+
   const handleQuickBook = useCallback(
     async (service: ServiceData, promo?: ClientPromotion) => {
       logger.log("Quick Book - Redirecting to checkout:", service.name);
@@ -2568,12 +2652,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // Cerviced's in-app booking — hand off to their own booking page
       // instead of adding to cart. See tryOpenExternalBooking below, which
       // handleBook uses for the same check on the non-Quick-Book path.
-      if (provider.externalBookingUrl) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        openExternalBookingPage(provider.externalBookingUrl).catch((error) => {
-          logger.error('[ProviderProfile] external booking link failed to open', error);
-          Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
-        });
+      if (provider.isLinkOnly) {
+        openLinkOnlyBooking();
         return;
       }
 
@@ -2679,6 +2759,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       navigation,
       isOwnProvider,
       showAlert,
+      openLinkOnlyBooking,
     ],
   );
 
@@ -2688,15 +2769,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // instead of opening the cart/BookingSheet. Returns true if it handled the
   // tap (caller should stop), false if the caller should proceed in-app.
   const tryOpenExternalBooking = useCallback((): boolean => {
-    const url = provider?.externalBookingUrl;
-    if (!url) return false;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    openExternalBookingPage(url).catch((error) => {
-      logger.error('[ProviderProfile] external booking link failed to open', error);
-      Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
-    });
+    if (!provider?.isLinkOnly) return false;
+    openLinkOnlyBooking();
     return true;
-  }, [provider]);
+  }, [provider?.isLinkOnly, openLinkOnlyBooking]);
 
   // Offers "Book Now" — when the offer's eligibility narrows to exactly one
   // service, skip straight to checkout via the same flow as Quick Book.
@@ -3043,7 +3119,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // Never auto-fire for external-booking providers — handleBook would
     // silently open their booking page the moment this screen mounts, before
     // the client has even seen the profile. Let them tap Book themselves.
-    if (!targetId || !provider || provider.externalBookingUrl) return;
+    if (!targetId || !provider || provider.isLinkOnly) return;
     // Wait for the owner check before auto-opening anything (see viewerChecked).
     if (!viewerChecked) return;
     const allServices = Object.values(provider.categories).flat();
@@ -3486,7 +3562,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           — with the "Select" entry point hidden, select mode can never be
           entered, so the floating bar and MultiBookingSheet below never show
           either. Single-service "Book" is unaffected. See FUTURE_LOGIC.md. */}
-      {canBookProvider && MULTI_SERVICE_BOOKING_ENABLED && !provider.externalBookingUrl && (
+      {canBookProvider && MULTI_SERVICE_BOOKING_ENABLED && !provider.isLinkOnly && (
         <TouchableOpacity
           onPress={toggleSelectMode}
           activeOpacity={0.6}
@@ -4066,6 +4142,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           tokens={{ text: OP.text, sub: OP.sub, border: OP.border, surface: OP.surface, bg: OP.bg }}
           onDone={handleAddOnPickerDone}
         />
+
+        {isLinkOnly && (
+          <DidYouBookSheet
+            visible={didYouBookVisible}
+            providerName={provider.displayName}
+            logoUrl={provider.providerLogo?.uri ?? null}
+            services={provider.specialties}
+            accentColor={adaptiveAccentColor}
+            tokens={{ text: OP.text, sub: OP.sub, border: OP.border, surface: OP.surface, bg: OP.bg }}
+            onSubmit={handleDidYouBookSubmit}
+            onClose={() => setDidYouBookVisible(false)}
+          />
+        )}
 
         {/* App-styled confirm dialog (leave-with-selection prompt, etc.) —
             not the OS Alert. */}
@@ -4864,7 +4953,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   ) : null}
                 </View>
 
-                {/* Rating inline */}
+                {/* Rating inline — not for a link-only provider: their
+                    bookings happen elsewhere, so there are no CERVICED
+                    reviews to rate them from. */}
+                {!isLinkOnly && (
                 <View style={styles.ratingRow}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <StarIcon key={star} size={12} color="#FFD700" />
@@ -4879,6 +4971,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     {provider.rating}
                   </Text>
                 </View>
+                )}
 
                 {/* Years experience (optional) */}
                 {provider.yearsExperience ? (
@@ -4910,6 +5003,78 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   // and whether the answer is available yet; see its comment
                   // for why a provider with a release day never waits on the
                   // availability fetch.
+                  if (isLinkOnly) {
+                    // In place of the availability pill: Book (their own
+                    // page, opened inside CERVICED) with their socials and
+                    // messaging beside it in the accent colour.
+                    const onAccentHero = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1B2740";
+                    const socialButton = (
+                      key: string,
+                      icon: keyof typeof Ionicons.glyphMap,
+                      label: string,
+                      onPress: () => void,
+                    ) => (
+                      <TouchableOpacity
+                        key={key}
+                        style={[styles.linkOnlySocialButton, { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+                        activeOpacity={0.8}
+                        accessibilityLabel={label}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name={icon} size={20} color={onAccentHero} />
+                      </TouchableOpacity>
+                    );
+                    return (
+                      <View style={styles.linkOnlyBookBlock}>
+                        {provider.specialties.length > 0 && (
+                          <View style={styles.linkOnlyChips}>
+                            {provider.specialties.slice(0, 6).map((specialty) => (
+                              <View
+                                key={specialty}
+                                style={[styles.linkOnlyChip, { backgroundColor: cardBg, borderColor: OP.border }]}
+                              >
+                                <Text style={[styles.linkOnlyChipText, { color: OP.text }]}>{specialty}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                        <View style={styles.linkOnlyBookRow}>
+                          <TouchableOpacity
+                            style={[styles.linkOnlyBookButton, { backgroundColor: OP.card, borderColor: OP.border }]}
+                            onPress={openLinkOnlyBooking}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Book with ${provider.displayName} on their booking page`}
+                          >
+                            <Text style={[styles.linkOnlyBookText, { color: OP.text }]}>BOOK</Text>
+                            <Ionicons name="open-outline" size={15} color={OP.text} />
+                          </TouchableOpacity>
+                          {provider.instagram
+                            ? socialButton("instagram", "logo-instagram", `Open @${provider.instagram} on Instagram`, () => {
+                                recordStat("instagram_tap");
+                                Linking.openURL(`https://instagram.com/${provider.instagram}`).catch(() => {
+                                  Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
+                                });
+                              })
+                            : null}
+                          {provider.tiktok
+                            ? socialButton("tiktok", "logo-tiktok", `Open @${provider.tiktok} on TikTok`, () => {
+                                Linking.openURL(`https://www.tiktok.com/@${provider.tiktok.replace(/^@/, "")}`).catch(() => {
+                                  Alert.alert("Couldn't open TikTok", "Please try again in a moment.");
+                                });
+                              })
+                            : null}
+                          {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
+                        </View>
+                        <Text
+                          style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
+                        >
+                          Books on their own page — opens inside CERVICED
+                        </Text>
+                      </View>
+                    );
+                  }
                   const row = resolveSlotsRow({
                     scheduleReleaseDay: provider.scheduleReleaseDay,
                     availability,
@@ -5214,13 +5379,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </BlurView>
               </View>
 
+              {!isLinkOnly && (
               <ProviderSpecialtiesSection
                 specialties={provider.specialties}
                 textColor={OP.text}
                 accent={adaptiveAccentColor}
               />
+              )}
 
-              {/* Services Section */}
+              {/* Services Section — the price list. A link-only provider's
+                  prices live on their own booking page. */}
+              {!isLinkOnly && (
               <View
                 style={styles.servicesSection}
                 ref={servicesSectionRef}
@@ -5235,13 +5404,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   setShowAllServicesModal(true);
                 })}
               </View>
+              )}
 
+              {!isLinkOnly && (
               <ProviderReviewPreviewSection
                 reviews={reviews}
                 loading={reviewsLoading}
                 palette={sectionPalette}
                 onSeeAll={handleOpenReviews}
               />
+              )}
 
               <ProviderContactSection
                 contact={contactDetails}
@@ -5534,6 +5706,61 @@ const styles = StyleSheet.create({
   // The same container as the availability pill beside it — same blurred
   // surface, same border, same 20pt corners, same height (from the row's
   // "stretch") — not a round button sitting next to one.
+  linkOnlyBookBlock: {
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 4,
+  },
+  linkOnlyChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 6,
+    maxWidth: 340,
+  },
+  linkOnlyChip: {
+    height: 28,
+    paddingHorizontal: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: "center",
+  },
+  linkOnlyChipText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  linkOnlyBookRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  linkOnlyBookButton: {
+    height: 46,
+    paddingHorizontal: 22,
+    borderRadius: 23,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  linkOnlyBookText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 15,
+    letterSpacing: 1,
+  },
+  linkOnlySocialButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  linkOnlyCaption: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   instagramButtonOutside: {
     borderRadius: 20,
   },

@@ -23,6 +23,9 @@ export const STORAGE_KEYS = {
   CART_ITEMS:          '@cerviced_cart',
   /** Set once the Welcome screen's full intro animation has played on this device */
   WELCOME_INTRO_SEEN:  '@cerviced_welcome_intro_seen',
+  /** Device calendar ids a link-only provider chose to show as their diary on
+   *  Home. Device-only on purpose: the events never leave the phone. */
+  DIARY_CALENDAR_IDS:  '@cerviced_diary_calendar_ids',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];

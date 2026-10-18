@@ -48,6 +48,7 @@ export type HomeStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   BookmarkedProviders: undefined;
   Notifications: undefined;
@@ -94,6 +95,7 @@ export type BeccaStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   CartMain: undefined;
@@ -156,6 +158,7 @@ export type CartStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   Notifications: undefined;
@@ -202,6 +205,7 @@ export type ProfileStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   BookmarkedProviders: undefined;
   Notifications: undefined;

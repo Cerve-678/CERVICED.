@@ -42,6 +42,7 @@ import {
   updateMyServiceCategory,
 } from '../../services/databaseService';
 import { useAppDialog } from '../../components/AppDialog';
+import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import {
   Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
@@ -62,7 +63,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
-  const { updateUser } = useAuth();
+  const { updateUser, myBookingMode } = useAuth();
+  // Only a link-only provider books through their link; for everyone else the
+  // field would be a setting nothing reads, so it isn't offered or written.
+  const isLinkOnly = myBookingMode === 'external';
 
   const [userId, setUserId]         = useState<string | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -189,6 +193,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const pendingCategoryLabel =
     SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '';
 
+  const normalizedBookingUrl = normalizeExternalBookingUrl(externalBookingUrl);
+
   function isValidEmail(email: string) {
     return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
@@ -204,6 +210,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
     if (!businessName.trim()) { flash('Enter your business name', 'error'); return; }
     if (!isValidEmail(businessEmail)) { flash('Enter a valid business email', 'error'); return; }
     if (!isValidEmail(bookingEmail))  { flash('Enter a valid public enquiry email', 'error'); return; }
+    if (isLinkOnly && !normalizedBookingUrl) { flash('Enter your booking link', 'error'); return; }
     // Only when the picker is actually on screen. A provider whose saved
     // type is OTHER with no label (possible for older rows) would otherwise be
     // blocked from saving anything at all on this screen, by a validation
@@ -281,7 +288,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           email: bookingEmail.trim() || null,
           instagram: instagram.trim() || null,
           website: website.trim() || null,
-          external_booking_url: externalBookingUrl.trim() || null,
+          ...(isLinkOnly ? { external_booking_url: normalizedBookingUrl } : {}),
           years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
         }));
       }
@@ -497,15 +504,17 @@ export default function BusinessInfoScreen({ navigation }: any) {
               )}
             </Card>
 
-            <Card title="External Booking Link" sub="Already booking through Fresha, Treatwell, Acuity, or similar?">
-              <Field
-                label="Booking Link"
-                value={externalBookingUrl}
-                onChange={setExternalBookingUrl}
-                placeholder="e.g. your Fresha or Acuity booking page"
-                note="When set, clients tap Book and go straight to this link — Cerviced's in-app booking is skipped for your profile. Leave blank to keep booking in-app."
-              />
-            </Card>
+            {isLinkOnly && (
+              <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">
+                <Field
+                  label="Booking Link"
+                  value={externalBookingUrl}
+                  onChange={setExternalBookingUrl}
+                  placeholder="e.g. your Fresha or Acuity booking page"
+                  note="When clients tap Book on your profile, this page opens inside CERVICED."
+                />
+              </Card>
+            )}
 
             {/* A provider's own client-facing Terms & Conditions are authored
                 as a FORM (booking_intake_forms, is_terms) via the

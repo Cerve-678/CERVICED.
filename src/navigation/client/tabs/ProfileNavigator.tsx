@@ -19,6 +19,7 @@ import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
 import PointsScreen from '../../../screens/client/PointsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
 import BookingDetailScreen from '../../../screens/client/BookingDetailScreen';
+import ExternalBookingDetailScreen from '../../../screens/client/ExternalBookingDetailScreen';
 import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvidersScreen';
@@ -170,6 +171,11 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
+        options={{ headerShown: true, presentation: 'card' }}
+      />
+      <ProfileStack.Screen
+        name="ExternalBookingDetail"
+        component={ExternalBookingDetailScreen}
         options={{ headerShown: true, presentation: 'card' }}
       />
 
