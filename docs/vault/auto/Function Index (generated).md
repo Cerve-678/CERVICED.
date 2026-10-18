@@ -5,7 +5,7 @@
 
 #generated
 
-**2331 functions** across **321 files**.
+**2334 functions** across **321 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -201,7 +201,7 @@
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo
 - `NotificationsSettingsScreen.tsx` — load · NotificationsSettingsScreen · persist · retrySave · toggle · ToggleRow
 - `OffersScreen.tsx` — allOffers · expDate · filteredOffers · goToProvider · handleRefresh · load · mapPromotion · OffersScreen
-- `PaymentMethodsScreen.tsx` — addCard · CheckoutExplainer · haptic · load · openCard · PaymentMethodsScreen · remove · SavedCardsSection · StripeNote
+- `PaymentMethodsScreen.tsx` — addCard · CardFan · CheckoutExplainer · FanCard · haptic · load · next · openCard · PaymentMethodsScreen · remove · SavedCardsSection · StripeNote
 - `PointsScreen.tsx` — load · PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage

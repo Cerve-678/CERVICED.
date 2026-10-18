@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
   Platform,
   ScrollView,
   StatusBar,
@@ -39,6 +41,32 @@ const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
 const WALLET_NAME = Platform.OS === 'ios' ? 'Apple Pay' : 'Google Pay';
 
 const haptic = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
+
+// The fan at the top: up to three saved cards, fanned out. Purely a picture of
+// what's saved — the list below is where a card is acted on. Each card gets its
+// own face colour so they're easy to tell apart; dark mode swaps the plum front
+// for the blue-grey accent, matching clientDarkTheme.
+const FAN_MAX = 3;
+const FAN_FACES = {
+  light: [
+    { bg: '#3F1E36', fg: '#FFFFFF' },
+    { bg: '#4A6B8F', fg: '#FFFFFF' },
+    { bg: '#D9C6CC', fg: '#3F1E36' },
+  ],
+  dark: [
+    { bg: '#E5ECF4', fg: '#1B2740' },
+    { bg: '#4A6B8F', fg: '#FFFFFF' },
+    { bg: '#6B3A5D', fg: '#FFFFFF' },
+  ],
+} as const;
+// Slot 0 is the front card (centred, upright); 1 leans right, 2 leans left.
+const FAN_SLOTS = [
+  { x: 0, rotate: 0, z: 3 },
+  { x: 26, rotate: 8, z: 2 },
+  { x: -26, rotate: -9, z: 1 },
+] as const;
+const FAN_CARD_WIDTH = Math.min(290, Dimensions.get('window').width - 48 - 56);
+const FAN_CARD_HEIGHT = Math.round(FAN_CARD_WIDTH * 0.6);
 
 export default function PaymentMethodsScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
@@ -194,6 +222,8 @@ function SavedCardsSection() {
           : 'Save a card once and checkout becomes one tap.'}
       </Text>
 
+      {!!cards?.length && <CardFan cards={cards.slice(0, FAN_MAX)} />}
+
       <Text style={[styles.sectionLabel, { color: P.sub }]}>
         {cards?.length ? 'SAVED CARDS' : 'CARDS'}
       </Text>
@@ -286,6 +316,92 @@ function SavedCardsSection() {
   );
 }
 
+function CardFan({ cards }: { cards: SavedCard[] }) {
+  const { isDarkMode, palette: P } = useTheme();
+  const [front, setFront] = useState(0);
+  const faces = isDarkMode ? FAN_FACES.dark : FAN_FACES.light;
+  const n = cards.length;
+
+  // A removed card can leave `front` past the end.
+  useEffect(() => { if (front >= n) setFront(0); }, [front, n]);
+
+  const next = useCallback(() => {
+    if (n < 2) return;
+    haptic();
+    setFront(f => (f + 1) % n);
+  }, [n]);
+
+  return (
+    <View style={styles.fanWrap}>
+      <View style={[styles.fan, { width: FAN_CARD_WIDTH, height: FAN_CARD_HEIGHT }]}>
+        {cards.map((card, i) => (
+          <FanCard
+            key={card.id}
+            card={card}
+            face={faces[i % faces.length]!}
+            slot={FAN_SLOTS[(i - front + n) % n]!}
+            onPress={next}
+          />
+        ))}
+      </View>
+      {n > 1 && (
+        <Text style={[styles.fanHint, { color: P.sub }]}>Tap the front card to see the next</Text>
+      )}
+    </View>
+  );
+}
+
+function FanCard({ card, face, slot, onPress }: {
+  card: SavedCard;
+  face: { bg: string; fg: string };
+  slot: { x: number; rotate: number; z: number };
+  onPress: () => void;
+}) {
+  const x = useRef(new Animated.Value(slot.x)).current;
+  const rotate = useRef(new Animated.Value(slot.rotate)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(x, { toValue: slot.x, useNativeDriver: true, friction: 7 }),
+      Animated.spring(rotate, { toValue: slot.rotate, useNativeDriver: true, friction: 7 }),
+    ]).start();
+  }, [slot.x, slot.rotate, x, rotate]);
+
+  const rotateDeg = rotate.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] });
+  const isFront = slot.z === FAN_SLOTS[0].z;
+
+  return (
+    <Animated.View
+      style={[
+        styles.fanCard,
+        {
+          width: FAN_CARD_WIDTH,
+          height: FAN_CARD_HEIGHT,
+          backgroundColor: face.bg,
+          zIndex: slot.z,
+          elevation: slot.z,
+          transform: [{ translateX: x }, { rotate: rotateDeg }],
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.fanCardInner}
+        onPress={onPress}
+        activeOpacity={0.9}
+        disabled={!isFront}
+        accessibilityLabel={`${savedCardBrandName(card.brand)} ending ${card.last4}, ${savedCardExpiryLabel(card)}`}
+        accessibilityHint={isFront ? 'Shows the next saved card' : undefined}
+      >
+        <Text style={[styles.fanBrand, { color: face.fg }]}>{savedCardBrandName(card.brand)}</Text>
+        <View>
+          <Text style={[styles.fanNumber, { color: face.fg }]}>•••• {card.last4}</Text>
+          <Text style={[styles.fanExpiry, { color: face.fg }]}>{savedCardExpiryLabel(card)}</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   scroll: { paddingHorizontal: 24 },
@@ -357,4 +473,22 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
   },
   infoText: { fontSize: 12, flex: 1, lineHeight: 18 },
+  fanWrap: { alignItems: 'center', marginBottom: 24 },
+  fan: { marginTop: 14, marginBottom: 6 },
+  fanCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#17151A',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  fanCardInner: { flex: 1, padding: 20, justifyContent: 'space-between' },
+  fanBrand: { alignSelf: 'flex-end', fontFamily: 'BakbakOne-Regular', fontSize: 17, letterSpacing: 1 },
+  fanNumber: { fontSize: 20, fontWeight: '700', letterSpacing: 3, marginBottom: 6 },
+  fanExpiry: { fontSize: 12, fontWeight: '600', opacity: 0.85 },
+  fanHint: { fontSize: 12, fontWeight: '600', marginTop: 16 },
 });
