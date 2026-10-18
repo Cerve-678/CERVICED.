@@ -22,8 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  session e283bace, 2026-10-18 — 20261018180000_beauty_maintenance (renumbered from 20261010120000, re-verified; awaiting SQL-editor paste)
+OWNER:  (none)
 ```
+
+### Applied 2026-10-18 (Beauty Maintenance)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018180000 | `beauty_maintenance` | **Applied 2026-10-18** by the user pasting it into the SQL editor; version recorded in `schema_migrations` by hand afterwards. Renumbered from 20261010120000, which sat below the frontier. Post-apply verified: maintenance_items / maintenance_settings / maintenance_service_types (15 rows), RLS on, both triggers, the `client-maintenance-reminders` cron job, notifications_type_check keeping the fee, refund-request and maintenance types, and process_rebooking_nudges reading maintenance_items. Frontier before apply: `20261018165847`. Next in queue: cerviced-c3's `20261018190000` (refund payout protection). |
 
 ### Applied 2026-10-18 (late and no-show fees)
 
