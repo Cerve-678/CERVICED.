@@ -58,7 +58,6 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
   }, [navigation, P]);
 
   const load = useCallback(() => {
-    setState('loading');
     getMyExternalBooking(externalBookingId)
       .then(row => {
         setEntry(row);
@@ -70,6 +69,10 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
       });
   }, [externalBookingId]);
   useEffect(load, [load]);
+  const retry = useCallback(() => {
+    setState('loading');
+    load();
+  }, [load]);
 
   const provider = entry?.provider ?? null;
   const name = provider?.display_name ?? 'this professional';
@@ -81,7 +84,7 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
       logger.error('[ExternalBookingDetail] booking page failed to open', error);
       Alert.alert("Couldn't open their booking page", 'Please try again in a moment.');
     });
-  }, [provider?.external_booking_url]);
+  }, [provider]);
 
   const handleMessage = useCallback(() => {
     if (!provider) return;
@@ -149,7 +152,7 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
                 {state === 'missing' ? "This booking isn't in your list any more" : "Couldn't load this booking"}
               </Text>
               {state === 'failed' && (
-                <TouchableOpacity onPress={load} style={styles.retry} activeOpacity={0.7}>
+                <TouchableOpacity onPress={retry} style={styles.retry} activeOpacity={0.7}>
                   <Text style={styles.retryText}>Try again</Text>
                 </TouchableOpacity>
               )}

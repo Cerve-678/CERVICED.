@@ -1393,6 +1393,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // and there's no price list, rating or reviews on this profile.
   const isLinkOnly = provider?.isLinkOnly ?? false;
   const [didYouBookVisible, setDidYouBookVisible] = useState(false);
+  // Bumped on every open so the sheet remounts with a fresh question.
+  const [didYouBookKey, setDidYouBookKey] = useState(0);
 
   // Counters behind a link-only provider's Analytics. Never for the owner
   // looking at their own profile; a failed count is logged, never shown.
@@ -2592,7 +2594,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         if (!canSaveProvider) return;
         // Let the browser sheet finish dismissing — iOS drops a modal
         // presented in the same tick another is closing.
-        setTimeout(() => setDidYouBookVisible(true), 400);
+        setTimeout(() => {
+          setDidYouBookKey(k => k + 1);
+          setDidYouBookVisible(true);
+        }, 400);
       })
       .catch((error: unknown) => {
         logger.error('[ProviderProfile] external booking link failed to open', error);
@@ -4151,6 +4156,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
         {isLinkOnly && (
           <DidYouBookSheet
+            key={didYouBookKey}
             visible={didYouBookVisible}
             providerName={provider.displayName}
             logoUrl={provider.providerLogo?.uri ?? null}

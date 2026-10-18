@@ -26,13 +26,10 @@ export function LinkOnlyAnnouncementSheet({ visible, P, onClose, onSent }: Props
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Fresh state per open: the caller remounts this sheet (a new `key`) each
+  // time it shows it; this only loads the audience size.
   useEffect(() => {
     if (!visible) return;
-    setTitle('');
-    setBody('');
-    setError('');
-    setSending(false);
-    setCount(null);
     getMyProviderSaverCount()
       .then(setCount)
       .catch((e: unknown) => {
