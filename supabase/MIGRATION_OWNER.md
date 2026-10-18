@@ -22,7 +22,7 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session cerviced-ea (e283bace), branch feat/late-no-show-fees, since 2026-10-18 — 20261018100000_late_and_no_show_fees (written, awaiting SQL-editor paste)
 ```
 
 ### Applied 2026-10-11 (sign-up booking link staged on users)

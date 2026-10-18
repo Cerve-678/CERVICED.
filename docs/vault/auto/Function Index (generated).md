@@ -5,7 +5,7 @@
 
 #generated
 
-**2311 functions** across **319 files**.
+**2313 functions** across **319 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
