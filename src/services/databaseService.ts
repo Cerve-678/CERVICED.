@@ -8039,6 +8039,29 @@ export async function updateUserBusinessInfo(
   if (error) throw error;
 }
 
+/**
+ * Writes provider answers onto the sign-up staging columns of the signed-in
+ * user's own row. Used only while there is no providers row yet: Business Info
+ * has nowhere else to put an edit, and the profile editor's first save reads
+ * these same columns (getUserSignupPrefillInfo) to build that row — so the
+ * edit is carried into the profile instead of being dropped.
+ */
+export async function updateMyStagedProviderAnswers(
+  userId: string,
+  answers: {
+    years_experience: number | null;
+    external_booking_url?: string | null;
+    instagram: string | null;
+    website: string | null;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update(answers)
+    .eq("id", userId);
+  if (error) throw error;
+}
+
 /** Sync beauty profile fields to the users table so providers can read them */
 /**
  * Saves the Beauty Profile onto the signed-in client's own users row.
