@@ -223,6 +223,13 @@ export type ProviderHomeStackParamList = {
   // viewMode: lets a caller (the daily-recap notification) open the calendar
   // straight into the list view rather than whichever mode was last used.
   ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
+  // Link-only providers (booking_mode 'external') start this stack here
+  // instead of the booking calendar — see ProviderTabNavigator.
+  LinkOnlyHomeMain: undefined;
+  LinkOnlyAnalytics: undefined;
+  // The provider Becca stack, pushed from the link-only Home (link-only
+  // providers have no Becca tab).
+  BeccaStack: NavigatorScreenParams<ProviderBeccaStackParamList> | undefined;
   ProviderSchedule: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   AddBooking: undefined;
@@ -309,6 +316,10 @@ export type ProviderServicesStackParamList = {
 // Provider Account Stack (settings for provider users)
 export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
+  // Link-only providers' Profile tab root: their public profile + edit rows.
+  LinkOnlyProfileMain: undefined;
+  // Their own public profile, exactly as clients see it.
+  MyPublicProfile: { providerId: string };
   EditProfile: { transferProviderId?: string } | undefined;
   Notifications: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
@@ -371,6 +382,24 @@ export type ProviderTabParamList = {
   ProviderHome: NavigatorScreenParams<ProviderHomeStackParamList>;
   MyServices: NavigatorScreenParams<ProviderServicesStackParamList>;
   Profile: NavigatorScreenParams<ProviderAccountStackParamList>;
+  // Link-only providers only (see ProviderTabNavigator).
+  LinkOnlyPortfolio: NavigatorScreenParams<LinkOnlyPortfolioStackParamList>;
+  LinkOnlyMessages: NavigatorScreenParams<LinkOnlyMessagesStackParamList>;
+};
+
+export type LinkOnlyPortfolioStackParamList = {
+  LinkOnlyPortfolioMain: undefined;
+};
+
+export type LinkOnlyMessagesStackParamList = {
+  ProviderInbox:
+    | { initialFilter?: "enquiries" | "messages" | "unread" }
+    | undefined;
+  ProviderConversation: {
+    conversationId: string;
+    clientUserId: string;
+    clientName: string;
+  };
 };
 
 // Tab Navigator

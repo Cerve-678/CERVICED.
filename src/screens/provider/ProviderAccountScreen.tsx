@@ -128,7 +128,12 @@ CarouselCard.displayName = 'CarouselCard';
 // ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderAccountScreen({ navigation }: any) {
-  const { user, logout, switchMode, hatState } = useAuth();
+  const { user, logout, switchMode, hatState, myBookingMode } = useAuth();
+  // A link-only provider reaches this screen from their Profile tab, which
+  // already holds their profile and business rows; Analytics is on their
+  // Home. The CERVICED-booking shortcuts (Offers, Clientele, Schedule,
+  // Booking history) don't apply to them, so this is account settings only.
+  const isLinkOnly = myBookingMode === 'external';
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
   const { t } = useTranslation();
@@ -288,6 +293,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
             <Text style={[styles.previewSub, { color: P.sub }]}>
               {t('providerAccount.hero.sub')}
             </Text>
+            {!isLinkOnly && (
             <View style={styles.previewStats}>
               <TouchableOpacity
                 style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
@@ -316,6 +322,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 <Text style={[styles.previewStatLbl, { color: P.sub }]}>{t('providerAccount.hero.clienteleSub')}</Text>
               </TouchableOpacity>
             </View>
+            )}
             </View>
           </View>
 
@@ -323,6 +330,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
 
             {/* ── Small persistent ring badge — demoted, NOT a hero. Kept per
                 explicit confirmation; sized/positioned to match the mockup. ── */}
+            {!isLinkOnly && (<>
             <TouchableOpacity
               style={[styles.ringInline, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.shadow }]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('BusinessProfile'); }}
@@ -372,6 +380,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 <CarouselCard key="booking-history" icon="stack" title={t('providerAccount.myBusiness.history.title')} subtitle={t('providerAccount.myBusiness.history.sub')} onPress={() => navigation.navigate('BookingHistory')} P={P} />
               </View>
             </View>
+            </>)}
 
             {/* ── Account: twin toggle cards + plain rows ────────────────── */}
             <View style={styles.twinRow}>

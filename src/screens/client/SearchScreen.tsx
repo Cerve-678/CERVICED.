@@ -1,6 +1,6 @@
 import { SKIN_TONES, matchesSkinTone } from '../../constants/skinTones';
 // SearchScreen.tsx
-import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,7 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug } from '../../services/databaseService';
+import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
@@ -43,6 +43,7 @@ import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
+import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
@@ -67,6 +68,9 @@ interface ProviderCardData {
   longitude: number | null;
   rating: number;
   reviewCount: number;
+  /** Books on their own page (booking_mode 'external') — no rating, prices or
+   *  availability here, and only some filters can match them. */
+  isLinkOnly: boolean;
   estimatedWait: string;
   // Real £min–£max from this provider's active services, resolved via a
   // batched fetch (see providersWithPriceRange below) — null until resolved
@@ -340,11 +344,17 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
             </Text>
           </View>
 
+          {provider.isLinkOnly ? (
+            <View style={styles.metaRow}>
+              <Text style={[styles.reviewCount, { color: P.sub }]}>Books on their own page</Text>
+            </View>
+          ) : (
           <View style={styles.metaRow}>
             <Text style={styles.star}>★</Text>
             <Text style={[styles.ratingNum, { color: P.text }]}>{provider.rating.toFixed(1)}</Text>
             <Text style={[styles.reviewCount, { color: P.sub }]}> ({provider.reviewCount})</Text>
           </View>
+          )}
           <View style={styles.metaRow}>
             <Text style={[styles.priceText, { color: P.sub }]} numberOfLines={1} ellipsizeMode="tail">
               {[
@@ -533,6 +543,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       longitude: p.longitude ?? null,
       distanceMiles: null,
       rating: p.rating, reviewCount: p.review_count,
+      isLinkOnly: p.booking_mode === 'external',
       estimatedWait: '10–15 min',
       // Resolved separately once the batched price-range fetch returns —
       // see providersWithPriceRange below. price_tier is kept purely for
@@ -886,6 +897,9 @@ export default function SearchScreen({ navigation, route }: Props) {
   // result set further, the same way HomeScreen's filter dropdown does. ─────
   const filteredProviders = useMemo(() => {
     let list = [...providersWithPriceRange];
+    if (!filtersAllowLinkOnly(activeFilters)) {
+      list = list.filter(p => !p.isLinkOnly);
+    }
 
     if (activeFilters.rating && activeFilters.rating > 0) {
       list = list.filter(p => p.rating >= activeFilters.rating!);
@@ -974,6 +988,21 @@ export default function SearchScreen({ navigation, route }: Props) {
 
     return list;
   }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
+
+  // "In search" on a link-only provider's Analytics: one count each time they
+  // appear in a distinct result set, not on every re-render of the same one.
+  // The server skips the viewer's own profile and anyone not live.
+  const lastAppearanceKeyRef = useRef('');
+  useEffect(() => {
+    const ids = filteredProviders.filter(p => p.isLinkOnly).map(p => p.providerId);
+    if (ids.length === 0) return;
+    const key = ids.join(',');
+    if (key === lastAppearanceKeyRef.current) return;
+    lastAppearanceKeyRef.current = key;
+    recordProviderStat(ids, 'search_appearance').catch((error: unknown) => {
+      logger.warn('[Search] could not record search appearances', error);
+    });
+  }, [filteredProviders]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete

@@ -6839,6 +6839,15 @@ export async function getMyProviderDailyStats(days: number): Promise<DbProviderD
   return (data ?? []) as DbProviderDailyStat[];
 }
 
+/** Clients who saved (bookmarked) the calling provider — the audience for a
+ *  link-only provider's announcements, and their Analytics "Saves" count.
+ *  Server-side because bookmarks RLS only shows a user their own rows. */
+export async function getMyProviderSaverIds(): Promise<string[]> {
+  const { data, error } = await supabase.rpc("get_my_provider_saver_ids");
+  if (error) throw error;
+  return ((data ?? []) as unknown[]).filter((id): id is string => typeof id === "string");
+}
+
 // ─────────────────────────────────────────────────────────
 // CLIENT EXTERNAL BOOKINGS — "Did you book?" entries
 // ─────────────────────────────────────────────────────────
@@ -9217,6 +9226,19 @@ export async function countProviderServices(
 ): Promise<number> {
   const { count, error } = await supabase
     .from("services")
+    .select("id", { count: "exact", head: true })
+    .eq("provider_id", providerId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** Every portfolio photo, venue photos included — exactly what a link-only
+ *  provider's server go-live check counts. Owner reading their own rows. */
+export async function countProviderPortfolioItems(
+  providerId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("portfolio_items")
     .select("id", { count: "exact", head: true })
     .eq("provider_id", providerId);
   if (error) throw error;

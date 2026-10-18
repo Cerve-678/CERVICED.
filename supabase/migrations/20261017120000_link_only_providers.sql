@@ -19,6 +19,11 @@
 -- 6. provider_daily_stats + two RPCs — per-day counters for the link-only
 --    Analytics screen (Book taps, profile views, search appearances,
 --    Instagram taps). One row per provider per day, never one per event.
+-- 7. get_my_provider_saver_ids() — the clients who saved (bookmarked) the
+--    calling provider. bookmarks RLS is own-rows-only, so a provider can't
+--    read this directly; link-only Announcements go to exactly this audience
+--    (send_provider_client_notifications already accepts a bookmark
+--    relationship) and Analytics shows its count.
 --
 -- Frontier at authoring: 20261011102423.
 
@@ -312,3 +317,22 @@ grant execute on function public.get_my_provider_daily_stats(integer) to authent
 revoke execute on function public.handle_provider_about_or_mode_change() from public, anon, authenticated;
 revoke execute on function public.handle_portfolio_change_for_go_live() from public, anon, authenticated;
 revoke execute on function public.refuse_booking_for_external_provider() from public, anon, authenticated;
+
+-- ── 7. who saved me ───────────────────────────────────────────────────────
+create or replace function public.get_my_provider_saver_ids()
+ returns setof uuid
+ language sql
+ stable
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+  select distinct b.user_id
+  from public.bookmarks b
+  join public.providers p on p.id = b.provider_id
+  where p.user_id = auth.uid()
+    and b.user_id <> auth.uid()
+  limit 5000;
+$function$;
+
+revoke execute on function public.get_my_provider_saver_ids() from public, anon;
+grant execute on function public.get_my_provider_saver_ids() to authenticated;
