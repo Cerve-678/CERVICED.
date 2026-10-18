@@ -346,7 +346,7 @@ Curated: [[Services]] · **44 files**
 - … +14 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **71 files**
+Curated: [[Payments]] · **72 files**
 - `src/screens/client/CartScreen.tsx` _(384)_
 - `src/services/databaseService.ts` _(80)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **71 files**
 - `src/constants/featureFlags.ts` _(3)_
 - `src/features/cart/platformFee.ts` _(3)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(3)_
-- … +41 more
+- … +42 more
