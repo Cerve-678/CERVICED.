@@ -2,6 +2,7 @@ import { checkFeeEligibility, type FeeKind } from '../_shared/bookingFeePlan.ts'
 import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
+import { takeBackFromProvider } from '../_shared/takeBack.ts';
 
 // Late-arrival and no-show fees (auto-memory late-and-no-show-fees-decision).
 //
@@ -217,7 +218,11 @@ async function refund(provider: ProviderRow, chargeId: string): Promise<Response
   if (fee.payout_status === 'held' || fee.payout_status === 'pending') {
     payoutStatus = 'cancelled';
   } else if (fee.payout_status === 'transferred' && fee.stripe_transfer_id) {
-    await stripe.transfers.createReversal(fee.stripe_transfer_id, {}, { idempotencyKey: `booking_fee_reversal_${fee.id}` });
+    await takeBackFromProvider(admin, stripe, {
+      providerId: fee.provider_id, bookingId: fee.booking_id, source: 'fee_refund',
+      transferId: fee.stripe_transfer_id, key: `booking_fee_reversal_${fee.id}`,
+      metadata: { fee_charge_id: fee.id },
+    });
     payoutStatus = 'reversed';
   }
 

@@ -71,7 +71,21 @@ Deno.serve(async (req: Request) => {
     let failed = 0;
     let skipped = 0;
 
+    // A booking with a refund request still open (with the provider, or under
+    // review by Cerviced) keeps its payout held until the request is closed,
+    // so a refund can come out of money Cerviced still has. One query for the
+    // whole batch; the row is simply picked up again on a later run.
+    const dueBookingIds = (due ?? []).map(row => row.booking_id);
+    const { data: openRequests, error: requestError } = dueBookingIds.length
+      ? await admin.from('refund_requests').select('booking_id')
+        .in('booking_id', dueBookingIds).in('status', ['with_provider', 'under_review'])
+      : { data: [], error: null };
+    if (requestError) throw requestError;
+    const awaitingRefundDecision = new Set((openRequests ?? []).map(r => r.booking_id));
+
     for (const row of due ?? []) {
+      if (awaitingRefundDecision.has(row.booking_id)) { skipped++; continue; }
+
       // Re-check the booking is still genuinely owed before moving money.
       const { data: booking, error: bookingError } = await admin
         .from('bookings')
@@ -148,13 +162,34 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      let madeTransfer = false;
       try {
         // Stripe may prune idempotency keys after 24 hours. The transfer group
-        // makes recovery durable when a successful transfer's DB write failed.
-        const previous = await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 });
-        const transfer = previous.data[0] ?? await stripe.transfers.create(
+        // makes recovery durable when a successful transfer's DB write failed:
+        // that transfer is recorded as it is, with no new deduction.
+        const previous = (await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 })).data[0];
+        let transferPence = 0;
+        if (!previous) {
+          // Take anything the provider still owes from an earlier refund or
+          // dispute (a reversal their Stripe balance couldn't cover) out of
+          // this payout first. Returns what is left to send, read under the
+          // payout's row lock.
+          const { data: net, error: shortfallErr } = await admin.rpc('apply_provider_shortfalls', { p_payout_id: row.id });
+          if (shortfallErr) throw shortfallErr;
+          transferPence = Number(net ?? 0);
+          if (transferPence <= 0) {
+            // All of it settled what the provider owed; nothing to send.
+            const { error: settleErr } = await admin.from('provider_payouts')
+              .update({ status: 'transferred', failure_reason: 'settled an earlier shortfall in full' })
+              .eq('id', row.id).eq('status', 'held');
+            if (settleErr) throw settleErr;
+            transferred++;
+            continue;
+          }
+        }
+        const transfer = previous ?? await stripe.transfers.create(
           {
-            amount: row.payout_amount,
+            amount: transferPence,
             currency: row.currency ?? 'gbp',
             destination: row.stripe_account_id,
             source_transaction: chargeId,
@@ -167,6 +202,7 @@ Deno.serve(async (req: Request) => {
           // second one, if this row is ever retried.
           { idempotencyKey: `payout_${row.id}` },
         );
+        madeTransfer = true;
 
         const { error: writeErr } = await admin
           .from('provider_payouts')
@@ -184,7 +220,18 @@ Deno.serve(async (req: Request) => {
       } catch (err) {
         // A real transfer failure (e.g. insufficient platform balance, account
         // restricted). Mark failed with the real reason for admin follow-up;
-        // it won't be auto-retried (status leaves 'held').
+        // it won't be auto-retried (status leaves 'held'). If no transfer was
+        // made, whatever was deducted for shortfalls goes back on the provider's
+        // balance owed, so it isn't forgiven by a payout that never went out.
+        // A timeout can hide a transfer Stripe did make, so look before giving back.
+        if (!madeTransfer) {
+          const late = await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 }).catch(() => null);
+          madeTransfer = !!late?.data[0] || late === null;
+        }
+        if (!madeTransfer) {
+          const { error: releaseErr } = await admin.rpc('release_provider_shortfalls', { p_payout_id: row.id });
+          if (releaseErr) console.error(`[release-payouts] could not give back shortfall deductions on ${row.id}: ${String(releaseErr)}`);
+        }
         const { error: failWriteErr } = await admin
           .from('provider_payouts')
           .update({ status: 'failed', failure_reason: String(err).slice(0, 500) })
