@@ -22,8 +22,8 @@ Last updated: 18 October 2026.
 | Provider chooses payout timing (24h–30d) | DB yes, app no | App picker on `feat/provider-payout-timing`, not merged |
 | Late and no-show fees | Yes | Merged to `main` (b6c0255), functions deployed |
 | Client refund requests → provider → Cerviced | DB yes, app no | App on `feat/refund-request-timeline`, not merged |
-| Payout held while a refund request is open | No | `feat/refund-payout-protection`, migration 20261018190000 unapplied |
-| Money owed by a provider taken from next payout | No | Same branch and migration |
+| Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
+| Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 
 ---
 
@@ -61,7 +61,7 @@ checkout. The provider never pays the fee and never sees it.
 | 7 | Release | `process_due_payouts` → `release-payouts` | Every 15 min: re-checks the booking, skips it while a refund request is open*, takes out anything the provider owes*, transfers the rest to their Stripe account |
 | 8 | Bank payout | Stripe | Stripe pays the provider's bank on its own default schedule (CERVICED doesn't set it) |
 
-\* Not live yet: `feat/refund-payout-protection`.
+\* Live since 18 Oct (38c6e8b9).
 
 **Changing payout timing:** a longer choice also pushes back payouts already
 waiting. A shorter one applies to new bookings only, so a held payout can never
@@ -71,11 +71,11 @@ be pulled forward past an open refund or no-show window.
 
 | Invariant | State |
 |---|---|
-| Provider payout ≤ client total − service fee (per booking) | Live CHECK still says **=**, which every refund path's payout lowering violates. Replaced with **≤** by 20261018190000 (unapplied). Only one refund exists live and it needed no payout change, so nothing has been lost yet |
+| Provider payout ≤ client total − service fee (per booking) | Enforced (CHECK, since 18 Oct). Before that it said **=**, which every refund path's payout lowering violated; no money was affected |
 | Exactly one payout per eligible booking, safe on retries | Enforced (unique key + idempotency) |
 | Never pay out a cancelled / refunded / disputed booking | Enforced (re-checked at release) |
-| Never pay out while the client's refund request is open | Not live (branch) |
-| Money taken back from a paid provider is never lost or taken twice | Not live (branch): a reversal Stripe refuses becomes a recorded shortfall; recovered from the next payout; given back if that payout fails |
+| Never pay out while the client's refund request is open | Enforced (re-checked at release) |
+| Money taken back from a paid provider is never lost or taken twice | Enforced: a reversal Stripe refuses becomes a recorded shortfall; recovered from the next payout; given back if that payout fails |
 | Every hold is at least 24h after the appointment | Enforced (CHECK + RPC whitelist + trigger floor) |
 
 ## 4. Provider payments experience
@@ -106,8 +106,7 @@ Payment settings.
 **Taking money back from a paid provider:** if the provider was already paid,
 their Stripe transfer is reversed. If their Stripe balance can't cover it
 (daily-payout providers are most exposed), the amount is recorded in
-`provider_shortfalls` and taken out of their next booking payout. *Not live
-yet.* Gap: late/no-show fee payouts aren't used to settle shortfalls.
+`provider_shortfalls` and taken out of their next booking payout. Gap: late/no-show fee payouts aren't used to settle shortfalls.
 
 ## 6. Late and no-show fees (live)
 
@@ -151,9 +150,6 @@ estimate of loss, not a penalty.
 
 ## 9. Known gaps and launch blockers
 
-- Apply 20261018190000 and deploy `release-payouts`, `stripe-webhook`,
-  `apply-cancellation-refund`, `booking-fee` and `refund-payment` from
-  `feat/refund-payout-protection` (only after the migration).
 - Merge the app sides of payout timing and refund requests.
 - **Legal flag:** holding provider money up to 30 days isn't covered in the
   Terms or LEGAL-COMPLIANCE-NOTES, and Stripe Connect may limit how long a
