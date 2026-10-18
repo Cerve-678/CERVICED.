@@ -2909,6 +2909,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // write — see the load effect below for why.
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
   const [policiesLoaded, setPoliciesLoaded] = useState(false);
+  // Whether booking_policies already held anything for this provider. A
+  // link-only provider's policies are optional and theirs to write, so a first
+  // save must not file CERVICED's defaults on their behalf.
+  const [policiesOnFile, setPoliciesOnFile] = useState(false);
 
   // True until the existing-provider fetch settles — without this the form
   // renders with empty defaults ('Provider Registration', blank fields, the
@@ -3142,6 +3146,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         // profile save, since depositOnly is no longer a mirror of
         // depositRequired.
         setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) });
+        setPoliciesOnFile(true);
         setPoliciesLoaded(true);
       })
       // Deliberately leaves policiesLoaded false on failure — this screen no
@@ -3590,7 +3595,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       // writing the in-memory `policies` back while it's still stuck at
       // DEFAULT_POLICIES (a failed load) would silently wipe out whatever a
       // provider had already saved via Business Profile → Policies.
-      if (policiesLoaded) {
+      if (policiesLoaded && (policiesOnFile || !isLinkOnly)) {
         await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
       }
       // Same guard, same reason: only write the terms back once we know what
@@ -3612,7 +3617,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, policiesLoaded, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
+  }, [providerData, user, policies, policiesLoaded, policiesOnFile, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
 
   // The pager owns swipe tracking; this callback is the single imperative
   // entry point used by timeline tabs, Next buttons and validation shortcuts.

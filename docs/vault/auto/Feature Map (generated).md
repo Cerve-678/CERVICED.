@@ -18,7 +18,7 @@ Curated: [[Address Release]] · **90 files**
 - `src/components/AddressPicker.tsx` _(47)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
-- `src/screens/provider/BusinessInfoScreen.tsx` _(39)_
+- `src/screens/provider/BusinessInfoScreen.tsx` _(40)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
 - `supabase/address_release_notification.sql` _(33)_
 - `supabase/require_provider_address.sql` _(32)_

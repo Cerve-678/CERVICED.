@@ -37,6 +37,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   getMyProviderProfileContext,
   getUserBusinessInfo,
+  getUserSignupPrefillInfo,
+  updateMyStagedProviderAnswers,
   updateUserBusinessInfo,
   updateProviderContactDetails,
   updateMyServiceCategory,
@@ -147,6 +149,24 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setWebsite(providerData.website ?? '');
           setExternalBookingUrl(providerData.external_booking_url ?? '');
           setYearsExperience(providerData.years_experience != null ? String(providerData.years_experience) : '');
+        } else {
+          // No providers row yet — a link-only provider can reach this screen
+          // before their first Edit Profile save creates one. Show what they
+          // already answered at sign-up instead of blank fields.
+          const signup = await getUserSignupPrefillInfo(context.userId);
+          if (signup) {
+            const name = signup.business_name ?? signup.name ?? '';
+            setBusinessName(name);
+            setSavedName(name);
+            const category = SERVICE_TYPE_OPTS.find(o => signup.service_interests?.includes(o.value))?.value ?? null;
+            setServiceCategory(category as ServiceCategory | null);
+            setSavedServiceCategory(category as ServiceCategory | null);
+            setBookingEmail(signup.business_email ?? '');
+            setInstagram(signup.instagram ?? '');
+            setWebsite(signup.website ?? '');
+            setExternalBookingUrl(signup.external_booking_url ?? '');
+            setYearsExperience(signup.years_experience != null ? String(signup.years_experience) : '');
+          }
         }
       } catch {
         flash('Could not load business details', 'error');
@@ -279,7 +299,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           // Written as a pair: business_type gates which release timings are
           // valid, so persisting the type without reconciling the policy is
           // what leaves a stale, unofferable timing in the DB.
-          ...(businessType
+          ...(businessType && !isLinkOnly
             ? {
                 business_type: businessType,
                 address_release_policy: reconcileAddressReleasePolicy(businessType, addressReleasePolicy),
@@ -290,6 +310,15 @@ export default function BusinessInfoScreen({ navigation }: any) {
           website: website.trim() || null,
           ...(isLinkOnly ? { external_booking_url: normalizedBookingUrl } : {}),
           years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
+        }));
+      } else if (userId) {
+        // No profile yet: stage the answers where the first Edit Profile save
+        // picks them up, rather than closing as if they'd been saved.
+        ops.push(updateMyStagedProviderAnswers(userId, {
+          years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
+          instagram: instagram.trim() || null,
+          website: website.trim() || null,
+          ...(isLinkOnly ? { external_booking_url: normalizedBookingUrl } : {}),
         }));
       }
 
@@ -456,6 +485,11 @@ export default function BusinessInfoScreen({ navigation }: any) {
               )}
             </Card>
 
+            {/* Where clients are seen and when the address is released only
+                matter to CERVICED's own booking flow. A link-only provider
+                books on their own page, so — as in Edit Profile — it isn't
+                asked of them. */}
+            {!isLinkOnly && (
             <Card
               title="Business Type"
               sub="Where you see clients. This decides whether — and when — your address is shared with them."
@@ -503,6 +537,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 </View>
               )}
             </Card>
+            )}
 
             {isLinkOnly && (
               <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">
