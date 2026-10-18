@@ -1074,3 +1074,49 @@ locked. Run `cerviced-legal-flagger` / `cerviced-security-review` on it, and
 consider a note in `LEGAL-COMPLIANCE-NOTES.md`.
 
 Build on its own branch (`feat/home-screen-widgets`) off `main`.
+
+## 24. Redeploying edge functions, and the late/no-show fees launch checks (2026-10-18)
+
+Numbered 24 because §22 (Instagram handle verification) and §23 (saved cards)
+are on unmerged branches.
+
+**When to redeploy.** Nothing needs deploying right now: the live
+`booking-fee`, `create-payment-intent`, `release-payouts` and `stripe-webhook`
+match `main` as of `b6c0255` (late/no-show fees, merged 2026-10-18).
+Redeploy only when:
+- a change touches anything under `supabase/functions/` (including `_shared/`,
+  which every function that imports it needs redeployed);
+- the saved-cards branch merges into `main`. Then redeploy
+  `create-payment-intent` and `client-saved-cards`, and check that the merge
+  kept the fees' consent check and `setup_future_usage`;
+- a change ships with a migration. Run the SQL first, then deploy.
+
+Always deploy from an up-to-date `main`. A function deployed from an older
+branch silently removes whatever `main` added to it, such as the fee payout
+loop or the bank-dispute reversal.
+
+```
+cd ~/Desktop/CERVICEDD/CERVICED.
+git checkout main && git pull
+supabase functions deploy <function-name> --project-ref ztrfpfvvejzaysrelmfm
+```
+
+Run one line per changed function. Each ends "Deployed Functions…", and
+"Docker is not running" is harmless. Before switching the shared folder to
+`main`, make sure no other session has uncommitted work in it, or have Claude
+deploy from a fresh copy of `main`.
+
+**Late/no-show fees: before real customers.**
+- [ ] Run the test-mode checklist end to end: set fees, tick box at checkout,
+      charge late fee, charge no-show fee, dispute → keep, dispute → refund,
+      declined card, 24h window closes, one fee per booking, fee payout released.
+- [ ] Lawyer review of Terms §6, the checkout tick-box line
+      (`src/constants/feeTerms.ts`) and the Privacy Policy saved-cards
+      paragraph. See LEGAL-COMPLIANCE-NOTES §17.
+- [ ] Put the same §6 wording on the website.
+- [ ] Provider terms must say a bank chargeback is taken back from their payout.
+- [ ] Rescheduled bookings pick up the provider's current fees, not the ones
+      originally agreed. Decide whether that's acceptable.
+- [x] Beauty Maintenance migration renumbered to `20261018180000` (above the
+      frontier) and re-verified against live on 2026-10-18; its constraint list
+      keeps the fee and refund-request notification types.

@@ -163,7 +163,7 @@ describe('notification routing — deep-link payload', () => {
 });
 
 describe('notification preferences gate the push', () => {
-  const prefKeys = ['bookingConfirm', 'bookingReminder', 'bookingUpdates', 'promotions', 'newProviders', 'weeklySummary'];
+  const prefKeys = ['bookingConfirm', 'bookingReminder', 'bookingUpdates', 'promotions', 'newProviders', 'weeklySummary', 'maintenanceReminders'];
 
   it('reads preferences on the send path', () => {
     // Every toggle on NotificationsSettingsScreen was decorative: the column
@@ -228,5 +228,55 @@ describe('notification preferences gate the push', () => {
     for (const [, , key] of mapped) {
       expect(prefKeys).toContain(key);
     }
+  });
+});
+
+describe('notification routing — Beauty Maintenance', () => {
+  const migration = () =>
+    read('supabase', 'migrations', '20261018180000_beauty_maintenance.sql');
+  const types = ['maintenance_due', 'aftercare_available'];
+
+  it('declares both types everywhere a notification type has to exist', () => {
+    // Memory: new-notification-type-is-four-places. tsc and jest were green
+    // while the DB CHECK rejected every insert of a type missing from it.
+    const union = read('src', 'types', 'database.ts');
+    const check = migration().slice(migration().indexOf('ADD CONSTRAINT notifications_type_check'));
+    for (const type of types) {
+      expect(union).toContain(`| "${type}"`);
+      expect(notificationsScreen()).toContain(`'${type}'`);
+      expect(tapHandler()).toContain(`'${type}'`);
+      expect(check).toContain(`'${type}'::text`);
+    }
+  });
+
+  it('opens the Maintenance view from both entry points, never a booking', () => {
+    const route = "navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId })";
+    expect(tapHandler()).toContain(route);
+    expect(notificationsScreen()).toContain(route);
+    const bookingTypes = tapHandler().slice(
+      tapHandler().indexOf('const BOOKING_TYPES'),
+      tapHandler().indexOf(']);', tapHandler().indexOf('const BOOKING_TYPES')),
+    );
+    for (const type of types) expect(bookingTypes).not.toContain(`'${type}'`);
+  });
+
+  it('keeps both types client-only in the in-app list', () => {
+    const source = notificationsScreen();
+    const clientOnly = source.slice(
+      source.indexOf('const CLIENT_ONLY_TYPES'),
+      source.indexOf(']);', source.indexOf('const CLIENT_ONLY_TYPES')),
+    );
+    for (const type of types) expect(clientOnly).toContain(`'${type}'`);
+  });
+
+  it('carries the item id, not item detail, in the push payload', () => {
+    expect(edgeFunction()).toContain("payload.record.metadata?.['maintenance_item_id']");
+    expect(pushService()).toContain("row.metadata?.['maintenance_item_id']");
+  });
+
+  it('gates both pushes behind the opt-in maintenance toggle, off by default', () => {
+    expect(edgeFunction()).toContain("maintenance_due: 'maintenanceReminders'");
+    expect(edgeFunction()).toContain("aftercare_available: 'maintenanceReminders'");
+    expect(databaseService()).toMatch(/maintenanceReminders: false,\n};/);
   });
 });

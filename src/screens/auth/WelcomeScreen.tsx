@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,32 +21,11 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Animated, {
-  Extrapolation,
-  interpolate,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withDelay,
-  withSpring,
-  withTiming,
-  type SharedValue,
-} from 'react-native-reanimated';
+import { useReducedMotion } from 'react-native-reanimated';
 import WelcomeIntro, { WELCOME_INTRO_TOP_MARGIN } from '../../components/WelcomeIntro';
 import { STORAGE_KEYS } from '../../utils/storageKeys';
 
 type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
-
-/** Each headline row rises a little after the one above it. */
-function useRowReveal(reveal: SharedValue<number>, row: number) {
-  return useAnimatedStyle(() => {
-    const start = row * 0.18;
-    return {
-      opacity: interpolate(reveal.value, [start, start + 0.45], [0, 1], Extrapolation.CLAMP),
-      transform: [{ translateY: interpolate(reveal.value, [start, start + 0.45], [14, 0], Extrapolation.CLAMP) }],
-    };
-  });
-}
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
@@ -108,47 +88,58 @@ export default function WelcomeScreen({ navigation }: Props) {
   // picks up where the glide left off: the wordmark is already in place and
   // "sorted." gets the intro's flip. Returning users get a short plain fade.
   const [cameFromIntro, setCameFromIntro] = useState(false);
-  const fromIntro = useSharedValue(0);
-  const reveal = useSharedValue(0);
-  const sortedFlip = useSharedValue(0);
-  const sortedDot = useSharedValue(0);
+
+  // The headline animates with React Native's own Animated API, not
+  // Reanimated, and is mounted whenever the intro isn't on screen (including
+  // during the AsyncStorage check). On device, Reanimated-driven opacity left
+  // the wordmark and headline invisible; this path doesn't depend on it.
+  const rows = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
+  const sortedFlip = useRef(new Animated.Value(0)).current;
+  const sortedDot = useRef(new Animated.Value(0)).current;
+  const phase = introState === 'playing' ? 'intro' : cameFromIntro ? 'afterIntro' : 'plain';
 
   useEffect(() => {
-    if (introState !== 'done') return;
+    if (phase === 'intro') return;
+    const all = [...rows, sortedFlip, sortedDot];
     if (reduceMotion) {
-      reveal.value = 1;
-      sortedFlip.value = 1;
-      sortedDot.value = 1;
+      all.forEach(v => v.setValue(1));
       return;
     }
-    if (cameFromIntro) {
-      fromIntro.value = 1;
-      reveal.value = withTiming(1, { duration: 900 });
-      sortedFlip.value = withDelay(350, withTiming(1, { duration: 600 }));
-      sortedDot.value = withDelay(850, withSpring(1, { damping: 9, stiffness: 180 }));
+    const rise = (v: Animated.Value, delay: number, duration: number) =>
+      Animated.timing(v, { toValue: 1, duration, delay, useNativeDriver: true });
+    let anim: Animated.CompositeAnimation;
+    if (phase === 'afterIntro') {
+      rows[2]?.setValue(1);
+      anim = Animated.parallel([
+        ...[0, 1, 3].map(i => rise(rows[i]!, i * 160, 550)),
+        rise(sortedFlip, 350, 600),
+        Animated.spring(sortedDot, { toValue: 1, delay: 850, damping: 9, stiffness: 180, useNativeDriver: true }),
+      ]);
     } else {
-      reveal.value = withTiming(1, { duration: 450 });
-      sortedFlip.value = 1;
-      sortedDot.value = 1;
+      sortedFlip.setValue(1);
+      sortedDot.setValue(1);
+      anim = Animated.parallel(rows.map((v, i) => rise(v, i * 70, 400)));
     }
-  }, [introState, reduceMotion, cameFromIntro, fromIntro, reveal, sortedFlip, sortedDot]);
+    anim.start();
+    // If anything stops the animation part-way, still leave the text visible.
+    return () => { anim.stop(); all.forEach(v => v.setValue(1)); };
+  }, [phase, reduceMotion, rows, sortedFlip, sortedDot]);
 
-  const wordmarkStyle = useAnimatedStyle(() => ({
-    opacity: Math.max(fromIntro.value, reveal.value),
-  }));
-  const beautyStyle = useRowReveal(reveal, 0);
-  const maintenanceStyle = useRowReveal(reveal, 1);
-  const sortedRowStyle = useRowReveal(reveal, 2);
-  const wordsStyle = useRowReveal(reveal, 3);
-  // Same over-the-top flip as the intro's S → C, for the whole word.
-  const sortedStyle = useAnimatedStyle(() => ({
-    opacity: sortedFlip.value > 0.02 ? 1 : 0,
-    transform: [{ perspective: 400 }, { rotateX: `${interpolate(sortedFlip.value, [0, 1], [-90, 0])}deg` }],
-  }));
-  const sortedDotStyle = useAnimatedStyle(() => ({
-    opacity: sortedDot.value > 0.02 ? 1 : 0,
-    transform: [{ translateY: interpolate(sortedDot.value, [0, 1], [-26, 0]) }],
-  }));
+  const rowStyle = (i: number) => {
+    const v = rows[i]!;
+    return {
+      opacity: v,
+      transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+    };
+  };
+  const sortedStyle = {
+    opacity: sortedFlip.interpolate({ inputRange: [0, 0.05, 1], outputRange: [0, 1, 1] }),
+    transform: [{ perspective: 400 }, { rotateX: sortedFlip.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] }) }],
+  };
+  const sortedDotStyle = {
+    opacity: sortedDot.interpolate({ inputRange: [0, 0.05, 1], outputRange: [0, 1, 1] }),
+    transform: [{ translateY: sortedDot.interpolate({ inputRange: [0, 1], outputRange: [-26, 0] }) }],
+  };
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -161,16 +152,16 @@ export default function WelcomeScreen({ navigation }: Props) {
           </View>
         ) : (
           <View accessible accessibilityLabel="CERVICED. Beauty maintenance, sorted.">
-            <Animated.Text style={[styles.wordmark, { color: t.text }, wordmarkStyle]}>CERVICED.</Animated.Text>
+            <Animated.Text style={[styles.wordmark, { color: t.text }, phase === 'afterIntro' ? null : { opacity: rows[0]! }]}>CERVICED.</Animated.Text>
             <View style={styles.headlineBlock}>
-              <Animated.Text style={[styles.headline, { color: t.text }, beautyStyle]}>Beauty</Animated.Text>
-              <Animated.Text style={[styles.headline, { color: t.text }, maintenanceStyle]}>maintenance,</Animated.Text>
-              <Animated.View style={[styles.sortedRow, sortedRowStyle]}>
+              <Animated.Text style={[styles.headline, { color: t.text }, rowStyle(0)]}>Beauty</Animated.Text>
+              <Animated.Text style={[styles.headline, { color: t.text }, rowStyle(1)]}>maintenance,</Animated.Text>
+              <Animated.View style={[styles.sortedRow, rowStyle(2)]}>
                 <Animated.Text style={[styles.headline, { color: t.accent }, sortedStyle]}>sorted</Animated.Text>
                 <Animated.Text style={[styles.headline, { color: t.accent }, sortedDotStyle]}>.</Animated.Text>
               </Animated.View>
             </View>
-            <Animated.View style={[styles.wordsRow, wordsStyle]}>
+            <Animated.View style={[styles.wordsRow, rowStyle(3)]}>
               {SERVICE_WORDS.map(w => (
                 <Text key={w} style={[styles.word, { color: t.sub }]}>{w}</Text>
               ))}

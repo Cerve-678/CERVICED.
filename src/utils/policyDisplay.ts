@@ -19,6 +19,11 @@ export interface PolicyDisplayData {
   depositType?: string;
   depositAmount?: string;
   noShowAction?: string;
+  noShowGraceMinutes?: string;
+  /** £ amounts the provider can charge after the appointment ('' = none).
+   *  Each booking freezes them at checkout, capped at half its price. */
+  lateFee?: string;
+  noShowFee?: string;
   policyImageUrl?: string;
   /** Free-text refund disclosure only — never a percentage/amount, since
    *  this app has no refund-processing infra and doesn't calculate or
@@ -148,12 +153,20 @@ export function buildPolicyDisplayRows(
     rows.push({
       icon: 'close-circle-outline',
       label: 'No-show',
-      value: policy.noShowAction === 'warn'
-        ? 'Warning issued'
-        : policy.noShowAction === 'charge_deposit'
-          ? 'Deposit charged'
-          : 'Full charge',
+      // 'charge_full' was never enforced and is read as keeping the deposit;
+      // an actual extra charge is the no-show fee row below.
+      value: policy.noShowAction === 'warn' ? 'Warning issued' : 'Deposit kept',
     });
+  }
+
+  const lateFee = feeLabel(policy.lateFee);
+  if (lateFee) {
+    const grace = Number(policy.noShowGraceMinutes) || 0;
+    rows.push({ icon: 'alarm-outline', label: 'Late fee', value: grace > 0 ? `${lateFee} after ${grace} min` : lateFee });
+  }
+  const noShowFee = feeLabel(policy.noShowFee);
+  if (noShowFee) {
+    rows.push({ icon: 'close-circle-outline', label: 'No-show fee', value: noShowFee });
   }
 
   if (policy.cancelNote) {
@@ -165,6 +178,13 @@ export function buildPolicyDisplayRows(
   }
 
   return rows;
+}
+
+/** "£10" / "£12.50" for a policy fee, or null when there's no valid fee. */
+function feeLabel(value: string | undefined): string | null {
+  if (!value || !/^\d+(\.\d{1,2})?$/.test(value) || Number(value) <= 0) return null;
+  const n = Number(value);
+  return `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
 }
 
 /**

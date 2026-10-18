@@ -400,7 +400,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           onSelect={v => set('rebookingNudgeWeeks', v)}
           C={C}
         />
-        <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you.</Text>
+        <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you. Your setting here is also their starting interval in Beauty Maintenance, and clients who already get Maintenance reminders for that service don't get this nudge as well.</Text>
 
         {/* Schedule release day — the day of the month clients who've
             turned on the notification bell on your profile get notified,

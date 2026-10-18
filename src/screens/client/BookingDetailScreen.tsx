@@ -22,6 +22,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
 import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus } from '../../types/booking';
+import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import {
   describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
@@ -866,6 +867,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <Text style={[st.typeText, { color: C.accent }]}>{booking.providerService.toUpperCase()}</Text>
             </View>
           </View>
+
+          <BookingFeeCard
+            bookingId={booking.id}
+            role="client"
+            otherName={booking.providerName}
+            refreshKey={String(booking.status)}
+            colors={{ card: C.card, text: C.text, sub: C.sub, border: C.border, accent: C.accent, onAccent: C.onAccent }}
+            showConfirm={(title, message, buttons) => Alert.alert(title, message, buttons)}
+            showAlert={(title, message) => Alert.alert(title, message)}
+          />
 
           {/* Appointment Details */}
           <View style={st.section}>

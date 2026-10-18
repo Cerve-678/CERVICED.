@@ -7,7 +7,9 @@ tags: [screen, client]
 **Registered route(s):** `BeautyProfile`
 
 ## → Navigates to
-- _— none —_
+- [[ProviderProfileScreen\|ProviderProfile]]
+- [[MessagesScreen\|Messages]]
+- [[BookingsScreen\|Bookings]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

@@ -66,7 +66,9 @@ type CancelNotice     = 'none' | '24h' | '48h' | '72h';
 type CancelPenalty    = 'none' | 'deposit' | 'full';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
-type NoShowAction     = 'none' | 'warn' | 'charge_deposit' | 'charge_full';
+// 'charge_full' was offered once and enforced by nothing; it's read back as
+// 'charge_deposit' and the real charge is now the no-show fee below.
+type NoShowAction     = 'none' | 'warn' | 'charge_deposit';
 
 interface PolicyState {
   cancelNotice:     CancelNotice;
@@ -78,6 +80,10 @@ interface PolicyState {
   noShowAction:     NoShowAction;
   noShowGraceMinutes: string;
   noShowNote:       string;
+  // £ amounts as typed; '' = no fee. The server freezes them onto each booking
+  // at checkout, capped at half that booking's price.
+  lateFee:          string;
+  noShowFee:        string;
   refundPolicyNote: string;
   bookingInstructions: string;
   policyImageUrl:   string;
@@ -99,6 +105,8 @@ const DEFAULT_POLICIES: PolicyState = {
   noShowAction:     'none',
   noShowGraceMinutes: '0',
   noShowNote:       '',
+  lateFee:          '',
+  noShowFee:        '',
   refundPolicyNote: '',
   bookingInstructions: '',
   policyImageUrl:   '',
@@ -126,6 +134,11 @@ function Pills<T extends string>({ options, value, onChange }: {
       })}
     </View>
   );
+}
+
+/** '' (no fee) or pounds with up to 2 decimals — the same shape the server reads. */
+function isFeeAmount(v: string): boolean {
+  return v === '' || /^\d+(\.\d{1,2})?$/.test(v);
 }
 
 const pSt = StyleSheet.create({
@@ -177,7 +190,9 @@ export default function PoliciesScreen({ navigation }: any) {
         if (!profile?.user_id) { setLoadFailed(true); setLoading(false); return; }
         setUserId(profile.user_id);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
-        setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) });
+        const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
+        if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
+        setPolicies(merged);
         const carried = Object.fromEntries(
           Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES)),
         );
@@ -230,6 +245,10 @@ export default function PoliciesScreen({ navigation }: any) {
     // See loadFailed above: writing without a successful read would replace
     // the stored blob with defaults.
     if (loadFailed) { flash('Your policies could not be loaded — reopen this screen before saving', 'error'); return; }
+    if (![policies.lateFee, policies.noShowFee].every(isFeeAmount)) {
+      flash('Enter fees as pounds, like 10 or 12.50', 'error');
+      return;
+    }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -323,8 +342,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 options={[
                   { v: 'none', l: 'No action' },
                   { v: 'warn', l: 'Warn client' },
-                  { v: 'charge_deposit', l: 'Charge deposit' },
-                  { v: 'charge_full', l: 'Charge in full' },
+                  { v: 'charge_deposit', l: 'Keep deposit' },
                 ]}
                 value={policies.noShowAction}
                 onChange={v => setPolicy('noShowAction', v)}
@@ -338,6 +356,25 @@ export default function PoliciesScreen({ navigation }: any) {
                 note="How long after the booked start time before you can mark a client No Show. 0 = no grace period."
               />
               <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+            </Card>
+
+            <Card title="Late & no-show fees" sub="Charged to the client's saved card, by you, within 24 hours of the appointment. Clients agree to them at checkout. Each fee can be at most half the service price. Leave blank for no fee.">
+              <Field
+                label="Late arrival fee (£)"
+                value={policies.lateFee}
+                onChange={v => setPolicy('lateFee', v.replace(/[^0-9.]/g, ''))}
+                placeholder="e.g. 10"
+                keyboardType="decimal-pad"
+                note="For arriving after your grace period above."
+              />
+              <Field
+                label="No-show fee (£)"
+                value={policies.noShowFee}
+                onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
+                placeholder="e.g. 20"
+                keyboardType="decimal-pad"
+                note="For not turning up. You mark the booking as a no-show first."
+              />
             </Card>
 
             {/* Refund policy — free-text disclosure only. This app has no

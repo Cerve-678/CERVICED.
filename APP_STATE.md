@@ -12,7 +12,7 @@ changes, not just when someone remembers to.** A status marked ✅ here is a
 claim about the code as of the date below; if you touch a feature, correct its
 row in the same change rather than leaving it stale for the next person.
 
-*Last verified against code: 2026-08-08.*
+*Last verified against code: 2026-08-08 (Beauty Profile & Maintenance rows: 2026-10-10).*
 
 ---
 
@@ -168,6 +168,18 @@ both code paths exist simultaneously on purpose.**
 | Push notifications | ✅ | `pushNotificationService.ts`, edge function `send-push-notification`. Note: it reads the push *ticket*, not the delivery *receipt*, so failed deliveries are currently silent (memory `push-notification-receipt-blindspot`) |
 | Booking status values | ✅ | `BookingStatus` enum: `upcoming` / `in_progress` / `completed` / `cancelled` / `no_show` — always map raw DB status through `mapDbBookingStatus()`, never cast directly |
 | Notification types | ✅ | Real DB-backed enum in `src/types/database.ts`, far larger than the 6-item list in old `LOGIC.md`: booking pending/confirmed/declined, reschedule request/response/confirmed/declined, review request/received, promotion, waitlist_slot_available, address_released, and more |
+
+### Beauty Profile & Beauty Maintenance (client hat, built 2026-10-10)
+
+| Feature | Status | Where |
+|---|---|---|
+| Beauty Profile landing — two doors (Maintenance, My Profile) | ✅ code, ⚠️ not device-run | `BeautyProfileScreen` (state + single SAVE PROFILE) → `src/features/beauty-profile/` (`BeautyLanding`, `MyProfileView`, `CategoryEditor`). Completeness rules in `beautyProfileStats.ts` unchanged |
+| Maintenance list, item menu, add-my-own, setup flow | ✅ code, ⚠️ **migration unapplied** | `src/features/maintenance/`. Pure rules: `src/utils/maintenanceSuggestions.ts` + `src/constants/maintenanceServiceTypes.ts` (mirrored in SQL, parity-tested). Until `supabase/migrations/20261018180000_beauty_maintenance.sql` is applied, the Maintenance card shows "couldn't load / try again" and the Profile badge stays hidden |
+| Completed booking → service item | ⚠️ written, unapplied | `on_booking_completed_maintenance` trigger; keeps a client-edited interval and only moves the due date. Provider's `rebookingNudgeWeeks` wins over the default interval |
+| Maintenance / aftercare push | ⚠️ written, unapplied | `process_maintenance_reminders()` daily 09:30 + aftercare notice on completion. **Opt-in** (`notification_preferences.maintenanceReminders`, default false) — no row is written while off; the provider rebooking nudge only steps aside for a client who has opted in. Push copy is generic by design (legal-flagger 2026-10-10); detail is in-app only |
+| Prep line on the 24h reminder | ⚠️ written, unapplied | `process_client_appointment_reminders()` appends one generic line when `booking_info_packs` exist |
+| Provider rebooking nudge dedupe | ⚠️ written, unapplied | `process_rebooking_nudges()` skips when the client has an active maintenance item for that provider + last service |
+| Profile tab "For You" section + "N due" badge | ✅ | `UserProfileScreen`, `useMaintenanceDueCount` |
 
 ### AI (Becca)
 
