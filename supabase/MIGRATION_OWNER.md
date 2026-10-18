@@ -29,7 +29,7 @@ OWNER:  (none)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261018140000 | `provider_payout_shortfalls` | **Written, NOT yet applied.** Apply AFTER 20261018110000 (payout timing) and 20261018130000 (refund requests). Replaces `provider_payouts_split_adds_up` with `payout_amount <= gross - fee` (every refund path's payout lowering was failing it), adds `provider_payouts.deducted_pence`, `provider_shortfalls` + `provider_shortfall_recoveries`, and service-only `apply_provider_shortfalls()` / `release_provider_shortfalls()`. Deploy release-payouts, stripe-webhook, apply-cancellation-refund, booking-fee and refund-payment from feat/refund-payout-protection AFTER it applies. |
+| 20261018180000 | `provider_payout_shortfalls` | **Written, NOT yet applied.** Apply AFTER 20261018165835 (payout timing) and 20261018165847 (refund requests). Replaces `provider_payouts_split_adds_up` with `payout_amount <= gross - fee` (every refund path's payout lowering was failing it), adds `provider_payouts.deducted_pence`, `provider_shortfalls` + `provider_shortfall_recoveries`, and service-only `apply_provider_shortfalls()` / `release_provider_shortfalls()`. Deploy release-payouts, stripe-webhook, apply-cancellation-refund, booking-fee and refund-payment from feat/refund-payout-protection AFTER it applies. |
 
 ### Applied 2026-10-18 (late and no-show fees)
 
