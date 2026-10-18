@@ -367,7 +367,7 @@ export async function fetchGoLiveStatus(
 // page, so none of the CERVICED-booking steps above apply. The server's
 // external branch of check_and_set_provider_live() publishes them on exactly
 // four things, and this list mirrors it — never add a step here the server
-// doesn't also gate on (migration 20261018170000_link_only_providers).
+// doesn't also gate on (migration 20261018200000_link_only_providers).
 
 export interface LinkOnlyGoLiveStatus {
   logoSet: boolean;
