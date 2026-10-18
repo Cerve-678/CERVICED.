@@ -5,7 +5,7 @@
 
 #generated
 
-**2413 functions** across **335 files**.
+**2414 functions** across **335 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -199,7 +199,7 @@
 - `SignUpStep3Screen.tsx` — fieldError · handleContinue · handleRow · markTouched · SignUpStep3Screen · validate
 - `SignUpStep4Screen.tsx` — chipStyle · chipTextStyle · handleContinue · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
 - `SignUpStep5Screen.tsx` — chipStyle · chipTextStyle · finishHatSwitch · handleComplete · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation · toggleSpecialty
-- `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · useRowReveal · WelcomeScreen
+- `WelcomeScreen.tsx` — handleAppleLogin · handleSocialLogin · rise · rowStyle · WelcomeScreen
 
 ### `src/screens/client/` (21)
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
