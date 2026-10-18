@@ -56,6 +56,7 @@ interface Notification {
       | 'no_show'            | 'provider_no_show'    | 'no_show_disputed'
       | 'cancellation_settled'
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
+      | 'refund_requested' | 'refund_request_updated'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
@@ -346,7 +347,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'refund_requested', 'refund_request_updated', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -535,6 +536,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'fee_charged' ||
         notification.type === 'fee_disputed' ||
         notification.type === 'fee_dispute_resolved' ||
+        notification.type === 'refund_requested' ||
+        notification.type === 'refund_request_updated' ||
         notification.type === 'booking_reminder' ||
         notification.type === 'booking_cancelled' ||
         notification.type === 'payment_success' ||
@@ -806,6 +809,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // an answered dispute is informational.
     if (type === 'fee_charged' || type === 'fee_disputed') return '#FF9500';
     if (type === 'fee_dispute_resolved') return P.accentText;
+    // Amber: a request someone still has to act on or decide.
+    if (type === 'refund_requested') return '#FF9500';
+    if (type === 'refund_request_updated') return P.accentText;
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
@@ -841,6 +847,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'fee_charged':
       case 'fee_disputed':
       case 'fee_dispute_resolved':
+      case 'refund_requested':
+      case 'refund_request_updated':
         return 'View Booking';
       case 'reschedule_declined':
       // The request is closed and the booking is unchanged, so the only useful

@@ -37,6 +37,8 @@ const BOOKING_TYPES = new Set([
   'fee_charged',
   'fee_disputed',
   'fee_dispute_resolved',
+  'refund_requested',
+  'refund_request_updated',
   'booking_reminder',
   'booking_cancelled',
   'payment_success',

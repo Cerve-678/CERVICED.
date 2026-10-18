@@ -55,6 +55,7 @@ import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
+import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -9547,6 +9548,9 @@ export interface SupportRequestInput {
   platform: string;
   appVersion: string;
   activeMode: string;
+  /** Set for a refund request: the ticket is linked to it and the provider
+   *  is emailed (see send-support-request). */
+  refundRequestId?: string;
 }
 
 export interface SupportRequestResult {
@@ -10303,6 +10307,81 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
         }
       : null,
   };
+}
+
+interface RefundRequestRow {
+  id: string;
+  booking_id: string;
+  status: RefundRequestStatus;
+  reason: string;
+  message: string | null;
+  outcome_note: string | null;
+  refunded_amount: number | string | null;
+  created_at: string;
+  passed_to_cerviced_at: string | null;
+  resolved_at: string | null;
+}
+
+// provider_note is deliberately absent: its column isn't granted to app users
+// (the provider's reason for passing a request on is for Cerviced only).
+const REFUND_REQUEST_COLUMNS =
+  'id, booking_id, status, reason, message, outcome_note, refunded_amount, created_at, passed_to_cerviced_at, resolved_at';
+
+function mapRefundRequest(r: RefundRequestRow): RefundRequest {
+  return {
+    id: r.id,
+    bookingId: r.booking_id,
+    status: r.status,
+    reason: r.reason,
+    message: r.message,
+    outcomeNote: r.outcome_note,
+    refundedAmount: r.refunded_amount == null ? null : Number(r.refunded_amount),
+    createdAt: r.created_at,
+    passedToCervicedAt: r.passed_to_cerviced_at,
+    resolvedAt: r.resolved_at,
+  };
+}
+
+/**
+ * A client asks for a refund on their own booking. The row is the record and
+ * request_booking_refund() notifies the provider; it refuses anything not
+ * paid through the app, or a second open request. Returns the request id.
+ */
+export async function requestBookingRefund(
+  bookingId: string,
+  reason: string,
+  message: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('request_booking_refund', {
+    p_booking_id: bookingId,
+    p_reason: reason,
+    p_message: message,
+  });
+  if (error) throw error;
+  if (typeof data !== 'string') throw new Error('Refund request returned no id.');
+  return data;
+}
+
+/** The provider isn't refunding: hand the request to Cerviced, with why. */
+export async function passRefundRequestToCerviced(requestId: string, note: string): Promise<void> {
+  const { error } = await supabase.rpc('pass_refund_request_to_cerviced', {
+    p_request_id: requestId,
+    p_note: note,
+  });
+  if (error) throw error;
+}
+
+/** A booking's refund requests, newest first. RLS lets the booking's client
+ *  and its provider read them. */
+export async function getRefundRequestsForBooking(bookingId: string): Promise<RefundRequest[]> {
+  const { data, error } = await supabase
+    .from('refund_requests')
+    .select(REFUND_REQUEST_COLUMNS)
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return (data as RefundRequestRow[] | null ?? []).map(mapRefundRequest);
 }
 
 /** The money half of a CLIENT cancellation: applies the provider's cancellation

@@ -77,6 +77,8 @@ export type NotificationType =
   | "fee_charged"
   | "fee_disputed"
   | "fee_dispute_resolved"
+  | "refund_requested"
+  | "refund_request_updated"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"
