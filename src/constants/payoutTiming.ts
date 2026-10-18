@@ -2,7 +2,7 @@
  * How long after an appointment CERVICED holds a provider's share before
  * releasing it to their Stripe account. Mirrors the CHECK constraint on
  * providers.payout_hold_days and the whitelist in set_payout_hold_days()
- * (20261018110000) — change all three together.
+ * (20261018165835) — change all three together.
  */
 export const PAYOUT_HOLD_DAY_OPTIONS = [1, 3, 7, 14, 30] as const;
 export type PayoutHoldDays = typeof PAYOUT_HOLD_DAY_OPTIONS[number];

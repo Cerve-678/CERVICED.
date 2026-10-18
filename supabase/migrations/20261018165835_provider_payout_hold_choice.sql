@@ -1,4 +1,4 @@
--- NOT APPLIED. Written 2026-10-18 on feat/provider-payout-timing while the
+-- APPLIED 2026-10-18, recorded as 20261018165835. Written 2026-10-18 on feat/provider-payout-timing while the
 -- migration lock (MIGRATION_OWNER.md) was held by feat/late-no-show-fees for
 -- 20261018100000. Numbered above that one on purpose; re-check
 -- max(version) in supabase_migrations.schema_migrations before applying.
