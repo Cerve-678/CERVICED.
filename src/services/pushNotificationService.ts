@@ -146,6 +146,10 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
               notification_id: row.id,
               type: row.type,
               recipient_role: row.recipient_role,
+              maintenance_item_id:
+                typeof row.metadata?.['maintenance_item_id'] === 'string'
+                  ? row.metadata['maintenance_item_id']
+                  : undefined,
             },
           },
           trigger: null,
