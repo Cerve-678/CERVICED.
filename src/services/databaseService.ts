@@ -42,6 +42,7 @@ import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
+import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -9578,6 +9579,28 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
     .eq('provider_id', provider.id).in('id', data.map(row => row.booking_id));
   if (bookingsError) throw bookingsError;
   return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
+}
+
+/** The provider's own payout timing (provider reading their own record). */
+export async function getPayoutHoldDays(): Promise<PayoutHoldDays> {
+  const { data: { user }, error: authError } = await getSessionUser();
+  if (authError || !user) throw new Error('Please sign in again.');
+  const { data, error } = await supabase.from('providers')
+    .select('payout_hold_days').eq('user_id', user.id).maybeSingle();
+  if (error) throw error;
+  return isPayoutHoldDays(data?.payout_hold_days) ? data.payout_hold_days : DEFAULT_PAYOUT_HOLD_DAYS;
+}
+
+/**
+ * Changes how long after an appointment the provider's share is held. A longer
+ * choice also pushes back payouts still held; a shorter one applies to new
+ * bookings only.
+ */
+export async function setPayoutHoldDays(days: PayoutHoldDays): Promise<PayoutHoldDays> {
+  const { data, error } = await supabase.rpc('set_payout_hold_days', { p_days: days });
+  if (error) throw error;
+  if (!isPayoutHoldDays(data)) throw new Error('Payout timing could not be confirmed. Refresh to check it.');
+  return data;
 }
 
 export interface RefundRequestInput {

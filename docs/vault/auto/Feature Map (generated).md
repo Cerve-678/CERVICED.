@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **165 files**
 - … +135 more
 
 ## Payments
-Curated: [[Payments]] · **129 files**
+Curated: [[Payments]] · **130 files**
 - `src/screens/client/CartScreen.tsx` _(505)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/databaseService.ts` _(168)_
@@ -82,8 +82,8 @@ Curated: [[Payments]] · **129 files**
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
+- `src/components/ProviderStripePayments.tsx` _(99)_
 - `src/features/bookings/receipt.ts` _(99)_
-- `src/components/ProviderStripePayments.tsx` _(96)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(56)_
 - `src/features/bookings/paymentPresentation.ts` _(55)_
@@ -105,13 +105,13 @@ Curated: [[Payments]] · **129 files**
 - `supabase/fix_waitlist_selection_method_hook.sql` _(24)_
 - `src/features/cart/pricing.ts` _(23)_
 - `src/screens/client/PointsScreen.tsx` _(23)_
-- … +99 more
+- … +100 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **255 files**
+Curated: [[Booking Flow]] · **256 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/services/databaseService.ts` _(689)_
+- `src/services/databaseService.ts` _(691)_
 - `src/screens/client/CartScreen.tsx` _(598)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(532)_
 - `src/services/becca/capabilities/client.ts` _(502)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **255 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +225 more
+- … +226 more
 
 ## Notifications
 Curated: [[Notifications]] · **152 files**
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **163 files**
 
 ## Auth
 Curated: [[Contexts]] · **175 files**
-- `src/services/databaseService.ts` _(255)_
+- `src/services/databaseService.ts` _(259)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(142)_
 - `src/screens/auth/LoginScreen.tsx` _(119)_
