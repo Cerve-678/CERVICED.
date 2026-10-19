@@ -10,7 +10,8 @@
 -- New flow:
 --   1. A signed-in account asks to claim a listing: request_provider_claim()
 --      records a provider_claim_requests row and hands back a bio code
---      (e.g. CERVICED-04821) for the listing's Instagram handle.
+--      (e.g. CERVICED-048213) for the listing's Instagram handle. At most
+--      five claims per account per day.
 --   2. The owner puts the code in that Instagram bio.
 --   3. Someone at CERVICED (in practice a Claude session running the
 --      check-claims command) looks at the bio and calls review_provider_claim()
@@ -56,7 +57,8 @@ CREATE TABLE IF NOT EXISTS public.provider_claim_requests (
   bio_code         text NOT NULL UNIQUE,
   status           text NOT NULL DEFAULT 'pending'
                    CHECK (status IN ('pending', 'approved', 'rejected', 'withdrawn')),
-  -- Written by the reviewer for the record. Not shown to the claimant.
+  -- Written by the reviewer for the record. Not readable by the claimant
+  -- (left out of the column grant below).
   review_note      text,
   created_at       timestamptz NOT NULL DEFAULT now(),
   decided_at       timestamptz,
@@ -75,10 +77,13 @@ CREATE INDEX IF NOT EXISTS provider_claim_requests_open_idx
 CREATE INDEX IF NOT EXISTS provider_claim_requests_provider_idx
   ON public.provider_claim_requests (provider_id);
 
--- Claimants read their own requests; every write goes through the functions below.
+-- Claimants read their own requests, minus the reviewer's note; every write
+-- goes through the functions below.
 ALTER TABLE public.provider_claim_requests ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.provider_claim_requests FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON public.provider_claim_requests TO authenticated;
+GRANT SELECT (id, provider_id, user_id, listing_name, instagram_handle, bio_code,
+              status, created_at, decided_at)
+  ON public.provider_claim_requests TO authenticated;
 
 DROP POLICY IF EXISTS provider_claim_requests_own_read ON public.provider_claim_requests;
 CREATE POLICY provider_claim_requests_own_read
@@ -128,10 +133,19 @@ BEGIN
    WHERE user_id = v_uid AND status = 'pending'
    FOR UPDATE;
 
-  IF FOUND THEN
-    IF v_open.provider_id = p_provider_id THEN
-      RETURN v_open;
-    END IF;
+  IF v_open.id IS NOT NULL AND v_open.provider_id = p_provider_id THEN
+    v_open.review_note := NULL;  -- the reviewer's note is never the claimant's to read
+    RETURN v_open;
+  END IF;
+
+  -- Each switch of listing makes a new row; cap it so one account can't churn
+  -- through claims (or through the code space).
+  IF (SELECT count(*) FROM public.provider_claim_requests
+       WHERE user_id = v_uid AND created_at > now() - interval '1 day') >= 5 THEN
+    RAISE EXCEPTION 'You''ve started too many claims today. Please try again tomorrow.';
+  END IF;
+
+  IF v_open.id IS NOT NULL THEN
     UPDATE public.provider_claim_requests
        SET status = 'withdrawn',
            decided_at = now(),
@@ -140,9 +154,9 @@ BEGIN
   END IF;
 
   -- Codes are never reused (bio_code is UNIQUE across every row, not just open
-  -- ones). 100,000 codes; retry on the rare collision.
+  -- ones). A million codes; retry on the rare collision.
   FOR i IN 1..20 LOOP
-    v_code := 'CERVICED-' || lpad(floor(random() * 100000)::int::text, 5, '0');
+    v_code := 'CERVICED-' || lpad(floor(random() * 1000000)::int::text, 6, '0');
     EXIT WHEN NOT EXISTS (SELECT 1 FROM public.provider_claim_requests WHERE bio_code = v_code);
     v_code := NULL;
   END LOOP;
@@ -179,6 +193,7 @@ AS $function$
 DECLARE
   v_req        public.provider_claim_requests;
   v_is_claimed boolean;
+  v_deleted    integer;
 BEGIN
   SELECT * INTO v_req
     FROM public.provider_claim_requests
@@ -223,9 +238,21 @@ BEGIN
 
   IF EXISTS (SELECT 1 FROM public.providers WHERE user_id = v_req.user_id) THEN
     -- Their own profile already carries the listing's imported details
-    -- (prefilled at signup), so the placeholder just goes.
+    -- (prefilled at signup), so the placeholder just goes. An unclaimed
+    -- listing can't be booked or reviewed, but say so plainly rather than
+    -- fail on a foreign key if one somehow has been. Anything else hanging
+    -- off it (imported services, portfolio) cascades away with it.
+    IF EXISTS (SELECT 1 FROM public.bookings WHERE provider_id = v_req.provider_id)
+       OR EXISTS (SELECT 1 FROM public.reviews WHERE provider_id = v_req.provider_id) THEN
+      RAISE EXCEPTION 'The listing for claim % has bookings or reviews, so it can''t be removed. Sort it out by hand.', p_request_id;
+    END IF;
+
     DELETE FROM public.providers
      WHERE id = v_req.provider_id AND is_claimed = false;
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    IF v_deleted <> 1 THEN
+      RAISE EXCEPTION 'The listing for claim % could not be removed.', p_request_id;
+    END IF;
     RETURN 'approved: listing removed, the account already has a profile';
   END IF;
 
