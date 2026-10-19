@@ -341,8 +341,9 @@ support links point at it. The legal copy does not:
   `privacy@cerviced.app` twice: once as the address to request the list of
   third-party processors, once as the address for access/correction/erasure
   requests and data exports.
-- `src/screens/shared/TermsScreen.tsx:54` — the Terms name
-  `legal@cerviced.app` for questions about the terms.
+- ~~`src/screens/shared/TermsScreen.tsx:54` — the Terms name
+  `legal@cerviced.app` for questions about the terms.~~ Fixed 2026-10-19: the
+  Terms now say support@cerviced.co (§19). The Privacy Policy is still open.
 
 `cerviced.app` is not a domain this project controls; the real one is
 `cerviced.co`. So both addresses are unreachable. This was left as-is
@@ -455,8 +456,8 @@ See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
 
 1. **Off-platform booking.** Tapping Book sends a client to the provider's own
    booking site (opened inside the app). The booking, payment, cancellation and
-   data handling all happen under that site's terms, not ours. `TermsScreen`
-   says nothing about this yet.
+   data handling all happen under that site's terms, not ours. Covered in
+   `TermsScreen` clause 12 since 2026-10-19 (§19).
 2. **Client-entered "booked elsewhere" entries.** The client's Upcoming list
    will hold appointments CERVICED never saw. The copy is deliberately framed as
    the client's own note ("we just keep track of them") — keep it that way so
@@ -524,3 +525,38 @@ cover it in the Privacy Policy before launch.
 - **Push consent (§8).** Snooze moves the date a week. The reminder fires
   again only for clients who opted in, through the same gate as before.
 
+
+---
+
+## 19. Terms & Conditions rewritten to match the live app (2026-10-19)
+
+`TermsScreen.tsx` went from 11 sections to 38, at the product owner's
+direction. It now covers the service fee (refunded only on a full refund),
+automatic cancellation refunds and the refund-request route, provider payouts
+and chargeback recovery, link-only (off-platform) bookings, health
+information, Becca, loyalty points, promo codes, reviews and content rules,
+account suspension, 30-day deletion, an in-app display licence for uploaded
+photos, and standard UK clauses (company details, governing law, changes,
+general). The topic list was checked against Fresha, Treatwell, Uber, Pinterest
+and Squarespace/Acuity terms; the wording is our own. Review page:
+https://claude.ai/artifact/TxdENX6Ftr7kxYybHXToXh. **Not lawyer-reviewed.**
+
+Decisions (product owner): contact = support@cerviced.co; payout timing stays
+general ("the payout period you choose"); Announcements removed for link-only
+pros instead of treating a save as consent; Terms say 30-day deletion grace.
+
+**Open before launch:**
+- `[company number]` and `[registered address]` placeholders in clause 1.
+- The app's deletion grace is still 1 day for testing. The Terms say 30.
+- Clause 4 describes Search order as featured-then-rating (main today). Update
+  it when ranked search ships, and say so if featuring is ever paid.
+- No in-app report button for reviews: clause 13 routes reports to the support
+  inbox (§7).
+- Things to put to a solicitor: 16 as the contracting age (§5); provider-set
+  cancellation terms under the CRA 2015 (§6); the foreseeable-loss liability
+  clause; holds up to 30 days and chargeback recovery from future payouts in
+  shared Terms rather than a signed provider agreement; the provider indemnity;
+  who is data controller for client health information passed to providers
+  (§2); PECR separation of marketing and booking notifications (§8).
+- No re-consent: existing users aren't asked to accept the new Terms (§10).
+- The Privacy Policy (AboutScreen) still names privacy@cerviced.app (§13).
