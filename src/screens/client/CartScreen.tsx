@@ -18,7 +18,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  useColorScheme,
+  Appearance,
 } from 'react-native';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
@@ -640,7 +640,6 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
-    const systemScheme = useColorScheme();
     // See the mock PaymentModal above — same reason, same fix.
     const bottomInset = useSystemBottomInset();
     const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
@@ -671,6 +670,19 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         .catch(err => logger.error('[checkout] could not check wallet support', err));
       return () => { cancelled = true; };
     }, [isVisible, isPlatformPaySupported]);
+
+    // On iOS, Stripe's CardForm draws its boxes and text in the phone's own
+    // light/dark style and ignores the colours it's given, and app.json pins
+    // the phone side to light — so in the app's dark mode the form came out
+    // as a bright white block. While this sheet is open, run iOS in the
+    // app's mode so the form matches it, and hand it back on close. The app's
+    // theme doesn't move: 'auto' already equals this value, and a manual
+    // light/dark choice never reads the phone's setting.
+    useEffect(() => {
+      if (!isVisible || Platform.OS !== 'ios') return;
+      Appearance.setColorScheme(isDarkMode ? 'dark' : 'light');
+      return () => Appearance.setColorScheme('unspecified');
+    }, [isVisible, isDarkMode]);
     // Late/no-show fees the client must agree to before their card is saved
     // for them. null = still loading; [] = this checkout has none.
     const [fees, setFees] = useState<CheckoutFee[] | null>(null);
@@ -979,14 +991,15 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                     <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Pay by card</Text>
                   )}
                   {/* Separate number / expiry / CVC / postcode boxes. On iOS,
-                      Stripe only lets the form's background, border and cursor
-                      be styled — its text colour follows the phone's own
-                      light/dark setting, not the app's. So the background
-                      follows the phone too, or the text could vanish. */}
+                      backgroundColor paints the whole form behind Stripe's own
+                      boxes, so it takes the sheet's colour and the boxes sit
+                      straight on the sheet; their text follows the light/dark
+                      mode set in the effect above. On Android it fills the
+                      boxes themselves and the text colours below apply. */}
                   <CardForm
                     disabled={isProcessing}
                     cardStyle={{
-                      backgroundColor: systemScheme === 'dark' ? '#FF1C1C1E' : '#FFFFFFFF',
+                      backgroundColor: toArgbHex(Platform.OS === 'ios' ? P.bg : P.card),
                       borderColor: toArgbHex(P.border),
                       borderWidth: 1,
                       borderRadius: 14,

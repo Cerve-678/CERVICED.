@@ -75,7 +75,7 @@ Curated: [[Availability & Slots]] · **173 files**
 
 ## Payments
 Curated: [[Payments]] · **138 files**
-- `src/screens/client/CartScreen.tsx` _(520)_
+- `src/screens/client/CartScreen.tsx` _(521)_
 - `src/services/databaseService.ts` _(206)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/bookingService.ts` _(120)_
