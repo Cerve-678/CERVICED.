@@ -7,7 +7,7 @@ import * as Location from 'expo-location';
 // renders nothing.
 import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
-import { lightTheme } from '../constants/theme';
+import { themeBrandingColours } from '../constants/providerThemes';
 import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import { normalizeServiceImages } from '../utils/serviceImageDraft';
 export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
@@ -934,11 +934,11 @@ export async function loadProviderFromSupabase(
     location: provider.location_text || '',
     aboutText: provider.about_text || '',
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
-    gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
+    // Unset colours fall back to the provider's own theme, never a
+    // placeholder: this object is saved back on the next profile save.
+    gradient: (provider.gradient || themeBrandingColours(provider.profile_theme).gradient) as [string, string, ...string[]],
     hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
-    // Was '#7B1FA2' (a hardcoded purple) for any provider who'd never set
-    // one — falls back to the app's own accent instead.
-    accentColor: provider.accent_color || lightTheme.accent,
+    accentColor: provider.accent_color || themeBrandingColours(provider.profile_theme).accentColor,
     profileTheme: provider.profile_theme || 'app',
     logo: provider.logo_url || null,
     categories,

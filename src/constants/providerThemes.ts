@@ -272,3 +272,16 @@ export function resolveProviderTheme(key: string | null | undefined): ProviderTh
   const d = preset.tokens;
   return sheet === SHEET_BG ? d : buildThemeTokens(d.hero, d.card, d.accent, sheet, d.gradient);
 }
+
+/** The hero gradient and accent a theme key puts on the profile — the same
+ *  pair a Branding save writes for it. Sign-up, the booking-link import and
+ *  the profile loader start from this, so a provider who never opens Branding
+ *  shows clients exactly the colours Branding shows them, rather than a
+ *  placeholder gradient that nobody chose. */
+export function themeBrandingColours(key: string | null | undefined): {
+  gradient: [string, string];
+  accentColor: string;
+} {
+  const tokens = resolveProviderTheme(key);
+  return { gradient: [...tokens.gradient], accentColor: tokens.accent };
+}
