@@ -25,6 +25,7 @@ Last updated: 18 October 2026.
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
+| Client asked to pay a fee the card couldn't | No | Branch `feat/fee-pay-request`: migration 20261019170000 unapplied; `booking-fee`, `stripe-webhook`, `release-payouts` undeployed |
 | Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
 
 ---
@@ -161,6 +162,7 @@ estimate of loss, not a penalty.
 | Late and no-show fees | In-app, 50% cap, 24h window, no CERVICED cut (13 Oct) |
 | Fee disputes | Go to the provider, not CERVICED |
 | Fee consent records | Kept six years, including after account deletion (19 Oct) |
+| Fee the card couldn't pay | Client asked to pay, in app + email, for 7 days (19 Oct) |
 | Removing a card a fee may need | Blocked until 24h after the appointment (19 Oct) |
 | Refund requests | Go to the provider first, then Cerviced if passed on |
 | Payout while a refund request is open | Held until it closes (18 Oct) |
@@ -175,8 +177,14 @@ estimate of loss, not a penalty.
   platform can delay transfers. Ask a solicitor and Stripe before the 14/30-day
   options go live.
 - Late/no-show fee payouts aren't netted against shortfalls.
-- A fee the bank wants the client to approve (SCA) fails and the provider is
-  told; the client isn't asked to approve it. No fallback flow yet.
+- (Branch `feat/fee-pay-request`, not live.) A fee the saved card can't pay
+  (declined, or the bank wants the client to approve it) becomes a Stripe
+  invoice on the client's Customer, open 7 days. The client pays it from the
+  booking (payment sheet) or the emailed Stripe page; both pay the invoice's one
+  PaymentIntent, so it can't be paid twice. Paid → recorded by `booking-fee`
+  'paid' or the webhook, payout held 24h like any fee. The provider sees it
+  waiting and can cancel it (invoice voided). After 7 days `release-payouts`
+  voids it and tells the provider.
 - `users.stripe_customer_id` (applied 20261019011825) is unused once the saved-
   cards branch is deployed; drop it and its two guard triggers in a migration
   applied AFTER that deploy.

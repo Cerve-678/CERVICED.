@@ -10105,8 +10105,10 @@ export interface BookingFeeCharge {
   id: string;
   kind: BookingFeeKind;
   amountPence: number;
-  status: 'processing' | 'succeeded' | 'failed' | 'refunded';
+  status: 'processing' | 'awaiting_client' | 'succeeded' | 'failed' | 'refunded';
   chargedAt: string | null;
+  /** While awaiting_client: when the client's request to pay lapses. */
+  payBy: string | null;
   createdAt: string;
   disputedAt: string | null;
   disputeReason: string | null;
@@ -10121,6 +10123,7 @@ interface BookingFeeChargeRow {
   amount_pence: number;
   status: BookingFeeCharge['status'];
   charged_at: string | null;
+  pay_by: string | null;
   created_at: string;
   disputed_at: string | null;
   dispute_reason: string | null;
@@ -10132,7 +10135,7 @@ interface BookingFeeChargeRow {
 /** Newest first. A booking has at most one live fee plus any failed attempts. */
 export async function getBookingFeeCharges(bookingId: string): Promise<BookingFeeCharge[]> {
   const { data, error } = await supabase.from('booking_fee_charges')
-    .select('id, kind, amount_pence, status, charged_at, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
+    .select('id, kind, amount_pence, status, charged_at, pay_by, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
     .eq('booking_id', bookingId)
     .order('created_at', { ascending: false })
     .limit(10);
@@ -10143,6 +10146,7 @@ export async function getBookingFeeCharges(bookingId: string): Promise<BookingFe
     amountPence: row.amount_pence,
     status: row.status,
     chargedAt: row.charged_at,
+    payBy: row.pay_by,
     createdAt: row.created_at,
     disputedAt: row.disputed_at,
     disputeReason: row.dispute_reason,
@@ -10179,17 +10183,65 @@ export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeT
   };
 }
 
-async function bookingFeeAction(body: Record<string, string>, fallback: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('booking-fee', { body });
-  if (error || data?.error) throw await getPaymentRequestError(error, data, fallback);
+/** Every field booking-fee may answer with; each action reads its own. */
+interface BookingFeeResponse {
+  status?: unknown;
+  payBy?: unknown;
+  clientSecret?: unknown;
+  customerId?: unknown;
+  ephemeralKeySecret?: unknown;
+  livemode?: unknown;
 }
 
-export async function chargeBookingFee(bookingId: string, kind: BookingFeeKind): Promise<void> {
-  return bookingFeeAction({ action: 'charge', bookingId, kind }, 'Could not charge this fee. Please try again.');
+async function bookingFeeAction(body: Record<string, string>, fallback: string): Promise<BookingFeeResponse> {
+  const { data, error } = await supabase.functions.invoke('booking-fee', { body });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, fallback);
+  return (data ?? {}) as BookingFeeResponse;
+}
+
+/** 'charged' when the saved card paid; 'awaiting_client' when it couldn't and
+ *  the client has been asked to pay instead (by `payBy`). */
+export type ChargeBookingFeeResult = { status: 'charged' } | { status: 'awaiting_client'; payBy: string };
+
+export async function chargeBookingFee(bookingId: string, kind: BookingFeeKind): Promise<ChargeBookingFeeResult> {
+  const data = await bookingFeeAction({ action: 'charge', bookingId, kind }, 'Could not charge this fee. Please try again.');
+  return data.status === 'awaiting_client' && typeof data.payBy === 'string'
+    ? { status: 'awaiting_client', payBy: data.payBy }
+    : { status: 'charged' };
+}
+
+/** The provider withdraws an open request for the client to pay. */
+export async function cancelBookingFeeRequest(chargeId: string): Promise<void> {
+  await bookingFeeAction({ action: 'cancel_request', chargeId }, 'Could not cancel this request. Please try again.');
+}
+
+/** What the payment sheet needs to pay a fee the client was asked to pay. */
+export interface FeePaymentSheet {
+  clientSecret: string;
+  customerId: string;
+  ephemeralKeySecret: string;
+}
+
+export async function startBookingFeePayment(chargeId: string): Promise<FeePaymentSheet> {
+  const data = await bookingFeeAction({ action: 'pay', chargeId }, 'Could not open payment. Please try again.');
+  if (typeof data.clientSecret !== 'string' || typeof data.customerId !== 'string' ||
+      typeof data.ephemeralKeySecret !== 'string') {
+    throw new Error('Could not open payment. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return { clientSecret: data.clientSecret, customerId: data.customerId, ephemeralKeySecret: data.ephemeralKeySecret };
+}
+
+/** After the sheet succeeds: records the fee as paid (the webhook does too). */
+export async function confirmBookingFeePayment(chargeId: string): Promise<void> {
+  await bookingFeeAction({ action: 'paid', chargeId }, "Your payment went through but we couldn't confirm it yet. Pull to refresh in a moment.");
 }
 
 export async function refundBookingFee(chargeId: string): Promise<void> {
-  return bookingFeeAction({ action: 'refund', chargeId }, 'Could not refund this fee. Please try again.');
+  await bookingFeeAction({ action: 'refund', chargeId }, 'Could not refund this fee. Please try again.');
 }
 
 export async function disputeBookingFee(chargeId: string, reason: string): Promise<void> {

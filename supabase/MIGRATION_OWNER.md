@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### PENDING APPLY 2026-10-19 (fee payment requests)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019170000 | `fee_payment_requests` | **Written, NOT applied** (branch `feat/fee-pay-request`). Frontier at authoring: `20261019140000`. `booking_fee_charges` status gains `awaiting_client` (+ `stripe_invoice_id`, `pay_by`); `notifications_type_check` rebuilt from live (verified 2026-10-19) + `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed`; `process_due_payouts()` reproduced from live + a lapse check. Apply, record the version, then deploy `booking-fee`, `stripe-webhook`, `release-payouts` from the branch. Deploying the functions first would fail every request on the old status constraint. |
+
 ### Applied 2026-10-19 (fee terms wording version '2026-10-19')
 
 | Authored version | Name | Status |
