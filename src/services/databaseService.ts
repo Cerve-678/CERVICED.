@@ -8186,7 +8186,7 @@ export async function getUserBeautyProfile(
 const MAINTENANCE_ITEMS_LIMIT = 200;
 
 const MAINTENANCE_ITEM_COLUMNS =
-  "id, kind, origin, title, type_key, provider_id, service_id, provider_name, repeat_weeks, interval_edited, last_done_on, due_on, event_on, paused, created_at";
+  "id, kind, origin, title, type_key, provider_id, service_id, provider_name, repeat_weeks, interval_edited, last_done_on, due_on, event_on, paused, note, created_at";
 
 interface MaintenanceItemRow {
   id: string;
@@ -8203,6 +8203,7 @@ interface MaintenanceItemRow {
   due_on: string | null;
   event_on: string | null;
   paused: boolean;
+  note: string | null;
   created_at: string;
 }
 
@@ -8223,6 +8224,7 @@ function mapMaintenanceItem(r: MaintenanceItemRow): MaintenanceItem {
     dueOn: r.due_on,
     eventOn: r.event_on,
     paused: r.paused,
+    note: r.note,
     createdAt: r.created_at,
   };
 }
@@ -8267,8 +8269,10 @@ export async function addMaintenanceItems(items: NewMaintenanceItem[]): Promise<
         service_id: i.serviceId,
         provider_name: i.providerName,
         repeat_weeks: i.repeatWeeks,
+        last_done_on: i.lastDoneOn,
         due_on: i.dueOn,
         event_on: i.eventOn,
+        note: i.note?.trim() || null,
       })),
     )
     .select(MAINTENANCE_ITEM_COLUMNS);
@@ -8285,6 +8289,8 @@ export interface MaintenanceItemPatch {
   dueOn?: string;
   lastDoneOn?: string;
   paused?: boolean;
+  /** Empty or whitespace clears it. */
+  note?: string;
 }
 
 export async function updateMaintenanceItem(
@@ -8298,12 +8304,14 @@ export async function updateMaintenanceItem(
     due_on?: string;
     last_done_on?: string;
     paused?: boolean;
+    note?: string | null;
   } = {};
   if (patch.repeatWeeks !== undefined) row.repeat_weeks = patch.repeatWeeks;
   if (patch.intervalEdited !== undefined) row.interval_edited = patch.intervalEdited;
   if (patch.dueOn !== undefined) row.due_on = patch.dueOn;
   if (patch.lastDoneOn !== undefined) row.last_done_on = patch.lastDoneOn;
   if (patch.paused !== undefined) row.paused = patch.paused;
+  if (patch.note !== undefined) row.note = patch.note.trim() || null;
   const { data, error } = await supabase
     .from("maintenance_items")
     .update(row)

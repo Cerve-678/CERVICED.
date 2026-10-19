@@ -13,7 +13,7 @@ function item(p: Partial<MaintenanceItem>): MaintenanceItem {
     id: 'x', kind: 'service', origin: 'booking', title: 'Lash infill', typeKey: 'lash_infill',
     providerId: 'p1', serviceId: 's1', providerName: 'Lash Lab', repeatWeeks: 3, intervalEdited: false,
     lastDoneOn: '2026-09-22', dueOn: '2026-10-13', eventOn: null, paused: false,
-    createdAt: '2026-09-22T10:00:00Z', ...p,
+    note: null, createdAt: '2026-09-22T10:00:00Z', ...p,
   };
 }
 const covered = (serviceIds: string[], providerIds: string[] = []) => ({

@@ -8,10 +8,20 @@ import { MAINTENANCE_SERVICE_TYPES } from '../constants/maintenanceServiceTypes'
  * suites are blind to — the same blind spot that let notifications_type_check
  * reject every insert while both were green (memory: new-notification-type-is-four-places).
  */
-const migration = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'supabase', 'migrations', '20261018180000_beauty_maintenance.sql'),
-  'utf8',
-);
+const migrationsDir = path.join(__dirname, '..', '..', 'supabase', 'migrations');
+const readMigration = (file: string): string => fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+const migration = readMigration('20261018180000_beauty_maintenance.sql');
+const moreTypes = readMigration('20261019120000_maintenance_more_types_and_notes.sql');
+
+// The live table is whatever the newest seeding migration restated, so that's
+// the copy the app table must match.
+const SEED = 'INSERT INTO public.maintenance_service_types';
+const latestSeed = fs.readdirSync(migrationsDir)
+  .filter(f => /^\d{14}_.*\.sql$/.test(f))
+  .sort()
+  .map(readMigration)
+  .filter(sql => sql.includes(SEED))
+  .pop()!;
 const fn = (name: string): string => {
   const start = migration.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
   expect(start).toBeGreaterThan(-1);
@@ -20,7 +30,7 @@ const fn = (name: string): string => {
 
 describe('maintenance_service_types seed matches the app table', () => {
   it('has the same keys, categories, weeks and keywords, in order', () => {
-    const rows = [...migration.matchAll(
+    const rows = [...latestSeed.matchAll(
       /\('([a-z_]+)',\s+'([A-Z]+)',\s+(\d+),\s+ARRAY\[([^\]]*)\]::text\[\],\s+(\d+)\)/g,
     )].map(m => ({
       key: m[1],
@@ -34,6 +44,31 @@ describe('maintenance_service_types seed matches the app table', () => {
         ({ key, searchCategory, defaultWeeks, keywords: [...keywords] })),
     );
     expect(rows.map(r => r.sortOrder)).toEqual(rows.map((_, i) => i + 1));
+  });
+});
+
+describe('maintenance_service_types restatement', () => {
+  it('is the newest seed, and upserts so a re-run or an old row is corrected in place', () => {
+    expect(latestSeed).toBe(moreTypes);
+    expect(moreTypes).toMatch(/ON CONFLICT \(key\) DO UPDATE SET[\s\S]*sort_order\s+= EXCLUDED\.sort_order/);
+  });
+
+  it('puts a type that must win a keyword tie ahead of the one it beats', () => {
+    const keys = MAINTENANCE_SERVICE_TYPES.map(t => t.key);
+    expect(keys.indexOf('pedicure')).toBeLessThan(keys.indexOf('gel_nails'));
+    expect(keys.indexOf('waxing')).toBeLessThan(keys.indexOf('facial'));
+    expect(keys.indexOf('brow_lamination')).toBeLessThan(keys.indexOf('brow_tint'));
+  });
+});
+
+describe('maintenance note and last-done grants', () => {
+  it('adds a capped, owner-only note and lets clients set it and last_done_on', () => {
+    expect(moreTypes).toContain('CHECK (note IS NULL OR char_length(note) <= 200)');
+    expect(moreTypes).toContain('GRANT INSERT (last_done_on, note) ON public.maintenance_items TO authenticated;');
+    expect(moreTypes).toContain('GRANT UPDATE (note) ON public.maintenance_items TO authenticated;');
+    // Never widens what a client can forge.
+    expect(moreTypes).not.toMatch(/GRANT (INSERT|UPDATE) \([^)]*(origin|source_booking_id|due_push_count)/);
+    expect(moreTypes).not.toMatch(/CREATE POLICY|USING\s*\(\s*true/i);
   });
 });
 
