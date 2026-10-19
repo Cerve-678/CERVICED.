@@ -26,6 +26,7 @@ Last updated: 18 October 2026.
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
+| Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
 | Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
 
 ---
@@ -163,6 +164,7 @@ estimate of loss, not a penalty.
 | Fee disputes | Go to the provider, not CERVICED |
 | Fee consent records | Kept six years, including after account deletion (19 Oct) |
 | Fee the card couldn't pay | Client asked to pay, in app + email, for 7 days (19 Oct) |
+| Declined fee retries | Up to 3 automatic retries in those 7 days, declines only, new wording only (19 Oct) |
 | Removing a card a fee may need | Blocked until 24h after the appointment (19 Oct) |
 | Refund requests | Go to the provider first, then Cerviced if passed on |
 | Payout while a refund request is open | Held until it closes (18 Oct) |
@@ -185,6 +187,12 @@ estimate of loss, not a penalty.
   'paid' or the webhook, payout held 24h like any fee. The provider sees it
   waiting and can cancel it (invoice voided). After 7 days `release-payouts`
   voids it and tells the provider.
+- If the off-session charge was
+  DECLINED (not `authentication_required`) and the client agreed to wording
+  version `2026-10-19-retries`, the saved card is also tried again up to three
+  times, about 1, 3 and 6 days into the request, by paying the same invoice
+  (`invoices.pay`, off-session), run by `release-payouts`. The card can't be
+  removed while retries are pending. Older agreements are never retried.
 - `users.stripe_customer_id` (applied 20261019011825) is unused once the saved-
   cards branch is deployed; drop it and its two guard triggers in a migration
   applied AFTER that deploy.

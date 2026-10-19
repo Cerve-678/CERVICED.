@@ -506,6 +506,20 @@ direction and **not lawyer-reviewed**:
   contradicts the product's standing liability boundary (CERVICED never collects,
   tracks or attests to off-app balances — CLAUDE.md, Security). No in-app
   balance payment exists, so the clause promises something that isn't built.
+- **Automatic retries (2026-10-19, user-directed, branch `feat/fee-auto-retry`):**
+  a declined fee may be retried on the saved card up to three times within 7
+  days, and the client is asked to pay it in the app or by a Stripe email link.
+  The fee wording (version '2026-10-19-retries'), Terms §4, the Privacy
+  paragraph and the provider Policies text now say so. Only agreements made on
+  that wording are retried. Raise: whether repeated merchant-initiated retries
+  of a consumer's card fit card-scheme retry rules and the CMA's unfair-terms
+  guidance on default charges; the retry count and spacing are a product call.
+  Hard declines (lost/stolen/fraud/closed/stop-payment) are never retried, and
+  the client is notified after every retry, paid or not. Still open: a client
+  can't withdraw consent to retries other than by paying (the card can't be
+  removed while retries are pending); and deleting an account during a pending
+  request doesn't cancel it — decide whether deletion should void the
+  invoice and stop retries.
 - A client can't remove a saved card while a booking paid with it is still
   inside its 24-hour fee window (user decision 2026-10-19); the app says when
   they can.

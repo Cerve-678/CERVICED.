@@ -3,7 +3,7 @@ import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { takeBackFromProvider } from '../_shared/takeBack.ts';
-import { closeFeeRequest, recordFeePaid, requestClientPayment } from '../_shared/feePayRequest.ts';
+import { closeFeeRequest, isRetryableDecline, recordFeePaid, requestClientPayment, termsAllowRetries } from '../_shared/feePayRequest.ts';
 
 // Late-arrival and no-show fees (auto-memory late-and-no-show-fees-decision).
 //
@@ -114,7 +114,7 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
   // this provider. The amount charged is the booking's frozen fee, which
   // accept_checkout_fees copied into the record from the same held rows.
   const { data: consent, error: consentError } = batch
-    ? await admin.from('fee_consent_records').select('id, user_id, fees').eq('checkout_batch_id', batch.id).maybeSingle()
+    ? await admin.from('fee_consent_records').select('id, user_id, fees, terms_version').eq('checkout_batch_id', batch.id).maybeSingle()
     : { data: null, error: null };
   if (consentError) throw consentError;
   // The agreed amount for this provider and fee kind; a charge above it (or
@@ -185,12 +185,16 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
       }).eq('id', row.id);
       throw err;
     }
+    // A decline may go through later; a bank that wants the client to approve
+    // never will. Retries only where the client's agreed wording allows them.
+    const retryWith = isRetryableDecline(stripeError.code, stripeError.decline_code) && termsAllowRetries(consent!.terms_version)
+      ? paymentMethod : null;
     return await askClientToPay(row.id, booking, kind, eligibility.amountPence, customerId!,
-      stripeError.payment_intent?.id ?? null, stripeError.code ?? 'card_error');
+      stripeError.payment_intent?.id ?? null, stripeError.code ?? 'card_error', retryWith);
   }
 
   if (intent.status !== 'succeeded') {
-    return await askClientToPay(row.id, booking, kind, eligibility.amountPence, customerId!, intent.id, `intent ${intent.status}`);
+    return await askClientToPay(row.id, booking, kind, eligibility.amountPence, customerId!, intent.id, `intent ${intent.status}`, null);
   }
 
   // Records the payout (CERVICED takes no cut). The webhook would too.
@@ -286,11 +290,12 @@ interface FeeBooking {
 async function askClientToPay(
   feeId: string, booking: FeeBooking, kind: FeeKind, amountPence: number,
   customerId: string, failedIntentId: string | null, failureReason: string,
+  retryPaymentMethodId: string | null,
 ): Promise<Response> {
   try {
     const { payBy } = await requestClientPayment(admin, stripe, {
       fee: { id: feeId, booking_id: booking.id, provider_id: booking.provider_id, client_user_id: booking.user_id, kind, amount_pence: amountPence },
-      customerId, failedIntentId, failureReason,
+      customerId, failedIntentId, failureReason, retryPaymentMethodId,
       providerName: booking.provider_name_snapshot?.trim() || 'Your provider',
       serviceName: booking.service_name_snapshot,
     });
