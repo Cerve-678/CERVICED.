@@ -161,9 +161,7 @@ export const en = {
   'providerAccount.linkOnly.hero.sub':
     'Your profile, how clients find you, and your account — all in one place.',
   'providerAccount.linkOnly.hero.edit': 'Edit profile',
-  'providerAccount.linkOnly.hero.editSub': 'Logo, About, contact',
   'providerAccount.linkOnly.hero.branding': 'Branding',
-  'providerAccount.linkOnly.hero.brandingSub': 'Colours & look',
   'providerAccount.section.yourBusiness': 'YOUR BUSINESS',
   'providerAccount.linkOnly.businessInfo.title': 'Business Info',
   'providerAccount.linkOnly.businessInfo.sub': 'Name, service type, booking link, emails',
