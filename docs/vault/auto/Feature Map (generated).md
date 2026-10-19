@@ -11,7 +11,7 @@ Curated: [[Address Release]] · **92 files**
 - `src/services/databaseService.ts` _(173)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
-- `src/screens/provider/InfoRegScreen.tsx` _(79)_
+- `src/screens/provider/InfoRegScreen.tsx` _(80)_
 - `src/services/providerRegistrationService.ts` _(66)_
 - `src/screens/client/CartScreen.tsx` _(65)_
 - `src/contexts/BookingContext.tsx` _(53)_

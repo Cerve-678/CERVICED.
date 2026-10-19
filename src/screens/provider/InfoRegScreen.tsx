@@ -4420,6 +4420,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
+              {/* Business Type, for link-only pros only. Everyone else sees it
+                  on 05 · Address Confirmation, a page link-only pros don't
+                  get. Locked here like Business Name and Service Type above:
+                  Business Info is its one editor. */}
+              {isLinkOnly && (
+                <View style={styles.inputGroup}>
+                  <RequiredLabel styles={styles}>Business Type</RequiredLabel>
+                  <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                    <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                    <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                      {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                    </Text>
+                  </View>
+                  <Text style={styles.inputHint}>
+                    Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.
+                  </Text>
+                </View>
+              )}
+
               {/* Location */}
               <View
                 style={styles.inputGroup}
