@@ -20,6 +20,7 @@ import {
   Platform,
   useColorScheme,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
@@ -40,7 +41,13 @@ import {
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
   getCheckoutFees, acceptCheckoutFees, type CheckoutFee } from '../../services/databaseService';
-import { FEE_CONSENT_LINE, FEE_TERMS_BODY, FEE_TERMS_HEADING } from '../../constants/feeTerms';
+import {
+  FEE_CONSENT_LINE,
+  FEE_TERMS_BODY,
+  FEE_TERMS_HEADING,
+  FEE_TERMS_SHA256,
+  FEE_TERMS_VERSION,
+} from '../../constants/feeTerms';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -703,7 +710,14 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
         }
-        if (hasFees) await acceptCheckoutFees(checkoutBatchId);
+        if (hasFees) {
+          await acceptCheckoutFees(checkoutBatchId, {
+            termsVersion: FEE_TERMS_VERSION,
+            termsSha256: FEE_TERMS_SHA256,
+            appPlatform: Platform.OS,
+            appVersion: Constants.expoConfig?.version ?? null,
+          });
+        }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
         const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;

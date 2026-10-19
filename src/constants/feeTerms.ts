@@ -15,3 +15,14 @@ export const FEE_TERMS_BODY =
 /** The tick-box line at checkout. */
 export const FEE_CONSENT_LINE =
   'I agree to these fees and to the Late Arrival & No-Show Fees terms, and that my card will be saved so the provider can charge an agreed fee within 24 hours of my appointment.';
+
+/** Which wording the client agreed to. The database keeps the full text of each
+ *  version (fee_terms_versions) and every agreement names one, so a consent
+ *  record proves exactly what the client was shown. Changing any of the three
+ *  strings above means a NEW version: a new fee_terms_versions row in a
+ *  migration, then bump these two. feeTerms.test.ts fails until both match. */
+export const FEE_TERMS_VERSION = '2026-10-18';
+
+/** sha256 of heading, body and consent line joined by blank lines. The
+ *  database refuses an agreement whose hash doesn't match the version's text. */
+export const FEE_TERMS_SHA256 = 'fcd24a7aba9846a53c749370735af8ae6eeb457074e067ba6b00a440cf545f8f';

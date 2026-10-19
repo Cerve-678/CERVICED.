@@ -26,7 +26,8 @@ export interface FeeEligibilityInput {
   noShowFeePence: number | null;
   /** The booking was paid through Stripe in the app. */
   paidInApp: boolean;
-  /** checkout_batches.fee_consent_at was stamped for this booking's payment. */
+  /** A fee_consent_records row exists for this booking's checkout, by this
+   *  client, covering this booking's provider. */
   clientConsented: boolean;
   /** A non-failed fee row already exists for this booking. */
   alreadyCharged: boolean;

@@ -24,6 +24,8 @@ Last updated: 18 October 2026.
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
+| Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
+| Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
 
 ---
 
@@ -113,7 +115,14 @@ their Stripe transfer is reversed. If their Stripe balance can't cover it
 - Two fixed £ fees in the provider's policy: late arrival (after the grace
   period) and no-show. Each is capped at **50% of the service price**.
 - Frozen onto the booking by a trigger at insert, from the live policy.
-- The client agrees to them at checkout before their card is saved.
+- The client agrees to them at checkout before their card is saved. Each agreement is a
+  `fee_consent_records` row: client, database time, checkout, the wording
+  version they were shown (`fee_terms_versions`, checked by sha256), the frozen
+  amounts per provider, and app platform/version. `create-payment-intent` won't
+  save the card off-session without it; `booking-fee` won't charge unless the
+  record covers that provider, and stores the record's id on the charge.
+  Changing the wording means a new `fee_terms_versions` row and a bump of
+  `FEE_TERMS_VERSION` / `FEE_TERMS_SHA256` (`feeTerms.test.ts` enforces it).
 - The provider can charge **once, within 24 hours** of the appointment ending.
 - The client disputes **to the provider**, who refunds or keeps it. CERVICED
   doesn't adjudicate.
@@ -128,6 +137,11 @@ estimate of loss, not a penalty.
 
 ## 7. Security & the data boundary
 
+- Saved cards: the client's Stripe Customer id sits in
+  `client_stripe_customers`, service-role only. CERVICED stores no card data;
+  Payment Methods reads brand/last 4/expiry live from Stripe. A card saved on
+  Payment Methods is `on_session` only. `booking-fee` charges the Customer and
+  card on the booking's original payment, not a lookup by user.
 - Provider fee visibility (UI): fixed. (Data level: per 3 Oct, a provider could
   still read the fee columns directly; not re-verified.)
 - Shortfall functions are service-role only; providers can read their own
@@ -155,6 +169,11 @@ estimate of loss, not a penalty.
   platform can delay transfers. Ask a solicitor and Stripe before the 14/30-day
   options go live.
 - Late/no-show fee payouts aren't netted against shortfalls.
+- A fee the bank wants the client to approve (SCA) fails and the provider is
+  told; the client isn't asked to approve it. No fallback flow yet.
+- `users.stripe_customer_id` (applied 20261019011825) is unused once the saved-
+  cards branch is deployed; drop it and its two guard triggers in a migration
+  applied AFTER that deploy.
 - A reschedule to a later date may not move the payout release date (per 3 Oct;
   not re-verified).
 - Failed payouts aren't retried or alerted; there's no admin view for

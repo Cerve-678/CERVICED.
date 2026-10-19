@@ -486,6 +486,16 @@ direction and **not lawyer-reviewed**:
   bank chargeback is taken back from the provider's payout (the webhook now does
   this for booking payments and fees); the client fee disputes go to the
   provider, never to Cerviced, so the Terms say Cerviced doesn't decide them.
+- **Consent record (2026-10-19, branch `feat/saved-cards-fee-consent-record`,
+  not live):** at the user's direction each agreement is now a
+  `fee_consent_records` row: client, database time, checkout, wording version
+  (full text kept in `fee_terms_versions`, matched by sha256), frozen fee
+  amounts per provider, app platform/version. Each fee charge names its record.
+  Still to raise: how long these records are kept, including after the client
+  deletes their account (they have no foreign key to the user, so they survive
+  deletion unless purged — the Privacy Policy doesn't say either way); and
+  there's no flow asking the client to approve a fee their bank sends back for
+  authentication (SCA), so such a fee simply fails.
 
 **Not changed unilaterally** — flagged for the product owner and a lawyer.
 

@@ -6,6 +6,8 @@ import {
 interface CreatePaymentIntentResult {
   clientSecret: string;
   paymentIntentId: string;
+  customerId?: string;
+  ephemeralKeySecret?: string;
 }
 
 /** Creates a Stripe PaymentIntent from a prepared server-owned checkout.
