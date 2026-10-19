@@ -178,6 +178,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             setYearsExperience(signup.years_experience != null ? String(signup.years_experience) : '');
             setAccessibility(signup.accessibility_notes?.split('|').filter(Boolean) ?? []);
             setPaymentMethods(signup.preferred_payment_methods ?? []);
+            setBusinessType((signup.business_type as BusinessType | null) ?? null);
           }
         }
       } catch {
@@ -319,7 +320,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           // Written as a pair: business_type gates which release timings are
           // valid, so persisting the type without reconciling the policy is
           // what leaves a stale, unofferable timing in the DB.
-          ...(businessType && !isLinkOnly
+          ...(businessType
             ? {
                 business_type: businessType,
                 address_release_policy: reconcileAddressReleasePolicy(businessType, addressReleasePolicy),
@@ -339,6 +340,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           instagram: instagram.trim() || null,
           website: website.trim() || null,
           ...(isLinkOnly ? linkOnlyFields : {}),
+          ...(isLinkOnly && businessType ? { business_type: businessType } : {}),
         }));
       }
 
@@ -505,14 +507,15 @@ export default function BusinessInfoScreen({ navigation }: any) {
               )}
             </Card>
 
-            {/* Where clients are seen and when the address is released only
-                matter to CERVICED's own booking flow. A link-only provider
-                books on their own page, so — as in Edit Profile — it isn't
-                asked of them. */}
-            {!isLinkOnly && (
+            {/* Every provider picks where they see clients; it's shown on
+                their profile. When the address is released only matters to
+                CERVICED's own booking flow, so a link-only provider (who books
+                on their own page) isn't shown that part. */}
             <Card
               title="Business Type"
-              sub="Where you see clients. This decides whether — and when — your address is shared with them."
+              sub={isLinkOnly
+                ? 'Where you see clients. Shown on your profile.'
+                : 'Where you see clients. This decides whether — and when — your address is shared with them.'}
             >
               <RadioGroup
                 options={BUSINESS_TYPE_OPTS}
@@ -531,7 +534,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   offered excludes 'always' (see ADDRESS_RELEASE_BY_BUSINESS_TYPE)
                   because the address on file for a mobile provider is usually
                   their home. */}
-              {businessType && (
+              {businessType && !isLinkOnly && (
                 <View style={{ marginTop: 18 }}>
                   <Text style={[s.cardTitle, { color: C.text, marginBottom: 4 }]}>Address Release</Text>
                   <Text style={[s.cardSub, { color: C.sub }]}>
@@ -557,7 +560,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 </View>
               )}
             </Card>
-            )}
 
             {isLinkOnly && (
               <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">

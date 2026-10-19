@@ -1357,3 +1357,163 @@ Reanimated timeline: staggered springs for the cards, `react-native-svg`
 stacked `Text` layers with `rotateX` for the S→C flip, per-letter
 `translateY` for the word. No new dependencies beyond what's installed
 (check `react-native-svg` is present before starting).
+
+---
+
+## Personalised Beauty Maintenance, Concept A "Your rhythm" — stages 1–2 shipped, Event plan parked (2026-10-19)
+
+### What it means
+
+Beauty Maintenance today leans on hair. `buildMaintenanceSuggestions`
+(`src/utils/maintenanceSuggestions.ts`) offers wash and go, silk press and
+deep conditioning only for textured hair types. Nails, lashes, brows and
+skin each get one generic "appointment" type, and waxing and makeup get
+nothing. "Add my own" (`src/features/maintenance/AddReminderSheet.tsx`) is a
+name, one of six broad types, and a repeat or single date. Concept A makes
+the whole thing feel like the client's own:
+
+1. **Your rhythm (landing).** A "Next up" card says how often the client
+   really goes, worked out from their own past bookings ("every 3½ weeks,
+   from your last 5 bookings"), with Rebook and Snooze. Below it is one list
+   across every category, with filter chips. Each row shows the provider and
+   the client's own note.
+2. **Picked for you.** Suggestions come from every section of the Beauty
+   Card, not just hair: brow style → lamination, sensitive areas → waxing,
+   protective styling → take-down, lash style → lash lift, nail shape →
+   pedicure. Each still shows "From your answer: …". A three-way choice
+   (Essentials / My regulars / Everything) sets how many are offered.
+3. **Add your own.** Free text plus quick-pick chips (wig install,
+   Brazilian, threading, spray tan, barber cut, massage…). Three timing
+   modes: Repeats / Before an event / Just once. Repeats count from "Last
+   done", so the next date is right on day one. Optional provider (past
+   providers or "Someone new"), and a private "Note to self".
+4. **Event plan.** An event becomes an ordered checklist (trial → brows →
+   nails → makeup) with a countdown and a "2 of 4 booked" progress bar. Each
+   step is marked booked or has a booking button.
+
+Mockup (private Artifact, Design canvas):
+https://claude.ai/artifact/QFA6Yjp9FZtbwEpBr3ttTH
+
+### Decided (2026-10-19)
+
+The user chose Concept A over B (calendar), C (head to toe) and D (simple
+and clear). All four are on one canvas:
+https://claude.ai/artifact/5EhfFJEkKuGDcUbrxCKdEF
+
+- **Build in stages**, each on its own branch and PR: (1) Picked for you +
+  new service types + the fuller Add your own; (2) the Your rhythm landing
+  with learned intervals; (3) Event plan.
+- **Learned intervals.** The interval learns from the client's *own* booking
+  gaps, but an interval the client sets always wins. Profile answers still
+  never change an interval. Run `cerviced-legal-flagger` before stage 2.
+- **New service types:** waxing, lash lift, brow lamination/tint, pedicure.
+  Anything the client names themselves stays first-class (free text, with
+  quick picks). They go into both `src/constants/maintenanceServiceTypes.ts`
+  and the SQL seed `public.maintenance_service_types`, and a test fails if the
+  two disagree. Adding them takes a migration, which needs the
+  `supabase/MIGRATION_OWNER.md` lock.
+- **Waxing is filed under Aesthetics** for now, because providers have no
+  waxing category (OTHER is retired). See "A Body provider category" below.
+- **Event plan: one push per event**, listing whatever isn't booked yet,
+  never one push per step.
+- **Still out:** at-home routines, product restock, patch-test timing (the
+  app has no basis to say when one is due), and anything that reads skin
+  tone or skin concerns.
+
+### Shipped
+
+- **Stage 1** (#94, migration `20261019120000`): Picked for you, the five new
+  types, and the fuller Add your own (quick picks, Repeats / Before an event /
+  Just once, last done, note to self). The quick picks were revised in #104:
+  French tips, wash and blow-dry, and style and cut replace blow-dry, massage
+  and barber cut.
+- **Stage 2** (#103, migration `20261019150000`): learned intervals and the
+  Next up card with Rebook and Snooze. Precedence: client, then provider, then
+  learned, then default. Aesthetics learns too, and the privacy gap is
+  LEGAL-COMPLIANCE-NOTES §18.
+- **Stage 3, the Event plan, is parked.** See the next section.
+
+---
+
+## Beauty Maintenance Event plan — designed, parked (2026-10-19)
+
+### What it means
+
+An event (a wedding, a holiday, a birthday) becomes an ordered checklist of
+the appointments the client wants before it: hair trial, then brows, then
+nails, then makeup on the day. Each step shows as booked (with the date and
+provider) or offers a button to book it. The event card shows a countdown
+("41 days to go") and progress ("2 of 4 booked"), and the client can add,
+reorder or remove steps.
+
+Mockup: board A4 "Event plan" on the concepts canvas,
+https://claude.ai/artifact/5EhfFJEkKuGDcUbrxCKdEF
+
+### What exists today
+
+- An event is a single `maintenance_items` row with `kind = 'event'`,
+  `event_on`, and a `due_on` "book by" date set `EVENT_BOOK_BY_WEEKS` (4) before
+  the event (`src/utils/maintenanceSuggestions.ts`). Clients add one from setup
+  or from Add your own → Before an event.
+- It pushes like any other item: on the book-by date, plus one follow-up,
+  only for opted-in clients. The cron deletes it the day after the event.
+
+### Rules the build has to keep (user decision 2026-10-19)
+
+- **One push per event, never one per step.** It fires when something in the
+  plan still isn't booked, and stays silent once every step is.
+- **Push bodies stay generic.** `maintenance_notification_copy()` is the one
+  place push text lives, and it never names services. So "what's left" is
+  listed in the app when the push is opened, not in the push itself.
+- A step counts as booked only when a real upcoming booking covers it (the
+  same coverage rule as `isCoveredByUpcomingBooking`), never because the
+  client ticked it.
+- No step suggests a health step. The app says "ask your lash tech whether
+  you need a patch test"; it never schedules one (the patch-test rule above).
+
+### What it would take
+
+- Storage: either a `maintenance_event_steps` table (event item id, title,
+  type, order, linked booking), or steps as `maintenance_items` rows with a
+  `parent_event_id`. A separate table keeps the existing item rules and the
+  cron simple. Owner-only RLS like the rest, deleted with the event and the
+  account. This takes a migration and the `MIGRATION_OWNER.md` lock.
+- Step timing: suggested "book by" offsets per step type (trial about 4 weeks
+  before, brows 1–2 weeks, nails 2–3 days). These are app-chosen
+  scheduling, not health advice. Each one is editable.
+- The cron: change the event branch of `process_maintenance_reminders()` so
+  an event with every step covered doesn't push.
+- UI: the event card becomes the plan view (A4). Add a step from the quick
+  picks, or the client's own text.
+
+---
+
+## A Body provider category (waxing, tanning, massage) — future
+
+### What it means
+
+Providers can pick Hair, Nails, Lashes, Brows, Makeup or Aesthetics.
+Waxing, tanning, massage and holistic therapies used to live under OTHER,
+which was retired as a pickable type because it told clients nothing
+(`src/features/business-details/options.ts`). So today a waxing
+professional has no honest category, and Search/Explore have no tab for
+them.
+
+### Why it came up
+
+Beauty Maintenance (Concept A, above) adds waxing reminders. With no waxing
+category, they're filed under AESTHETICS for now: "Find someone" opens the
+Aesthetics tab, and a booked wax only becomes a reminder if its service is
+in Aesthetics.
+
+### What it would take
+
+- A new `BODY` service category: sign-up (`InfoRegScreen`), Business Info
+  (`SERVICE_TYPE_OPTS`, with its 90-day cooldown), Search's
+  `CATEGORY_CODE_MAP` and tabs, Explore's categories, Becca's
+  `serviceCatalogue`.
+- A migration widening every CHECK that lists the categories, including
+  `maintenance_service_types.search_category`. Then move the waxing row's
+  `search_category` from AESTHETICS to BODY in the same migration.
+- A decision on providers still stamped OTHER: offer them BODY, or leave
+  them as they are.

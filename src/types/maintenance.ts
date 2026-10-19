@@ -20,6 +20,18 @@ export type MaintenanceItemKind =
   /** A date the client is preparing for; due_on is the "book by" date. */
   | 'event';
 
+/** Where an item's interval came from, so the card can say so honestly.
+ *  Mirrors the CHECK on maintenance_items.interval_source. */
+export type MaintenanceIntervalSource =
+  /** The client set or changed it. Nothing ever overrides this. */
+  | 'client'
+  /** The provider's own recommended rebooking interval. */
+  | 'provider'
+  /** How often the client's own completed bookings of this type were. */
+  | 'learned'
+  /** Our neutral starting interval for the type. */
+  | 'default';
+
 /** Who made the item. 'booking' rows are written only by the server, when a
  *  booking completes; the client cannot insert one (column grants + RLS). */
 export type MaintenanceItemOrigin = 'booking' | 'client';
@@ -38,6 +50,12 @@ export interface MaintenanceItem {
   repeatWeeks: number | null;
   /** True once the client changed the interval: a later booking keeps it. */
   intervalEdited: boolean;
+  intervalSource: MaintenanceIntervalSource;
+  /** Median days between the client's recent completed bookings of this
+   *  type, and how many bookings (3–6) that came from. Null without enough
+   *  history. Server-written, owner-only, never shown to a provider. */
+  learnedDays: number | null;
+  learnedFrom: number | null;
   lastDoneOn: string | null;
   /** "YYYY-MM-DD". For an event this is the book-by date. */
   dueOn: string | null;

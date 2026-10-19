@@ -4,11 +4,17 @@
 // ONE neutral starting interval for each. The client can change any interval
 // on any item; these are only where a new item starts.
 //
-// Deliberate limits (legal-flagger mitigations, 2026-10-10):
-//  - One interval per service type. Nothing in the client's Beauty Profile
-//    (hair type, treatment history, skin type...) ever changes the LENGTH of an
-//    interval. The profile only decides WHICH types are offered — see
-//    src/utils/maintenanceSuggestions.ts.
+// Deliberate limits (legal-flagger mitigations, 2026-10-10; interval rule
+// revised by the user 2026-10-19):
+//  - One neutral default per service type. Nothing in the client's Beauty
+//    Profile (hair type, treatment history, skin type...) ever changes the
+//    LENGTH of an interval. The profile only decides WHICH types are offered —
+//    see src/utils/maintenanceSuggestions.ts.
+//  - What CAN change it, in order: an interval the client set (always wins),
+//    the provider's own recommendation, then how often the client's own
+//    completed bookings of the type actually were (server-side, see
+//    supabase/migrations/20261019150000_maintenance_learned_intervals.sql).
+//    The default applies only when none of those exists.
 //  - Skin tone is not read anywhere in this feature.
 //  - Bookable services only. No at-home routines, no product restock.
 //  - No injectables or other AESTHETICS treatments except facials and

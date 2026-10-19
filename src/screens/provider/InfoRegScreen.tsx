@@ -2848,8 +2848,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Form state
   const [providerData, setProviderData] = useState<ProviderRegistrationData>({
     providerName: '',
-    providerService: 'HAIR',
-    serviceCategories: ['HAIR'],
+    // Nothing is selected until the provider chose it at sign-up or chooses
+    // it themselves here. This matters for link-only providers too: their
+    // own booking page must not cause CERVICED to invent business details.
+    providerService: '',
+    serviceCategories: [],
     categoryServiceTypes: {},
     customServiceType: '',
     location: '',
@@ -2871,7 +2874,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     website: '',
     tiktok: '',
     whatsapp: '',
-    preferredContactMethods: ['in_app'],
+    preferredContactMethods: [],
     externalBookingUrl: '',
     yearsExperience: '',
     businessType: '',
@@ -2884,7 +2887,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     preferredPaymentMethods: [],
     fullAddress: '',
     fullAddressCoordinates: null,
-    addressReleasePolicy: 'on_confirmation',
+    addressReleasePolicy: null,
     backgroundImage: null,
     isVerified: false,
     rating: 0,
