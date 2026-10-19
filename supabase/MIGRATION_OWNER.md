@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-19 (link-only lifecycle emails)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019190000 → **20261019104123** | `link_only_lifecycle_emails` | **Applied 2026-10-19** via `apply_migration`, which recorded the wall-clock version; file renamed to match. Below the frontier (`20261019170000`) but harmless: that one only adds fee tables. Verified live: `users.link_only_live_email_sent_at` / `link_only_reminder_sent_at`, `request_link_only_email` + `send_link_only_go_live_reminders` (SECURITY DEFINER, search_path pinned, not anon-executable), `handle_provider_gone_live` with the link-only branch, cron `link-only-go-live-reminders` at 11:10. `send-link-only-email` deployed first. File is on `feat/link-only-emails` (PR #106). |
+
 ### Applied 2026-10-18 (link-only providers)
 
 | Authored version | Name | Status |
