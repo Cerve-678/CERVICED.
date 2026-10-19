@@ -1360,7 +1360,7 @@ stacked `Text` layers with `rotateX` for the S→C flip, per-letter
 
 ---
 
-## Personalised Beauty Maintenance, Concept A "Your rhythm" — designed, not built (2026-10-19)
+## Personalised Beauty Maintenance, Concept A "Your rhythm" — chosen, being built in stages (2026-10-19)
 
 ### What it means
 
@@ -1394,24 +1394,60 @@ the whole thing feel like the client's own:
 Mockup (private Artifact, Design canvas):
 https://claude.ai/artifact/QFA6Yjp9FZtbwEpBr3ttTH
 
-### Conflicts with decisions already made (resolve before building)
+### Decided (2026-10-19)
 
-These go against the 2026-10-10 Beauty Maintenance decisions (auto-memory
-`beauty-maintenance-feature`) and need the user's call first:
+The user chose Concept A over B (calendar), C (head to toe) and D (simple
+and clear). All four are on one canvas:
+https://claude.ai/artifact/5EhfFJEkKuGDcUbrxCKdEF
 
-- **Learned intervals.** The current rule is one neutral interval per type,
-  and no profile answer changes it. Learning from the client's *own*
-  booking history doesn't break that rule, but run it past
-  `cerviced-legal-flagger` before building.
-- **New service types** (waxing, lash lift, brow lamination, pedicure, spray
-  tan…) have to go into both `src/constants/maintenanceServiceTypes.ts` and
-  the SQL seed `public.maintenance_service_types`. A test fails if the two
-  disagree. Adding them takes a migration, which needs the
+- **Build in stages**, each on its own branch and PR: (1) Picked for you +
+  new service types + the fuller Add your own; (2) the Your rhythm landing
+  with learned intervals; (3) Event plan.
+- **Learned intervals.** The interval learns from the client's *own* booking
+  gaps, but an interval the client sets always wins. Profile answers still
+  never change an interval. Run `cerviced-legal-flagger` before stage 2.
+- **New service types:** waxing, lash lift, brow lamination/tint, pedicure.
+  Anything the client names themselves stays first-class (free text, with
+  quick picks). They go into both `src/constants/maintenanceServiceTypes.ts`
+  and the SQL seed `public.maintenance_service_types`, and a test fails if the
+  two disagree. Adding them takes a migration, which needs the
   `supabase/MIGRATION_OWNER.md` lock.
-- **Event plan steps.** Today an event has one "book by" date, 4 weeks
-  before (`EVENT_BOOK_BY_WEEKS`). Several steps would mean several
-  reminders, against the "one ping per question" rule. Suggested fix: one
-  push per event that lists whatever isn't booked yet.
+- **Waxing is filed under Aesthetics** for now, because providers have no
+  waxing category (OTHER is retired). See "A Body provider category" below.
+- **Event plan: one push per event**, listing whatever isn't booked yet,
+  never one push per step.
 - **Still out:** at-home routines, product restock, patch-test timing (the
   app has no basis to say when one is due), and anything that reads skin
   tone or skin concerns.
+
+---
+
+## A Body provider category (waxing, tanning, massage) — future
+
+### What it means
+
+Providers can pick Hair, Nails, Lashes, Brows, Makeup or Aesthetics.
+Waxing, tanning, massage and holistic therapies used to live under OTHER,
+which was retired as a pickable type because it told clients nothing
+(`src/features/business-details/options.ts`). So today a waxing
+professional has no honest category, and Search/Explore have no tab for
+them.
+
+### Why it came up
+
+Beauty Maintenance (Concept A, above) adds waxing reminders. With no waxing
+category, they're filed under AESTHETICS for now: "Find someone" opens the
+Aesthetics tab, and a booked wax only becomes a reminder if its service is
+in Aesthetics.
+
+### What it would take
+
+- A new `BODY` service category: sign-up (`InfoRegScreen`), Business Info
+  (`SERVICE_TYPE_OPTS`, with its 90-day cooldown), Search's
+  `CATEGORY_CODE_MAP` and tabs, Explore's categories, Becca's
+  `serviceCatalogue`.
+- A migration widening every CHECK that lists the categories, including
+  `maintenance_service_types.search_category`. Then move the waxing row's
+  `search_category` from AESTHETICS to BODY in the same migration.
+- A decision on providers still stamped OTHER: offer them BODY, or leave
+  them as they are.
