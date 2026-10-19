@@ -2,16 +2,17 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
 import type Stripe from 'npm:stripe@17.4.0';
 
 /** The client's existing Stripe Customer id, or null if they've never saved a
- *  card or checked out. Reads the caller's OWN row (RLS scopes it). */
+ *  card or checked out. client_stripe_customers is service-role only, so this
+ *  takes the admin client. */
 export async function findStripeCustomer(
-  supabase: SupabaseClient,
+  admin: SupabaseClient,
   userId: string,
 ): Promise<string | null> {
-  const { data: row, error } = await supabase
-    .from('users')
+  const { data: row, error } = await admin
+    .from('client_stripe_customers')
     .select('stripe_customer_id')
-    .eq('id', userId)
-    .single();
+    .eq('user_id', userId)
+    .maybeSingle();
   if (error) throw error;
   return (row?.stripe_customer_id as string | null) ?? null;
 }
@@ -31,9 +32,9 @@ export async function forgetStripeCustomer(
   customerId: string,
 ): Promise<void> {
   const { error } = await admin
-    .from('users')
-    .update({ stripe_customer_id: null })
-    .eq('id', userId)
+    .from('client_stripe_customers')
+    .delete()
+    .eq('user_id', userId)
     .eq('stripe_customer_id', customerId);
   if (error) throw error;
 }
@@ -44,17 +45,16 @@ export async function forgetStripeCustomer(
  * through Stripe is only reusable at checkout if the SAME Customer is used to
  * save it and to charge it.
  *
- * The id is written back with the SERVICE ROLE only — clients cannot write
- * users.stripe_customer_id (enforce_user_stripe_customer_server_only rejects
- * it), so it can never be pointed at someone else's Customer from the app.
+ * The id lives in client_stripe_customers, which only the service role can
+ * read or write, so it can never be pointed at someone else's Customer from
+ * the app.
  */
 export async function getOrCreateStripeCustomer(
-  supabase: SupabaseClient,
   admin: SupabaseClient,
   stripe: Stripe,
   user: { id: string; email?: string | null },
 ): Promise<string> {
-  const existing = await findStripeCustomer(supabase, user.id);
+  const existing = await findStripeCustomer(admin, user.id);
   if (existing) {
     try {
       const customer = await stripe.customers.retrieve(existing);
@@ -70,29 +70,26 @@ export async function getOrCreateStripeCustomer(
     metadata: { user_id: user.id },
   });
 
-  // Only fill an empty slot, so a concurrent call (Payment Methods and a
-  // checkout opened together) never overwrites the other's Customer.
+  // Only fill an empty slot, so concurrent calls converge on one Customer.
   const { error: writeError } = await admin
-    .from('users')
-    .update({ stripe_customer_id: customer.id })
-    .eq('id', user.id)
-    .is('stripe_customer_id', null);
+    .from('client_stripe_customers')
+    .upsert({ user_id: user.id, stripe_customer_id: customer.id }, { onConflict: 'user_id', ignoreDuplicates: true });
   if (writeError) {
     await deleteOrphan(stripe, customer.id);
     throw writeError;
   }
 
   const { data: fresh, error: readError } = await admin
-    .from('users')
+    .from('client_stripe_customers')
     .select('stripe_customer_id')
-    .eq('id', user.id)
+    .eq('user_id', user.id)
     .single();
   if (readError) throw readError;
   const bound = (fresh?.stripe_customer_id as string | null) ?? null;
   if (bound !== customer.id) {
     // The other call won the race: reuse its Customer, drop ours.
     await deleteOrphan(stripe, customer.id);
-    if (!bound) throw new Error('Stripe customer was not attached to the user row');
+    if (!bound) throw new Error('Stripe customer was not recorded for this client');
   }
   return bound;
 }

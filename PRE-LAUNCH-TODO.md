@@ -1144,3 +1144,50 @@ build until it is**: a test key in a public build takes bookings with no money.
 - [ ] Security review and legal review of the Stripe flow (auto-memory
       stripe-payment-intent-integration), and the fee terms (LEGAL-COMPLIANCE-NOTES §17).
 
+---
+
+## 23. Saved cards + fee consent record — built on `feat/saved-cards-fee-consent-record`, not live (2026-10-19)
+
+(Numbered 23 because §22, Instagram handle verification, is on another branch.
+Supersedes `feat/saved-payment-methods` and `feat/combined-saved-cards-fees`.)
+
+Clients can save cards on Payment Methods and reuse them at checkout. Stripe
+holds the card; CERVICED stores only the Stripe Customer id, in the
+service-role-only `client_stripe_customers` table. A card saved on Payment
+Methods is on-session only. A card is saved for off-session use only at a
+checkout with late/no-show fees, after the client's agreement is recorded in
+`fee_consent_records` (wording version + sha256, frozen amounts, DB time).
+
+Inert until all of these happen, in order:
+
+1. Apply `20261019120000_saved_cards_and_fee_consent_records.sql` (check
+   `supabase/MIGRATION_OWNER.md`; frontier at authoring 20261019011825).
+2. Deploy `client-saved-cards`, `create-payment-intent` and `booking-fee`,
+   outside peak hours: the PaymentIntent idempotency key was renamed, so a
+   checkout mid-flight at deploy time can leave one orphaned, uncaptured intent.
+   Between steps 1 and 2 the live functions still read
+   `checkout_batches.fee_consent_at`, which the new RPC keeps stamping — but an
+   app build from before this branch calls the old one-argument
+   `accept_checkout_fees`, which step 1 drops, so its fee checkouts fail.
+3. Then a migration dropping `users.stripe_customer_id` and its two guard
+   triggers/functions (unused after step 2; never before it).
+4. `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED=true` (§1). Until then Payment Methods
+   shows the old explainer and checkout doesn't use saved cards.
+
+Before turning it on:
+
+- **Verify in Stripe test mode which `setup_future_usage` a card saved from the
+  checkout sheet ends up with.** The ephemeral-key Payment Sheet's own "save"
+  checkbox may save it as `off_session`, which contradicts the on-session scope.
+  If so, move checkout to a Customer Session with
+  `payment_method_save_usage: 'on_session'` (needs a newer Stripe API version
+  than the `2024-12-18.acacia` the functions pin). "Add a card" on Payment
+  Methods is on-session by construction (SetupIntent `usage: 'on_session'`).
+- **Account deletion doesn't delete the Stripe Customer.** When the deletion
+  grace period completes, call `stripe.customers.del(...)` from a service-role
+  function — before the auth user goes, since `client_stripe_customers`
+  cascades away with it.
+- **Privacy Policy** doesn't name Stripe or say a Stripe Customer is kept for
+  saved cards. Wording is the user's call.
+- Apple Pay still needs a real Apple merchant ID (`merchant.com.cerviced` is a
+  placeholder) before the "Also at checkout" row is true on iOS.
