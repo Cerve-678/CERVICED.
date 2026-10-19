@@ -25,7 +25,7 @@ describe('fee terms version', () => {
   // Point this at the migration that seeds the current version.
   it('the current version is seeded in a migration with exactly this wording', () => {
     const migration = readFileSync(
-      join(__dirname, '../../supabase/migrations/20261019140000_fee_terms_version_2026_10_19.sql'),
+      join(__dirname, '../../supabase/migrations/20261019210000_fee_auto_retries.sql'),
       'utf8',
     );
     const seed = [FEE_TERMS_VERSION, FEE_TERMS_HEADING, FEE_TERMS_BODY, FEE_CONSENT_LINE]

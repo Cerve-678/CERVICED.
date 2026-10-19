@@ -174,11 +174,11 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
       const by = fee.payBy ? formatShortDayDate(new Date(fee.payBy)) : null;
       if (role === 'provider') {
         body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · waiting for {otherName || 'the client'} to pay</Text>);
-        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>The saved card couldn't be charged, so they've been asked to pay{by ? ` by ${by}` : ''}. Nothing has been taken yet.</Text>);
+        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>The saved card couldn't be charged, so they've been asked to pay{by ? ` by ${by}` : ''}.{fee.nextRetryAt ? ' Their card will also be tried again automatically.' : ''} Nothing has been taken yet.</Text>);
         body.push(<Action key="cancel" C={C} busy={busy} label="Cancel request" ghost onPress={() => confirmCancelRequest(fee)} />);
       } else {
         body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} to pay</Text>);
-        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>{otherName || 'Your provider'} couldn't take the fee you agreed to from your saved card. Please pay it{by ? ` by ${by}` : ''}.</Text>);
+        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>{otherName || 'Your provider'} couldn't take the fee you agreed to from your saved card. Please pay it{by ? ` by ${by}` : ''}.{fee.nextRetryAt ? " We'll also try your card again, and you'll only ever pay it once." : ''}</Text>);
         body.push(<Action key="pay" C={C} busy={busy} label={`Pay ${pounds(fee.amountPence)}`} onPress={() => payFee(fee)} />);
       }
     }

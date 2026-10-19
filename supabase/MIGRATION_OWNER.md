@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### PENDING APPLY 2026-10-19 (automatic fee retries)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019210000 | `fee_auto_retries` | **Written, NOT applied** (branch `feat/fee-auto-retry`). Frontier at authoring: `20261019170000`; numbered above the unapplied `20261019150000` / `20261019190000` on other branches. Adds `booking_fee_charges.retry_payment_method_id` / `retry_count` / `next_retry_at`, redefines `process_due_payouts()` (from 20261019170000's, verified live) to wake on due retries, seeds fee terms version '2026-10-19-retries' (sha256 checked against Postgres before commit). Apply, record the version, then deploy `booking-fee`, `client-saved-cards`, `release-payouts` from the branch. |
+
 ### Applied 2026-10-19 (fee payment requests)
 
 | Authored version | Name | Status |

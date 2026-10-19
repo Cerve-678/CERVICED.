@@ -28,7 +28,7 @@ const SECTIONS = [
   },
   {
     heading: '4. Cancellations & Refunds',
-    body: 'Each provider\'s cancellation, late-arrival and no-show policy is shown before booking and forms part of the booking. Where you expressly agree at checkout to a stated late-arrival or no-show fee, Cerviced may collect that fee for the provider using your saved card only where the relevant event occurs and within 24 hours after the appointment ends. The fee is limited to the amount shown for that booking. You can dispute a charged fee in the app within 7 days. The provider reviews the dispute and decides whether to refund it; this does not limit your statutory rights or card-scheme rights.',
+    body: 'Each provider\'s cancellation, late-arrival and no-show policy is shown before booking and forms part of the booking. Where you expressly agree at checkout to a stated late-arrival or no-show fee, Cerviced may collect that fee for the provider using your saved card only where the relevant event occurs, first charging it within 24 hours after the appointment ends. If that charge is declined, Cerviced may try the card again up to three times within the following 7 days and will ask you to pay it in the app or by email in that time. The fee is limited to the amount shown for that booking and is collected only once. You can dispute a charged fee in the app within 7 days. The provider reviews the dispute and decides whether to refund it; this does not limit your statutory rights or card-scheme rights.',
   },
   {
     heading: '5. Deposits & Remaining Balances',

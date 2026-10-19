@@ -1096,6 +1096,8 @@ export function feePaymentRequestEmail(params: {
   service: string;
   payBy: string;
   payUrl: string;
+  /** The saved card will be tried again automatically. */
+  willRetry?: boolean;
 }) {
   const first = firstNameOf(params.name);
   const P = CLIENT;
@@ -1117,7 +1119,7 @@ export function feePaymentRequestEmail(params: {
           P,
           `${e.providerName} tried to charge the ${e.feeLabel} you agreed to when you booked ${e.service}, but your bank declined it or needs you to approve it. Nothing has been taken.`,
         ) +
-        note(P, `Please pay it by ${e.payBy}. You can pay below, or from the booking in the CERVICED app. If you think the fee is wrong, contact ${e.providerName} in the app.`) +
+        note(P, `Please pay it by ${e.payBy}. You can pay below, or from the booking in the CERVICED app.${params.willRetry ? ' We may also try your saved card again up to three times before then; you will only ever pay the fee once.' : ''} If you think the fee is wrong, contact ${e.providerName} in the app.`) +
         button(P, esc(params.payUrl), `Pay ${e.amount}`) +
         appHint(P),
     }),
