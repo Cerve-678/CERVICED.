@@ -36,7 +36,9 @@ reason. "It's ready" is not urgent.
 
 ## Queued (written, not applied)
 
-_None._
+| Version | File | What it does, and what to do after |
+|---|---|---|
+| 20261019235500 | `listing_claims_checked_by_instagram` (branch `feat/claim-instagram-review`) | Retires the email-code listing claim, whose code sat in a column anon can read, and adds Instagram bio-code claims approved by hand: drops `claim_provider_profile()` and the four `claim_token*` columns on `providers`, adds `provider_claim_requests`, `request_provider_claim()` and `review_provider_claim()`. **Apply before importing Gina's directory listings**, or every imported listing joins the readable-code problem. The app side ships in the same branch, and the old email flow stops working as soon as this runs (only one test listing uses it). After applying: record the version, then delete the now-dead `request-claim-verification` Edge Function in the dashboard. Not URGENT: only the test listing "Gina's Nail Studio (DO NOT BOOK — TEST)" is affected today. |
 
 ---
 
