@@ -26,7 +26,8 @@ import { invokeSendAccountEmail, signUpWithEmail } from '../../services/database
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS } from '../../features/business-details/options';
+import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS, ALL_SPECIALTIES, SPECIALTIES_MAP } from '../../features/business-details/options';
+import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
@@ -54,20 +55,6 @@ const ACCESSIBILITY_OPTIONS = ACCESSIBILITY_OPTS;
 // (see options.ts) where a language chosen here had no chip later.
 const LANGUAGE_OPTIONS = [...LANGUAGE_OPTS, 'Other'];
 
-// Specialty chip options, tailored per service category selected in Step 4
-// (data.serviceInterests) — a provider who picked NAILS sees nail-relevant
-// options, not hair techniques. 'Other' always trails each list and reveals
-// a free-text input rather than being just another chip (see
-// specialtiesOther state below).
-const SPECIALTY_OPTIONS_BY_CATEGORY: Record<string, string[]> = {
-  HAIR: ['Balayage', 'Colour correction', 'Curly/coily hair', 'Braids & extensions', 'Bridal styling', 'Other'],
-  NAILS: ['Gel', 'Acrylics', 'Nail art', 'BIAB', 'Sculpted nails', 'Other'],
-  LASHES: ['Classic', 'Volume', 'Hybrid', 'Lash lift', 'Lash tint', 'Other'],
-  BROWS: ['Microblading', 'Brow lamination', 'Threading', 'Henna brows', 'Tinting', 'Other'],
-  MUA: ['Bridal', 'Editorial', 'Glam', 'Special occasion', 'Airbrush', 'Other'],
-  AESTHETICS: ['Facials', 'Chemical peels', 'Microneedling', 'Dermaplaning', 'Sensitive skin', 'Mature skin', 'Other'],
-  OTHER: ['Other'],
-};
 
 
 // Shown once the second hat is actually on the account, in place of dropping
@@ -145,16 +132,14 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(data.languagesSpoken);
   const [languagesOther, setLanguagesOther] = useState<string>(data.languagesOther);
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>(data.specialties);
-  const [specialtiesOther, setSpecialtiesOther] = useState<string>(data.specialtiesOther);
-  // Category-aware options: union of every selected service category's list
-  // (a provider offering both HAIR and NAILS sees both lists combined), deduped,
-  // 'Other' always trailing regardless of category order.
+  // The same vocabulary Search's Speciality filter and the profile editors
+  // use (SPECIALTIES_MAP), for every service type picked in Step 4, so what a
+  // provider picks here is exactly what clients filter on. Picked in the same
+  // searchable sheet as the filter; a term typed that isn't listed can still
+  // be added, which replaces the old "Other" box.
   const specialtyOptions = React.useMemo(() => {
-    const categories = data.serviceInterests.length ? data.serviceInterests : ['OTHER'];
-    const combined = categories.flatMap(cat => SPECIALTY_OPTIONS_BY_CATEGORY[cat] ?? []);
-    const withoutOther = combined.filter(o => o !== 'Other');
-    const deduped = withoutOther.filter((o, i) => withoutOther.indexOf(o) === i);
-    return [...deduped, 'Other'];
+    const combined = data.serviceInterests.flatMap(cat => SPECIALTIES_MAP[cat] ?? []);
+    return combined.length ? [...new Set(combined)] : ALL_SPECIALTIES;
   }, [data.serviceInterests]);
   // Personalisation — optional, affects home feed section gating
   const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
@@ -219,19 +204,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     setSelectedLanguages(prev => prev.includes(item) ? prev.filter(l => l !== item) : [...prev, item]);
   };
 
-  const toggleSpecialty = (item: string) => {
-    Haptics.selectionAsync().catch(() => {});
-    setSelectedSpecialties(prev => prev.includes(item) ? prev.filter(s => s !== item) : [...prev, item]);
-  };
-
-  // 'Other' plus its free-text value is folded into one flat list to store —
-  // e.g. ['Balayage', 'Other'] + "Colour matching for grey coverage" becomes
-  // ['Balayage', 'Colour matching for grey coverage'], never the literal
-  // string 'Other' itself.
-  const finalSpecialties = selectedSpecialties.includes('Other') && specialtiesOther.trim()
-    ? [...selectedSpecialties.filter(s => s !== 'Other'), specialtiesOther.trim()]
-    : selectedSpecialties.filter(s => s !== 'Other');
-
   // recognizeLanguage normalises casing/aliases (e.g. "french" → "French")
   // so a typed language matches the canonical name AboutYouScreen already
   // knows about, instead of creating a near-duplicate chip later.
@@ -244,8 +216,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       accessibilityNotes: selectedAccessibility.join('|'),
       languagesSpoken: finalLanguages,
       languagesOther,
-      specialties: finalSpecialties,
-      specialtiesOther,
+      specialties: selectedSpecialties,
       referralSource: selectedReferral,
     } : {
       serviceInterests: selectedInterests,
@@ -300,7 +271,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           preferredContactMethods: data.preferredContactMethods,
           preferredPaymentMethods: data.preferredPaymentMethods,
           accessibilityNotes: selectedAccessibility.join('|'),
-          languagesSpoken: finalLanguages, specialties: finalSpecialties,
+          languagesSpoken: finalLanguages, specialties: selectedSpecialties,
           referralSource: selectedReferral,
         });
         // Non-blocking, logged rather than swallowed. Server-side resolves
@@ -353,7 +324,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             preferred_contact_methods: isProvider ? data.preferredContactMethods : null,
             accessibility_notes: isProvider ? (selectedAccessibility.join('|') || null) : null,
             languages_spoken: isProvider ? finalLanguages : null,
-            specialties: isProvider ? finalSpecialties : null,
+            specialties: isProvider ? selectedSpecialties : null,
             preferred_payment_methods: isProvider ? data.preferredPaymentMethods : null,
         },
       });
@@ -478,24 +449,13 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                   ? 'What client needs or hair/skin types do you specialise in?'
                   : 'What do you specialise in? You can add more later'}
               </Text>
-              <View style={styles.chipsContainer}>
-                {specialtyOptions.map(item => (
-                  <TouchableOpacity key={item} style={chipStyle(selectedSpecialties.includes(item))} onPress={() => toggleSpecialty(item)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedSpecialties.includes(item))}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {selectedSpecialties.includes('Other') && (
-                <View style={[styles.otherInputWrap, { backgroundColor: t.card, borderColor: t.border }]}>
-                  <TextInput
-                    style={[styles.otherInput, { color: t.text }]}
-                    value={specialtiesOther}
-                    onChangeText={setSpecialtiesOther}
-                    placeholder="Tell us more..."
-                    placeholderTextColor={t.sub}
-                  />
-                </View>
-              )}
+              <SpecialityMultiSelect
+                selected={selectedSpecialties}
+                onChange={setSelectedSpecialties}
+                options={specialtyOptions}
+                palette={t}
+                placeholder="Search specialities"
+              />
             </View>
 
             {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral, true)}

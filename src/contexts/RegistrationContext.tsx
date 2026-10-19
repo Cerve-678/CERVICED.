@@ -63,7 +63,6 @@ export interface RegistrationData {
   languagesSpoken: string[];
   languagesOther: string;
   specialties: string[];
-  specialtiesOther: string;
   // Set when a logged-in client starts the provider upgrade flow
   fromProviderSwitch: boolean;
   // Set when a logged-in provider starts the client registration flow
@@ -124,7 +123,6 @@ const initialData: RegistrationData = {
   languagesSpoken: [],
   languagesOther: '',
   specialties: [],
-  specialtiesOther: '',
   fromProviderSwitch: false,
   fromClientSwitch: false,
 };

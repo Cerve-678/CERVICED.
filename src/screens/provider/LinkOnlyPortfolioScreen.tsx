@@ -37,6 +37,7 @@ import {
   replaceMyProviderSpecialties,
 } from '../../services/databaseService';
 import { ALL_SERVICE_TYPE_OPTS, SPECIALTIES_MAP } from '../../features/business-details/options';
+import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import type { DbProvider } from '../../types/database';
 import type { LinkOnlyPortfolioStackParamList } from '../../navigation/types';
 import { uploadToStorage } from '../../services/providerRegistrationService';
@@ -145,14 +146,6 @@ export default function LinkOnlyPortfolioScreen() {
     : '';
   const initials = (profile?.display_name ?? '')
     .split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
-
-  const toggleDraftSpecialty = useCallback((specialty: string) => {
-    Haptics.selectionAsync().catch(() => {});
-    setDraftSpecialties(prev => {
-      const current = prev ?? [];
-      return current.includes(specialty) ? current.filter(s => s !== specialty) : [...current, specialty];
-    });
-  }, []);
 
   const handleSaveSpecialties = useCallback(async () => {
     if (!draftSpecialties) return;
@@ -320,23 +313,14 @@ export default function LinkOnlyPortfolioScreen() {
                 )
               ) : (
                 <>
-                  <View style={styles.chips}>
-                    {specialtyOptions.map(specialty => {
-                      const on = draftSpecialties.includes(specialty);
-                      return (
-                        <TouchableOpacity
-                          key={specialty}
-                          style={[styles.chip, on && styles.chipOn]}
-                          onPress={() => toggleDraftSpecialty(specialty)}
-                          activeOpacity={0.7}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: on }}
-                        >
-                          <Text style={[styles.chipText, on && styles.chipTextOn]}>{specialty}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  {/* The same searchable sheet as Search's Speciality filter. */}
+                  <SpecialityMultiSelect
+                    selected={draftSpecialties}
+                    onChange={setDraftSpecialties}
+                    options={specialtyOptions}
+                    palette={P}
+                    placeholder="Search specialities"
+                  />
                   <TouchableOpacity
                     style={[styles.saveButton, savingSpecialties && styles.disabled]}
                     onPress={handleSaveSpecialties}
