@@ -22,7 +22,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-d0 [325d14], branch feat/claim-instagram-review
+SINCE:  2026-10-19 19:05 BST
+WHAT:   20261019235500_listing_claims_checked_by_instagram: retires the
+        email-code listing claim (drops claim_provider_profile and the
+        claim_token columns on providers) and adds provider_claim_requests
+        + request_provider_claim() + review_provider_claim().
 ```
 
 ### Applied 2026-10-19 (expired holds cleared before a booking is saved)
