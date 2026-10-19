@@ -17,29 +17,6 @@ applied while you weren't looking*:
 
 Neither was a git problem. Both sessions wrote correct SQL.
 
-## Batches, not one at a time
-
-Each applied migration makes PostgREST reload its schema cache, which
-stalls every app request for 2–45s on this project. Writing a migration and
-applying it are separate steps:
-
-1. Write it, number it above the frontier, commit it, and add it under
-   **Queued** below with one line on what it does and anything to deploy
-   after it.
-2. The user applies the queue together in one sitting, in version order, as
-   one script, at a quiet time. Then each entry moves to its own
-   **Applied** section, and the lock is released.
-
-**Exception:** a fix for something actively broken for real users, their
-data or their money is applied straight away. Mark it **URGENT** with the
-reason. "It's ready" is not urgent.
-
-## Queued (written, not applied)
-
-| Version | File | What it does, and what to do after |
-|---|---|---|
-| 20261019235500 | `listing_claims_checked_by_instagram` (branch `feat/claim-instagram-review`) | Retires the email-code listing claim, whose code sat in a column anon can read, and adds Instagram bio-code claims approved by hand: drops `claim_provider_profile()` and the four `claim_token*` columns on `providers`, adds `provider_claim_requests`, `request_provider_claim()` and `review_provider_claim()`. **Apply before importing Gina's directory listings**, or every imported listing joins the readable-code problem. The app side ships in the same branch, and the old email flow stops working as soon as this runs (only one test listing uses it). After applying: record the version, then delete the now-dead `request-claim-verification` Edge Function in the dashboard. Not URGENT: only the test listing "Gina's Nail Studio (DO NOT BOOK — TEST)" is affected today. |
-
 ---
 
 ## Current owner
@@ -51,6 +28,11 @@ WHAT:   20261019235500_listing_claims_checked_by_instagram: retires the
         email-code listing claim (drops claim_provider_profile and the
         claim_token columns on providers) and adds provider_claim_requests
         + request_provider_claim() + review_provider_claim().
+STATUS: written, NOT applied, not yet dry-run against live (Supabase MCP
+        was disconnected). Apply before importing Gina's directory
+        listings. Old email claim stops working once it runs (only the
+        test listing uses it). After applying: record the version and
+        delete the dead request-claim-verification Edge Function.
 ```
 
 ### Applied 2026-10-19 (expired holds cleared before a booking is saved)
