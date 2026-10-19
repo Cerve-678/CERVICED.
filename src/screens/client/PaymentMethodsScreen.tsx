@@ -37,7 +37,7 @@ export default function PaymentMethodsScreen({ navigation }: any) {
           Pay securely when you book
         </Text>
 
-        {/* Payment details are entered only in Stripe’s secure sheet. */}
+        {/* Payment details are entered only in Stripe's own fields, or on PayPal's page. */}
         <View style={[styles.comingSoon, {
           backgroundColor: P.accentDim,
           borderColor: 'transparent',
@@ -45,14 +45,14 @@ export default function PaymentMethodsScreen({ navigation }: any) {
           <Icon name="payment" size={40} color={P.accentText} />
           <Text style={[styles.comingSoonTitle, { color: P.text }]}>Secure checkout</Text>
           <Text style={[styles.comingSoonSub, { color: P.sub }]}>
-            Choose your services and appointment time, then enter your card details at checkout. Supported wallet options appear automatically on your device.
+            Choose your services and appointment time, then pay at checkout by card, Apple Pay or Google Pay where your device supports it, or PayPal. If a provider has a late arrival or no-show fee, that booking is paid by card, since the fee may be charged to it after the appointment.
           </Text>
         </View>
 
         <View style={[styles.infoRow, { backgroundColor: P.card, borderColor: P.border }]}>
           <Icon name="lock" size={18} color={P.accentText} />
           <Text style={[styles.infoText, { color: P.sub }]}>
-            Stripe handles your card details securely. Cerviced does not store your full card number.
+            Stripe handles your card and PayPal payments securely. Cerviced does not store your full card number or your PayPal details.
           </Text>
         </View>
       </ScrollView>

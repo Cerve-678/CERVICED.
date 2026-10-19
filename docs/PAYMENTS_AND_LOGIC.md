@@ -102,6 +102,7 @@ Payment settings.
 | Provider refunds (full or partial) | `refund-payment`; partial and repeat refunds allowed; CERVICED keeps its fee on a partial refund, returns it on a full one |
 | Client asks for a refund | Request goes to the **provider** (`refund_requested`). The provider refunds or passes it to Cerviced, which resolves it. The client follows a timeline |
 | Off-app payment | Not CERVICED's business: the client is told it's between them and the provider |
+| Paid by PayPal (branch only) | Same refund paths, all through Stripe. The money goes back to the client's PayPal account. Stripe allows PayPal refunds up to 180 days after payment. PayPal disputes appear in the Stripe dashboard like card disputes |
 
 **Taking money back from a paid provider:** if the provider was already paid,
 their Stripe transfer is reversed. If their Stripe balance can't cover it
