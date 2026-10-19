@@ -287,6 +287,10 @@ async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
  * (logos rely on their transparency); everything else becomes JPEG. Any
  * failure falls back to the original, the same as before this existed:
  * a slow upload is better than a lost photo.
+ *
+ * Not a privacy control: re-encoding drops photo metadata (including GPS)
+ * from the images it shrinks, but an image that is already small enough, or
+ * that falls back to the original, keeps whatever metadata it had.
  */
 async function shrinkImageForUpload(
   localUri: string,

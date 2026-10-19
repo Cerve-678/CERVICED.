@@ -1,4 +1,4 @@
-import { createReadCache, isCacheableRead, isWriteRequest } from '../utils/readCache';
+import { createReadCache, isCacheableRead, isWriteRequest, MAX_CACHED_RESPONSE_BYTES } from '../utils/readCache';
 
 const BASE = 'https://example.supabase.co';
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
@@ -59,10 +59,10 @@ describe('readCache', () => {
       return Promise.resolve(new Response('{}', { status: 201 }));
     }) as unknown as typeof fetch;
     const cache = createReadCache(fetchImpl, { ttlMs: 30_000, maxEntries: 10 });
-    const url = `${BASE}/rest/v1/bookings?user_id=eq.1`;
+    const url = `${BASE}/rest/v1/services?provider_id=eq.1`;
 
     const pending = cache.fetch(url, auth('a'));
-    await cache.fetch(`${BASE}/rest/v1/bookings`, { ...auth('a'), method: 'POST' });
+    await cache.fetch(`${BASE}/rest/v1/services`, { ...auth('a'), method: 'POST' });
     releaseRead(new Response('{"stale":true}', { status: 200 }));
     await pending;
 
@@ -102,6 +102,33 @@ describe('readCache', () => {
     expect(server.calls).toHaveLength(3);
   });
 
+  it('keeps the cache through an analytics insert, so Search keeps the results it just got', async () => {
+    const server = fakeServer();
+    const cache = createReadCache(server.fetchImpl, { ttlMs: 30_000, maxEntries: 10 });
+    const url = `${BASE}/rest/v1/providers?select=*`;
+
+    await cache.fetch(url, auth('a'));
+    await cache.fetch(`${BASE}/rest/v1/search_events`, { ...auth('a'), method: 'POST' });
+    await cache.fetch(`${BASE}/rest/v1/rpc/record_provider_stat`, { ...auth('a'), method: 'POST' });
+    await cache.fetch(url, auth('a'));
+
+    expect(server.calls.filter(call => call.startsWith('GET'))).toHaveLength(1);
+  });
+
+  it('does not keep a reply larger than the size limit', async () => {
+    const fetchImpl = jest.fn(async () => new Response('[]', {
+      status: 200,
+      headers: { 'content-length': String(MAX_CACHED_RESPONSE_BYTES + 1) },
+    })) as unknown as typeof fetch;
+    const cache = createReadCache(fetchImpl, { ttlMs: 30_000, maxEntries: 10 });
+    const url = `${BASE}/rest/v1/providers?select=*`;
+
+    await cache.fetch(url, auth('a'));
+    await cache.fetch(url, auth('a'));
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('never remembers a failed read', async () => {
     const fetchImpl = jest.fn(async () => new Response('{}', { status: 503 })) as unknown as typeof fetch;
     const cache = createReadCache(fetchImpl, { ttlMs: 30_000, maxEntries: 10 });
@@ -117,10 +144,10 @@ describe('readCache', () => {
     const server = fakeServer();
     const cache = createReadCache(server.fetchImpl, { ttlMs: 30_000, maxEntries: 2 });
 
-    await cache.fetch(`${BASE}/rest/v1/a`, auth('a'));
-    await cache.fetch(`${BASE}/rest/v1/b`, auth('a'));
-    await cache.fetch(`${BASE}/rest/v1/c`, auth('a'));
-    await cache.fetch(`${BASE}/rest/v1/a`, auth('a'));
+    await cache.fetch(`${BASE}/rest/v1/providers`, auth('a'));
+    await cache.fetch(`${BASE}/rest/v1/services`, auth('a'));
+    await cache.fetch(`${BASE}/rest/v1/reviews`, auth('a'));
+    await cache.fetch(`${BASE}/rest/v1/providers`, auth('a'));
 
     expect(server.calls).toHaveLength(4);
   });
@@ -136,19 +163,21 @@ describe('isCacheableRead', () => {
     expect(isCacheableRead('GET', `${BASE}/storage/v1/object/public/logos/a.png`)).toBe(false);
   });
 
-  it('never covers money or slot-hold tables', () => {
-    for (const table of ['provider_payouts', 'booking_fee_charges', 'refund_requests', 'client_stripe_customers', 'booking_holds', 'payment_events']) {
+  it('never covers bookings, money or slot-hold tables, or anything not listed', () => {
+    for (const table of ['bookings', 'client_bookings', 'provider_payouts', 'booking_fee_charges', 'refund_requests', 'client_stripe_customers', 'transactions', 'provider_shortfalls', 'promotions', 'provider_private_details', 'some_new_table']) {
       expect(isCacheableRead('GET', `${BASE}/rest/v1/${table}?select=*`)).toBe(false);
     }
   });
 });
 
 describe('isWriteRequest', () => {
-  it('treats every non-read as a write except plain get_ RPCs', () => {
+  it('treats every non-read as a write except plain get_ RPCs and analytics inserts', () => {
     expect(isWriteRequest('GET', `${BASE}/rest/v1/providers`)).toBe(false);
     expect(isWriteRequest('POST', `${BASE}/rest/v1/rpc/get_my_provider_daily_stats`)).toBe(false);
     expect(isWriteRequest('POST', `${BASE}/rest/v1/rpc/get_or_create_provider_conversation`)).toBe(true);
-    expect(isWriteRequest('POST', `${BASE}/rest/v1/rpc/record_provider_stat`)).toBe(true);
+    expect(isWriteRequest('POST', `${BASE}/rest/v1/rpc/record_provider_stat`)).toBe(false);
+    expect(isWriteRequest('POST', `${BASE}/rest/v1/search_events`)).toBe(false);
+    expect(isWriteRequest('POST', `${BASE}/rest/v1/rpc/cancel_own_booking`)).toBe(true);
     expect(isWriteRequest('PATCH', `${BASE}/rest/v1/bookings?id=eq.1`)).toBe(true);
     expect(isWriteRequest('POST', `${BASE}/functions/v1/create-payment-intent`)).toBe(true);
     expect(isWriteRequest('POST', `${BASE}/storage/v1/object/logos/a.png`)).toBe(true);

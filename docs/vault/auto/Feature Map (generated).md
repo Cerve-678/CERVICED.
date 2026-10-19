@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **92 files**
+Curated: [[Address Release]] · **93 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(173)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **92 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
 - `src/utils/addressRelease.ts` _(15)_
-- … +62 more
+- … +63 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **174 files**
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **281 files**
 - … +251 more
 
 ## Notifications
-Curated: [[Notifications]] · **167 files**
+Curated: [[Notifications]] · **168 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(310)_
 - `src/services/databaseService.ts` _(174)_
@@ -173,11 +173,11 @@ Curated: [[Notifications]] · **167 files**
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `src/i18n/catalogs/en.ts` _(24)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
-- … +137 more
+- … +138 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **79 files**
-- `src/services/databaseService.ts` _(78)_
+- `src/services/databaseService.ts` _(79)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -346,7 +346,7 @@ Curated: [[Services]] · **48 files**
 - … +18 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **74 files**
+Curated: [[Payments]] · **73 files**
 - `src/screens/client/CartScreen.tsx` _(406)_
 - `src/services/databaseService.ts` _(96)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **74 files**
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
 - `src/constants/featureFlags.ts` _(3)_
-- … +44 more
+- … +43 more

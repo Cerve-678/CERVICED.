@@ -1542,6 +1542,8 @@ export async function getMyProviderHomeBundle(): Promise<{
   if (authError) throw authError;
   if (!user) return null;
 
+  // No has_gone_live / is_active filter: the provider reading their own
+  // record, the same exception as getProviderProfileForUserId.
   const { data, error } = await supabase
     .from("providers")
     .select(`
