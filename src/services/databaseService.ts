@@ -10561,6 +10561,11 @@ export interface ProviderRefundState {
   heldPence: number;
   /** True once anything has been refunded; a full refund is then no longer offered. */
   anyRefunded: boolean;
+  /** Whether the client paid the full price in app or only a deposit. */
+  paidAs: 'full' | 'deposit';
+  /** The booking's full price (service + add-ons), in pence. With a deposit,
+   *  the rest was settled off-app and can't be refunded from here. */
+  bookingPricePence: number;
   /**
    * Set once the client's own cancellation was settled by the provider's
    * policy. `hoursBefore` is cancel-to-start, `noticeHours` the policy window,
@@ -10587,7 +10592,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     // for the notice window the settlement summary quotes.
     supabase
       .from('bookings')
-      .select('amount_paid, service_charge, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
+      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
       .eq('id', bookingId)
       .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
@@ -10622,6 +10627,8 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     sharePence: share,
     heldPence: Math.max(0, Math.min(held, paid - refunded)),
     anyRefunded: refunded > 0,
+    paidAs: b.payment_type === 'deposit' ? 'deposit' : 'full',
+    bookingPricePence: Math.round((Number(b.base_price ?? 0) + Number(b.add_ons_total ?? 0)) * 100),
     policySettlement: settled
       ? {
           refundedToClientPence: settlementRow ? Number(settlementRow.amount_pence) : 0,
