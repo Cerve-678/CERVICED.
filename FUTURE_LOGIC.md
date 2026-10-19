@@ -176,6 +176,61 @@ If CERVICED takes a percentage (e.g. 10%), this is handled via Stripe Connect �
 
 ---
 
+## Provider Payouts: Instant Payouts and Expected Bank Dates — BUILT, parked (2026-10-19)
+
+Both are built and pushed, each on its own branch. Neither is merged, and `create-connect-account` hasn't been redeployed with them. Don't rebuild them: merge the branch when it's time. Full money detail is in `docs/PAYMENTS_AND_LOGIC.md`.
+
+### Why these exist
+
+A provider's "When you get paid" choice (24 hours to 30 days) only controls when CERVICED releases their share to Stripe. Stripe then holds a UK card payment for about 3 working days, counted from when the **client paid**, not from our release. Our transfers use `source_transaction`, so they inherit that date. In practice:
+
+- a booking paid a week ahead reaches the bank 1–2 days after the appointment;
+- a same-day booking takes 3–5 working days.
+
+So "24 hours" on its own is misleading.
+
+### 1. Expected bank date on each booking payment
+
+**Branch:** `feat/payment-bank-estimate` (bd176c51)
+
+- **What the provider sees:** open a booking payment on Payments → Booking payments and it says "In your Stripe balance from Thu 15 Oct. Expected in your bank around Fri 16 Oct."
+- **How the date is worked out:** a new `payment-estimate` action on `create-connect-account` reads Stripe's `available_on`:
+  - for a held payment, from the client's charge, and the app takes whichever is later, that date or `release_after`;
+  - for a released payment, from the provider-side payment, which gives the exact date.
+- **How the bank date is worked out:** add the provider's Stripe payout schedule, then one working day.
+- **Weekends and holidays:** weekends are skipped. UK bank holidays aren't, which is why the wording says "around".
+- **Cost:** it fetches one payment per tap, not the whole list.
+- **To ship:** merge, then redeploy `create-connect-account`, then check the dates on a test booking.
+- **Also outstanding:** the earlier suggestion to reword the timing picker, for example "Release after 24 hours" plus a line saying the bank date depends on when the client paid. That isn't done. Do it with this branch.
+
+### 2. Instant payouts (provider pays 1.5%)
+
+**Branch:** `feat/instant-payouts`
+
+- **What the provider sees:** a "Need it sooner?" card on Payments → Overview. "Pay out £X now" sends what's in their Stripe balance to their debit card or bank. It typically arrives within 30 minutes, any day.
+- **The fee is shown twice:** in pounds under the button, then again in a confirmation (balance → fee → amount received).
+- **Fee decision (2026-10-18):** the provider pays 1.5% in total. Stripe charges CERVICED 1%, so CERVICED keeps 0.5%.
+- **Where the fee lives:** the rate is set in **Stripe's Platform Pricing Tool**, not in code. The app shows Stripe's after-fee figure (`instant_available.net_available`), so the fee shown is always the fee charged.
+- **Safety checks already built:**
+  - it can only pay out money already released to Stripe, so CERVICED's hold is never skipped;
+  - the server refuses a card or bank with no fee configured, so CERVICED never pays Stripe's 1% itself;
+  - the payout is refused if the amount the provider confirmed has changed.
+
+### Before instant payouts can go live
+
+1. **Provider Terms fee clause.** The Terms don't mention any provider fee yet. Add the 1.5% instant payout fee, who sets it, and the right to change it. Ideally have it checked by a solicitor. `cerviced-legal-flagger` also asked whether to show "1.5%" as well as the £ amount, and whether to keep a record that the fee was confirmed.
+2. **Stripe setup.** In Connect settings, set Instant Payouts pricing to 1.5% and turn Instant Payouts on. Allow debit cards for payouts too.
+3. **One test-mode payout.** Confirm that the payout amount, the balance taken and the fee Stripe records match the confirmation screen exactly. The security review asked for this.
+4. **Decide who gets it.** Stripe lets card money be paid out instantly before its usual ~3 days are up. A refund or dispute after that leaves the provider's balance negative, and the existing `provider_shortfalls` path takes it from their next payout. If they never earn again, CERVICED loses it. Consider offering it only to established providers (for example a number of completed, undisputed payouts) or capping the amount.
+5. **Then:** merge, and redeploy `create-connect-account`.
+
+### Related
+
+- `docs/PAYMENTS_AND_LOGIC.md` (§0, §4, §8, §9 on each branch)
+- Stripe docs: `/payouts`, `/connect/instant-payouts`, `/connect/separate-charges-and-transfers`, `/connect/account-balances`
+
+---
+
 ## Intake Form During Checkout
 
 ### What it means
