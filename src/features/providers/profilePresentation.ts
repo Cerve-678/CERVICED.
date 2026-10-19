@@ -38,22 +38,6 @@ export function formatServiceDuration(minutes: number): string {
   return remainder > 0 ? `${hours}h ${remainder}min` : `${hours} hour${hours > 1 ? 's' : ''}`;
 }
 
-/** Selects a readable accent against known provider gradient presets. */
-export function getAdaptiveAccentColor(gradient: [string, string, ...string[]]): string {
-  const colorMap: Record<string, string> = {
-    '#FF6B6B': '#C2185B',
-    '#FF4500': '#7B1FA2',
-    '#FF69B4': '#6A1B9A',
-    '#E6E6FA': '#4A148C',
-    '#708090': '#3F51B5',
-    '#99FFCC': '#00838F',
-    '#1B4332': '#E91E63',
-    '#FFE4B5': '#E65100',
-    '#D4A574': '#8D4E85',
-  };
-  return colorMap[gradient[0]] || '#7B1FA2';
-}
-
 /** Whether the profile should expose its Policy tab. */
 export function hasProviderPolicyInfo(provider: ProviderProfileData): boolean {
   const policy = provider.bookingPolicies;
