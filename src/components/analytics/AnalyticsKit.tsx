@@ -433,8 +433,10 @@ export function StatTile({
   columns?: number;
 }) {
   const { width: screenWidth } = useWindowDimensions();
+  // flexGrow fills the row-stretched Reveal wrapper, so a tile whose label
+  // wraps to two lines ("Instagram taps") doesn't hang lower than its row.
   return (
-    <DeckCard dark={dark} tint={color} style={{ width: tileWidth(screenWidth, columns) }}>
+    <DeckCard dark={dark} tint={color} style={{ width: tileWidth(screenWidth, columns), flexGrow: 1 }}>
       <View style={tile.inner}>
         <View style={[tile.icon, { backgroundColor: color + '22' }]}>
           <Ionicons name={icon} size={14} color={color} />
