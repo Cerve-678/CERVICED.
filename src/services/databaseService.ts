@@ -10081,6 +10081,8 @@ export interface BookingFeeCharge {
   chargedAt: string | null;
   /** While awaiting_client: when the client's request to pay lapses. */
   payBy: string | null;
+  /** While awaiting_client: when the saved card is next tried again, if it will be. */
+  nextRetryAt: string | null;
   createdAt: string;
   disputedAt: string | null;
   disputeReason: string | null;
@@ -10096,6 +10098,7 @@ interface BookingFeeChargeRow {
   status: BookingFeeCharge['status'];
   charged_at: string | null;
   pay_by: string | null;
+  next_retry_at: string | null;
   created_at: string;
   disputed_at: string | null;
   dispute_reason: string | null;
@@ -10107,7 +10110,7 @@ interface BookingFeeChargeRow {
 /** Newest first. A booking has at most one live fee plus any failed attempts. */
 export async function getBookingFeeCharges(bookingId: string): Promise<BookingFeeCharge[]> {
   const { data, error } = await supabase.from('booking_fee_charges')
-    .select('id, kind, amount_pence, status, charged_at, pay_by, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
+    .select('id, kind, amount_pence, status, charged_at, pay_by, next_retry_at, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
     .eq('booking_id', bookingId)
     .order('created_at', { ascending: false })
     .limit(10);
@@ -10119,6 +10122,7 @@ export async function getBookingFeeCharges(bookingId: string): Promise<BookingFe
     status: row.status,
     chargedAt: row.charged_at,
     payBy: row.pay_by,
+    nextRetryAt: row.next_retry_at,
     createdAt: row.created_at,
     disputedAt: row.disputed_at,
     disputeReason: row.dispute_reason,

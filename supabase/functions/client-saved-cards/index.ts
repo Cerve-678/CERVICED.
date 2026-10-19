@@ -142,7 +142,9 @@ Deno.serve(async (req: Request) => {
         return json({ error: 'That card is no longer saved.' }, 404);
       }
       // User decision 2026-10-19: a card a client paid with at a checkout
-      // with agreed late/no-show fees stays until 24h after that appointment.
+      // with agreed late/no-show fees stays until 24h after that appointment,
+      // or, while a declined fee is still being retried on it, until that
+      // request closes.
       const neededUntil = await feeCardNeededUntil(admin, user.id, pm.id);
       if (neededUntil !== null) {
         return json({ code: 'card_needed_for_fee', until: ukLabel(neededUntil), error: 'This card is needed for an agreed fee.' }, 409);
@@ -171,6 +173,15 @@ async function feeCardNeededUntil(
   userId: string,
   paymentMethodId: string,
 ): Promise<number | null> {
+  // A declined fee still being retried on this card holds it until the request closes.
+  const { data: retrying, error: retryError } = await admin.from('booking_fee_charges')
+    .select('pay_by')
+    .eq('client_user_id', userId).eq('status', 'awaiting_client')
+    .eq('retry_payment_method_id', paymentMethodId).not('next_retry_at', 'is', null)
+    .limit(FEE_CARD_BOOKING_LIMIT);
+  if (retryError) throw retryError;
+  const retryUntil = (retrying ?? []).reduce((max, r) => Math.max(max, Date.parse(r.pay_by as string) || 0), 0);
+
   const since = new Date(Date.now() - FEE_CARD_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
   const { data: bookings, error } = await admin.from('bookings')
     .select('id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, payment_intent_id')
@@ -181,7 +192,7 @@ async function feeCardNeededUntil(
     .or('late_fee_pence.not.is.null,no_show_fee_pence.not.is.null')
     .limit(FEE_CARD_BOOKING_LIMIT);
   if (error) throw error;
-  if (!bookings?.length) return null;
+  if (!bookings?.length) return retryUntil > Date.now() ? retryUntil : null;
 
   const { data: charged, error: chargedError } = await admin.from('booking_fee_charges')
     .select('booking_id').in('booking_id', bookings.map(b => b.id)).neq('status', 'failed');
@@ -200,7 +211,7 @@ async function feeCardNeededUntil(
     });
     return until === null ? [] : [{ intentId: b.payment_intent_id as string, until }];
   });
-  if (!open.length) return null;
+  if (!open.length) return retryUntil > Date.now() ? retryUntil : null;
 
   // Which of those payments used this card. One Stripe read per distinct payment.
   const intentIds = [...new Set(open.map(o => o.intentId))];
@@ -209,6 +220,7 @@ async function feeCardNeededUntil(
     .filter(pi => (typeof pi.payment_method === 'string' ? pi.payment_method : pi.payment_method?.id) === paymentMethodId)
     .map(pi => pi.id));
   const untils = open.filter(o => usedThisCard.has(o.intentId)).map(o => o.until);
+  if (retryUntil > Date.now()) untils.push(retryUntil);
   return untils.length ? Math.max(...untils) : null;
 }
 
