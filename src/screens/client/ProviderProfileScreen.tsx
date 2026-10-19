@@ -94,7 +94,7 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { resolveSlotsRow } from "../../utils/slotsRowText";
-import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
+import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
@@ -1622,20 +1622,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     new Animated.Value(sidePanelWidth(screenWidth)),
   ).current;
 
-  // Prefer DB-stored accent_color, fall back to gradient-derived, then app default
-  const adaptiveAccentColor = useMemo(
-    () =>
-      provider?.accentColor ??
-      (provider?.hasCustomGradient
-        ? getAdaptiveAccentColor(provider.gradient)
-        : OP.accent),
-    [
-      provider?.accentColor,
-      provider?.gradient,
-      provider?.hasCustomGradient,
-      OP.accent,
-    ],
-  );
+  // The saved accent_color, else the provider's own theme accent (the app's
+  // brown for the default theme). There used to be a middle step that guessed
+  // an accent from the gradient's first colour through a table of old
+  // placeholder presets, falling back to purple for anything else.
+  const adaptiveAccentColor = provider?.accentColor ?? OP.accent;
 
   // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat
   // opaque fill — derived from the provider theme's card colour so every preset matches.

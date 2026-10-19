@@ -1,15 +1,10 @@
-import { BUSINESS_TYPE_LABEL, formatServiceDuration, getAdaptiveAccentColor, hasProviderPolicyInfo } from '../features/providers/profilePresentation';
+import { BUSINESS_TYPE_LABEL, formatServiceDuration, hasProviderPolicyInfo } from '../features/providers/profilePresentation';
 
 describe('provider profile presentation', () => {
   it('formats service durations consistently', () => {
     expect(formatServiceDuration(45)).toBe('45 min');
     expect(formatServiceDuration(60)).toBe('1 hour');
     expect(formatServiceDuration(90)).toBe('1h 30min');
-  });
-
-  it('uses a readable accent for known and unknown gradients', () => {
-    expect(getAdaptiveAccentColor(['#FF6B6B', '#FFFFFF'])).toBe('#C2185B');
-    expect(getAdaptiveAccentColor(['#123456', '#FFFFFF'])).toBe('#7B1FA2');
   });
 
   it('uses one canonical display label for each business type', () => {
