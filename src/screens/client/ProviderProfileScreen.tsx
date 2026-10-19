@@ -78,7 +78,7 @@ import {
 import type { ProviderStatKind } from "../../types/database";
 import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
 import { toUserMessage } from "../../utils/userFacingError";
-import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
+import type { DirectoryListingDetail } from "../../services/directoryListingService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
 import { MultiBookingSheet, type MultiBookingSheetResult } from "../../components/MultiBookingSheet";
@@ -1032,7 +1032,7 @@ function UnclaimedProviderView({
   onBack,
   onClaim,
 }: {
-  provider: UnclaimedProviderDetail;
+  provider: DirectoryListingDetail;
   theme: ProviderThemeTokens;
   onBack: () => void;
   onClaim: () => void;
@@ -1143,11 +1143,12 @@ function UnclaimedProviderView({
 
         <View style={[unclaimedStyles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[unclaimedStyles.noticeText, { color: theme.sub }]}>
-            This business isn't on CERVICED yet, so you can't book it in the
-            app. Booking happens on their own page. These details were
-            imported from public listings and may be out of date. If it's
-            your business, claim it below, or email support@cerviced.co to
-            have it removed.
+            This business isn't on CERVICED yet and hasn't partnered with us,
+            so you can't book it in the app. Booking happens on their own
+            page, which CERVICED doesn't run. These details come from public
+            directories and may be out of date. If it's your business, claim
+            it below, or email support@cerviced.co to have it corrected or
+            removed.
           </Text>
         </View>
       </ScrollView>

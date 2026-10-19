@@ -1093,15 +1093,41 @@ export async function searchProviders(
 
 export interface DirectoryListingRow {
   id: string;
-  slug: string;
   display_name: string;
   service_category: string;
   location_text: string | null;
   logo_url: string | null;
 }
 
+export interface DirectoryListingDetailRow extends DirectoryListingRow {
+  about_text: string | null;
+  instagram: string | null;
+  website: string | null;
+}
+
 const DIRECTORY_LISTING_SELECT =
-  "id, slug, display_name, service_category, location_text, logo_url";
+  "id, display_name, service_category, location_text, logo_url";
+
+/**
+ * One directory listing for the read-only listing page a client opens from
+ * Search, by its uuid. Same scope as getDirectoryListings below, and only the
+ * columns that page shows: the claim flow's wider getUnclaimedProviderDetail
+ * also reads contact fields, which have no business on every client's device.
+ */
+export async function getDirectoryListingDetail(
+  id: string,
+): Promise<DirectoryListingDetailRow | null> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select(`${DIRECTORY_LISTING_SELECT}, about_text, instagram, website`)
+    .eq("id", id)
+    .eq("is_claimed", false)
+    .eq("source", "scraped")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data as DirectoryListingDetailRow | null;
+}
 
 /**
  * Directory listings for client Search: businesses imported from public
