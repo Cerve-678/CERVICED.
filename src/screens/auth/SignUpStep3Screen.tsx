@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import SignUpHeader from '../../components/SignUpHeader';
-import { FieldRow, FormCard, PrimaryButton, ScreenTitle, SectionLabel, useFieldInputStyle } from '../../components/signup/FormKit';
+import { DobField, FieldRow, FormCard, PrimaryButton, ScreenTitle, SectionLabel, useFieldInputStyle } from '../../components/signup/FormKit';
 import { Ionicons } from '@expo/vector-icons';
 import { validateEmail, validateDob } from '../../utils/validation';
 import type { StackScreenProps } from '@react-navigation/stack';
@@ -47,7 +47,6 @@ export default function SignUpStep3Screen({ navigation }: Props) {
   const [tiktok, setTiktok] = useState(data.tiktok);
   const [website, setWebsite] = useState(data.website);
 
-  const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const isUser = data.accountType === 'user';
@@ -74,12 +73,10 @@ export default function SignUpStep3Screen({ navigation }: Props) {
 
   const markTouched = (field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
-    setErrors(validate());
   };
 
   const handleContinue = () => {
     const errs = validate();
-    setErrors(errs);
 
     setTouched({
       ...(needsDob ? { dob: true } : {}),
@@ -108,31 +105,17 @@ export default function SignUpStep3Screen({ navigation }: Props) {
   };
 
   const inputStyle = useFieldInputStyle();
+  // Recomputed every render so an error clears the moment it's fixed.
+  const errors = validate();
   const fieldError = (field: keyof FormErrors) => (touched[field] ? errors[field] : undefined);
 
   const dobRow = (
     <FieldRow label="DATE OF BIRTH" error={fieldError('dob')}>
-      <View style={styles.dobRow}>
-        {[
-          { value: dobDay, set: setDobDay, ph: 'DD', max: 2, width: 34 },
-          { value: dobMonth, set: setDobMonth, ph: 'MM', max: 2, width: 34 },
-          { value: dobYear, set: setDobYear, ph: 'YYYY', max: 4, width: 56 },
-        ].map((f, i) => (
-          <View key={f.ph} style={styles.dobPart}>
-            {i > 0 && <Text style={[styles.dobSlash, { color: t.sub }]}>/</Text>}
-            <TextInput
-              style={[inputStyle, { width: f.width }]}
-              value={f.value}
-              onChangeText={v => { if (v.length <= f.max) f.set(v.replace(/[^0-9]/g, '')); }}
-              onBlur={() => markTouched('dob')}
-              placeholder={f.ph}
-              placeholderTextColor={t.sub}
-              keyboardType="number-pad"
-              maxLength={f.max}
-            />
-          </View>
-        ))}
-      </View>
+            <DobField
+        value={{ day: dobDay, month: dobMonth, year: dobYear }}
+        onChange={next => { setDobDay(next.day); setDobMonth(next.month); setDobYear(next.year); }}
+        onDone={() => markTouched('dob')}
+      />
     </FieldRow>
   );
 
@@ -234,9 +217,6 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, flexGrow: 1 },
   cardGap: { marginBottom: 12 },
   sectionGap: { marginTop: 22 },
-  dobRow: { flexDirection: 'row', alignItems: 'center' },
-  dobPart: { flexDirection: 'row', alignItems: 'center' },
-  dobSlash: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '600', marginHorizontal: 6 },
   prefixRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   bookingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, marginTop: 12 },
   bookingLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
