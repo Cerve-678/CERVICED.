@@ -41,6 +41,7 @@ import { PortfolioItem, ServiceCategory } from '../../types/providers';
 import {
   getPortfolioItems,
   getDiscoverServices,
+  getDiscoverFeedTotal,
   getSavedPortfolioDetails,
   prefetchProviderBySlug,
 } from '../../services/databaseService';
@@ -337,6 +338,9 @@ const ExploreScreen = memo(() => {
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
+  // The header count per filter: the whole feed's size, not how many pages
+  // have loaded so far (portfolioItems grows as the client scrolls).
+  const [discoverTotals, setDiscoverTotals] = useState<Record<string, number>>({});
   const [discoverVisibleCount, setDiscoverVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
   const discoverLoadMoreAtRef = useRef(0);
   const discoverPageLoadingRef = useRef(false);
@@ -608,6 +612,17 @@ const ExploreScreen = memo(() => {
     return () => { cancelled = true; };
   }, [selectedFilter, loadDiscoverFeed]);
 
+  const loadDiscoverTotal = useCallback((filter: string) => {
+    const category = filter !== 'All' ? filterMap[filter] : undefined;
+    getDiscoverFeedTotal(category)
+      .then(total => setDiscoverTotals(existing => ({ ...existing, [filter]: total })))
+      .catch(error => logger.warn('Failed to count Explore results:', error));
+  }, [filterMap]);
+
+  useEffect(() => {
+    if (discoverTotals[selectedFilter] === undefined) loadDiscoverTotal(selectedFilter);
+  }, [selectedFilter, discoverTotals, loadDiscoverTotal]);
+
   // Other filters load on demand and remain cached for this screen session.
   // Eagerly prefetching every alternative cost 24 speculative database
   // requests and competed with images in the feed being viewed.
@@ -624,11 +639,12 @@ const ExploreScreen = memo(() => {
     setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
     discoverLoadMoreAtRef.current = 0;
     setPortfolioRefreshing(true);
+    loadDiscoverTotal(selectedFilter);
     loadDiscoverFeed(selectedFilter)
       .then(feed => setPortfolioItems(feed))
       .catch(() => setPortfolioItems([]))
       .finally(() => setPortfolioRefreshing(false));
-  }, [selectedFilter, loadDiscoverFeed]);
+  }, [selectedFilter, loadDiscoverFeed, loadDiscoverTotal]);
 
   // Fetch favourites whenever the tab is opened or the saved-ids list changes
   // (e.g. hearting/unhearting something while already on this tab).
@@ -1000,7 +1016,7 @@ const ExploreScreen = memo(() => {
                 ListHeaderComponent={
                   <View style={styles.gridHeader}>
                     <Text style={[styles.gridCount, { color: P.sub }]}>
-                      {portfolioItems.length} results
+                      {discoverTotals[selectedFilter] ?? portfolioItems.length} results
                     </Text>
                   </View>
                 }
