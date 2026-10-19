@@ -241,15 +241,6 @@ export default function LinkOnlyPortfolioScreen() {
                     </Text>
                   </View>
                 </View>
-                {specialties.length > 0 && (
-                  <View style={styles.chips}>
-                    {specialties.slice(0, 3).map(specialty => (
-                      <View key={specialty} style={styles.previewChip}>
-                        <Text style={styles.previewChipText}>{specialty}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
                 <View style={styles.previewActions}>
                   <View style={styles.previewBook}>
                     <Text style={styles.addText}>Book</Text>
@@ -403,8 +394,6 @@ const createStyles = (P: Palette) =>
     previewInitials: { fontFamily: 'BakbakOne-Regular', fontSize: 20, color: P.onAccent },
     previewName: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
     previewMeta: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', color: P.sub },
-    previewChip: { borderRadius: 100, backgroundColor: P.accentDim, paddingVertical: 5, paddingHorizontal: 10 },
-    previewChipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.text },
     previewActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     previewBook: { flex: 1, height: 40, borderRadius: 20, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
     previewIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
