@@ -104,9 +104,15 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     ? await admin.from('fee_consent_records').select('id, user_id, fees').eq('checkout_batch_id', batch.id).maybeSingle()
     : { data: null, error: null };
   if (consentError) throw consentError;
-  const consentCoversProvider = !!consent && consent.user_id === booking.user_id &&
-    Array.isArray(consent.fees) &&
-    (consent.fees as Array<{ provider_id?: string }>).some(fee => fee.provider_id === booking.provider_id);
+  // The agreed amount for this provider and fee kind; a charge above it (or
+  // with no agreement covering this provider) is refused.
+  type ConsentedFee = { provider_id?: string; late_fee_pence?: number | null; no_show_fee_pence?: number | null };
+  const agreed = consent && consent.user_id === booking.user_id && Array.isArray(consent.fees)
+    ? (consent.fees as ConsentedFee[]).find(fee => fee.provider_id === booking.provider_id)
+    : undefined;
+  const agreedPence = agreed ? (kind === 'late' ? agreed.late_fee_pence : agreed.no_show_fee_pence) ?? 0 : 0;
+  const bookingPence = (kind === 'late' ? booking.late_fee_pence : booking.no_show_fee_pence) ?? 0;
+  const consentCoversProvider = !!agreed && agreedPence > 0 && bookingPence <= agreedPence;
 
   // The card saved at checkout, and the Customer it was saved to, are on the
   // original payment.
