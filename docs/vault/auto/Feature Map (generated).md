@@ -55,7 +55,7 @@ Curated: [[Availability & Slots]] · **170 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(67)_
 - `src/screens/client/RescheduleScreen.tsx` _(55)_
 - `supabase/availability_v2.sql` _(54)_
-- `src/screens/client/CartScreen.tsx` _(47)_
+- `src/screens/client/CartScreen.tsx` _(45)_
 - `src/screens/provider/SchedulingScreen.tsx` _(44)_
 - `supabase/waitlist_holds.sql` _(43)_
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
@@ -75,7 +75,7 @@ Curated: [[Availability & Slots]] · **170 files**
 
 ## Payments
 Curated: [[Payments]] · **136 files**
-- `src/screens/client/CartScreen.tsx` _(509)_
+- `src/screens/client/CartScreen.tsx` _(513)_
 - `src/services/databaseService.ts` _(181)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/bookingService.ts` _(120)_
@@ -112,7 +112,7 @@ Curated: [[Booking Flow]] · **279 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/services/databaseService.ts` _(838)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/screens/client/CartScreen.tsx` _(611)_
+- `src/screens/client/CartScreen.tsx` _(638)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(562)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/client/BookingDetailScreen.tsx` _(418)_
@@ -253,7 +253,7 @@ Curated: [[Booking Flow]] · **171 files**
 - `src/screens/client/BookingDetailScreen.tsx` _(159)_
 - `src/screens/client/RescheduleScreen.tsx` _(143)_
 - `src/services/becca/capabilities/client.ts` _(132)_
-- `src/screens/client/CartScreen.tsx` _(115)_
+- `src/screens/client/CartScreen.tsx` _(121)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
@@ -301,10 +301,10 @@ Curated: [[Contexts]] · **180 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
+- `src/screens/client/CartScreen.tsx` _(15)_
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
-- `src/screens/client/CartScreen.tsx` _(13)_
 - `src/screens/provider/InfoRegScreen.tsx` _(13)_
 - `src/i18n/catalogs/en.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
@@ -347,7 +347,7 @@ Curated: [[Services]] · **47 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **72 files**
-- `src/screens/client/CartScreen.tsx` _(396)_
+- `src/screens/client/CartScreen.tsx` _(405)_
 - `src/services/databaseService.ts` _(95)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(62)_

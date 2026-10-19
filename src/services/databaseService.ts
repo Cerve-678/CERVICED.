@@ -634,6 +634,7 @@ const DEFAULT_LIFETIME_BOOKINGS_QUERY_LIMIT = 2000;
 export async function getProviders(
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  offset = 0,
 ): Promise<PublicProviderSummary[]> {
   let query = supabase
     .from("providers")
@@ -644,8 +645,7 @@ export async function getProviders(
     // this is a plain browse/list, not a recommendation — a provider's own
     // business is allowed to appear here (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
-    .order("rating", { ascending: false })
-    .limit(limit);
+    .order("rating", { ascending: false });
 
   if (category && category !== "ALL") {
     // ANY of the provider's declared types, not just the headline one — a
@@ -653,6 +653,12 @@ export async function getProviders(
     // (providers_service_categories_gin), so this stays an index scan.
     query = query.overlaps("service_categories", [category]);
   }
+
+  // Preserve the normal first-page request shape; only Home's deferred
+  // catalogue extension needs a range after the first batch.
+  query = offset > 0
+    ? query.range(offset, offset + limit - 1)
+    : query.limit(limit);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -1637,8 +1643,9 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
-  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  limit: number | null = DEFAULT_PROVIDER_QUERY_LIMIT,
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1675,7 +1682,12 @@ export async function getPortfolioItems(
     query = query.eq("category", category.toUpperCase());
   }
 
-  const { data, error } = await query.limit(limit);
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
 }
@@ -1719,9 +1731,10 @@ export async function searchPortfolio(
  */
 export async function getDiscoverServices(
   category?: string,
-  limit = 40,
+  limit: number | null = 40,
   audience?: "women" | "men" | "kids" | "everyone",
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
@@ -1735,7 +1748,9 @@ export async function getDiscoverServices(
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    .limit(limit);
+    // Pagination must have a stable order. Without this, a next page can
+    // repeat or skip services as Postgres is free to return rows in any order.
+    .order("created_at", { ascending: false });
 
   if (options?.excludeOwnProvider !== false) {
     query = query.not("provider_id", "in", await ownProviderIdExclusion());
@@ -1753,6 +1768,11 @@ export async function getDiscoverServices(
   }
   if (audience) {
     query = query.eq("audience", audience);
+  }
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
   }
 
   const { data, error } = await query;

@@ -61,9 +61,11 @@ export interface ProviderProfileDataState {
    *  here — the work gallery and the venue/workspace shots have separate
    *  row caps and render in two different places on the profile. */
   portfolio: { work: DbPortfolioItem[]; venue: DbPortfolioItem[] };
+  portfolioLoading: boolean;
   availability: AvailabilitySummary | null;
   availabilityLoading: boolean;
   openingHours: WeeklyOpeningHoursDay[] | null;
+  openingHoursLoading: boolean;
   currentUserId: string | null;
   currentUserName: string;
   isOwnProvider: boolean;
@@ -96,6 +98,7 @@ export function useProviderProfileData(
     work: DbPortfolioItem[];
     venue: DbPortfolioItem[];
   }>({ work: [], venue: [] });
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(
     null,
   );
@@ -103,6 +106,7 @@ export function useProviderProfileData(
   const [openingHours, setOpeningHours] = useState<
     WeeklyOpeningHoursDay[] | null
   >(null);
+  const [openingHoursLoading, setOpeningHoursLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("");
   const [isOwnProvider, setIsOwnProvider] = useState(false);
@@ -112,7 +116,6 @@ export function useProviderProfileData(
   useEffect(() => {
     profileGenerationRef.current += 1;
     let cancelled = false;
-    let viewerCheckTimeout: ReturnType<typeof setTimeout> | null = null;
     setLoading(true);
     setLoadFailed(false);
     setProvider(null);
@@ -123,9 +126,11 @@ export function useProviderProfileData(
     setReviewsLoadedAll(false);
     setPromotions([]);
     setPortfolio({ work: [], venue: [] });
+    setPortfolioLoading(true);
     setAvailability(null);
     setAvailabilityLoading(true);
     setOpeningHours(null);
+    setOpeningHoursLoading(true);
     setCurrentUserId(null);
     setCurrentUserName("");
     setIsOwnProvider(false);
@@ -215,6 +220,9 @@ export function useProviderProfileData(
           })
           .catch((error: unknown) => {
             logger.warn("Failed to load provider portfolio:", error);
+          })
+          .finally(() => {
+            if (!cancelled) setPortfolioLoading(false);
           });
 
         void AvailabilityService.getAvailabilitySummary(data.id, {
@@ -236,17 +244,14 @@ export function useProviderProfileData(
           })
           .catch((error: unknown) => {
             logger.warn("Failed to load provider opening hours:", error);
+          })
+          .finally(() => {
+            if (!cancelled) setOpeningHoursLoading(false);
           });
 
-        // Ownership is secondary viewer context, not profile content. Never
-        // let a stalled auth/follow query hold a Book-intent entrance forever:
-        // fail open after a short bound and keep the database self-booking
-        // guard as the final authority. If the request eventually resolves,
-        // it can still correct isOwnProvider for the visible screen.
-        viewerCheckTimeout = setTimeout(() => {
-          if (!cancelled) setViewerChecked(true);
-        }, 1500);
-
+        // Booking authority is fail-closed. Never show a booking control
+        // until this ownership lookup has answered: a timeout must not turn
+        // an owner into a client for even one tappable frame.
         void getProviderProfileViewerContext(data.id)
           .then((viewer) => {
             if (cancelled) return;
@@ -260,14 +265,6 @@ export function useProviderProfileData(
           })
           .catch((error: unknown) => {
             logger.warn("Failed to load provider viewer context:", error);
-            // Fail open in the UI only. Server-side booking authority still
-            // prevents self-booking, while a transient viewer-state failure
-            // must not freeze every legitimate client's booking entry point.
-            if (!cancelled) setViewerChecked(true);
-          })
-          .finally(() => {
-            if (viewerCheckTimeout) clearTimeout(viewerCheckTimeout);
-            viewerCheckTimeout = null;
           });
       } catch (error: unknown) {
         if (!cancelled) setLoadFailed(true);
@@ -280,7 +277,6 @@ export function useProviderProfileData(
     void loadProfile();
     return () => {
       cancelled = true;
-      if (viewerCheckTimeout) clearTimeout(viewerCheckTimeout);
       profileGenerationRef.current += 1;
     };
   }, [providerSlug]);
@@ -314,9 +310,11 @@ export function useProviderProfileData(
     reviewsLoadedAll,
     promotions,
     portfolio,
+    portfolioLoading,
     availability,
     availabilityLoading,
     openingHours,
+    openingHoursLoading,
     currentUserId,
     currentUserName,
     isOwnProvider,

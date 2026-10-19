@@ -23,17 +23,9 @@ export interface BookingCtaInput {
  *
  * Two properties have to hold at once, and they pull against each other:
  *
- *  1. A provider is NEVER offered a Book button on their own profile, not even
- *     for one frame. So "ownership unknown" must read as "withhold", never as
- *     "not the owner".
- *  2. For everyone else the controls must paint WITH the service card, not a
- *     round trip later. Gating on the per-profile check alone satisfied (1) by
- *     making every client pay for it: the profile drew, then the buttons
- *     appeared afterwards.
- *
- * Resolved by letting the session-level answer — which normally settled long
- * before this screen mounted — satisfy (2), while treating a lookup that
- * FAILED as unknown rather than as "owns nothing", which is what keeps (1).
+ * A provider is NEVER offered a Book button on their own profile, not even
+ * for one frame. Ownership is therefore fail-closed: controls wait for the
+ * per-profile answer instead of interpreting a timeout as "not the owner".
  *
  * Extracted from ProviderProfileScreen so this is testable on its own: the
  * interesting states are all mid-load, and they are the states a running app
@@ -48,15 +40,12 @@ export function shouldShowBookingCta(input: BookingCtaInput): boolean {
     viewerChecked,
   } = input;
 
-  // The session answer counts only where it actually produced one, and only
-  // once there is a loaded profile to compare it against.
-  const sessionOwnershipKnown =
-    myProviderIdStatus === "resolved" && providerDbId !== null;
+  if (providerDbId === null || !viewerChecked) return false;
+
+  const sessionOwnershipKnown = myProviderIdStatus === "resolved";
 
   const ownsThisProfile =
     isOwnProvider || (sessionOwnershipKnown && myProviderId === providerDbId);
 
-  const ownershipResolved = viewerChecked || sessionOwnershipKnown;
-
-  return ownershipResolved && !ownsThisProfile;
+  return !ownsThisProfile;
 }
