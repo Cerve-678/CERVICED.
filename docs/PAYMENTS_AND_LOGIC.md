@@ -26,7 +26,7 @@ Last updated: 18 October 2026.
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
-| Automatic retries of a declined fee | No | Branch `feat/fee-auto-retry`: migration 20261019210000 unapplied; `booking-fee`, `client-saved-cards`, `release-payouts` undeployed |
+| Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
 | Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
 
 ---
@@ -187,7 +187,7 @@ estimate of loss, not a penalty.
   'paid' or the webhook, payout held 24h like any fee. The provider sees it
   waiting and can cancel it (invoice voided). After 7 days `release-payouts`
   voids it and tells the provider.
-- (Branch `feat/fee-auto-retry`, not live.) If the off-session charge was
+- If the off-session charge was
   DECLINED (not `authentication_required`) and the client agreed to wording
   version `2026-10-19-retries`, the saved card is also tried again up to three
   times, about 1, 3 and 6 days into the request, by paying the same invoice
