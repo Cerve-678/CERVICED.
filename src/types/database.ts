@@ -904,6 +904,7 @@ export type ProviderWithServices = Pick<
   | "travel_radius"
   | "products_used"
   | "hair_types_catered"
+  | "preferred_payment_methods"
 > & {
   /** Only the automation flags needed by the public profile UI. */
   automation_settings: Pick<

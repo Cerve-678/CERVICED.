@@ -1170,7 +1170,8 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   group_bookings_available,
   vegan_cruelty_free,
   travel_radius,
-  products_used
+  products_used,
+  preferred_payment_methods
 `;
 
 const PROVIDER_PROFILE_CACHE_TTL_MS = 60_000;
@@ -8069,6 +8070,8 @@ export async function updateMyStagedProviderAnswers(
     external_booking_url?: string | null;
     instagram: string | null;
     website: string | null;
+    accessibility_notes?: string | null;
+    preferred_payment_methods?: string[] | null;
   },
 ): Promise<void> {
   const { error } = await supabase
