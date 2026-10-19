@@ -1011,19 +1011,24 @@ export async function searchProviders(
       .eq("is_active", true)
       .or(serviceOr)
       .limit(limit),
-    // 2. Provider IDs where display_name, about_text, or location matches
+    // 2. Provider IDs where display_name, about_text, or location matches.
+    // Live providers only, like step 4: unclaimed directory listings are
+    // readable rows too, and hundreds of them matching "london" or "hair"
+    // would fill this capped id list and push real providers out of it.
     supabase
       .from("providers")
       .select("id")
       .eq("is_active", true)
+      .eq("has_gone_live", true)
       .or(nameOr)
       .limit(limit),
-    // 3. Provider IDs in the detected category, if any
+    // 3. Provider IDs in the detected category, if any (live only, as above)
     categoryHint
       ? supabase
           .from("providers")
           .select("id")
           .eq("is_active", true)
+          .eq("has_gone_live", true)
           .overlaps("service_categories", [categoryHint])
           .limit(limit)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
@@ -1084,6 +1089,111 @@ export async function searchProviders(
   return ((data ?? []) as PublicProviderSummary[])
     .sort((a, b) => relevance(b) - relevance(a))
     .slice(0, limit);
+}
+
+export interface DirectoryListingRow {
+  id: string;
+  display_name: string;
+  service_category: string;
+  location_text: string | null;
+  logo_url: string | null;
+}
+
+export interface DirectoryListingDetailRow extends DirectoryListingRow {
+  about_text: string | null;
+  instagram: string | null;
+  website: string | null;
+}
+
+const DIRECTORY_LISTING_SELECT =
+  "id, display_name, service_category, location_text, logo_url";
+
+/**
+ * One directory listing for the read-only listing page a client opens from
+ * Search, by its uuid. Same scope as getDirectoryListings below, and only the
+ * columns that page shows: the claim flow's wider getUnclaimedProviderDetail
+ * also reads contact fields, which have no business on every client's device.
+ */
+export async function getDirectoryListingDetail(
+  id: string,
+): Promise<DirectoryListingDetailRow | null> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select(`${DIRECTORY_LISTING_SELECT}, about_text, instagram, website`)
+    .eq("id", id)
+    .eq("is_claimed", false)
+    .eq("source", "scraped")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data as DirectoryListingDetailRow | null;
+}
+
+/**
+ * Directory listings for client Search: businesses imported from public
+ * directories that haven't joined CERVICED (see
+ * src/features/providers/directoryListings.ts). Matched on the same parsed
+ * query as searchProviders, against the fields a listing has: name,
+ * Instagram handle, imported service type and area.
+ *
+ * Deliberate exception to the has_gone_live rule (product owner,
+ * 2026-10-19: clients should find these in Search). A listing can never go
+ * live because nobody owns it, and it's shown as an unbookable listing, not
+ * a provider. `is_claimed = false` + `source = 'scraped'` is what scopes
+ * this to imported listings (RLS providers_unclaimed_read lets anyone read
+ * those rows); `is_active = false` takes one down.
+ */
+export async function getDirectoryListings(
+  query: string,
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+): Promise<DirectoryListingRow[]> {
+  let listingQuery = supabase
+    .from("providers")
+    .select(DIRECTORY_LISTING_SELECT)
+    .eq("is_claimed", false)
+    .eq("source", "scraped")
+    .eq("is_active", true)
+    .order("display_name", { ascending: true })
+    .limit(limit);
+
+  if (category && category !== "ALL") {
+    listingQuery = listingQuery.eq("service_category", category);
+  }
+
+  const q = query.trim();
+  if (q) {
+    const parsed = parseSearchQuery(q);
+    // Handles are stored without the @ people often type.
+    const clean = (term: string): string => sanitizeIlikeTerm(term).replace(/^@+\s*/, "");
+    const textTerms = (
+      parsed.serviceTerms.length ? parsed.serviceTerms : (parsed.locationTerms.length ? parsed.locationTerms : [q])
+    ).map(clean).filter(Boolean);
+    const locationTerms = parsed.locationTerms.map(clean).filter(Boolean);
+    if (!textTerms.length) return [];
+
+    const textOr = textTerms.flatMap((t) => [
+      `display_name.ilike.%${t}%`,
+      `instagram.ilike.%${t}%`,
+      `custom_service_type.ilike.%${t}%`,
+      `location_text.ilike.%${t}%`,
+    ]);
+    // Same category broadening as searchProviders: "lash tech" finds every
+    // LASHES listing, not only ones with the words in their name.
+    if (parsed.categoryHint && (!category || category === "ALL")) {
+      textOr.push(`service_category.eq.${parsed.categoryHint}`);
+    }
+    listingQuery = listingQuery.or(textOr.join(","));
+    if (locationTerms.length) {
+      listingQuery = listingQuery.or(
+        locationTerms.map((t) => `location_text.ilike.%${t}%`).join(","),
+      );
+    }
+  }
+
+  const { data, error } = await listingQuery;
+  if (error) throw error;
+  return (data ?? []) as DirectoryListingRow[];
 }
 
 /**
@@ -3175,6 +3285,9 @@ export async function getProviderIdByDisplayName(
     .select("id")
     .ilike("display_name", name)
     .eq("is_active", true)
+    // Not an imported directory listing — those share this table, and one
+    // named like a real provider would make this lookup ambiguous.
+    .eq("is_claimed", true)
     .maybeSingle();
   return (data as any)?.id ?? null;
 }
@@ -4446,6 +4559,7 @@ export async function resolveActiveProviderIdByDisplayName(
     .select("id")
     .ilike("display_name", displayName)
     .eq("is_active", true)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   if (error) throw error;
   return data?.id ?? null;
@@ -5441,6 +5555,7 @@ export async function getProviderCancellationPolicy(
     .from("providers")
     .select("cancellation_notice_hours, booking_policies")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return mapCancellationPolicyRow(data);
 }
@@ -6149,6 +6264,7 @@ export async function validatePromoCode(
     .from("providers")
     .select("id")
     .eq("display_name", providerDisplayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   if (!provider) return null;
 
@@ -6214,6 +6330,7 @@ export async function getProviderReschedulePolicyByDisplayName(
     .from("providers")
     .select("booking_policies")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return mapReschedulePolicyRow(data);
 }
@@ -6271,7 +6388,7 @@ export async function getProviderBookingDetailMetadata(params: {
     );
   query = params.providerId
     ? query.eq("id", params.providerId)
-    : query.eq("display_name", params.displayName);
+    : query.eq("display_name", params.displayName).eq("is_claimed", true);
 
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
@@ -6338,6 +6455,7 @@ export async function getProviderContactByDisplayName(
     .from("providers")
     .select("preferred_contact_methods, whatsapp_number, email, phone")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return mapContactRow(data);
 }
@@ -6391,7 +6509,8 @@ export async function getProviderLocationsByDisplayNames(
   const { data, error } = await supabase
     .from("providers")
     .select("display_name, location_text, latitude, longitude, phone")
-    .in("display_name", displayNames);
+    .in("display_name", displayNames)
+    .eq("is_claimed", true); // never an imported directory listing
 
   if (error || !data) return {};
 
@@ -6720,6 +6839,7 @@ export async function getProviderAddressPolicyByDisplayName(
     .from("providers")
     .select("business_type, address_release_policy")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return data ? (data as ProviderAddressPolicy) : null;
 }
@@ -7578,7 +7698,8 @@ export async function getProviderDepositPoliciesByDisplayNames(
   const { data, error } = await supabase
     .from("providers")
     .select("display_name, booking_policies")
-    .in("display_name", displayNames);
+    .in("display_name", displayNames)
+    .eq("is_claimed", true); // never an imported directory listing
 
   if (error || !data) return {};
 
@@ -7661,7 +7782,7 @@ export async function getProviderSchedulingConstraints(
     .select("booking_window_days, min_booking_notice_hrs");
   const { data } = UUID_RE.test(providerIdOrDisplayName)
     ? await query.eq("id", providerIdOrDisplayName).maybeSingle()
-    : await query.eq("display_name", providerIdOrDisplayName).maybeSingle();
+    : await query.eq("display_name", providerIdOrDisplayName).eq("is_claimed", true).maybeSingle();
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
     minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,

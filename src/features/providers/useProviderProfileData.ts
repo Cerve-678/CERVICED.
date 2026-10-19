@@ -14,8 +14,8 @@ import {
   getProviderReviews,
   trackUserInteraction,
 } from "../../services/databaseService";
-import { getUnclaimedProviderDetail } from "../../services/providerClaimService";
-import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
+import { getDirectoryListingDetail } from "../../services/directoryListingService";
+import type { DirectoryListingDetail } from "../../services/directoryListingService";
 import userLearningService from "../../services/userLearningService";
 import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
@@ -52,7 +52,7 @@ export interface ProviderProfileDataState {
   providerDbId: string | null;
   loading: boolean;
   loadFailed: boolean;
-  unclaimedProvider: UnclaimedProviderDetail | null;
+  unclaimedProvider: DirectoryListingDetail | null;
   reviews: ProviderReviewItem[];
   reviewsLoading: boolean;
   reviewsLoadedAll: boolean;
@@ -89,7 +89,7 @@ export function useProviderProfileData(
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [unclaimedProvider, setUnclaimedProvider] =
-    useState<UnclaimedProviderDetail | null>(null);
+    useState<DirectoryListingDetail | null>(null);
   const [reviews, setReviews] = useState<ProviderReviewItem[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsLoadedAll, setReviewsLoadedAll] = useState(false);
@@ -153,7 +153,7 @@ export function useProviderProfileData(
         if (!data) data = await fullProfileRequest;
         if (cancelled) return;
         if (!data) {
-          const unclaimed = await getUnclaimedProviderDetail(providerSlug);
+          const unclaimed = await getDirectoryListingDetail(providerSlug);
           if (!cancelled) setUnclaimedProvider(unclaimed);
           return;
         }

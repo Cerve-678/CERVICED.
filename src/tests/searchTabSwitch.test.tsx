@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native';
 import SearchScreen from '../screens/client/SearchScreen';
-import { getProviders } from '../services/databaseService';
+import { getDirectoryListings, getProviders } from '../services/databaseService';
 
 jest.mock('react-native-worklets', () => require('react-native-worklets/lib/module/mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -30,6 +30,7 @@ jest.mock('../services/userLearningService', () => ({
 jest.mock('../services/databaseService', () => ({
   getProviders: jest.fn(),
   searchProviders: jest.fn(async () => []),
+  getDirectoryListings: jest.fn(async () => []),
   logSearchEvent: jest.fn(),
   getProvidersAvailability: jest.fn(async () => new Map()),
   getProviderServiceFacets: jest.fn(async () => ({ priceRanges: new Map(), audiences: new Map(), skinTones: new Map() })),
@@ -57,6 +58,24 @@ describe('Search tab switching', () => {
     fireEvent.press(screen.getByText('Hair'));
     await waitFor(() => expect(screen.getAllByText('Salon hair-one').length).toBeGreaterThan(0));
     expect(screen.queryByText('Salon nails-one')).toBeNull();
+  });
+});
+
+describe('Search directory listings', () => {
+  it('shows businesses not on CERVICED after the bookable providers', async () => {
+    (getProviders as jest.Mock).mockImplementation(async () => [provider('all-one', 'HAIR')]);
+    (getDirectoryListings as jest.Mock).mockImplementationOnce(async () => [{
+      id: 'listing-uuid', slug: 'fshairuk-hair', display_name: 'fshairuk', service_category: 'HAIR',
+      location_text: 'Abbey Wood, South London', logo_url: null,
+    }]);
+
+    render(<SearchScreen route={{ params: {} } as never} navigation={{ navigate: jest.fn(), setOptions: jest.fn(), goBack: jest.fn() } as never} />);
+    await waitFor(() => expect(screen.getAllByText('fshairuk').length).toBeGreaterThan(0));
+    expect(screen.getByText('Not on CERVICED yet')).toBeTruthy();
+    // Grey initial in place of the missing logo, and no Book Now.
+    expect(screen.getByLabelText('fshairuk logo')).toBeTruthy();
+    expect(screen.getByText('View')).toBeTruthy();
+    expect(screen.getAllByText('Book Now')).toHaveLength(1);
   });
 });
 

@@ -10,7 +10,7 @@ import {
   getProviderReviews,
   trackUserInteraction,
 } from "../services/databaseService";
-import { getUnclaimedProviderDetail } from "../services/providerClaimService";
+import { getDirectoryListingDetail } from "../services/directoryListingService";
 import userLearningService from "../services/userLearningService";
 import { mapProviderProfileData } from "../features/providers/profileMapper";
 import {
@@ -35,8 +35,8 @@ jest.mock("../services/AvailabilityService", () => ({
   },
 }));
 
-jest.mock("../services/providerClaimService", () => ({
-  getUnclaimedProviderDetail: jest.fn(),
+jest.mock("../services/directoryListingService", () => ({
+  getDirectoryListingDetail: jest.fn(),
 }));
 
 jest.mock("../services/userLearningService", () => ({
@@ -63,7 +63,7 @@ describe("useProviderProfileData", () => {
     (getProviderProfilePreviewBySlug as jest.Mock).mockImplementation(
       (slug: string) => getProviderBySlug(slug),
     );
-    (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(null);
+    (getDirectoryListingDetail as jest.Mock).mockResolvedValue(null);
     (userLearningService.trackInteraction as jest.Mock).mockResolvedValue(
       undefined,
     );

@@ -61,7 +61,9 @@ const SECTIONS = [
     body: [
       'In Search, providers that match your search and filters are shown with providers Cerviced has chosen to feature first, then by rating. You can change the order, for example to nearest or price. Providers can\'t pay to be featured or to appear higher.',
       'Explore, Becca and some reminders are personalised. We use your activity in the app, such as the looks and providers you save, view and book, and the beauty profile you fill in, to suggest things you\'re likely to want. Our Privacy Policy explains this in more detail.',
-      'Providers only appear to clients once they\'ve completed their profile and gone live.',
+      'Providers who have joined Cerviced only appear to clients once they\'ve completed their profile and gone live.',
+      'Search also shows some beauty businesses that haven\'t joined Cerviced, marked "Not on CERVICED yet". We list them so you can find them, using information from public online directories of beauty businesses and from their public Instagram profiles: their name or Instagram handle, the area and type of work listed for them, and their booking link. A listing doesn\'t mean the business has approved of, joined or partnered with Cerviced. You can\'t book them through Cerviced, and they aren\'t providers under these Terms: their buttons take you to their own page or Instagram, and section 20 applies to those pages in the same way. We don\'t check these listings, so their details may be out of date.',
+      'If one of these listings is your business, you can ask to claim it from the listing. We check each claim by hand before it\'s approved. Anyone a listing is about can ask us to correct or remove it by emailing support@cerviced.co.',
     ].join('\n\n'),
   },
   {
