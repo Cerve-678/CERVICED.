@@ -1,4 +1,4 @@
-import { buildMaintenanceSuggestions } from '../utils/maintenanceSuggestions';
+import { buildMaintenanceSuggestions, scheduleNewReminder } from '../utils/maintenanceSuggestions';
 import { MAINTENANCE_SERVICE_TYPES } from '../constants/maintenanceServiceTypes';
 import { EMPTY_BEAUTY_DATA, type BeautyData } from '../types/beautyProfile';
 import type { MaintenanceItem, MaintenanceSetupAnswers } from '../types/maintenance';
@@ -18,7 +18,7 @@ function item(p: Partial<MaintenanceItem>): MaintenanceItem {
   return {
     id: 'x', kind: 'service', origin: 'client', title: 't', typeKey: null, providerId: null,
     serviceId: null, providerName: null, repeatWeeks: 4, intervalEdited: false, lastDoneOn: null,
-    dueOn: '2026-11-01', eventOn: null, paused: false, createdAt: '2026-10-01T00:00:00Z', ...p,
+    dueOn: '2026-11-01', eventOn: null, paused: false, note: null, createdAt: '2026-10-01T00:00:00Z', ...p,
   };
 }
 
@@ -102,9 +102,63 @@ describe('buildMaintenanceSuggestions', () => {
     ]);
   });
 
+  it('offers brow lamination for laminated brows, the general brow visit otherwise', () => {
+    const lam = buildMaintenanceSuggestions(profile({ browStyle: 'Laminated' }), NO_ANSWERS, [], TODAY);
+    expect(lam.map(x => [x.typeKey, x.answer])).toEqual([['brow_lamination', 'Brows: Laminated']]);
+    const nat = buildMaintenanceSuggestions(profile({ browStyle: 'Natural' }), NO_ANSWERS, [], TODAY);
+    expect(nat.map(x => x.typeKey)).toEqual(['brows_general']);
+  });
+
+  it('offers a lash lift only for natural lashes with no extensions', () => {
+    const lift = buildMaintenanceSuggestions(
+      profile({ lashStatus: 'No extensions', lashStyle: 'Natural' }), NO_ANSWERS, [], TODAY);
+    expect(lift.map(x => x.typeKey)).toEqual(['lash_lift']);
+    const ext = buildMaintenanceSuggestions(
+      profile({ lashStatus: 'Currently have extensions', lashStyle: 'Natural' }), NO_ANSWERS, [], TODAY);
+    expect(ext.map(x => x.typeKey)).toEqual(['lash_infill']);
+  });
+
+  it('offers a pedicure alongside the nail visit, citing the same answer', () => {
+    const s = buildMaintenanceSuggestions(profile({ nailShape: 'Almond' }), NO_ANSWERS, [], TODAY);
+    expect(s.map(x => [x.typeKey, x.answer])).toEqual([
+      ['nails_general', 'Nails: Almond'],
+      ['pedicure', 'Nails: Almond'],
+    ]);
+  });
+
+  it('never suggests waxing, whatever the sensitive areas say', () => {
+    const s = buildMaintenanceSuggestions(
+      profile({ sensitiveAreas: ['Legs', 'Bikini / Brazilian'], skinType: 'Dry' }), NO_ANSWERS, [], TODAY);
+    expect(s.map(x => x.typeKey)).not.toContain('waxing');
+    expect(s).toEqual(buildMaintenanceSuggestions(profile({ skinType: 'Dry' }), NO_ANSWERS, [], TODAY));
+  });
+
   it('never suggests a patch test', () => {
     const s = buildMaintenanceSuggestions(profile({ treatmentHistory: ['Coloured'] }),
       { ...NO_ANSWERS, lastPatchTestOn: '2025-01-01' }, [], TODAY);
     expect(s.every(x => !/patch/i.test(x.title))).toBe(true);
+  });
+});
+
+describe('scheduleNewReminder', () => {
+  it('counts a repeat from the last visit, or from today when unknown', () => {
+    expect(scheduleNewReminder({ mode: 'repeats', weeks: 6, lastDoneOn: '2026-10-02' }, TODAY))
+      .toEqual({ kind: 'service', repeatWeeks: 6, lastDoneOn: '2026-10-02', dueOn: '2026-11-13', eventOn: null });
+    expect(scheduleNewReminder({ mode: 'repeats', weeks: 3, lastDoneOn: null }, TODAY).dueOn).toBe('2026-10-31');
+  });
+
+  it('lets a long-ago last visit come out overdue rather than hiding it', () => {
+    expect(scheduleNewReminder({ mode: 'repeats', weeks: 2, lastDoneOn: '2026-08-01' }, TODAY).dueOn).toBe('2026-08-15');
+  });
+
+  it('times an event like setup does: book by four weeks ahead, never in the past', () => {
+    expect(scheduleNewReminder({ mode: 'event', eventOn: '2026-11-29' }, TODAY))
+      .toEqual({ kind: 'event', repeatWeeks: null, lastDoneOn: null, dueOn: '2026-11-01', eventOn: '2026-11-29' });
+    expect(scheduleNewReminder({ mode: 'event', eventOn: '2026-10-20' }, TODAY).dueOn).toBe('2026-10-10');
+  });
+
+  it('makes a one-off on the chosen date', () => {
+    expect(scheduleNewReminder({ mode: 'once', date: '2026-12-01' }, TODAY))
+      .toEqual({ kind: 'service', repeatWeeks: null, lastDoneOn: null, dueOn: '2026-12-01', eventOn: null });
   });
 });

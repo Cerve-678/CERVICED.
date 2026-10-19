@@ -22,7 +22,7 @@ import type { BeautyData } from '../../types/beautyProfile';
 import type { MaintenanceSettings, MaintenanceSetupAnswers, NewMaintenanceItem, ProtectiveStyle } from '../../types/maintenance';
 import { dateToYMD, formatShortDayDate, toLocalDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
-import { buildMaintenanceSuggestions, PROTECTIVE_STYLE_LABELS, type MaintenanceSuggestion } from '../../utils/maintenanceSuggestions';
+import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS, PROTECTIVE_STYLE_LABELS, type MaintenanceSuggestion } from '../../utils/maintenanceSuggestions';
 import type { MaintenanceState } from './useMaintenance';
 import {
   Chip, FONT_BODY, FONT_DISPLAY, GhostButton, Note, PrimaryButton, WeekStepper,
@@ -34,20 +34,22 @@ interface Props {
   state: MaintenanceState;
   onClose: () => void;
   onDone: () => void;
+  /** 3 opens straight on the suggestions ("Picked for you" after setup). */
+  startStep?: Step | undefined;
 }
 
-type Step = 1 | 2 | 3;
+export type Step = 1 | 2 | 3;
 const STYLES: ProtectiveStyle[] = ['braids', 'twists', 'locs', 'wigs_weaves'];
 const DEFAULT_WEAR_WEEKS = 6;
 const MAX_EVENTS = 3;
 
-export function SetupFlow({ profile, state, onClose, onDone }: Props) {
+export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const S = useMemo(() => semanticColors(isDarkMode), [isDarkMode]);
 
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(startStep ?? 1);
   const [style, setStyle] = useState<ProtectiveStyle | null>(state.settings?.protectiveStyle ?? null);
   const [wearWeeks, setWearWeeks] = useState(state.settings?.protectiveWearWeeks ?? DEFAULT_WEAR_WEEKS);
   const [weeksIn, setWeeksIn] = useState<number | null>(null);
@@ -73,8 +75,7 @@ export function SetupFlow({ profile, state, onClose, onDone }: Props) {
 
   // Step 1 shows exactly the profile answers the rules will use.
   const profileAnswers = useMemo(() => {
-    const blank: MaintenanceSetupAnswers = { protectiveStyle: null, protectiveWearWeeks: DEFAULT_WEAR_WEEKS, protectiveWeeksIn: null, events: [], lastPatchTestOn: null };
-    return [...new Set(buildMaintenanceSuggestions(profile, blank, [], today).map(s => s.answer))];
+    return [...new Set(buildMaintenanceSuggestions(profile, EMPTY_SETUP_ANSWERS, [], today).map(s => s.answer))];
   }, [profile, today]);
 
   const suggestions = useMemo(
@@ -109,8 +110,10 @@ export function SetupFlow({ profile, state, onClose, onDone }: Props) {
       serviceId: null,
       providerName: null,
       repeatWeeks: s.repeatWeeks,
+      lastDoneOn: null,
       dueOn: s.dueOn,
       eventOn: s.eventOn,
+      note: null,
     }));
     try {
       // Settings first: an idempotent upsert, so a retry after a later
@@ -365,21 +368,24 @@ export function SetupFlow({ profile, state, onClose, onDone }: Props) {
               );
             })}
 
-            <View style={[ui.card, styles.pad, { backgroundColor: P.card, borderColor: P.border }]}>
-              <View style={styles.sugTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.sugTitle, { color: P.text }]}>{t('maintenance.setup.optIn.title')}</Text>
-                  <Text style={[ui.body, { color: P.sub }]}>{t('maintenance.setup.optIn.sub')}</Text>
+            {/* Already on: nothing to opt into (e.g. opened from "Picked for you"). */}
+            {state.remindersOn !== true && (
+              <View style={[ui.card, styles.pad, { backgroundColor: P.card, borderColor: P.border }]}>
+                <View style={styles.sugTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sugTitle, { color: P.text }]}>{t('maintenance.setup.optIn.title')}</Text>
+                    <Text style={[ui.body, { color: P.sub }]}>{t('maintenance.setup.optIn.sub')}</Text>
+                  </View>
+                  <Switch
+                    value={optIn}
+                    onValueChange={v => { hapticSelection(); setOptIn(v); }}
+                    trackColor={{ false: '#D1D1D6', true: P.accent }}
+                    thumbColor={optIn ? '#fff' : '#f4f3f4'}
+                    accessibilityLabel={t('maintenance.setup.optIn.title')}
+                  />
                 </View>
-                <Switch
-                  value={optIn}
-                  onValueChange={v => { hapticSelection(); setOptIn(v); }}
-                  trackColor={{ false: '#D1D1D6', true: P.accent }}
-                  thumbColor={optIn ? '#fff' : '#f4f3f4'}
-                  accessibilityLabel={t('maintenance.setup.optIn.title')}
-                />
               </View>
-            </View>
+            )}
 
             <Note P={P} icon="information-circle-outline" text={t('maintenance.disclaimer')} />
             {error && <Text style={[ui.inlineError, { color: S.bad }]}>{error}</Text>}

@@ -1,11 +1,11 @@
 // src/features/maintenance/ItemMenuSheet.tsx
 //
-// The "⋯" menu for one item: change the interval (or the date, for a one-off),
-// mark it done, pause it, or delete it. Delete is a hard delete and asks
+// The "⋯" menu for one item: change the interval (or the date, for a one-off)
+// and the private note, mark it done, pause it, or delete it. Delete is a hard delete and asks
 // inline first — a dialog can't layer over this Modal.
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import type { AppTheme } from '../../constants/theme';
@@ -41,6 +41,7 @@ function addWeeksYMD(fromYMD: string, weeks: number): string {
 export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Props) {
   const [weeks, setWeeks] = useState(4);
   const [dueOn, setDueOn] = useState<string | null>(null);
+  const [note, setNote] = useState('');
   const [showPicker, setShowPicker] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -52,6 +53,7 @@ export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Pr
     if (!item) return;
     setWeeks(item.repeatWeeks ?? 4);
     setDueOn(item.dueOn);
+    setNote(item.note ?? '');
     setShowPicker(false);
     setConfirmDelete(false);
     setBusy(false);
@@ -80,14 +82,20 @@ export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Pr
 
   const intervalChanged = repeating && weeks !== item.repeatWeeks;
   const dateChanged = !repeating && dueOn !== null && dueOn !== item.dueOn;
+  const noteChanged = note.trim() !== (item.note ?? '');
 
-  const saveSchedule = () => run(async () => {
-    if (repeating) {
+  const saveChanges = () => run(async () => {
+    if (noteChanged && !intervalChanged && !dateChanged) {
+      await onUpdate(item.id, { note });
+    } else if (repeating) {
       // Due date moves with the interval, from the last time it was done.
       const base = item.lastDoneOn ?? today;
-      await onUpdate(item.id, { repeatWeeks: weeks, intervalEdited: true, dueOn: addWeeksYMD(base, weeks) });
+      await onUpdate(item.id, {
+        repeatWeeks: weeks, intervalEdited: true, dueOn: addWeeksYMD(base, weeks),
+        ...(noteChanged ? { note } : {}),
+      });
     } else if (dueOn) {
-      await onUpdate(item.id, { dueOn });
+      await onUpdate(item.id, { dueOn, ...(noteChanged ? { note } : {}) });
     }
   }, t('maintenance.error.save'));
 
@@ -156,8 +164,22 @@ export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Pr
         )
       )}
 
-      {(intervalChanged || dateChanged) && (
-        <PrimaryButton P={P} label={t('maintenance.menu.save')} disabled={busy} onPress={saveSchedule} />
+      <View style={styles.field}>
+        <Text style={[ui.label, { color: P.sub }]}>{t('maintenance.add.note').toUpperCase()}</Text>
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          maxLength={200}
+          multiline
+          placeholder={t('maintenance.add.notePlaceholder')}
+          placeholderTextColor={P.sub}
+          style={[ui.input, styles.note, { color: P.text, backgroundColor: P.surface, borderColor: P.border }]}
+          accessibilityLabel={t('maintenance.add.note')}
+        />
+      </View>
+
+      {(intervalChanged || dateChanged || noteChanged) && (
+        <PrimaryButton P={P} label={t('maintenance.menu.save')} disabled={busy} onPress={saveChanges} />
       )}
 
       {item.kind !== 'event' && (
@@ -200,6 +222,7 @@ const styles = StyleSheet.create({
   datePill: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 100, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 9 },
   dateText: { fontFamily: FONT_BODY, fontSize: 14, fontWeight: '700' },
   hr: { height: 1 },
+  note: { minHeight: 56, textAlignVertical: 'top' },
   confirm: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
   confirmRow: { flexDirection: 'row', gap: 8 },
 });
