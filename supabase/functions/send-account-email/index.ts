@@ -25,6 +25,8 @@ import {
   clientHatAddedEmail,
   providerHatAddedEmail,
   generalWelcomeEmail,
+  linkOnlyWelcomeEmail,
+  linkOnlyHatAddedEmail,
 } from '../_shared/emailTemplates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
@@ -81,19 +83,28 @@ serve(async (req) => {
     const [{ data: account }, { data: provider }] = await Promise.all([
       supabase
         .from('users')
-        .select('name, email, business_name')
+        .select('name, email, business_name, external_booking_url')
         .eq('id', user.id)
         .maybeSingle(),
       supabase
         .from('providers')
-        // display_name only — the provider email is deliberately no longer a
-        // recipient, so fetching it would just be dead weight.
-        .select('display_name')
+        // No email — the provider email is deliberately no longer a recipient,
+        // so fetching it would just be dead weight.
+        .select('display_name, booking_mode')
         .eq('user_id', user.id)
         .maybeSingle(),
     ]);
 
     const name = account?.name ?? '';
+    // A link-only pro (books on their own page) has no services, prices or
+    // availability here, so the two provider kinds get the link-only wording
+    // for them. Decided here from the account, not by a separate kind from the
+    // app: a new kind needs this function redeployed before the app can send
+    // it, and an app ahead of the deploy loses the email silently. At sign-up
+    // there is no providers row yet, so the link saved on users decides.
+    const isLinkOnly = provider
+      ? provider.booking_mode === 'external'
+      : Boolean(account?.external_booking_url);
     const businessName = provider?.display_name ?? account?.business_name ?? undefined;
 
     // EVERY kind goes to the login address, including the provider ones.
@@ -124,9 +135,9 @@ serve(async (req) => {
     };
 
     const { subject, html } = kind === 'provider_welcome'
-      ? providerWelcomeEmail(providerParams)
+      ? (isLinkOnly ? linkOnlyWelcomeEmail(providerParams) : providerWelcomeEmail(providerParams))
       : kind === 'provider_hat_added'
-      ? providerHatAddedEmail(providerParams)
+      ? (isLinkOnly ? linkOnlyHatAddedEmail(providerParams) : providerHatAddedEmail(providerParams))
       : kind === 'password_changed'
       ? passwordChangedEmail({ name })
       : kind === 'client_hat_added'

@@ -20,6 +20,11 @@ import {
   clientHatAddedEmail,
   clientWelcomeEmail,
   generalWelcomeEmail,
+  LINK_ONLY_GO_LIVE_STEPS,
+  linkOnlyGoLiveReminderEmail,
+  linkOnlyHatAddedEmail,
+  linkOnlyLiveEmail,
+  linkOnlyWelcomeEmail,
   passwordChangedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
@@ -88,6 +93,13 @@ const every = () => [
     }),
   ],
   ['generalWelcomeEmail', generalWelcomeEmail({ name: HOSTILE })],
+  ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: HOSTILE, businessName: HOSTILE })],
+  [
+    'linkOnlyGoLiveReminderEmail',
+    linkOnlyGoLiveReminderEmail({ name: HOSTILE, businessName: HOSTILE, remaining: [HOSTILE] }),
+  ],
 ] as Array<[string, { subject: string; html: string }]>;
 
 describe('email templates', () => {
@@ -205,5 +217,29 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Awaiting payment');
     expect(html).not.toContain('platform fee');
     expect(html).toContain('£73.00');
+  });
+
+  // Link-only pros book on their own page: nothing sent to them may tell them
+  // to add services, prices or availability, which they don't have here.
+  it.each([
+    ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+  ])('%s never asks a link-only pro for services, pricing or availability', (_name, mail) => {
+    expect(mail.html).not.toMatch(/services &amp; pricing|availability/i);
+  });
+
+  it('lists the four link-only go-live steps in the welcome', () => {
+    const { html } = linkOnlyWelcomeEmail({ name: 'Ada' });
+    for (const step of LINK_ONLY_GO_LIVE_STEPS) expect(html).toContain(step);
+  });
+
+  it('counts only the steps still left in the reminder', () => {
+    expect(linkOnlyGoLiveReminderEmail({ name: 'Ada', remaining: ['Add your logo'] }).subject)
+      .toBe("You're one step from going live on CERVICED");
+    const two = linkOnlyGoLiveReminderEmail({ name: 'Ada', remaining: ['Add your logo', 'Write your About'] });
+    expect(two.subject).toBe("You're 2 steps from going live on CERVICED");
+    expect(two.html).toContain('Write your About');
+    expect(two.html).not.toContain('Set your opening hours');
   });
 });
