@@ -50,11 +50,12 @@ const QUICK_PICKS: { label: TranslationKey; key: MaintenanceTypeKey | null }[] =
   { label: 'maintenance.add.pick.threading', key: 'brows_general' },
   { label: 'maintenance.add.pick.lashLift', key: 'lash_lift' },
   { label: 'maintenance.add.pick.pedicure', key: 'pedicure' },
+  { label: 'maintenance.add.pick.frenchTips', key: 'nails_general' },
   { label: 'maintenance.add.pick.wigInstall', key: 'hair_general' },
-  { label: 'maintenance.add.pick.blowDry', key: 'hair_general' },
-  { label: 'maintenance.add.pick.barberCut', key: 'trim' },
+  { label: 'maintenance.add.pick.washBlowDry', key: 'hair_general' },
+  // 'trim', the same type a booked "cut" is matched to.
+  { label: 'maintenance.add.pick.styleAndCut', key: 'trim' },
   { label: 'maintenance.add.pick.sprayTan', key: null },
-  { label: 'maintenance.add.pick.massage', key: null },
 ];
 
 const MODES: { mode: Mode; label: TranslationKey }[] = [

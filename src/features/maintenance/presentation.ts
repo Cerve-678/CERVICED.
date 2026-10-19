@@ -8,8 +8,12 @@
 // server-side by process_maintenance_reminders(), which applies the same
 // "already booked" rule (see supabase/migrations/20261018180000_beauty_maintenance.sql).
 
+import {
+  getMaintenanceServiceType,
+  type MaintenanceSearchCategory,
+} from '../../constants/maintenanceServiceTypes';
 import type { MaintenanceItem } from '../../types/maintenance';
-import { toLocalDate } from '../../utils/dateUtils';
+import { dateToYMD, toLocalDate } from '../../utils/dateUtils';
 
 /** An item counts as "due soon" this many days ahead of its due date. */
 export const DUE_SOON_DAYS = 7;
@@ -114,7 +118,6 @@ export interface MaintenanceGroups {
   comingUp: PresentedItem[];
   events: PresentedItem[];
   paused: PresentedItem[];
-  summary: { overdue: number; dueSoon: number; onTrack: number };
   /** The soonest item that needs the client, for the landing card. */
   next: PresentedItem | null;
 }
@@ -145,11 +148,6 @@ export function groupMaintenanceItems(
     comingUp,
     events,
     paused,
-    summary: {
-      overdue: [...attention, ...eventsDue].filter(p => p.view.state === 'overdue').length,
-      dueSoon: [...attention, ...eventsDue].filter(p => p.view.state !== 'overdue').length,
-      onTrack: comingUp.length + events.length - eventsDue.length,
-    },
     next: [...attention, ...eventsDue].sort(byDue)[0] ?? null,
   };
 }
@@ -192,4 +190,60 @@ export function landingStubs(groups: MaintenanceGroups, limit = 3): PresentedIte
   const first = [...groups.needsAttention, ...groups.events.filter(due)].sort(byDue);
   const later = [...groups.comingUp, ...groups.events.filter(p => !due(p))].sort(byDue);
   return [...first, ...later].slice(0, limit);
+}
+
+// ── Your rhythm ──────────────────────────────────────────────────────────────
+
+/** How far Snooze moves an item. Its push cycle restarts on the new date
+ *  (maintenance_items_before_update), still gated by the client's opt-in. */
+export const SNOOZE_DAYS = 7;
+
+/** A week from today, or a week past the due date if that's later, so an
+ *  overdue item doesn't snooze into the past. */
+export function snoozedDueOn(item: MaintenanceItem, todayYMD: string): string {
+  const base = item.dueOn && item.dueOn > todayYMD ? item.dueOn : todayYMD;
+  const d = toLocalDate(base);
+  d.setDate(d.getDate() + SNOOZE_DAYS);
+  return dateToYMD(d);
+}
+
+/** What the "Next up" card says about an item's interval. Never claims a
+ *  habit next to a provider's recommendation: when the provider's figure is
+ *  the one in use, that's what's shown. */
+export type RhythmLine =
+  /** "Your last {from} bookings were about {weeks} weeks apart." */
+  | { kind: 'learned'; weeks: number; from: number }
+  /** "{provider} recommends every {weeks} weeks." */
+  | { kind: 'provider'; weeks: number; provider: string }
+  /** "Every {weeks} weeks, set by you." */
+  | { kind: 'client'; weeks: number }
+  | null;
+
+/** Learned gaps read to the nearest half week ("3½"), never finer: they come
+ *  from a handful of bookings, not a measurement. */
+export function learnedWeeks(days: number): number {
+  return Math.max(1, Math.round((days / 7) * 2) / 2);
+}
+
+export function rhythmLineFor(item: MaintenanceItem): RhythmLine {
+  if (item.repeatWeeks === null) return null;
+  switch (item.intervalSource) {
+    case 'learned':
+      return item.learnedDays !== null && item.learnedFrom !== null
+        ? { kind: 'learned', weeks: learnedWeeks(item.learnedDays), from: item.learnedFrom }
+        : null;
+    case 'provider':
+      return item.providerName ? { kind: 'provider', weeks: item.repeatWeeks, provider: item.providerName } : null;
+    case 'client':
+      return { kind: 'client', weeks: item.repeatWeeks };
+    default:
+      return null;
+  }
+}
+
+/** Which filter chip an item sits under. Take-downs are hair; events and
+ *  untyped reminders sit under "Other" (null). */
+export function categoryOf(item: MaintenanceItem): MaintenanceSearchCategory | null {
+  if (item.kind === 'takedown') return 'HAIR';
+  return getMaintenanceServiceType(item.typeKey)?.searchCategory ?? null;
 }

@@ -57,7 +57,7 @@ checkout. The provider never pays the fee and never sees it.
 | 1 | Price & reserve | `prepare_checkout` | Validates the basket, holds each slot (`on_hold`, 10 min), writes the batch |
 | 2 | Add fee | `apply_checkout_platform_fee` | Adds the service fee on top |
 | 3 | Authorise | `create-payment-intent` | Re-reads the amount server-side; blocks providers who aren't payout-ready; if the booking has late/no-show fees, requires the client's consent and saves the card for later |
-| 4 | Collect | Stripe PaymentSheet | Client authorises payment |
+| 4 | Collect | Stripe `CardForm` / Apple Pay / Google Pay, inside the app's Complete Payment sheet | Client authorises payment. Card details go straight from Stripe's own field to Stripe; a decline stays in the sheet and retries the same intent; closing the sheet cancels the unconfirmed intent |
 | 5 | Capture & confirm | `finalize-payment-intent` | Captures, then promotes bookings `on_hold` → `pending`/`confirmed` |
 | 6 | Hold payout | `create_held_payout_on_finalize` | Creates a held payout row. Release time = appointment end + **the provider's chosen hold** (`providers.payout_hold_days`: 1, 3, 7, 14 or 30 days; default 1) |
 | 7 | Release | `process_due_payouts` → `release-payouts` | Every 15 min: re-checks the booking, skips it while a refund request is open*, takes out anything the provider owes*, transfers the rest to their Stripe account |
