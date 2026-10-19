@@ -1365,9 +1365,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     reviewsLoadedAll,
     promotions,
     portfolio,
+    portfolioLoading,
     availability,
     availabilityLoading,
     openingHours,
+    openingHoursLoading,
     currentUserId,
     currentUserName,
     isOwnProvider,
@@ -5433,11 +5435,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
               <ProviderOpeningHoursSection
                 openingHours={openingHours}
+                loading={openingHoursLoading}
                 palette={sectionPalette}
               />
 
               <ProviderPortfolioSection
                 items={workPortfolio}
+                loading={portfolioLoading}
                 palette={sectionPalette}
                 onOpenImage={openImageViewer}
               />
@@ -5720,17 +5724,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   linkOnlyBookRow: {
+    alignSelf: "stretch",
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   linkOnlyBookButton: {
     height: 46,
-    paddingHorizontal: 22,
+    // The primary action takes every spare point in the row; the fixed-size
+    // contact/social controls still fit on every screen width.
+    flex: 1,
     borderRadius: 23,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
   },
   linkOnlyBookText: {

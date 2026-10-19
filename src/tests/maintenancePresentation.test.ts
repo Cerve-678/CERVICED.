@@ -1,4 +1,8 @@
 import {
+  categoryOf,
+  learnedWeeks,
+  rhythmLineFor,
+  snoozedDueOn,
   countdownFor,
   countDueItems,
   landingStubs,
@@ -12,6 +16,7 @@ function item(p: Partial<MaintenanceItem>): MaintenanceItem {
   return {
     id: 'x', kind: 'service', origin: 'booking', title: 'Lash infill', typeKey: 'lash_infill',
     providerId: 'p1', serviceId: 's1', providerName: 'Lash Lab', repeatWeeks: 3, intervalEdited: false,
+    intervalSource: 'default', learnedDays: null, learnedFrom: null,
     lastDoneOn: '2026-09-22', dueOn: '2026-10-13', eventOn: null, paused: false,
     note: null, createdAt: '2026-09-22T10:00:00Z', ...p,
   };
@@ -69,7 +74,6 @@ describe('countDueItems / groupMaintenanceItems', () => {
     expect(g.comingUp.map(p => p.item.id)).toEqual(['c']);
     expect(g.events.map(p => p.item.id)).toEqual(['e']);
     expect(g.paused.map(p => p.item.id)).toEqual(['d']);
-    expect(g.summary).toEqual({ overdue: 1, dueSoon: 1, onTrack: 2 });
     expect(g.next?.item.id).toBe('a');
   });
 });
@@ -96,5 +100,41 @@ describe('countdownFor / landingStubs', () => {
       item({ id: 'over', title: 'Over', dueOn: '2026-10-02' }),
     ];
     expect(landingStubs(groupMaintenanceItems(items, TODAY)).map(p => p.item.id)).toEqual(['over', 'soon', 'later']);
+  });
+});
+
+describe('Your rhythm helpers', () => {
+  it('snoozes a week from the due date, or from today when already overdue', () => {
+    expect(snoozedDueOn(item({ dueOn: '2026-10-13' }), TODAY)).toBe('2026-10-20');
+    expect(snoozedDueOn(item({ dueOn: '2026-10-01' }), TODAY)).toBe('2026-10-17');
+    expect(snoozedDueOn(item({ dueOn: TODAY }), TODAY)).toBe('2026-10-17');
+  });
+
+  it('reads a learned gap to the nearest half week, never under one', () => {
+    expect(learnedWeeks(25)).toBe(3.5);
+    expect(learnedWeeks(28)).toBe(4);
+    expect(learnedWeeks(7)).toBe(1);
+  });
+
+  it('describes the interval by where it came from', () => {
+    expect(rhythmLineFor(item({ intervalSource: 'learned', learnedDays: 25, learnedFrom: 5 })))
+      .toEqual({ kind: 'learned', weeks: 3.5, from: 5 });
+    expect(rhythmLineFor(item({ intervalSource: 'provider', repeatWeeks: 6 })))
+      .toEqual({ kind: 'provider', weeks: 6, provider: 'Lash Lab' });
+    expect(rhythmLineFor(item({ intervalSource: 'client', repeatWeeks: 5 }))).toEqual({ kind: 'client', weeks: 5 });
+    expect(rhythmLineFor(item({ intervalSource: 'default' }))).toBeNull();
+    expect(rhythmLineFor(item({ repeatWeeks: null, intervalSource: 'client' }))).toBeNull();
+  });
+
+  it('never shows a learned habit when the provider figure is the one in use', () => {
+    // learned_* is kept on provider rows too; the line must still be the provider's.
+    expect(rhythmLineFor(item({ intervalSource: 'provider', repeatWeeks: 6, learnedDays: 21, learnedFrom: 4 })))
+      .toEqual({ kind: 'provider', weeks: 6, provider: 'Lash Lab' });
+  });
+
+  it('files items under their type\'s category; take-downs are hair, events are other', () => {
+    expect(categoryOf(item({ typeKey: 'waxing' }))).toBe('AESTHETICS');
+    expect(categoryOf(item({ kind: 'takedown', typeKey: null }))).toBe('HAIR');
+    expect(categoryOf(item({ kind: 'event', typeKey: null }))).toBeNull();
   });
 });

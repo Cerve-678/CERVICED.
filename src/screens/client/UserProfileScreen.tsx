@@ -442,9 +442,12 @@ const styles = StyleSheet.create({
 
   // Section
   section: {
-    marginBottom: 18,
+    // Keep the groups distinct, but don't leave a large dead band between
+    // consecutive settings sections.
+    marginBottom: 8,
     borderRadius: 16,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   sectionTitle: {
     fontSize: 11,

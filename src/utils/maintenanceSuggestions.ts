@@ -5,8 +5,10 @@
 //
 // What it may and may not do (legal-flagger mitigations, 2026-10-10):
 //  - Beauty Profile answers only choose WHICH service types are offered.
-//    Every interval comes from MAINTENANCE_SERVICE_TYPES' single neutral
-//    default — no answer makes an interval longer or shorter.
+//    Every suggested interval comes from MAINTENANCE_SERVICE_TYPES' single
+//    neutral default — no answer makes an interval longer or shorter. (A
+//    booking-made item can later learn from the client's own booking history;
+//    that's server-side and never reads the profile.)
 //  - Skin tone is never read. Skin CONCERNS and SENSITIVE AREAS are never
 //    read either: several concerns are medical conditions (eczema, psoriasis,
 //    rosacea), sensitive areas describe skin sensitivity, and offering a

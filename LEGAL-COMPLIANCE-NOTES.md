@@ -341,8 +341,9 @@ support links point at it. The legal copy does not:
   `privacy@cerviced.app` twice: once as the address to request the list of
   third-party processors, once as the address for access/correction/erasure
   requests and data exports.
-- `src/screens/shared/TermsScreen.tsx:54` — the Terms name
-  `legal@cerviced.app` for questions about the terms.
+- ~~`src/screens/shared/TermsScreen.tsx:54` — the Terms name
+  `legal@cerviced.app` for questions about the terms.~~ Fixed 2026-10-19: the
+  Terms now say support@cerviced.co (§19). The Privacy Policy is still open.
 
 `cerviced.app` is not a domain this project controls; the real one is
 `cerviced.co`. So both addresses are unreachable. This was left as-is
@@ -455,8 +456,8 @@ See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
 
 1. **Off-platform booking.** Tapping Book sends a client to the provider's own
    booking site (opened inside the app). The booking, payment, cancellation and
-   data handling all happen under that site's terms, not ours. `TermsScreen`
-   says nothing about this yet.
+   data handling all happen under that site's terms, not ours. Covered in
+   `TermsScreen` clause 12 since 2026-10-19 (§19).
 2. **Client-entered "booked elsewhere" entries.** The client's Upcoming list
    will hold appointments CERVICED never saw. The copy is deliberately framed as
    the client's own note ("we just keep track of them") — keep it that way so
@@ -510,3 +511,75 @@ direction and **not lawyer-reviewed**:
   they can.
 
 **Not changed unilaterally** — flagged for the product owner and a lawyer.
+
+---
+
+## 18. Beauty Maintenance learns each client's rebooking habit (2026-10-19)
+
+**What it is:** when a booking completes, the server works out how often that
+client's own completed bookings of the same kind were. It takes the median gap
+over their last 3–6 visits, ignoring gaps under a week, and stores it on the
+reminder (`maintenance_items.learned_days`, `learned_from`). If the client
+hasn't set an interval and the provider hasn't recommended one, the reminder
+repeats on that habit. The card says "Your last N bookings were about X weeks
+apart". It is owner-only, never readable by a provider, and deleted with the
+reminder and the account.
+
+**User decisions (2026-10-19):** the provider's recommendation outranks the
+learned habit. Aesthetics types (facials, waxing) learn too. Build now, and
+cover it in the Privacy Policy before launch.
+
+**Gaps to raise (not resolved):**
+- **Privacy Policy (§1).** This is a stored inference about the person
+  ("profiling" in UK GDPR terms, low-risk because it has no legal or similarly
+  significant effect). No policy text covers "we work out your usual cadence
+  from your bookings" yet.
+- **Retention.** The learned value stays on the reminder until the next
+  completed booking refreshes it, even if older bookings are later deleted.
+  There's no separate retention rule.
+- **"Completed" isn't attendance (§12).** Bookings auto-complete, so the basis
+  can include visits that didn't happen. The wording describes past bookings,
+  never the client.
+- **Aesthetics.** A learned cadence for facials or waxing is close to the
+  clinical judgement the app said it wouldn't make (the header of
+  `maintenanceServiceTypes.ts`). Injectables can't become reminders, because
+  Aesthetics has no catch-all type (pinned by
+  `src/tests/maintenanceLearnedIntervals.test.ts`).
+- **Push consent (§8).** Snooze moves the date a week. The reminder fires
+  again only for clients who opted in, through the same gate as before.
+
+
+---
+
+## 19. Terms & Conditions rewritten to match the live app (2026-10-19)
+
+`TermsScreen.tsx` went from 11 sections to 38, at the product owner's
+direction. It now covers the service fee (refunded only on a full refund),
+automatic cancellation refunds and the refund-request route, provider payouts
+and chargeback recovery, link-only (off-platform) bookings, health
+information, Becca, loyalty points, promo codes, reviews and content rules,
+account suspension, 30-day deletion, an in-app display licence for uploaded
+photos, and standard UK clauses (company details, governing law, changes,
+general). The topic list was checked against Fresha, Treatwell, Uber, Pinterest
+and Squarespace/Acuity terms; the wording is our own. Review page:
+https://claude.ai/artifact/TxdENX6Ftr7kxYybHXToXh. **Not lawyer-reviewed.**
+
+Decisions (product owner): contact = support@cerviced.co; payout timing stays
+general ("the payout period you choose"); Announcements removed for link-only
+pros instead of treating a save as consent; Terms say 30-day deletion grace.
+
+**Open before launch:**
+- `[company number]` and `[registered address]` placeholders in clause 1.
+- The app's deletion grace is still 1 day for testing. The Terms say 30.
+- Clause 4 describes Search order as featured-then-rating (main today). Update
+  it when ranked search ships, and say so if featuring is ever paid.
+- No in-app report button for reviews: clause 13 routes reports to the support
+  inbox (§7).
+- Things to put to a solicitor: 16 as the contracting age (§5); provider-set
+  cancellation terms under the CRA 2015 (§6); the foreseeable-loss liability
+  clause; holds up to 30 days and chargeback recovery from future payouts in
+  shared Terms rather than a signed provider agreement; the provider indemnity;
+  who is data controller for client health information passed to providers
+  (§2); PECR separation of marketing and booking notifications (§8).
+- No re-consent: existing users aren't asked to accept the new Terms (§10).
+- The Privacy Policy (AboutScreen) still names privacy@cerviced.app (§13).

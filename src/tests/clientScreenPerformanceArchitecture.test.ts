@@ -18,7 +18,11 @@ describe('client screen performance contracts', () => {
   it('bounds the initial Explore queries and never keeps the feed spinner forever', () => {
     const source = readScreen('ExploreScreen');
 
-    expect(source).toContain('DISCOVER_PORTFOLIO_LIMIT = 60');
+    expect(source).toContain('DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20');
+    expect(source).toContain('DISCOVER_INITIAL_SERVICE_LIMIT = 10');
+    expect(source).toContain('const loadNextDiscoverPage');
+    expect(source).toContain('getPortfolioItems(');
+    expect(source).toContain('cursor.portfolioOffset');
     expect(source).toContain("withTimeout(");
     expect(source).toContain("'Explore feed'");
   });
@@ -30,7 +34,7 @@ describe('client screen performance contracts', () => {
       'utf8',
     );
 
-    expect(source).toContain('const INITIAL_EXPLORE_ITEMS = 24');
+    expect(source).toContain('const INITIAL_EXPLORE_ITEMS = 20');
     expect(source).toContain('portfolioItems.slice(0, discoverVisibleCount)');
     expect(source).toContain('favouriteItems.slice(0, favouritesVisibleCount)');
     expect(source).toContain('.filter(i => i.aspectRatioIsFallback)');
