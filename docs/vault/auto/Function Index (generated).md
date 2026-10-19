@@ -59,7 +59,7 @@
 - `AnalyticsKit.tsx` — **accentColor** · **AnalyticsHeader** · **AnimatedNumber** · **BarChart** · **DeckCard** · handlePress · **HeroGradient** · **InsightStrip** · **LivePulse** · pressIn · pressOut · **PressScale** · **RangeSelector** · **Reveal** · **SectionLabel** · **StatTile** · **tileWidth**
 
 ### `src/components/signup/` (1)
-- `FormKit.tsx` — **Chip** · **ChipWrap** · **FieldRow** · **FormCard** · **PrimaryButton** · **ScreenTitle** · **SectionLabel** · **useFieldInputStyle**
+- `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **useFieldInputStyle** · **useSuccessColors**
 
 ### `src/constants/` (8)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
