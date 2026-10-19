@@ -1015,8 +1015,13 @@ const ExploreScreen = memo(() => {
                 onRefresh={handleRefreshDiscover}
                 ListHeaderComponent={
                   <View style={styles.gridHeader}>
+                    {/* Total only — never the pages loaded so far. A blank line
+                        holds the header's height until the count arrives, so
+                        the grid doesn't shift down when it does. */}
                     <Text style={[styles.gridCount, { color: P.sub }]}>
-                      {discoverTotals[selectedFilter] ?? portfolioItems.length} results
+                      {discoverTotals[selectedFilter] !== undefined
+                        ? `${discoverTotals[selectedFilter]} results`
+                        : ' '}
                     </Text>
                   </View>
                 }
