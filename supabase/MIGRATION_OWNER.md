@@ -17,6 +17,27 @@ applied while you weren't looking*:
 
 Neither was a git problem. Both sessions wrote correct SQL.
 
+## Batches, not one at a time
+
+Each applied migration makes PostgREST reload its schema cache, which
+stalls every app request for 2–45s on this project. Writing a migration and
+applying it are separate steps:
+
+1. Write it, number it above the frontier, commit it, and add it under
+   **Queued** below with one line on what it does and anything to deploy
+   after it.
+2. The user applies the queue together in one sitting, in version order, as
+   one script, at a quiet time. Then each entry moves to its own
+   **Applied** section, and the lock is released.
+
+**Exception:** a fix for something actively broken for real users, their
+data or their money is applied straight away. Mark it **URGENT** with the
+reason. "It's ready" is not urgent.
+
+## Queued (written, not applied)
+
+_None._
+
 ---
 
 ## Current owner

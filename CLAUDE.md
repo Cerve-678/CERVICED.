@@ -371,6 +371,20 @@ agent — these are the standing rules of thumb for every session.
   `max(version)` in `supabase_migrations.schema_migrations`, never off the wall
   clock, and release the lock when the migration is **applied** rather than
   when the file is written.
+- **Apply live migrations in batches, not one at a time through the day.**
+  Every DDL statement makes PostgREST rebuild its schema cache, and on this
+  CPU-bound project that stalls *every* app request until it finishes: 2–45s,
+  with some requests killed. On 2026-10-19 one `CREATE OR REPLACE` cost a 45s
+  app-wide stall, and several sessions applying one by one kept the app slow
+  all evening. So writing a migration and applying it are separate steps.
+  Write and commit it, list it as **QUEUED** in `supabase/MIGRATION_OWNER.md`,
+  and apply the whole queue together in one sitting, in version order, as one
+  pasted script, at a quiet time. The user decides when a batch goes out.
+  **Exception:** a fix for something actively broken for real users, their
+  data or their money goes out immediately. Say so in its queue entry. "It's
+  ready" is not urgent. Function deploys that change no schema don't trigger
+  a reload and aren't batched. See auto-memory
+  `slow-requests-are-postgrest-schema-reloads`.
 - **This repo lives under `~/Desktop`, so iCloud forks conflicting writes**
   into numbered copies (`shuffle 2.ts` beside `shuffle.ts`). They are never
   intentional content, and `.gitignore` now drops them — but only for

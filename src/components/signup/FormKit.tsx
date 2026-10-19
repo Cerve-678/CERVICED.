@@ -2,7 +2,7 @@
 //
 // Shared building blocks for the redesigned auth + sign-up screens: a grouped
 // form card with hairline separators, a field row with its label inside the
-// card, accent section labels, chips and the main pill button. Every value
+// card, section labels, chips and the main pill button. Every value
 // comes from the active palette, so these follow light/dark like the rest.
 import React, { useRef } from 'react';
 import {
@@ -66,7 +66,7 @@ export function FieldRow({
   return (
     <View style={styles.fieldRow}>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.fieldLabel, { color: error ? ERROR_RED : t.sub }]}>{label}</Text>
+        <Text style={[styles.fieldLabel, { color: error ? ERROR_RED : t.text }]}>{label}</Text>
         {children}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
@@ -147,12 +147,12 @@ export function DobField({
   );
 }
 
-/** Accent uppercase label above a group of chips or a card. */
+/** Uppercase label above a group of chips or a card. */
 export function SectionLabel({ title, hint, error }: { title: string; hint?: string | undefined; error?: boolean | undefined }) {
   const { palette: t } = useTheme();
   return (
     <View style={styles.sectionRow}>
-      <Text style={[styles.sectionTitle, { color: error ? ERROR_RED : t.accentText }]}>
+      <Text style={[styles.sectionTitle, { color: error ? ERROR_RED : t.text }]}>
         {title}{error ? '  — required' : ''}
       </Text>
       {hint ? <Text style={[styles.sectionHint, { color: t.sub }]}>{hint}</Text> : null}
@@ -161,7 +161,7 @@ export function SectionLabel({ title, hint, error }: { title: string; hint?: str
 }
 
 /**
- * One question on a chip-heavy step: accent label above a grouped card that
+ * One question on a chip-heavy step: a label above a grouped card that
  * holds a one-line prompt and the answer (chips, an input, a picker).
  * `onLayout` is on the outer view so a screen can scroll to a missed question.
  */
@@ -257,10 +257,10 @@ const styles = StyleSheet.create({
   card: { borderRadius: 20, borderWidth: 1, overflow: 'hidden' },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 16 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  fieldLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+  fieldLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
   errorText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: ERROR_RED, marginTop: 4 },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, marginTop: 4 },
-  sectionTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
+  sectionTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1.2 },
   sectionHint: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600' },
   question: { marginBottom: 22 },
   questionBody: { padding: 16 },
