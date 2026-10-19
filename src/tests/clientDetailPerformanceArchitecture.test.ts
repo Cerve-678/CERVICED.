@@ -33,6 +33,14 @@ describe('client detail screen performance and safety contracts', () => {
     expect(source).not.toContain("navigation.addListener('focus'");
   });
 
+  it('records privacy-safe timings for the booking-detail loads', () => {
+    const source = read('screens', 'client', 'BookingDetailScreen.tsx');
+
+    expect(source).toContain("traceScreenLoad('screen.booking_detail.todo_content'");
+    expect(source).toContain("traceScreenLoad('screen.booking_detail.provider_metadata'");
+    expect(source).toContain("traceScreenLoad('screen.booking_detail.refund_timeline'");
+  });
+
   it('reserves the client booking-detail To Do area while tasks load', () => {
     const source = read('screens', 'client', 'BookingDetailScreen.tsx');
 

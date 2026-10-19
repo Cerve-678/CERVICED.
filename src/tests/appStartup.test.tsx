@@ -10,7 +10,7 @@ jest.mock('../navigation/AppNavigator', () => {
 jest.mock('../utils/reactotron', () => ({}));
 jest.mock('../utils/fontScaleClamp', () => ({ applyFontScaleClamp: jest.fn() }));
 jest.mock('../lib/sentry', () => ({ initSentry: jest.fn() }));
-jest.mock('@sentry/react-native', () => ({ init: jest.fn(), wrap: (app: unknown) => app, feedbackIntegration: jest.fn() }));
+jest.mock('@sentry/react-native', () => ({ init: jest.fn(), wrap: (app: unknown) => app, feedbackIntegration: jest.fn(), reactNativeTracingIntegration: jest.fn() }));
 jest.mock('../utils/env', () => ({ env: { beccaAiEnabled: false } }));
 jest.mock('../services/becca/aiRuntime', () => ({ configureBeccaAI: jest.fn() }));
 jest.mock('../services/becca/nvidiaInterpreter', () => ({ nvidiaBeccaInterpreter: undefined }));

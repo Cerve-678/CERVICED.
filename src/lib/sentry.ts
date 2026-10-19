@@ -22,3 +22,40 @@ export function initSentry(): void {
     }
   });
 }
+
+/**
+ * Records the duration of a user-visible async load without attaching booking
+ * ids, names, addresses, notes, or any other customer data to Sentry.
+ *
+ * A forced transaction means the span remains useful even when a navigation
+ * transaction is unavailable (for example, a screen restored from iOS state).
+ */
+export async function traceScreenLoad<T>(
+  name: string,
+  load: () => Promise<T>,
+): Promise<T> {
+  return Sentry.startSpan(
+    {
+      name,
+      op: 'ui.load',
+      forceTransaction: true,
+    },
+    async (span) => {
+      const startedAt = Date.now();
+      try {
+        const value = await load();
+        span.setAttributes({
+          'ui.duration_ms': Date.now() - startedAt,
+          'ui.outcome': 'ok',
+        });
+        return value;
+      } catch (error) {
+        span.setAttributes({
+          'ui.duration_ms': Date.now() - startedAt,
+          'ui.outcome': 'error',
+        });
+        throw error;
+      }
+    },
+  );
+}

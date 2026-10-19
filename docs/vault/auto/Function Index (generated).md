@@ -5,7 +5,7 @@
 
 #generated
 
-**2579 functions** across **357 files**.
+**2580 functions** across **357 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -174,7 +174,7 @@
 - `useTranslation.ts` — t · **useTranslation**
 
 ### `src/lib/` (1)
-- `sentry.ts` — **initSentry**
+- `sentry.ts` — **initSentry** · **traceScreenLoad**
 
 ### `src/navigation/` (4)
 - `AppNavigator.tsx` — AppNavigator

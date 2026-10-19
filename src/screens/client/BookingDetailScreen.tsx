@@ -63,6 +63,7 @@ import { A4_PRINT_SIZE, buildClientReceiptHTML } from '../../features/bookings/r
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
+import { traceScreenLoad } from '../../lib/sentry';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -220,10 +221,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setTodoLoadError(false);
 
     let active = true;
-    Promise.allSettled([
-      getIntakeFormByBooking(bookingId),
-      getInfoPacksByBooking(bookingId),
-    ]).then(([intakeResult, packsResult]) => {
+    void traceScreenLoad('screen.booking_detail.todo_content', () =>
+      Promise.allSettled([
+        getIntakeFormByBooking(bookingId),
+        getInfoPacksByBooking(bookingId),
+      ]),
+    ).then(([intakeResult, packsResult]) => {
       if (!active) return;
       const form = intakeResult.status === 'fulfilled' ? intakeResult.value : null;
       const packs = packsResult.status === 'fulfilled' ? packsResult.value : [];
@@ -254,7 +257,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     void refundRequestsNonce;
     if (!bookingId) return undefined;
     let active = true;
-    getRefundRequestsForBooking(bookingId)
+    traceScreenLoad('screen.booking_detail.refund_timeline', () =>
+      getRefundRequestsForBooking(bookingId),
+    )
       .then(rows => { if (active) setRefundRequests(rows); })
       // No timeline is the honest fallback: the request itself is safe server-side.
       .catch(err => logger.error('[BookingDetail] refund requests failed to load:', err));
@@ -294,10 +299,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     const pid = booking.providerId;
 
     let cancelled = false;
-    const request = getProviderBookingDetailMetadata({
-      ...(pid ? { providerId: pid } : {}),
-      displayName: booking.providerName,
-    });
+    const request = traceScreenLoad('screen.booking_detail.provider_metadata', () =>
+      getProviderBookingDetailMetadata({
+        ...(pid ? { providerId: pid } : {}),
+        displayName: booking.providerName,
+      }),
+    );
     // Resolves to null rather than rejecting, so awaiting it in the reschedule
     // handler can never throw out of the tap.
     metadataRef.current = request.catch(() => null);

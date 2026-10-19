@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **90 files**
+Curated: [[Address Release]] · **91 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(173)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,10 +37,10 @@ Curated: [[Address Release]] · **90 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
 - `src/utils/addressRelease.ts` _(15)_
-- … +60 more
+- … +61 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **168 files**
+Curated: [[Availability & Slots]] · **169 files**
 - `src/services/AvailabilityService.ts` _(333)_
 - `src/services/databaseService.ts` _(272)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **168 files**
 - `src/types/database.ts` _(21)_
 - `src/screens/client/BookingsScreen.tsx` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- … +138 more
+- … +139 more
 
 ## Payments
 Curated: [[Payments]] · **134 files**
@@ -108,14 +108,14 @@ Curated: [[Payments]] · **134 files**
 - … +104 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **280 files**
+Curated: [[Booking Flow]] · **281 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/services/databaseService.ts` _(835)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(611)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(560)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/client/BookingDetailScreen.tsx` _(417)_
+- `src/screens/client/BookingDetailScreen.tsx` _(420)_
 - `src/screens/client/BookingsScreen.tsx` _(346)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(249)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **280 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +250 more
+- … +251 more
 
 ## Notifications
 Curated: [[Notifications]] · **168 files**

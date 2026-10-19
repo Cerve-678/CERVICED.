@@ -106,14 +106,25 @@ Sentry.init({
   enabled: !__DEV__,
   environment: __DEV__ ? 'development' : 'production',
 
-  // Errors only — no performance tracing.
-  tracesSampleRate: 0,
+  // Collect every booking-detail trace during the TestFlight investigation;
+  // sample the rest of production navigation lightly to keep volume bounded.
+  // The spans carry only fixed operation names and timings, never booking or
+  // client/provider data.
+  tracesSampler: ({ name }) =>
+    name.startsWith('screen.booking_detail') ? 1 : 0.1,
+
+  integrations: [
+    Sentry.reactNativeTracingIntegration({
+      // Supabase calls are the only network requests relevant to these screen
+      // investigations. Avoid recording timings for unrelated third parties.
+      shouldCreateSpanForRequest: (url) => url.includes('.supabase.co'),
+    }),
+    Sentry.feedbackIntegration(),
+  ],
 
   // Session Replay intentionally OFF: it records screen sessions, which for this
   // app would capture sensitive personal/health data. Re-enable only with full
   // masking if ever needed.
-  integrations: [Sentry.feedbackIntegration()],
-
   // uncomment the line below to enable Spotlight (https://spotlightjs.com)
   // spotlight: __DEV__,
 });
