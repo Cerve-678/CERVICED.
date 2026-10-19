@@ -117,7 +117,7 @@ export function buildProfileStrength(input: ProfileStrengthInput): { items: Prof
       done: photosToGo === 0,
     },
     { key: 'accessibility', label: 'Add accessibility info', hint: 'Step-free access, parking and more', doneLabel: 'Accessibility', done: !!input.accessibilityNotes?.trim() },
-    { key: 'payments', label: 'Add payment methods', hint: 'How clients can pay you', doneLabel: 'Payment methods', done: (input.paymentMethods?.length ?? 0) > 0 },
+    { key: 'payments', label: 'State preferred payment method', hint: 'How clients can pay you', doneLabel: 'Payment method', done: (input.paymentMethods?.length ?? 0) > 0 },
   ];
   const done = items.filter(item => item.done).length;
   return { items, percent: Math.round((done / items.length) * 100) };

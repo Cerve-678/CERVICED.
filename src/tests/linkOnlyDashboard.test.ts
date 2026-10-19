@@ -107,6 +107,12 @@ describe('buildProfileStrength', () => {
     expect(items.find(i => i.key === 'photos')!.label).toBe('Add 3 more photos');
   });
 
+  it('asks for a preferred payment method when none is stated', () => {
+    const item = buildProfileStrength({ ...base, paymentMethods: [] }).items.find(i => i.key === 'payments')!;
+    expect(item.done).toBe(false);
+    expect(item.label).toBe('State preferred payment method');
+  });
+
   it('is 100% when everything is filled in', () => {
     const full = { ...base, portfolioCount: 12, specialityCount: 2, instagram: '@ellie', policiesSet: true };
     expect(buildProfileStrength(full).percent).toBe(100);
