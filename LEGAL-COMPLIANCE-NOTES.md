@@ -513,6 +513,12 @@ direction and **not lawyer-reviewed**:
   that wording are retried. Raise: whether repeated merchant-initiated retries
   of a consumer's card fit card-scheme retry rules and the CMA's unfair-terms
   guidance on default charges; the retry count and spacing are a product call.
+  Hard declines (lost/stolen/fraud/closed/stop-payment) are never retried, and
+  the client is notified after every retry, paid or not. Still open: a client
+  can't withdraw consent to retries other than by paying (the card can't be
+  removed while retries are pending); and deleting an account during a pending
+  request doesn't cancel it — decide whether deletion should void the
+  invoice and stop retries.
 - A client can't remove a saved card while a booking paid with it is still
   inside its 24-hour fee window (user decision 2026-10-19); the app says when
   they can.
