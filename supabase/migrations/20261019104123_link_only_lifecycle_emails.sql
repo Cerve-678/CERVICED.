@@ -1,9 +1,10 @@
 -- Link-only lifecycle emails: "you're live" and the go-live reminder.
 --
--- Frontier at authoring: 20261019170000 (max(version) in
--- supabase_migrations.schema_migrations, read live 2026-10-19).
--- NOT APPLIED. Written for the user to approve and apply; the edge function
--- send-link-only-email must be deployed first, or the first requests 404.
+-- APPLIED 2026-10-19 via apply_migration, which recorded it as 20261019104123
+-- (authored as 20261019190000, above the frontier 20261019170000; renamed to
+-- the recorded version). Sitting below 20261019170000 is harmless: that
+-- migration only adds fee tables and touches nothing redefined here.
+-- send-link-only-email was deployed before this was applied.
 --
 -- What this adds:
 --   1. users.link_only_live_email_sent_at / link_only_reminder_sent_at — the
