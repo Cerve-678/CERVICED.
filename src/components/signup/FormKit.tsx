@@ -8,10 +8,12 @@ import React, { useRef } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  type LayoutChangeEvent,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -158,6 +160,54 @@ export function SectionLabel({ title, hint, error }: { title: string; hint?: str
   );
 }
 
+/**
+ * One question on a chip-heavy step: accent label above a grouped card that
+ * holds a one-line prompt and the answer (chips, an input, a picker).
+ * `onLayout` is on the outer view so a screen can scroll to a missed question.
+ */
+export function QuestionCard({
+  title, prompt, hint, error, onLayout, children,
+}: {
+  title: string;
+  prompt?: string | undefined;
+  hint?: string | undefined;
+  error?: boolean | undefined;
+  onLayout?: ((e: LayoutChangeEvent) => void) | undefined;
+  children: React.ReactNode;
+}) {
+  const { palette: t } = useTheme();
+  return (
+    <View style={styles.question} onLayout={onLayout}>
+      <SectionLabel title={title} hint={hint} error={error} />
+      <View style={[styles.card, styles.questionBody, { backgroundColor: t.card, borderColor: error ? ERROR_RED : t.border }]}>
+        {prompt ? <Text style={[styles.prompt, { color: t.sub }]}>{prompt}</Text> : null}
+        {children}
+      </View>
+    </View>
+  );
+}
+
+/** A yes/no row inside a FormCard: title and explanation on the left, switch on the right. */
+export function SwitchRow({
+  title, subtitle, value, onValueChange,
+}: { title: string; subtitle?: string | undefined; value: boolean; onValueChange: (v: boolean) => void }) {
+  const { palette: t } = useTheme();
+  return (
+    <View style={styles.fieldRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.switchTitle, { color: t.text }]}>{title}</Text>
+        {subtitle ? <Text style={[styles.switchSub, { color: t.sub }]}>{subtitle}</Text> : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={v => { Haptics.selectionAsync().catch(() => {}); onValueChange(v); }}
+        trackColor={{ false: '#D1D1D6', true: t.accent }}
+        thumbColor="#FFFFFF"
+      />
+    </View>
+  );
+}
+
 export function Chip({
   label, selected, onPress, style,
 }: { label: string; selected: boolean; onPress: () => void; style?: StyleProp<ViewStyle> | undefined }) {
@@ -212,6 +262,11 @@ const styles = StyleSheet.create({
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, marginTop: 4 },
   sectionTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
   sectionHint: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600' },
+  question: { marginBottom: 22 },
+  questionBody: { padding: 16 },
+  prompt: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 19, marginBottom: 12 },
+  switchTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700' },
+  switchSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, marginTop: 2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 18 },
   chip: { minHeight: 38, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   chipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700' },
