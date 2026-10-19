@@ -1360,7 +1360,7 @@ stacked `Text` layers with `rotateX` for the S→C flip, per-letter
 
 ---
 
-## Personalised Beauty Maintenance, Concept A "Your rhythm" — chosen, being built in stages (2026-10-19)
+## Personalised Beauty Maintenance, Concept A "Your rhythm" — stages 1–2 shipped, Event plan parked (2026-10-19)
 
 ### What it means
 
@@ -1419,6 +1419,72 @@ https://claude.ai/artifact/5EhfFJEkKuGDcUbrxCKdEF
 - **Still out:** at-home routines, product restock, patch-test timing (the
   app has no basis to say when one is due), and anything that reads skin
   tone or skin concerns.
+
+### Shipped
+
+- **Stage 1** (#94, migration `20261019120000`): Picked for you, the five new
+  types, and the fuller Add your own (quick picks, Repeats / Before an event /
+  Just once, last done, note to self). The quick picks were revised in #104:
+  French tips, wash and blow-dry, and style and cut replace blow-dry, massage
+  and barber cut.
+- **Stage 2** (#103, migration `20261019150000`): learned intervals and the
+  Next up card with Rebook and Snooze. Precedence: client, then provider, then
+  learned, then default. Aesthetics learns too, and the privacy gap is
+  LEGAL-COMPLIANCE-NOTES §18.
+- **Stage 3, the Event plan, is parked.** See the next section.
+
+---
+
+## Beauty Maintenance Event plan — designed, parked (2026-10-19)
+
+### What it means
+
+An event (a wedding, a holiday, a birthday) becomes an ordered checklist of
+the appointments the client wants before it: hair trial, then brows, then
+nails, then makeup on the day. Each step shows as booked (with the date and
+provider) or offers a button to book it. The event card shows a countdown
+("41 days to go") and progress ("2 of 4 booked"), and the client can add,
+reorder or remove steps.
+
+Mockup: board A4 "Event plan" on the concepts canvas,
+https://claude.ai/artifact/5EhfFJEkKuGDcUbrxCKdEF
+
+### What exists today
+
+- An event is a single `maintenance_items` row with `kind = 'event'`,
+  `event_on`, and a `due_on` "book by" date set `EVENT_BOOK_BY_WEEKS` (4) before
+  the event (`src/utils/maintenanceSuggestions.ts`). Clients add one from setup
+  or from Add your own → Before an event.
+- It pushes like any other item: on the book-by date, plus one follow-up,
+  only for opted-in clients. The cron deletes it the day after the event.
+
+### Rules the build has to keep (user decision 2026-10-19)
+
+- **One push per event, never one per step.** It fires when something in the
+  plan still isn't booked, and stays silent once every step is.
+- **Push bodies stay generic.** `maintenance_notification_copy()` is the one
+  place push text lives, and it never names services. So "what's left" is
+  listed in the app when the push is opened, not in the push itself.
+- A step counts as booked only when a real upcoming booking covers it (the
+  same coverage rule as `isCoveredByUpcomingBooking`), never because the
+  client ticked it.
+- No step suggests a health step. The app says "ask your lash tech whether
+  you need a patch test"; it never schedules one (the patch-test rule above).
+
+### What it would take
+
+- Storage: either a `maintenance_event_steps` table (event item id, title,
+  type, order, linked booking), or steps as `maintenance_items` rows with a
+  `parent_event_id`. A separate table keeps the existing item rules and the
+  cron simple. Owner-only RLS like the rest, deleted with the event and the
+  account. This takes a migration and the `MIGRATION_OWNER.md` lock.
+- Step timing: suggested "book by" offsets per step type (trial about 4 weeks
+  before, brows 1–2 weeks, nails 2–3 days). These are app-chosen
+  scheduling, not health advice. Each one is editable.
+- The cron: change the event branch of `process_maintenance_reminders()` so
+  an event with every step covered doesn't push.
+- UI: the event card becomes the plan view (A4). Add a step from the quick
+  picks, or the client's own text.
 
 ---
 
