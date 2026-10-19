@@ -61,7 +61,9 @@ import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/p
 import type { DbPortfolioItem } from '../../types/database';
 
 import {
+  DEFAULT_PROVIDER_THEME,
   resolveProviderTheme,
+  themeBrandingColours,
   withAlpha,
   isDarkColor,
   blend,
@@ -2853,13 +2855,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     location: '',
     aboutText: '',
     scheduleReleaseDay: null,
-    gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
+    // The default theme's own colours, which is what this signup saves, so a
+    // new provider's profile matches Branding until they choose something.
+    // (Was a coral/teal/blue placeholder gradient, saved for real and shown
+    // to clients behind the profile top.)
+    ...themeBrandingColours(DEFAULT_PROVIDER_THEME),
     hasCustomGradient: false,
-    // Was '#7B1FA2' (a hardcoded purple) — showed as the accent everywhere
-    // in this screen (chip fills, save buttons, template picker) for every
-    // brand-new signup, before they'd ever chosen anything. Defaults to the
-    // app's own accent instead, matching chromeTheme's app-default.
-    accentColor: lightTheme.accent,
     profileTheme: 'app',
     logo: null,
     categories: {},

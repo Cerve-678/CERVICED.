@@ -4275,7 +4275,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           reviews={reviews}
           providerName={provider?.providerName ?? ""}
           adaptiveAccentColor={adaptiveAccentColor}
-          providerGradient={provider?.gradient ?? ["#FF6B6B", "#4ECDC4"]}
+          providerGradient={provider?.gradient ?? OP.gradient}
         />
 
         {/* Offers side panel */}
