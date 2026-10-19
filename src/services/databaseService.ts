@@ -1645,6 +1645,7 @@ export async function getPortfolioItems(
   category?: string,
   limit: number | null = DEFAULT_PROVIDER_QUERY_LIMIT,
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1681,7 +1682,11 @@ export async function getPortfolioItems(
     query = query.eq("category", category.toUpperCase());
   }
 
-  if (limit != null) query = query.limit(limit);
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
+  }
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
@@ -1729,6 +1734,7 @@ export async function getDiscoverServices(
   limit: number | null = 40,
   audience?: "women" | "men" | "kids" | "everyone",
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
@@ -1741,7 +1747,10 @@ export async function getDiscoverServices(
     )
     .eq("is_active", true)
     .eq("provider.is_active", true)
-    .eq("provider.has_gone_live", true);
+    .eq("provider.has_gone_live", true)
+    // Pagination must have a stable order. Without this, a next page can
+    // repeat or skip services as Postgres is free to return rows in any order.
+    .order("created_at", { ascending: false });
 
   if (options?.excludeOwnProvider !== false) {
     query = query.not("provider_id", "in", await ownProviderIdExclusion());
@@ -1760,7 +1769,11 @@ export async function getDiscoverServices(
   if (audience) {
     query = query.eq("audience", audience);
   }
-  if (limit != null) query = query.limit(limit);
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
