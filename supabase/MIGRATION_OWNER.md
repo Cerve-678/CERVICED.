@@ -22,14 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-a1 (fix/checkout-clears-own-stale-holds) — release when 20261019233000 is APPLIED
+OWNER:  (none)
 ```
 
-### Authored 2026-10-19 (expired holds cleared before a booking is saved)
+### Applied 2026-10-19 (expired holds cleared before a booking is saved)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261019233000 | `clear_expired_holds_before_booking` | **NOT APPLIED** — awaiting the user (SQL editor). Frontier at authoring: `20261019230000`. Adds `clear_expired_holds_before_booking()` + trigger `before_booking_clear_expired_holds` (fires before `before_booking_enforce_bookability`, same events). Deletes the provider's lapsed `on_hold` cart holds (guards as `expire_cart_holds()`, plus: not NEW's own row/batch, not a batch with a payment intent) so the overlap check and `bookings_no_overlap` stop rejecting a time the picker already shows as free in the up-to-5-minute gap before the cron sweep. Redefines nothing; `enforce_booking_bookability` md5 `d38065c2c030dbf211263cee389259e6` stays. The file records its own version. |
+| 20261019233000 | `clear_expired_holds_before_booking` | **APPLIED 2026-10-19** by the user (SQL editor), version recorded; verified live: trigger present and ordered first, claim skip present, `enforce_booking_bookability` md5 unchanged. Frontier at authoring: `20261019230000`. Adds `clear_expired_holds_before_booking()` + trigger `before_booking_clear_expired_holds` (fires before `before_booking_enforce_bookability`, same events). Deletes the provider's lapsed `on_hold` cart holds (guards as `expire_cart_holds()`, plus: not NEW's own row/batch, not a batch with a payment intent) so the overlap check and `bookings_no_overlap` stop rejecting a time the picker already shows as free in the up-to-5-minute gap before the cron sweep. Redefines nothing; `enforce_booking_bookability` md5 `d38065c2c030dbf211263cee389259e6` stays. The file records its own version. |
 
 ### Applied 2026-10-19 (checkout clears the client's own stale holds)
 
