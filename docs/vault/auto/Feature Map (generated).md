@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **168 files**
 - … +138 more
 
 ## Payments
-Curated: [[Payments]] · **133 files**
+Curated: [[Payments]] · **132 files**
 - `src/screens/client/CartScreen.tsx` _(509)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/databaseService.ts` _(171)_
@@ -105,7 +105,7 @@ Curated: [[Payments]] · **133 files**
 - `supabase/fix_waitlist_selection_method_hook.sql` _(24)_
 - `src/features/cart/pricing.ts` _(23)_
 - `src/screens/client/PointsScreen.tsx` _(23)_
-- … +103 more
+- … +102 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **278 files**
