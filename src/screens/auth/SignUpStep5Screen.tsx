@@ -22,7 +22,7 @@ import { useRegistration } from '../../contexts/RegistrationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import SignUpHeader from '../../components/SignUpHeader';
 import { Ionicons } from '@expo/vector-icons';
-import { invokeSendAccountEmail, signUpWithEmail } from '../../services/databaseService';
+import { invokeSendAccountEmail, signUpWithEmail, upsertVerifiedUserProfile } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -75,7 +75,7 @@ const HAT_CELEBRATION = {
 export default function SignUpStep5Screen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
-  const { user, upgradeToProvider, addClientProfile } = useAuth();
+  const { user, upgradeToProvider, addClientProfile, refreshUserProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const servicesY  = useRef(0);
@@ -298,6 +298,73 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     const dob = data.dobDay && data.dobMonth && data.dobYear
       ? `${data.dobYear}-${data.dobMonth.padStart(2, '0')}-${data.dobDay.padStart(2, '0')}`
       : '';
+
+    // Apple has already verified and authenticated this identity. Complete
+    // the same CERVICED profile row email signups create after OTP, but do not
+    // create a second Auth identity or ask Apple users for a password.
+    if (data.fromAppleSignup) {
+      if (!user?.id || !user.email) {
+        setIsLoading(false);
+        Alert.alert('Sign in expired', 'Please continue with Apple again.');
+        return;
+      }
+      try {
+        await upsertVerifiedUserProfile({
+          id: user.id,
+          email: user.email,
+          name: data.name.trim(),
+          phone: data.phone.trim(),
+          dob: dob || null,
+          role: data.accountType,
+          login_method: 'apple',
+          ...(data.accountType !== 'provider' ? { has_client_profile: true } : {}),
+          service_interests: isProvider ? data.serviceInterests : selectedInterests,
+          service_locations: isProvider ? data.serviceLocations : selectedLocations,
+          maintenance_frequency: selectedFrequency || null,
+          referral_source: selectedReferral || null,
+          gender: selectedGender || null,
+          has_kids: hasKids,
+          business_name: data.businessName || null,
+          business_email: data.businessEmail || null,
+          business_type: data.businessType || null,
+          business_phone: data.businessPhone || null,
+          instagram: data.instagram || null,
+          tiktok: data.tiktok || null,
+          website: data.website || null,
+          hair_type: data.hairType || null,
+          skin_type: data.skinType || null,
+          allergies: data.allergies,
+          skin_concerns: data.skinConcerns,
+          style_vibe: data.styleVibe || null,
+          treatment_history: data.treatmentHistory,
+          medical_notes: data.medicalNotes || null,
+          photography_consent: data.photographyConsent,
+          location_text: data.location || null,
+          years_experience: data.yearsExperience && !Number.isNaN(parseInt(data.yearsExperience, 10))
+            ? parseInt(data.yearsExperience, 10)
+            : null,
+          accessibility_notes: isProvider ? (selectedAccessibility.join('|') || null) : null,
+          languages_spoken: isProvider ? finalLanguages : [],
+          specialties: isProvider ? selectedSpecialties : [],
+          price_range: isProvider ? (data.priceRange || null) : null,
+          preferred_contact_methods: isProvider ? data.preferredContactMethods : [],
+          preferred_payment_methods: isProvider ? data.preferredPaymentMethods : [],
+          external_booking_url: isProvider ? (data.externalBookingUrl || null) : null,
+        });
+        invokeSendAccountEmail(
+          data.accountType === 'provider' ? 'provider_welcome' : 'client_welcome',
+        ).catch((error) => logger.error('[email] Apple welcome email failed to send:', error));
+        resetData();
+        await refreshUserProfile();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } catch (error) {
+        logger.error('[signup] Apple profile completion failed:', error);
+        Alert.alert('Almost there', "We couldn't finish saving your account. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
 
     try {
       const authData = await signUpWithEmail({

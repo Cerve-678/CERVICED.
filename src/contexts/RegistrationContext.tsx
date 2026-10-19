@@ -67,6 +67,9 @@ export interface RegistrationData {
   fromProviderSwitch: boolean;
   // Set when a logged-in provider starts the client registration flow
   fromClientSwitch: boolean;
+  // A native Apple identity already authenticated, but must still complete
+  // CERVICED's required registration before accessing the app.
+  fromAppleSignup: boolean;
 }
 
 interface RegistrationContextType {
@@ -125,6 +128,7 @@ const initialData: RegistrationData = {
   specialties: [],
   fromProviderSwitch: false,
   fromClientSwitch: false,
+  fromAppleSignup: false,
 };
 
 const RegistrationContext = createContext<RegistrationContextType | undefined>(undefined);
@@ -133,7 +137,7 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<RegistrationData>(initialData);
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, requiresRegistration, user } = useAuth();
   const wasLoggedIn = useRef(isLoggedIn);
 
   // Rehydrate draft from AsyncStorage on mount so a user can resume
@@ -164,6 +168,19 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
       // a draft that won't load is why someone reappears at step 1.
       .catch((err) => logger.error('[Registration] draft restore failed:', err));
   }, []);
+
+  // Apple gives us an authenticated identity before CERVICED's own required
+  // registration questions have been answered. Seed only the non-sensitive
+  // details we received, and let the normal five-step flow collect the rest.
+  useEffect(() => {
+    if (!requiresRegistration || !user) return;
+    setData(previous => ({
+      ...previous,
+      fromAppleSignup: true,
+      name: previous.name || user.name,
+      email: previous.email || user.email,
+    }));
+  }, [requiresRegistration, user?.id, user?.name, user?.email]);
 
   const updateData = useCallback((partial: Partial<RegistrationData>) => {
     setData(prev => {

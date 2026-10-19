@@ -54,6 +54,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
 
   const isClientSwitch = data.fromClientSwitch;
+  const isAppleSignup = data.fromAppleSignup;
   const isProvider = data.accountType === 'provider';
 
   const validate = useCallback((): FormErrors => {
@@ -63,7 +64,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     else if (!validateEmail(email)) errs.email = 'Enter a valid email';
     const phoneErr = validatePhone(phone);
     if (phoneErr) errs.phone = phoneErr;
-    if (!isClientSwitch) {
+    if (!isClientSwitch && !isAppleSignup) {
       if (!password) errs.password = 'Password is required';
       else {
         const e = validatePassword(password);
@@ -91,7 +92,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
       return;
     }
 
-    if (user && email.trim().toLowerCase() === user.email.toLowerCase() && !isClientSwitch) {
+    if (user && email.trim().toLowerCase() === user.email.toLowerCase() && !isClientSwitch && !isAppleSignup) {
       const becomingProvider = !hatState.owned.provider;
       const becomingClient = hatState.owned.provider && !hatState.owned.client;
 
@@ -122,7 +123,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     updateData({
       name, email, phone,
-      ...(isClientSwitch ? {} : { password }),
+      ...(isClientSwitch || isAppleSignup ? {} : { password }),
       ...(isProvider ? { dobDay, dobMonth, dobYear } : {}),
     });
     navigation.navigate('SignUpStep3');
@@ -156,6 +157,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
                 style={inputStyle} value={email} onChangeText={setEmail} onBlur={() => markTouched('email')}
                 placeholder="sarah@example.com" placeholderTextColor={t.sub}
                 keyboardType="email-address" autoCapitalize="none" textContentType="emailAddress"
+                editable={!isAppleSignup}
               />
             </FieldRow>
             <FieldRow label="MOBILE" error={fieldError('phone')}>
@@ -192,7 +194,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
             )}
           </FormCard>
 
-          {!isClientSwitch && (
+          {!isClientSwitch && !isAppleSignup && (
             <FormCard style={styles.passwordCard}>
               <View style={styles.passwordInner}>
                 <FieldRow

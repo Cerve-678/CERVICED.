@@ -59,3 +59,21 @@ test('the latest session wins when profile requests finish out of order', async 
   expect(result.current.user?.id).toBe('second');
   expect(result.current.isLoggedIn).toBe(true);
 });
+
+test('a first-time Apple identity is held for required registration', async () => {
+  mockProfile.mockResolvedValue(null);
+  const appleSession = {
+    ...session('apple-first'),
+    user: {
+      ...session('apple-first').user,
+      app_metadata: { provider: 'apple' },
+    },
+  } as Session;
+  const { result } = renderHook(useAuth, { wrapper });
+
+  await act(async () => { await mockListener('SIGNED_IN', appleSession); });
+
+  expect(result.current.isLoggedIn).toBe(false);
+  expect(result.current.requiresRegistration).toBe(true);
+  expect(result.current.user?.loginMethod).toBe('apple');
+});

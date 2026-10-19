@@ -176,14 +176,15 @@ Curated: [[Notifications]] · **168 files**
 - … +138 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **78 files**
+Curated: [[Provider Onboarding & Go-Live]] · **79 files**
 - `src/services/databaseService.ts` _(75)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/screens/provider/InfoRegScreen.tsx` _(34)_
+- `src/contexts/RegistrationContext.tsx` _(33)_
 - `src/services/providerRegistrationService.ts` _(30)_
-- `src/contexts/RegistrationContext.tsx` _(28)_
+- `src/contexts/AuthContext.tsx` _(19)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(14)_
@@ -193,21 +194,20 @@ Curated: [[Provider Onboarding & Go-Live]] · **78 files**
 - `supabase/dev_reset_provider.sql` _(8)_
 - `src/services/becca/capabilities/client.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
+- `src/navigation/RootNavigation.tsx` _(5)_
 - `src/screens/auth/SignUpStep5Screen.tsx` _(5)_
 - `src/services/acuityTransferService.ts` _(5)_
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
 - `src/components/ProviderStripePayments.tsx` _(4)_
 - `src/constants/featureFlags.ts` _(4)_
 - `src/screens/client/CartScreen.tsx` _(4)_
-- `src/contexts/AuthContext.tsx` _(3)_
 - `src/screens/auth/ClaimProviderScreen.tsx` _(3)_
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep2Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep3Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
-- `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
-- … +48 more
+- … +49 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **54 files**
@@ -280,8 +280,8 @@ Curated: [[Booking Flow]] · **169 files**
 ## Auth
 Curated: [[Contexts]] · **180 files**
 - `src/services/databaseService.ts` _(272)_
+- `src/contexts/AuthContext.tsx` _(154)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(142)_
 - `src/screens/auth/LoginScreen.tsx` _(119)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_
@@ -291,7 +291,7 @@ Curated: [[Contexts]] · **180 files**
 - `src/screens/auth/NewPasswordScreen.tsx` _(42)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(41)_
 - `src/screens/auth/SignUpStep2Screen.tsx` _(39)_
-- `src/navigation/RootNavigation.tsx` _(36)_
+- `src/navigation/RootNavigation.tsx` _(37)_
 - `supabase/phase1_schema.sql` _(32)_
 - `src/services/beccaStorageService.ts` _(30)_
 - `src/screens/shared/ChangePasswordScreen.tsx` _(29)_

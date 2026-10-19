@@ -34,7 +34,7 @@ import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
 const Stack = createStackNavigator<RootStackParamList>();
 
 export default function RootNavigation() {
-  const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
+  const { isLoggedIn, requiresRegistration, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
   const { isDarkMode } = useTheme();
 
@@ -173,6 +173,8 @@ export default function RootNavigation() {
     </Modal>
     <NavigationContainer ref={navigationRef} onReady={() => setIsNavReady(true)}>
       <Stack.Navigator
+        key={requiresRegistration ? 'registration' : isLoggedIn ? 'app' : 'auth'}
+        initialRouteName={requiresRegistration ? 'SignUpStep1' : 'Welcome'}
         screenOptions={{
           headerShown: false,
           cardStyle: { backgroundColor: 'transparent' },
@@ -181,7 +183,7 @@ export default function RootNavigation() {
           gestureDirection: 'horizontal',
         }}
       >
-        {isLoggedIn ? (
+        {isLoggedIn && !requiresRegistration ? (
           // ── Authenticated screens ───────────────────────────────────────────
           // SignUpStep1-5 are included here so logged-in users can navigate the
           // in-place upgrade flows (client→provider, provider→client) and the

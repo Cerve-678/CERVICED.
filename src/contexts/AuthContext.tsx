@@ -83,6 +83,9 @@ export interface ClientProfileData {
 
 interface AuthContextType {
   isLoggedIn: boolean;
+  /** A verified Apple identity exists, but its required CERVICED profile has
+   * not been completed yet. It must stay in registration, never MainTabs. */
+  requiresRegistration: boolean;
   isLoading: boolean;
   isSwitching: boolean;
   switchingTo: 'provider' | 'client';
@@ -122,6 +125,7 @@ interface AuthContextType {
   deleteClientProfile: () => Promise<void>;
   deleteProviderProfile: () => Promise<void>;
   updateUser: (partial: Partial<UserData>) => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
   /** Set (to the ISO deletion_requested_at) when this login belongs to an
    *  account mid-30-day grace period — RootNavigation shows ReactivateAccountScreen
    *  instead of the normal app while this is non-null. */
@@ -162,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Invalidates profile responses when a newer session or sign-out arrives.
   const profileLoadVersion = useRef(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [requiresRegistration, setRequiresRegistration] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserData | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -292,6 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           intentionalLogoutRef.current = true;
           await signOutCurrentSession().catch(() => {});
           setUser(null);
+          setRequiresRegistration(false);
           setIsLoggedIn(false);
           setSession(null);
           setIsLoading(false);
@@ -316,6 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         intentionalLogoutRef.current = false;
         setUser(null);
+        setRequiresRegistration(false);
         setIsLoggedIn(false);
         setSession(null);
         setPendingReactivation(null);
@@ -328,6 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         profileLoadVersion.current += 1;
         setUser(null);
+        setRequiresRegistration(false);
         setIsLoggedIn(false);
         setIsLoading(false);
       }
@@ -356,6 +364,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const meta = session.user.user_metadata as Record<string, any>;
+      const appMeta = session.user.app_metadata as Record<string, unknown>;
 
       let profile = null;
       let profileError: Error | null = null;
@@ -402,6 +411,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (profile) {
+        setRequiresRegistration(false);
         logger.log('[AuthContext] profile found — role:', profile.role);
 
         // Account is mid-30-day grace period (see supabase/account_deletion_grace_period.sql)
@@ -470,7 +480,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         //     user_metadata carries name/role from signUp call.
         // (b) Missing row for an existing account.
         // In both cases: session is valid, keep the user logged in.
-        if (meta?.['name']) {
+        const isAppleIdentity =
+          appMeta?.['provider'] === 'apple' ||
+          session.user.identities?.some(identity => identity.provider === 'apple') === true;
+
+        // Apple validates the identity before issuing this session, but it
+        // does not collect CERVICED's required account/booking preferences.
+        // Do not treat a bare Apple Auth user as a finished client: keep the
+        // authenticated session solely to finish registration.
+        if (isAppleIdentity) {
+          setUser({
+            id: session.user.id,
+            name: meta?.['full_name'] ?? meta?.['name'] ?? '',
+            email: session.user.email ?? '',
+            phone: '',
+            dob: '',
+            accountType: 'user',
+            loginMethod: 'apple',
+          });
+          setRequiresRegistration(true);
+          setIsLoggedIn(false);
+        } else if (meta?.['name']) {
           logger.log('[AuthContext] no profile row — signup race, using metadata fallback');
           const role = (meta['role'] as AccountType) ?? 'user';
           setUser({
@@ -485,6 +515,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             businessEmail: meta['business_email'] ?? undefined,
           });
           setActiveMode(role === 'provider' ? 'provider' : 'client');
+          setRequiresRegistration(false);
           setIsLoggedIn(true);
           registerForPushNotifications().catch((err) => console.warn('[Push] registration failed:', err));
         } else {
@@ -501,6 +532,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             loginMethod: 'email',
           });
           setActiveMode('client');
+          setRequiresRegistration(false);
           setIsLoggedIn(true);
         }
       }
@@ -660,6 +692,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // All real auth goes through onAuthStateChange → loadUserProfile.
   const login = useCallback((_userData?: UserData) => {}, []);
 
+  const refreshUserProfile = useCallback(async () => {
+    if (!session) throw new Error('No active session');
+    await loadUserProfile(session);
+  }, [session, loadUserProfile]);
+
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
@@ -691,6 +728,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loggedOutUserId = user?.id;
     // Clear local state immediately — navigator switches to auth screens right away
     setUser(null);
+    setRequiresRegistration(false);
     setIsLoggedIn(false);
     setSession(null);
     setActiveMode('client');
@@ -749,6 +787,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPendingReactivation(null);
     setUser(null);
     setSession(null);
+    setRequiresRegistration(false);
     setIsLoggedIn(false);
     await signOutCurrentSession().catch(err => logger.warn('signOut error:', err));
   }, []);
@@ -801,16 +840,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, activeMode, session, logout, applyMode, loadUserProfile]);
 
   const value = useMemo<AuthContextType>(() => ({
-    isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
+    isLoggedIn, requiresRegistration, isLoading, isSwitching, switchingTo, user, session, hatState,
     myProviderId, myProviderIdStatus, myBookingMode,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
-    deleteClientProfile, deleteProviderProfile, updateUser,
+    deleteClientProfile, deleteProviderProfile, updateUser, refreshUserProfile,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
-    isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
+    isLoggedIn, requiresRegistration, isLoading, isSwitching, switchingTo, user, session, hatState,
     myProviderId, myProviderIdStatus, myBookingMode,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
-    deleteClientProfile, deleteProviderProfile, updateUser,
+    deleteClientProfile, deleteProviderProfile, updateUser, refreshUserProfile,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   ]);
 
