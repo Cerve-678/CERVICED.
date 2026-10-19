@@ -72,6 +72,13 @@
 
 import { escapeHtml as esc } from './escapeHtml.ts';
 
+// Every email is light only, whatever the reader's mail app is set to (user,
+// 2026-10-19). The two meta tags in each <head> cover Apple Mail and iOS Mail;
+// this CSS form is what some other clients read instead. Gmail's and
+// Outlook's apps can still force-darken a message regardless — nothing an
+// email sends can switch that off.
+const LIGHT_ONLY_CSS = ':root { color-scheme: light only; supported-color-schemes: light only; }';
+
 interface EmailPalette {
   bg: string;
   surface: string;
@@ -175,7 +182,7 @@ function letter(
           <p style="font-family:${BODY};color:${P.sub};font-size:12px;line-height:1.7;padding-top:14px;">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a></p>
           <p style="font-family:${BODY};color:${P.sub};font-size:11px;line-height:1.7;padding-top:10px;">You're receiving this because you have a CERVICED account.<br />&copy; CERVICED &middot; cerviced.co</p>`;
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -185,6 +192,7 @@ function letter(
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${P.bg}; font-family: ${BODY}; }
     a { color: ${P.accent}; }
   </style>
@@ -814,7 +822,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   };
 
   const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -824,6 +832,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${P.surface}; font-family: ${BODY}; }
     a { color: ${P.accent}; }
   </style>
@@ -1177,7 +1186,7 @@ export function generalWelcomeEmail(params: {
   return {
     subject: 'Welcome to CERVICED — beauty at your fingertips',
     html: `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1187,6 +1196,7 @@ export function generalWelcomeEmail(params: {
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${BRAND.ink}; font-family: ${BODY}; }
   </style>
 </head>

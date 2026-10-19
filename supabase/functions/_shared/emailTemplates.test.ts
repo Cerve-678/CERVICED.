@@ -110,6 +110,13 @@ describe('email templates', () => {
     expect(mail.html).toContain('&lt;script&gt;');
   });
 
+  // Emails never follow the reader's dark mode (user, 2026-10-19).
+  it.each(every())('%s asks mail apps to keep it light', (_name, mail) => {
+    expect(mail.html).toContain('<meta name="color-scheme" content="light only" />');
+    expect(mail.html).toContain('color-scheme: light only');
+    expect(mail.html).not.toMatch(/prefers-color-scheme:\s*dark/);
+  });
+
   it.each(every())('%s emits a subject and a body', (_name, mail) => {
     expect(mail.subject.length).toBeGreaterThan(0);
     expect(mail.html.startsWith('<!DOCTYPE html>')).toBe(true);
