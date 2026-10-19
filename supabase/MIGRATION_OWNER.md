@@ -22,14 +22,20 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-a1 (fix/checkout-clears-own-stale-holds) — release when 20261019230000 is APPLIED
+OWNER:  cerviced-a1 (fix/checkout-clears-own-stale-holds) — release when 20261019233000 is APPLIED
 ```
 
-### Authored 2026-10-19 (checkout clears the client's own stale holds)
+### Authored 2026-10-19 (expired holds cleared before a booking is saved)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261019230000 | `prepare_checkout_clears_own_stale_holds` | **NOT APPLIED** — awaiting the user (SQL editor). Frontier at authoring: `20261019210000`; live `prepare_checkout` md5 before: `c1ef1dfa54bf2786849ddfb421ffc97a`. Redefines `prepare_checkout()` from the live definition plus one block: before holding, `cancel_checkout()` each of the caller's other `prepared` batches with no `payment_intent_id` that holds an `on_hold` slot with a provider on a date this checkout books. Fixes a client being blocked by their own abandoned checkout ("That time is no longer available"). No app or function deploy needed. Apply the file, then `INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('20261019230000', 'prepare_checkout_clears_own_stale_holds');` |
+| 20261019233000 | `clear_expired_holds_before_booking` | **NOT APPLIED** — awaiting the user (SQL editor). Frontier at authoring: `20261019230000`. Adds `clear_expired_holds_before_booking()` + trigger `before_booking_clear_expired_holds` (fires before `before_booking_enforce_bookability`, same events). Deletes the provider's lapsed `on_hold` cart holds (guards as `expire_cart_holds()`, plus: not NEW's own row/batch, not a batch with a payment intent) so the overlap check and `bookings_no_overlap` stop rejecting a time the picker already shows as free in the up-to-5-minute gap before the cron sweep. Redefines nothing; `enforce_booking_bookability` md5 `d38065c2c030dbf211263cee389259e6` stays. The file records its own version. |
+
+### Applied 2026-10-19 (checkout clears the client's own stale holds)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019230000 | `prepare_checkout_clears_own_stale_holds` | **APPLIED 2026-10-19** by the user (SQL editor), version recorded; verified live: fix block present, and the definition minus that block md5-matches the pre-change live one. Frontier at authoring: `20261019210000`; live `prepare_checkout` md5 before: `c1ef1dfa54bf2786849ddfb421ffc97a`. Redefines `prepare_checkout()` from the live definition plus one block: before holding, `cancel_checkout()` each of the caller's other `prepared` batches with no `payment_intent_id` that holds an `on_hold` slot with a provider on a date this checkout books. Fixes a client being blocked by their own abandoned checkout ("That time is no longer available"). No app or function deploy needed. Apply the file, then `INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('20261019230000', 'prepare_checkout_clears_own_stale_holds');` |
 
 ### Applied 2026-10-19 (automatic fee retries)
 
