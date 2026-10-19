@@ -487,3 +487,40 @@ direction and **not lawyer-reviewed**:
   provider, never to Cerviced, so the Terms say Cerviced doesn't decide them.
 
 **Not changed unilaterally** — flagged for the product owner and a lawyer.
+
+---
+
+## 18. Beauty Maintenance learns each client's rebooking habit (2026-10-19)
+
+**What it is:** when a booking completes, the server works out how often that
+client's own completed bookings of the same kind were. It takes the median gap
+over their last 3–6 visits, ignoring gaps under a week, and stores it on the
+reminder (`maintenance_items.learned_days`, `learned_from`). If the client
+hasn't set an interval and the provider hasn't recommended one, the reminder
+repeats on that habit. The card says "Your last N bookings were about X weeks
+apart". It is owner-only, never readable by a provider, and deleted with the
+reminder and the account.
+
+**User decisions (2026-10-19):** the provider's recommendation outranks the
+learned habit. Aesthetics types (facials, waxing) learn too. Build now, and
+cover it in the Privacy Policy before launch.
+
+**Gaps to raise (not resolved):**
+- **Privacy Policy (§1).** This is a stored inference about the person
+  ("profiling" in UK GDPR terms, low-risk because it has no legal or similarly
+  significant effect). No policy text covers "we work out your usual cadence
+  from your bookings" yet.
+- **Retention.** The learned value stays on the reminder until the next
+  completed booking refreshes it, even if older bookings are later deleted.
+  There's no separate retention rule.
+- **"Completed" isn't attendance (§12).** Bookings auto-complete, so the basis
+  can include visits that didn't happen. The wording describes past bookings,
+  never the client.
+- **Aesthetics.** A learned cadence for facials or waxing is close to the
+  clinical judgement the app said it wouldn't make (the header of
+  `maintenanceServiceTypes.ts`). Injectables can't become reminders, because
+  Aesthetics has no catch-all type (pinned by
+  `src/tests/maintenanceLearnedIntervals.test.ts`).
+- **Push consent (§8).** Snooze moves the date a week. The reminder fires
+  again only for clients who opted in, through the same gate as before.
+

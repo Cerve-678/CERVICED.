@@ -17,7 +17,8 @@ const defaultWeeks = (key: string) => MAINTENANCE_SERVICE_TYPES.find(t => t.key 
 function item(p: Partial<MaintenanceItem>): MaintenanceItem {
   return {
     id: 'x', kind: 'service', origin: 'client', title: 't', typeKey: null, providerId: null,
-    serviceId: null, providerName: null, repeatWeeks: 4, intervalEdited: false, lastDoneOn: null,
+    serviceId: null, providerName: null, repeatWeeks: 4, intervalEdited: false, intervalSource: 'client',
+    learnedDays: null, learnedFrom: null, lastDoneOn: null,
     dueOn: '2026-11-01', eventOn: null, paused: false, note: null, createdAt: '2026-10-01T00:00:00Z', ...p,
   };
 }
