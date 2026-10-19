@@ -12,6 +12,7 @@ import type { AppTheme } from '../../constants/theme';
 import { MAINTENANCE_MAX_WEEKS, MAINTENANCE_MIN_WEEKS } from '../../constants/maintenanceServiceTypes';
 import type { MaintenanceItem } from '../../types/maintenance';
 import type { MaintenanceItemPatch } from '../../services/databaseService';
+import { snoozedDueOn } from './presentation';
 import type { TranslationKey, TranslationParams } from '../../i18n';
 import { dateToYMD, formatShortDayDate, toLocalDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -184,6 +185,15 @@ export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Pr
 
       {item.kind !== 'event' && (
         <GhostButton P={P} icon="checkmark" label={t('maintenance.menu.done')} disabled={busy} onPress={markDone} />
+      )}
+      {item.kind !== 'event' && !item.paused && (
+        <GhostButton
+          P={P}
+          icon="time-outline"
+          label={t('maintenance.action.snooze')}
+          disabled={busy}
+          onPress={() => run(() => onUpdate(item.id, { dueOn: snoozedDueOn(item, today) }), t('maintenance.error.save'))}
+        />
       )}
 
       <View style={[styles.hr, { backgroundColor: P.sep }]} />

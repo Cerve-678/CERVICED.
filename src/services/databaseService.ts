@@ -2,6 +2,7 @@ import { getPaymentRequestError } from '../utils/paymentRequestError';
 import type {
   MaintenanceBookingContext,
   MaintenanceBookingNote,
+  MaintenanceIntervalSource,
   MaintenanceItem,
   MaintenanceItemKind,
   MaintenanceItemOrigin,
@@ -8187,7 +8188,7 @@ export async function getUserBeautyProfile(
 const MAINTENANCE_ITEMS_LIMIT = 200;
 
 const MAINTENANCE_ITEM_COLUMNS =
-  "id, kind, origin, title, type_key, provider_id, service_id, provider_name, repeat_weeks, interval_edited, last_done_on, due_on, event_on, paused, note, created_at";
+  "id, kind, origin, title, type_key, provider_id, service_id, provider_name, repeat_weeks, interval_edited, interval_source, learned_days, learned_from, last_done_on, due_on, event_on, paused, note, created_at";
 
 interface MaintenanceItemRow {
   id: string;
@@ -8200,6 +8201,9 @@ interface MaintenanceItemRow {
   provider_name: string | null;
   repeat_weeks: number | null;
   interval_edited: boolean;
+  interval_source: MaintenanceIntervalSource;
+  learned_days: number | null;
+  learned_from: number | null;
   last_done_on: string | null;
   due_on: string | null;
   event_on: string | null;
@@ -8221,6 +8225,9 @@ function mapMaintenanceItem(r: MaintenanceItemRow): MaintenanceItem {
     providerName: r.provider_name,
     repeatWeeks: r.repeat_weeks,
     intervalEdited: r.interval_edited,
+    intervalSource: r.interval_source,
+    learnedDays: r.learned_days,
+    learnedFrom: r.learned_from,
     lastDoneOn: r.last_done_on,
     dueOn: r.due_on,
     eventOn: r.event_on,
