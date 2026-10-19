@@ -32,6 +32,7 @@ import {
   updateGroupBookingStatus,
   getActiveRescheduleRequestsForBookings,
   type WaitlistEntry,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../contexts/BookingContext';
 import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
@@ -411,6 +412,8 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   }, [fetchWaitlist, providerDbId]));
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     await Promise.all([fetchBookings(), fetchWaitlist(), fetchUnreadMessages()]);
     setRefreshing(false);

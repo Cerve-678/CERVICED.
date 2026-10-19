@@ -82,8 +82,15 @@ export interface ProviderProfileDataState {
  */
 export function useProviderProfileData(
   providerSlug: string,
+  knownOwnedProviderId?: string | null,
 ): ProviderProfileDataState {
   const profileGenerationRef = useRef(0);
+  // Keep this current without making a settled AuthContext update restart the
+  // public-profile load. `undefined` means the ownership lookup is not ready.
+  const knownOwnedProviderIdRef = useRef<string | null | undefined>(
+    knownOwnedProviderId,
+  );
+  knownOwnedProviderIdRef.current = knownOwnedProviderId;
   const [provider, setProvider] = useState<ProviderProfileData | null>(null);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -251,8 +258,16 @@ export function useProviderProfileData(
 
         // Booking authority is fail-closed. Never show a booking control
         // until this ownership lookup has answered: a timeout must not turn
-        // an owner into a client for even one tappable frame.
-        void getProviderProfileViewerContext(data.id)
+        // an owner into a client for even one tappable frame. When
+        // AuthContext has already settled who this viewer owns, reuse that
+        // answer instead of issuing another providers lookup per profile.
+        const viewerContextRequest = knownOwnedProviderIdRef.current === undefined
+          ? getProviderProfileViewerContext(data.id)
+          : getProviderProfileViewerContext(
+              data.id,
+              knownOwnedProviderIdRef.current,
+            );
+        void viewerContextRequest
           .then((viewer) => {
             if (cancelled) return;
             if (viewer) {

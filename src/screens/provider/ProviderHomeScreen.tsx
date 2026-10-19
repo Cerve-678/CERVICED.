@@ -41,17 +41,14 @@ import { FLOATING_TAB_BAR_CLEARANCE, tabBarSpotlightRect } from '../../component
 import { tabBarOccupiedHeight } from '../../utils/tabBarGeometry';
 import {
   getProviderBookings,
-  getMyProviderProfile,
+  getMyProviderHomeBundle,
   hasMyProviderGoLiveAddress,
-  getProviderAvailability,
-  getProviderAvailabilityWindows,
-  getProviderAvailabilityOverrides,
   getServiceDurationsByIds,
-  getProviderBlockedDates,
   subscribeToProviderBookingChanges,
   getUnreadNotificationCount,
   countProviderServices,
   getOrCreateConversation,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../utils/scheduleIssues';
@@ -1466,7 +1463,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       hasLoadedBookingsRef.current = true;
       void loadBookings(showInitialLoad, knownProviderId);
     }
-    getMyProviderProfile().then(profile => {
+    getMyProviderHomeBundle().then(bundle => {
       if (cancelled) return;
       // Flipped only once we're actually about to load, not before the
       // profile fetch even resolves — otherwise a profile fetch that comes
@@ -1480,31 +1477,22 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // decoupled from availability the way it was pre-merge, but not
       // silently skipping bookings entirely just because availability can't
       // load this focus.
-      if (!knownProviderId) void loadBookings(showInitialLoad, profile?.id);
-      setHasNoProviderProfile(!profile);
-      if (!profile) return;
+      if (!knownProviderId) void loadBookings(showInitialLoad, bundle?.profile.id);
+      setHasNoProviderProfile(!bundle);
+      if (!bundle) return;
+      const { profile, availability: avail, blockedDates: blocked, availabilityWindows: windows, availabilityOverrides: overrides } = bundle;
+      setAvailability(avail);
+      setBlockedDates(blocked);
+      setAvailabilityWindows(windows);
+      setAvailabilityOverrides(overrides);
+      // The setup card is supplementary. Do not make the calendar wait for
+      // its service-count and private-address reads before it can draw the
+      // day's working hours and blocked dates.
       return Promise.all([
-        getProviderAvailability(profile.id),
-        getProviderBlockedDates(profile.id),
-        getProviderAvailabilityWindows(profile.id),
-        // Overrides only from a fortnight back — far enough to cover every
-        // booking the day list can show, without pulling a provider's whole
-        // history of one-off closures on each focus.
-        getProviderAvailabilityOverrides(profile.id, overridesFromDate()),
-      ]).then(([avail, blocked, windows, overrides]) => {
+        countProviderServices(profile.id),
+        hasMyProviderGoLiveAddress(profile.id).catch(() => false),
+      ]).then(([serviceCount, goLiveAddress]) => {
         if (cancelled) return;
-        setAvailability(avail);
-        setBlockedDates(blocked);
-        setAvailabilityWindows(windows);
-        setAvailabilityOverrides(overrides);
-        // The setup card is supplementary. Do not make the calendar wait for
-        // its service-count and private-address reads before it can draw the
-        // day's working hours and blocked dates.
-        return Promise.all([
-          countProviderServices(profile.id),
-          hasMyProviderGoLiveAddress(profile.id).catch(() => false),
-        ]).then(([serviceCount, goLiveAddress]) => {
-          if (cancelled) return;
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
           servicesSet: serviceCount > 0,
@@ -1548,7 +1536,6 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             storage.setItem(celebrationKey, false).catch((err) => logger.error('[ProviderHome] go-live pending write failed:', err));
           }
         }).catch((err) => logger.error('[ProviderHome] go-live celebration flag read failed:', err));
-        });
       });
     }).catch((err) => {
       logger.error('[ProviderHome] provider profile load failed:', err);
@@ -1582,6 +1569,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [loadBookings, myProviderId]);
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     await loadBookings();
     setRefreshing(false);

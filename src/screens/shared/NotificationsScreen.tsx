@@ -25,6 +25,7 @@ import {
   getBookingWithAddOnsById,
   getProviderBasicById,
   subscribeToNotificationChanges,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import type { DbNotification } from '../../types/database';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -780,6 +781,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Refresh control
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     hapticLight();
     setRefreshing(true);
     await loadNotifications();

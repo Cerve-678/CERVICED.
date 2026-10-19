@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '../../services/databaseService';
+import { forgetCachedReads, getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -923,6 +923,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   }, [fetchSupportingMetrics]));
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRefreshing(true);
     await Promise.all([fetchBookingsForRange(), fetchSupportingMetrics()]);

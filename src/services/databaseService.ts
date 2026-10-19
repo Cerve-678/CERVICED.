@@ -14,7 +14,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
-import { supabase } from "../lib/supabase";
+import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
@@ -63,6 +63,7 @@ import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
+import { overridesFromDate } from "../utils/dateUtils";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -156,6 +157,15 @@ export async function clearUserStorageFolder(
   if (error) throw error;
 }
 
+/**
+ * Forget every remembered read, so the next load of each screen goes to the
+ * server. For explicit refreshes (pull-to-refresh): the person asked for the
+ * latest, so a 30-second-old answer isn't good enough.
+ */
+export function forgetCachedReads(): void {
+  clearCachedReads();
+}
+
 export function subscribeToUserBookingChanges(
   userId: string,
   onChange: () => void,
@@ -170,7 +180,10 @@ export function subscribeToUserBookingChanges(
         table: "bookings",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -184,11 +197,14 @@ export function subscribeToRescheduleRequestChanges(
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "booking_reschedule_requests" },
-      (payload) => onChange(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        onChange(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -219,7 +235,10 @@ export function subscribeToNotificationInserts(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      payload => onInsert(payload.new as NotificationInsertRow),
+      payload => {
+        clearCachedReads();
+        onInsert(payload.new as NotificationInsertRow);
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -1426,6 +1445,12 @@ export interface ProviderProfileViewerContext {
  */
 export async function getProviderProfileViewerContext(
   providerId: string,
+  /**
+   * AuthContext resolves this once per session. When it has a settled answer,
+   * reuse it instead of issuing another providers lookup for every profile a
+   * client opens. `undefined` deliberately means unknown, not "owns none".
+   */
+  knownOwnedProviderId?: string | null,
 ): Promise<ProviderProfileViewerContext | null> {
   const {
     data: { user },
@@ -1436,12 +1461,17 @@ export async function getProviderProfileViewerContext(
 
   const [userResult, ownerResult, followResult] = await Promise.all([
     supabase.from("users").select("name").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("providers")
-      .select("id")
-      .eq("id", providerId)
-      .eq("user_id", user.id)
-      .maybeSingle(),
+    knownOwnedProviderId === undefined
+      ? supabase
+          .from("providers")
+          .select("id")
+          .eq("id", providerId)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({
+          data: knownOwnedProviderId === providerId ? { id: providerId } : null,
+          error: null,
+        }),
     supabase
       .from("provider_follows")
       .select("notify_enabled")
@@ -1491,6 +1521,82 @@ export async function getMyProviderProfile(): Promise<DbProvider | null> {
   if (error) throw error;
   if (!user) return null;
   return getProviderProfileForUserId(user.id);
+}
+
+/**
+ * Provider Home's first-paint data. The profile and every schedule collection
+ * belong to the same provider row, so embed them in one PostgREST response
+ * instead of starting five independent mobile requests during app launch.
+ */
+export async function getMyProviderHomeBundle(): Promise<{
+  profile: DbProvider;
+  availability: DbProviderAvailability[];
+  blockedDates: DbProviderBlockedDate[];
+  availabilityWindows: DbProviderAvailabilityWindow[];
+  availabilityOverrides: DbProviderAvailabilityOverride[];
+} | null> {
+  const {
+    data: { user },
+    error: authError,
+  } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return null;
+
+  // No has_gone_live / is_active filter: the provider reading their own
+  // record, the same exception as getProviderProfileForUserId.
+  const { data, error } = await supabase
+    .from("providers")
+    .select(`
+      *,
+      provider_availability (*),
+      provider_blocked_dates (*),
+      provider_availability_windows (*),
+      provider_availability_overrides (*)
+    `)
+    .eq("user_id", user.id)
+    // Same bounds the standalone loaders apply: overrides only from a
+    // fortnight back, and at most 500 blocked dates.
+    .gte("provider_availability_overrides.availability_date", overridesFromDate())
+    .order("blocked_date", { referencedTable: "provider_blocked_dates" })
+    .limit(500, { referencedTable: "provider_blocked_dates" })
+    // Same identity rule as getProviderProfileForUserId: active profile
+    // first, then the oldest.
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as DbProvider & {
+    provider_availability: DbProviderAvailability[] | null;
+    provider_blocked_dates: DbProviderBlockedDate[] | null;
+    provider_availability_windows: DbProviderAvailabilityWindow[] | null;
+    provider_availability_overrides: DbProviderAvailabilityOverride[] | null;
+  };
+  const {
+    provider_availability,
+    provider_blocked_dates,
+    provider_availability_windows,
+    provider_availability_overrides,
+    ...profile
+  } = row;
+
+  return {
+    profile,
+    availability: [...(provider_availability ?? [])].sort((a, b) => a.day_of_week - b.day_of_week),
+    blockedDates: [...(provider_blocked_dates ?? [])].sort(
+      (a, b) => a.blocked_date.localeCompare(b.blocked_date),
+    ),
+    availabilityWindows: [...(provider_availability_windows ?? [])].sort(
+      (a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time),
+    ),
+    availabilityOverrides: [...(provider_availability_overrides ?? [])]
+      .sort(
+        (a, b) => a.availability_date.localeCompare(b.availability_date)
+          || (a.start_time ?? '').localeCompare(b.start_time ?? ''),
+      ),
+  };
 }
 
 /** Owner profile plus legacy auth metadata, resolved with one auth lookup. */
@@ -1639,6 +1745,41 @@ export async function deletePortfolioItem(id: string): Promise<void> {
     .delete()
     .eq("id", id);
   if (error) throw error;
+}
+
+// Explore's masonry cards do not need the full portfolio row (personalisation
+// fields and service linkage are used by other callers). Keep its network
+// response small without narrowing the shared getPortfolioItems() contract.
+const EXPLORE_PORTFOLIO_SELECT = `
+  id, provider_id, image_url, caption, category, tags, price, aspect_ratio,
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+`;
+
+/** Fetch the lean portfolio projection used by Explore's public masonry feed. */
+export async function getExplorePortfolioItems(
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  offset = 0,
+): Promise<PortfolioItemWithProvider[]> {
+  let query = supabase
+    .from("portfolio_items")
+    .select(EXPLORE_PORTFOLIO_SELECT)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
+    .order("created_at", { ascending: false });
+
+  if (category && category !== "All") {
+    query = query.eq("category", category.toUpperCase());
+  }
+
+  const { data, error } = await (offset > 0
+    ? query.range(offset, offset + limit - 1)
+    : query.limit(limit));
+  if (error) throw error;
+  // The public projection is intentionally narrower than DbPortfolioItem,
+  // while the Explore mapper only reads the selected card fields above.
+  return (data ?? []) as unknown as PortfolioItemWithProvider[];
 }
 
 /** Fetch portfolio items, optionally filtered by category */
@@ -3599,7 +3740,10 @@ export function subscribeToProviderBookingChanges(
         table: "bookings",
         filter: `provider_id=eq.${providerId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -3632,11 +3776,14 @@ export function subscribeToProviderBookingDetailChanges(
         table: "booking_reschedule_requests",
         filter: `booking_id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onReschedule(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onReschedule(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .on(
       "postgres_changes",
@@ -3646,9 +3793,12 @@ export function subscribeToProviderBookingDetailChanges(
         table: "bookings",
         filter: `id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onBookingUpdate(
-        payload.new as ProviderBookingLiveUpdate,
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onBookingUpdate(
+          payload.new as ProviderBookingLiveUpdate,
+        );
+      },
     )
     .subscribe();
   return () => {
@@ -3884,7 +4034,10 @@ export function subscribeToUserConversationChanges(
         table: "provider_conversations",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -4131,7 +4284,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onInsert(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbNotification);
+      },
     )
     .on(
       "postgres_changes",
@@ -4141,7 +4297,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onUpdate(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onUpdate(payload.new as DbNotification);
+      },
     )
     .subscribe();
   return () => {
@@ -9529,7 +9688,10 @@ export function subscribeToConversationMessages(
         table: "provider_messages",
         filter: `conversation_id=eq.${conversationId}`,
       },
-      (payload) => onInsert(payload.new as DbProviderMessage),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbProviderMessage);
+      },
     )
     .subscribe();
   return () => {

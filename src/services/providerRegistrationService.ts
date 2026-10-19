@@ -3,6 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 // Only for getSize (reading an image's true pixel dimensions) — this service
 // renders nothing.
 import { Image as RNImage } from 'react-native';
@@ -257,11 +258,13 @@ function sniffImageType(
   return null;
 }
 
-export async function uploadToStorage(
-  bucket: string,
-  storagePath: string,
-  localUri: string
-): Promise<string> {
+/** Longest side, in pixels, of any image this app uploads. A phone shows a
+ *  photo at most about 1,290 px wide (full-screen viewer), and an Explore card
+ *  at a few hundred, so a 4,000-8,000 px original is 3-7 MB of download for
+ *  nothing. At this size a JPEG is typically 200-400 KB. */
+export const MAX_UPLOAD_IMAGE_EDGE_PX = 1600;
+
+async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
   // Use expo-file-system to read the local file reliably on both iOS and Android.
   // fetch(localUri) can fail with "Network request failed" for file:// URIs in RN.
   const base64 = await FileSystem.readAsStringAsync(localUri, {
@@ -274,6 +277,59 @@ export async function uploadToStorage(
   for (let i = 0; i < binaryStr.length; i++) {
     bytes[i] = binaryStr.charCodeAt(i);
   }
+  return bytes;
+}
+
+/**
+ * A smaller copy of an oversized photo, or null to upload the original.
+ * Only shrinks; an image already within MAX_UPLOAD_IMAGE_EDGE_PX is left
+ * byte-for-byte alone, so it isn't recompressed for no gain. PNGs stay PNG
+ * (logos rely on their transparency); everything else becomes JPEG. Any
+ * failure falls back to the original, the same as before this existed:
+ * a slow upload is better than a lost photo.
+ *
+ * Not a privacy control: re-encoding drops photo metadata (including GPS)
+ * from the images it shrinks, but an image that is already small enough, or
+ * that falls back to the original, keeps whatever metadata it had.
+ */
+async function shrinkImageForUpload(
+  localUri: string,
+  sniffedMime: string | undefined,
+): Promise<string | null> {
+  try {
+    // Rendered once to read the upright (EXIF-applied) size, then reused as
+    // the resize source so the file is only decoded once.
+    const original = await ImageManipulator.manipulate(localUri).renderAsync();
+    const { width, height } = original;
+    if (Math.max(width, height) <= MAX_UPLOAD_IMAGE_EDGE_PX) return null;
+    const resized = await ImageManipulator.manipulate(original)
+      .resize(width >= height
+        ? { width: MAX_UPLOAD_IMAGE_EDGE_PX }
+        : { height: MAX_UPLOAD_IMAGE_EDGE_PX })
+      .renderAsync();
+    const saved = await resized.saveAsync(
+      sniffedMime === 'image/png'
+        ? { format: SaveFormat.PNG }
+        : { format: SaveFormat.JPEG, compress: 0.8 },
+    );
+    return saved.uri;
+  } catch (error) {
+    logger.warn('[uploadToStorage] could not shrink image, uploading original:', error);
+    return null;
+  }
+}
+
+export async function uploadToStorage(
+  bucket: string,
+  storagePath: string,
+  localUri: string
+): Promise<string> {
+  let bytes = await readLocalFileBytes(localUri);
+
+  // Oversized photos are shrunk before upload, so every screen that shows
+  // them later downloads a few hundred KB rather than several MB.
+  const shrunkUri = await shrinkImageForUpload(localUri, sniffImageType(bytes)?.mime);
+  if (shrunkUri) bytes = await readLocalFileBytes(shrunkUri);
 
   // Content type comes from the bytes, never from the name. Only if the bytes
   // are unrecognisable do we fall back to reading the local URI's extension.
@@ -822,23 +878,31 @@ export async function saveProviderToSupabase(
 // Falls back to AsyncStorage cache if Supabase returns nothing.
 
 export async function loadProviderFromSupabase(
-  userId: string
+  userId: string,
+  knownProvider?: DbProvider | null,
 ): Promise<ProviderRegistrationData | null> {
-  let provider: Awaited<ReturnType<typeof getProviderRegistrationRecord>>;
-  try {
-    provider = await getProviderRegistrationRecord(userId);
-  } catch (error) {
-    logger.warn('loadProviderFromSupabase error:', error);
-    const cached = await getCachedProviderData(userId);
-    if (cached) return cached;
-    // A transient failure here is NOT the same thing as "no provider row
-    // exists" — returning null in both cases is indistinguishable to every
-    // caller, which is exactly what let an existing, published provider's
-    // locked Business Name/Service Type fields render as editable (and, if
-    // touched, silently overwrite service_category on save) after a
-    // one-off network blip during load. Callers must treat this as a
-    // failure to retry, never as "confirmed new signup".
-    throw error;
+  let provider: DbProvider | null;
+  if (knownProvider !== undefined) {
+    // A caller that already resolved its own provider row can pass it in.
+    // My Profile does this so its registration reconstruction and dashboard
+    // share one `providers` request instead of issuing identical reads.
+    provider = knownProvider;
+  } else {
+    try {
+      provider = await getProviderRegistrationRecord(userId);
+    } catch (error) {
+      logger.warn('loadProviderFromSupabase error:', error);
+      const cached = await getCachedProviderData(userId);
+      if (cached) return cached;
+      // A transient failure here is NOT the same thing as "no provider row
+      // exists" — returning null in both cases is indistinguishable to every
+      // caller, which is exactly what let an existing, published provider's
+      // locked Business Name/Service Type fields render as editable (and, if
+      // touched, silently overwrite service_category on save) after a
+      // one-off network blip during load. Callers must treat this as a
+      // failure to retry, never as "confirmed new signup".
+      throw error;
+    }
   }
   // The query itself succeeded and genuinely found no row — this really is
   // either a brand-new signup or an offline draft that never reached the

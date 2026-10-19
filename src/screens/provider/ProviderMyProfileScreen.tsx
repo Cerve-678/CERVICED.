@@ -622,14 +622,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           let parsed: ProviderRegistrationData | null = null;
 
           if (user?.id) {
-            // Two independent lookups — run them together, not one after the
-            // other. The whole provider row is read here rather than just its
-            // id: it costs the same single row but carries logo_url,
-            // has_gone_live and review_count too, so everything below reuses
-            // it instead of re-reading the same provider once per consumer.
+            // Start one provider-row lookup and share its result with the
+            // registration reconstruction. The latter still starts its
+            // independent details query as soon as the row arrives, but this
+            // avoids two identical `providers` requests on every focus.
+            const profilePromise = getMyProviderProfile();
             const [loaded, profile] = await Promise.all([
-              loadProviderFromSupabase(user.id),
-              getMyProviderProfile(),
+              profilePromise.then(profile => loadProviderFromSupabase(user.id, profile)),
+              profilePromise,
             ]);
             if (!active) return;
             parsed = loaded;
