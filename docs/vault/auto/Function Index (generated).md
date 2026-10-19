@@ -5,7 +5,7 @@
 
 #generated
 
-**2569 functions** across **357 files**.
+**2578 functions** across **357 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -130,8 +130,8 @@
 - `AddReminderSheet.tsx` — **AddReminderSheet** · addWeeksFromToday · chipFor · datePill · onPickDate · pick · submit
 - `ItemMenuSheet.tsx` — addWeeksYMD · **ItemMenuSheet** · markDone · onPickDate · run · saveChanges
 - `MaintenanceItemCard.tsx` — iconFor · **itemPill** · MaintenanceItemCardImpl · **primaryActionFor** · subline
-- `MaintenanceView.tsx` — groups · **MaintenanceView** · onPickPatch · openMenu · renderItems · renderNote · S · tryScroll · turnOnReminders · visibleItems
-- `presentation.ts` — byDue · **countdownFor** · **countDueItems** · dayDiff · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **needsAttention** · **presentMaintenanceItem**
+- `MaintenanceView.tsx` — filterCounts · groups · **MaintenanceView** · nextUp · onPickPatch · openMenu · renderItems · renderNextUp · renderNote · S · snooze · tryScroll · turnOnReminders · visibleItems · weeksText
+- `presentation.ts` — byDue · **categoryOf** · **countdownFor** · **countDueItems** · dayDiff · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **learnedWeeks** · **needsAttention** · **presentMaintenanceItem** · **rhythmLineFor** · **snoozedDueOn**
 - `SetupFlow.tsx` — datePill · finish · header · onPickEvent · onPickPatch · profileAnswers · question · S · **SetupFlow** · suggestions · today · toggle
 - `ui.tsx` — **Chip** · **GhostButton** · **hapticError** · **hapticLight** · **hapticMedium** · **hapticSelection** · **hapticSuccess** · **Note** · **Pill** · **PrimaryButton** · **ProgressBar** · **SectionLabel** · **semanticColors** · **Sheet** · step · **SwitchRow** · **WeekStepper**
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
