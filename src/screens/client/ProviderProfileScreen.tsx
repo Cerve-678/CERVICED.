@@ -1365,9 +1365,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     reviewsLoadedAll,
     promotions,
     portfolio,
+    portfolioLoading,
     availability,
     availabilityLoading,
     openingHours,
+    openingHoursLoading,
     currentUserId,
     currentUserName,
     isOwnProvider,
@@ -5433,11 +5435,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
               <ProviderOpeningHoursSection
                 openingHours={openingHours}
+                loading={openingHoursLoading}
                 palette={sectionPalette}
               />
 
               <ProviderPortfolioSection
                 items={workPortfolio}
+                loading={portfolioLoading}
                 palette={sectionPalette}
                 onOpenImage={openImageViewer}
               />

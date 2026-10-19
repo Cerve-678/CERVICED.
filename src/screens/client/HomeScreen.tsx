@@ -101,6 +101,12 @@ interface Provider {
   distanceKm?: number; // populated by nearbyProviders when the user's location is known
 }
 
+// Home should become useful as soon as its first rail is ready. The rest of
+// the browse catalogue is appended after that initial paint instead of making
+// the first request fetch every provider in one large response.
+const HOME_INITIAL_PROVIDER_LIMIT = 40;
+const HOME_REMAINING_PROVIDER_LIMIT = 160;
+
 const ProviderRail = React.memo(function ProviderRail({
   providers,
   keyPrefix,
@@ -485,13 +491,28 @@ export default function HomeScreen() {
     // has settled; a client can browse immediately, while the extra rails
     // progressively fill in behind it.
     let secondaryRailsTimer: ReturnType<typeof setTimeout> | null = null;
-    const loadSecondaryRails = () => {
+    const loadSecondaryRails = (hasMoreProviders: boolean) => {
       // getProviders() has just resolved and committed its cards. This delay
       // gives React Native a frame to render them before lower-priority work
       // starts, without relying on deprecated InteractionManager scheduling.
       secondaryRailsTimer = setTimeout(() => {
         if (locationRunCancelled) return;
         void (async () => {
+          // The primary rail is already visible. Extend it in the background
+          // rather than holding the first Home render behind the full 200-row
+          // provider response.
+          if (hasMoreProviders) {
+            getProviders(undefined, HOME_REMAINING_PROVIDER_LIMIT, HOME_INITIAL_PROVIDER_LIMIT)
+              .then(data => {
+                if (locationRunCancelled) return;
+                setLiveProviders(current => {
+                  const seen = new Set(current.map(provider => provider.id));
+                  return [...current, ...data.map(mapDbProvider).filter(provider => !seen.has(provider.id))];
+                });
+              })
+              .catch(() => {});
+          }
+
           if (OFFERS_ENABLED) {
             getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
           }
@@ -528,12 +549,16 @@ export default function HomeScreen() {
     // The visible provider rail does not depend on the owner-id guard. Let it
     // paint as soon as its own query lands; the guard can reconcile quietly
     // afterwards instead of holding the whole Home screen behind it.
-    getProviders()
-      .then(data => setLiveProviders(data.map(mapDbProvider)))
+    let hasMoreProviders = false;
+    getProviders(undefined, HOME_INITIAL_PROVIDER_LIMIT)
+      .then(data => {
+        setLiveProviders(data.map(mapDbProvider));
+        hasMoreProviders = data.length === HOME_INITIAL_PROVIDER_LIMIT;
+      })
       .catch(() => {})
       .finally(() => {
         setProvidersLoading(false);
-        loadSecondaryRails();
+        loadSecondaryRails(hasMoreProviders);
       });
     getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
 
