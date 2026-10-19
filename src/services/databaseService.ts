@@ -9952,6 +9952,8 @@ export async function createCheckoutPaymentIntent(
   // only from an older deployed function; the sheet then works without them.
   customerId?: string;
   ephemeralKeySecret?: string;
+  /** The server allows PayPal on this intent (never with late/no-show fees). */
+  paypalAvailable: boolean;
 }> {
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
@@ -9964,9 +9966,13 @@ export async function createCheckoutPaymentIntent(
   if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
     throw new Error('Payment configuration does not match this app. Please contact support.');
   }
+  // The server decides (never for a checkout with late/no-show fees); an older
+  // deployment that doesn't send the list means no PayPal.
+  const paypalAvailable = Array.isArray(data.paymentMethodTypes) && data.paymentMethodTypes.includes('paypal');
   return {
     clientSecret: data.clientSecret,
     paymentIntentId: data.paymentIntentId,
+    paypalAvailable,
     customerId: typeof data.customerId === 'string' ? data.customerId : undefined,
     ephemeralKeySecret: typeof data.ephemeralKeySecret === 'string' ? data.ephemeralKeySecret : undefined,
   };

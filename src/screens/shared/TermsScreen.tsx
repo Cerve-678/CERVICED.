@@ -81,7 +81,7 @@ const SECTIONS = [
     heading: '9. Prices and Payment',
     body: [
       'Prices are in pounds sterling and are set by each provider. The total you pay in the app, including any deposit and Cerviced\'s service fee, is shown before you pay.',
-      'Payments are processed securely by Stripe, and Cerviced never sees or stores your full card number. Stripe\'s own terms also apply. If a provider asks you to save your card for an agreed fee, Stripe stores it, not us.',
+      'You can pay in the app by card, Apple Pay, Google Pay or PayPal. Payments are processed securely by Stripe, and Cerviced never sees or stores your full card number or your PayPal login. Stripe\'s own terms also apply, and PayPal\'s terms apply when you pay with PayPal. If a provider has a late arrival or no-show fee, that booking is paid by card, because the fee may be charged to it after the appointment. If a provider asks you to save your card for an agreed fee, Stripe stores it, not us.',
       'If a price is clearly wrong because of a mistake, for example a treatment listed at a fraction of its usual price, we or the provider may cancel the booking and refund you in full.',
       'Anything you agree with the provider at the appointment, such as adding a treatment or a tip paid in person, is between you and the provider and isn\'t paid through the app.',
     ].join('\n\n'),
@@ -116,7 +116,7 @@ const SECTIONS = [
     heading: '15. Refunds and Refund Requests',
     body: [
       'A provider can refund you in full or in part at any time. If you\'d like a refund, you can request one from the booking. Your request goes to the provider first. They can refund you or pass it to Cerviced, and if it\'s passed to us, we\'ll review it and let you know the outcome.',
-      'Refunds go back to the card you paid with and usually take 5 to 10 working days to appear, depending on your bank.',
+      'Refunds go back to the way you paid: to your card, or to your PayPal account if you paid with PayPal. A card refund usually takes 5 to 10 working days to appear, depending on your bank.',
     ].join('\n\n'),
   },
   {
@@ -154,7 +154,7 @@ const SECTIONS = [
   },
   {
     heading: '21. Other Services We Work With',
-    body: 'Cerviced works with other companies\' services, for example Stripe for payments, Apple and Google for sign-in and notifications, and Instagram when you open a provider\'s Instagram profile. When you use them, their own terms and privacy policies apply, and we aren\'t responsible for them.',
+    body: 'Cerviced works with other companies\' services, for example Stripe and PayPal for payments, Apple and Google for sign-in and notifications, and Instagram when you open a provider\'s Instagram profile. When you use them, their own terms and privacy policies apply, and we aren\'t responsible for them.',
   },
   {
     heading: '22. Reviews',

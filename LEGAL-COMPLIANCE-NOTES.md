@@ -597,3 +597,23 @@ pros instead of treating a save as consent; Terms say 30-day deletion grace.
   (§2); PECR separation of marketing and booking notifications (§8).
 - No re-consent: existing users aren't asked to accept the new Terms (§10).
 - The Privacy Policy (AboutScreen) still names privacy@cerviced.app (§13).
+
+## 20. PayPal at checkout (2026-10-19)
+
+**What it is:** clients can pay by PayPal as well as card, Apple Pay and Google
+Pay, processed through Stripe (`feat/paypal-checkout`, not deployed).
+A checkout where a provider has a late arrival or no-show fee stays card-only,
+because that fee is charged off-session to a saved card. PayPal accounts are
+never saved. CERVICED doesn't store the PayPal payer name, email or ID that
+come back on the charge. Terms (payments, refunds, third-party services), the Privacy text (About) and Payment
+Methods were updated in the same change.
+
+**Gaps to raise (not resolved):**
+- **Stripe's marketplace approval.** Stripe needs a PayPal onboarding request
+  before PayPal works live for a Connect marketplace. Not yet submitted.
+- **PayPal's Acceptable Use Policy** hasn't been checked against the kinds of
+  services providers sell. PayPal requires pre-approval for some categories.
+- **Processing fee.** CERVICED absorbs Stripe's fee out of its service fee.
+  PayPal's rate hasn't been compared with card. This is a margin question, not
+  a client-facing one.
+- **Not lawyer-reviewed**, like the rest of the Terms and Privacy text.

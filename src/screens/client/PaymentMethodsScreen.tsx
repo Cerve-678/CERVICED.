@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { Ionicons } from '@expo/vector-icons';
 import Icon from '../../components/IconLibrary';
 import { useAppDialog } from '../../components/AppDialog';
 import { createSavedCardSetup, listSavedCards, removeSavedCard } from '../../services/databaseService';
@@ -107,7 +108,7 @@ function CheckoutExplainer() {
         <Icon name="payment" size={40} color={P.accentText} />
         <Text style={[styles.explainerTitle, { color: P.text }]}>Secure checkout</Text>
         <Text style={[styles.explainerSub, { color: P.sub }]}>
-          Choose your services and appointment time, then enter your card details at checkout. Supported wallet options appear automatically on your device.
+          Choose your services and appointment time, then pay at checkout by card, Apple Pay or Google Pay where your device supports it, or PayPal. Bookings with a late arrival or no-show fee are paid by card, since the fee may be charged to it after the appointment.
         </Text>
       </View>
       <StripeNote />
@@ -121,7 +122,7 @@ function StripeNote() {
     <View style={[styles.infoRow, { backgroundColor: P.card, borderColor: P.border }]}>
       <Icon name="lock" size={18} color={P.accentText} />
       <Text style={[styles.infoText, { color: P.sub }]}>
-        Stripe holds your card details. Cerviced only sees the card type, last four digits and expiry date.
+        Stripe holds your card details. Cerviced only sees the card type, last four digits and expiry date, and never stores your PayPal details.
       </Text>
     </View>
   );
@@ -304,6 +305,15 @@ function SavedCardsSection() {
               <View style={styles.rowBody}>
                 <Text style={[styles.rowTitle, { color: P.text }]}>{WALLET_NAME}</Text>
                 <Text style={[styles.rowSub, { color: P.sub }]}>Offered when your phone is set up for it</Text>
+              </View>
+            </View>
+            <View style={[styles.row, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border }]}>
+              <View style={[styles.badge, { backgroundColor: P.iconBg }]}>
+                <Ionicons name="logo-paypal" size={20} color={P.accentText} />
+              </View>
+              <View style={styles.rowBody}>
+                <Text style={[styles.rowTitle, { color: P.text }]}>PayPal</Text>
+                <Text style={[styles.rowSub, { color: P.sub }]}>Pay on PayPal's own page. Bookings with a late or no-show fee are card only</Text>
               </View>
             </View>
           </View>
