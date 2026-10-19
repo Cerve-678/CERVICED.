@@ -261,7 +261,6 @@ export default function LinkOnlyPortfolioScreen() {
               </TouchableOpacity>
             </>
           )}
-          <Text style={styles.sub}>Your work shows on your profile and in Explore.</Text>
           {providerId && !failed && photos != null && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
@@ -327,6 +326,10 @@ export default function LinkOnlyPortfolioScreen() {
               )}
             </View>
           )}
+          <View style={styles.photosHeading}>
+            <Text style={styles.cardTitle} accessibilityRole="header">Portfolio</Text>
+            <Text style={styles.sub}>Your work shows on your profile and in Explore.</Text>
+          </View>
           {failed ? (
             <Text style={styles.sub}>Couldn't load your photos. Come back to this tab to try again.</Text>
           ) : photos == null ? (
@@ -401,6 +404,7 @@ const createStyles = (P: Palette) =>
     card: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, padding: 16, gap: 10 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     cardTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
+    photosHeading: { gap: 2, marginTop: 4 },
     cardAction: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.accent },
     cardActionMuted: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.sub },
     cardSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, color: P.sub },
