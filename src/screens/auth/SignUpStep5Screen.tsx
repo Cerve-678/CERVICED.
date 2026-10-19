@@ -1,7 +1,6 @@
 // src/screens/auth/SignUpStep5Screen.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   LayoutChangeEvent,
@@ -9,7 +8,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -31,6 +29,9 @@ import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
+import {
+  Chip, ChipWrap, FormCard, PrimaryButton, QuestionCard, ScreenTitle, SectionLabel, SwitchRow, useFieldInputStyle,
+} from '../../components/signup/FormKit';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep5'>;
 
@@ -145,28 +146,14 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
   const [hasKids,           setHasKids]           = useState<boolean>(data.has_kids ?? false);
 
-  const chipStyle = (isSelected: boolean) => ({
-    borderRadius: 100,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: isSelected ? t.accent : t.card,
-    borderColor: isSelected ? t.accent : t.border,
-  });
-
-  const chipTextStyle = (isSelected: boolean) => ({
-    fontFamily: 'Jura-VariableFont_wght' as const,
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: isSelected ? t.onAccent : t.text,
-  });
+  const onLayoutFor = (yRef: React.MutableRefObject<number>) =>
+    (e: LayoutChangeEvent) => { yRef.current = e.nativeEvent.layout.y; };
 
   const scrollTo = (yRef: React.MutableRefObject<number>) => {
     scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current - 24), animated: true });
   };
 
   const toggleInterest = (category: string) => {
-    Haptics.selectionAsync().catch(() => {});
     const next = selectedInterests.includes(category)
       ? selectedInterests.filter(c => c !== category)
       : [...selectedInterests, category];
@@ -175,7 +162,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   };
 
   const toggleLocation = (location: string) => {
-    Haptics.selectionAsync().catch(() => {});
     const next = selectedLocations.includes(location)
       ? selectedLocations.filter(l => l !== location)
       : [...selectedLocations, location];
@@ -184,23 +170,19 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   };
 
   const selectFrequency = (freq: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setSelectedFrequency(freq);
     setTimeout(() => scrollTo(referralY), 150);
   };
 
   const selectReferral = (source: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setSelectedReferral(source);
   };
 
   const toggleAccessibility = (item: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedAccessibility(prev => prev.includes(item) ? prev.filter(a => a !== item) : [...prev, item]);
   };
 
   const toggleLanguage = (item: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedLanguages(prev => prev.includes(item) ? prev.filter(l => l !== item) : [...prev, item]);
   };
 
@@ -366,26 +348,25 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const renderSection = (
     yRef: React.MutableRefObject<number>,
     label: string,
-    sub: string,
-    items: string[],
+    prompt: string,
+    items: readonly string[],
     isSelectedFn: (item: string) => boolean,
     onPress: (item: string) => void,
-    required: boolean,
   ) => (
-    <View onLayout={(e: LayoutChangeEvent) => { yRef.current = e.nativeEvent.layout.y; }}>
-      <Text style={[styles.sectionLabel, { color: showErrors && required && !items.find(isSelectedFn) ? '#DC2626' : t.accentText }]}>
-        {label}{showErrors && required && !items.find(isSelectedFn) ? '  — required' : ''}
-      </Text>
-      <Text style={[styles.sectionSub, { color: t.sub }]}>{sub}</Text>
-      <View style={styles.chipsContainer}>
-        {items.map(item => (
-          <TouchableOpacity key={item} style={chipStyle(isSelectedFn(item))} onPress={() => onPress(item)} activeOpacity={0.6}>
-            <Text style={chipTextStyle(isSelectedFn(item))}>{item}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
+    <QuestionCard title={label} prompt={prompt} error={showErrors && !items.some(isSelectedFn)} onLayout={onLayoutFor(yRef)}>
+      <ChipWrap style={styles.chipsInCard}>
+        {items.map(item => <Chip key={item} label={item} selected={isSelectedFn(item)} onPress={() => onPress(item)} />)}
+      </ChipWrap>
+    </QuestionCard>
   );
+
+  const inputStyle = useFieldInputStyle();
+  const GENDERS = [
+    { v: 'female', l: 'Female' },
+    { v: 'male', l: 'Male' },
+    { v: 'non-binary', l: 'Non-binary' },
+    { v: 'prefer-not-to-say', l: 'Prefer not to say' },
+  ] as const;
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
@@ -398,57 +379,47 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       >
         <SignUpHeader onBack={() => navigation.goBack()} currentStep={5} totalSteps={totalSteps} />
 
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: t.text }]}>Tell me more</Text>
-          <Text style={[styles.headerSubtitle, { color: t.sub }]}>
-            {isProvider
-              ? 'A few finishing touches for your provider profile'
-              : "Personalise your experience — skip anything you'd like"}
-          </Text>
-        </View>
+        <ScreenTitle
+          title="Tell me more"
+          subtitle={isProvider
+            ? 'A few finishing touches for your provider profile.'
+            : "Personalise your experience. Skip anything you'd like."}
+        />
 
         {isProvider ? (
           <>
-            {renderSection(accessibilityY, 'ACCESSIBILITY', "Does your space have any of these? Select all that apply", ACCESSIBILITY_OPTIONS, item => selectedAccessibility.includes(item), toggleAccessibility, true)}
+            {renderSection(accessibilityY, 'ACCESSIBILITY', 'Does your space have any of these? Select all that apply.', ACCESSIBILITY_OPTIONS, item => selectedAccessibility.includes(item), toggleAccessibility)}
 
-            {/* Languages spoken — 'Other' reveals a free-text input, same
-                pattern as Specialties below, so a language outside the
-                fixed list can still be added instead of being lost. */}
-            <View onLayout={(e: LayoutChangeEvent) => { languagesY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLanguages.length ? '#DC2626' : t.accentText }]}>
-                LANGUAGES SPOKEN{showErrors && !selectedLanguages.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Which languages can you offer appointments in?</Text>
-              <View style={styles.chipsContainer}>
+            {/* Languages spoken — 'Other' reveals a free-text input so a
+                language outside the fixed list can still be added. */}
+            <QuestionCard title="LANGUAGES SPOKEN" prompt="Which languages can you offer appointments in?" error={showErrors && !selectedLanguages.length} onLayout={onLayoutFor(languagesY)}>
+              <ChipWrap style={styles.chipsInCard}>
                 {LANGUAGE_OPTIONS.map(item => (
-                  <TouchableOpacity key={item} style={chipStyle(selectedLanguages.includes(item))} onPress={() => toggleLanguage(item)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedLanguages.includes(item))}>{item}</Text>
-                  </TouchableOpacity>
+                  <Chip key={item} label={item} selected={selectedLanguages.includes(item)} onPress={() => toggleLanguage(item)} />
                 ))}
-              </View>
+              </ChipWrap>
               {selectedLanguages.includes('Other') && (
-                <View style={[styles.otherInputWrap, { backgroundColor: t.card, borderColor: t.border }]}>
+                <View style={[styles.otherInputWrap, { borderTopColor: t.sep }]}>
                   <TextInput
-                    style={[styles.otherInput, { color: t.text }]}
+                    style={inputStyle}
                     value={languagesOther}
                     onChangeText={setLanguagesOther}
-                    placeholder="Tell us more..."
+                    placeholder="Which language?"
                     placeholderTextColor={t.sub}
                   />
                 </View>
               )}
-            </View>
+            </QuestionCard>
 
             {/* Specialties — options depend on the service categories picked in Step 4 */}
-            <View onLayout={(e: LayoutChangeEvent) => { specialtiesY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedSpecialties.length ? '#DC2626' : t.accentText }]}>
-                SPECIALTIES{showErrors && !selectedSpecialties.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>
-                {data.serviceInterests.some(c => c === 'HAIR' || c === 'AESTHETICS')
-                  ? 'What client needs or hair/skin types do you specialise in?'
-                  : 'What do you specialise in? You can add more later'}
-              </Text>
+            <QuestionCard
+              title="SPECIALTIES"
+              prompt={data.serviceInterests.some(c => c === 'HAIR' || c === 'AESTHETICS')
+                ? 'What client needs or hair/skin types do you specialise in?'
+                : 'What do you specialise in? You can add more later.'}
+              error={showErrors && !selectedSpecialties.length}
+              onLayout={onLayoutFor(specialtiesY)}
+            >
               <SpecialityMultiSelect
                 selected={selectedSpecialties}
                 onChange={setSelectedSpecialties}
@@ -456,76 +427,42 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                 palette={t}
                 placeholder="Search specialities"
               />
-            </View>
+            </QuestionCard>
 
-            {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral, true)}
+            {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral)}
           </>
         ) : (
           <>
-            {renderSection(servicesY, 'SERVICES', "Select all services you're interested in", SERVICE_CATEGORIES, item => selectedInterests.includes(item), toggleInterest, true)}
-            {renderSection(locationY, 'LOCATION', 'Where are you willing to get services from?', LOCATIONS, item => selectedLocations.includes(item), toggleLocation, true)}
-            {renderSection(frequencyY, 'FREQUENCY', 'How often do you get your maintenance done?', FREQUENCIES, item => selectedFrequency === item, selectFrequency, true)}
-            {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral, true)}
+            {renderSection(servicesY, 'SERVICES', "Select all services you're interested in.", SERVICE_CATEGORIES, item => selectedInterests.includes(item), toggleInterest)}
+            {renderSection(locationY, 'LOCATION', 'Where are you willing to get services from?', LOCATIONS, item => selectedLocations.includes(item), toggleLocation)}
+            {renderSection(frequencyY, 'FREQUENCY', 'How often do you get your maintenance done?', FREQUENCIES, item => selectedFrequency === item, selectFrequency)}
+            {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral)}
 
             {/* Gender — optional, personalises the home feed */}
-            <View>
-              <Text style={[styles.sectionLabel, { color: t.accentText }]}>GENDER  <Text style={[styles.skipText, { color: t.sub, fontSize: 11 }]}>optional</Text></Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Helps us show you relevant services</Text>
-              <View style={styles.chipsContainer}>
-                {(['female', 'male', 'non-binary', 'prefer-not-to-say'] as const).map(g => {
-                  const label: Record<string, string> = { female: 'FEMALE', male: 'MALE', 'non-binary': 'NON-BINARY', 'prefer-not-to-say': 'PREFER NOT TO SAY' };
-                  const isSelected = selectedGender === g;
-                  return (
-                    <TouchableOpacity
-                      key={g}
-                      style={chipStyle(isSelected)}
-                      onPress={() => { Haptics.selectionAsync().catch(() => {}); setSelectedGender(isSelected ? null : g); }}
-                      activeOpacity={0.6}
-                    >
-                      <Text style={chipTextStyle(isSelected)}>{label[g]}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
+            <QuestionCard title="GENDER" hint="Optional" prompt="Helps us show you relevant services.">
+              <ChipWrap style={styles.chipsInCard}>
+                {GENDERS.map(({ v, l }) => (
+                  <Chip key={v} label={l} selected={selectedGender === v} onPress={() => setSelectedGender(selectedGender === v ? null : v)} />
+                ))}
+              </ChipWrap>
+            </QuestionCard>
 
             {/* Kids toggle — optional */}
-            <View style={[styles.kidsToggleRow, { backgroundColor: t.card, borderColor: t.border }]}>
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={[styles.sectionLabel, { color: t.text, marginBottom: 4 }]}>KIDS BEAUTY SERVICES</Text>
-                <Text style={[styles.sectionSub, { color: t.sub, marginBottom: 0 }]}>Show me kids' beauty services</Text>
-              </View>
-              <Switch
-                value={hasKids}
-                onValueChange={v => { Haptics.selectionAsync().catch(() => {}); setHasKids(v); }}
-                trackColor={{ false: '#D1D1D6', true: t.accent }}
-                thumbColor={hasKids ? '#fff' : '#f4f3f4'}
-              />
+            <View style={styles.question}>
+              <SectionLabel title="FAMILY" hint="Optional" />
+              <FormCard>
+                <SwitchRow title="Kids' beauty services" subtitle="Show me services for kids too." value={hasKids} onValueChange={setHasKids} />
+              </FormCard>
             </View>
           </>
         )}
 
-        {/* Actions */}
-        <View style={styles.actionsSection}>
-          <TouchableOpacity
-            style={[styles.completeBtn, { backgroundColor: t.accent }]}
-            onPress={handleComplete}
-            activeOpacity={0.75}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.completeBtnText}>GET STARTED</Text>
-            )}
+        <PrimaryButton label="GET STARTED" onPress={handleComplete} loading={isLoading} style={styles.completeBtn} />
+        {!isLoading && (
+          <TouchableOpacity style={styles.skipBtn} onPress={submitSignUp} activeOpacity={0.6}>
+            <Text style={[styles.skipText, { color: t.sub }]}>Skip for now</Text>
           </TouchableOpacity>
-
-          {!isLoading && (
-            <TouchableOpacity style={styles.skipBtn} onPress={submitSignUp} activeOpacity={0.6}>
-              <Text style={[styles.skipText, { color: t.sub }]}>Skip for now</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        )}
       </ScrollView>
 
       {/* Second-hat celebration. Dismissing it is what completes the switch. */}
@@ -570,27 +507,12 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  header: { marginBottom: 22 },
-  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 36, letterSpacing: 0.5 },
-  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, marginTop: 4, lineHeight: 21 },
-  sectionLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
-  sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 10, lineHeight: 18 },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 24 },
-  otherInputWrap: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    marginTop: -22,
-    marginBottom: 32,
-  },
-  otherInput: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, letterSpacing: 0.3, padding: 0 },
-  actionsSection: { alignItems: 'center' },
-  completeBtn: { borderRadius: 100, minHeight: 56, justifyContent: 'center', alignItems: 'center', width: '100%' },
-  completeBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5, color: '#FFFFFF' },
-  skipBtn: { marginTop: 16, paddingVertical: 8 },
+  question: { marginBottom: 22 },
+  chipsInCard: { marginBottom: 0 },
+  otherInputWrap: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 12 },
+  completeBtn: { marginTop: 8 },
+  skipBtn: { alignSelf: 'center', marginTop: 16, paddingVertical: 8 },
   skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
   // Second-hat celebration. Typography follows this screen's fonts rather than
   // the go-live modal's raw fontWeights, so it reads as part of signup.
@@ -635,13 +557,5 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 1,
-  },
-  kidsToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 24,
   },
 });
