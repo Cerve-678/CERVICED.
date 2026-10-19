@@ -146,14 +146,19 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
             <Text style={styles.title}>Your week</Text>
             <Text style={styles.headerSub}>{weekRangeLabel(week)} · from your phone calendar</Text>
           </View>
+          {/* A bordered pill with an icon, not bare text, so it reads as a
+              button at a glance (owner's call, 2026-10-19). */}
           <TouchableOpacity
+            style={styles.calendarsButton}
             onPress={openChooser}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Choose calendars"
           >
+            <Ionicons name="calendar-outline" size={14} color={P.accent} />
             <Text style={styles.link}>Calendars</Text>
+            <Ionicons name="chevron-down" size={12} color={P.accent} />
           </TouchableOpacity>
         </View>
       ) : (
@@ -315,6 +320,7 @@ const createStyles = (P: DiaryPalette) =>
     freeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', color: P.sub },
     free: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.sub },
     link: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.accent },
+    calendarsButton: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 17, borderWidth: 1.5, borderColor: P.accent, backgroundColor: P.surface },
     body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, color: P.sub },
     spacer: { marginVertical: 8 },
     button: { height: 44, borderRadius: 22, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
