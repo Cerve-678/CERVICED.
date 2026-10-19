@@ -47,6 +47,14 @@ export default function RootNavigation() {
     : (isDarkMode ? clientDarkTheme : clientLightTheme);
 
   const MainTabsComponent = activeMode === 'provider' ? ProviderTabNavigation : ClientTabNavigation;
+  // React Navigation validates initialRouteName against the routes mounted in
+  // this render. The app branch has MainTabs but not Welcome; the incomplete
+  // Apple branch has SignUpStep1; ordinary signed-out users start at Welcome.
+  const initialRouteName = requiresRegistration
+    ? 'SignUpStep1'
+    : isLoggedIn
+      ? 'MainTabs'
+      : 'Welcome';
 
   // Resolves any requestMode() callers (e.g. the notification tap handler,
   // and switchMode()'s manual toggle — both funnel through the same
@@ -174,7 +182,7 @@ export default function RootNavigation() {
     <NavigationContainer ref={navigationRef} onReady={() => setIsNavReady(true)}>
       <Stack.Navigator
         key={requiresRegistration ? 'registration' : isLoggedIn ? 'app' : 'auth'}
-        initialRouteName={requiresRegistration ? 'SignUpStep1' : 'Welcome'}
+        initialRouteName={initialRouteName}
         screenOptions={{
           headerShown: false,
           cardStyle: { backgroundColor: 'transparent' },
