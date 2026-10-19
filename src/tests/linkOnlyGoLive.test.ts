@@ -8,6 +8,7 @@ const none = {
   hoursSet: false,
   portfolioSet: false,
   portfolioCount: 0,
+  hours: [],
   isLive: false,
 };
 

@@ -241,6 +241,9 @@ export type ProviderHomeStackParamList = {
   Branding: undefined;
   Policies: undefined;
   Payments: undefined;
+  // Pushed from the link-only Dashboard's Profile strength rows (Instagram,
+  // accessibility, payment methods), same reasoning as EditProfile above.
+  BusinessInfo: undefined;
   // fromRescheduleRequest: set when opened from a reschedule-request notification,
   // so the screen can say so if that request is no longer open, instead of
   // quietly offering a fresh "propose new times" sheet for a request that's gone.

@@ -5,7 +5,7 @@
 
 #generated
 
-**151 edges** across **47 screens**. Node-graph version: [[Screen Flow (generated)]].
+**154 edges** across **47 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -67,10 +67,13 @@ graph LR
   HomeScreen --> ProviderProfileScreen
   HomeScreen --> SearchScreen
   LinkOnlyHomeScreen --> BeccaStack
+  LinkOnlyHomeScreen --> BrandingScreen
+  LinkOnlyHomeScreen --> BusinessInfoScreen
   LinkOnlyHomeScreen --> InfoRegScreen
   LinkOnlyHomeScreen --> LinkOnlyAnalyticsScreen
   LinkOnlyHomeScreen --> LinkOnlyPortfolio
   LinkOnlyHomeScreen --> NotificationsScreen
+  LinkOnlyHomeScreen --> PoliciesScreen
   LinkOnlyHomeScreen --> ProviderScheduleScreen
   LinkOnlyPortfolioScreen --> ProviderProfileScreen
   LoginScreen --> ForgotPassword
@@ -196,7 +199,7 @@ graph LR
 - `provider/BusinessDetailsScreen` → `provider/AboutYouScreen`, `provider/BusinessInfoScreen`, `provider/PoliciesScreen`, `provider/SchedulingScreen`, `provider/ServicesPricingScreen`
 - `provider/BusinessInfoScreen` → `provider/ProviderCommunicationsScreen`
 - `provider/BusinessProfileScreen` → `provider/BrandingScreen`, `provider/BusinessDetailsScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/ProviderAutomationsScreen`, `provider/ProviderCommunicationsScreen`
-- `provider/LinkOnlyHomeScreen` → `BeccaStack`, `LinkOnlyPortfolio`, `provider/InfoRegScreen`, `provider/LinkOnlyAnalyticsScreen`, `provider/ProviderScheduleScreen`, `shared/NotificationsScreen`
+- `provider/LinkOnlyHomeScreen` → `BeccaStack`, `LinkOnlyPortfolio`, `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/LinkOnlyAnalyticsScreen`, `provider/PoliciesScreen`, `provider/ProviderScheduleScreen`, `shared/NotificationsScreen`
 - `provider/LinkOnlyPortfolioScreen` → `client/ProviderProfileScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
 - `provider/ProviderAccountScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/BusinessProfileScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/LanguageRegionScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `shared/TextSizingScreen`, `SignUpStep3`

@@ -9,10 +9,13 @@ tags: [screen, provider]
 ## → Navigates to
 - [[ProviderScheduleScreen\|ProviderSchedule]]
 - `LinkOnlyPortfolio` _(navigator / dynamic)_
+- [[PoliciesScreen\|Policies]]
+- [[BusinessInfoScreen\|BusinessInfo]]
 - [[InfoRegScreen\|EditProfile]]
+- `BeccaStack` _(navigator / dynamic)_
 - [[NotificationsScreen\|Notifications]]
 - [[LinkOnlyAnalyticsScreen\|LinkOnlyAnalytics]]
-- `BeccaStack` _(navigator / dynamic)_
+- [[BrandingScreen\|Branding]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
