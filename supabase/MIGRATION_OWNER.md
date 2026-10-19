@@ -22,8 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-a1 (fix/checkout-clears-own-stale-holds) — release when 20261019230000 is APPLIED
 ```
+
+### Authored 2026-10-19 (checkout clears the client's own stale holds)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019230000 | `prepare_checkout_clears_own_stale_holds` | **NOT APPLIED** — awaiting the user (SQL editor). Frontier at authoring: `20261019210000`; live `prepare_checkout` md5 before: `c1ef1dfa54bf2786849ddfb421ffc97a`. Redefines `prepare_checkout()` from the live definition plus one block: before holding, `cancel_checkout()` each of the caller's other `prepared` batches with no `payment_intent_id` that holds an `on_hold` slot with a provider on a date this checkout books. Fixes a client being blocked by their own abandoned checkout ("That time is no longer available"). No app or function deploy needed. Apply the file, then `INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('20261019230000', 'prepare_checkout_clears_own_stale_holds');` |
 
 ### Applied 2026-10-19 (automatic fee retries)
 
