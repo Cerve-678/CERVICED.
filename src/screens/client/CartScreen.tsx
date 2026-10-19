@@ -617,6 +617,8 @@ PaymentModal.displayName = 'PaymentModal';
 // The sheet authorises a server-priced reservation. The authenticated endpoint
 // and signed webhook share capture/finalisation logic, including recovery when
 // the app closes and refunds if the reservation can no longer be fulfilled.
+const PAYPAL_NAVY = '#003087';
+
 const StripePaymentModal: React.FC<PaymentModalProps> = memo(
   ({
     isVisible,
@@ -683,8 +685,12 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
     const hasFees = (fees?.length ?? 0) > 0;
     const canPay = fees !== null && (!hasFees || agreedToFees);
+    // Same rule as create-payment-intent: a late/no-show fee is charged later
+    // to a saved card, so those checkouts are card-only. Hidden in Expo Go,
+    // which can't return from PayPal's page.
+    const paypalShown = fees !== null && !hasFees && !env.isExpoGo;
 
-    const handlePayment = useCallback(async (method: 'card' | 'wallet') => {
+    const handlePayment = useCallback(async (method: 'card' | 'wallet' | 'paypal') => {
       const timestamp = () => new Date().toISOString().split('T')[1];
 
       if (processingRef.current) {
@@ -703,9 +709,14 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         }
         if (hasFees) await acceptCheckoutFees(checkoutBatchId);
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
-        const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
+        const { clientSecret, paymentIntentId, paypalAvailable } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
         openIntentRef.current = paymentIntentId;
+        if (method === 'paypal' && !paypalAvailable) {
+          // The server decides; nothing is authorised, so card still works.
+          setPayError('PayPal isn\'t available for this booking. Please pay by card.');
+          return;
+        }
 
         let confirmError: { code: string; message: string; localizedMessage?: string; declineCode?: string; type?: string } | undefined;
         if (method === 'wallet') {
@@ -736,6 +747,10 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             // account and release signing.
             googlePay: { testEnv: GOOGLE_PAY_TEST_ENV, merchantName: 'Cerviced', merchantCountryCode: 'GB', currencyCode: 'GBP' },
           }));
+        } else if (method === 'paypal') {
+          // Opens PayPal's own page; the SDK brings the client back on
+          // cerviced://safepay (forwarded to Stripe in App.tsx).
+          ({ error: confirmError } = await confirmPayment(clientSecret, { paymentMethodType: 'PayPal' }));
         } else {
           // The card details live only inside Stripe's CardField — the app
           // never sees them; confirmPayment reads them from the field.
@@ -752,7 +767,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             const isCardError = confirmError.type === 'card_error' || !!confirmError.declineCode;
             setPayError(isCardError
               ? (confirmError.localizedMessage || confirmError.message)
-              : 'That payment didn\'t go through. Please check your details and try again.');
+              : method === 'paypal'
+                ? 'That PayPal payment didn\'t go through. Please try again, or pay by card.'
+                : 'That payment didn\'t go through. Please check your details and try again.');
           }
           return;
         }
@@ -760,7 +777,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
         paymentStarted = true;
         await capturePaymentIntent(checkoutBatchId, paymentIntentId);
-        await onPaymentSuccess('card', paymentIntentId);
+        await onPaymentSuccess(method === 'paypal' ? 'paypal' : 'card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
         onPaymentComplete();
@@ -898,20 +915,39 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   </View>
                 )}
 
-                {/* Card details are typed into Stripe's own CardField and
-                    wallets open Apple/Google's own sheet — neither ever
-                    passes through this component's state. */}
+                {/* Card details are typed into Stripe's own CardField,
+                    wallets open Apple/Google's own sheet and PayPal its own
+                    page — none of them pass through this component's state. */}
                 <View style={styles.paymentMethods}>
-                  {walletSupported && (
+                  {(walletSupported || paypalShown) && (
                     <>
-                      <PlatformPayButton
-                        type={PlatformPay.ButtonType.Default}
-                        appearance={isDarkMode ? PlatformPay.ButtonStyle.White : PlatformPay.ButtonStyle.Black}
-                        borderRadius={dimensions.button.large.borderRadius}
-                        disabled={isProcessing || !canPay}
-                        onPress={() => { handlePayment('wallet'); }}
-                        style={styles.walletButton}
-                      />
+                      {walletSupported && (
+                        <PlatformPayButton
+                          type={PlatformPay.ButtonType.Default}
+                          appearance={isDarkMode ? PlatformPay.ButtonStyle.White : PlatformPay.ButtonStyle.Black}
+                          borderRadius={dimensions.button.large.borderRadius}
+                          disabled={isProcessing || !canPay}
+                          onPress={() => { handlePayment('wallet'); }}
+                          style={styles.walletButton}
+                        />
+                      )}
+                      {paypalShown && (
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel="Pay with PayPal"
+                          disabled={isProcessing || !canPay}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            handlePayment('paypal');
+                          }}
+                          style={[styles.walletButton, styles.paypalButton, walletSupported && styles.paypalButtonBelowWallet,
+                            (isProcessing || !canPay) && styles.paypalButtonDisabled]}
+                        >
+                          <Ionicons name="logo-paypal" size={18} color={PAYPAL_NAVY} />
+                          <Text style={styles.paypalButtonText}>Pay with PayPal</Text>
+                        </TouchableOpacity>
+                      )}
                       <View style={styles.payDivider}>
                         <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
                         <Text style={[styles.payDividerText, { color: P.sub }]}>or pay by card</Text>
@@ -5717,6 +5753,27 @@ const styles = StyleSheet.create({
   walletButton: {
     height: 48,
     width: '100%',
+  },
+  // PayPal's own brand colours (gold button, navy mark) — a third-party
+  // button, like Apple Pay's, rather than one in the app's palette.
+  paypalButton: {
+    backgroundColor: '#FFC439',
+    borderRadius: dimensions.button.large.borderRadius,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  paypalButtonBelowWallet: {
+    marginTop: spacing.md,
+  },
+  paypalButtonDisabled: {
+    opacity: 0.5,
+  },
+  paypalButtonText: {
+    color: PAYPAL_NAVY,
+    fontSize: 16,
+    fontWeight: '700',
   },
   payDivider: {
     flexDirection: 'row',

@@ -55,8 +55,8 @@ checkout. The provider never pays the fee and never sees it.
 | 1 | Price & reserve | `prepare_checkout` | Validates the basket, holds each slot (`on_hold`, 10 min), writes the batch |
 | 2 | Add fee | `apply_checkout_platform_fee` | Adds the service fee on top |
 | 3 | Authorise | `create-payment-intent` | Re-reads the amount server-side; blocks providers who aren't payout-ready; if the booking has late/no-show fees, requires the client's consent and saves the card for later. Allows card (incl. Apple/Google Pay) plus **PayPal**, except when fees apply: then card only, since `booking-fee` charges saved cards only. Returns the allowed types to the app |
-| 4 | Collect | Stripe `CardField` / Apple Pay / Google Pay / **PayPal**, inside the app's Complete Payment sheet | Client authorises payment. Card details go straight from Stripe's own field to Stripe; PayPal opens PayPal's page and returns to the app (`cerviced://stripe-redirect`); the PayPal button is hidden when the checkout has fees. A decline stays in the sheet and retries the same intent; closing the sheet cancels the unconfirmed intent |
-| 5 | Capture & confirm | `finalize-payment-intent` | Captures, then promotes bookings `on_hold` → `pending`/`confirmed` |
+| 4 | Collect | Stripe `CardField` / Apple Pay / Google Pay / **PayPal**, inside the app's Complete Payment sheet | Client authorises payment. Card details go straight from Stripe's own field to Stripe; PayPal opens PayPal's page and returns to the app (`cerviced://safepay`, forwarded to Stripe in `App.tsx`); the PayPal button is hidden when the checkout has fees. A decline stays in the sheet and retries the same intent; closing the sheet cancels the unconfirmed intent |
+| 5 | Capture & confirm | `finalize-payment-intent` | Captures, then promotes bookings `on_hold` → `pending`/`confirmed`, then records `bookings.payment_method` (card / apple / google / paypal) from the Stripe payment method for receipts. If a PayPal return lands before Stripe marks it ready, the app shows "checking your payment" and the webhook finishes it |
 | 6 | Hold payout | `create_held_payout_on_finalize` | Creates a held payout row. Release time = appointment end + **the provider's chosen hold** (`providers.payout_hold_days`: 1, 3, 7, 14 or 30 days; default 1) |
 | 7 | Release | `process_due_payouts` → `release-payouts` | Every 15 min: re-checks the booking, skips it while a refund request is open*, takes out anything the provider owes*, transfers the rest to their Stripe account |
 | 8 | Bank payout | Stripe | Stripe pays the provider's bank on its own default schedule (CERVICED doesn't set it) |
@@ -102,7 +102,7 @@ Payment settings.
 | Provider refunds (full or partial) | `refund-payment`; partial and repeat refunds allowed; CERVICED keeps its fee on a partial refund, returns it on a full one |
 | Client asks for a refund | Request goes to the **provider** (`refund_requested`). The provider refunds or passes it to Cerviced, which resolves it. The client follows a timeline |
 | Off-app payment | Not CERVICED's business: the client is told it's between them and the provider |
-| Paid by PayPal (branch only) | Same refund paths, all through Stripe. The money goes back to the client's PayPal account. Stripe allows PayPal refunds up to 180 days after payment. PayPal disputes appear in the Stripe dashboard like card disputes |
+| Paid by PayPal | Same refund paths, all through Stripe. The money goes back to the client's PayPal account. Stripe allows PayPal refunds up to 180 days after payment. PayPal disputes appear in the Stripe dashboard like card disputes |
 
 **Taking money back from a paid provider:** if the provider was already paid,
 their Stripe transfer is reversed. If their Stripe balance can't cover it
