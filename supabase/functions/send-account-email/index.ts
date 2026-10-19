@@ -27,6 +27,7 @@ import {
   generalWelcomeEmail,
   linkOnlyWelcomeEmail,
   linkOnlyHatAddedEmail,
+  linkOnlyClientHatAddedEmail,
 } from '../_shared/emailTemplates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
@@ -97,8 +98,8 @@ serve(async (req) => {
 
     const name = account?.name ?? '';
     // A link-only pro (books on their own page) has no services, prices or
-    // availability here, so the two provider kinds get the link-only wording
-    // for them. Decided here from the account, not by a separate kind from the
+    // availability here, so the provider kinds and client_hat_added get the
+    // link-only wording for them. Decided here from the account, not by a separate kind from the
     // app: a new kind needs this function redeployed before the app can send
     // it, and an app ahead of the deploy loses the email silently. At sign-up
     // there is no providers row yet, so the link saved on users decides.
@@ -141,7 +142,7 @@ serve(async (req) => {
       : kind === 'password_changed'
       ? passwordChangedEmail({ name })
       : kind === 'client_hat_added'
-      ? clientHatAddedEmail({ name })
+      ? (isLinkOnly ? linkOnlyClientHatAddedEmail({ name }) : clientHatAddedEmail({ name }))
       : kind === 'general_welcome'
       ? generalWelcomeEmail({ name })
       : clientWelcomeEmail({ name });

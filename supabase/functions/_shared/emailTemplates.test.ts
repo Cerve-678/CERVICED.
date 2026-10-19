@@ -21,6 +21,7 @@ import {
   clientWelcomeEmail,
   generalWelcomeEmail,
   LINK_ONLY_GO_LIVE_STEPS,
+  linkOnlyClientHatAddedEmail,
   linkOnlyGoLiveReminderEmail,
   linkOnlyHatAddedEmail,
   linkOnlyLiveEmail,
@@ -96,6 +97,7 @@ const every = () => [
   ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: HOSTILE, businessName: HOSTILE })],
   ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
   ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyClientHatAddedEmail', linkOnlyClientHatAddedEmail({ name: HOSTILE })],
   [
     'linkOnlyGoLiveReminderEmail',
     linkOnlyGoLiveReminderEmail({ name: HOSTILE, businessName: HOSTILE, remaining: [HOSTILE] }),
@@ -225,8 +227,9 @@ describe('booking confirmation money', () => {
     ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
     ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
     ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyClientHatAddedEmail', linkOnlyClientHatAddedEmail({ name: 'Ada' })],
   ])('%s never asks a link-only pro for services, pricing or availability', (_name, mail) => {
-    expect(mail.html).not.toMatch(/services &amp; pricing|availability/i);
+    expect(mail.html).not.toMatch(/services &amp; pricing|availability|services and bookings/i);
   });
 
   it('lists the four link-only go-live steps in the welcome', () => {

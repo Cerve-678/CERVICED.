@@ -533,7 +533,9 @@ export function linkOnlyWelcomeEmail(params: { name: string; businessName?: stri
   };
 }
 
-/** An existing client account adding a link-only provider hat. */
+/** An existing client account adding a link-only provider hat. Leads with
+ *  how the two hats work, then what's new on the professional side — not the
+ *  welcome's go-live steps again. */
 export function linkOnlyHatAddedEmail(params: { name: string; businessName?: string }) {
   const first = firstNameOf(params.name);
   const display = params.businessName || first;
@@ -541,20 +543,65 @@ export function linkOnlyHatAddedEmail(params: { name: string; businessName?: str
   return {
     subject: `You're a professional on CERVICED now too${display ? `, ${display}` : ''}`,
     html: letter(P, {
-      preview: 'Same login, second hat. Four quick steps and clients can find you and book on your own page.',
+      preview: 'Same login, two hats. Here is how they work, and what clients will see.',
       content:
         eyebrow(P, 'Both hats, one account') +
         headline(P, "You're a professional now too") +
         lede(
           P,
-          `${first ? `Hi ${esc(first)} — your` : 'Your'} CERVICED account now wears both hats. You're still a client, with your bookings and saved providers exactly as they were, and from today clients can find you here too. They'll tap Book to go straight to your own booking page.`,
+          `${first ? `Hi ${esc(first)} — your` : 'Your'} CERVICED account now has two hats on one login: the client side you already use, and a professional profile clients can find.`,
         ) +
-        stepsPanel(P, 'Go live in four steps', [...LINK_ONLY_GO_LIVE_STEPS]) +
+        checklistPanel(P, 'How your two hats work', [
+          'Switch between them any time from your account screen',
+          'Your client side stays private: your bookings and saved providers are never shown to your clients',
+          'Clients only ever see your professional profile',
+        ]) +
+        checklistPanel(P, "What's new for you", [
+          'Clients find you by name, category, speciality and area',
+          'Book on your profile takes them straight to your own booking page',
+          'Clients who save you hear about your announcements',
+          'Analytics shows your Book taps, profile views and saves',
+        ]) +
         note(
           P,
-          'Switch between your two hats any time from your account screen — your client side carries on exactly as before.',
+          'Your profile goes live once it has your logo, an About, your opening hours and at least one portfolio photo.',
         ) +
         button(P, 'cerviced://provider/profile', 'Finish my profile') +
+        appHint(P),
+    }),
+  };
+}
+
+/** A link-only pro adding the client hat. The general clientHatAddedEmail
+ *  tells them their "services and bookings are untouched", and a link-only
+ *  pro has neither here. */
+export function linkOnlyClientHatAddedEmail(params: { name: string }) {
+  const first = firstNameOf(params.name);
+  const P = CLIENT;
+  return {
+    subject: `You're a client now too${first ? `, ${first}` : ''} ✨`,
+    html: letter(P, {
+      preview: 'Same login, two hats. Here is how they work, and what you can do as a client.',
+      content:
+        eyebrow(P, 'Both hats, one account') +
+        headline(P, "You're a client now too") +
+        lede(
+          P,
+          `${first ? `Hi ${esc(first)} — your` : 'Your'} CERVICED account now has two hats on one login: your professional profile, exactly as you left it, and a client side for booking beauty professionals for yourself.`,
+        ) +
+        checklistPanel(P, 'How your two hats work', [
+          'Switch between them any time from your account screen',
+          'Your client side stays private: nothing you do as a client is shown to your own clients',
+          'Your professional profile, portfolio and booking link carry on as before',
+        ]) +
+        checklistPanel(P, "What's new for you", [
+          'Discover beauty professionals near you',
+          'Browse portfolios of real work',
+          'Book and manage your own appointments',
+          'Save your favourite providers',
+          'Booked a pro on their own page? Add it to Upcoming so everything stays in one place',
+        ]) +
+        button(P, 'cerviced://home', 'Start browsing') +
         appHint(P),
     }),
   };
