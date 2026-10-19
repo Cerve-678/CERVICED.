@@ -39,6 +39,13 @@ BEGIN
   IF NEW.status NOT IN ('pending', 'confirmed', 'in_progress', 'on_hold') THEN
     RETURN NEW;
   END IF;
+  -- A hold being claimed (on_hold -> pending/confirmed sets end_time, which
+  -- fires this) already owns its slot, and by then the claim has cleared
+  -- NEW.hold_batch_id, so the own-batch guard below couldn't protect its
+  -- siblings. Nothing to clear for it; leave the batch alone.
+  IF TG_OP = 'UPDATE' AND OLD.status = 'on_hold' THEN
+    RETURN NEW;
+  END IF;
 
   DELETE FROM public.notifications n
    USING public.bookings b
