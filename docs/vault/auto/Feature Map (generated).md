@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **170 files**
 - … +140 more
 
 ## Auth
-Curated: [[Contexts]] · **180 files**
+Curated: [[Contexts]] · **181 files**
 - `src/services/databaseService.ts` _(272)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(142)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **180 files**
 - `src/i18n/catalogs/en.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- … +150 more
+- … +151 more
 
 ## Becca / AI
 Curated: [[Services]] · **46 files**
@@ -346,7 +346,7 @@ Curated: [[Services]] · **46 files**
 - … +16 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **73 files**
+Curated: [[Payments]] · **74 files**
 - `src/screens/client/CartScreen.tsx` _(396)_
 - `src/services/databaseService.ts` _(95)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **73 files**
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
 - `src/constants/featureFlags.ts` _(3)_
-- … +43 more
+- … +44 more

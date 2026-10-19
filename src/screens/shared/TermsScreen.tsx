@@ -28,11 +28,11 @@ const SECTIONS = [
   },
   {
     heading: '4. Cancellations & Refunds',
-    body: 'Cancellation and refund policies are set by individual providers. Please review each provider\'s policy before booking. Cerviced is not liable for disputes arising from cancellations.',
+    body: 'Each provider\'s cancellation, late-arrival and no-show policy is shown before booking and forms part of the booking. Where you expressly agree at checkout to a stated late-arrival or no-show fee, Cerviced may collect that fee for the provider using your saved card only where the relevant event occurs and within 24 hours after the appointment ends. The fee is limited to the amount shown for that booking. You can dispute a charged fee in the app within 7 days. The provider reviews the dispute and decides whether to refund it; this does not limit your statutory rights or card-scheme rights.',
   },
   {
     heading: '5. Deposits & Remaining Balances',
-    body: 'Some providers accept a deposit through the app instead of full payment. Any remaining balance is owed directly to the provider and is settled between you and the provider in person — Cerviced does not collect, hold, verify, or guarantee payment of that balance, and is not responsible for resolving disputes about whether or how much was paid at the appointment.',
+    body: 'Payments made in the app, including deposits, service payments and any fee you expressly agreed to at checkout, are processed by Stripe. If a booking has an unpaid balance, the provider\'s policy will say whether it is payable in person or in the app. Cerviced does not charge an unpaid balance to your saved card unless you separately authorise that charge at the time it is due.',
   },
   {
     heading: `6. ${FEE_TERMS_HEADING}`,
