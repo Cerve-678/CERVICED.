@@ -24,6 +24,15 @@ export function normalizeExternalBookingUrl(raw: string | null | undefined): str
   }
 }
 
+/** Their booking link as people read it: "fresha.com/a/studio", without
+ *  https://, www. or a trailing slash. Null if it isn't a usable link. */
+export function displayExternalBookingUrl(raw: string | null | undefined): string | null {
+  const url = normalizeExternalBookingUrl(raw);
+  if (!url) return null;
+  const { hostname, pathname, search } = new URL(url);
+  return `${hostname.replace(/^www\./, '')}${pathname === '/' ? '' : pathname.replace(/\/$/, '')}${search}`;
+}
+
 /**
  * Opens a provider's external booking page inside the app (SFSafariViewController
  * / Chrome Custom Tabs) rather than kicking the client out to their browser, so

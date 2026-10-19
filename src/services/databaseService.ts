@@ -3978,6 +3978,35 @@ export async function getProviderUnreadConversationCount(): Promise<number> {
   return count ?? 0;
 }
 
+export interface ProviderEnquirySummary {
+  /** Conversations with a message the provider hasn't read. */
+  unread: number;
+  /** The most recent of those, for a one-line preview. */
+  latest: { clientName: string | null; message: string | null } | null;
+}
+
+/** The unread count and the newest unread message for a provider's own
+ *  Dashboard — one row and one name, instead of the whole inbox. */
+export async function getProviderEnquirySummary(providerId: string): Promise<ProviderEnquirySummary> {
+  const { data, count, error } = await supabase
+    .from("provider_conversations")
+    .select("user_id, last_message", { count: "exact" })
+    .eq("provider_id", providerId)
+    .gt("unread_count_provider", 0)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+  if (error) throw error;
+  const row = (data ?? [])[0] as { user_id: string; last_message: string | null } | undefined;
+  if (!row) return { unread: count ?? 0, latest: null };
+  // Same batched RPC the inbox uses — see fix_users_table_pii_leak.sql.
+  const { data: profiles, error: profilesError } = await supabase.rpc("get_user_public_profiles", {
+    p_user_ids: [row.user_id],
+  });
+  if (profilesError) throw profilesError;
+  const name = ((profiles ?? []) as { id: string; name: string | null }[])[0]?.name ?? null;
+  return { unread: count ?? 0, latest: { clientName: name, message: row.last_message } };
+}
+
 /** A provider_conversations row joined with the provider's public info */
 export interface UserConversationWithProvider {
   id: string;
