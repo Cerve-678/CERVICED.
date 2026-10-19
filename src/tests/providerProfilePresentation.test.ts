@@ -12,7 +12,15 @@ describe('provider profile presentation', () => {
   });
 
   it('only exposes policy details when there is actionable policy information', () => {
-    expect(hasProviderPolicyInfo({ cancellationNoticeHours: 24, bookingPolicies: null } as any)).toBe(true);
     expect(hasProviderPolicyInfo({ cancellationNoticeHours: 0, bookingPolicies: { cancelNotice: 'none' } } as any)).toBe(false);
+    expect(hasProviderPolicyInfo({ cancellationNoticeHours: 24, bookingPolicies: { cancelNotice: '24h' } } as any)).toBe(true);
+  });
+
+  it('hides the Policy tab for a provider who never entered a policy, despite the 24h column default', () => {
+    expect(hasProviderPolicyInfo({ cancellationNoticeHours: 24, bookingPolicies: null } as any)).toBe(false);
+  });
+
+  it('shows the Policy tab when the provider has only uploaded a policy image', () => {
+    expect(hasProviderPolicyInfo({ cancellationNoticeHours: 0, bookingPolicies: { policyImageUrl: 'https://x/p.jpg' } } as any)).toBe(true);
   });
 });
