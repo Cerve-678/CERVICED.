@@ -16,6 +16,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Animated,
+  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import Constants from 'expo-constants';
@@ -39,7 +40,13 @@ import {
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
   getCheckoutFees, acceptCheckoutFees, type CheckoutFee } from '../../services/databaseService';
-import { FEE_CONSENT_LINE, FEE_TERMS_BODY, FEE_TERMS_HEADING, FEE_TERMS_SHA256, FEE_TERMS_VERSION } from '../../constants/feeTerms';
+import {
+  FEE_CONSENT_LINE,
+  FEE_TERMS_BODY,
+  FEE_TERMS_HEADING,
+  FEE_TERMS_SHA256,
+  FEE_TERMS_VERSION,
+} from '../../constants/feeTerms';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -56,7 +63,7 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
-import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
+import { toArgbHex } from '../../utils/color';
 import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
 import { newestAddedItem } from '../../utils/newestAddedItem';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
@@ -65,15 +72,16 @@ import { calculatePlatformFee } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
-// includes the SDK-compatible Stripe module, so it can show the card
-// PaymentSheet; wallet payments still require a development build.
+// includes the SDK-compatible Stripe module, so it can show the card field;
+// wallet payments still require a development build.
 const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
 
 // Expo SDK 57 ships a compatible Stripe module in Expo Go, so use the real
-// hook in both Expo Go and custom native builds.
-const useStripe: () => { initPaymentSheet: (...args: any[]) => Promise<any>; presentPaymentSheet: (...args: any[]) => Promise<any> } =
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require('@stripe/stripe-react-native').useStripe;
+// module in both Expo Go and custom native builds.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const StripeRN: typeof import('@stripe/stripe-react-native') = require('@stripe/stripe-react-native');
+const { CardField, PlatformPay, PlatformPayButton, useStripe } = StripeRN;
+const GOOGLE_PAY_TEST_ENV = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_test_') === true;
 
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
@@ -628,12 +636,37 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentPending,
     onBookingFailed,
   }) => {
-    const { theme, palette: P } = useTheme();
+    const { theme, palette: P, isDarkMode } = useTheme();
     // See the mock PaymentModal above — same reason, same fix.
     const bottomInset = useSystemBottomInset();
-    const { initPaymentSheet, presentPaymentSheet } = useStripe();
+    const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
     const processingRef = useRef(false);
+    const [cardComplete, setCardComplete] = useState(false);
+    const [walletSupported, setWalletSupported] = useState(false);
+    // A declined card or a failed bank check stays in this sheet so the
+    // client can fix it and try again.
+    const [payError, setPayError] = useState<string | null>(null);
+    // The intent this checkout opened. A retry reuses it (the server hands
+    // back the same one per checkout); closing the sheet cancels it.
+    const openIntentRef = useRef<string | null>(null);
+
+    useEffect(() => {
+      if (!isVisible) return;
+      openIntentRef.current = null;
+      setPayError(null);
+      setCardComplete(false);
+    }, [isVisible]);
+
+    // Apple Pay / Google Pay need a development build (env.isExpoGo).
+    useEffect(() => {
+      if (!isVisible || env.isExpoGo) return;
+      let cancelled = false;
+      isPlatformPaySupported({ googlePay: { testEnv: GOOGLE_PAY_TEST_ENV } })
+        .then(supported => { if (!cancelled) setWalletSupported(supported); })
+        .catch(err => logger.error('[checkout] could not check wallet support', err));
+      return () => { cancelled = true; };
+    }, [isVisible, isPlatformPaySupported]);
     // Late/no-show fees the client must agree to before their card is saved
     // for them. null = still loading; [] = this checkout has none.
     const [fees, setFees] = useState<CheckoutFee[] | null>(null);
@@ -658,7 +691,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     const hasFees = (fees?.length ?? 0) > 0;
     const canPay = fees !== null && (!hasFees || agreedToFees);
 
-    const handlePayment = useCallback(async () => {
+    const handlePayment = useCallback(async (method: 'card' | 'wallet') => {
       const timestamp = () => new Date().toISOString().split('T')[1];
 
       if (processingRef.current) {
@@ -667,6 +700,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       }
       processingRef.current = true;
       setIsProcessing(true);
+      setPayError(null);
 
       let paymentStarted = false;
       let createdIntentId: string | undefined;
@@ -683,50 +717,58 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           });
         }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
-        const { clientSecret, paymentIntentId, customerId, ephemeralKeySecret } =
-          await createPaymentIntent(checkoutBatchId);
+        const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
+        openIntentRef.current = paymentIntentId;
 
-        const { error: initError } = await initPaymentSheet({
-          merchantDisplayName: 'Cerviced',
-          returnURL: 'cerviced://stripe-redirect',
-          allowsDelayedPaymentMethods: false,
-          paymentIntentClientSecret: clientSecret,
-          // The client's Stripe Customer: the sheet lists their saved cards
-          // and offers to save a new one. Both come back together; an older
-          // deployed function sends neither and the sheet still works.
-          ...(customerId && ephemeralKeySecret
-            ? { customerId, customerEphemeralKeySecret: ephemeralKeySecret }
-            : {}),
-          appearance: buildPaymentSheetAppearance(P, theme.text),
-          // Requires a real Apple merchant ID registered in your Apple
-          // Developer account and linked in the Stripe Dashboard — the
-          // placeholder in app.json's plugin config ("merchant.com.cerviced")
-          // unblocks the build but Apple Pay won't actually appear/function
-          // until that registration is real.
-          ...(!env.isExpoGo ? { applePay: { merchantCountryCode: 'GB' } } : {}),
-          // Works in Stripe test mode. app.json enables Google Pay for
-          // Android; production still requires a fully configured Stripe
-          // account and release signing.
-          ...(!env.isExpoGo ? { googlePay: { merchantCountryCode: 'GB', testEnv: process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_test_') === true } } : {}),
-        });
-        if (initError) {
-          throw new Error(initError.message || 'Could not start payment.');
-        }
-
-        const { error: presentError } = await presentPaymentSheet();
-        if (presentError) {
-          if (presentError.code === 'Canceled') {
-            if (__DEV__) logger.log(`[${timestamp()}] Payment sheet cancelled by user`);
-            // Stripe's own sheet dismiss bypasses this modal's normal close
-            // path entirely — call onClose explicitly so CartScreen's
-            // release-the-hold-batch logic (wired into onClose) still runs
-            // instead of leaving the slot reserved until the TTL sweep.
-            await cancelPaymentIntent(checkoutBatchId, paymentIntentId);
-            onClose();
+        let confirmError: { code: string; message: string; localizedMessage?: string; declineCode?: string; type?: string } | undefined;
+        if (method === 'wallet') {
+          // The wallet sheet shows the amount it's given, so give it the
+          // server-priced intent's amount rather than the cart's own sum.
+          const { paymentIntent, error: retrieveError } = await retrievePaymentIntent(clientSecret);
+          if (retrieveError || !paymentIntent) {
+            // Nothing has been authorised yet — keep the checkout and let
+            // them try again rather than releasing the hold over a blip.
+            logger.error(`[${timestamp()}] could not read the payment amount`, retrieveError);
+            setPayError('We couldn\'t start Apple Pay or Google Pay. Please try again.');
             return;
           }
-          throw new Error(presentError.message || 'Payment failed. Please try again.');
+          const amount = (paymentIntent.amount / 100).toFixed(2);
+          ({ error: confirmError } = await confirmPlatformPayPayment(clientSecret, {
+            // Requires a real Apple merchant ID registered in your Apple
+            // Developer account and linked in the Stripe Dashboard — the
+            // placeholder in app.json's plugin config ("merchant.com.cerviced")
+            // unblocks the build but Apple Pay won't actually appear/function
+            // until that registration is real.
+            applePay: {
+              merchantCountryCode: 'GB',
+              currencyCode: 'GBP',
+              cartItems: [{ label: 'Cerviced', amount, paymentType: PlatformPay.PaymentType.Immediate }],
+            },
+            // Works in Stripe test mode. app.json enables Google Pay for
+            // Android; production still requires a fully configured Stripe
+            // account and release signing.
+            googlePay: { testEnv: GOOGLE_PAY_TEST_ENV, merchantName: 'Cerviced', merchantCountryCode: 'GB', currencyCode: 'GBP' },
+          }));
+        } else {
+          // The card details live only inside Stripe's CardField — the app
+          // never sees them; confirmPayment reads them from the field.
+          ({ error: confirmError } = await confirmPayment(clientSecret, { paymentMethodType: 'Card' }));
+        }
+
+        if (confirmError) {
+          // Nothing was authorised, so the intent can be retried as-is.
+          // Leave the sheet open rather than throwing the checkout away.
+          if (confirmError.code !== 'Canceled') {
+            logger.error(`[${timestamp()}] payment confirmation failed`, confirmError);
+            // Card errors (declines, wrong CVC, failed bank check) are written
+            // by Stripe for the cardholder; anything else is ours to word.
+            const isCardError = confirmError.type === 'card_error' || !!confirmError.declineCode;
+            setPayError(isCardError
+              ? (confirmError.localizedMessage || confirmError.message)
+              : 'That payment didn\'t go through. Please check your details and try again.');
+          }
+          return;
         }
 
         if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
@@ -754,13 +796,41 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, P, theme]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed]);
+
+    // Closing after a declined attempt leaves an unconfirmed intent open —
+    // cancel it so CartScreen's hold release (wired into onClose) isn't
+    // racing a live intent.
+    const handleClose = useCallback(async () => {
+      // Shares the Pay lock so a tap on Pay can't race the cancel.
+      if (processingRef.current) return;
+      const intentId = openIntentRef.current;
+      if (intentId && checkoutBatchId) {
+        processingRef.current = true;
+        setIsProcessing(true);
+        openIntentRef.current = null;
+        try { await cancelPaymentIntent(checkoutBatchId, intentId); }
+        catch (err) {
+          logger.error('[checkout] could not cancel the open payment on close', err);
+          onPaymentPending?.();
+          return;
+        } finally {
+          processingRef.current = false;
+          setIsProcessing(false);
+        }
+      }
+      onClose();
+    }, [checkoutBatchId, onClose, onPaymentPending]);
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
+            {/* The card field brings the keyboard up; keep Pay above it. */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}
+            >
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
@@ -769,14 +839,14 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   accessibilityLabel="Close payment"
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    onClose();
+                    handleClose();
                   }}
                 >
                   <Text style={[styles.paymentCloseText, { color: theme.text }]}>×</Text>
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                   <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Order Summary</Text>
                   {effectiveCartItems.map(({ item, effectivePrice, isDeposit }) => (
@@ -842,24 +912,66 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   </View>
                 )}
 
-                {/* Card entry, Apple Pay, and Google Pay all happen inside
-                    Stripe's own Payment Sheet (opened by the button below) —
-                    never in this component's state. */}
+                {/* Card details are typed into Stripe's own CardField and
+                    wallets open Apple/Google's own sheet — neither ever
+                    passes through this component's state. */}
                 <View style={styles.paymentMethods}>
-                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Payment</Text>
-                  <Text style={[styles.paymentMethodName, { color: P.sub }]}>
-                    Enter your card details securely with Stripe. Available wallet options appear on the next screen.
-                  </Text>
+                  {walletSupported && (
+                    <>
+                      <PlatformPayButton
+                        type={PlatformPay.ButtonType.Default}
+                        appearance={isDarkMode ? PlatformPay.ButtonStyle.White : PlatformPay.ButtonStyle.Black}
+                        borderRadius={dimensions.button.large.borderRadius}
+                        disabled={isProcessing || !canPay}
+                        onPress={() => { handlePayment('wallet'); }}
+                        style={styles.walletButton}
+                      />
+                      <View style={styles.payDivider}>
+                        <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
+                        <Text style={[styles.payDividerText, { color: P.sub }]}>or pay by card</Text>
+                        <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
+                      </View>
+                    </>
+                  )}
+                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Card details</Text>
+                  <CardField
+                    postalCodeEnabled
+                    disabled={isProcessing}
+                    placeholders={{ number: '1234 1234 1234 1234' }}
+                    cardStyle={{
+                      backgroundColor: toArgbHex(P.surface),
+                      borderColor: toArgbHex(P.border),
+                      borderWidth: 1,
+                      borderRadius: 14,
+                      textColor: toArgbHex(theme.text),
+                      placeholderColor: toArgbHex(P.sub),
+                      cursorColor: toArgbHex(P.accent),
+                      textErrorColor: '#FFFF3B30',
+                      fontSize: 15,
+                    }}
+                    onCardChange={details => {
+                      setCardComplete(details.complete);
+                      setPayError(null);
+                    }}
+                    style={styles.cardField}
+                  />
+                  {payError && (
+                    <Text accessibilityRole="alert" style={[styles.paymentMethodName, styles.payErrorText]}>{payError}</Text>
+                  )}
+                  <View style={styles.paySecureRow}>
+                    <Ionicons name="lock-closed" size={12} color={P.sub} />
+                    <Text style={[styles.paySecureText, { color: P.sub }]}>Card details go straight to Stripe</Text>
+                  </View>
                 </View>
               </ScrollView>
 
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: isProcessing || !canPay ? P.accentDim : P.accent }]}
+                style={[styles.payButton, { backgroundColor: isProcessing || !canPay || !cardComplete ? P.accentDim : P.accent }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  handlePayment();
+                  handlePayment('card');
                 }}
-                disabled={isProcessing || !canPay}
+                disabled={isProcessing || !canPay || !cardComplete}
               >
                 {isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
@@ -867,7 +979,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </KeyboardAvoidingView>
           </View>
         </View>
       </Modal>
@@ -5615,6 +5727,47 @@ const styles = StyleSheet.create({
   },
   paymentMethods: {
     marginBottom: spacing.xxl,
+  },
+  walletButton: {
+    height: 48,
+    width: '100%',
+  },
+  payDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginVertical: spacing.lg,
+  },
+  payDividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  payDividerText: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  cardField: {
+    width: '100%',
+    height: 52,
+  },
+  payErrorText: {
+    color: '#E06070',
+    marginTop: spacing.sm,
+  },
+  paySecureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: spacing.md,
+  },
+  paySecureText: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   paymentMethodsTitle: {
     fontSize: fonts.body.large,
