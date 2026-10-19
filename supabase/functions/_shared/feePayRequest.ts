@@ -1,8 +1,8 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
 import type Stripe from 'npm:stripe@17.4.0';
 import { feePaymentRequestEmail } from './emailTemplates.ts';
-import { nextRetryAt } from './feeRetrySchedule.ts';
-export { termsAllowRetries } from './feeRetrySchedule.ts';
+import { isRetryableDecline, nextRetryAt } from './feeRetrySchedule.ts';
+export { isRetryableDecline, termsAllowRetries } from './feeRetrySchedule.ts';
 
 // Late/no-show fees the saved card couldn't pay (user decisions 2026-10-19,
 // migration 20261019170000). The fee becomes a Stripe invoice on the client's
@@ -237,7 +237,17 @@ export async function closeFeeRequest(
       if (!recorded) console.error(`[feePayRequest] invoice ${invoice.id} is paid but fee ${fee.id} couldn't be recorded — check it by hand`);
       return 'paid';
     }
-    if (invoice.status === 'open') await stripe.invoices.voidInvoice(invoice.id);
+    if (invoice.status === 'open') {
+      try {
+        await stripe.invoices.voidInvoice(invoice.id);
+      } catch (err) {
+        // A retry or the client may have paid it a moment ago.
+        const again = await stripe.invoices.retrieve(invoice.id);
+        if (again.status !== 'paid') throw err;
+        if (fee.payment_intent_id) await recordFeePaid(admin, stripe, fee.id, fee.payment_intent_id);
+        return 'paid';
+      }
+    }
   }
   const { error } = await admin.from('booking_fee_charges')
     .update({ status: 'failed', failure_reason: reason, pay_by: null, next_retry_at: null })
@@ -288,55 +298,98 @@ export async function retryDueFees(admin: SupabaseClient, stripe: Stripe, limit:
   let paid = 0;
   let failed = 0;
   for (const fee of due ?? []) {
-    const attempt = (fee.retry_count ?? 0) + 1;
-    if (!fee.stripe_invoice_id || !fee.retry_payment_method_id || !fee.payment_intent_id || !fee.pay_by) {
-      await admin.from('booking_fee_charges').update({ next_retry_at: null }).eq('id', fee.id).eq('status', 'awaiting_client');
-      continue;
-    }
-    let reason: string | null = null;
-    let stopRetrying = false;
     try {
-      const invoice = await stripe.invoices.pay(fee.stripe_invoice_id, {
-        payment_method: fee.retry_payment_method_id,
-        off_session: true,
-      }, { idempotencyKey: `booking_fee_retry_${fee.id}_${attempt}` });
-      if (invoice.status !== 'paid') reason = `invoice ${invoice.status}`;
+      const outcome = await retryOne(admin, stripe, fee);
+      if (outcome === 'paid') paid++;
+      if (outcome === 'failed') failed++;
     } catch (err) {
-      const e = err as { code?: string; type?: string; message?: string };
-      reason = e.code ?? e.type ?? String(err);
-      // The bank wants the client present, or the invoice can't be paid any more.
-      stopRetrying = e.code === 'authentication_required' || e.code === 'invoice_not_editable' || e.type !== 'StripeCardError';
+      // One bad row must not stop the rest; it's picked up again next run.
+      console.error(`[feePayRequest] retry of ${fee.id} errored: ${String(err)}`);
     }
-
-    if (!reason) {
-      const was = await recordFeePaid(admin, stripe, fee.id, fee.payment_intent_id);
-      if (was) {
-        paid++;
-        const { error: notifyError } = await admin.from('notifications').insert({
-          user_id: fee.client_user_id,
-          type: 'fee_charged',
-          title: `${pounds(fee.amount_pence)} ${feeLabel(fee.kind)} charged`,
-          message: `We tried your saved card again and the ${feeLabel(fee.kind)} you agreed to has now been paid. There's nothing more to do. If you think it's wrong, you can dispute it within 7 days.`,
-          priority: 'high',
-          is_actionable: true,
-          booking_id: fee.booking_id,
-          provider_id: fee.provider_id,
-          recipient_role: 'client',
-          metadata: { fee_charge_id: fee.id, amount_pence: fee.amount_pence, kind: fee.kind, retry: attempt },
-        });
-        if (notifyError) console.error(`[feePayRequest] retry-paid notification failed for ${fee.id}: ${String(notifyError.message ?? notifyError)}`);
-      }
-      continue;
-    }
-
-    failed++;
-    const requestedAt = Date.parse(fee.pay_by) - PAY_REQUEST_DAYS * 86_400_000;
-    const { error: updateError } = await admin.from('booking_fee_charges').update({
-      retry_count: attempt,
-      next_retry_at: stopRetrying ? null : nextRetryAt(requestedAt, attempt, Date.parse(fee.pay_by)),
-      failure_reason: `retry ${attempt}: ${reason}`.slice(0, 500),
-    }).eq('id', fee.id).eq('status', 'awaiting_client').eq('retry_count', fee.retry_count ?? 0);
-    if (updateError) console.error(`[feePayRequest] could not record retry ${attempt} on ${fee.id}: ${String(updateError.message ?? updateError)}`);
   }
   return { paid, failed };
+}
+
+interface RetryRow extends FeeRow {
+  stripe_invoice_id: string | null;
+  payment_intent_id: string | null;
+  retry_payment_method_id: string | null;
+  retry_count: number | null;
+  pay_by: string | null;
+}
+
+async function retryOne(admin: SupabaseClient, stripe: Stripe, fee: RetryRow): Promise<'paid' | 'failed' | 'skipped'> {
+  const attempt = (fee.retry_count ?? 0) + 1;
+  if (!fee.stripe_invoice_id || !fee.retry_payment_method_id || !fee.payment_intent_id || !fee.pay_by) {
+    await admin.from('booking_fee_charges').update({ next_retry_at: null }).eq('id', fee.id).eq('status', 'awaiting_client');
+    return 'skipped';
+  }
+  let reason: string | null = null;
+  let stopRetrying = false;
+  try {
+    const invoice = await stripe.invoices.pay(fee.stripe_invoice_id, {
+      payment_method: fee.retry_payment_method_id,
+      off_session: true,
+    }, { idempotencyKey: `booking_fee_retry_${fee.id}_${attempt}` });
+    if (invoice.status !== 'paid') reason = `invoice ${invoice.status}`;
+  } catch (err) {
+    const e = err as { code?: string; decline_code?: string; type?: string };
+    if (e.code === 'invoice_already_paid') {
+      reason = null; // paid another way (the client, or an earlier attempt)
+    } else {
+      reason = [e.code ?? e.type ?? String(err), e.decline_code].filter(Boolean).join('/');
+      stopRetrying = e.type !== 'StripeCardError' || !isRetryableDecline(e.code, e.decline_code);
+    }
+  }
+
+  if (!reason) {
+    const was = await recordFeePaid(admin, stripe, fee.id, fee.payment_intent_id);
+    if (!was) return 'skipped';
+    await notifyClient(admin, fee, 'fee_charged',
+      `${pounds(fee.amount_pence)} ${feeLabel(fee.kind)} charged`,
+      `We tried your saved card again and the ${feeLabel(fee.kind)} you agreed to has now been paid. There's nothing more to do. If you think it's wrong, you can dispute it within 7 days.`,
+      { retry: attempt });
+    return 'paid';
+  }
+
+  const requestedAt = Date.parse(fee.pay_by) - PAY_REQUEST_DAYS * 86_400_000;
+  const next = stopRetrying ? null : nextRetryAt(requestedAt, attempt, Date.parse(fee.pay_by));
+  const { data: updated, error: updateError } = await admin.from('booking_fee_charges').update({
+    retry_count: attempt,
+    next_retry_at: next,
+    failure_reason: `retry ${attempt}: ${reason}`.slice(0, 500),
+  }).eq('id', fee.id).eq('status', 'awaiting_client').eq('retry_count', fee.retry_count ?? 0).select('id');
+  if (updateError) throw updateError;
+  if (!updated?.length) return 'skipped';
+
+  // The fee wording promises a notification whenever a fee is retried.
+  const payByLabel = UK_DAY.format(new Date(fee.pay_by));
+  await notifyClient(admin, fee, 'fee_payment_requested',
+    `Your ${pounds(fee.amount_pence)} ${feeLabel(fee.kind)} is still unpaid`,
+    `We tried your saved card again but it was declined. Open the booking to pay it by ${payByLabel}.${next ? " We'll try your card once more before then." : ''}`,
+    { retry: attempt });
+  return 'failed';
+}
+
+async function notifyClient(
+  admin: SupabaseClient,
+  fee: FeeRow,
+  type: 'fee_charged' | 'fee_payment_requested',
+  title: string,
+  message: string,
+  extra: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await admin.from('notifications').insert({
+    user_id: fee.client_user_id,
+    type,
+    title,
+    message,
+    priority: 'high',
+    is_actionable: true,
+    booking_id: fee.booking_id,
+    provider_id: fee.provider_id,
+    recipient_role: 'client',
+    metadata: { fee_charge_id: fee.id, amount_pence: fee.amount_pence, kind: fee.kind, ...extra },
+  });
+  if (error) console.error(`[feePayRequest] ${type} notification failed for ${fee.id}: ${String(error.message ?? error)}`);
 }

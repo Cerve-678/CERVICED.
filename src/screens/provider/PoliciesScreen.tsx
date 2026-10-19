@@ -358,7 +358,7 @@ export default function PoliciesScreen({ navigation }: any) {
               <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
             </Card>
 
-            <Card title="Late & no-show fees" sub="Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, it's tried again automatically and the client is asked to pay within 7 days. Clients agree to them at checkout. Each fee can be at most half the service price. Leave blank for no fee.">
+            <Card title="Late & no-show fees" sub="Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to them at checkout. Each fee can be at most half the service price. Leave blank for no fee.">
               <Field
                 label="Late arrival fee (£)"
                 value={policies.lateFee}

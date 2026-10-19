@@ -3,7 +3,7 @@ import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { takeBackFromProvider } from '../_shared/takeBack.ts';
-import { closeFeeRequest, recordFeePaid, requestClientPayment, termsAllowRetries } from '../_shared/feePayRequest.ts';
+import { closeFeeRequest, isRetryableDecline, recordFeePaid, requestClientPayment, termsAllowRetries } from '../_shared/feePayRequest.ts';
 
 // Late-arrival and no-show fees (auto-memory late-and-no-show-fees-decision).
 //
@@ -187,7 +187,7 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     }
     // A decline may go through later; a bank that wants the client to approve
     // never will. Retries only where the client's agreed wording allows them.
-    const retryWith = stripeError.code !== 'authentication_required' && termsAllowRetries(consent!.terms_version)
+    const retryWith = isRetryableDecline(stripeError.code, stripeError.decline_code) && termsAllowRetries(consent!.terms_version)
       ? paymentMethod : null;
     return await askClientToPay(row.id, booking, kind, eligibility.amountPence, customerId!,
       stripeError.payment_intent?.id ?? null, stripeError.code ?? 'card_error', retryWith);
