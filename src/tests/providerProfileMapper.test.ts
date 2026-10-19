@@ -31,4 +31,20 @@ describe('mapProviderProfileData', () => {
     expect(images.map(image => image.url)).toEqual(['second.jpg', 'first.jpg']);
     expect(cutServices[0]!.addOns).toEqual([{ id: 'addon-1', name: 'Treatment', price: 10, description: '' }]);
   });
+
+  it('carries the stated payment methods and accessibility tags through for the profile', () => {
+    const result = mapProviderProfileData({
+      slug: 'studio-b',
+      display_name: 'Studio B',
+      service_category: 'Hair',
+      services: [],
+      preferred_payment_methods: ['cash', 'bank_transfer'],
+      accessibility_notes: 'Wheelchair accessible|Parking available',
+    } as any);
+    expect(result.paymentMethods).toEqual(['cash', 'bank_transfer']);
+    expect(result.accessibilityTags).toEqual(['Wheelchair accessible', 'Parking available']);
+
+    const none = mapProviderProfileData({ slug: 's', display_name: 'S', service_category: 'Hair', services: [] } as any);
+    expect(none.paymentMethods).toEqual([]);
+  });
 });

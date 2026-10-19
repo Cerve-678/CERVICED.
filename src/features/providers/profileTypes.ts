@@ -88,6 +88,10 @@ export interface ProviderProfileData {
    *  ACCESSIBILITY_OPTS chip values (see AboutYouScreen.tsx), not free
    *  text — split here so it renders as tags, matching how it's collected. */
   accessibilityTags: string[];
+  /** preferred_payment_methods: canonical lowercase values ('card' | 'cash' |
+   *  'bank_transfer'). A stated preference only — the app never collects,
+   *  tracks or attests to an off-app payment. */
+  paymentMethods: string[];
   languagesSpoken: string[];
   qualifications: string;
   /** Provider's own attestation — Cerviced does not verify either. Always

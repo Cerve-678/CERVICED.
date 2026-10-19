@@ -46,11 +46,13 @@ import {
 import { useAppDialog } from '../../components/AppDialog';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import {
-  Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
+  Card, ChipGroup, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
+  ACCESSIBILITY_OPTS,
   ADDRESS_RELEASE_OPTS,
   BUSINESS_TYPE_OPTS,
+  PAYMENT_OPTS,
   SERVICE_TYPE_OPTS,
   isAddressReleaseAllowed,
   reconcileAddressReleasePolicy,
@@ -99,6 +101,12 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [website, setWebsite]             = useState('');
   const [externalBookingUrl, setExternalBookingUrl] = useState('');
   const [yearsExperience, setYearsExperience] = useState('');
+  // Link-only only. A link-only pro has no About You or Payments screen, so
+  // Business Info is where these two live for them. Same storage as those
+  // screens: accessibility_notes is '|'-joined ACCESSIBILITY_OPTS values,
+  // preferred_payment_methods is canonical lowercase PAYMENT_OPTS values.
+  const [accessibility, setAccessibility]   = useState<string[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -149,6 +157,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setWebsite(providerData.website ?? '');
           setExternalBookingUrl(providerData.external_booking_url ?? '');
           setYearsExperience(providerData.years_experience != null ? String(providerData.years_experience) : '');
+          setAccessibility(providerData.accessibility_notes?.split('|').filter(Boolean) ?? []);
+          setPaymentMethods(providerData.preferred_payment_methods ?? []);
         } else {
           // No providers row yet — a link-only provider can reach this screen
           // before their first Edit Profile save creates one. Show what they
@@ -166,6 +176,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
             setWebsite(signup.website ?? '');
             setExternalBookingUrl(signup.external_booking_url ?? '');
             setYearsExperience(signup.years_experience != null ? String(signup.years_experience) : '');
+            setAccessibility(signup.accessibility_notes?.split('|').filter(Boolean) ?? []);
+            setPaymentMethods(signup.preferred_payment_methods ?? []);
           }
         }
       } catch {
@@ -280,6 +292,14 @@ export default function BusinessInfoScreen({ navigation }: any) {
 
       const ops: Promise<void>[] = [];
 
+      // Only a link-only pro edits these here; everyone else edits them in
+      // About You / Payments, so they're never written from this screen.
+      const linkOnlyFields = {
+        external_booking_url: normalizedBookingUrl,
+        accessibility_notes: accessibility.length ? accessibility.join('|') : null,
+        preferred_payment_methods: paymentMethods,
+      };
+
       const trimmedName = businessName.trim();
       const nameChanged = trimmedName.length > 0 && trimmedName !== savedName;
 
@@ -308,7 +328,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           email: bookingEmail.trim() || null,
           instagram: instagram.trim() || null,
           website: website.trim() || null,
-          ...(isLinkOnly ? { external_booking_url: normalizedBookingUrl } : {}),
+          ...(isLinkOnly ? linkOnlyFields : {}),
           years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
         }));
       } else if (userId) {
@@ -318,7 +338,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
           instagram: instagram.trim() || null,
           website: website.trim() || null,
-          ...(isLinkOnly ? { external_booking_url: normalizedBookingUrl } : {}),
+          ...(isLinkOnly ? linkOnlyFields : {}),
         }));
       }
 
@@ -551,6 +571,32 @@ export default function BusinessInfoScreen({ navigation }: any) {
               </Card>
             )}
 
+            {isLinkOnly && (
+              <Card title="Accessibility" sub="Help clients with access needs find you.">
+                <ChipGroup
+                  options={ACCESSIBILITY_OPTS}
+                  selected={accessibility}
+                  onToggle={v => setAccessibility(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+                />
+              </Card>
+            )}
+
+            {isLinkOnly && (
+              <Card title="Payment Methods" sub="Shown on your profile so clients know how they can pay you.">
+                <ChipGroup
+                  options={PAYMENT_OPTS.map(o => o.label)}
+                  selected={PAYMENT_OPTS.filter(o => paymentMethods.includes(o.value)).map(o => o.label)}
+                  onToggle={label => {
+                    const opt = PAYMENT_OPTS.find(o => o.label === label);
+                    if (!opt) return;
+                    setPaymentMethods(prev =>
+                      prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value],
+                    );
+                  }}
+                />
+              </Card>
+            )}
+
             {/* A provider's own client-facing Terms & Conditions are authored
                 as a FORM (booking_intake_forms, is_terms) via the
                 ProviderIntakeForm builder, and their only entry point is now
@@ -563,7 +609,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 canonical lowercase preferred_contact_methods write path. This
                 card used to re-implement it with mismatched capitalized chip
                 labels, silently desyncing what clients' contact sheets check —
-                link out rather than duplicating the writer again. */}
+                link out rather than duplicating the writer again. Not shown
+                to a link-only pro (owner's call, 2026-10-19) — their Business
+                Info carries Accessibility and Payment Methods instead. */}
+            {!isLinkOnly && (
             <TouchableOpacity
               style={[s.card, { backgroundColor: C.surface, borderColor: C.border, flexDirection: 'row', alignItems: 'center' }]}
               onPress={() => navigation.navigate('Communications')}
@@ -575,6 +624,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.sub} />
             </TouchableOpacity>
+            )}
 
             <SaveButton saving={saving} onPress={handleSave} />
           </ScrollView>
