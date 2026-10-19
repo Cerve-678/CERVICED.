@@ -434,10 +434,18 @@ export async function saveProviderToSupabase(
   // required for every business_type now, including 'mobile' (a private base
   // address, never shown to clients). Fails fast, before any upload or DB
   // write, so a bad address never leaves partial state behind.
-  const addressCoords = await geocodeAndValidateUkAddress(
-    data.fullAddress || '',
-    data.fullAddressCoordinates,
-  );
+  //
+  // Except for a link-only provider (booking_mode 'external'): their bookings
+  // happen on their own page, so CERVICED never releases an address to a
+  // client and Edit Profile never asks for one. Requiring it here made their
+  // profile impossible to save.
+  const isLinkOnly = data.bookingMode === 'external';
+  const addressCoords = isLinkOnly
+    ? null
+    : await geocodeAndValidateUkAddress(
+        data.fullAddress || '',
+        data.fullAddressCoordinates,
+      );
 
   // 1. Upload logo if it's a local file. Path is versioned with Date.now()
   // (matching the pattern already used for portfolio/promotions uploads)
@@ -669,12 +677,16 @@ export async function saveProviderToSupabase(
   // clients on every browse. See restrict_provider_full_address.sql. Real
   // coordinates come from the validation at the top of this function (step 0)
   // — see require_provider_address.sql for how they're used.
-  await setMyProviderFullAddress(
-    providerId,
-    data.fullAddress || null,
-    addressCoords.latitude,
-    addressCoords.longitude
-  );
+  // Skipped for link-only (no address asked) — and not cleared either, so a
+  // provider who switched to link-only keeps the address they had on file.
+  if (addressCoords) {
+    await setMyProviderFullAddress(
+      providerId,
+      data.fullAddress || null,
+      addressCoords.latitude,
+      addressCoords.longitude
+    );
+  }
 
   // 3. Update user role to 'provider'
   await promoteUserToProvider(userId);

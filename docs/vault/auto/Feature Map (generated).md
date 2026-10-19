@@ -12,8 +12,8 @@ Curated: [[Address Release]] · **90 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(79)_
+- `src/services/providerRegistrationService.ts` _(66)_
 - `src/screens/client/CartScreen.tsx` _(65)_
-- `src/services/providerRegistrationService.ts` _(62)_
 - `src/contexts/BookingContext.tsx` _(53)_
 - `src/components/AddressPicker.tsx` _(47)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
