@@ -121,6 +121,10 @@ their Stripe transfer is reversed. If their Stripe balance can't cover it
   amounts per provider, and app platform/version. `create-payment-intent` won't
   save the card off-session without it; `booking-fee` won't charge unless the
   record covers that provider, and stores the record's id on the charge.
+  Records are kept six years, including after account deletion (19 Oct); no
+  purge job yet. A client can't remove a saved card while a booking paid with
+  it is inside its 24-hour fee window (`client-saved-cards` returns
+  `card_needed_for_fee`).
   Changing the wording means a new `fee_terms_versions` row and a bump of
   `FEE_TERMS_VERSION` / `FEE_TERMS_SHA256` (`feeTerms.test.ts` enforces it).
 - The provider can charge **once, within 24 hours** of the appointment ending.
@@ -156,6 +160,8 @@ estimate of loss, not a penalty.
 | Who chooses payout timing | The provider: 24h, 3, 7, 14 or 30 days (18 Oct). Stripe's bank schedule stays default |
 | Late and no-show fees | In-app, 50% cap, 24h window, no CERVICED cut (13 Oct) |
 | Fee disputes | Go to the provider, not CERVICED |
+| Fee consent records | Kept six years, including after account deletion (19 Oct) |
+| Removing a card a fee may need | Blocked until 24h after the appointment (19 Oct) |
 | Refund requests | Go to the provider first, then Cerviced if passed on |
 | Payout while a refund request is open | Held until it closes (18 Oct) |
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |

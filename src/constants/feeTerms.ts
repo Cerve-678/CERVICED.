@@ -14,15 +14,17 @@ export const FEE_TERMS_BODY =
 
 /** The tick-box line at checkout. */
 export const FEE_CONSENT_LINE =
-  'I agree to these fees and to the Late Arrival & No-Show Fees terms, and that my card will be saved so the provider can charge an agreed fee within 24 hours of my appointment.';
+  'I agree that CERVICED may save this card with Stripe and, if the provider records that I arrived more than the stated grace period late or did not attend, may charge this card the applicable fee shown above. ' +
+  'Each fee is for this booking only, is charged no later than 24 hours after the appointment ends, and will not exceed the amount shown. ' +
+  'I can dispute a charged fee in the app within 7 days; the provider will review the dispute and may refund or keep the fee. This does not affect my statutory rights.';
 
 /** Which wording the client agreed to. The database keeps the full text of each
  *  version (fee_terms_versions) and every agreement names one, so a consent
  *  record proves exactly what the client was shown. Changing any of the three
  *  strings above means a NEW version: a new fee_terms_versions row in a
  *  migration, then bump these two. feeTerms.test.ts fails until both match. */
-export const FEE_TERMS_VERSION = '2026-10-18';
+export const FEE_TERMS_VERSION = '2026-10-19';
 
 /** sha256 of heading, body and consent line joined by blank lines. The
  *  database refuses an agreement whose hash doesn't match the version's text. */
-export const FEE_TERMS_SHA256 = 'fcd24a7aba9846a53c749370735af8ae6eeb457074e067ba6b00a440cf545f8f';
+export const FEE_TERMS_SHA256 = '44b1d39d81d6e8dcf1907b33ff4cfd4843c5ce7ae51071a00592b83c5fb654c6';
