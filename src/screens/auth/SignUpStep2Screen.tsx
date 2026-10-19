@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import SignUpHeader from '../../components/SignUpHeader';
-import { FieldRow, FormCard, PrimaryButton, ScreenTitle, useFieldInputStyle } from '../../components/signup/FormKit';
+import { DobField, FieldRow, FormCard, PrimaryButton, ScreenTitle, useFieldInputStyle, useSuccessColors } from '../../components/signup/FormKit';
 import { Ionicons } from '@expo/vector-icons';
 import { validateEmail, validatePassword, validatePhone, validateDob } from '../../utils/validation';
 import { PasswordRequirements } from '../../components/PasswordRequirements';
@@ -49,7 +49,6 @@ export default function SignUpStep2Screen({ navigation }: Props) {
   const [dobDay, setDobDay] = useState(data.dobDay);
   const [dobMonth, setDobMonth] = useState(data.dobMonth);
   const [dobYear, setDobYear] = useState(data.dobYear);
-  const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showPassword, setShowPassword] = useState(false);
 
@@ -79,12 +78,10 @@ export default function SignUpStep2Screen({ navigation }: Props) {
 
   const markTouched = (field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
-    setErrors(validate());
   };
 
   const handleContinue = () => {
     const errs = validate();
-    setErrors(errs);
     setTouched({ name: true, email: true, phone: true, password: true, dob: true });
     if (Object.keys(errs).length > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -129,6 +126,9 @@ export default function SignUpStep2Screen({ navigation }: Props) {
   };
 
   const inputStyle = useFieldInputStyle();
+  const success = useSuccessColors();
+  // Recomputed every render so an error clears the moment it's fixed.
+  const errors = validate();
   const fieldError = (field: keyof FormErrors) => (touched[field] ? errors[field] : undefined);
 
   return (
@@ -167,27 +167,11 @@ export default function SignUpStep2Screen({ navigation }: Props) {
             {/* Providers only; client DOB is collected on Step 3 */}
             {isProvider && (
               <FieldRow label="DATE OF BIRTH" error={fieldError('dob')}>
-                <View style={styles.dobRow}>
-                  {[
-                    { value: dobDay, set: setDobDay, ph: 'DD', max: 2, width: 34 },
-                    { value: dobMonth, set: setDobMonth, ph: 'MM', max: 2, width: 34 },
-                    { value: dobYear, set: setDobYear, ph: 'YYYY', max: 4, width: 56 },
-                  ].map((f, i) => (
-                    <View key={f.ph} style={styles.dobPart}>
-                      {i > 0 && <Text style={[styles.dobSlash, { color: t.sub }]}>/</Text>}
-                      <TextInput
-                        style={[inputStyle, { width: f.width }]}
-                        value={f.value}
-                        onChangeText={v => { if (v.length <= f.max) f.set(v.replace(/[^0-9]/g, '')); }}
-                        onBlur={() => markTouched('dob')}
-                        placeholder={f.ph}
-                        placeholderTextColor={t.sub}
-                        keyboardType="number-pad"
-                        maxLength={f.max}
-                      />
-                    </View>
-                  ))}
-                </View>
+                                <DobField
+                  value={{ day: dobDay, month: dobMonth, year: dobYear }}
+                  onChange={next => { setDobDay(next.day); setDobMonth(next.month); setDobYear(next.year); }}
+                  onDone={() => markTouched('dob')}
+                />
               </FieldRow>
             )}
           </FormCard>
@@ -215,7 +199,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
                   />
                 </FieldRow>
                 <View style={styles.rules}>
-                  <PasswordRequirements password={password} layout="chips" goodColor={t.accentText} goodFill={t.accentDim} pendingColor={t.sub} />
+                  <PasswordRequirements password={password} layout="chips" goodColor={success.text} goodFill={success.fill} pendingColor={t.sub} />
                 </View>
               </View>
             </FormCard>
@@ -237,9 +221,6 @@ export default function SignUpStep2Screen({ navigation }: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { paddingHorizontal: 16, flexGrow: 1 },
-  dobRow: { flexDirection: 'row', alignItems: 'center' },
-  dobPart: { flexDirection: 'row', alignItems: 'center' },
-  dobSlash: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '600', marginHorizontal: 6 },
   passwordCard: { marginTop: 12 },
   passwordInner: { paddingBottom: 12 },
   rules: { paddingHorizontal: 16, marginTop: -6 },
