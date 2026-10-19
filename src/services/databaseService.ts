@@ -1782,6 +1782,40 @@ export async function getDiscoverServices(
 }
 
 /**
+ * How many cards Explore's feed holds for a filter in total, not just the
+ * pages loaded so far: every portfolio item getPortfolioItems would return,
+ * plus one card per photo of every service getDiscoverServices would return
+ * (mapDbServiceToCards makes a card per photo). Head-only counts, so no rows
+ * come back. Same filters as those two queries, own work included, as Explore
+ * passes excludeOwnProvider: false.
+ */
+export async function getDiscoverFeedTotal(category?: string): Promise<number> {
+  let portfolioQuery = supabase
+    .from("portfolio_items")
+    .select("id, provider: providers!inner ( id )", { count: "exact", head: true })
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`);
+  let imageQuery = supabase
+    .from("service_images")
+    .select(
+      "service_id, service: services!inner ( id, provider: providers!inner ( id ) )",
+      { count: "exact", head: true },
+    )
+    .eq("service.is_active", true)
+    .eq("service.provider.is_active", true)
+    .eq("service.provider.has_gone_live", true);
+  if (category && category !== "All") {
+    portfolioQuery = portfolioQuery.eq("category", category.toUpperCase());
+    imageQuery = imageQuery.eq("service.service_category", category.toUpperCase());
+  }
+  const [portfolio, images] = await Promise.all([portfolioQuery, imageQuery]);
+  if (portfolio.error) throw portfolio.error;
+  if (images.error) throw images.error;
+  return (portfolio.count ?? 0) + (images.count ?? 0);
+}
+
+/**
  * Provider ids with at least one active service tagged `audience`, WITHOUT
  * requiring a photo. Deliberately separate from getDiscoverServices (which
  * !inner-joins service_images for its photo feed): a provider whose new
