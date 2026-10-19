@@ -8072,6 +8072,7 @@ export async function updateMyStagedProviderAnswers(
     website: string | null;
     accessibility_notes?: string | null;
     preferred_payment_methods?: string[] | null;
+    business_type?: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase
