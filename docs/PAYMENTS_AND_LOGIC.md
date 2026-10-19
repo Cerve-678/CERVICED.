@@ -25,7 +25,7 @@ Last updated: 18 October 2026.
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
-| Client asked to pay a fee the card couldn't | No | Branch `feat/fee-pay-request`: migration 20261019170000 unapplied; `booking-fee`, `stripe-webhook`, `release-payouts` undeployed |
+| Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
 | Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
 
 ---
@@ -177,7 +177,7 @@ estimate of loss, not a penalty.
   platform can delay transfers. Ask a solicitor and Stripe before the 14/30-day
   options go live.
 - Late/no-show fee payouts aren't netted against shortfalls.
-- (Branch `feat/fee-pay-request`, not live.) A fee the saved card can't pay
+- A fee the saved card can't pay
   (declined, or the bank wants the client to approve it) becomes a Stripe
   invoice on the client's Customer, open 7 days. The client pays it from the
   booking (payment sheet) or the emailed Stripe page; both pay the invoice's one
