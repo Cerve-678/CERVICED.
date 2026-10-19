@@ -324,7 +324,12 @@ async function clientPayment(userId: string, chargeId: string, action: 'pay' | '
     if (fee.status === 'succeeded') return json({ status: 'paid' }, 200);
     if (fee.status !== 'awaiting_client' || !fee.payment_intent_id) return json({ error: 'This fee has nothing to pay.' }, 409);
     const was = await recordFeePaid(admin, stripe, fee.id, fee.payment_intent_id);
-    return was ? json({ status: 'paid' }, 200) : json({ error: "Your payment hasn't come through yet. Please check again shortly." }, 409);
+    if (was) return json({ status: 'paid' }, 200);
+    // The webhook may have recorded it in the meantime.
+    const { data: now } = await admin.from('booking_fee_charges').select('status').eq('id', fee.id).maybeSingle();
+    return now?.status === 'succeeded'
+      ? json({ status: 'paid' }, 200)
+      : json({ error: "Your payment hasn't come through yet. Please check again shortly." }, 409);
   }
 
   if (fee.status === 'succeeded') return json({ code: 'fee_already_paid', error: 'This fee has already been paid.' }, 409);

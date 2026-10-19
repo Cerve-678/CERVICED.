@@ -153,10 +153,15 @@ export async function recordFeePaid(
     .eq('id', feeId).maybeSingle();
   if (error) throw error;
   if (!fee || (fee.status !== 'processing' && fee.status !== 'awaiting_client')) return null;
-  if (fee.payment_intent_id && fee.payment_intent_id !== intentId) return null;
+  // Only the payment bound to this fee row counts — never one matched by amount.
+  if (!fee.payment_intent_id || fee.payment_intent_id !== intentId) return null;
 
   const intent = await stripe.paymentIntents.retrieve(intentId, { expand: ['latest_charge.balance_transaction'] });
-  if (intent.status !== 'succeeded' || intent.amount_received !== fee.amount_pence) return null;
+  if (intent.status !== 'succeeded' || intent.amount_received !== fee.amount_pence ||
+      intent.currency !== 'gbp' || intent.metadata?.fee_charge_id !== fee.id) {
+    console.error(`[feePayRequest] intent ${intentId} doesn't match fee ${fee.id}; not recorded`);
+    return null;
+  }
 
   // CERVICED takes no cut: only Stripe's actual card fee comes off.
   const charge = intent.latest_charge as Stripe.Charge | null;
@@ -215,7 +220,10 @@ export async function closeFeeRequest(
   if (fee.stripe_invoice_id) {
     const invoice = await stripe.invoices.retrieve(fee.stripe_invoice_id);
     if (invoice.status === 'paid') {
-      if (fee.payment_intent_id) await recordFeePaid(admin, stripe, fee.id, fee.payment_intent_id);
+      const recorded = fee.payment_intent_id ? await recordFeePaid(admin, stripe, fee.id, fee.payment_intent_id) : null;
+      // Paid some other way (e.g. a Stripe customer credit balance): no card
+      // payment to record, so it needs a person to look at it.
+      if (!recorded) console.error(`[feePayRequest] invoice ${invoice.id} is paid but fee ${fee.id} couldn't be recorded — check it by hand`);
       return 'paid';
     }
     if (invoice.status === 'open') await stripe.invoices.voidInvoice(invoice.id);
