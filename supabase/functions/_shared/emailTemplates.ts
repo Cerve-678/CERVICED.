@@ -1269,3 +1269,46 @@ export function generalWelcomeEmail(params: {
 </html>`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Fee payment request — the saved card couldn't be charged
+// ---------------------------------------------------------------------------
+// Sent when a provider's late-arrival or no-show fee was declined by the
+// client's bank, or the bank wants the client to approve it. The button goes
+// to Stripe's own page for the fee's invoice; the same fee can also be paid
+// from the booking in the app, and it can only be paid once.
+export function feePaymentRequestEmail(params: {
+  name?: string;
+  amount: string;
+  feeLabel: string;
+  providerName: string;
+  service: string;
+  payBy: string;
+  payUrl: string;
+}) {
+  const first = firstNameOf(params.name);
+  const P = CLIENT;
+  const e = {
+    amount: esc(params.amount),
+    feeLabel: esc(params.feeLabel),
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    payBy: esc(params.payBy),
+  };
+  return {
+    subject: `Please pay your ${params.amount} ${params.feeLabel} to ${params.providerName}`,
+    html: letter(P, {
+      preview: `${e.providerName} couldn't take the ${e.feeLabel} from your saved card. Pay it by ${e.payBy}.`,
+      content:
+        eyebrow(P, 'Fee to pay') +
+        headline(P, `${first ? `${esc(first)}, your` : 'Your'} ${e.amount} ${e.feeLabel}`) +
+        lede(
+          P,
+          `${e.providerName} tried to charge the ${e.feeLabel} you agreed to when you booked ${e.service}, but your bank declined it or needs you to approve it. Nothing has been taken.`,
+        ) +
+        note(P, `Please pay it by ${e.payBy}. You can pay below, or from the booking in the CERVICED app. If you think the fee is wrong, contact ${e.providerName} in the app.`) +
+        button(P, esc(params.payUrl), `Pay ${e.amount}`) +
+        appHint(P),
+    }),
+  };
+}

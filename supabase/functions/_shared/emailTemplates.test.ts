@@ -19,6 +19,7 @@ import {
   claimVerificationEmail,
   clientHatAddedEmail,
   clientWelcomeEmail,
+  feePaymentRequestEmail,
   generalWelcomeEmail,
   LINK_ONLY_GO_LIVE_STEPS,
   linkOnlyClientHatAddedEmail,
@@ -251,5 +252,24 @@ describe('booking confirmation money', () => {
     expect(two.subject).toBe("You're 2 steps from going live on CERVICED");
     expect(two.html).toContain('Write your About');
     expect(two.html).not.toContain('Set your opening hours');
+  });
+});
+
+describe('fee payment request email', () => {
+  const base = {
+    name: 'Sam Lee', amount: '£15.00', feeLabel: 'no-show fee', providerName: AMPERSAND,
+    service: 'Classic lash full set', payBy: 'Mon 26 Oct',
+    payUrl: 'https://invoice.stripe.com/i/acct_1/test_abc?s=ap&x=1',
+  };
+
+  it('names the amount and provider in a plain-text subject', () => {
+    expect(feePaymentRequestEmail(base).subject).toBe('Please pay your £15.00 no-show fee to Curls&Co');
+  });
+
+  it('escapes every caller value in the body, including the link', () => {
+    const { html } = feePaymentRequestEmail({ ...base, providerName: HOSTILE, service: HOSTILE });
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('href="https://invoice.stripe.com/i/acct_1/test_abc?s=ap&amp;x=1"');
+    expect(html).toContain('Mon 26 Oct');
   });
 });

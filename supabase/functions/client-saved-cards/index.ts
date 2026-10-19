@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import {
   findStripeCustomer,
@@ -167,7 +167,7 @@ const FEE_CARD_BOOKING_LIMIT = 50;
 /** The latest moment `paymentMethodId` is still needed for an agreed fee on
  *  one of the client's bookings, or null if it isn't. */
 async function feeCardNeededUntil(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   userId: string,
   paymentMethodId: string,
 ): Promise<number | null> {
