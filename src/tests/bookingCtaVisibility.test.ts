@@ -14,28 +14,9 @@ const at = (over: Partial<BookingCtaInput>): boolean =>
   shouldShowBookingCta({ ...base, ...over });
 
 describe("booking CTA visibility on a provider profile", () => {
-  describe("the reported bug: the Book button must arrive WITH the card", () => {
-    it("shows the CTA on the first paint, before the per-profile check returns", () => {
-      // This is the exact frame the bug lived in. getProviderBySlug has just
-      // resolved, so the service cards are rendering and providerDbId is set.
-      // getProviderProfileViewerContext has NOT returned — it is a whole round
-      // trip behind, chained after the provider fetch. Previously the gate was
-      // `viewerChecked && !isOwnProvider`, so this frame rendered no booking
-      // controls at all and they popped in later.
-      expect(at({ viewerChecked: false })).toBe(true);
-    });
-
-    it("still shows it for a provider viewing a DIFFERENT provider's profile", () => {
-      expect(
-        at({ viewerChecked: false, myProviderId: "my-own-other-profile" }),
-      ).toBe(true);
-    });
-
-    it("does not depend on the per-profile check to reach that state", () => {
-      // Same input, only the slow check's arrival differs. The answer must not
-      // change when it lands — otherwise the button would visibly appear or
-      // disappear mid-load, which is the glitch in another form.
-      expect(at({ viewerChecked: false })).toBe(at({ viewerChecked: true }));
+  describe("ownership is fail-closed", () => {
+    it("withholds the CTA until the per-profile ownership check returns", () => {
+      expect(at({ viewerChecked: false })).toBe(false);
     });
   });
 
@@ -73,15 +54,9 @@ describe("booking CTA visibility on a provider profile", () => {
       ).toBe(false);
     });
 
-    it("falls back to exactly the old behaviour when the session lookup failed", () => {
-      // On the failed path the gate must reduce to `viewerChecked && !isOwnProvider`.
-      for (const viewerChecked of [true, false]) {
-        for (const isOwnProvider of [true, false]) {
-          expect(
-            at({ myProviderIdStatus: "failed", viewerChecked, isOwnProvider }),
-          ).toBe(viewerChecked && !isOwnProvider);
-        }
-      }
+    it("allows another profile after a failed session lookup only once the viewer check confirms it", () => {
+      expect(at({ myProviderIdStatus: "failed", viewerChecked: true, isOwnProvider: false })).toBe(true);
+      expect(at({ myProviderIdStatus: "failed", viewerChecked: false, isOwnProvider: false })).toBe(false);
     });
   });
 
@@ -94,9 +69,7 @@ describe("booking CTA visibility on a provider profile", () => {
 
     it("never treats a null profile id as matching a null owned id", () => {
       // Both null must not read as "these are the same profile".
-      expect(
-        at({ providerDbId: null, myProviderId: null, viewerChecked: true }),
-      ).toBe(true);
+      expect(at({ providerDbId: null, myProviderId: null, viewerChecked: true })).toBe(false);
     });
   });
 });

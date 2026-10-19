@@ -83,10 +83,20 @@ import { logger } from '../../utils/logger';
 // virtualized list it mounts every item it receives. Feed it a window that
 // grows near the end so opening Explore does not decode and render an entire
 // discovery catalogue before the first frame is useful.
-const INITIAL_EXPLORE_ITEMS = 24;
+const INITIAL_EXPLORE_ITEMS = 20;
 const EXPLORE_BATCH_SIZE = 18;
 const LOAD_MORE_THRESHOLD = 900;
 const LOAD_MORE_COOLDOWN_MS = 300;
+// Only the first viewport belongs on the critical path. Further source pages
+// are fetched as the client reaches the end of this initial window.
+const DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20;
+const DISCOVER_INITIAL_SERVICE_LIMIT = 10;
+
+type DiscoverPageCursor = {
+  portfolioOffset: number;
+  serviceOffset: number;
+  hasMore: boolean;
+};
 
 function isNearGridEnd(event: NativeSyntheticEvent<NativeScrollEvent>): boolean {
   const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -329,6 +339,7 @@ const ExploreScreen = memo(() => {
   const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
   const [discoverVisibleCount, setDiscoverVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
   const discoverLoadMoreAtRef = useRef(0);
+  const discoverPageLoadingRef = useRef(false);
   const favouritesLoadMoreAtRef = useRef(0);
 
   useEffect(() => {
@@ -353,6 +364,7 @@ const ExploreScreen = memo(() => {
   // since writing it must never itself trigger a render. Pull-to-refresh is
   // the only thing allowed to discard an entry and force a fresh shuffle.
   const discoverFeedCache = useRef<Map<string, PortfolioItem[]>>(new Map());
+  const discoverPageCursors = useRef<Map<string, DiscoverPageCursor>>(new Map());
 
   // Map a Supabase portfolio row to the local PortfolioItem shape
   const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => {
@@ -459,10 +471,8 @@ const ExploreScreen = memo(() => {
       Promise.all([
         // Explore is a browse surface, including for providers viewing their
         // own public work. Do not hide a provider's images from this feed.
-        // The result count is the real discover catalogue, not an arbitrary
-        // source window. MasonryGrid still mounts cards progressively below.
-        getPortfolioItems(category, null, { excludeOwnProvider: false }),
-        getDiscoverServices(category, null, undefined, { excludeOwnProvider: false }),
+        getPortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT, { excludeOwnProvider: false }),
+        getDiscoverServices(category, DISCOVER_INITIAL_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
       ]),
       8_000,
       'Explore feed',
@@ -491,7 +501,79 @@ const ExploreScreen = memo(() => {
       serviceCards.filter(c => keep.has(c.id)),
     );
     discoverFeedCache.current.set(filter, feed);
+    discoverPageCursors.current.set(filter, {
+      portfolioOffset: portfolioData.length,
+      serviceOffset: serviceData.length,
+      hasMore:
+        portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
+        serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+    });
     return feed;
+  }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
+
+  const loadNextDiscoverPage = useCallback(async (filter: string) => {
+    const cursor = discoverPageCursors.current.get(filter);
+    if (!cursor?.hasMore || discoverPageLoadingRef.current) return;
+
+    const category = filter !== 'All' ? filterMap[filter] : undefined;
+    discoverPageLoadingRef.current = true;
+    try {
+      const [portfolioData, serviceData] = await withTimeout(
+        Promise.all([
+          getPortfolioItems(
+            category,
+            DISCOVER_INITIAL_PORTFOLIO_LIMIT,
+            { excludeOwnProvider: false },
+            cursor.portfolioOffset,
+          ),
+          getDiscoverServices(
+            category,
+            DISCOVER_INITIAL_SERVICE_LIMIT,
+            undefined,
+            { excludeOwnProvider: false },
+            cursor.serviceOffset,
+          ),
+        ]),
+        8_000,
+        'More Explore results',
+      );
+
+      discoverPageCursors.current.set(filter, {
+        portfolioOffset: cursor.portfolioOffset + portfolioData.length,
+        serviceOffset: cursor.serviceOffset + serviceData.length,
+        hasMore:
+          portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
+          serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+      });
+
+      setPortfolioItems(existing => {
+        const knownUris = new Set(
+          existing
+            .map(card => (card.image as { uri?: string } | undefined)?.uri)
+            .filter((uri): uri is string => Boolean(uri)),
+        );
+        const portfolioCards = portfolioData.map(mapDbPortfolioItem);
+        const serviceCards = serviceData.flatMap(mapDbServiceToCards);
+        const nextCards = interleaveDiscoverFeed(portfolioCards, serviceCards)
+          .filter(card => {
+            const uri = (card.image as { uri?: string } | undefined)?.uri;
+            if (!uri || knownUris.has(uri)) return false;
+            knownUris.add(uri);
+            return true;
+          });
+        const updated = [...existing, ...nextCards];
+        discoverFeedCache.current.set(filter, updated);
+        return updated;
+      });
+      // The user has already reached the end of the rendered window. Reveal
+      // the first part of this newly-arrived page immediately instead of
+      // requiring a second scroll gesture after the network response.
+      setDiscoverVisibleCount(current => current + EXPLORE_BATCH_SIZE);
+    } catch (error) {
+      logger.warn('Failed to load more Explore results:', error);
+    } finally {
+      discoverPageLoadingRef.current = false;
+    }
   }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
 
   // Fetch the mixed discovery feed whenever the category filter changes —
@@ -535,6 +617,7 @@ const ExploreScreen = memo(() => {
   // and re-fetches, leaving every other filter's cached order untouched.
   const handleRefreshDiscover = useCallback(() => {
     discoverFeedCache.current.delete(selectedFilter);
+    discoverPageCursors.current.delete(selectedFilter);
     // A refresh replaces the feed rather than extending the current one.
     // Return to the lightweight initial window so a deeply-scrolled session
     // does not mount the same large card count against all-new image URLs.
@@ -688,15 +771,19 @@ const ExploreScreen = memo(() => {
   const handleDiscoverScrollSettled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
-      if (discoverVisibleCount >= portfolioItems.length || !isNearGridEnd(event)) return;
+      if (!isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - discoverLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
       discoverLoadMoreAtRef.current = now;
+      if (discoverVisibleCount >= portfolioItems.length) {
+        void loadNextDiscoverPage(selectedFilter);
+        return;
+      }
       setDiscoverVisibleCount(current =>
         Math.min(portfolioItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [discoverVisibleCount, portfolioItems.length],
+    [discoverVisibleCount, portfolioItems.length, loadNextDiscoverPage, selectedFilter],
   );
 
   const handleFavouritesScrollSettled = useCallback(
