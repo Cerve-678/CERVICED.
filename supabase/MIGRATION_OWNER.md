@@ -22,15 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-18 (session 204a4991), claimed 2026-10-19 for
-        20261019120000_saved_cards_and_fee_consent_records.sql
+OWNER:  (none)
 ```
 
-### PENDING APPLY 2026-10-19 (saved cards + fee consent records)
+### Applied 2026-10-19 (saved cards + fee consent records)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261019120000 | `saved_cards_and_fee_consent_records` | **Written, NOT applied** (branch `feat/saved-cards-fee-consent-record`). Frontier at authoring: `20261019011825` (`client_stripe_customer_id`, applied 2026-10-19 by another session; file added as `20261019011825_client_stripe_customer_id.sql`). New `client_stripe_customers` (service role only), `fee_terms_versions` (seeded '2026-10-18', sha256 by trigger), `fee_consent_records` (own-row read), `booking_fee_charges.fee_consent_record_id`; replaces `accept_checkout_fees(uuid)` with the five-argument version. Paste into the SQL editor, record the version, then deploy `client-saved-cards`, `create-payment-intent`, `booking-fee` from the same branch. Release this lock once applied. |
+| 20261019120000 | `saved_cards_and_fee_consent_records` | **APPLIED 2026-10-19** by the user pasting it into the SQL editor; version recorded by hand. Verified live: three tables, `fee_terms_versions` sha256 = app's, 5-arg `accept_checkout_fees` with the changed-fees guard, `booking_fee_charges.fee_consent_record_id`. `client-saved-cards` v1, `create-payment-intent` v16, `booking-fee` v3 deployed from the branch. Frontier at authoring: `20261019011825` (`client_stripe_customer_id`, applied 2026-10-19 by another session; file added as `20261019011825_client_stripe_customer_id.sql`). New `client_stripe_customers` (service role only), `fee_terms_versions` (seeded '2026-10-18', sha256 by trigger), `fee_consent_records` (own-row read), `booking_fee_charges.fee_consent_record_id`; replaces `accept_checkout_fees(uuid)` with the five-argument version. Paste into the SQL editor, record the version, then deploy `client-saved-cards`, `create-payment-intent`, `booking-fee` from the same branch. |
 
 ### Applied 2026-10-18 (link-only providers)
 
