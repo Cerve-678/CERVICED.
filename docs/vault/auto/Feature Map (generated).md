@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **90 files**
 - … +60 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **171 files**
+Curated: [[Availability & Slots]] · **170 files**
 - `src/services/AvailabilityService.ts` _(333)_
 - `src/services/databaseService.ts` _(272)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **171 files**
 - `src/types/database.ts` _(21)_
 - `src/screens/client/BookingsScreen.tsx` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- … +141 more
+- … +140 more
 
 ## Payments
 Curated: [[Payments]] · **136 files**
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **136 files**
 - … +106 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **280 files**
+Curated: [[Booking Flow]] · **279 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/services/databaseService.ts` _(838)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -139,10 +139,10 @@ Curated: [[Booking Flow]] · **280 files**
 - `src/services/becca/engine.ts` _(92)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +250 more
+- … +249 more
 
 ## Notifications
-Curated: [[Notifications]] · **168 files**
+Curated: [[Notifications]] · **167 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(307)_
 - `src/services/databaseService.ts` _(174)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **168 files**
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `src/i18n/catalogs/en.ts` _(24)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
-- … +138 more
+- … +137 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **79 files**
@@ -188,7 +188,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **79 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(14)_
 - `supabase/require_provider_address.sql` _(13)_
-- `src/screens/provider/LinkOnlyHomeScreen.tsx` _(12)_
+- `src/screens/provider/LinkOnlyHomeScreen.tsx` _(11)_
 - `supabase/provider_schedule_gating.sql` _(10)_
 - `supabase/dev_reset_provider.sql` _(8)_
 - `src/services/becca/capabilities/client.ts` _(6)_

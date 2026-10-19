@@ -20,12 +20,12 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 
 > **Default is "yes" (product owner, 2026-10-17).** Link-only providers can use the app like any CERVICED provider. Only the exclusions named on this page are off. Anything not listed here, **ask the product owner** whether they can use it before building — don't assume either way.
 
-**Yes:** searchable (Search + Explore), profile (hero, About + optional Policies, specialities under Additional Information, logo, portfolio, opening hours in About), Book button with socials beside it, portfolio, in-app messages, Announcements (to clients who **saved** them), Becca, Branding, Analytics, calendar sync.
+**Yes:** searchable (Search + Explore), profile (hero, About + optional Policies, specialities under Additional Information, logo, portfolio, opening hours in About), Book button with socials beside it, portfolio, in-app messages, Becca, Branding, Analytics, calendar sync.
 
 **No:** CERVICED's own booking flow (they book via their link), the price list on their profile, star ratings and reviews (no reviews section at all), teams, Offers / promo codes, all client-care tools (info packs, intake / consultation forms, Clientele list, reminders), Automations.
 
 - **Tabs:** Home, Portfolio, Messages, Profile. Becca is a floating button on Home.
-- **Home:** once live, This week (Book taps headline + a bar per day, profile views, saves, search appearances → Analytics); before that, the go-live checklist. Then their diary, then Announce and Add work.
+- **Home (Dashboard, redesigned 2026-10-19, https://claude.ai/artifact/DrnMGFGGk5HJZW9ij1F9FN):** greeting + Live pill + today's hours; before go-live, the checklist; their diary always open on the whole week (day strip + every day, free/closed included); once live, This week vs last week (→ Analytics), Profile strength (missing extras, each opens its editor) and "Becca noticed" (busiest Book-tap day); shortcuts Add work / Hours / Branding.
 - **Portfolio tab:** a small preview of their profile as clients see it (taps through to the real one), their specialities (editable — Search's Speciality filter reads them), then the photo grid.
 - **Profile tab:** the shared Settings screen (ProviderAccountScreen). For link-only its hero has Edit profile + Branding, and a Your Business section has Business Info, Opening hours and Policies, above the usual account sections.
 - **InfoReg:** Identity, About & Portfolio, Contact only — with their booking link required. No Services or Address pages.
@@ -55,5 +55,5 @@ Exactly four things: **logo**, **About**, **opening hours**, **at least one port
 - **Mode is a real column** (`providers.booking_mode`), never inferred from whether `external_booking_url` is filled in (same lesson as [[Client vs Provider Hats]]). Before the providers row exists, the sign-up answer stands in (`getProviderOwnershipForUserId`). In the app, read it from `useAuth().myBookingMode` (provider side) or `provider.isLinkOnly` (profile).
 - **Every booking affordance must know the mode.** The DB refuses a `bookings` row for an external provider, so a missed check fails loudly rather than booking silently.
 - **CERVICED never tracks or vouches for the external booking or its payment** — the deposit/liability boundary in `CLAUDE.md` applies. The client's entry is their own note, readable only by them.
-- **Saving a provider counts as agreeing to their announcements** (product owner, 2026-10-18). The save moment doesn't say so yet — flagged, not built.
+- **No Announcements for link-only pros** (product owner, 2026-10-19 — reverses the 2026-10-17 yes). The app-side sheet and `sendAnnouncementToMySavers` are deleted; the DB function `send_announcement_to_my_savers` (migration 20261018200000) is still live and now has no caller — drop it in a future migration (needs the MIGRATION_OWNER lock).
 - **No teams** — the solo/team sign-up question was removed; teams aren't supported yet.

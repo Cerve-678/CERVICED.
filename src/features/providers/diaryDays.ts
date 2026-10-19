@@ -1,7 +1,6 @@
 /**
  * A link-only provider's diary as the Dashboard shows it: today and the six
- * days after, every day listed (free and closed days too), plus the first
- * free open day for the nudge. Pure, so the day bucketing is testable
+ * days after, every day listed (free and closed days too). Pure, so the day bucketing is testable
  * without the phone's calendar. Days are local calendar days, matching what the phone shows.
  */
 import type { DiaryEvent } from '../../services/deviceCalendarService';
@@ -50,17 +49,6 @@ export function buildDashboardWeek(
       closed: row ? row.is_closed : false,
     };
   });
-}
-
-/** The first day after today that they're open and nothing is booked —
- *  the free-day nudge. Null when hours aren't set (we can't tell a free day
- *  from a day off) or every open day has something in it. */
-export function firstFreeOpenDay(
-  week: readonly DashboardWeekDay[],
-  hours: readonly DbProviderAvailability[],
-): DashboardWeekDay | null {
-  if (!hours.some(row => !row.is_closed)) return null;
-  return week.slice(1).find(day => !day.closed && !!hoursFor(hours, day.date) && day.events.length === 0) ?? null;
 }
 
 /** Minutes an event runs for, or 0 for an all-day or zero-length one. */

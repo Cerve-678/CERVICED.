@@ -1,4 +1,4 @@
-import { buildDashboardWeek, diaryEventMinutes, firstFreeOpenDay } from '../features/providers/diaryDays';
+import { buildDashboardWeek, diaryEventMinutes } from '../features/providers/diaryDays';
 import type { DiaryEvent } from '../services/deviceCalendarService';
 import type { DbProviderAvailability } from '../types/database';
 
@@ -50,26 +50,6 @@ describe('buildDashboardWeek', () => {
 
   it('marks nothing closed when hours are unknown', () => {
     expect(buildDashboardWeek([], [], today).some(d => d.closed)).toBe(false);
-  });
-});
-
-describe('firstFreeOpenDay', () => {
-  const today = new Date(2026, 9, 19, 9, 0);
-
-  it('finds the first open day after today with nothing booked', () => {
-    const week = buildDashboardWeek([event('tue', new Date(2026, 9, 20, 11, 0), 60)], hours, today);
-    expect(firstFreeOpenDay(week, hours)?.ymd).toBe('2026-10-21');
-  });
-
-  it('never suggests today or a closed day', () => {
-    const busy = [1, 2, 3, 4, 5].map(i => event(`d${i}`, new Date(2026, 9, 19 + i, 10, 0), 60));
-    const week = buildDashboardWeek(busy, hours, today);
-    // Today (empty) and Sunday (closed) are the only free days.
-    expect(firstFreeOpenDay(week, hours)).toBeNull();
-  });
-
-  it('stays quiet without opening hours', () => {
-    expect(firstFreeOpenDay(buildDashboardWeek([], [], today), [])).toBeNull();
   });
 });
 

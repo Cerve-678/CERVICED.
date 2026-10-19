@@ -7,7 +7,7 @@
 // Always the whole week, never behind a tap (owner's call, 2026-10-19): a day
 // strip counting each day's appointments, then every day listed — free and
 // closed days included, so a gap is visible at a glance.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -61,20 +61,9 @@ function daySummary(day: DashboardWeekDay): string {
   return minutes > 0 ? `${count} · ${formatDurationMinutes(minutes)}` : count;
 }
 
-/**
- * `hours` — their weekly opening hours, so closed days read "Closed" rather
- * than "Free all day". `onWeek` hears the week once the calendar is read, and
- * null when it isn't connected (Home's free-day nudge needs both).
- */
-export function DiaryCard({
-  P,
-  hours,
-  onWeek,
-}: {
-  P: DiaryPalette;
-  hours: readonly DbProviderAvailability[];
-  onWeek?: (week: DashboardWeekDay[] | null) => void;
-}) {
+/** `hours` — their weekly opening hours, so closed days read "Closed" rather
+ *  than "Free all day". */
+export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbProviderAvailability[] }) {
   const styles = useMemo(() => createStyles(P), [P]);
   const bottomInset = useSystemBottomInset();
   const [phase, setPhase] = useState<Phase>('loading');
@@ -131,10 +120,6 @@ export function DiaryCard({
 
   const week = useMemo(() => buildDashboardWeek(events, hours, new Date()), [events, hours]);
   const connected = phase === 'connected';
-
-  useEffect(() => {
-    onWeek?.(connected ? week : null);
-  }, [connected, week, onWeek]);
 
   const renderEvent = (event: (typeof events)[number]) => {
     const minutes = diaryEventMinutes(event);

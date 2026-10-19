@@ -8,11 +8,13 @@
  *  - until they're live, the go-live checklist: the four things the server
  *    publishes them on (logo, About, opening hours, a portfolio photo)
  *  - their whole week, read from the phone's own calendar (DiaryCard)
- *  - once live: a nudge to announce a free open day to the clients who saved
- *    them; this week's numbers against last week (tapping through to
+ *  - once live: this week's numbers against last week (tapping through to
  *    Analytics); Profile strength (what's still missing); and one fact from
  *    their own numbers ("Becca noticed")
- *  - shortcuts: Announce, Add work, Hours, Branding
+ *  - shortcuts: Add work, Hours, Branding
+ *
+ * No Announcements: the product owner removed them for link-only pros
+ * (2026-10-19), so the free-day nudge from the design went with them.
  *  - Becca as a floating button, above the tab bar
  *
  * Product rules: docs/vault/Link-Only Providers.md. Design (approved
@@ -29,7 +31,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
-import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -49,9 +50,8 @@ import {
   type ProfileStrengthKey,
   type WeekComparison,
 } from '../../features/providers/linkOnlyDashboard';
-import { firstFreeOpenDay, type DashboardWeekDay } from '../../features/providers/diaryDays';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
-import { DAY_NAMES_ABBREV, DAY_NAMES_FULL, MONTH_NAMES_ABBREV, relativeDayLabel } from '../../utils/dateUtils';
+import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV } from '../../utils/dateUtils';
 import type { DbProvider } from '../../types/database';
 import {
   buildLinkOnlyGoLiveSteps,
@@ -60,7 +60,6 @@ import {
   type LinkOnlyGoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
 import { DiaryCard } from '../../features/providers/DiaryCard';
-import { LinkOnlyAnnouncementSheet } from '../../features/providers/LinkOnlyAnnouncementSheet';
 import { logger } from '../../utils/logger';
 import type { ProviderHomeStackParamList } from '../../navigation/types';
 
@@ -70,7 +69,6 @@ export default function LinkOnlyHomeScreen() {
   const navigation = useNavigation<Nav>();
   const { palette } = useTheme();
   const { user } = useAuth();
-  const { showAlert, DialogHost } = useAppDialog();
   const P = useMemo(
     () => ({
       bg: palette.bg,
@@ -92,14 +90,10 @@ export default function LinkOnlyHomeScreen() {
   const [profile, setProfile] = useState<DbProvider | null>(null);
   const [week, setWeek] = useState<{ comparison: WeekComparison; bars: DayBar[]; savers: number } | null>(null);
   const [specialityCount, setSpecialityCount] = useState<number | null>(null);
-  const [diaryWeek, setDiaryWeek] = useState<DashboardWeekDay[] | null>(null);
   const [weekFailed, setWeekFailed] = useState(false);
   const [status, setStatus] = useState<LinkOnlyGoLiveStatus | null>(null);
   const [hasRow, setHasRow] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [announcementOpen, setAnnouncementOpen] = useState(false);
-  // Bumped on every open so the sheet remounts empty.
-  const [announcementKey, setAnnouncementKey] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -190,10 +184,6 @@ export default function LinkOnlyHomeScreen() {
   const greeting = `${greetingFor(now)}${firstName ? `, ${firstName}` : ''} · ${DAY_NAMES_ABBREV[now.getDay()]} ${now.getDate()} ${MONTH_NAMES_ABBREV[now.getMonth()]}`;
   const hoursLabel = status ? todayHoursLabel(status.hours, now) : null;
 
-  // Only once there's someone to tell: live, calendar connected, and saved.
-  const freeDay = live && diaryWeek && status && (week?.savers ?? 0) > 0 ? firstFreeOpenDay(diaryWeek, status.hours) : null;
-  const freeDayName = freeDay ? relativeDayLabel(freeDay.date) ?? DAY_NAMES_FULL[freeDay.date.getDay()] : null;
-
   const strength = useMemo(() => {
     if (!status || !profile || specialityCount == null) return null;
     return buildProfileStrength({
@@ -219,16 +209,6 @@ export default function LinkOnlyHomeScreen() {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('BeccaStack', { screen: 'BeccaMain', params: {} });
   }, [navigation]);
-
-  const openAnnouncement = useCallback(() => {
-    Haptics.selectionAsync().catch(() => {});
-    if (!live) {
-      showAlert('Go live first', "Announcements go to clients who saved you, and they can only find you once you're live.");
-      return;
-    }
-    setAnnouncementKey(k => k + 1);
-    setAnnouncementOpen(true);
-  }, [live, showAlert]);
 
   return (
     <ThemedBackground>
@@ -330,20 +310,7 @@ export default function LinkOnlyHomeScreen() {
             </View>
           )}
 
-          <DiaryCard P={P} hours={status?.hours ?? []} onWeek={setDiaryWeek} />
-
-          {freeDay && freeDayName && (
-            <TouchableOpacity style={styles.nudge} onPress={openAnnouncement} activeOpacity={0.85} accessibilityRole="button">
-              <View style={styles.nudgeIcon}><Ionicons name="megaphone-outline" size={20} color={P.onAccent} /></View>
-              <View style={styles.flex}>
-                <Text style={styles.nudgeTitle}>{freeDayName} is free</Text>
-                <Text style={styles.nudgeSub}>
-                  Tell the {week?.savers} client{week?.savers === 1 ? '' : 's'} who saved you
-                </Text>
-              </View>
-              <View style={styles.nudgeButton}><Text style={styles.nudgeButtonText}>Announce</Text></View>
-            </TouchableOpacity>
-          )}
+          <DiaryCard P={P} hours={status?.hours ?? []} />
 
           {live && (
             <TouchableOpacity
@@ -453,7 +420,6 @@ export default function LinkOnlyHomeScreen() {
           )}
 
           <View style={styles.actions}>
-            <QuickAction styles={styles} P={P} icon="megaphone-outline" label="Announce" onPress={openAnnouncement} />
             <QuickAction styles={styles} P={P} icon="camera-outline" label="Add work" onPress={() => goToStep('portfolio')} />
             <QuickAction styles={styles} P={P} icon="time-outline" label="Hours" onPress={() => goToStep('hours')} />
             <QuickAction
@@ -477,17 +443,6 @@ export default function LinkOnlyHomeScreen() {
         <Ionicons name="sparkles" size={24} color={P.onAccent} />
       </TouchableOpacity>
 
-      <LinkOnlyAnnouncementSheet
-        key={announcementKey}
-        visible={announcementOpen}
-        P={P}
-        onClose={() => setAnnouncementOpen(false)}
-        onSent={count => {
-          setAnnouncementOpen(false);
-          setTimeout(() => showAlert('Announcement sent', `Sent to ${count} client${count === 1 ? '' : 's'}.`), 400);
-        }}
-      />
-      <DialogHost />
     </ThemedBackground>
   );
 }
@@ -618,13 +573,6 @@ const createStyles = (P: HomePalette) =>
     trend: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: '#3D8B5A', marginTop: 1 },
     trendDown: { color: '#B0563C' },
     miniTrend: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', color: '#3D8B5A', marginTop: 2 },
-    nudge: { backgroundColor: P.accent, borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-    nudgeIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-    nudgeTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.onAccent },
-    nudgeSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.onAccent, opacity: 0.85, marginTop: 2 },
-    nudgeButton: { height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: P.onAccent, justifyContent: 'center' },
-    // Dark chocolate on the white button in both themes; the dark accent is too pale on white.
-    nudgeButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: '#5C4033' },
     strengthHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     ring: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
     ringText: { position: 'absolute', fontFamily: 'BakbakOne-Regular', fontSize: 16, color: P.text },
