@@ -197,7 +197,14 @@ BEGIN
   ON CONFLICT (checkout_batch_id) DO NOTHING
   RETURNING id INTO v_id;
   IF v_id IS NULL THEN
-    SELECT r.id INTO v_id FROM public.fee_consent_records r WHERE r.checkout_batch_id = p_checkout_batch_id;
+    -- Already agreed for this checkout: only reuse it if the fees are the same.
+    SELECT r.id INTO v_id FROM public.fee_consent_records r
+     WHERE r.checkout_batch_id = p_checkout_batch_id
+       AND r.user_id = v_uid
+       AND r.fees = v_fees;
+    IF v_id IS NULL THEN
+      RAISE EXCEPTION 'The fees on this checkout have changed. Please review your booking and try again.';
+    END IF;
   END IF;
 
   UPDATE public.checkout_batches
