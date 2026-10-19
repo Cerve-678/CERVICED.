@@ -118,6 +118,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     preferredContactMethods: provider.preferred_contact_methods ?? [],
     onlineConsultationsAvailable: provider.online_consultations_available ?? false,
     accessibilityTags: provider.accessibility_notes?.split('|').filter(Boolean) ?? [],
+    paymentMethods: provider.preferred_payment_methods ?? [],
     languagesSpoken: provider.languages_spoken ?? [],
     qualifications: provider.qualifications ?? '',
     isInsuredSelfDeclared: provider.is_insured_self_declared ?? false,

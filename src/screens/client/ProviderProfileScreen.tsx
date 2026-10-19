@@ -108,6 +108,7 @@ import {
   ProviderReviewPreviewSection,
   ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
+import { PAYMENT_OPTS } from "../../features/business-details/options";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -1737,6 +1738,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         label: "Accessibility",
         chips: [...provider.accessibilityTags],
       });
+    }
+    // The provider's stated preference only (Payments, or Business Info for a
+    // link-only pro) — Cerviced doesn't collect or track off-app payments.
+    // Labelled from the shared PAYMENT_OPTS so this can't drift from the
+    // pickers that write it.
+    const paymentLabels = provider.paymentMethods
+      .map(v => PAYMENT_OPTS.find(o => o.value === v)?.label)
+      .filter((l): l is string => !!l);
+    if (paymentLabels.length > 0) {
+      groups.push({ label: "Payment methods", chips: paymentLabels });
     }
     return groups;
   }, [provider]);
