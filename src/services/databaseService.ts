@@ -2,6 +2,7 @@ import { getPaymentRequestError } from '../utils/paymentRequestError';
 import type {
   MaintenanceBookingContext,
   MaintenanceBookingNote,
+  MaintenanceIntervalSource,
   MaintenanceItem,
   MaintenanceItemKind,
   MaintenanceItemOrigin,
@@ -634,6 +635,7 @@ const DEFAULT_LIFETIME_BOOKINGS_QUERY_LIMIT = 2000;
 export async function getProviders(
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  offset = 0,
 ): Promise<PublicProviderSummary[]> {
   let query = supabase
     .from("providers")
@@ -644,8 +646,7 @@ export async function getProviders(
     // this is a plain browse/list, not a recommendation — a provider's own
     // business is allowed to appear here (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
-    .order("rating", { ascending: false })
-    .limit(limit);
+    .order("rating", { ascending: false });
 
   if (category && category !== "ALL") {
     // ANY of the provider's declared types, not just the headline one — a
@@ -653,6 +654,12 @@ export async function getProviders(
     // (providers_service_categories_gin), so this stays an index scan.
     query = query.overlaps("service_categories", [category]);
   }
+
+  // Preserve the normal first-page request shape; only Home's deferred
+  // catalogue extension needs a range after the first batch.
+  query = offset > 0
+    ? query.range(offset, offset + limit - 1)
+    : query.limit(limit);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -1637,8 +1644,9 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
-  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  limit: number | null = DEFAULT_PROVIDER_QUERY_LIMIT,
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1675,7 +1683,12 @@ export async function getPortfolioItems(
     query = query.eq("category", category.toUpperCase());
   }
 
-  const { data, error } = await query.limit(limit);
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
 }
@@ -1719,9 +1732,10 @@ export async function searchPortfolio(
  */
 export async function getDiscoverServices(
   category?: string,
-  limit = 40,
+  limit: number | null = 40,
   audience?: "women" | "men" | "kids" | "everyone",
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
@@ -1735,7 +1749,9 @@ export async function getDiscoverServices(
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    .limit(limit);
+    // Pagination must have a stable order. Without this, a next page can
+    // repeat or skip services as Postgres is free to return rows in any order.
+    .order("created_at", { ascending: false });
 
   if (options?.excludeOwnProvider !== false) {
     query = query.not("provider_id", "in", await ownProviderIdExclusion());
@@ -1753,6 +1769,11 @@ export async function getDiscoverServices(
   }
   if (audience) {
     query = query.eq("audience", audience);
+  }
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
   }
 
   const { data, error } = await query;
@@ -6865,18 +6886,6 @@ export async function getMyProviderSaverCount(): Promise<number> {
   return typeof data === "number" ? data : 0;
 }
 
-/** A link-only provider's announcement to the clients who saved them. The
- *  audience is resolved in the database and never reaches this device.
- *  Returns how many clients it was sent to. */
-export async function sendAnnouncementToMySavers(title: string, message: string): Promise<number> {
-  const { data, error } = await supabase.rpc("send_announcement_to_my_savers", {
-    p_title: title,
-    p_message: message,
-  });
-  if (error) throw error;
-  return typeof data === "number" ? data : 0;
-}
-
 // ─────────────────────────────────────────────────────────
 // CLIENT EXTERNAL BOOKINGS — "Did you book?" entries
 // ─────────────────────────────────────────────────────────
@@ -8073,6 +8082,7 @@ export async function updateMyStagedProviderAnswers(
     website: string | null;
     accessibility_notes?: string | null;
     preferred_payment_methods?: string[] | null;
+    business_type?: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase
@@ -8187,7 +8197,7 @@ export async function getUserBeautyProfile(
 const MAINTENANCE_ITEMS_LIMIT = 200;
 
 const MAINTENANCE_ITEM_COLUMNS =
-  "id, kind, origin, title, type_key, provider_id, service_id, provider_name, repeat_weeks, interval_edited, last_done_on, due_on, event_on, paused, note, created_at";
+  "id, kind, origin, title, type_key, provider_id, service_id, provider_name, repeat_weeks, interval_edited, interval_source, learned_days, learned_from, last_done_on, due_on, event_on, paused, note, created_at";
 
 interface MaintenanceItemRow {
   id: string;
@@ -8200,6 +8210,9 @@ interface MaintenanceItemRow {
   provider_name: string | null;
   repeat_weeks: number | null;
   interval_edited: boolean;
+  interval_source: MaintenanceIntervalSource;
+  learned_days: number | null;
+  learned_from: number | null;
   last_done_on: string | null;
   due_on: string | null;
   event_on: string | null;
@@ -8221,6 +8234,9 @@ function mapMaintenanceItem(r: MaintenanceItemRow): MaintenanceItem {
     providerName: r.provider_name,
     repeatWeeks: r.repeat_weeks,
     intervalEdited: r.interval_edited,
+    intervalSource: r.interval_source,
+    learnedDays: r.learned_days,
+    learnedFrom: r.learned_from,
     lastDoneOn: r.last_done_on,
     dueOn: r.due_on,
     eventOn: r.event_on,
@@ -10700,6 +10716,11 @@ export interface ProviderRefundState {
   heldPence: number;
   /** True once anything has been refunded; a full refund is then no longer offered. */
   anyRefunded: boolean;
+  /** Whether the client paid the full price in app or only a deposit. */
+  paidAs: 'full' | 'deposit';
+  /** The booking's full price (service + add-ons), in pence. With a deposit,
+   *  the rest was settled off-app and can't be refunded from here. */
+  bookingPricePence: number;
   /**
    * Set once the client's own cancellation was settled by the provider's
    * policy. `hoursBefore` is cancel-to-start, `noticeHours` the policy window,
@@ -10726,7 +10747,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     // for the notice window the settlement summary quotes.
     supabase
       .from('bookings')
-      .select('amount_paid, service_charge, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
+      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
       .eq('id', bookingId)
       .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
@@ -10761,6 +10782,8 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     sharePence: share,
     heldPence: Math.max(0, Math.min(held, paid - refunded)),
     anyRefunded: refunded > 0,
+    paidAs: b.payment_type === 'deposit' ? 'deposit' : 'full',
+    bookingPricePence: Math.round((Number(b.base_price ?? 0) + Number(b.add_ons_total ?? 0)) * 100),
     policySettlement: settled
       ? {
           refundedToClientPence: settlementRow ? Number(settlementRow.amount_pence) : 0,

@@ -72,6 +72,13 @@
 
 import { escapeHtml as esc } from './escapeHtml.ts';
 
+// Every email is light only, whatever the reader's mail app is set to (user,
+// 2026-10-19). The two meta tags in each <head> cover Apple Mail and iOS Mail;
+// this CSS form is what some other clients read instead. Gmail's and
+// Outlook's apps can still force-darken a message regardless — nothing an
+// email sends can switch that off.
+const LIGHT_ONLY_CSS = ':root { color-scheme: light only; supported-color-schemes: light only; }';
+
 interface EmailPalette {
   bg: string;
   surface: string;
@@ -175,7 +182,7 @@ function letter(
           <p style="font-family:${BODY};color:${P.sub};font-size:12px;line-height:1.7;padding-top:14px;">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a></p>
           <p style="font-family:${BODY};color:${P.sub};font-size:11px;line-height:1.7;padding-top:10px;">You're receiving this because you have a CERVICED account.<br />&copy; CERVICED &middot; cerviced.co</p>`;
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -185,6 +192,7 @@ function letter(
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${P.bg}; font-family: ${BODY}; }
     a { color: ${P.accent}; }
   </style>
@@ -490,6 +498,185 @@ export function providerHatAddedEmail(params: { name: string; businessName?: str
   };
 }
 
+// ---------------------------------------------------------------------------
+// Link-only providers — professionals who take bookings on their own page
+// (Fresha, Treatwell, Acuity…) and use CERVICED to be found. They have no
+// services, prices or availability here, so the provider emails above, which
+// tell them to add exactly those, are wrong for them. Their go-live steps are
+// the four in buildLinkOnlyGoLiveSteps (src/features/providers/goLiveStatus.ts);
+// keep the wording of LINK_ONLY_GO_LIVE_STEPS in step with it.
+// ---------------------------------------------------------------------------
+
+export const LINK_ONLY_GO_LIVE_STEPS = [
+  'Add your logo',
+  'Write your About',
+  'Set your opening hours',
+  'Add portfolio photos',
+] as const;
+
+/** A new account that signed up to be found and booked through its own link. */
+export function linkOnlyWelcomeEmail(params: { name: string; businessName?: string }) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  return {
+    subject: `Welcome to CERVICED${display ? `, ${display}` : ''} — four steps to go live`,
+    html: letter(P, {
+      preview: 'Clients find you here and book on your own page. Four quick steps and your profile goes live.',
+      content:
+        eyebrow(P, 'Welcome to CERVICED') +
+        headline(P, `Welcome${display ? `, ${esc(display)}` : ''}`) +
+        lede(
+          P,
+          "Your account is set up. Clients will find you on CERVICED and tap Book to go straight to your own booking page, so you keep taking bookings exactly where you do now. Finish these four steps and your profile goes live.",
+        ) +
+        stepsPanel(P, 'Go live in four steps', [...LINK_ONLY_GO_LIVE_STEPS]) +
+        note(
+          P,
+          'Your profile goes live by itself the moment all four are done. Portfolio photos are what clients look at first, so add your best work.',
+        ) +
+        button(P, 'cerviced://provider/profile', 'Finish my profile') +
+        appHint(P),
+    }),
+  };
+}
+
+/** An existing client account adding a link-only provider hat. Leads with
+ *  how the two hats work, then what's new on the professional side — not the
+ *  welcome's go-live steps again. */
+export function linkOnlyHatAddedEmail(params: { name: string; businessName?: string }) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  return {
+    subject: `You're a professional on CERVICED now too${display ? `, ${display}` : ''}`,
+    html: letter(P, {
+      preview: 'Same login, two hats. Here is how they work, and what clients will see.',
+      content:
+        eyebrow(P, 'Both hats, one account') +
+        headline(P, "You're a professional now too") +
+        lede(
+          P,
+          `${first ? `Hi ${esc(first)} — your` : 'Your'} CERVICED account now has two hats on one login: the client side you already use, and a professional profile clients can find.`,
+        ) +
+        checklistPanel(P, 'How your two hats work', [
+          'Switch between them any time from your account screen',
+          'Your client side stays private: your bookings and saved providers are never shown to your clients',
+          'Clients only ever see your professional profile',
+        ]) +
+        checklistPanel(P, "What's new for you", [
+          'Clients find you by name, category, speciality and area',
+          'Book on your profile takes them straight to your own booking page',
+          'Clients who save you hear about your announcements',
+          'Analytics shows your Book taps, profile views and saves',
+        ]) +
+        note(
+          P,
+          'Your profile goes live once it has your logo, an About, your opening hours and at least one portfolio photo.',
+        ) +
+        button(P, 'cerviced://provider/profile', 'Finish my profile') +
+        appHint(P),
+    }),
+  };
+}
+
+/** A link-only pro adding the client hat. The general clientHatAddedEmail
+ *  tells them their "services and bookings are untouched", and a link-only
+ *  pro has neither here. */
+export function linkOnlyClientHatAddedEmail(params: { name: string }) {
+  const first = firstNameOf(params.name);
+  const P = CLIENT;
+  return {
+    subject: `You're a client now too${first ? `, ${first}` : ''} ✨`,
+    html: letter(P, {
+      preview: 'Same login, two hats. Here is how they work, and what you can do as a client.',
+      content:
+        eyebrow(P, 'Both hats, one account') +
+        headline(P, "You're a client now too") +
+        lede(
+          P,
+          `${first ? `Hi ${esc(first)} — your` : 'Your'} CERVICED account now has two hats on one login: your professional profile, exactly as you left it, and a client side for booking beauty professionals for yourself.`,
+        ) +
+        checklistPanel(P, 'How your two hats work', [
+          'Switch between them any time from your account screen',
+          'Your client side stays private: nothing you do as a client is shown to your own clients',
+          'Your professional profile, portfolio and booking link carry on as before',
+        ]) +
+        checklistPanel(P, "What's new for you", [
+          'Discover beauty professionals near you',
+          'Browse portfolios of real work',
+          'Book and manage your own appointments',
+          'Save your favourite providers',
+          'Booked a pro on their own page? Add it to Upcoming so everything stays in one place',
+        ]) +
+        button(P, 'cerviced://home', 'Start browsing') +
+        appHint(P),
+    }),
+  };
+}
+
+/** Sent once, when a link-only profile first goes live. */
+export function linkOnlyLiveEmail(params: { name: string; businessName?: string }) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  return {
+    subject: `You're live on CERVICED${display ? `, ${display}` : ''} 🎉`,
+    html: letter(P, {
+      preview: 'Clients can now find you on CERVICED and tap Book to reach your booking page.',
+      content:
+        eyebrow(P, "You're live") +
+        headline(P, `${display ? `${esc(display)} is` : "You're"} live`) +
+        lede(
+          P,
+          'Your profile is now on CERVICED. Clients can find you by name, category, speciality and area, see your portfolio in Explore, and tap Book to go straight to your own booking page.',
+        ) +
+        checklistPanel(P, 'What happens now', [
+          'Clients who book through your link do it on your page, as they always have',
+          'Clients who save you hear about your announcements',
+          'Your Analytics shows Book taps, profile views and saves',
+        ]) +
+        note(
+          P,
+          'Keep your portfolio fresh — new photos also appear in Explore, which is where most clients discover someone new.',
+        ) +
+        button(P, 'cerviced://provider/profile', 'See my profile') +
+        appHint(P),
+    }),
+  };
+}
+
+/** A nudge for a link-only account that signed up but hasn't gone live yet.
+ *  `remaining` is the go-live steps still not done, in LINK_ONLY_GO_LIVE_STEPS
+ *  wording; the caller works them out from the account. */
+export function linkOnlyGoLiveReminderEmail(params: {
+  name: string;
+  businessName?: string;
+  remaining: string[];
+}) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  const count = params.remaining.length;
+  const left = count === 1 ? 'one step' : `${count} steps`;
+  return {
+    subject: `You're ${left} from going live on CERVICED`,
+    html: letter(P, {
+      preview: `Finish ${left} and clients can find you and book on your own page.`,
+      content:
+        eyebrow(P, 'Almost there') +
+        headline(P, `${display ? `${esc(display)}, you're` : "You're"} nearly live`) +
+        lede(
+          P,
+          `Your profile isn't showing to clients yet. Finish ${left} and it goes live by itself, so clients can find you and tap Book to go straight to your booking page.`,
+        ) +
+        stepsPanel(P, 'Still to do', params.remaining.map(esc)) +
+        button(P, 'cerviced://provider/profile', 'Finish my profile') +
+        appHint(P),
+    }),
+  };
+}
+
 // Account-level rather than hat-specific — it can reach either hat, so it uses
 // the app's base theme (the provider/shared palette) rather than picking one.
 export function passwordChangedEmail(params: { name: string }) {
@@ -635,7 +822,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   };
 
   const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -645,6 +832,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${P.surface}; font-family: ${BODY}; }
     a { color: ${P.accent}; }
   </style>
@@ -998,7 +1186,7 @@ export function generalWelcomeEmail(params: {
   return {
     subject: 'Welcome to CERVICED — beauty at your fingertips',
     html: `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1008,6 +1196,7 @@ export function generalWelcomeEmail(params: {
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${BRAND.ink}; font-family: ${BODY}; }
   </style>
 </head>

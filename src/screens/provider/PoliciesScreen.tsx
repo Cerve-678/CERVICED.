@@ -62,13 +62,13 @@ import {
 } from '../../features/business-details/BusinessDetailsKit';
 import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
-type CancelNotice     = 'none' | '24h' | '48h' | '72h';
-type CancelPenalty    = 'none' | 'deposit' | 'full';
-type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
-type MaxReschedules   = '1' | '2' | 'unlimited';
+type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
+type CancelPenalty    = '' | 'none' | 'deposit' | 'full';
+type RescheduleNotice = '' | 'same_day' | '24h' | '48h' | '72h';
+type MaxReschedules   = '' | '1' | '2' | 'unlimited';
 // 'charge_full' was offered once and enforced by nothing; it's read back as
 // 'charge_deposit' and the real charge is now the no-show fee below.
-type NoShowAction     = 'none' | 'warn' | 'charge_deposit';
+type NoShowAction     = '' | 'none' | 'warn' | 'charge_deposit';
 
 interface PolicyState {
   cancelNotice:     CancelNotice;
@@ -96,14 +96,14 @@ interface PolicyState {
 }
 
 const DEFAULT_POLICIES: PolicyState = {
-  cancelNotice:     '24h',
-  cancelPenalty:    'none',
+  cancelNotice:     '',
+  cancelPenalty:    '',
   cancelNote:       '',
-  rescheduleNotice: '24h',
-  maxReschedules:   '1',
+  rescheduleNotice: '',
+  maxReschedules:   '',
   rescheduleNote:   '',
-  noShowAction:     'none',
-  noShowGraceMinutes: '0',
+  noShowAction:     '',
+  noShowGraceMinutes: '',
   noShowNote:       '',
   lateFee:          '',
   noShowFee:        '',

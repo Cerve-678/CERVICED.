@@ -58,7 +58,7 @@ import {
 } from '../../services/databaseService';
 import { resolveDepositMode } from '../../utils/depositPolicy';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
-import type { DbProvider } from '../../types/database';
+import type { DbProvider, DbProviderAvailability } from '../../types/database';
 
 export interface GoLiveStatus {
   /** Blocking — mirrors check_and_set_provider_live() exactly. */
@@ -377,6 +377,9 @@ export interface LinkOnlyGoLiveStatus {
   /** At least one portfolio photo. */
   portfolioSet: boolean;
   portfolioCount: number;
+  /** Their weekly opening hours, as read for `hoursSet` — Home's diary uses
+   *  them to tell a free day from a day off. */
+  hours: DbProviderAvailability[];
   /** providers.has_gone_live — the authority, never re-derived. */
   isLive: boolean;
 }
@@ -417,6 +420,7 @@ export async function fetchLinkOnlyGoLiveStatus(
     hoursSet: availability.some(day => !day.is_closed),
     portfolioSet: portfolioCount > 0,
     portfolioCount,
+    hours: availability,
     isLive: !!profile.has_gone_live,
   };
 }

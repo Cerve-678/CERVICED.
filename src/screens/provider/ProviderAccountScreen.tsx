@@ -302,7 +302,6 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 activeOpacity={0.75}
               >
                 <Text style={[styles.previewStatNum, { color: '#FFFFFF' }]}>{t('providerAccount.linkOnly.hero.edit')}</Text>
-                <Text style={[styles.previewStatLbl, { color: '#FFFFFF', opacity: 0.8 }]}>{t('providerAccount.linkOnly.hero.editSub')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
@@ -310,7 +309,6 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 activeOpacity={0.75}
               >
                 <Text style={[styles.previewStatNum, { color: P.text }]}>{t('providerAccount.linkOnly.hero.branding')}</Text>
-                <Text style={[styles.previewStatLbl, { color: P.sub }]}>{t('providerAccount.linkOnly.hero.brandingSub')}</Text>
               </TouchableOpacity>
             </View>
             )}

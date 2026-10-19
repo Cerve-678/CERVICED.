@@ -21,6 +21,12 @@ import {
   clientWelcomeEmail,
   feePaymentRequestEmail,
   generalWelcomeEmail,
+  LINK_ONLY_GO_LIVE_STEPS,
+  linkOnlyClientHatAddedEmail,
+  linkOnlyGoLiveReminderEmail,
+  linkOnlyHatAddedEmail,
+  linkOnlyLiveEmail,
+  linkOnlyWelcomeEmail,
   passwordChangedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
@@ -89,12 +95,27 @@ const every = () => [
     }),
   ],
   ['generalWelcomeEmail', generalWelcomeEmail({ name: HOSTILE })],
+  ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyClientHatAddedEmail', linkOnlyClientHatAddedEmail({ name: HOSTILE })],
+  [
+    'linkOnlyGoLiveReminderEmail',
+    linkOnlyGoLiveReminderEmail({ name: HOSTILE, businessName: HOSTILE, remaining: [HOSTILE] }),
+  ],
 ] as Array<[string, { subject: string; html: string }]>;
 
 describe('email templates', () => {
   it.each(every())('%s never lets raw markup into the body', (_name, mail) => {
     expect(mail.html).not.toContain('<script');
     expect(mail.html).toContain('&lt;script&gt;');
+  });
+
+  // Emails never follow the reader's dark mode (user, 2026-10-19).
+  it.each(every())('%s asks mail apps to keep it light', (_name, mail) => {
+    expect(mail.html).toContain('<meta name="color-scheme" content="light only" />');
+    expect(mail.html).toContain('color-scheme: light only');
+    expect(mail.html).not.toMatch(/prefers-color-scheme:\s*dark/);
   });
 
   it.each(every())('%s emits a subject and a body', (_name, mail) => {
@@ -206,6 +227,31 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Awaiting payment');
     expect(html).not.toContain('platform fee');
     expect(html).toContain('£73.00');
+  });
+
+  // Link-only pros book on their own page: nothing sent to them may tell them
+  // to add services, prices or availability, which they don't have here.
+  it.each([
+    ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyClientHatAddedEmail', linkOnlyClientHatAddedEmail({ name: 'Ada' })],
+  ])('%s never asks a link-only pro for services, pricing or availability', (_name, mail) => {
+    expect(mail.html).not.toMatch(/services &amp; pricing|availability|services and bookings/i);
+  });
+
+  it('lists the four link-only go-live steps in the welcome', () => {
+    const { html } = linkOnlyWelcomeEmail({ name: 'Ada' });
+    for (const step of LINK_ONLY_GO_LIVE_STEPS) expect(html).toContain(step);
+  });
+
+  it('counts only the steps still left in the reminder', () => {
+    expect(linkOnlyGoLiveReminderEmail({ name: 'Ada', remaining: ['Add your logo'] }).subject)
+      .toBe("You're one step from going live on CERVICED");
+    const two = linkOnlyGoLiveReminderEmail({ name: 'Ada', remaining: ['Add your logo', 'Write your About'] });
+    expect(two.subject).toBe("You're 2 steps from going live on CERVICED");
+    expect(two.html).toContain('Write your About');
+    expect(two.html).not.toContain('Set your opening hours');
   });
 });
 
