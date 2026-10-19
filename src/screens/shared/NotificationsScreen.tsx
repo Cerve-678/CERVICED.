@@ -56,6 +56,7 @@ interface Notification {
       | 'no_show'            | 'provider_no_show'    | 'no_show_disputed'
       | 'cancellation_settled'
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
+      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed'
       | 'refund_requested' | 'refund_request_updated'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
@@ -347,7 +348,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'refund_requested', 'refund_request_updated', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'refund_requested', 'refund_request_updated', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -536,6 +537,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'fee_charged' ||
         notification.type === 'fee_disputed' ||
         notification.type === 'fee_dispute_resolved' ||
+        notification.type === 'fee_payment_requested' ||
+        notification.type === 'fee_paid_by_client' ||
+        notification.type === 'fee_payment_lapsed' ||
         notification.type === 'refund_requested' ||
         notification.type === 'refund_request_updated' ||
         notification.type === 'booking_reminder' ||
@@ -807,8 +811,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     if (type === 'cancellation_settled') return P.accentText;
     // A fee charged or disputed is money that needs the reader's attention;
     // an answered dispute is informational.
-    if (type === 'fee_charged' || type === 'fee_disputed') return '#FF9500';
-    if (type === 'fee_dispute_resolved') return P.accentText;
+    if (type === 'fee_charged' || type === 'fee_disputed' || type === 'fee_payment_requested') return '#FF9500';
+    if (type === 'fee_dispute_resolved' || type === 'fee_payment_lapsed') return P.accentText;
+    if (type === 'fee_paid_by_client') return '#4CAF50';
     // Amber: a request someone still has to act on or decide.
     if (type === 'refund_requested') return '#FF9500';
     if (type === 'refund_request_updated') return P.accentText;
@@ -847,6 +852,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'fee_charged':
       case 'fee_disputed':
       case 'fee_dispute_resolved':
+      case 'fee_paid_by_client':
+      case 'fee_payment_lapsed':
       case 'refund_requested':
       case 'refund_request_updated':
         return 'View Booking';
@@ -864,6 +871,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Respond Now';
       case 'payment_success':
         return 'View Booking';
+      case 'fee_payment_requested':
+        return 'Pay Fee';
       case 'reschedule_request':
       case 'reschedule_provider_response':
         return 'Reschedule Now';

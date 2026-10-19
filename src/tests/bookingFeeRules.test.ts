@@ -4,7 +4,7 @@ import type { BookingFeeCharge, BookingFeeTerms } from '../services/databaseServ
 const terms: BookingFeeTerms = { status: 'completed', bookingDate: '2026-07-01', bookingTime: '14:00:00', endTime: '15:00:00', lateFeePence: 1000, noShowFeePence: 2000 };
 const end = new Date('2026-07-01T15:00:00').getTime();
 const charge = (over: Partial<BookingFeeCharge>): BookingFeeCharge => ({
-  id: 'c', kind: 'late', amountPence: 1000, status: 'succeeded', chargedAt: '2026-07-01T16:00:00Z', createdAt: '2026-07-01T16:00:00Z',
+  id: 'c', kind: 'late', amountPence: 1000, status: 'succeeded', chargedAt: '2026-07-01T16:00:00Z', payBy: null, createdAt: '2026-07-01T16:00:00Z',
   disputedAt: null, disputeReason: null, disputeOutcome: null, disputeResponse: null, disputeResolvedAt: null, ...over,
 });
 

@@ -3,6 +3,7 @@ import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { takeBackFromProvider } from '../_shared/takeBack.ts';
+import { closeFeeRequest, recordFeePaid, requestClientPayment } from '../_shared/feePayRequest.ts';
 
 // Late-arrival and no-show fees (auto-memory late-and-no-show-fees-decision).
 //
@@ -21,9 +22,16 @@ import { takeBackFromProvider } from '../_shared/takeBack.ts';
 //   • CERVICED takes no cut: the provider's payout is the amount minus Stripe's
 //     actual card fee, held 24h, then transferred by release-payouts.
 //   • A card that needs the client present (declined / authentication_required)
-//     marks the row failed — nothing is retried automatically.
+//     becomes a request for the client to pay (user decision 2026-10-19,
+//     _shared/feePayRequest.ts): a Stripe invoice they can pay in the app or
+//     from an email, open for 7 days. Nothing is retried automatically.
+//   action 'cancel_request' — the provider withdraws an open request to pay.
+//   action 'pay' / 'paid' — the CLIENT the fee is owed by: 'pay' returns what
+//     the payment sheet needs for the request's invoice; 'paid' records it once
+//     the sheet succeeds (the webhook records it too, for the emailed link).
 //
-// AUTH: the provider who owns the booking (their JWT). Never a client.
+// AUTH: the provider who owns the booking (their JWT); for 'pay' / 'paid',
+// the client the fee row belongs to.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,11 +45,9 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-const PAYOUT_HOLD_MS = 24 * 60 * 60 * 1000;
-
 type RequestBody =
   | { action: 'charge'; bookingId: string; kind: FeeKind }
-  | { action: 'refund'; chargeId: string };
+  | { action: 'refund' | 'cancel_request' | 'pay' | 'paid'; chargeId: string };
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -55,6 +61,11 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return json({ error: 'Invalid session' }, 401);
 
+    const body = await req.json() as RequestBody;
+    if ((body?.action === 'pay' || body?.action === 'paid') && typeof body.chargeId === 'string') {
+      return await clientPayment(user.id, body.chargeId, body.action);
+    }
+
     const { data: provider, error: providerError } = await admin.from('providers')
       .select('id, stripe_account_id, stripe_payouts_enabled').eq('user_id', user.id)
       .order('is_active', { ascending: false }).order('created_at', { ascending: true })
@@ -62,12 +73,14 @@ Deno.serve(async (req: Request) => {
     if (providerError) throw providerError;
     if (!provider) return json({ error: 'Only providers can manage fees.' }, 403);
 
-    const body = await req.json() as RequestBody;
     if (body?.action === 'charge' && typeof body.bookingId === 'string' && (body.kind === 'late' || body.kind === 'no_show')) {
       return await charge(provider, body.bookingId, body.kind);
     }
     if (body?.action === 'refund' && typeof body.chargeId === 'string') {
       return await refund(provider, body.chargeId);
+    }
+    if (body?.action === 'cancel_request' && typeof body.chargeId === 'string') {
+      return await cancelRequest(provider, body.chargeId);
     }
     return json({ error: 'Invalid request' }, 400);
   } catch (err) {
@@ -166,38 +179,26 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
   } catch (err) {
     // Card declined, or the bank wants the client present. Nothing was taken.
     const stripeError = err as Stripe.errors.StripeError;
-    const reason = stripeError?.code ?? stripeError?.type ?? String(err);
-    await admin.from('booking_fee_charges').update({
-      status: 'failed', failure_reason: reason.slice(0, 500),
-      payment_intent_id: stripeError?.payment_intent?.id ?? null,
-    }).eq('id', row.id);
-    if (stripeError?.type === 'StripeCardError') {
-      return json({ code: 'fee_not_collected', error: "Couldn't collect this fee — the client's bank declined it or needs them to approve it." }, 402);
+    if (stripeError?.type !== 'StripeCardError') {
+      await admin.from('booking_fee_charges').update({
+        status: 'failed', failure_reason: String(stripeError?.code ?? stripeError?.type ?? err).slice(0, 500),
+      }).eq('id', row.id);
+      throw err;
     }
-    throw err;
+    return await askClientToPay(row.id, booking, kind, eligibility.amountPence, customerId!,
+      stripeError.payment_intent?.id ?? null, stripeError.code ?? 'card_error');
   }
 
   if (intent.status !== 'succeeded') {
-    await admin.from('booking_fee_charges').update({
-      status: 'failed', failure_reason: `intent ${intent.status}`, payment_intent_id: intent.id,
-    }).eq('id', row.id);
-    return json({ code: 'fee_not_collected', error: "Couldn't collect this fee — the client's bank needs them to approve it." }, 402);
+    return await askClientToPay(row.id, booking, kind, eligibility.amountPence, customerId!, intent.id, `intent ${intent.status}`);
   }
 
-  // CERVICED takes no cut: only Stripe's actual card fee comes off.
-  const charge = intent.latest_charge as Stripe.Charge | null;
-  const balance = charge?.balance_transaction as Stripe.BalanceTransaction | null;
-  const stripeFee = typeof balance?.fee === 'number' ? balance.fee : null;
-  const payout = stripeFee === null ? null : Math.max(0, eligibility.amountPence - stripeFee);
-  const { error: updateError } = await admin.from('booking_fee_charges').update({
-    status: 'succeeded', payment_intent_id: intent.id, charged_at: new Date().toISOString(),
-    stripe_fee_pence: stripeFee, payout_pence: payout,
-    // Without a known card fee the payout waits; the webhook can't price it either,
-    // so it shows as 'pending' for follow-up rather than paying a guessed amount.
-    payout_status: payout === null ? 'pending' : 'held',
-    release_after: new Date(Date.now() + PAYOUT_HOLD_MS).toISOString(),
-  }).eq('id', row.id);
-  if (updateError) console.error(`[booking-fee] charged ${intent.id} but could not record fee ${row.id}: ${String(updateError.message ?? updateError)}`);
+  // Records the payout (CERVICED takes no cut). The webhook would too.
+  const { error: updateError } = await admin.from('booking_fee_charges')
+    .update({ payment_intent_id: intent.id }).eq('id', row.id).eq('status', 'processing');
+  if (updateError) console.error(`[booking-fee] charged ${intent.id} but could not bind fee ${row.id}: ${String(updateError.message ?? updateError)}`);
+  await recordFeePaid(admin, stripe, row.id, intent.id)
+    .catch(e => console.error(`[booking-fee] charged ${intent.id} but could not record fee ${row.id}: ${String(e)}`));
 
   const amount = `£${(eligibility.amountPence / 100).toFixed(2)}`;
   const providerName = booking.provider_name_snapshot?.trim() || 'Your provider';
@@ -271,6 +272,76 @@ async function refund(provider: ProviderRow, chargeId: string): Promise<Response
   if (notifyError) console.error(`[booking-fee] refunded but notification failed: ${String(notifyError.message ?? notifyError)}`);
 
   return json({ status: 'refunded' }, 200);
+}
+
+interface FeeBooking {
+  id: string;
+  provider_id: string;
+  user_id: string;
+  provider_name_snapshot: string | null;
+  service_name_snapshot: string | null;
+}
+
+/** The saved card couldn't pay: turn the fee into a request for the client to pay. */
+async function askClientToPay(
+  feeId: string, booking: FeeBooking, kind: FeeKind, amountPence: number,
+  customerId: string, failedIntentId: string | null, failureReason: string,
+): Promise<Response> {
+  try {
+    const { payBy } = await requestClientPayment(admin, stripe, {
+      fee: { id: feeId, booking_id: booking.id, provider_id: booking.provider_id, client_user_id: booking.user_id, kind, amount_pence: amountPence },
+      customerId, failedIntentId, failureReason,
+      providerName: booking.provider_name_snapshot?.trim() || 'Your provider',
+      serviceName: booking.service_name_snapshot,
+    });
+    return json({ status: 'awaiting_client', chargeId: feeId, payBy }, 200);
+  } catch (err) {
+    console.error(`[booking-fee] could not ask the client to pay ${feeId}: ${String(err)}`);
+    await admin.from('booking_fee_charges').update({ status: 'failed', failure_reason: failureReason.slice(0, 500) })
+      .eq('id', feeId).eq('status', 'processing');
+    return json({ code: 'fee_not_collected', error: "Couldn't collect this fee — the client's bank declined it or needs them to approve it." }, 402);
+  }
+}
+
+async function cancelRequest(provider: ProviderRow, chargeId: string): Promise<Response> {
+  const { data: fee, error } = await admin.from('booking_fee_charges')
+    .select('id, provider_id, status, stripe_invoice_id, payment_intent_id').eq('id', chargeId).maybeSingle();
+  if (error) throw error;
+  if (!fee || fee.provider_id !== provider.id) return json({ error: 'Fee not found' }, 404);
+  if (fee.status !== 'awaiting_client') return json({ error: 'There is no open request to cancel.' }, 409);
+  const outcome = await closeFeeRequest(admin, stripe, fee, 'request_cancelled');
+  if (outcome === 'paid') return json({ error: 'The client has already paid this fee.' }, 409);
+  return json({ status: 'cancelled' }, 200);
+}
+
+async function clientPayment(userId: string, chargeId: string, action: 'pay' | 'paid'): Promise<Response> {
+  const { data: fee, error } = await admin.from('booking_fee_charges')
+    .select('id, client_user_id, status, pay_by, payment_intent_id').eq('id', chargeId).maybeSingle();
+  if (error) throw error;
+  if (!fee || fee.client_user_id !== userId) return json({ error: 'Fee not found' }, 404);
+
+  if (action === 'paid') {
+    if (fee.status === 'succeeded') return json({ status: 'paid' }, 200);
+    if (fee.status !== 'awaiting_client' || !fee.payment_intent_id) return json({ error: 'This fee has nothing to pay.' }, 409);
+    const was = await recordFeePaid(admin, stripe, fee.id, fee.payment_intent_id);
+    return was ? json({ status: 'paid' }, 200) : json({ error: "Your payment hasn't come through yet. Please check again shortly." }, 409);
+  }
+
+  if (fee.status === 'succeeded') return json({ code: 'fee_already_paid', error: 'This fee has already been paid.' }, 409);
+  if (fee.status !== 'awaiting_client' || !fee.payment_intent_id || !fee.pay_by || Date.parse(fee.pay_by) <= Date.now()) {
+    return json({ error: 'This fee is no longer waiting to be paid.' }, 409);
+  }
+  const intent = await stripe.paymentIntents.retrieve(fee.payment_intent_id);
+  const customerId = typeof intent.customer === 'string' ? intent.customer : intent.customer?.id;
+  if (!customerId || !intent.client_secret) throw new Error(`fee ${fee.id} intent has no customer`);
+  const ephemeralKey = await stripe.ephemeralKeys.create({ customer: customerId }, { apiVersion: '2024-12-18.acacia' });
+  return json({
+    clientSecret: intent.client_secret,
+    paymentIntentId: intent.id,
+    customerId,
+    ephemeralKeySecret: ephemeralKey.secret,
+    livemode: intent.livemode,
+  }, 200);
 }
 
 function json(payload: unknown, status: number): Response {
