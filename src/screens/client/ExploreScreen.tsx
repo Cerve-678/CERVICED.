@@ -87,12 +87,6 @@ const INITIAL_EXPLORE_ITEMS = 24;
 const EXPLORE_BATCH_SIZE = 18;
 const LOAD_MORE_THRESHOLD = 900;
 const LOAD_MORE_COOLDOWN_MS = 300;
-// Explore combines two sources before deduplicating. Keeping each source
-// bounded avoids fetching the full catalogue (portfolio used to request 200
-// rows) just to paint the first 24 cards. The already-present load-more flow
-// progressively mounts the resulting feed as the person browses.
-const DISCOVER_PORTFOLIO_LIMIT = 60;
-const DISCOVER_SERVICE_LIMIT = 30;
 
 function isNearGridEnd(event: NativeSyntheticEvent<NativeScrollEvent>): boolean {
   const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -465,8 +459,10 @@ const ExploreScreen = memo(() => {
       Promise.all([
         // Explore is a browse surface, including for providers viewing their
         // own public work. Do not hide a provider's images from this feed.
-        getPortfolioItems(category, DISCOVER_PORTFOLIO_LIMIT, { excludeOwnProvider: false }),
-        getDiscoverServices(category, DISCOVER_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
+        // The result count is the real discover catalogue, not an arbitrary
+        // source window. MasonryGrid still mounts cards progressively below.
+        getPortfolioItems(category, null, { excludeOwnProvider: false }),
+        getDiscoverServices(category, null, undefined, { excludeOwnProvider: false }),
       ]),
       8_000,
       'Explore feed',
