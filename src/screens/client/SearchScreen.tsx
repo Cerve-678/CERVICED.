@@ -32,7 +32,7 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
+import { forgetCachedReads, getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
@@ -1088,6 +1088,8 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleRefresh = useCallback(() => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     setProvidersLoading(true);
     setProvidersError(null);

@@ -30,6 +30,7 @@ import {
   getMyProviderMessageTemplates,
   replaceMyProviderMessageTemplates,
   ProviderMessageTemplate,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
@@ -298,6 +299,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   }, [loadInbox]));
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     await loadInbox();
     setRefreshing(false);

@@ -33,7 +33,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -815,6 +815,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [currentBooking]);
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     setBookingsError(null);
 

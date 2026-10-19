@@ -14,7 +14,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
-import { supabase } from "../lib/supabase";
+import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
@@ -157,6 +157,15 @@ export async function clearUserStorageFolder(
   if (error) throw error;
 }
 
+/**
+ * Forget every remembered read, so the next load of each screen goes to the
+ * server. For explicit refreshes (pull-to-refresh): the person asked for the
+ * latest, so a 30-second-old answer isn't good enough.
+ */
+export function forgetCachedReads(): void {
+  clearCachedReads();
+}
+
 export function subscribeToUserBookingChanges(
   userId: string,
   onChange: () => void,
@@ -171,7 +180,10 @@ export function subscribeToUserBookingChanges(
         table: "bookings",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -185,11 +197,14 @@ export function subscribeToRescheduleRequestChanges(
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "booking_reschedule_requests" },
-      (payload) => onChange(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        onChange(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -220,7 +235,10 @@ export function subscribeToNotificationInserts(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      payload => onInsert(payload.new as NotificationInsertRow),
+      payload => {
+        clearCachedReads();
+        onInsert(payload.new as NotificationInsertRow);
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -3720,7 +3738,10 @@ export function subscribeToProviderBookingChanges(
         table: "bookings",
         filter: `provider_id=eq.${providerId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -3753,11 +3774,14 @@ export function subscribeToProviderBookingDetailChanges(
         table: "booking_reschedule_requests",
         filter: `booking_id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onReschedule(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onReschedule(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .on(
       "postgres_changes",
@@ -3767,9 +3791,12 @@ export function subscribeToProviderBookingDetailChanges(
         table: "bookings",
         filter: `id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onBookingUpdate(
-        payload.new as ProviderBookingLiveUpdate,
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onBookingUpdate(
+          payload.new as ProviderBookingLiveUpdate,
+        );
+      },
     )
     .subscribe();
   return () => {
@@ -4005,7 +4032,10 @@ export function subscribeToUserConversationChanges(
         table: "provider_conversations",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -4252,7 +4282,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onInsert(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbNotification);
+      },
     )
     .on(
       "postgres_changes",
@@ -4262,7 +4295,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onUpdate(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onUpdate(payload.new as DbNotification);
+      },
     )
     .subscribe();
   return () => {
@@ -9650,7 +9686,10 @@ export function subscribeToConversationMessages(
         table: "provider_messages",
         filter: `conversation_id=eq.${conversationId}`,
       },
-      (payload) => onInsert(payload.new as DbProviderMessage),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbProviderMessage);
+      },
     )
     .subscribe();
   return () => {

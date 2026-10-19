@@ -48,6 +48,7 @@ import {
   getUnreadNotificationCount,
   countProviderServices,
   getOrCreateConversation,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../utils/scheduleIssues';
@@ -1568,6 +1569,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   }, [loadBookings, myProviderId]);
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     await loadBookings();
     setRefreshing(false);

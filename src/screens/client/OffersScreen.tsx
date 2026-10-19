@@ -21,7 +21,7 @@ import type { AppTheme } from '../../constants/theme';
 import TabIcon from '../../components/TabIcon';
 import SlidingTabs from '../../components/SlidingTabs';
 import { HomeStackParamList } from '../../navigation/types';
-import { getActivePromotions } from '../../services/databaseService';
+import { forgetCachedReads, getActivePromotions } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import type { PublicPromotionWithProvider } from '../../types/database';
 
@@ -166,6 +166,8 @@ export default function OffersScreen({ navigation }: Props) {
   useEffect(() => { load(); }, [load]);
 
   const handleRefresh = useCallback(() => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     load().finally(() => setRefreshing(false));
   }, [load]);

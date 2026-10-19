@@ -44,6 +44,7 @@ import {
   getDiscoverFeedTotal,
   getSavedPortfolioDetails,
   prefetchProviderBySlug,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import type { PortfolioItemWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 
@@ -630,6 +631,8 @@ const ExploreScreen = memo(() => {
   // for the currently-selected filter — discards that filter's cache entry
   // and re-fetches, leaving every other filter's cached order untouched.
   const handleRefreshDiscover = useCallback(() => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     discoverFeedCache.current.delete(selectedFilter);
     discoverPageCursors.current.delete(selectedFilter);
     // A refresh replaces the feed rather than extending the current one.

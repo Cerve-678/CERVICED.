@@ -9,6 +9,8 @@
 // are dropped on purpose: PostgREST filters carry ids and values
 // (`?user_id=eq.…`) that have no business in a log.
 
+import { readRequestKey } from './readCache';
+
 export type RequestKind = 'auth-check' | 'auth' | 'table' | 'rpc' | 'storage' | 'function' | 'other';
 
 export interface RequestLabel {
@@ -58,8 +60,9 @@ type Fetch = typeof fetch;
  * the same PostgREST resource in the same event loop. Sending every copy is
  * particularly harmful while the API is recovering: it multiplies queued work
  * and makes an otherwise brief 503 look like an app-wide outage. This is only
- * an in-flight coalescer (not a response cache), and only applies to GET/HEAD;
- * writes and differently-authenticated requests always remain independent.
+ * an in-flight coalescer, and only applies to GET/HEAD; writes and
+ * differently-authenticated requests always remain independent. Remembering
+ * replies after they land is readCache.ts's job, which sits in front of this.
  */
 export function createCoalescingFetch(baseFetch: Fetch): Fetch {
   const inFlight = new Map<string, Promise<Response>>();
@@ -68,15 +71,10 @@ export function createCoalescingFetch(baseFetch: Fetch): Fetch {
     const method = (init?.method ?? (typeof input === 'object' && 'method' in input ? input.method : 'GET')).toUpperCase();
     if (method !== 'GET' && method !== 'HEAD') return baseFetch(input, init);
 
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     // The response is only safe to share between consumers when their headers
     // match too: authorization and PostgREST profile/preference headers can
     // change the visible rows or representation for the same URL.
-    const headers = new Headers(init?.headers ?? (typeof input === 'object' && 'headers' in input ? input.headers : undefined));
-    const headerKey = Array.from(headers.entries())
-      .map(([name, value]) => [name.toLowerCase(), value] as const)
-      .sort(([a], [b]) => a.localeCompare(b));
-    const key = `${method} ${url} ${JSON.stringify(headerKey)}`;
+    const key = readRequestKey(input, init);
 
     let request = inFlight.get(key);
     if (!request) {
