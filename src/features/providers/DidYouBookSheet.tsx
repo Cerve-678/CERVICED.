@@ -174,9 +174,16 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={step === 'ask' ? onClose : undefined}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <Pressable
-            style={[styles.sheet, { backgroundColor: tokens.bg, paddingBottom: bottomInset + 20 }]}
+            style={[
+              styles.sheet,
+              step === 'details' && styles.detailsSheet,
+              { backgroundColor: tokens.bg, paddingBottom: bottomInset + 20 },
+            ]}
             onPress={e => e.stopPropagation()}
           >
             <View style={[styles.grabber, { backgroundColor: tokens.border }]} />
@@ -342,7 +349,12 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  keyboardAvoidingView: { flex: 1, justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
+  // A defined height gives the details ScrollView a real viewport. Without
+  // one it measures at its content height, so the final button can be pushed
+  // beneath the bottom edge on smaller devices.
+  detailsSheet: { height: '92%' },
   grabber: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 14 },
   askHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
   logo: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
@@ -353,7 +365,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
   secondaryButton: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginTop: 10 },
   secondaryButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
-  detailsScroll: { flexGrow: 0 },
+  detailsScroll: { flex: 1, minHeight: 0 },
   detailsContent: { paddingBottom: 8 },
   detailsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailsTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 28 },

@@ -5720,17 +5720,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   linkOnlyBookRow: {
+    alignSelf: "stretch",
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   linkOnlyBookButton: {
     height: 46,
-    paddingHorizontal: 22,
+    // The primary action takes every spare point in the row; the fixed-size
+    // contact/social controls still fit on every screen width.
+    flex: 1,
     borderRadius: 23,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
   },
   linkOnlyBookText: {
