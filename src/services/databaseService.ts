@@ -12,6 +12,7 @@ import type {
 } from '../types/maintenance';
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
+import type { SavedCard } from '../features/payments/savedCards';
 import { supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
@@ -9927,7 +9928,15 @@ export async function lookupPostcodeAddress(addressId: string): Promise<Postcode
 export async function createCheckoutPaymentIntent(
   checkoutBatchId: string,
   currency: string,
-): Promise<{ clientSecret: string; paymentIntentId: string }> {
+): Promise<{
+  clientSecret: string;
+  paymentIntentId: string;
+  // The client's Stripe Customer + a short-lived ephemeral key, so the Payment
+  // Sheet can list their saved cards and offer to save a new one. Undefined
+  // only from an older deployed function; the sheet then works without them.
+  customerId?: string;
+  ephemeralKeySecret?: string;
+}> {
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
   });
@@ -9939,7 +9948,69 @@ export async function createCheckoutPaymentIntent(
   if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
     throw new Error('Payment configuration does not match this app. Please contact support.');
   }
-  return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId };
+  return {
+    clientSecret: data.clientSecret,
+    paymentIntentId: data.paymentIntentId,
+    customerId: typeof data.customerId === 'string' ? data.customerId : undefined,
+    ephemeralKeySecret: typeof data.ephemeralKeySecret === 'string' ? data.ephemeralKeySecret : undefined,
+  };
+}
+
+/** The signed-in client's saved cards, read live from Stripe (CERVICED stores
+ *  no card details). Empty until they save one. */
+export async function listSavedCards(): Promise<SavedCard[]> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'list' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not load your saved cards. Please try again.');
+  if (!Array.isArray(data?.cards)) throw new Error('Could not load your saved cards. Please try again.');
+  return (data.cards as unknown[]).flatMap((raw): SavedCard[] => {
+    const c = raw as Partial<SavedCard>;
+    if (typeof c.id !== 'string' || typeof c.last4 !== 'string' ||
+        typeof c.expMonth !== 'number' || typeof c.expYear !== 'number') return [];
+    return [{
+      id: c.id,
+      brand: typeof c.brand === 'string' ? c.brand : 'unknown',
+      last4: c.last4,
+      expMonth: c.expMonth,
+      expYear: c.expYear,
+      wallet: typeof c.wallet === 'string' ? c.wallet : null,
+    }];
+  });
+}
+
+/** What the Payment Sheet needs to save a new card: the Customer (got or
+ *  created server-side), an ephemeral key over it, and a SetupIntent secret. */
+export async function createSavedCardSetup(): Promise<{
+  customerId: string;
+  ephemeralKeySecret: string;
+  setupIntentClientSecret: string;
+}> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'setup' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not open card setup. Please try again.');
+  if (typeof data?.customerId !== 'string' || typeof data?.ephemeralKeySecret !== 'string' ||
+      typeof data?.setupIntentClientSecret !== 'string') {
+    throw new Error('Could not open card setup. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return {
+    customerId: data.customerId,
+    ephemeralKeySecret: data.ephemeralKeySecret,
+    setupIntentClientSecret: data.setupIntentClientSecret,
+  };
+}
+
+/** Removes one of the signed-in client's own saved cards from Stripe. */
+export async function removeSavedCard(paymentMethodId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'remove', paymentMethodId },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not remove that card. Please try again.');
 }
 
 /** A provider's late-arrival and no-show fees for one checkout, frozen on the
@@ -9972,11 +10043,31 @@ export async function getCheckoutFees(checkoutBatchId: string): Promise<Checkout
   }));
 }
 
-/** Stamps the client's agreement to those fees with the database clock. The
- *  payment function refuses to save a card for fees without it. */
-export async function acceptCheckoutFees(checkoutBatchId: string): Promise<void> {
-  const { error } = await supabase.rpc('accept_checkout_fees', { p_checkout_batch_id: checkoutBatchId });
+/** What the client agreed to, so the database can keep a full record of it. */
+export interface FeeConsentAgreement {
+  termsVersion: string;
+  termsSha256: string;
+  appPlatform: string | null;
+  appVersion: string | null;
+}
+
+/** Records the client's agreement to those fees: a fee_consent_records row
+ *  with the database clock, the wording version and the frozen amounts. The
+ *  payment functions refuse to save a card for fees, or charge one, without
+ *  it. Returns the record's id. */
+export async function acceptCheckoutFees(
+  checkoutBatchId: string,
+  agreement: FeeConsentAgreement,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('accept_checkout_fees', {
+    p_checkout_batch_id: checkoutBatchId,
+    p_terms_version: agreement.termsVersion,
+    p_terms_sha256: agreement.termsSha256,
+    p_app_platform: agreement.appPlatform,
+    p_app_version: agreement.appVersion,
+  });
   if (error) throw error;
+  return data as string;
 }
 
 export type BookingFeeKind = 'late' | 'no_show';

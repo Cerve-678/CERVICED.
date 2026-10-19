@@ -16,7 +16,9 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Animated,
+  Platform,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
@@ -37,7 +39,7 @@ import {
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
   getCheckoutFees, acceptCheckoutFees, type CheckoutFee } from '../../services/databaseService';
-import { FEE_CONSENT_LINE, FEE_TERMS_BODY, FEE_TERMS_HEADING } from '../../constants/feeTerms';
+import { FEE_CONSENT_LINE, FEE_TERMS_BODY, FEE_TERMS_HEADING, FEE_TERMS_SHA256, FEE_TERMS_VERSION } from '../../constants/feeTerms';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -54,7 +56,7 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
-import { toArgbHex } from '../../utils/color';
+import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
 import { newestAddedItem } from '../../utils/newestAddedItem';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
@@ -672,50 +674,31 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
         }
-        if (hasFees) await acceptCheckoutFees(checkoutBatchId);
+        if (hasFees) {
+          await acceptCheckoutFees(checkoutBatchId, {
+            termsVersion: FEE_TERMS_VERSION,
+            termsSha256: FEE_TERMS_SHA256,
+            appPlatform: Platform.OS,
+            appVersion: Constants.expoConfig?.version ?? null,
+          });
+        }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
-        const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
+        const { clientSecret, paymentIntentId, customerId, ephemeralKeySecret } =
+          await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
-
-        // Theme the sheet to match the app's own palette instead of Stripe's
-        // generic default. These are flat colours rather than Stripe's
-        // light/dark pair on purpose: the palette already resolves to the
-        // app's own dark mode, which is not necessarily the OS setting Stripe
-        // would otherwise auto-detect.
-        // Every value goes through toArgbHex: the palette's translucent tokens
-        // (sub, border) are CSS rgba() strings, which Stripe rejects outright
-        // rather than falling back on.
-        const stripeColors = {
-          primary: toArgbHex(P.accent),
-          background: toArgbHex(P.bg),
-          componentBackground: toArgbHex(P.surface),
-          componentBorder: toArgbHex(P.border),
-          componentDivider: toArgbHex(P.border),
-          primaryText: toArgbHex(theme.text),
-          secondaryText: toArgbHex(P.sub),
-          componentText: toArgbHex(theme.text),
-          placeholderText: toArgbHex(P.sub),
-          icon: toArgbHex(P.sub),
-          error: '#FFFF3B30',
-        };
 
         const { error: initError } = await initPaymentSheet({
           merchantDisplayName: 'Cerviced',
           returnURL: 'cerviced://stripe-redirect',
           allowsDelayedPaymentMethods: false,
           paymentIntentClientSecret: clientSecret,
-          appearance: {
-            colors: stripeColors,
-            shapes: { borderRadius: 20, borderWidth: 1 },
-            primaryButton: {
-              colors: {
-                background: toArgbHex(P.accent),
-                text: toArgbHex(P.onAccent),
-                border: toArgbHex(P.accent),
-              },
-              shapes: { borderRadius: 20 },
-            },
-          },
+          // The client's Stripe Customer: the sheet lists their saved cards
+          // and offers to save a new one. Both come back together; an older
+          // deployed function sends neither and the sheet still works.
+          ...(customerId && ephemeralKeySecret
+            ? { customerId, customerEphemeralKeySecret: ephemeralKeySecret }
+            : {}),
+          appearance: buildPaymentSheetAppearance(P, theme.text),
           // Requires a real Apple merchant ID registered in your Apple
           // Developer account and linked in the Stripe Dashboard — the
           // placeholder in app.json's plugin config ("merchant.com.cerviced")

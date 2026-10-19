@@ -88,16 +88,32 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     return json({ error: 'Finish setting up payouts before charging fees.' }, 409);
   }
 
-  const [{ data: batch, error: batchError }, { data: existing, error: existingError }, { data: customer, error: customerError }] = await Promise.all([
+  const [{ data: batch, error: batchError }, { data: existing, error: existingError }] = await Promise.all([
     booking.payment_intent_id
-      ? admin.from('checkout_batches').select('fee_consent_at').eq('payment_intent_id', booking.payment_intent_id).maybeSingle()
+      ? admin.from('checkout_batches').select('id').eq('payment_intent_id', booking.payment_intent_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     admin.from('booking_fee_charges').select('id').eq('booking_id', booking.id).neq('status', 'failed').limit(1),
-    admin.from('users').select('stripe_customer_id').eq('id', booking.user_id).maybeSingle(),
   ]);
   if (batchError) throw batchError;
   if (existingError) throw existingError;
-  if (customerError) throw customerError;
+
+  // The client's recorded agreement for this checkout, and that it covers
+  // this provider. The amount charged is the booking's frozen fee, which
+  // accept_checkout_fees copied into the record from the same held rows.
+  const { data: consent, error: consentError } = batch
+    ? await admin.from('fee_consent_records').select('id, user_id, fees').eq('checkout_batch_id', batch.id).maybeSingle()
+    : { data: null, error: null };
+  if (consentError) throw consentError;
+  const consentCoversProvider = !!consent && consent.user_id === booking.user_id &&
+    Array.isArray(consent.fees) &&
+    (consent.fees as Array<{ provider_id?: string }>).some(fee => fee.provider_id === booking.provider_id);
+
+  // The card saved at checkout, and the Customer it was saved to, are on the
+  // original payment.
+  const original = booking.payment_intent_id
+    ? await stripe.paymentIntents.retrieve(booking.payment_intent_id)
+    : null;
+  const customerId = typeof original?.customer === 'string' ? original.customer : original?.customer?.id ?? null;
 
   const eligibility = checkFeeEligibility({
     kind,
@@ -106,22 +122,21 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     endMs: londonWallTimeToUtcMs(booking.booking_date, booking.end_time ?? booking.booking_time),
     lateFeePence: booking.late_fee_pence,
     noShowFeePence: booking.no_show_fee_pence,
-    paidInApp: !!booking.payment_intent_id && !!customer?.stripe_customer_id,
-    clientConsented: !!batch?.fee_consent_at,
+    paidInApp: !!booking.payment_intent_id && !!customerId,
+    clientConsented: consentCoversProvider,
     alreadyCharged: (existing?.length ?? 0) > 0,
     nowMs: Date.now(),
   });
   if (!eligibility.ok) return json({ error: eligibility.error }, 409);
 
-  // The card saved at checkout is the payment method on the original payment.
-  const original = await stripe.paymentIntents.retrieve(booking.payment_intent_id!);
-  const paymentMethod = typeof original.payment_method === 'string' ? original.payment_method : original.payment_method?.id;
+  const paymentMethod = typeof original?.payment_method === 'string' ? original.payment_method : original?.payment_method?.id;
   if (!paymentMethod) return json({ error: "This client's saved card isn't available any more." }, 409);
 
   // Claim the booking first: the unique index stops a second tap here.
   const { data: row, error: insertError } = await admin.from('booking_fee_charges').insert({
     booking_id: booking.id, provider_id: provider.id, client_user_id: booking.user_id,
     kind, amount_pence: eligibility.amountPence, stripe_account_id: provider.stripe_account_id,
+    fee_consent_record_id: consent!.id,
   }).select('id').single();
   if (insertError) {
     if (insertError.code === '23505') return json({ error: 'A fee has already been charged for this booking.' }, 409);
@@ -133,7 +148,7 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     intent = await stripe.paymentIntents.create({
       amount: eligibility.amountPence,
       currency: 'gbp',
-      customer: customer!.stripe_customer_id,
+      customer: customerId!,
       payment_method: paymentMethod,
       off_session: true,
       confirm: true,
