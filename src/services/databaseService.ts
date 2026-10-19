@@ -6885,18 +6885,6 @@ export async function getMyProviderSaverCount(): Promise<number> {
   return typeof data === "number" ? data : 0;
 }
 
-/** A link-only provider's announcement to the clients who saved them. The
- *  audience is resolved in the database and never reaches this device.
- *  Returns how many clients it was sent to. */
-export async function sendAnnouncementToMySavers(title: string, message: string): Promise<number> {
-  const { data, error } = await supabase.rpc("send_announcement_to_my_savers", {
-    p_title: title,
-    p_message: message,
-  });
-  if (error) throw error;
-  return typeof data === "number" ? data : 0;
-}
-
 // ─────────────────────────────────────────────────────────
 // CLIENT EXTERNAL BOOKINGS — "Did you book?" entries
 // ─────────────────────────────────────────────────────────

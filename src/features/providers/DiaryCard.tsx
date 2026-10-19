@@ -3,6 +3,10 @@
 // (where Fresha, Treatwell, Acuity etc. already put their bookings). Nothing
 // is sent to CERVICED's servers — see deviceCalendarService. Free for now;
 // planned to sit behind a subscription once the product owner switches it on.
+//
+// Always the whole week, never behind a tap (owner's call, 2026-10-19): a day
+// strip counting each day's appointments, then every day listed — free and
+// closed days included, so a gap is visible at a glance.
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,8 +23,9 @@ import {
   type DeviceCalendar,
   type DiaryEvent,
 } from '../../services/deviceCalendarService';
-import { dateToYMD, formatDurationMinutes, formatTime12Safe, relativeDayLabel, formatShortDayDate } from '../../utils/dateUtils';
-import { diaryEventMinutes, groupDiaryByDay } from './diaryDays';
+import { DAY_NAMES_ABBREV, DAY_NAMES_FULL, MONTH_NAMES_ABBREV, formatDurationMinutes, formatTime12Safe, relativeDayLabel } from '../../utils/dateUtils';
+import type { DbProviderAvailability } from '../../types/database';
+import { DASHBOARD_WEEK_DAYS, buildDashboardWeek, diaryEventMinutes, type DashboardWeekDay } from './diaryDays';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
 
@@ -35,11 +40,30 @@ export interface DiaryPalette {
   bg: string;
 }
 
-const DIARY_DAYS = 7;
-
 type Phase = 'loading' | 'disconnected' | 'denied' | 'connected' | 'failed';
 
-export function DiaryCard({ P }: { P: DiaryPalette }) {
+/** "19–25 Oct", or "29 Oct – 4 Nov" across a month end. */
+function weekRangeLabel(week: readonly DashboardWeekDay[]): string {
+  const first = week[0]?.date;
+  const last = week[week.length - 1]?.date;
+  if (!first || !last) return '';
+  const firstMonth = MONTH_NAMES_ABBREV[first.getMonth()];
+  const lastMonth = MONTH_NAMES_ABBREV[last.getMonth()];
+  return firstMonth === lastMonth
+    ? `${first.getDate()}–${last.getDate()} ${lastMonth}`
+    : `${first.getDate()} ${firstMonth} – ${last.getDate()} ${lastMonth}`;
+}
+
+function daySummary(day: DashboardWeekDay): string {
+  if (day.events.length === 0) return day.closed ? 'Closed' : '';
+  const minutes = day.events.reduce((sum, event) => sum + diaryEventMinutes(event), 0);
+  const count = `${day.events.length} appointment${day.events.length === 1 ? '' : 's'}`;
+  return minutes > 0 ? `${count} · ${formatDurationMinutes(minutes)}` : count;
+}
+
+/** `hours` — their weekly opening hours, so closed days read "Closed" rather
+ *  than "Free all day". */
+export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbProviderAvailability[] }) {
   const styles = useMemo(() => createStyles(P), [P]);
   const bottomInset = useSystemBottomInset();
   const [phase, setPhase] = useState<Phase>('loading');
@@ -47,7 +71,6 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
   const [chooserOpen, setChooserOpen] = useState(false);
   const [calendars, setCalendars] = useState<DeviceCalendar[]>([]);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<'today' | 'week'>('today');
 
   const load = useCallback(async () => {
     try {
@@ -55,7 +78,7 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
       if (ids == null) { setPhase('disconnected'); return; }
       const access = await getCalendarAccess();
       if (access !== 'granted') { setPhase(access === 'denied' ? 'denied' : 'disconnected'); return; }
-      setEvents(await getDiaryEvents(ids, DIARY_DAYS));
+      setEvents(await getDiaryEvents(ids, DASHBOARD_WEEK_DAYS));
       setPhase('connected');
     } catch (error) {
       logger.warn('[DiaryCard] could not read the phone calendar', error);
@@ -95,11 +118,8 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
     setPhase('disconnected');
   }, []);
 
-  const today = new Date();
-  const todayYmd = dateToYMD(today);
-  const days = useMemo(() => groupDiaryByDay(events, new Date()), [events]);
-  const todayDay = days.find(day => day.ymd === todayYmd);
-  const nextEvent = days[0]?.events[0];
+  const week = useMemo(() => buildDashboardWeek(events, hours, new Date()), [events, hours]);
+  const connected = phase === 'connected';
 
   const renderEvent = (event: (typeof events)[number]) => {
     const minutes = diaryEventMinutes(event);
@@ -120,19 +140,20 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
 
   return (
     <View style={styles.card}>
-      {phase === 'connected' ? (
+      {connected ? (
         <View style={styles.headerRow}>
           <View style={styles.eventText}>
-            <Text style={styles.title}>{view === 'today' ? 'Today' : 'This week'}</Text>
-            <Text style={styles.headerSub}>{formatShortDayDate(today)} · from your phone calendar</Text>
+            <Text style={styles.title}>Your week</Text>
+            <Text style={styles.headerSub}>{weekRangeLabel(week)} · from your phone calendar</Text>
           </View>
           <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync().catch(() => {}); setView(v => (v === 'today' ? 'week' : 'today')); }}
+            onPress={openChooser}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             activeOpacity={0.7}
             accessibilityRole="button"
+            accessibilityLabel="Choose calendars"
           >
-            <Text style={styles.link}>{view === 'today' ? 'Week' : 'Today'}</Text>
+            <Text style={styles.link}>Calendars</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -176,34 +197,55 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
         </>
       )}
 
-      {phase === 'connected' && (
+      {connected && (
         <>
-          {view === 'today' ? (
-            todayDay ? (
-              <View style={styles.list}>{todayDay.events.map(renderEvent)}</View>
-            ) : (
-              <Text style={styles.body}>
-                Nothing in your calendar today.
-                {nextEvent
-                  ? ` Next: ${relativeDayLabel(nextEvent.start) ?? formatShortDayDate(nextEvent.start)} · ${nextEvent.title}${nextEvent.allDay ? '' : ` at ${formatTime12Safe(nextEvent.start) ?? ''}`}`
-                  : ''}
-              </Text>
-            )
-          ) : days.length === 0 ? (
-            <Text style={styles.body}>Nothing in your calendar for the next {DIARY_DAYS} days.</Text>
-          ) : (
-            <View style={styles.list}>
-              {days.map(day => (
-                <View key={day.ymd} style={styles.list}>
-                  <Text style={styles.dayLabel}>{relativeDayLabel(day.date) ?? formatShortDayDate(day.date)}</Text>
-                  {day.events.map(renderEvent)}
+          <View style={styles.strip}>
+            {week.map((day, index) => {
+              const isToday = index === 0;
+              return (
+                <View
+                  key={day.ymd}
+                  style={[styles.stripDay, isToday && styles.stripToday]}
+                  accessibilityLabel={`${DAY_NAMES_FULL[day.date.getDay()]} ${day.date.getDate()}: ${daySummary(day) || 'free'}`}
+                >
+                  <Text style={[styles.stripName, isToday && styles.onAccent]}>{DAY_NAMES_ABBREV[day.date.getDay()]}</Text>
+                  <Text style={[styles.stripNum, isToday && styles.onAccent, day.closed && !isToday && styles.closedNum]}>
+                    {day.date.getDate()}
+                  </Text>
+                  <View style={styles.stripDots}>
+                    {day.events.slice(0, 3).map(event => (
+                      <View
+                        key={`${event.calendarId}-${event.id}-${event.start.getTime()}`}
+                        style={[styles.stripDot, { backgroundColor: isToday ? P.onAccent : P.accent }]}
+                      />
+                    ))}
+                  </View>
                 </View>
-              ))}
-            </View>
-          )}
-          <TouchableOpacity onPress={openChooser} style={styles.footerLink} activeOpacity={0.7} accessibilityRole="button">
-            <Text style={styles.link}>Choose calendars</Text>
-          </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {week.map(day => {
+            const summary = daySummary(day);
+            const label = relativeDayLabel(day.date) ?? `${DAY_NAMES_FULL[day.date.getDay()]} ${day.date.getDate()}`;
+            return (
+              <View key={day.ymd} style={styles.list}>
+                <View style={styles.dayRow}>
+                  <Text style={styles.dayLabel}>{label}</Text>
+                  {!!summary && <Text style={styles.daySummary}>{summary}</Text>}
+                </View>
+                {day.events.map(renderEvent)}
+                {day.events.length === 0 && !day.closed && (
+                  <View style={styles.eventRow}>
+                    <View style={styles.eventTimeSpacer} />
+                    <View style={styles.freeBlock}>
+                      <Text style={styles.freeText}>Free all day</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </>
       )}
 
@@ -256,8 +298,21 @@ const createStyles = (P: DiaryPalette) =>
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     title: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
     headerSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub, marginTop: 1 },
+    dayRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
     dayLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: P.sub, textTransform: 'uppercase' },
-    footerLink: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
+    daySummary: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', color: P.sub },
+    strip: { flexDirection: 'row', gap: 4 },
+    stripDay: { flex: 1, alignItems: 'center', borderRadius: 14, paddingTop: 7, paddingBottom: 8, backgroundColor: P.surface },
+    stripToday: { backgroundColor: P.accent },
+    stripName: { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: P.sub },
+    stripNum: { fontFamily: 'BakbakOne-Regular', fontSize: 17, lineHeight: 22, color: P.text },
+    closedNum: { opacity: 0.45 },
+    onAccent: { color: P.onAccent },
+    stripDots: { flexDirection: 'row', gap: 2, height: 5, marginTop: 3 },
+    stripDot: { width: 5, height: 5, borderRadius: 3 },
+    eventTimeSpacer: { width: 64 },
+    freeBlock: { flex: 1, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: P.border, paddingVertical: 10, paddingHorizontal: 12 },
+    freeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', color: P.sub },
     free: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.sub },
     link: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.accent },
     body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, color: P.sub },

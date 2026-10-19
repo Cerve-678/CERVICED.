@@ -71,9 +71,9 @@ Curated overview: [[Screens & Navigation]].
 - `Branding`
 - `Policies`
 - `Payments`
+- `BusinessInfo`
 - `ProviderIntakeForm`
 - `ProviderServicesMain`
-- `BusinessInfo`
 - `ProviderAccountMain`
 - `MyPublicProfile`
 - `AccountInfo`
