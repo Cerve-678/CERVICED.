@@ -24,8 +24,8 @@ Last updated: 18 October 2026.
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
-| Client saved cards (Payment Methods) | No | Branch `feat/saved-cards-fee-consent-record`: migration 20261019120000 unapplied, `client-saved-cards` + updated `create-payment-intent` / `booking-fee` undeployed |
-| Fee consent record (`fee_consent_records`) | No | Same branch; replaces the bare `fee_consent_at` stamp once deployed |
+| Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
+| Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
 
 ---
 
@@ -115,8 +115,7 @@ their Stripe transfer is reversed. If their Stripe balance can't cover it
 - Two fixed £ fees in the provider's policy: late arrival (after the grace
   period) and no-show. Each is capped at **50% of the service price**.
 - Frozen onto the booking by a trigger at insert, from the live policy.
-- The client agrees to them at checkout before their card is saved. On
-  `feat/saved-cards-fee-consent-record` (not live yet) each agreement is a
+- The client agrees to them at checkout before their card is saved. Each agreement is a
   `fee_consent_records` row: client, database time, checkout, the wording
   version they were shown (`fee_terms_versions`, checked by sha256), the frozen
   amounts per provider, and app platform/version. `create-payment-intent` won't
@@ -138,7 +137,7 @@ estimate of loss, not a penalty.
 
 ## 7. Security & the data boundary
 
-- Saved cards (branch, not live): the client's Stripe Customer id sits in
+- Saved cards: the client's Stripe Customer id sits in
   `client_stripe_customers`, service-role only. CERVICED stores no card data;
   Payment Methods reads brand/last 4/expiry live from Stripe. A card saved on
   Payment Methods is `on_session` only. `booking-fee` charges the Customer and
