@@ -1480,20 +1480,18 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       setHasNoProviderProfile(!bundle);
       if (!bundle) return;
       const { profile, availability: avail, blockedDates: blocked, availabilityWindows: windows, availabilityOverrides: overrides } = bundle;
-      {
+      setAvailability(avail);
+      setBlockedDates(blocked);
+      setAvailabilityWindows(windows);
+      setAvailabilityOverrides(overrides);
+      // The setup card is supplementary. Do not make the calendar wait for
+      // its service-count and private-address reads before it can draw the
+      // day's working hours and blocked dates.
+      return Promise.all([
+        countProviderServices(profile.id),
+        hasMyProviderGoLiveAddress(profile.id).catch(() => false),
+      ]).then(([serviceCount, goLiveAddress]) => {
         if (cancelled) return;
-        setAvailability(avail);
-        setBlockedDates(blocked);
-        setAvailabilityWindows(windows);
-        setAvailabilityOverrides(overrides);
-        // The setup card is supplementary. Do not make the calendar wait for
-        // its service-count and private-address reads before it can draw the
-        // day's working hours and blocked dates.
-        return Promise.all([
-          countProviderServices(profile.id),
-          hasMyProviderGoLiveAddress(profile.id).catch(() => false),
-        ]).then(([serviceCount, goLiveAddress]) => {
-          if (cancelled) return;
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
           servicesSet: serviceCount > 0,
@@ -1537,8 +1535,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             storage.setItem(celebrationKey, false).catch((err) => logger.error('[ProviderHome] go-live pending write failed:', err));
           }
         }).catch((err) => logger.error('[ProviderHome] go-live celebration flag read failed:', err));
-        });
-      }
+      });
     }).catch((err) => {
       logger.error('[ProviderHome] provider profile load failed:', err);
       if (cancelled) return;

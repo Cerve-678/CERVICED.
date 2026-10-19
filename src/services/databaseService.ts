@@ -1534,6 +1534,13 @@ export async function getMyProviderHomeBundle(): Promise<{
       provider_availability_overrides (*)
     `)
     .eq("user_id", user.id)
+    // Same bounds the standalone loaders apply: overrides only from a
+    // fortnight back, and at most 500 blocked dates.
+    .gte("provider_availability_overrides.availability_date", overridesFromDate())
+    .order("blocked_date", { referencedTable: "provider_blocked_dates" })
+    .limit(500, { referencedTable: "provider_blocked_dates" })
+    // Same identity rule as getProviderProfileForUserId: active profile
+    // first, then the oldest.
     .order("is_active", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(1)
@@ -1565,7 +1572,6 @@ export async function getMyProviderHomeBundle(): Promise<{
       (a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time),
     ),
     availabilityOverrides: [...(provider_availability_overrides ?? [])]
-      .filter(override => override.availability_date >= overridesFromDate())
       .sort(
         (a, b) => a.availability_date.localeCompare(b.availability_date)
           || (a.start_time ?? '').localeCompare(b.start_time ?? ''),
