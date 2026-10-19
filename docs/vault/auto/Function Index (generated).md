@@ -160,7 +160,7 @@
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **getAdaptiveAccentColor** · **hasProviderPolicyInfo**
-- `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · tileHeight · venueImages
+- `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialitiesSection** · tileHeight · venueImages
 - `ServiceEditorSheet.tsx` — handleSave · ServiceEditorSheet · toDraft · **toEditorValue** · validateServiceValue
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**

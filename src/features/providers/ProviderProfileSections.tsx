@@ -36,6 +36,37 @@ interface SectionPalette {
   highlightColors: [string, string];
 }
 
+/** A link-only profile's own Specialities section. Link-only profiles carry
+ *  no price list, so specialities are the main signal of what they do and get
+ *  a section of their own; full providers show them as the first group in
+ *  Additional Information instead. */
+export const ProviderSpecialitiesSection = React.memo(function ProviderSpecialitiesSection({
+  specialities,
+  textColor,
+  accent,
+}: {
+  specialities: readonly string[];
+  textColor: string;
+  accent: string;
+}) {
+  if (specialities.length === 0) return null;
+  return (
+    <View style={styles.plainSection}>
+      <Text style={[styles.plainTitle, { color: textColor }]}>Specialities</Text>
+      <View style={styles.chipRow}>
+        {specialities.map(speciality => (
+          <View
+            key={speciality}
+            style={[styles.chip, { borderColor: `${accent}55`, backgroundColor: `${accent}18` }]}
+          >
+            <Text style={[styles.chipText, { color: textColor }]}>{speciality}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+});
+
 export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPreviewSection({
   reviews,
   loading,
@@ -417,6 +448,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 });
 
 const styles = StyleSheet.create({
+  plainSection: { marginTop: 20, marginBottom: 20 },
   plainTitle: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 15 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },

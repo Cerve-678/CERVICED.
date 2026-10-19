@@ -33,6 +33,7 @@ describe("ProviderProfileScreen data architecture", () => {
 
   it("keeps state-independent profile sections outside the screen component", () => {
     for (const section of [
+      "ProviderSpecialitiesSection",
       "ProviderReviewPreviewSection",
       "ProviderContactSection",
       "ProviderOpeningHoursSection",

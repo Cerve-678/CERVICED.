@@ -106,6 +106,7 @@ import {
   ProviderOpeningHoursSection,
   ProviderPortfolioSection,
   ProviderReviewPreviewSection,
+  ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -1718,8 +1719,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (!provider) return [];
     const groups: { label: string; chips: string[] }[] = [];
     // First, because it's what clients most often scan for ("do they do
-    // knotless?"). Same values Search's Speciality filter matches on.
-    if (provider.specialties.length > 0) {
+    // knotless?"). Same values Search's Speciality filter matches on. A
+    // link-only profile shows them in their own section instead.
+    if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
     if (provider.languagesSpoken.length > 0) {
@@ -5382,6 +5384,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   ) : null}
                 </BlurView>
               </View>
+
+              {isLinkOnly && (
+                <ProviderSpecialitiesSection
+                  specialities={provider.specialties}
+                  textColor={OP.text}
+                  accent={adaptiveAccentColor}
+                />
+              )}
 
               {/* Services Section — the price list. A link-only provider's
                   prices live on their own booking page. */}
