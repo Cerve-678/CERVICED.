@@ -36,33 +36,6 @@ interface SectionPalette {
   highlightColors: [string, string];
 }
 
-export const ProviderSpecialtiesSection = React.memo(function ProviderSpecialtiesSection({
-  specialties,
-  textColor,
-  accent,
-}: {
-  specialties: string[];
-  textColor: string;
-  accent: string;
-}) {
-  if (specialties.length === 0) return null;
-  return (
-    <View style={styles.plainSection}>
-      <Text style={[styles.plainTitle, { color: textColor }]}>Specialties</Text>
-      <View style={styles.chipRow}>
-        {specialties.map(specialty => (
-          <View
-            key={specialty}
-            style={[styles.chip, { borderColor: `${accent}55`, backgroundColor: `${accent}18` }]}
-          >
-            <Text style={[styles.chipText, { color: textColor }]}>{specialty}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-});
-
 export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPreviewSection({
   reviews,
   loading,
@@ -444,7 +417,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 });
 
 const styles = StyleSheet.create({
-  plainSection: { marginTop: 20, marginBottom: 20 },
   plainTitle: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 15 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },

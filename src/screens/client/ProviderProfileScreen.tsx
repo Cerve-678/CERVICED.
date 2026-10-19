@@ -106,7 +106,6 @@ import {
   ProviderOpeningHoursSection,
   ProviderPortfolioSection,
   ProviderReviewPreviewSection,
-  ProviderSpecialtiesSection,
 } from "../../features/providers/ProviderProfileSections";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -1718,6 +1717,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const additionalInfoGroups = useMemo(() => {
     if (!provider) return [];
     const groups: { label: string; chips: string[] }[] = [];
+    // First, because it's what clients most often scan for ("do they do
+    // knotless?"). Same values Search's Speciality filter matches on.
+    if (provider.specialties.length > 0) {
+      groups.push({ label: "Specialities", chips: [...provider.specialties] });
+    }
     if (provider.languagesSpoken.length > 0) {
       groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
     }
@@ -5039,18 +5043,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     );
                     return (
                       <View style={styles.linkOnlyBookBlock}>
-                        {provider.specialties.length > 0 && (
-                          <View style={styles.linkOnlyChips}>
-                            {provider.specialties.slice(0, 6).map((specialty) => (
-                              <View
-                                key={specialty}
-                                style={[styles.linkOnlyChip, { backgroundColor: cardBg, borderColor: OP.border }]}
-                              >
-                                <Text style={[styles.linkOnlyChipText, { color: OP.text }]}>{specialty}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        )}
                         <View style={styles.linkOnlyBookRow}>
                           <TouchableOpacity
                             style={[styles.linkOnlyBookButton, { backgroundColor: OP.card, borderColor: OP.border }]}
@@ -5391,14 +5383,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </BlurView>
               </View>
 
-              {!isLinkOnly && (
-              <ProviderSpecialtiesSection
-                specialties={provider.specialties}
-                textColor={OP.text}
-                accent={adaptiveAccentColor}
-              />
-              )}
-
               {/* Services Section — the price list. A link-only provider's
                   prices live on their own booking page. */}
               {!isLinkOnly && (
@@ -5722,25 +5706,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     marginBottom: 4,
-  },
-  linkOnlyChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 6,
-    maxWidth: 340,
-  },
-  linkOnlyChip: {
-    height: 28,
-    paddingHorizontal: 11,
-    borderRadius: 14,
-    borderWidth: 1,
-    justifyContent: "center",
-  },
-  linkOnlyChipText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    fontWeight: "700",
   },
   linkOnlyBookRow: {
     flexDirection: "row",

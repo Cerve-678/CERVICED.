@@ -5,7 +5,7 @@
 
 #generated
 
-**2560 functions** across **356 files**.
+**2559 functions** across **356 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -160,7 +160,7 @@
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **getAdaptiveAccentColor** · **hasProviderPolicyInfo**
-- `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialtiesSection** · tileHeight · venueImages
+- `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · tileHeight · venueImages
 - `ServiceEditorSheet.tsx` — handleSave · ServiceEditorSheet · toDraft · **toEditorValue** · validateServiceValue
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
