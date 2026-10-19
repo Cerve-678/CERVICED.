@@ -29,7 +29,8 @@ import { getMaintenanceServiceType } from '../../constants/maintenanceServiceTyp
 import { BeautyLanding } from '../../features/beauty-profile/BeautyLanding';
 import { MyProfileView } from '../../features/beauty-profile/MyProfileView';
 import { MaintenanceView } from '../../features/maintenance/MaintenanceView';
-import { SetupFlow } from '../../features/maintenance/SetupFlow';
+import { SetupFlow, type Step } from '../../features/maintenance/SetupFlow';
+import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS } from '../../utils/maintenanceSuggestions';
 import { useMaintenance } from '../../features/maintenance/useMaintenance';
 import type { ItemAction } from '../../features/maintenance/MaintenanceItemCard';
 
@@ -69,6 +70,13 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   const focusItemId = route.params?.focusItemId;
   const maintenance = useMaintenance(user?.id ?? null);
   const [rebookingId, setRebookingId] = useState<string | null>(null);
+  // Setup opens on step 1, or straight on the suggestions from "Picked for you".
+  const [setupStart, setSetupStart] = useState<Step>(1);
+  const openSetup = (start: Step) => { setSetupStart(start); setView('setup'); };
+  const pickedCount = useMemo(
+    () => buildMaintenanceSuggestions(saved, EMPTY_SETUP_ANSWERS, maintenance.items, new Date()).length,
+    [saved, maintenance.items],
+  );
 
   // A notification tap while this screen is already mounted re-sends params.
   useEffect(() => {
@@ -339,7 +347,9 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           busyItemId={rebookingId}
           onBack={() => setView('landing')}
           onItemAction={(item, action) => { void handleItemAction(item, action); }}
-          onOpenSetup={() => setView('setup')}
+          onOpenSetup={() => openSetup(1)}
+          pickedCount={pickedCount}
+          onOpenPicked={() => openSetup(3)}
           onMessageProviders={() => navigation.navigate('Messages')}
           onViewBooking={bookingId => navigation.navigate('Bookings', { openBookingId: bookingId, highlightBookingId: bookingId })}
         />
@@ -352,6 +362,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           state={maintenance}
           onClose={() => setView(maintenance.items.length > 0 ? 'maintenance' : 'landing')}
           onDone={() => setView('maintenance')}
+          startStep={setupStart}
         />
       );
       break;
@@ -363,7 +374,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           maintenance={maintenance}
           onBack={() => navigation.goBack()}
           onOpenMaintenance={() => setView('maintenance')}
-          onOpenSetup={() => setView('setup')}
+          onOpenSetup={() => openSetup(1)}
           onOpenProfile={() => { setSelectedCategory(null); setView('profile'); }}
           onOpenHealth={() => { setView('profile'); setSelectedCategory('health'); }}
         />

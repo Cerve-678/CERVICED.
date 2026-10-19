@@ -5,7 +5,7 @@
 
 #generated
 
-**2559 functions** across **356 files**.
+**2565 functions** across **356 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -124,8 +124,8 @@
 - `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst
 
 ### `src/features/maintenance/` (9)
-- `AddReminderSheet.tsx` — **AddReminderSheet** · addWeeksFromToday · onPickDate · submit
-- `ItemMenuSheet.tsx` — addWeeksYMD · **ItemMenuSheet** · markDone · onPickDate · run · saveSchedule
+- `AddReminderSheet.tsx` — **AddReminderSheet** · addWeeksFromToday · chipFor · datePill · onPickDate · pick · submit
+- `ItemMenuSheet.tsx` — addWeeksYMD · **ItemMenuSheet** · markDone · onPickDate · run · saveChanges
 - `MaintenanceItemCard.tsx` — iconFor · **itemPill** · MaintenanceItemCardImpl · **primaryActionFor** · subline
 - `MaintenanceView.tsx` — groups · **MaintenanceView** · onPickPatch · openMenu · renderItems · renderNote · S · tryScroll · turnOnReminders · visibleItems
 - `presentation.ts` — byDue · **countdownFor** · **countDueItems** · dayDiff · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **needsAttention** · **presentMaintenanceItem**
@@ -218,7 +218,7 @@
 
 ### `src/screens/client/` (22)
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
-- `BeautyProfileScreen.tsx` — BeautyProfileScreen · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · stats · toggleEdit
+- `BeautyProfileScreen.tsx` — BeautyProfileScreen · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openSetup · pickedCount · stats · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · tick
 - `BookingsScreen.tsx` — applyLocation · bookingListKeyExtractor · BookingsScreen · confirmRebook · createStyles · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handleBookWaitlistEntry · handleConfirmWaitlistHold · handleDeclineWaitlistHold · handleExternalBookingPress · handleLeaveWaitlistEntry · handleRatingSubmit · handleRebook · handleTap · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · HiddenDevMenuTrigger · isMessagingAvailable · listItems · onRefresh · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · pastBookingsFiltered · pastCategories · refreshBookingActionItems · refreshUserLocation · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · retryLoadBookings · routeCoordinates · startLocationUpdates · styles · to · toggleFilter · virtualizedListRows · WaitlistCard
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · filteredProviders · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · renderEmptyState · SkeletonProviderCard
@@ -347,7 +347,7 @@
 - `fuzzyMatch.ts` — levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar**
 - `hairTypeMatch.ts` — **matchesHairType**
 - `logger.ts` — **clearLogBuffer** · formatArgs · **getLogBuffer** · **installAuthErrorFilter** · noop · pushToBuffer · **reportError** · **setErrorReporter** · **subscribeToLogBuffer**
-- `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer
+- `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer · **scheduleNewReminder**
 - `masonryHeight.ts` — **getMasonryItemHeight** · hashToUnit
 - `mergeSavedExploreCards.ts` — **mergeSavedExploreCards**
 - `newestAddedItem.ts` — **newestAddedItem**

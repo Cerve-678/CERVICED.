@@ -7,9 +7,10 @@
 //  - Beauty Profile answers only choose WHICH service types are offered.
 //    Every interval comes from MAINTENANCE_SERVICE_TYPES' single neutral
 //    default — no answer makes an interval longer or shorter.
-//  - Skin tone is never read. Skin CONCERNS are never read either: several of
-//    them are medical conditions (eczema, psoriasis, rosacea), and offering a
-//    treatment because of one is advice, not a reminder.
+//  - Skin tone is never read. Skin CONCERNS and SENSITIVE AREAS are never
+//    read either: several concerns are medical conditions (eczema, psoriasis,
+//    rosacea), sensitive areas describe skin sensitivity, and offering a
+//    treatment because of either is advice, not a reminder.
 //  - Every suggestion carries the answer it came from, shown to the client as
 //    "from your answer: …".
 //  - Bookable services only. Patch tests are not suggested: the app has no
@@ -46,6 +47,16 @@ export interface MaintenanceSuggestion {
 
 /** Hair types whose usual salon routine includes the textured-hair services. */
 const TEXTURED_HAIR_TYPES: ReadonlySet<string> = new Set(['Curly', 'Coily', '4A', '4B', '4C']);
+
+/** Setup answers before the client has given any: what "Picked for you"
+ *  uses after setup, when only the Beauty Profile is in play. */
+export const EMPTY_SETUP_ANSWERS: MaintenanceSetupAnswers = {
+  protectiveStyle: null,
+  protectiveWearWeeks: 6,
+  protectiveWeeksIn: null,
+  events: [],
+  lastPatchTestOn: null,
+};
 
 /** How long before an event its "book by" date falls. App-chosen, not health
  *  related: it only decides when the client is prompted to book. */
@@ -147,11 +158,23 @@ export function buildMaintenanceSuggestions(
     offer('lash_infill', 'Lashes: Currently have extensions');
   } else if (profile.lashStatus !== 'No extensions' && profile.treatmentHistory.includes('Lash extensions')) {
     offer('lash_infill', 'Treatment history: Lash extensions');
+  } else if (profile.lashStatus === 'No extensions' && profile.lashStyle === 'Natural') {
+    // Natural lashes, no extensions: a lift is the bookable lash service.
+    offer('lash_lift', 'Lashes: Natural, no extensions');
   }
-  if (profile.nailShape) offer('nails_general', `Nails: ${profile.nailShape}`);
-  else if (profile.nailLength) offer('nails_general', `Nails: ${profile.nailLength}`);
-  if (profile.browStyle) offer('brows_general', `Brows: ${profile.browStyle}`);
+  const nailAnswer = profile.nailShape ? `Nails: ${profile.nailShape}`
+    : profile.nailLength ? `Nails: ${profile.nailLength}`
+    : null;
+  if (nailAnswer) {
+    offer('nails_general', nailAnswer);
+    offer('pedicure', nailAnswer);
+  }
+  if (profile.browStyle === 'Laminated') offer('brow_lamination', 'Brows: Laminated');
+  else if (profile.browStyle) offer('brows_general', `Brows: ${profile.browStyle}`);
   else if (profile.browCondition) offer('brows_general', `Brows: ${profile.browCondition}`);
+  // Waxing is never suggested: the only related answer, "Sensitive areas", is
+  // about skin sensitivity, and a treatment offered because of it is advice.
+  // Clients add waxing themselves from "Add your own".
   if (profile.skinType) offer('facial', `Skin type: ${profile.skinType}`);
 
   // ── Events ────────────────────────────────────────────────────────────────
@@ -173,4 +196,52 @@ export function buildMaintenanceSuggestions(
   });
 
   return out;
+}
+
+/** How a reminder the client adds themselves is timed. */
+export type ReminderTiming =
+  /** Every N weeks, counted from the last visit (or from today if unknown). */
+  | { mode: 'repeats'; weeks: number; lastDoneOn: string | null }
+  /** Getting ready for a date: due on its book-by date, never in the past. */
+  | { mode: 'event'; eventOn: string }
+  /** Once, on a date. */
+  | { mode: 'once'; date: string };
+
+export interface ScheduledReminder {
+  kind: MaintenanceItemKind;
+  repeatWeeks: number | null;
+  lastDoneOn: string | null;
+  /** "YYYY-MM-DD". May be in the past for a repeat whose last visit was long
+   *  ago: that's honestly overdue, not something to hide. */
+  dueOn: string;
+  eventOn: string | null;
+}
+
+/** The dates a new client-made reminder is saved with. Pure; today is passed in. */
+export function scheduleNewReminder(timing: ReminderTiming, today: Date): ScheduledReminder {
+  const todayYMD = dateToYMD(today);
+  switch (timing.mode) {
+    case 'repeats': {
+      const from = timing.lastDoneOn ? toLocalDate(timing.lastDoneOn) : today;
+      return {
+        kind: 'service',
+        repeatWeeks: timing.weeks,
+        lastDoneOn: timing.lastDoneOn,
+        dueOn: dateToYMD(addDays(from, timing.weeks * 7)),
+        eventOn: null,
+      };
+    }
+    case 'event': {
+      const bookBy = dateToYMD(addDays(toLocalDate(timing.eventOn), -EVENT_BOOK_BY_WEEKS * 7));
+      return {
+        kind: 'event',
+        repeatWeeks: null,
+        lastDoneOn: null,
+        dueOn: bookBy < todayYMD ? todayYMD : bookBy,
+        eventOn: timing.eventOn,
+      };
+    }
+    case 'once':
+      return { kind: 'service', repeatWeeks: null, lastDoneOn: null, dueOn: timing.date, eventOn: null };
+  }
 }

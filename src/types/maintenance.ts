@@ -44,6 +44,8 @@ export interface MaintenanceItem {
   /** "YYYY-MM-DD", events only. The row is removed the day after. */
   eventOn: string | null;
   paused: boolean;
+  /** The client's private note to self. Never shown to a provider. */
+  note: string | null;
   createdAt: string;
 }
 
@@ -93,8 +95,11 @@ export interface NewMaintenanceItem {
   serviceId: string | null;
   providerName: string | null;
   repeatWeeks: number | null;
+  /** "YYYY-MM-DD" the client last had it done; a repeat counts from here. */
+  lastDoneOn: string | null;
   dueOn: string;
   eventOn: string | null;
+  note: string | null;
 }
 
 /** A provider the client has booked before, for linking a reminder. */
