@@ -418,7 +418,8 @@ export interface DbProvider {
   // Claimable-profile fields (supabase/claimable_provider_profiles.sql).
   // is_claimed=false rows are imported placeholders with no owner yet —
   // see searchUnclaimedProviders/getUnclaimedProviderDetail in
-  // databaseService.ts and the claim flow in ClaimProviderScreen.tsx.
+  // databaseService.ts, the claim flow in ClaimProviderScreen.tsx, and
+  // provider_claim_requests (20261019235500) for how a claim is approved.
   is_claimed: boolean;
   source: "self_signup" | "scraped" | null;
   created_at: string;

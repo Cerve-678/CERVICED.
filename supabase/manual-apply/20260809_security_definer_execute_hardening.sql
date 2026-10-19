@@ -47,10 +47,6 @@ BEGIN
      OR NEW.source_url IS DISTINCT FROM OLD.source_url
      OR NEW.scraped_at IS DISTINCT FROM OLD.scraped_at
      OR NEW.claimed_at IS DISTINCT FROM OLD.claimed_at
-     OR NEW.claim_token IS DISTINCT FROM OLD.claim_token
-     OR NEW.claim_token_expires_at IS DISTINCT FROM OLD.claim_token_expires_at
-     OR NEW.claim_attempts IS DISTINCT FROM OLD.claim_attempts
-     OR NEW.claim_token_last_sent_at IS DISTINCT FROM OLD.claim_token_last_sent_at
      OR NEW.scraped_fields IS DISTINCT FROM OLD.scraped_fields
      OR NEW.search_vector IS DISTINCT FROM OLD.search_vector
      OR NEW.fully_booked_alert_last_sent_at IS DISTINCT FROM OLD.fully_booked_alert_last_sent_at THEN
@@ -174,7 +170,6 @@ BEGIN
     'public.cancel_account_deletion()'::regprocedure,
     'public.cancel_own_booking(uuid)'::regprocedure,
     'public.claim_cart_booking_slots(uuid,jsonb)'::regprocedure,
-    'public.claim_provider_profile(uuid,text)'::regprocedure,
     'public.claim_waitlist_hold(uuid)'::regprocedure,
     'public.confirm_reschedule_own_booking(uuid,date,time without time zone,time without time zone)'::regprocedure,
     'public.decline_reschedule_offer(uuid)'::regprocedure,

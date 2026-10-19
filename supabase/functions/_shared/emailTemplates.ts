@@ -308,15 +308,6 @@ function stepsPanel(P: EmailPalette, label: string, items: string[]) {
   );
 }
 
-/** The one-time code, sized so it is unmistakably the point of the email. */
-function codePanel(P: EmailPalette, code: string, expiry: string) {
-  return `
-      <div style="background:${P.surface};border-radius:16px;padding:26px 20px;text-align:center;margin-bottom:26px;">
-        <div style="font-family:${DISPLAY};color:${P.accent};font-size:36px;letter-spacing:10px;line-height:1.1;">${code}</div>
-        <div style="font-family:${BODY};color:${P.sub};font-size:11px;letter-spacing:2px;text-transform:uppercase;padding-top:14px;">${expiry}</div>
-      </div>`;
-}
-
 /** Quiet aside marked with an accent rule down its left edge. */
 function note(P: EmailPalette, html: string, marginBottom = 26) {
   return `
@@ -697,37 +688,6 @@ export function passwordChangedEmail(params: { name: string }) {
           P,
           "Wasn't you?",
           `Someone else may have access to your account. Contact <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a> right away and we'll secure it. If you made the change yourself, there's nothing else to do.`,
-        ),
-    }),
-  };
-}
-
-/**
- * The one-time code for claiming a scraped business listing. Provider-side, so
- * it takes the provider palette.
- *
- * The code is repeated in the preheader on purpose: on a phone that puts it in
- * the lock-screen notification, which is where it is most useful.
- */
-export function claimVerificationEmail(params: { code: string; businessName?: string }) {
-  const P = PROVIDER;
-  const who = params.businessName ? ` for ${esc(params.businessName)}` : '';
-  return {
-    subject: `Your CERVICED verification code: ${params.code}`,
-    html: letter(P, {
-      preview: `${esc(params.code)} — your CERVICED verification code. Expires in 15 minutes.`,
-      content:
-        eyebrow(P, 'Claim your listing') +
-        headline(P, 'Your verification code') +
-        lede(
-          P,
-          `Someone asked to claim the CERVICED listing${who}. Enter this code in the app to confirm the business is yours:`,
-        ) +
-        codePanel(P, esc(params.code), 'Expires in 15 minutes') +
-        alertPanel(
-          P,
-          "Didn't ask for this?",
-          'You can ignore this email. The listing stays unclaimed, and nobody gets access to it without this code.',
         ),
     }),
   };
