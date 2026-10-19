@@ -25,11 +25,11 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
-### PENDING APPLY 2026-10-19 (fee terms wording version '2026-10-19')
+### Applied 2026-10-19 (fee terms wording version '2026-10-19')
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261019140000 | `fee_terms_version_2026_10_19` | **Written, NOT applied** (branch `feat/saved-card-fee-followups`). Data only: one `fee_terms_versions` row; sha256 checked against Postgres before commit (44b1d39d…). Apply BEFORE the app build with the new tick-box line ships, or its fee checkouts are refused. Frontier at authoring: `20261019120000`. No lock needed (insert-only, `ON CONFLICT DO NOTHING`). |
+| 20261019140000 | `fee_terms_version_2026_10_19` | **APPLIED 2026-10-19** by the user in the SQL editor; version recorded by hand; row verified live. `client-saved-cards` v2 (card lock) deployed from `feat/saved-card-fee-followups`. Data only: one `fee_terms_versions` row; sha256 checked against Postgres before commit (44b1d39d…). Apply BEFORE the app build with the new tick-box line ships, or its fee checkouts are refused. Frontier at authoring: `20261019120000`. No lock needed (insert-only, `ON CONFLICT DO NOTHING`). |
 
 ### Applied 2026-10-19 (saved cards + fee consent records)
 
