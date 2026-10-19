@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
-  chargeBookingFee, disputeBookingFee, getBookingFeeCharges, getBookingFeeTerms, keepDisputedBookingFee,
-  refundBookingFee, type BookingFeeCharge, type BookingFeeKind, type BookingFeeTerms,
+  cancelBookingFeeRequest, chargeBookingFee, confirmBookingFeePayment, disputeBookingFee, getBookingFeeCharges,
+  getBookingFeeTerms, keepDisputedBookingFee, refundBookingFee, startBookingFeePayment,
+  type BookingFeeCharge, type BookingFeeKind, type BookingFeeTerms,
 } from '../../services/databaseService';
+import { buildPaymentSheetAppearance } from '../payments/paymentSheetAppearance';
+import { formatShortDayDate } from '../../utils/dateUtils';
 import { PaymentRequestError } from '../../utils/paymentRequestError';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { feeChargeWindow, feeDisputeOpen, liveFee } from './bookingFeeRules';
@@ -13,6 +16,17 @@ import { feeChargeWindow, feeDisputeOpen, liveFee } from './bookingFeeRules';
 // late-and-no-show-fees-decision). The provider charges within 24 hours and
 // answers disputes; the client sees the charge and can dispute it within 7
 // days. CERVICED never decides — the server enforces every rule shown here.
+//
+// If the saved card can't pay (declined, or the bank wants the client to
+// approve it), the client is asked to pay instead for 7 days: they pay here
+// with the payment sheet, or from the emailed link; the provider sees it
+// waiting and can cancel the request (user decisions 2026-10-19).
+
+// StripeProvider is mounted app-wide in App.tsx. Required (not imported) the
+// same way CartScreen does it.
+const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 export interface BookingFeeColors {
   card: string;
@@ -49,6 +63,7 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<'dispute' | 'keep' | null>(null);
   const [text, setText] = useState('');
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const load = useCallback(async () => {
     try {
@@ -71,13 +86,13 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   const lastFailed = charges?.[0]?.status === 'failed' ? charges[0] : null;
   const window = terms && !fee ? feeChargeWindow(terms, Date.now()) : null;
 
-  const run = useCallback(async (action: () => Promise<void>, fallback: string, context: string, done?: string) => {
+  const run = useCallback(async (action: () => Promise<string | void>, fallback: string, context: string, done?: string) => {
     setBusy(true);
     try {
-      await action();
+      const outcome = await action();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setDraft(null); setText('');
-      if (done) showAlert(done);
+      if (outcome || done) showAlert(outcome || done!);
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       showAlert('Something went wrong', errorMessage(err, fallback, context));
@@ -90,7 +105,12 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   const confirmCharge = (kind: BookingFeeKind, amountPence: number) => {
     showConfirm(`Charge ${pounds(amountPence)}?`, `This charges ${otherName || 'the client'}'s saved card the ${kindLabel(kind)} they agreed to when booking. They'll be told and can dispute it with you.`, [
       { text: 'Not now', style: 'cancel' },
-      { text: `Charge ${pounds(amountPence)}`, onPress: () => void run(() => chargeBookingFee(bookingId, kind), 'Could not charge this fee.', 'BookingFeeCard.charge', 'Fee charged') },
+      { text: `Charge ${pounds(amountPence)}`, onPress: () => void run(async () => {
+        const result = await chargeBookingFee(bookingId, kind);
+        return result.status === 'awaiting_client'
+          ? `The card couldn't be charged, so ${otherName || 'the client'} has been asked to pay by ${formatShortDayDate(new Date(result.payBy))}. You'll be told when they do.`
+          : 'Fee charged';
+      }, 'Could not charge this fee.', 'BookingFeeCard.charge') },
     ]);
   };
 
@@ -100,6 +120,35 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
       { text: 'Refund fee', style: 'destructive', onPress: () => void run(() => refundBookingFee(charge.id), 'Could not refund this fee.', 'BookingFeeCard.refund', 'Fee refunded') },
     ]);
   };
+
+  const confirmCancelRequest = (charge: BookingFeeCharge) => {
+    showConfirm('Cancel this request?', `${otherName || 'The client'} won't be able to pay the ${kindLabel(charge.kind)} any more.`, [
+      { text: 'Keep it open', style: 'cancel' },
+      { text: 'Cancel request', style: 'destructive', onPress: () => void run(() => cancelBookingFeeRequest(charge.id), 'Could not cancel this request.', 'BookingFeeCard.cancelRequest', 'Request cancelled') },
+    ]);
+  };
+
+  const payFee = (charge: BookingFeeCharge) => void run(async () => {
+    const sheet = await startBookingFeePayment(charge.id);
+    const { error: initError } = await initPaymentSheet({
+      merchantDisplayName: 'Cerviced',
+      returnURL: 'cerviced://stripe-redirect',
+      customerId: sheet.customerId,
+      customerEphemeralKeySecret: sheet.ephemeralKeySecret,
+      paymentIntentClientSecret: sheet.clientSecret,
+      appearance: buildPaymentSheetAppearance(
+        { accent: C.accent, onAccent: C.onAccent, bg: C.card, surface: C.card, border: C.border, sub: C.sub }, C.text,
+      ),
+    });
+    if (initError) throw new Error(initError.message || 'Could not open payment.');
+    const { error: presentError } = await presentPaymentSheet();
+    if (presentError) {
+      if (presentError.code === 'Canceled') return;
+      throw new Error(presentError.message || 'Your payment did not go through.');
+    }
+    await confirmBookingFeePayment(charge.id);
+    return 'Fee paid';
+  }, 'Could not take this payment.', 'BookingFeeCard.pay');
 
   if (!charges) return null;
 
@@ -121,6 +170,18 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   if (fee) {
     const label = `${pounds(fee.amountPence)} ${kindLabel(fee.kind)}`;
     if (fee.status === 'processing') body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · charging…</Text>);
+    if (fee.status === 'awaiting_client') {
+      const by = fee.payBy ? formatShortDayDate(new Date(fee.payBy)) : null;
+      if (role === 'provider') {
+        body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · waiting for {otherName || 'the client'} to pay</Text>);
+        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>The saved card couldn't be charged, so they've been asked to pay{by ? ` by ${by}` : ''}.{fee.nextRetryAt ? ' Their card will also be tried again automatically.' : ''} Nothing has been taken yet.</Text>);
+        body.push(<Action key="cancel" C={C} busy={busy} label="Cancel request" ghost onPress={() => confirmCancelRequest(fee)} />);
+      } else {
+        body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} to pay</Text>);
+        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>{otherName || 'Your provider'} couldn't take the fee you agreed to from your saved card. Please pay it{by ? ` by ${by}` : ''}.{fee.nextRetryAt ? " We'll also try your card again, and you'll only ever pay it once." : ''}</Text>);
+        body.push(<Action key="pay" C={C} busy={busy} label={`Pay ${pounds(fee.amountPence)}`} onPress={() => payFee(fee)} />);
+      }
+    }
     if (fee.status === 'refunded') body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · refunded</Text>);
     if (fee.status === 'succeeded') {
       body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · charged</Text>);

@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
+import { lapseFeePayRequests, retryDueFees } from '../_shared/feePayRequest.ts';
 
 // Step 3 of the Connect build (handoff: stripe-connect-payouts-build-handoff):
 // the release job. It finds 'held' payout rows whose hold has elapsed
@@ -244,10 +245,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const fees = await releaseFeePayouts();
+    // Declined fees whose next automatic retry on the saved card is due.
+    const feeRetries = await retryDueFees(admin, stripe, BATCH_LIMIT)
+      .catch((err) => { console.error(`[release-payouts] fee retries failed: ${String(err)}`); return null; });
+    // Requests to pay a fee the saved card couldn't, past their 7 days.
+    const lapsedFeeRequests = await lapseFeePayRequests(admin, stripe, BATCH_LIMIT)
+      .catch((err) => { console.error(`[release-payouts] fee request lapse failed: ${String(err)}`); return -1; });
 
-    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)}`);
+    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)} lapsedFeeRequests=${lapsedFeeRequests} feeRetries=${JSON.stringify(feeRetries)}`);
     return new Response(
-      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees }),
+      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees, lapsedFeeRequests, feeRetries }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   } catch (err) {

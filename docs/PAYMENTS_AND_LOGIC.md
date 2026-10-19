@@ -24,6 +24,11 @@ Last updated: 18 October 2026.
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
+| Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
+| Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
+| Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
+| Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
+| PayPal at checkout (no-fee checkouts) | No | PR #118. Needs `create-payment-intent`, `finalize-payment-intent`, `stripe-webhook` deployed, a new app build, and Stripe's marketplace PayPal approval for live |
 
 ---
 
@@ -55,7 +60,7 @@ checkout. The provider never pays the fee and never sees it.
 | 1 | Price & reserve | `prepare_checkout` | Validates the basket, holds each slot (`on_hold`, 10 min), writes the batch |
 | 2 | Add fee | `apply_checkout_platform_fee` | Adds the service fee on top |
 | 3 | Authorise | `create-payment-intent` | Re-reads the amount server-side; blocks providers who aren't payout-ready; if the booking has late/no-show fees, requires the client's consent and saves the card for later. Allows card (incl. Apple/Google Pay) plus **PayPal**, except when fees apply: then card only, since `booking-fee` charges saved cards only. Returns the allowed types to the app |
-| 4 | Collect | Stripe `CardField` / Apple Pay / Google Pay / **PayPal**, inside the app's Complete Payment sheet | Client authorises payment. Card details go straight from Stripe's own field to Stripe; PayPal opens PayPal's page and returns to the app (`cerviced://safepay`, forwarded to Stripe in `App.tsx`); the PayPal button is hidden when the checkout has fees. A decline stays in the sheet and retries the same intent; closing the sheet cancels the unconfirmed intent |
+| 4 | Collect | Stripe `CardForm` / Apple Pay / Google Pay / **PayPal**, inside the app's Complete Payment sheet | Client authorises payment. Card details go straight from Stripe's own field to Stripe; PayPal opens PayPal's page and returns to the app (`cerviced://safepay`, forwarded to Stripe in `App.tsx`); the PayPal button is hidden when the checkout has fees. A decline stays in the sheet and retries the same intent; closing the sheet cancels the unconfirmed intent |
 | 5 | Capture & confirm | `finalize-payment-intent` | Captures, then promotes bookings `on_hold` → `pending`/`confirmed`, then records `bookings.payment_method` (card / apple / google / paypal) from the Stripe payment method for receipts. If a PayPal return lands before Stripe marks it ready, the app shows "checking your payment" and the webhook finishes it |
 | 6 | Hold payout | `create_held_payout_on_finalize` | Creates a held payout row. Release time = appointment end + **the provider's chosen hold** (`providers.payout_hold_days`: 1, 3, 7, 14 or 30 days; default 1) |
 | 7 | Release | `process_due_payouts` → `release-payouts` | Every 15 min: re-checks the booking, skips it while a refund request is open*, takes out anything the provider owes*, transfers the rest to their Stripe account |
@@ -114,7 +119,18 @@ their Stripe transfer is reversed. If their Stripe balance can't cover it
 - Two fixed £ fees in the provider's policy: late arrival (after the grace
   period) and no-show. Each is capped at **50% of the service price**.
 - Frozen onto the booking by a trigger at insert, from the live policy.
-- The client agrees to them at checkout before their card is saved.
+- The client agrees to them at checkout before their card is saved. Each agreement is a
+  `fee_consent_records` row: client, database time, checkout, the wording
+  version they were shown (`fee_terms_versions`, checked by sha256), the frozen
+  amounts per provider, and app platform/version. `create-payment-intent` won't
+  save the card off-session without it; `booking-fee` won't charge unless the
+  record covers that provider, and stores the record's id on the charge.
+  Records are kept six years, including after account deletion (19 Oct); no
+  purge job yet. A client can't remove a saved card while a booking paid with
+  it is inside its 24-hour fee window (`client-saved-cards` returns
+  `card_needed_for_fee`).
+  Changing the wording means a new `fee_terms_versions` row and a bump of
+  `FEE_TERMS_VERSION` / `FEE_TERMS_SHA256` (`feeTerms.test.ts` enforces it).
 - The provider can charge **once, within 24 hours** of the appointment ending.
 - The client disputes **to the provider**, who refunds or keeps it. CERVICED
   doesn't adjudicate.
@@ -129,6 +145,11 @@ estimate of loss, not a penalty.
 
 ## 7. Security & the data boundary
 
+- Saved cards: the client's Stripe Customer id sits in
+  `client_stripe_customers`, service-role only. CERVICED stores no card data;
+  Payment Methods reads brand/last 4/expiry live from Stripe. A card saved on
+  Payment Methods is `on_session` only. `booking-fee` charges the Customer and
+  card on the booking's original payment, not a lookup by user.
 - Provider fee visibility (UI): fixed. (Data level: per 3 Oct, a provider could
   still read the fee columns directly; not re-verified.)
 - Shortfall functions are service-role only; providers can read their own
@@ -143,6 +164,10 @@ estimate of loss, not a penalty.
 | Who chooses payout timing | The provider: 24h, 3, 7, 14 or 30 days (18 Oct). Stripe's bank schedule stays default |
 | Late and no-show fees | In-app, 50% cap, 24h window, no CERVICED cut (13 Oct) |
 | Fee disputes | Go to the provider, not CERVICED |
+| Fee consent records | Kept six years, including after account deletion (19 Oct) |
+| Fee the card couldn't pay | Client asked to pay, in app + email, for 7 days (19 Oct) |
+| Declined fee retries | Up to 3 automatic retries in those 7 days, declines only, new wording only (19 Oct) |
+| Removing a card a fee may need | Blocked until 24h after the appointment (19 Oct) |
 | Refund requests | Go to the provider first, then Cerviced if passed on |
 | Payout while a refund request is open | Held until it closes (18 Oct) |
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |
@@ -156,6 +181,23 @@ estimate of loss, not a penalty.
   platform can delay transfers. Ask a solicitor and Stripe before the 14/30-day
   options go live.
 - Late/no-show fee payouts aren't netted against shortfalls.
+- A fee the saved card can't pay
+  (declined, or the bank wants the client to approve it) becomes a Stripe
+  invoice on the client's Customer, open 7 days. The client pays it from the
+  booking (payment sheet) or the emailed Stripe page; both pay the invoice's one
+  PaymentIntent, so it can't be paid twice. Paid → recorded by `booking-fee`
+  'paid' or the webhook, payout held 24h like any fee. The provider sees it
+  waiting and can cancel it (invoice voided). After 7 days `release-payouts`
+  voids it and tells the provider.
+- If the off-session charge was
+  DECLINED (not `authentication_required`) and the client agreed to wording
+  version `2026-10-19-retries`, the saved card is also tried again up to three
+  times, about 1, 3 and 6 days into the request, by paying the same invoice
+  (`invoices.pay`, off-session), run by `release-payouts`. The card can't be
+  removed while retries are pending. Older agreements are never retried.
+- `users.stripe_customer_id` (applied 20261019011825) is unused once the saved-
+  cards branch is deployed; drop it and its two guard triggers in a migration
+  applied AFTER that deploy.
 - A reschedule to a later date may not move the payout release date (per 3 Oct;
   not re-verified).
 - Failed payouts aren't retried or alerted; there's no admin view for

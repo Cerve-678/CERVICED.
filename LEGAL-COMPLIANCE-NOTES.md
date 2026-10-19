@@ -486,6 +486,43 @@ direction and **not lawyer-reviewed**:
   bank chargeback is taken back from the provider's payout (the webhook now does
   this for booking payments and fees); the client fee disputes go to the
   provider, never to Cerviced, so the Terms say Cerviced doesn't decide them.
+- **Consent record (2026-10-19, branch `feat/saved-cards-fee-consent-record`,
+  not live):** at the user's direction each agreement is now a
+  `fee_consent_records` row: client, database time, checkout, wording version
+  (full text kept in `fee_terms_versions`, matched by sha256), frozen fee
+  amounts per provider, app platform/version. Each fee charge names its record.
+  User decision 2026-10-19: records are kept **six years, including after the
+  client deletes their account**, and the Privacy Policy now says so. Nothing
+  purges them after six years yet. There's still no flow asking the client to
+  approve a fee their bank sends back for authentication (SCA); such a fee
+  simply fails (the user is deciding how this should work).
+- **Wording brought in 2026-10-19 at the user's direction** (from
+  feat/combined-saved-cards-fees, not lawyer-reviewed): a longer checkout
+  tick-box line (fee terms version '2026-10-19'), Terms §4 "Cancellations &
+  Refunds", Terms §5 "Deposits & Remaining Balances", and the Privacy Policy
+  "Payments and saved cards" paragraph. **Raise:** the new §5 says a provider's
+  policy will say whether an unpaid balance is "payable in person or in the
+  app". That reads as if the app might collect remaining balances, which
+  contradicts the product's standing liability boundary (CERVICED never collects,
+  tracks or attests to off-app balances — CLAUDE.md, Security). No in-app
+  balance payment exists, so the clause promises something that isn't built.
+- **Automatic retries (2026-10-19, user-directed, branch `feat/fee-auto-retry`):**
+  a declined fee may be retried on the saved card up to three times within 7
+  days, and the client is asked to pay it in the app or by a Stripe email link.
+  The fee wording (version '2026-10-19-retries'), Terms §4, the Privacy
+  paragraph and the provider Policies text now say so. Only agreements made on
+  that wording are retried. Raise: whether repeated merchant-initiated retries
+  of a consumer's card fit card-scheme retry rules and the CMA's unfair-terms
+  guidance on default charges; the retry count and spacing are a product call.
+  Hard declines (lost/stolen/fraud/closed/stop-payment) are never retried, and
+  the client is notified after every retry, paid or not. Still open: a client
+  can't withdraw consent to retries other than by paying (the card can't be
+  removed while retries are pending); and deleting an account during a pending
+  request doesn't cancel it — decide whether deletion should void the
+  invoice and stop retries.
+- A client can't remove a saved card while a booking paid with it is still
+  inside its 24-hour fee window (user decision 2026-10-19); the app says when
+  they can.
 
 **Not changed unilaterally** — flagged for the product owner and a lawyer.
 

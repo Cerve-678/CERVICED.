@@ -18,7 +18,9 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  useColorScheme,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
@@ -39,7 +41,13 @@ import {
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
   getCheckoutFees, acceptCheckoutFees, type CheckoutFee } from '../../services/databaseService';
-import { FEE_CONSENT_LINE, FEE_TERMS_BODY, FEE_TERMS_HEADING } from '../../constants/feeTerms';
+import {
+  FEE_CONSENT_LINE,
+  FEE_TERMS_BODY,
+  FEE_TERMS_HEADING,
+  FEE_TERMS_SHA256,
+  FEE_TERMS_VERSION,
+} from '../../constants/feeTerms';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -65,7 +73,7 @@ import { calculatePlatformFee } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
-// includes the SDK-compatible Stripe module, so it can show the card field;
+// includes the SDK-compatible Stripe module, so it can show the card form;
 // wallet payments still require a development build.
 const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
 
@@ -73,7 +81,7 @@ const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
 // module in both Expo Go and custom native builds.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const StripeRN: typeof import('@stripe/stripe-react-native') = require('@stripe/stripe-react-native');
-const { CardField, PlatformPay, PlatformPayButton, useStripe } = StripeRN;
+const { CardForm, PlatformPay, PlatformPayButton, useStripe } = StripeRN;
 const GOOGLE_PAY_TEST_ENV = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_test_') === true;
 
 
@@ -632,6 +640,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
+    const systemScheme = useColorScheme();
     // See the mock PaymentModal above — same reason, same fix.
     const bottomInset = useSystemBottomInset();
     const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
@@ -707,7 +716,14 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
         }
-        if (hasFees) await acceptCheckoutFees(checkoutBatchId);
+        if (hasFees) {
+          await acceptCheckoutFees(checkoutBatchId, {
+            termsVersion: FEE_TERMS_VERSION,
+            termsSha256: FEE_TERMS_SHA256,
+            appPlatform: Platform.OS,
+            appVersion: Constants.expoConfig?.version ?? null,
+          });
+        }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
         const { clientSecret, paymentIntentId, paypalAvailable } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
@@ -752,7 +768,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           // cerviced://safepay (forwarded to Stripe in App.tsx).
           ({ error: confirmError } = await confirmPayment(clientSecret, { paymentMethodType: 'PayPal' }));
         } else {
-          // The card details live only inside Stripe's CardField — the app
+          // The card details live only inside Stripe's CardForm — the app
           // never sees them; confirmPayment reads them from the field.
           ({ error: confirmError } = await confirmPayment(clientSecret, { paymentMethodType: 'Card' }));
         }
@@ -827,13 +843,17 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
-        <View style={styles.paymentOverlay}>
+        {/* The card form brings the keyboard up; keep Pay above it. This
+            wraps the whole full-screen overlay on purpose: KeyboardAvoidingView
+            measures its own frame against the screen, so nested inside the
+            sheet (which starts marginTop: 100 down) it under-pads by that much
+            and the Pay button ends up under the keyboard. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.paymentOverlay}
+        >
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            {/* The card field brings the keyboard up; keep Pay above it. */}
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}
-            >
+            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
@@ -915,7 +935,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   </View>
                 )}
 
-                {/* Card details are typed into Stripe's own CardField,
+                {/* Card details are typed into Stripe's own CardForm,
                     wallets open Apple/Google's own sheet and PayPal its own
                     page — none of them pass through this component's state. */}
                 <View style={styles.paymentMethods}>
@@ -955,27 +975,31 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                       </View>
                     </>
                   )}
-                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Card details</Text>
-                  <CardField
-                    postalCodeEnabled
+                  {!walletSupported && (
+                    <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Pay by card</Text>
+                  )}
+                  {/* Separate number / expiry / CVC / postcode boxes. On iOS,
+                      Stripe only lets the form's background, border and cursor
+                      be styled — its text colour follows the phone's own
+                      light/dark setting, not the app's. So the background
+                      follows the phone too, or the text could vanish. */}
+                  <CardForm
                     disabled={isProcessing}
-                    placeholders={{ number: '1234 1234 1234 1234' }}
                     cardStyle={{
-                      backgroundColor: toArgbHex(P.surface),
+                      backgroundColor: systemScheme === 'dark' ? '#FF1C1C1E' : '#FFFFFFFF',
                       borderColor: toArgbHex(P.border),
                       borderWidth: 1,
                       borderRadius: 14,
+                      cursorColor: toArgbHex(P.accent),
                       textColor: toArgbHex(theme.text),
                       placeholderColor: toArgbHex(P.sub),
-                      cursorColor: toArgbHex(P.accent),
                       textErrorColor: '#FFFF3B30',
-                      fontSize: 15,
                     }}
-                    onCardChange={details => {
+                    onFormComplete={details => {
                       setCardComplete(details.complete);
                       setPayError(null);
                     }}
-                    style={styles.cardField}
+                    style={styles.cardForm}
                   />
                   {payError && (
                     <Text accessibilityRole="alert" style={[styles.paymentMethodName, styles.payErrorText]}>{payError}</Text>
@@ -1001,9 +1025,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </KeyboardAvoidingView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
   }
@@ -5792,9 +5816,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  cardField: {
+  cardForm: {
     width: '100%',
-    height: 52,
+    // The native form doesn't size itself — iOS stacks number, then
+    // expiry/CVC, then country/postcode; Android adds field labels.
+    height: Platform.OS === 'ios' ? 210 : 290,
   },
   payErrorText: {
     color: '#E06070',

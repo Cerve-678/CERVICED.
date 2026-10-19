@@ -25,6 +25,30 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-19 (automatic fee retries)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019210000 | `fee_auto_retries` | **APPLIED 2026-10-19** by the user, version recorded; verified live (three columns, terms version '2026-10-19-retries', `process_due_payouts` retry check). `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed from `feat/fee-auto-retry` (ea156501). Frontier at authoring: `20261019170000`; numbered above the unapplied `20261019150000` / `20261019190000` on other branches. Adds `booking_fee_charges.retry_payment_method_id` / `retry_count` / `next_retry_at`, redefines `process_due_payouts()` (from 20261019170000's, verified live) to wake on due retries, seeds fee terms version '2026-10-19-retries' (sha256 checked against Postgres before commit). Apply, record the version, then deploy `booking-fee`, `client-saved-cards`, `release-payouts` from the branch. |
+
+### Applied 2026-10-19 (fee payment requests)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019170000 | `fee_payment_requests` | **APPLIED 2026-10-19** by the user (SQL editor), version recorded; verified live: status constraint, both columns, notification types, `process_due_payouts` lapse check. `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed from `feat/fee-pay-request` (b291bf40, includes the review fixes). Frontier at authoring: `20261019140000`. `booking_fee_charges` status gains `awaiting_client` (+ `stripe_invoice_id`, `pay_by`); `notifications_type_check` rebuilt from live (verified 2026-10-19) + `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed`; `process_due_payouts()` reproduced from live + a lapse check. Apply, record the version, then deploy `booking-fee`, `stripe-webhook`, `release-payouts` from the branch. Deploying the functions first would fail every request on the old status constraint. |
+
+### Applied 2026-10-19 (fee terms wording version '2026-10-19')
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019140000 | `fee_terms_version_2026_10_19` | **APPLIED 2026-10-19** by the user in the SQL editor; row verified live. Version NOT yet recorded in schema_migrations (insert it by hand). `client-saved-cards` v2 (card lock) deployed from `feat/saved-card-fee-followups`. Data only: one `fee_terms_versions` row; sha256 checked against Postgres before commit (44b1d39d…). Apply BEFORE the app build with the new tick-box line ships, or its fee checkouts are refused. Frontier at authoring: `20261019120000`. No lock needed (insert-only, `ON CONFLICT DO NOTHING`). |
+
+### Applied 2026-10-19 (saved cards + fee consent records)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019120000 | `saved_cards_and_fee_consent_records` | **APPLIED 2026-10-19** by the user pasting it into the SQL editor; version recorded by hand. Verified live: three tables, `fee_terms_versions` sha256 = app's, 5-arg `accept_checkout_fees` with the changed-fees guard, `booking_fee_charges.fee_consent_record_id`. `client-saved-cards` v1, `create-payment-intent` v16, `booking-fee` v3 deployed from the branch. Frontier at authoring: `20261019011825` (`client_stripe_customer_id`, applied 2026-10-19 by another session; file added as `20261019011825_client_stripe_customer_id.sql`). New `client_stripe_customers` (service role only), `fee_terms_versions` (seeded '2026-10-18', sha256 by trigger), `fee_consent_records` (own-row read), `booking_fee_charges.fee_consent_record_id`; replaces `accept_checkout_fees(uuid)` with the five-argument version. Paste into the SQL editor, record the version, then deploy `client-saved-cards`, `create-payment-intent`, `booking-fee` from the same branch. |
+
 ### Applied 2026-10-19 (link-only lifecycle emails)
 
 | Authored version | Name | Status |

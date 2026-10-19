@@ -13,6 +13,7 @@ import type {
 } from '../types/maintenance';
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
+import type { SavedCard } from '../features/payments/savedCards';
 import { supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
@@ -9943,7 +9944,17 @@ export async function lookupPostcodeAddress(addressId: string): Promise<Postcode
 export async function createCheckoutPaymentIntent(
   checkoutBatchId: string,
   currency: string,
-): Promise<{ clientSecret: string; paymentIntentId: string; paypalAvailable: boolean }> {
+): Promise<{
+  clientSecret: string;
+  paymentIntentId: string;
+  // The client's Stripe Customer + a short-lived ephemeral key, so the Payment
+  // Sheet can list their saved cards and offer to save a new one. Undefined
+  // only from an older deployed function; the sheet then works without them.
+  customerId?: string;
+  ephemeralKeySecret?: string;
+  /** The server allows PayPal on this intent (never with late/no-show fees). */
+  paypalAvailable: boolean;
+}> {
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
   });
@@ -9958,7 +9969,70 @@ export async function createCheckoutPaymentIntent(
   // The server decides (never for a checkout with late/no-show fees); an older
   // deployment that doesn't send the list means no PayPal.
   const paypalAvailable = Array.isArray(data.paymentMethodTypes) && data.paymentMethodTypes.includes('paypal');
-  return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId, paypalAvailable };
+  return {
+    clientSecret: data.clientSecret,
+    paymentIntentId: data.paymentIntentId,
+    paypalAvailable,
+    customerId: typeof data.customerId === 'string' ? data.customerId : undefined,
+    ephemeralKeySecret: typeof data.ephemeralKeySecret === 'string' ? data.ephemeralKeySecret : undefined,
+  };
+}
+
+/** The signed-in client's saved cards, read live from Stripe (CERVICED stores
+ *  no card details). Empty until they save one. */
+export async function listSavedCards(): Promise<SavedCard[]> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'list' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not load your saved cards. Please try again.');
+  if (!Array.isArray(data?.cards)) throw new Error('Could not load your saved cards. Please try again.');
+  return (data.cards as unknown[]).flatMap((raw): SavedCard[] => {
+    const c = raw as Partial<SavedCard>;
+    if (typeof c.id !== 'string' || typeof c.last4 !== 'string' ||
+        typeof c.expMonth !== 'number' || typeof c.expYear !== 'number') return [];
+    return [{
+      id: c.id,
+      brand: typeof c.brand === 'string' ? c.brand : 'unknown',
+      last4: c.last4,
+      expMonth: c.expMonth,
+      expYear: c.expYear,
+      wallet: typeof c.wallet === 'string' ? c.wallet : null,
+    }];
+  });
+}
+
+/** What the Payment Sheet needs to save a new card: the Customer (got or
+ *  created server-side), an ephemeral key over it, and a SetupIntent secret. */
+export async function createSavedCardSetup(): Promise<{
+  customerId: string;
+  ephemeralKeySecret: string;
+  setupIntentClientSecret: string;
+}> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'setup' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not open card setup. Please try again.');
+  if (typeof data?.customerId !== 'string' || typeof data?.ephemeralKeySecret !== 'string' ||
+      typeof data?.setupIntentClientSecret !== 'string') {
+    throw new Error('Could not open card setup. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return {
+    customerId: data.customerId,
+    ephemeralKeySecret: data.ephemeralKeySecret,
+    setupIntentClientSecret: data.setupIntentClientSecret,
+  };
+}
+
+/** Removes one of the signed-in client's own saved cards from Stripe. */
+export async function removeSavedCard(paymentMethodId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'remove', paymentMethodId },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not remove that card. Please try again.');
 }
 
 /** A provider's late-arrival and no-show fees for one checkout, frozen on the
@@ -9991,11 +10065,31 @@ export async function getCheckoutFees(checkoutBatchId: string): Promise<Checkout
   }));
 }
 
-/** Stamps the client's agreement to those fees with the database clock. The
- *  payment function refuses to save a card for fees without it. */
-export async function acceptCheckoutFees(checkoutBatchId: string): Promise<void> {
-  const { error } = await supabase.rpc('accept_checkout_fees', { p_checkout_batch_id: checkoutBatchId });
+/** What the client agreed to, so the database can keep a full record of it. */
+export interface FeeConsentAgreement {
+  termsVersion: string;
+  termsSha256: string;
+  appPlatform: string | null;
+  appVersion: string | null;
+}
+
+/** Records the client's agreement to those fees: a fee_consent_records row
+ *  with the database clock, the wording version and the frozen amounts. The
+ *  payment functions refuse to save a card for fees, or charge one, without
+ *  it. Returns the record's id. */
+export async function acceptCheckoutFees(
+  checkoutBatchId: string,
+  agreement: FeeConsentAgreement,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('accept_checkout_fees', {
+    p_checkout_batch_id: checkoutBatchId,
+    p_terms_version: agreement.termsVersion,
+    p_terms_sha256: agreement.termsSha256,
+    p_app_platform: agreement.appPlatform,
+    p_app_version: agreement.appVersion,
+  });
   if (error) throw error;
+  return data as string;
 }
 
 export type BookingFeeKind = 'late' | 'no_show';
@@ -10005,8 +10099,12 @@ export interface BookingFeeCharge {
   id: string;
   kind: BookingFeeKind;
   amountPence: number;
-  status: 'processing' | 'succeeded' | 'failed' | 'refunded';
+  status: 'processing' | 'awaiting_client' | 'succeeded' | 'failed' | 'refunded';
   chargedAt: string | null;
+  /** While awaiting_client: when the client's request to pay lapses. */
+  payBy: string | null;
+  /** While awaiting_client: when the saved card is next tried again, if it will be. */
+  nextRetryAt: string | null;
   createdAt: string;
   disputedAt: string | null;
   disputeReason: string | null;
@@ -10021,6 +10119,8 @@ interface BookingFeeChargeRow {
   amount_pence: number;
   status: BookingFeeCharge['status'];
   charged_at: string | null;
+  pay_by: string | null;
+  next_retry_at: string | null;
   created_at: string;
   disputed_at: string | null;
   dispute_reason: string | null;
@@ -10032,7 +10132,7 @@ interface BookingFeeChargeRow {
 /** Newest first. A booking has at most one live fee plus any failed attempts. */
 export async function getBookingFeeCharges(bookingId: string): Promise<BookingFeeCharge[]> {
   const { data, error } = await supabase.from('booking_fee_charges')
-    .select('id, kind, amount_pence, status, charged_at, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
+    .select('id, kind, amount_pence, status, charged_at, pay_by, next_retry_at, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
     .eq('booking_id', bookingId)
     .order('created_at', { ascending: false })
     .limit(10);
@@ -10043,6 +10143,8 @@ export async function getBookingFeeCharges(bookingId: string): Promise<BookingFe
     amountPence: row.amount_pence,
     status: row.status,
     chargedAt: row.charged_at,
+    payBy: row.pay_by,
+    nextRetryAt: row.next_retry_at,
     createdAt: row.created_at,
     disputedAt: row.disputed_at,
     disputeReason: row.dispute_reason,
@@ -10079,17 +10181,65 @@ export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeT
   };
 }
 
-async function bookingFeeAction(body: Record<string, string>, fallback: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('booking-fee', { body });
-  if (error || data?.error) throw await getPaymentRequestError(error, data, fallback);
+/** Every field booking-fee may answer with; each action reads its own. */
+interface BookingFeeResponse {
+  status?: unknown;
+  payBy?: unknown;
+  clientSecret?: unknown;
+  customerId?: unknown;
+  ephemeralKeySecret?: unknown;
+  livemode?: unknown;
 }
 
-export async function chargeBookingFee(bookingId: string, kind: BookingFeeKind): Promise<void> {
-  return bookingFeeAction({ action: 'charge', bookingId, kind }, 'Could not charge this fee. Please try again.');
+async function bookingFeeAction(body: Record<string, string>, fallback: string): Promise<BookingFeeResponse> {
+  const { data, error } = await supabase.functions.invoke('booking-fee', { body });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, fallback);
+  return (data ?? {}) as BookingFeeResponse;
+}
+
+/** 'charged' when the saved card paid; 'awaiting_client' when it couldn't and
+ *  the client has been asked to pay instead (by `payBy`). */
+export type ChargeBookingFeeResult = { status: 'charged' } | { status: 'awaiting_client'; payBy: string };
+
+export async function chargeBookingFee(bookingId: string, kind: BookingFeeKind): Promise<ChargeBookingFeeResult> {
+  const data = await bookingFeeAction({ action: 'charge', bookingId, kind }, 'Could not charge this fee. Please try again.');
+  return data.status === 'awaiting_client' && typeof data.payBy === 'string'
+    ? { status: 'awaiting_client', payBy: data.payBy }
+    : { status: 'charged' };
+}
+
+/** The provider withdraws an open request for the client to pay. */
+export async function cancelBookingFeeRequest(chargeId: string): Promise<void> {
+  await bookingFeeAction({ action: 'cancel_request', chargeId }, 'Could not cancel this request. Please try again.');
+}
+
+/** What the payment sheet needs to pay a fee the client was asked to pay. */
+export interface FeePaymentSheet {
+  clientSecret: string;
+  customerId: string;
+  ephemeralKeySecret: string;
+}
+
+export async function startBookingFeePayment(chargeId: string): Promise<FeePaymentSheet> {
+  const data = await bookingFeeAction({ action: 'pay', chargeId }, 'Could not open payment. Please try again.');
+  if (typeof data.clientSecret !== 'string' || typeof data.customerId !== 'string' ||
+      typeof data.ephemeralKeySecret !== 'string') {
+    throw new Error('Could not open payment. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return { clientSecret: data.clientSecret, customerId: data.customerId, ephemeralKeySecret: data.ephemeralKeySecret };
+}
+
+/** After the sheet succeeds: records the fee as paid (the webhook does too). */
+export async function confirmBookingFeePayment(chargeId: string): Promise<void> {
+  await bookingFeeAction({ action: 'paid', chargeId }, "Your payment went through but we couldn't confirm it yet. Pull to refresh in a moment.");
 }
 
 export async function refundBookingFee(chargeId: string): Promise<void> {
-  return bookingFeeAction({ action: 'refund', chargeId }, 'Could not refund this fee. Please try again.');
+  await bookingFeeAction({ action: 'refund', chargeId }, 'Could not refund this fee. Please try again.');
 }
 
 export async function disputeBookingFee(chargeId: string, reason: string): Promise<void> {
