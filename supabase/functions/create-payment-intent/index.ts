@@ -111,7 +111,10 @@ Deno.serve(async (req: Request) => {
       amount: amountInPence,
       currency: batch.currency,
       metadata: { user_id: user.id, checkout_batch_id: batch.id },
-      payment_method_types: ['card'],
+      // PayPal only when nothing has to be saved for later: a late/no-show fee
+      // is charged off-session by booking-fee, which charges cards only.
+      // Apple Pay and Google Pay ride on 'card'.
+      payment_method_types: hasFees ? ['card'] : ['card', 'paypal'],
       ...(customerId ? { customer: customerId, setup_future_usage: 'off_session' as const } : {}),
       // The sheet authorises only. Server settlement captures, then confirms
       // the reserved bookings; signed webhooks recover interrupted requests
@@ -141,6 +144,9 @@ Deno.serve(async (req: Request) => {
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         livemode: paymentIntent.livemode,
+        // What this intent can be confirmed with — the app shows a PayPal
+        // button only when 'paypal' is in here (never for fee checkouts).
+        paymentMethodTypes: paymentIntent.payment_method_types,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

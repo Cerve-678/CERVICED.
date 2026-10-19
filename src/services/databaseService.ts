@@ -9943,7 +9943,7 @@ export async function lookupPostcodeAddress(addressId: string): Promise<Postcode
 export async function createCheckoutPaymentIntent(
   checkoutBatchId: string,
   currency: string,
-): Promise<{ clientSecret: string; paymentIntentId: string }> {
+): Promise<{ clientSecret: string; paymentIntentId: string; paypalAvailable: boolean }> {
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
   });
@@ -9955,7 +9955,10 @@ export async function createCheckoutPaymentIntent(
   if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
     throw new Error('Payment configuration does not match this app. Please contact support.');
   }
-  return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId };
+  // The server decides (never for a checkout with late/no-show fees); an older
+  // deployment that doesn't send the list means no PayPal.
+  const paypalAvailable = Array.isArray(data.paymentMethodTypes) && data.paymentMethodTypes.includes('paypal');
+  return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId, paypalAvailable };
 }
 
 /** A provider's late-arrival and no-show fees for one checkout, frozen on the
