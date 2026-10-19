@@ -119,6 +119,9 @@ function MaintenanceItemCardImpl({ item, view, P, S, t, highlighted, busy, onAct
         <View style={styles.main}>
           <Text style={[styles.title, { color: P.text }]} numberOfLines={2}>{item.title}</Text>
           <Text style={[styles.sub, { color: P.sub }]} numberOfLines={2}>{subline(item, t)}</Text>
+          {item.note && (
+            <Text style={[styles.note, { color: P.text }]} numberOfLines={2}>{t('maintenance.item.note', { note: item.note })}</Text>
+          )}
         </View>
         <TouchableOpacity
           onPress={() => { hapticLight(); onMenu(item); }}
@@ -168,6 +171,7 @@ const styles = StyleSheet.create({
   main: { flex: 1, minWidth: 0 },
   title: { fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: 0.8, lineHeight: 19 },
   sub: { fontFamily: FONT_BODY, fontSize: 12.5, marginTop: 2, lineHeight: 17 },
+  note: { fontFamily: FONT_BODY, fontSize: 12.5, marginTop: 4, lineHeight: 17, fontStyle: 'italic' },
   more: { padding: 2 },
   foot: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   src: { flexDirection: 'row', alignItems: 'center', gap: 4 },

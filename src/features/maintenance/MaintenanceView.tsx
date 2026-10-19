@@ -36,12 +36,16 @@ interface Props {
   onBack: () => void;
   onItemAction: (item: MaintenanceItem, action: ItemAction) => void;
   onOpenSetup: () => void;
+  /** Profile-based suggestions not yet added; shown once setup is done. */
+  pickedCount: number;
+  onOpenPicked: () => void;
   onMessageProviders: () => void;
   onViewBooking: (bookingId: string) => void;
 }
 
 export function MaintenanceView({
-  state, focusItemId, busyItemId, onBack, onItemAction, onOpenSetup, onMessageProviders, onViewBooking,
+  state, focusItemId, busyItemId, onBack, onItemAction, onOpenSetup, pickedCount, onOpenPicked,
+  onMessageProviders, onViewBooking,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { t } = useTranslation();
@@ -204,6 +208,20 @@ export function MaintenanceView({
               >
                 <Ionicons name="sparkles-outline" size={18} color={P.accentText} />
                 <Text style={[ui.body, { color: P.text, flex: 1 }]}>{t('maintenance.finishSetup')}</Text>
+                <Ionicons name="chevron-forward" size={16} color={P.sub} />
+              </TouchableOpacity>
+            )}
+            {state.settings?.setupCompletedAt && pickedCount > 0 && (
+              <TouchableOpacity
+                style={[styles.banner, { backgroundColor: P.accentDim, borderColor: P.border }]}
+                onPress={() => { hapticLight(); onOpenPicked(); }}
+                activeOpacity={0.5}
+                accessibilityRole="button"
+              >
+                <Ionicons name="sparkles-outline" size={18} color={P.accentText} />
+                <Text style={[ui.body, { color: P.text, flex: 1 }]}>
+                  {t(pickedCount === 1 ? 'maintenance.picked.one' : 'maintenance.picked.many', { count: pickedCount })}
+                </Text>
                 <Ionicons name="chevron-forward" size={16} color={P.sub} />
               </TouchableOpacity>
             )}

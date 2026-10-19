@@ -11,15 +11,22 @@
 //    src/utils/maintenanceSuggestions.ts.
 //  - Skin tone is not read anywhere in this feature.
 //  - Bookable services only. No at-home routines, no product restock.
-//  - No injectables or other AESTHETICS treatments except facials: a repeat
-//    interval for those is a clinical judgement the app must not make.
+//  - No injectables or other AESTHETICS treatments except facials and
+//    waxing: a repeat interval for those is a clinical judgement the app must
+//    not make. Waxing sits in AESTHETICS only because providers have no
+//    waxing category (OTHER is retired); see "A Body provider category" in
+//    FUTURE_LOGIC.md.
 //
 // THIS TABLE IS MIRRORED IN SQL. The completion trigger has to choose an
-// interval server-side, so `public.maintenance_service_types` is seeded with
-// exactly these rows in
-// supabase/migrations/20261018180000_beauty_maintenance.sql.
+// interval server-side, so `public.maintenance_service_types` holds exactly
+// these rows, restated in full by the newest migration that seeds it
+// (currently 20261019120000_maintenance_more_types_and_notes.sql).
 // src/tests/maintenanceServiceTypes.test.ts parses that seed and fails if the
 // two copies ever disagree. Change both, in the same commit.
+//
+// Order matters: within a category the completion trigger takes the first
+// type whose keyword is in the booked service's name. So a type that must win
+// a tie goes first ("Gel pedicure" is a pedicure, "Facial wax" is a wax).
 
 /** Search tab codes (SearchScreen's CATEGORY_CODE_MAP values). */
 export type MaintenanceSearchCategory = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'AESTHETICS';
@@ -33,12 +40,17 @@ export type MaintenanceTypeKey =
   | 'loc_retwist'
   | 'trim'
   | 'hair_general'
+  | 'pedicure'
   | 'gel_nails'
   | 'acrylic_infill'
   | 'nails_general'
   | 'lash_infill'
+  | 'lash_lift'
   | 'lashes_general'
+  | 'brow_lamination'
+  | 'brow_tint'
   | 'brows_general'
+  | 'waxing'
   | 'facial';
 
 export interface MaintenanceServiceType {
@@ -68,12 +80,17 @@ export const MAINTENANCE_SERVICE_TYPES: readonly MaintenanceServiceType[] = [
   { key: 'loc_retwist',       label: 'Loc retwist',          searchCategory: 'HAIR',       defaultWeeks: 6,  keywords: ['retwist', 'loc maintenance'] },
   { key: 'trim',              label: 'Trim',                 searchCategory: 'HAIR',       defaultWeeks: 12, keywords: ['trim', 'cut'] },
   { key: 'hair_general',      label: 'Hair appointment',     searchCategory: 'HAIR',       defaultWeeks: 6,  keywords: [] },
+  { key: 'pedicure',          label: 'Pedicure',             searchCategory: 'NAILS',      defaultWeeks: 6,  keywords: ['pedi'] },
   { key: 'gel_nails',         label: 'Gel nails',            searchCategory: 'NAILS',      defaultWeeks: 3,  keywords: ['gel', 'biab', 'builder'] },
   { key: 'acrylic_infill',    label: 'Acrylic infill',       searchCategory: 'NAILS',      defaultWeeks: 3,  keywords: ['acrylic', 'infill', 'full set'] },
   { key: 'nails_general',     label: 'Nail appointment',     searchCategory: 'NAILS',      defaultWeeks: 3,  keywords: [] },
   { key: 'lash_infill',       label: 'Lash infill',          searchCategory: 'LASHES',     defaultWeeks: 3,  keywords: ['infill', 'fill'] },
+  { key: 'lash_lift',         label: 'Lash lift',            searchCategory: 'LASHES',     defaultWeeks: 6,  keywords: ['lift'] },
   { key: 'lashes_general',    label: 'Lash appointment',     searchCategory: 'LASHES',     defaultWeeks: 3,  keywords: [] },
+  { key: 'brow_lamination',   label: 'Brow lamination',      searchCategory: 'BROWS',      defaultWeeks: 6,  keywords: ['lamin'] },
+  { key: 'brow_tint',         label: 'Brow tint',            searchCategory: 'BROWS',      defaultWeeks: 4,  keywords: ['tint'] },
   { key: 'brows_general',     label: 'Brow appointment',     searchCategory: 'BROWS',      defaultWeeks: 4,  keywords: [] },
+  { key: 'waxing',            label: 'Waxing',               searchCategory: 'AESTHETICS', defaultWeeks: 4,  keywords: ['wax'] },
   { key: 'facial',            label: 'Facial',               searchCategory: 'AESTHETICS', defaultWeeks: 6,  keywords: ['facial', 'dermaplan'] },
 ] as const;
 
