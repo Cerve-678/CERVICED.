@@ -67,3 +67,28 @@ export function checkFeeEligibility(input: FeeEligibilityInput): FeeEligibility 
 
   return { ok: true, amountPence: amount };
 }
+
+/** Statuses a booking can be in and still end up with a fee charged. */
+export const FEE_POSSIBLE_STATUSES = ['pending', 'confirmed', 'in_progress', 'completed', 'no_show'];
+
+/**
+ * When the card a booking was paid with stops being needed for an agreed fee:
+ * 24 hours after the appointment ends. Null if the booking can't be charged a
+ * fee at all (no fee agreed, already charged, or a status that rules it out),
+ * or the window has already closed. User decision 2026-10-19: a client can't
+ * remove that card until then.
+ */
+export function feeCardNeededUntilMs(input: {
+  status: string;
+  endMs: number;
+  lateFeePence: number | null;
+  noShowFeePence: number | null;
+  alreadyCharged: boolean;
+  nowMs: number;
+}): number | null {
+  if (!(input.lateFeePence ?? 0) && !(input.noShowFeePence ?? 0)) return null;
+  if (input.alreadyCharged || !FEE_POSSIBLE_STATUSES.includes(input.status)) return null;
+  if (!Number.isFinite(input.endMs)) return null;
+  const until = input.endMs + FEE_WINDOW_MS;
+  return input.nowMs < until ? until : null;
+}

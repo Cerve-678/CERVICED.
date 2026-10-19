@@ -74,9 +74,9 @@ Curated: [[Availability & Slots]] · **169 files**
 - … +139 more
 
 ## Payments
-Curated: [[Payments]] · **134 files**
+Curated: [[Payments]] · **136 files**
 - `src/screens/client/CartScreen.tsx` _(508)_
-- `src/services/databaseService.ts` _(184)_
+- `src/services/databaseService.ts` _(186)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/bookingService.ts` _(120)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -87,7 +87,7 @@ Curated: [[Payments]] · **134 files**
 - `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(63)_
 - `src/features/bookings/paymentPresentation.ts` _(55)_
-- `src/types/database.ts` _(52)_
+- `src/types/database.ts` _(53)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/client/BookingDetailScreen.tsx` _(47)_
 - `src/features/bookings/bookingSupportRequest.ts` _(40)_
@@ -101,11 +101,11 @@ Curated: [[Payments]] · **134 files**
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/InfoRegScreen.tsx` _(27)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(26)_
 - `src/utils/policyDisplay.ts` _(26)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(25)_
 - `supabase/fix_waitlist_selection_method_hook.sql` _(24)_
-- `src/features/cart/pricing.ts` _(23)_
-- … +104 more
+- … +106 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **280 files**
@@ -170,8 +170,8 @@ Curated: [[Notifications]] · **168 files**
 - `supabase/consolidate_address_release_notification.sql` _(28)_
 - `src/screens/client/BookingsScreen.tsx` _(27)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(26)_
-- `src/i18n/catalogs/en.ts` _(25)_
 - `supabase/chat_two_way_fix.sql` _(25)_
+- `src/i18n/catalogs/en.ts` _(24)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
 - … +138 more
 

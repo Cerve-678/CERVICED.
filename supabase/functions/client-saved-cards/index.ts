@@ -6,6 +6,8 @@ import {
   getOrCreateStripeCustomer,
   isMissingStripeCustomer,
 } from '../_shared/stripeCustomer.ts';
+import { FEE_POSSIBLE_STATUSES, feeCardNeededUntilMs } from '../_shared/bookingFeePlan.ts';
+import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 
 // A client's saved cards, for the Payment Methods screen.
 //
@@ -139,6 +141,12 @@ Deno.serve(async (req: Request) => {
       if (!customerId || !pm || owner !== customerId) {
         return json({ error: 'That card is no longer saved.' }, 404);
       }
+      // User decision 2026-10-19: a card a client paid with at a checkout
+      // with agreed late/no-show fees stays until 24h after that appointment.
+      const neededUntil = await feeCardNeededUntil(admin, user.id, pm.id);
+      if (neededUntil !== null) {
+        return json({ code: 'card_needed_for_fee', until: ukLabel(neededUntil), error: 'This card is needed for an agreed fee.' }, 409);
+      }
       await stripe.paymentMethods.detach(pm.id);
       return json({ ok: true });
     }
@@ -150,3 +158,68 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Could not load your saved cards. Please try again.' }, 500);
   }
 });
+
+// Bookings whose fee window could still be open are at most a couple of days
+// old; this bounds the scan.
+const FEE_CARD_LOOKBACK_DAYS = 3;
+const FEE_CARD_BOOKING_LIMIT = 50;
+
+/** The latest moment `paymentMethodId` is still needed for an agreed fee on
+ *  one of the client's bookings, or null if it isn't. */
+async function feeCardNeededUntil(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  paymentMethodId: string,
+): Promise<number | null> {
+  const since = new Date(Date.now() - FEE_CARD_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const { data: bookings, error } = await admin.from('bookings')
+    .select('id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, payment_intent_id')
+    .eq('user_id', userId)
+    .gte('booking_date', since)
+    .in('status', FEE_POSSIBLE_STATUSES)
+    .not('payment_intent_id', 'is', null)
+    .or('late_fee_pence.not.is.null,no_show_fee_pence.not.is.null')
+    .limit(FEE_CARD_BOOKING_LIMIT);
+  if (error) throw error;
+  if (!bookings?.length) return null;
+
+  const { data: charged, error: chargedError } = await admin.from('booking_fee_charges')
+    .select('booking_id').in('booking_id', bookings.map(b => b.id)).neq('status', 'failed');
+  if (chargedError) throw chargedError;
+  const chargedIds = new Set((charged ?? []).map(c => c.booking_id as string));
+
+  const nowMs = Date.now();
+  const open = bookings.flatMap(b => {
+    const until = feeCardNeededUntilMs({
+      status: b.status,
+      endMs: londonWallTimeToUtcMs(b.booking_date, b.end_time ?? b.booking_time),
+      lateFeePence: b.late_fee_pence,
+      noShowFeePence: b.no_show_fee_pence,
+      alreadyCharged: chargedIds.has(b.id),
+      nowMs,
+    });
+    return until === null ? [] : [{ intentId: b.payment_intent_id as string, until }];
+  });
+  if (!open.length) return null;
+
+  // Which of those payments used this card. One Stripe read per distinct payment.
+  const intentIds = [...new Set(open.map(o => o.intentId))];
+  const intents = await Promise.all(intentIds.map(id => stripe.paymentIntents.retrieve(id)));
+  const usedThisCard = new Set(intents
+    .filter(pi => (typeof pi.payment_method === 'string' ? pi.payment_method : pi.payment_method?.id) === paymentMethodId)
+    .map(pi => pi.id));
+  const untils = open.filter(o => usedThisCard.has(o.intentId)).map(o => o.until);
+  return untils.length ? Math.max(...untils) : null;
+}
+
+const UK_LABEL = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', hour: 'numeric', minute: '2-digit', hour12: true,
+  weekday: 'short', day: 'numeric', month: 'short',
+});
+
+/** e.g. "3:00pm on Thu 2 Jul", in UK time. */
+function ukLabel(ms: number): string {
+  const parts = UK_LABEL.formatToParts(new Date(ms));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value ?? '';
+  return `${part('hour')}:${part('minute')}${part('dayPeriod').toLowerCase().replace(/\s|\./g, '')} on ${part('weekday')} ${part('day')} ${part('month')}`;
+}
