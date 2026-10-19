@@ -158,10 +158,7 @@ export default function LinkOnlyHomeScreen() {
                 <Text style={styles.avatarText}>{initials}</Text>
               </View>
             )}
-            <View style={styles.flex}>
-              <Text style={styles.welcome}>Welcome,</Text>
-              <Text style={styles.name} numberOfLines={1}>{name || 'your business'}</Text>
-            </View>
+            <Text style={[styles.name, styles.flex]} numberOfLines={1}>Dashboard</Text>
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Notifications'); }}
               style={styles.iconButton}
@@ -355,7 +352,6 @@ const createStyles = (P: HomePalette) =>
     avatarText: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.onAccent },
     liveRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
     liveSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub },
-    welcome: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600', color: P.sub },
     name: { fontFamily: 'BakbakOne-Regular', fontSize: 26, color: P.text },
     livePill: { height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: P.accentDim, flexDirection: 'row', alignItems: 'center', gap: 6 },
     liveDot: { width: 8, height: 8, borderRadius: 4 },

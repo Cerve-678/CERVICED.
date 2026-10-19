@@ -19,7 +19,8 @@ import {
   type DeviceCalendar,
   type DiaryEvent,
 } from '../../services/deviceCalendarService';
-import { formatTime12Safe, relativeDayLabel, formatShortDayDate } from '../../utils/dateUtils';
+import { dateToYMD, formatDurationMinutes, formatTime12Safe, relativeDayLabel, formatShortDayDate } from '../../utils/dateUtils';
+import { diaryEventMinutes, groupDiaryByDay } from './diaryDays';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
 
@@ -35,7 +36,6 @@ export interface DiaryPalette {
 }
 
 const DIARY_DAYS = 7;
-const DIARY_ROWS = 6;
 
 type Phase = 'loading' | 'disconnected' | 'denied' | 'connected' | 'failed';
 
@@ -47,6 +47,7 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
   const [chooserOpen, setChooserOpen] = useState(false);
   const [calendars, setCalendars] = useState<DeviceCalendar[]>([]);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<'today' | 'week'>('today');
 
   const load = useCallback(async () => {
     try {
@@ -94,19 +95,53 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
     setPhase('disconnected');
   }, []);
 
+  const today = new Date();
+  const todayYmd = dateToYMD(today);
+  const days = useMemo(() => groupDiaryByDay(events, new Date()), [events]);
+  const todayDay = days.find(day => day.ymd === todayYmd);
+  const nextEvent = days[0]?.events[0];
+
+  const renderEvent = (event: (typeof events)[number]) => {
+    const minutes = diaryEventMinutes(event);
+    const detail = [minutes ? formatDurationMinutes(minutes) : null, event.location].filter(Boolean).join(' · ');
+    return (
+      <View key={`${event.calendarId}-${event.id}-${event.start.getTime()}`} style={styles.eventRow}>
+        <Text style={styles.eventTime}>{event.allDay ? 'All day' : formatTime12Safe(event.start) ?? ''}</Text>
+        <View style={styles.eventBlock}>
+          <View style={[styles.eventBar, { backgroundColor: event.calendarColor }]} />
+          <View style={styles.eventText}>
+            <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
+            {!!detail && <Text style={styles.eventWhen} numberOfLines={1}>{detail}</Text>}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <Ionicons name="calendar-outline" size={22} color={P.accent} />
-        <Text style={styles.title}>{phase === 'connected' ? 'Your diary' : 'Connect your calendar'}</Text>
-        {phase === 'connected' ? (
-          <TouchableOpacity onPress={openChooser} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
-            <Text style={styles.link}>Manage</Text>
+      {phase === 'connected' ? (
+        <View style={styles.headerRow}>
+          <View style={styles.eventText}>
+            <Text style={styles.title}>{view === 'today' ? 'Today' : 'This week'}</Text>
+            <Text style={styles.headerSub}>{formatShortDayDate(today)} · from your phone calendar</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); setView(v => (v === 'today' ? 'week' : 'today')); }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <Text style={styles.link}>{view === 'today' ? 'Week' : 'Today'}</Text>
           </TouchableOpacity>
-        ) : (
+        </View>
+      ) : (
+        <View style={styles.headerRow}>
+          <Ionicons name="calendar-outline" size={22} color={P.accent} />
+          <Text style={[styles.title, styles.eventText]}>Connect your calendar</Text>
           <Text style={styles.free}>Free</Text>
-        )}
-      </View>
+        </View>
+      )}
 
       {phase === 'loading' && <ActivityIndicator color={P.accent} style={styles.spacer} />}
 
@@ -142,27 +177,34 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
       )}
 
       {phase === 'connected' && (
-        events.length === 0 ? (
-          <Text style={styles.body}>Nothing in your calendar for the next {DIARY_DAYS} days.</Text>
-        ) : (
-          <View style={styles.list}>
-            {events.slice(0, DIARY_ROWS).map(event => (
-              <View key={`${event.calendarId}-${event.id}-${event.start.getTime()}`} style={styles.eventRow}>
-                <View style={[styles.dot, { backgroundColor: event.calendarColor }]} />
-                <View style={styles.eventText}>
-                  <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
-                  <Text style={styles.eventWhen} numberOfLines={1}>
-                    {relativeDayLabel(event.start) ?? formatShortDayDate(event.start)}
-                    {event.allDay ? ' · All day' : ` · ${formatTime12Safe(event.start) ?? ''}`}
-                  </Text>
+        <>
+          {view === 'today' ? (
+            todayDay ? (
+              <View style={styles.list}>{todayDay.events.map(renderEvent)}</View>
+            ) : (
+              <Text style={styles.body}>
+                Nothing in your calendar today.
+                {nextEvent
+                  ? ` Next: ${relativeDayLabel(nextEvent.start) ?? formatShortDayDate(nextEvent.start)} · ${nextEvent.title}${nextEvent.allDay ? '' : ` at ${formatTime12Safe(nextEvent.start) ?? ''}`}`
+                  : ''}
+              </Text>
+            )
+          ) : days.length === 0 ? (
+            <Text style={styles.body}>Nothing in your calendar for the next {DIARY_DAYS} days.</Text>
+          ) : (
+            <View style={styles.list}>
+              {days.map(day => (
+                <View key={day.ymd} style={styles.list}>
+                  <Text style={styles.dayLabel}>{relativeDayLabel(day.date) ?? formatShortDayDate(day.date)}</Text>
+                  {day.events.map(renderEvent)}
                 </View>
-              </View>
-            ))}
-            {events.length > DIARY_ROWS && (
-              <Text style={styles.more}>+{events.length - DIARY_ROWS} more this week</Text>
-            )}
-          </View>
-        )
+              ))}
+            </View>
+          )}
+          <TouchableOpacity onPress={openChooser} style={styles.footerLink} activeOpacity={0.7} accessibilityRole="button">
+            <Text style={styles.link}>Choose calendars</Text>
+          </TouchableOpacity>
+        </>
       )}
 
       <Modal visible={chooserOpen} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setChooserOpen(false)}>
@@ -210,9 +252,12 @@ export function DiaryCard({ P }: { P: DiaryPalette }) {
 
 const createStyles = (P: DiaryPalette) =>
   StyleSheet.create({
-    card: { backgroundColor: P.card, borderRadius: 20, borderWidth: 1, borderColor: P.border, padding: 14, gap: 10 },
+    card: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, padding: 16, gap: 12 },
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    title: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.text },
+    title: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
+    headerSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub, marginTop: 1 },
+    dayLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: P.sub, textTransform: 'uppercase' },
+    footerLink: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
     free: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.sub },
     link: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.accent },
     body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, color: P.sub },
@@ -221,12 +266,14 @@ const createStyles = (P: DiaryPalette) =>
     buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.6, color: P.onAccent },
     disabled: { opacity: 0.45 },
     list: { gap: 10 },
-    eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    eventRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
+    eventTime: { width: 64, paddingTop: 10, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.text },
+    eventBlock: { flex: 1, flexDirection: 'row', gap: 10, backgroundColor: P.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
+    eventBar: { width: 3, borderRadius: 2 },
     dot: { width: 10, height: 10, borderRadius: 5 },
     eventText: { flex: 1 },
     eventTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.text },
     eventWhen: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub, marginTop: 1 },
-    more: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.sub },
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
     sheet: { backgroundColor: P.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingTop: 10, gap: 10, maxHeight: '80%' },
     grabber: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: P.border, marginBottom: 6 },

@@ -5,7 +5,7 @@
 
 #generated
 
-**2557 functions** across **355 files**.
+**2560 functions** across **356 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -148,9 +148,10 @@
 - `ServiceImageCropper.tsx` — finish · handleCancel · handleUse · layout · panResponder · **ServiceImageCropper**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **useVerticalDragReorder**
 
-### `src/features/providers/` (14)
+### `src/features/providers/` (15)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
-- `DiaryCard.tsx` — createStyles · **DiaryCard** · disconnect · load · openChooser · saveChoice · styles
+- `DiaryCard.tsx` — createStyles · days · **DiaryCard** · disconnect · load · openChooser · saveChoice · styles
+- `diaryDays.ts` — **diaryEventMinutes** · **groupDiaryByDay**
 - `DidYouBookSheet.tsx` — chip · days · defaultTime · **DidYouBookSheet** · handlePickerChange · handleSubmit · hhmm · startOfToday
 - `externalBookingLink.ts` — **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
