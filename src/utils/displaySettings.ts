@@ -88,22 +88,6 @@ export function isFontChoiceKey(value: string): value is FontChoiceKey {
   return FONT_OPTIONS.some((f) => f.key === value);
 }
 
-/**
- * The font is a per-account choice, so it is stored under the signed-in
- * account's id. A device-wide key made one person's font every account's font
- * on a shared phone.
- */
-export const LEGACY_FONT_CHOICE_KEY = '@cerviced_font_choice';
-
-export function fontChoiceStorageKey(userId: string): string {
-  return `${LEGACY_FONT_CHOICE_KEY}:${userId}`;
-}
-
-/** A missing, corrupt or retired stored value reads as the default. */
-export function resolveStoredFontChoice(raw: string | null): FontChoiceKey {
-  return raw !== null && isFontChoiceKey(raw) ? raw : DEFAULT_FONT_CHOICE;
-}
-
 // ── Language ─────────────────────────────────────────────────────────────────
 
 export interface LanguageOption {
@@ -154,4 +138,60 @@ export const DEFAULT_REGION = 'GB';
 
 export function isRegionCode(value: string): boolean {
   return REGION_OPTIONS.some((r) => r.code === value);
+}
+
+// ── Per-account storage ──────────────────────────────────────────────────────
+
+// Every display setting belongs to the signed-in account, so each is stored
+// under that account's id. These were once device-wide keys, which made one
+// person's choice every account's choice on a shared phone; the old keys are
+// kept here only so an existing choice can be handed over once.
+
+export type DisplaySettingField = 'textScale' | 'fontChoice' | 'language' | 'region';
+
+export const DISPLAY_SETTING_FIELDS: readonly DisplaySettingField[] = [
+  'textScale',
+  'fontChoice',
+  'language',
+  'region',
+] as const;
+
+export const LEGACY_DISPLAY_SETTING_KEYS: Readonly<Record<DisplaySettingField, string>> = {
+  textScale: '@cerviced_text_scale',
+  fontChoice: '@cerviced_font_choice',
+  language: '@cerviced_language',
+  region: '@cerviced_region',
+};
+
+export function displaySettingStorageKey(field: DisplaySettingField, userId: string): string {
+  return `${LEGACY_DISPLAY_SETTING_KEYS[field]}:${userId}`;
+}
+
+export interface DisplaySettingsValues {
+  readonly textScale: number;
+  readonly fontChoice: FontChoiceKey;
+  readonly language: string;
+  readonly region: string;
+}
+
+export const DEFAULT_DISPLAY_SETTINGS: DisplaySettingsValues = {
+  textScale: DEFAULT_TEXT_SCALE,
+  fontChoice: DEFAULT_FONT_CHOICE,
+  language: DEFAULT_LANGUAGE,
+  region: DEFAULT_REGION,
+};
+
+/** Missing, corrupt or retired stored values read as the defaults. */
+export function resolveStoredDisplaySettings(
+  raw: Readonly<Record<DisplaySettingField, string | null>>,
+): DisplaySettingsValues {
+  const font = raw.fontChoice;
+  const language = raw.language;
+  const region = raw.region;
+  return {
+    textScale: raw.textScale !== null ? snapTextScaleToStep(Number(raw.textScale)) : DEFAULT_TEXT_SCALE,
+    fontChoice: font !== null && isFontChoiceKey(font) ? font : DEFAULT_FONT_CHOICE,
+    language: language !== null && isLanguageCode(language) ? language : DEFAULT_LANGUAGE,
+    region: region !== null && isRegionCode(region) ? region : DEFAULT_REGION,
+  };
 }
