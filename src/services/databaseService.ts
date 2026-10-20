@@ -7459,7 +7459,7 @@ export interface NotificationPreferences {
   maintenanceReminders: boolean;
 }
 
-const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
+export const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
   bookingConfirm: true,
   bookingReminder: true,
   bookingUpdates: true,
@@ -7469,8 +7469,38 @@ const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
   maintenanceReminders: false,
 };
 
-/** Load the user's notification preferences from Supabase */
-export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+/**
+ * The provider hat's push switches. Same users.notification_preferences column
+ * as the client's, under keys of their own, so a dual-hat account's two
+ * screens never switch each other's notifications off. The edge function only
+ * reads these for notifications addressed to the provider role.
+ */
+export interface ProviderNotificationPreferences {
+  providerNewBookings: boolean;
+  providerBookingChanges: boolean;
+  providerReminders: boolean;
+  providerForms: boolean;
+  providerMessages: boolean;
+  providerPayments: boolean;
+  providerReviews: boolean;
+  providerDailyRecap: boolean;
+  providerFullyBooked: boolean;
+}
+
+export const DEFAULT_PROVIDER_NOTIF_PREFS: ProviderNotificationPreferences = {
+  providerNewBookings: true,
+  providerBookingChanges: true,
+  providerReminders: true,
+  providerForms: true,
+  providerMessages: true,
+  providerPayments: true,
+  providerReviews: true,
+  providerDailyRecap: true,
+  providerFullyBooked: true,
+};
+
+/** The signed-in user's whole stored preferences object, both hats' keys. */
+async function readStoredNotificationPreferences(): Promise<{ userId: string; stored: Record<string, unknown> }> {
   const {
     data: { user },
   } = await getSessionUser();
@@ -7481,22 +7511,54 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
     .eq("id", user.id)
     .single();
   if (error) throw error;
-  return { ...DEFAULT_NOTIF_PREFS, ...(data?.notification_preferences ?? {}) };
+  const stored = data?.notification_preferences;
+  return { userId: user.id, stored: stored && typeof stored === "object" ? stored as Record<string, unknown> : {} };
+}
+
+/** Only the keys `defaults` names, each falling back to its default. */
+function pickPreferences<T extends { [K in keyof T]: boolean }>(defaults: T, stored: Record<string, unknown>): T {
+  const picked = { ...defaults };
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const value = stored[key as string];
+    if (typeof value === "boolean") picked[key] = value as T[keyof T];
+  }
+  return picked;
+}
+
+/** Write one hat's keys without touching the other hat's (read-merge-write). */
+async function mergeNotificationPreferences(patch: object): Promise<void> {
+  const { userId, stored } = await readStoredNotificationPreferences();
+  const { error } = await supabase
+    .from("users")
+    .update({ notification_preferences: { ...stored, ...patch } })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
+/** Load the user's notification preferences from Supabase */
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+  const { stored } = await readStoredNotificationPreferences();
+  return pickPreferences(DEFAULT_NOTIF_PREFS, stored);
 }
 
 /** Persist the user's notification preferences to Supabase */
 export async function saveNotificationPreferences(
   prefs: NotificationPreferences,
 ): Promise<void> {
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not signed in");
-  const { error } = await supabase
-    .from("users")
-    .update({ notification_preferences: prefs })
-    .eq("id", user.id);
-  if (error) throw error;
+  await mergeNotificationPreferences(pickPreferences(DEFAULT_NOTIF_PREFS, prefs as unknown as Record<string, unknown>));
+}
+
+/** Load the provider hat's notification switches. */
+export async function getProviderNotificationPreferences(): Promise<ProviderNotificationPreferences> {
+  const { stored } = await readStoredNotificationPreferences();
+  return pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, stored);
+}
+
+/** Persist the provider hat's notification switches, leaving the client's alone. */
+export async function saveProviderNotificationPreferences(
+  prefs: ProviderNotificationPreferences,
+): Promise<void> {
+  await mergeNotificationPreferences(pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, prefs as unknown as Record<string, unknown>));
 }
 
 /** Turn Beauty Maintenance pushes on or off without touching any other

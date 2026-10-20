@@ -91,13 +91,13 @@ graph LR
   ProviderAccountScreen --> HelpCentreScreen
   ProviderAccountScreen --> InfoRegScreen
   ProviderAccountScreen --> LanguageRegionScreen
-  ProviderAccountScreen --> NotificationsScreen
   ProviderAccountScreen --> PoliciesScreen
   ProviderAccountScreen --> ProviderAccountInfoScreen
   ProviderAccountScreen --> ProviderAnalyticsScreen
   ProviderAccountScreen --> ProviderBookingHistoryScreen
   ProviderAccountScreen --> ProviderClienteleScreen
   ProviderAccountScreen --> ProviderInboxScreen
+  ProviderAccountScreen --> ProviderNotificationSettingsScreen
   ProviderAccountScreen --> ProviderPromotionsScreen
   ProviderAccountScreen --> ProviderScheduleScreen
   ProviderAccountScreen --> ReportProblemScreen
@@ -203,7 +203,7 @@ graph LR
 - `provider/LinkOnlyHomeScreen` → `BeccaStack`, `LinkOnlyMessages`, `LinkOnlyPortfolio`, `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/LinkOnlyAnalyticsScreen`, `provider/PoliciesScreen`, `provider/ProviderScheduleScreen`, `shared/NotificationsScreen`
 - `provider/LinkOnlyPortfolioScreen` → `client/ProviderProfileScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
-- `provider/ProviderAccountScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/BusinessProfileScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/LanguageRegionScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `shared/TextSizingScreen`, `SignUpStep3`
+- `provider/ProviderAccountScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/BusinessProfileScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderNotificationSettingsScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/LanguageRegionScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `shared/TextSizingScreen`, `SignUpStep3`
 - `provider/ProviderAnalyticsScreen` → `provider/PaymentsScreen`, `provider/ProviderBookingDetailScreen`
 - `provider/ProviderBookingDetailScreen` → `provider/ProviderConversationScreen`, `provider/ProviderIntakeFormScreen`
 - `provider/ProviderBookingHistoryScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderInboxScreen`, `shared/DevSettingsScreen`

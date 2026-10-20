@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderAccountScreen from '../../../screens/provider/ProviderAccountScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
-import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
+import ProviderNotificationSettingsScreen from '../../../screens/provider/ProviderNotificationSettingsScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
@@ -74,13 +74,12 @@ export default function ProviderAccountNavigator() {
         }}
       />
 
+      {/* The notifications list itself lives on the Home tab (bell button,
+          push taps); this tab only holds which ones push. */}
       <ProviderAccountStack.Screen
-        name="Notifications"
-        component={NotificationsScreen}
-        options={{
-          headerShown: false,
-          presentation: 'formSheet',
-        }}
+        name="NotificationSettings"
+        component={ProviderNotificationSettingsScreen}
+        options={{ headerShown: false }}
       />
 
       <ProviderAccountStack.Screen
