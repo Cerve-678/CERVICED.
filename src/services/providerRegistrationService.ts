@@ -873,6 +873,83 @@ export async function saveProviderToSupabase(
   await AsyncStorage.setItem(`@provider_reg_data_${userId}`, JSON.stringify(cached));
 }
 
+interface RegistrationCatalogue {
+  categories: Record<string, ServiceData[]>;
+  categoryDescriptions: Record<string, string>;
+  categoryServiceTypes: Record<string, string>;
+  fullAddress: string;
+}
+
+const NO_CATALOGUE: RegistrationCatalogue = {
+  categories: {},
+  categoryDescriptions: {},
+  categoryServiceTypes: {},
+  fullAddress: '',
+};
+
+/**
+ * The provider row as registration data. Without `catalogue` it has no
+ * services and no street address, which is what My Profile paints its hero
+ * and policy tiles from while the image-heavy services read is still on its
+ * way. Never save or cache that partial form: its empty `categories` would
+ * read as a provider with no services.
+ */
+export function providerRowToRegistrationData(
+  provider: DbProvider,
+  cached: ProviderRegistrationData | null = null,
+  catalogue: RegistrationCatalogue = NO_CATALOGUE,
+): ProviderRegistrationData {
+  return {
+    providerName: provider.display_name,
+    providerService: provider.service_category,
+    serviceCategories: provider.service_categories?.length
+      ? provider.service_categories
+      : [provider.service_category],
+    categoryServiceTypes: catalogue.categoryServiceTypes,
+    customServiceType: provider.custom_service_type || '',
+    location: provider.location_text || '',
+    aboutText: provider.about_text || '',
+    scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
+    // Unset colours fall back to the provider's own theme, never a
+    // placeholder: this object is saved back on the next profile save.
+    gradient: (provider.gradient || themeBrandingColours(provider.profile_theme).gradient) as [string, string, ...string[]],
+    hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
+    accentColor: provider.accent_color || themeBrandingColours(provider.profile_theme).accentColor,
+    profileTheme: provider.profile_theme || 'app',
+    logo: provider.logo_url || null,
+    categories: catalogue.categories,
+    categoryDescriptions: catalogue.categoryDescriptions,
+    phone: provider.phone || '',
+    email: provider.email || '',
+    instagram: provider.instagram || cached?.instagram || '',
+    website: provider.website || cached?.website || '',
+    tiktok: provider.tiktok || cached?.tiktok || '',
+    externalBookingUrl: provider.external_booking_url || '',
+    yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
+    businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
+    teamSize: (provider.team_size as ProviderRegistrationData['teamSize']) || '',
+    accessibilityNotes: provider.accessibility_notes || '',
+    termsAcceptedAt: provider.terms_accepted_at ?? null,
+    languagesSpoken: provider.languages_spoken || [],
+    priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
+    serviceLocations: provider.service_locations || [],
+    preferredPaymentMethods: provider.preferred_payment_methods || [],
+    fullAddress: catalogue.fullAddress,
+    // Existing profiles may predate the picker. A later save falls back to a
+    // one-time geocode, while every new picker selection supplies these.
+    fullAddressCoordinates: null,
+    // NULL round-trips as null — see the field's note on ProviderRegistrationData.
+    addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
+    backgroundImage: provider.background_image_url ?? null,
+    isVerified: provider.is_verified ?? false,
+    rating: Number(provider.rating) || 0,
+    whatsapp: provider.whatsapp_number ?? '',
+    preferredContactMethods: provider.preferred_contact_methods ?? ['in_app'],
+    bookingPolicies: (provider.booking_policies as ProviderRegistrationData['bookingPolicies']) ?? null,
+    cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
+  };
+}
+
 // ── loadProviderFromSupabase ─────────────────────────────────────────────────
 // Fetches provider + services + images + add-ons, reconstructs ProviderRegistrationData.
 // Falls back to AsyncStorage cache if Supabase returns nothing.
@@ -987,55 +1064,12 @@ export async function loadProviderFromSupabase(
     });
   }
 
-  const loaded: ProviderRegistrationData = {
-    providerName: provider.display_name,
-    providerService: provider.service_category,
-    serviceCategories: provider.service_categories?.length
-      ? provider.service_categories
-      : [provider.service_category],
-    categoryServiceTypes,
-    customServiceType: provider.custom_service_type || '',
-    location: provider.location_text || '',
-    aboutText: provider.about_text || '',
-    scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
-    // Unset colours fall back to the provider's own theme, never a
-    // placeholder: this object is saved back on the next profile save.
-    gradient: (provider.gradient || themeBrandingColours(provider.profile_theme).gradient) as [string, string, ...string[]],
-    hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
-    accentColor: provider.accent_color || themeBrandingColours(provider.profile_theme).accentColor,
-    profileTheme: provider.profile_theme || 'app',
-    logo: provider.logo_url || null,
+  const loaded = providerRowToRegistrationData(provider, cached, {
     categories,
     categoryDescriptions,
-    phone: provider.phone || '',
-    email: provider.email || '',
-    instagram: provider.instagram || cached?.instagram || '',
-    website: provider.website || cached?.website || '',
-    tiktok: provider.tiktok || cached?.tiktok || '',
-    externalBookingUrl: provider.external_booking_url || '',
-    yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
-    businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
-    teamSize: (provider.team_size as ProviderRegistrationData['teamSize']) || '',
-    accessibilityNotes: provider.accessibility_notes || '',
-    termsAcceptedAt: provider.terms_accepted_at ?? null,
-    languagesSpoken: provider.languages_spoken || [],
-    priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
-    serviceLocations: provider.service_locations || [],
-    preferredPaymentMethods: provider.preferred_payment_methods || [],
+    categoryServiceTypes,
     fullAddress,
-    // Existing profiles may predate the picker. A later save falls back to a
-    // one-time geocode, while every new picker selection supplies these.
-    fullAddressCoordinates: null,
-    // NULL round-trips as null — see the field's note on ProviderRegistrationData.
-    addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
-    backgroundImage: provider.background_image_url ?? null,
-    isVerified: provider.is_verified ?? false,
-    rating: Number(provider.rating) || 0,
-    whatsapp: provider.whatsapp_number ?? '',
-    preferredContactMethods: provider.preferred_contact_methods ?? ['in_app'],
-    bookingPolicies: (provider.booking_policies as ProviderRegistrationData['bookingPolicies']) ?? null,
-    cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
-  };
+  });
   // A live read is also the best offline/startup snapshot. Persist it so the
   // profile editor opened from My Profile can paint its saved fields straight
   // away instead of showing a blank loading route and repeating this work.
