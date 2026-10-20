@@ -22,14 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  feat/logo-card-framing (2026-10-20), until 20261020140000 is applied
+OWNER:  (none)
 ```
 
-### Written 2026-10-20 (per-card logo framing)
+### Applied 2026-10-20 (per-card logo framing)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261020140000 | `providers_logo_framing` | **WRITTEN, NOT APPLIED.** Frontier at authoring: `20261020120000`. Adds nullable `providers.logo_framing jsonb` + a CHECK that it's an object. Additive, no backfill, no policy change. Must be applied **before** the app change merges: Home's provider select names the column. The file records its own version. |
+| 20261020140000 | `providers_logo_framing` | **APPLIED 2026-10-20** by the user (SQL editor; the file's own INSERT records the version). Verified: `providers?select=logo_framing` returns 200 through the public API. Frontier at authoring: `20261020120000`. Adds nullable `providers.logo_framing jsonb` + a CHECK that it's an object. Additive, no backfill, no policy change. Must be applied **before** the app change merges: Home's provider select names the column. The file records its own version. |
 
 ### Applied 2026-10-20 (no more +30 for booking the same provider again)
 
