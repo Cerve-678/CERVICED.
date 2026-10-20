@@ -17,6 +17,8 @@ interface ServiceImageCarouselProps {
   onRemoveImage: (index: number) => void;
   /** Flip one photo between filling its box (cropping) and showing it whole. */
   onToggleFit: (index: number) => void;
+  /** A quick tap on a photo (not a hold): crop it again. */
+  onRecrop: (index: number) => void;
   /** Commit a drag: move the photo at `from` to sit at `to`. The first photo
    *  is the one that leads the service everywhere it's shown, so this is the
    *  only way to choose a cover shot without deleting and re-adding. */
@@ -43,6 +45,7 @@ export function ServiceImageCarousel({
   onAddImage,
   onRemoveImage,
   onToggleFit,
+  onRecrop,
   onReorder,
   size = 80,
   styles,
@@ -145,8 +148,14 @@ export function ServiceImageCarousel({
             Haptics.selectionAsync().catch(() => {});
           }
         },
-        onPanResponderRelease: () => {
+        onPanResponderRelease: (_evt, gesture) => {
           clearHold();
+          // Lifted before the hold armed and without moving: a tap, which
+          // re-crops the photo rather than starting a drag.
+          if (!armedRef.current && Math.abs(gesture.dx) < 6 && Math.abs(gesture.dy) < 6) {
+            onRecrop(index);
+            return;
+          }
           const from = dragIndexRef.current;
           const to = targetIndexRef.current;
           if (armedRef.current && from != null && to != null && from !== to) {
@@ -162,7 +171,7 @@ export function ServiceImageCarousel({
           endDrag();
         },
       }),
-    [beginHold, clearHold, dragX, endDrag, onReorder, pitch],
+    [beginHold, clearHold, dragX, endDrag, onRecrop, onReorder, pitch],
   );
 
   // Built once per photo rather than inline in the map: a fresh PanResponder
@@ -290,8 +299,9 @@ export function ServiceImageCarousel({
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Hold a photo to drag it — the first one leads your service. Use
-          Show whole to keep every edge, or Fill frame for a tighter crop.
+          Tap a photo to crop it, or hold it to drag — the first one leads
+          your service. Use Show whole to keep every edge, or Fill frame for a
+          tighter crop.
         </Text>
       )}
       {images.length > 0 && (

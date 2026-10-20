@@ -176,13 +176,13 @@ Curated: [[Notifications]] · **168 files**
 - … +138 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **79 files**
+Curated: [[Provider Onboarding & Go-Live]] · **78 files**
 - `src/services/databaseService.ts` _(79)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(37)_
-- `src/screens/provider/InfoRegScreen.tsx` _(34)_
+- `src/screens/provider/InfoRegScreen.tsx` _(33)_
 - `src/contexts/RegistrationContext.tsx` _(28)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **79 files**
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
-- … +49 more
+- … +48 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **55 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **55 files**
 - … +25 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **172 files**
+Curated: [[Booking Flow]] · **171 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(299)_
 - `src/services/databaseService.ts` _(234)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **172 files**
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_
-- … +142 more
+- … +141 more
 
 ## Auth
 Curated: [[Contexts]] · **183 files**
@@ -302,10 +302,10 @@ Curated: [[Contexts]] · **183 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
 - `src/screens/client/CartScreen.tsx` _(16)_
-- `src/screens/provider/InfoRegScreen.tsx` _(15)_
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
+- `src/screens/provider/InfoRegScreen.tsx` _(13)_
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
