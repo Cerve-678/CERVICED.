@@ -1532,9 +1532,23 @@ words, or promises that only make sense when CERVICED handles the booking.
 None of it is broken. It just makes the two kinds of provider look the same
 when they aren't.
 
-Each fix needs a yes/no from the user before it's built. Link-only gets
-everything except the exclusions already decided (see auto-memory
-`link-only-provider-user-type`), so ask feature by feature.
+### Decided (user, 2026-10-20)
+
+- **Saved notification:** a daily count with no names ("3 people saved you
+  today"), at most one a day. It goes to **every provider**, not just
+  link-only. It's on by default, with a toggle to turn it off.
+- **Notifications tabs (link-only):** All / Unread only.
+- **Settings row (link-only):** "Messages and saves".
+- **Policies (link-only):** plain text only. Cancellation notice,
+  reschedules and a note; no fee card and no deposit options. The profile
+  says they're handled on the pro's booking site.
+- **Becca (link-only):** only the capabilities that fit (the "probably
+  fine" list in item 5). Anything else gets "that isn't part of your
+  setup". She doesn't read the phone diary yet.
+- **Help Centre:** one set of provider FAQs for **all** pros, with the
+  link-only answers inside it. The user approves the wording.
+
+Not built yet. The details below are the reasoning and file pointers.
 
 ### 1. "Someone saved you" notification — missing
 
