@@ -5,9 +5,9 @@
 
 #generated
 
-**78 screens.** Curated overview: [[Screens & Navigation]].
+**79 screens.** Curated overview: [[Screens & Navigation]].
 
-## Provider (32)
+## Provider (33)
 - `src/screens/client/ProviderChatScreen.tsx`
 - `src/screens/client/ProviderProfileScreen.tsx`
 - `src/screens/provider/AboutYouScreen.tsx`
@@ -36,6 +36,7 @@
 - `src/screens/provider/ProviderInfoPackScreen.tsx`
 - `src/screens/provider/ProviderIntakeFormScreen.tsx`
 - `src/screens/provider/ProviderMyProfileScreen.tsx`
+- `src/screens/provider/ProviderNotificationSettingsScreen.tsx`
 - `src/screens/provider/ProviderPromotionsScreen.tsx`
 - `src/screens/provider/ProviderScheduleScreen.tsx`
 - `src/screens/provider/SchedulingScreen.tsx`

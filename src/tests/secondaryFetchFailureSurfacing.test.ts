@@ -44,7 +44,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
   describe('notification preferences', () => {
     it('makes the service report a failed read instead of returning defaults', () => {
       const section = database.slice(
-        database.indexOf('export async function getNotificationPreferences'),
+        database.indexOf('async function readStoredNotificationPreferences'),
         database.indexOf('/** Count how many users have bookmarked'),
       );
 
@@ -59,12 +59,12 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
     });
 
     it('never renders default toggles as saved preferences after a failed load', () => {
-      const source = read('screens', 'client', 'NotificationsSettingsScreen.tsx');
+      const source = read('components', 'NotificationPreferencesView.tsx');
 
       // Scoped to the preference calls — the bare `.catch(() => {})` on the
       // Haptics calls is a legitimate fire-and-forget, not a swallowed write.
       expect(source).not.toMatch(
-        /(get|save)NotificationPreferences\([^)]*\)[\s\S]{0,200}?\.catch\(\(\) => \{\}\)/,
+        /(loadPrefs|save)\([^)]*\)[\s\S]{0,200}?\.catch\(\(\) => \{\}\)/,
       );
       expect(source).toContain("useState<'loading' | 'ready' | 'error'>('loading')");
       // The toggle rows are gated behind a successful load.
@@ -73,13 +73,13 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
     });
 
     it('never shows the saved footer when the write failed', () => {
-      const source = read('screens', 'client', 'NotificationsSettingsScreen.tsx');
+      const source = read('components', 'NotificationPreferencesView.tsx');
 
       // "Preferences saved automatically." must sit in the else branch of the
       // save-error check, so a failed write can't display it.
       const footer = source.slice(
         source.indexOf('{saveError ? ('),
-        source.indexOf('</>'),
+        source.indexOf('</>', source.indexOf('{saveError ? (')),
       );
       expect(footer).toContain("Your last change hasn't been applied yet.");
       expect(footer).toContain('onPress={retrySave}');
@@ -87,7 +87,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
         footer.indexOf(') : ('),
       );
       // The flush-on-unmount save still has no UI to report to, but must log.
-      expect(source).toContain('saveNotificationPreferences(pendingPrefs.current)');
+      expect(source).toContain('save(pendingPrefs.current)');
       expect(source).toContain('flush-on-unmount save failed');
     });
   });

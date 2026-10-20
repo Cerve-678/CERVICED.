@@ -323,7 +323,7 @@ export type ProviderAccountStackParamList = {
   // Their own public profile, exactly as clients see it.
   MyPublicProfile: { providerId: string };
   EditProfile: { transferProviderId?: string } | undefined;
-  Notifications: undefined;
+  NotificationSettings: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Analytics: undefined;
   Promotions: undefined;
