@@ -5,7 +5,7 @@
 
 #generated
 
-**36 service modules.** Curated overview: [[Services]].
+**37 service modules.** Curated overview: [[Services]].
 
 ### `src/services/acuityTransferService.ts`
 `transferFromAcuity`
@@ -15,6 +15,9 @@
 
 ### `src/services/api.ts`
 `api`
+
+### `src/services/authProfileSnapshot.ts`
+`AUTH_PROFILE_SNAPSHOT_MAX_AGE_MS` · `clearAuthProfileSnapshot` · `readAuthProfileSnapshot` · `saveAuthProfileSnapshot`
 
 ### `src/services/AvailabilityService.ts`
 `AvailabilityService` · `describeEmergencyReason` · `earliestBookableStartMs` · `isStartTaken` · `parseDurationToMinutes` · `parseTimeToMinutes` · `readEmergencyPolicy` · `resolveSlotOffer` · `resolveWorkingWindows` · `slotStartMs` · `snapToRequestable` · `takesEmergencyRequests` · `toWindowMins`
