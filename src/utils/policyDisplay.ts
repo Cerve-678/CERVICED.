@@ -96,13 +96,22 @@ export interface PolicyDisplayRow {
  * actually enforces. A frozen booking snapshot has no equivalent enforced
  * number (only the descriptive text was ever captured), so callers reading a
  * snapshot should omit this parameter.
+ *
+ * `linkOnly`: a link-only provider takes bookings on their own site, so
+ * nothing on CERVICED applies a notice window, keeps a deposit or charges a
+ * fee for them. Their rows are the plain policy text only: no deposit,
+ * penalty, no-show or fee rows, and their own notice rather than the
+ * enforced column (which defaults to 24 for every provider). Rows for values
+ * stored before they switched to link-only stay hidden too.
  */
 export function buildPolicyDisplayRows(
   policy: PolicyDisplayData | null | undefined,
   enforcedCancellationNoticeHours?: number,
+  options?: { linkOnly?: boolean },
 ): PolicyDisplayRow[] {
   const rows: PolicyDisplayRow[] = [];
   if (!policy) return rows;
+  if (options?.linkOnly) return buildLinkOnlyPolicyRows(policy);
 
   // "required" is only true for the deposit_required mode — under
   // client_choice the client can still pay in full, so labelling the deposit
@@ -177,6 +186,30 @@ export function buildPolicyDisplayRows(
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
 
+  return rows;
+}
+
+function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] {
+  const rows: PolicyDisplayRow[] = [];
+  if (policy.cancelNotice && policy.cancelNotice !== 'none') {
+    rows.push({ icon: 'time-outline', label: 'Cancellation', value: `${policy.cancelNotice} notice` });
+  }
+  const rescheduleParts: string[] = [];
+  if (policy.rescheduleNotice && policy.rescheduleNotice !== 'same_day') {
+    rescheduleParts.push(`${policy.rescheduleNotice} notice`);
+  }
+  if (policy.maxReschedules && policy.maxReschedules !== 'unlimited') {
+    rescheduleParts.push(`max ${policy.maxReschedules}`);
+  }
+  if (rescheduleParts.length > 0) {
+    rows.push({ icon: 'calendar-outline', label: 'Reschedule', value: rescheduleParts.join(' · ') });
+  }
+  if (policy.cancelNote) {
+    rows.push({ icon: 'information-circle-outline', label: 'Note', value: policy.cancelNote });
+  }
+  if (policy.refundPolicyNote) {
+    rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
+  }
   return rows;
 }
 

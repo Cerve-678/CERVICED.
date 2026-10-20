@@ -597,7 +597,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // Measured per render, not captured at module load: the paired tiles and the
   // quick-action row both divide the screen width between them.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
   const [services, setServices] = useState<DbService[]>([]);
@@ -889,8 +889,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     return buildPolicyDisplayRows(
       providerData.bookingPolicies,
       providerData.cancellationNoticeHours,
+      { linkOnly: myBookingMode === 'external' },
     );
-  }, [providerData]);
+  }, [providerData, myBookingMode]);
 
   /** goLive plus the two Profile-Health-only fields it never fetches itself
    *  (see GoLiveStatus's portfolioSet/termsSet doc comment) — merged here
