@@ -5,7 +5,6 @@ import type { Catalog } from '../../types';
 import { common } from './common';
 import { settings } from './settings';
 import { beauty } from './beauty';
-import { auth } from './auth';
 import { discover } from './discover';
 import { clientBooking } from './clientBooking';
 import { cart } from './cart';
@@ -20,7 +19,6 @@ export const es_AREAS = {
   common,
   settings,
   beauty,
-  auth,
   discover,
   clientBooking,
   cart,
@@ -36,7 +34,6 @@ export const es: Catalog = {
   ...common,
   ...settings,
   ...beauty,
-  ...auth,
   ...discover,
   ...clientBooking,
   ...cart,

@@ -17,6 +17,8 @@
 //   HELD IN ENGLISH: list the key in its area's `<area>Held` array. Held keys
 //   are left out of the other languages, and the resolver returns English
 //   for them regardless.
+// - Sign-in, sign-up and the welcome screen are deliberately English-only
+//   (src/screens/auth/*), so there is no auth area.
 // - Provider-written content (bios, service names, notes) never goes in a
 //   catalog — see src/services/dynamicTranslationService.ts.
 // - Values the app stores or matches on (DB enums, category names used in
@@ -26,7 +28,6 @@
 import { common, commonHeld } from './common';
 import { settings, settingsHeld } from './settings';
 import { beauty, beautyHeld } from './beauty';
-import { auth, authHeld } from './auth';
 import { discover, discoverHeld } from './discover';
 import { clientBooking, clientBookingHeld } from './clientBooking';
 import { cart, cartHeld } from './cart';
@@ -43,7 +44,6 @@ export const EN_AREAS = {
   common,
   settings,
   beauty,
-  auth,
   discover,
   clientBooking,
   cart,
@@ -61,7 +61,6 @@ export const en = {
   ...common,
   ...settings,
   ...beauty,
-  ...auth,
   ...discover,
   ...clientBooking,
   ...cart,
@@ -78,7 +77,6 @@ export const HELD_KEYS: readonly (keyof typeof en)[] = [
   ...commonHeld,
   ...settingsHeld,
   ...beautyHeld,
-  ...authHeld,
   ...discoverHeld,
   ...clientBookingHeld,
   ...cartHeld,
