@@ -15,7 +15,7 @@ interface ServiceImageCarouselProps {
   images: ServiceImageDraft[];
   onAddImage: () => void;
   onRemoveImage: (index: number) => void;
-  /** Flip one photo between filling its box (cropping) and fitting whole. */
+  /** Flip one photo between filling its box (cropping) and showing it whole. */
   onToggleFit: (index: number) => void;
   /** Commit a drag: move the photo at `from` to sit at `to`. The first photo
    *  is the one that leads the service everywhere it's shown, so this is the
@@ -267,7 +267,7 @@ export function ServiceImageCarousel({
                   activeOpacity={0.7}
                 >
                   <Text style={styles.fitToggleText}>
-                    {image.fit === 'cover' ? 'Fill' : 'Fit'}
+                    {image.fit === 'cover' ? 'Show whole' : 'Fill frame'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -290,8 +290,8 @@ export function ServiceImageCarousel({
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Hold a photo to drag it — the first one leads your service. Tap
-          Fill/Fit to choose whether it crops.
+          Hold a photo to drag it — the first one leads your service. Use
+          Show whole to keep every edge, or Fill frame for a tighter crop.
         </Text>
       )}
       {images.length > 0 && (

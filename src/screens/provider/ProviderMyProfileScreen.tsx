@@ -27,7 +27,7 @@
  * schedule item at all, so a provider could be told they were ready for
  * clients while the server was still refusing to publish them.
  */
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,8 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Alert,
+  Animated,
+  InteractionManager,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -285,6 +287,59 @@ const DashEmpty = React.memo(function DashEmpty({
 }) {
   return <Text style={[styles.dashEmpty, { color: palette.sub }]}>{text}</Text>;
 });
+
+/**
+ * The profile has several independent reads behind it.  A centred spinner made
+ * that work look like an empty route (and, on a slow connection, like a
+ * broken one).  Keep the silhouette of the real page on screen immediately;
+ * the lower dashboard cards arrive first and the header follows upwards.
+ */
+function ProviderProfileLoadingShell({ accent }: { accent: string }) {
+  const lowerOpacity = useRef(new Animated.Value(0)).current;
+  const middleOpacity = useRef(new Animated.Value(0)).current;
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const reveal = (value: Animated.Value) =>
+      Animated.timing(value, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      });
+    const animation = Animated.sequence([
+      reveal(lowerOpacity),
+      reveal(middleOpacity),
+      reveal(heroOpacity),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [heroOpacity, lowerOpacity, middleOpacity]);
+
+  return (
+    <ThemedBackground>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.profileLoadingShell} accessibilityLabel="Loading your profile">
+          <Animated.View style={[styles.profileLoadingHero, { opacity: heroOpacity }]}>
+            <View style={[styles.profileLoadingHeroMark, { backgroundColor: accent }]} />
+          </Animated.View>
+          <Animated.View style={[styles.profileLoadingCard, { opacity: middleOpacity }]}>
+            <View style={styles.profileLoadingTitle} />
+            <View style={styles.profileLoadingLine} />
+            <View style={styles.profileLoadingLineShort} />
+          </Animated.View>
+          <Animated.View style={[styles.profileLoadingBottom, { opacity: lowerOpacity }]}>
+            <View style={styles.profileLoadingSectionLabel} />
+            <View style={styles.profileLoadingTileRow}>
+              <View style={styles.profileLoadingTile} />
+              <View style={styles.profileLoadingTile} />
+            </View>
+            <View style={styles.profileLoadingWideTile} />
+          </Animated.View>
+        </View>
+      </SafeAreaView>
+    </ThemedBackground>
+  );
+}
 
 const formatServicePrice = (service: DbService): string =>
   `£${service.price}${service.price_max ? `–£${service.price_max}` : ''}`;
@@ -595,6 +650,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      let catalogueTask: ReturnType<typeof InteractionManager.runAfterInteractions> | null = null;
 
       // Returning providers can render their saved profile before the live
       // request finishes. Supabase still refreshes every field below; this
@@ -655,41 +711,53 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               AvailabilityService.getAvailabilitySummary(profile.id, {
                 includeExtendedSearch: false,
               })
-                .then(setAvailability)
-                .catch(() => setAvailability(null))
-                .finally(() => setAvailabilityLoading(false));
+                .then(summary => {
+                  if (active) setAvailability(summary);
+                })
+                .catch(() => {
+                  if (active) setAvailability(null);
+                })
+                .finally(() => {
+                  if (active) setAvailabilityLoading(false);
+                });
 
-              // The catalogue is what this screen is for, so it's awaited
-              // rather than fired and forgotten — everything else can arrive
-              // late without the screen looking broken.
-              const catalogue = await getMyServiceCatalogue(profile.id);
-              if (!active) return;
-              setServices(catalogue.services);
-
+              // These dashboard sections do not depend on the catalogue. Start
+              // them now, while the service list is still loading, so the page
+              // fills from its lower cards upward instead of holding every
+              // section hostage to the slowest query.
               getProviderPortfolio(profile.id)
-                .then(({ work }) => setWorkPhotos(work))
+                .then(({ work }) => {
+                  if (active) setWorkPhotos(work);
+                })
                 .catch(() => {});
 
               getMyProviderTermsText()
-                .then(text => setTermsSet(text.trim().length > 0))
+                .then(text => {
+                  if (active) setTermsSet(text.trim().length > 0);
+                })
                 .catch(err => {
                   logger.error('[MyServices] terms status load failed:', err);
                 });
 
               getMyBookmarkCount()
-                .then(setBookmarkCount)
+                .then(count => {
+                  if (active) setBookmarkCount(count);
+                })
                 .catch(err => {
                   logger.error('[MyServices] bookmark count load failed:', err);
                 });
 
               getMyTopServices(90, 1)
-                .then(setTopServices)
+                .then(result => {
+                  if (active) setTopServices(result);
+                })
                 .catch(err => {
                   logger.error('[MyServices] top services load failed:', err);
                 });
 
               getProviderReviews(profile.id, { limit: 20 })
-                .then(dbReviews =>
+                .then(dbReviews => {
+                  if (!active) return;
                   setReviews(
                     dbReviews.map(r => ({
                       id: r.id,
@@ -702,18 +770,34 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         year: 'numeric',
                       }),
                     })),
-                  ),
-                )
+                  );
+                })
                 .catch(() => {});
 
               // Passed the profile we already hold, so this costs the three
               // status reads and not a fourth lookup of the same row.
               fetchGoLiveStatus(profile)
-                .then(setGoLive)
+                .then(status => {
+                  if (active) setGoLive(status);
+                })
                 .catch(err => {
                   logger.error('[MyServices] go-live status load failed:', err);
-                  setGoLive(null);
+                  if (active) setGoLive(null);
                 });
+
+              // The dashboard is the entrance view. Let its navigation and
+              // first paint finish before starting the heaviest read on this
+              // route; otherwise services competes with the profile hero,
+              // portfolio and availability for the same mobile connection.
+              catalogueTask = InteractionManager.runAfterInteractions(() => {
+                void getMyServiceCatalogue(profile.id)
+                  .then(catalogue => {
+                    if (active) setServices(catalogue.services);
+                  })
+                  .catch(error => {
+                    logger.error('[MyServices] catalogue load failed:', error);
+                  });
+              });
             }
           }
 
@@ -725,7 +809,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         }
       };
       void load();
-      return () => { active = false; };
+      return () => {
+        active = false;
+        catalogueTask?.cancel();
+      };
     }, [user?.id]),
   );
 
@@ -1180,17 +1267,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   );
 
 
-  if (isLoading) {
-    return (
-      <ThemedBackground>
-        <SafeAreaView style={styles.container} edges={['top']}>
-          <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color={theme.accent} />
-          </View>
-        </SafeAreaView>
-      </ThemedBackground>
-    );
-  }
+  if (isLoading && !providerData) return <ProviderProfileLoadingShell accent={theme.accent} />;
 
   if (!providerData) {
     return (
@@ -2023,6 +2100,16 @@ const styles = StyleSheet.create({
     height: 260,
     borderRadius: 24,
     backgroundColor: 'rgba(126,102,103,0.16)',
+    overflow: 'hidden',
+  },
+  profileLoadingHeroMark: {
+    position: 'absolute',
+    right: 24,
+    bottom: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    opacity: 0.28,
   },
   profileLoadingCard: {
     marginTop: -40,
@@ -2049,6 +2136,33 @@ const styles = StyleSheet.create({
     marginTop: 9,
     borderRadius: 7,
     backgroundColor: 'rgba(126,102,103,0.14)',
+  },
+  profileLoadingBottom: {
+    marginHorizontal: 12,
+    marginTop: 20,
+  },
+  profileLoadingSectionLabel: {
+    width: 92,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(126,102,103,0.14)',
+  },
+  profileLoadingTileRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  profileLoadingTile: {
+    flex: 1,
+    height: 112,
+    borderRadius: 18,
+    backgroundColor: 'rgba(126,102,103,0.12)',
+  },
+  profileLoadingWideTile: {
+    height: 84,
+    marginTop: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(126,102,103,0.12)',
   },
   emptyTitle: {
     fontSize: 22,

@@ -76,7 +76,6 @@ import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
-import { ServiceImageCropper } from '../../features/provider-registration/ServiceImageCropper';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
@@ -1165,10 +1164,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
   const [images, setImages] = useState<ServiceImageDraft[]>(service?.images || []);
-  // Freshly-picked URIs waiting to be framed. They are deliberately NOT added
-  // to `images` yet — a provider who backs out of the cropper should end up
-  // with the set they started with, not a half-added batch.
-  const [pendingCropUris, setPendingCropUris] = useState<string[]>([]);
   const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
@@ -1276,16 +1271,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.length) {
-      // Straight into the cropper rather than into the set: every photo is
-      // re-rendered to JPEG on the way through, which is also what stops an
-      // iOS HEIC being uploaded under a .jpg name (see ServiceImageCropper).
-      setPendingCropUris(result.assets.map(a => a.uri));
+      // Keep the provider's complete original by default. They can switch an
+      // individual tile to "Fill frame" later when a tighter crop genuinely
+      // makes sense; opening every picked photo in a mandatory cropper made
+      // adding a simple service gallery feel like an editing task.
+      setImages(prev => [
+        ...prev,
+        ...result.assets.map(asset => ({ uri: asset.uri, fit: 'contain' as const })),
+      ]);
     }
-  };
-
-  const handleCropperDone = (framed: ServiceImageDraft[]) => {
-    setPendingCropUris([]);
-    if (framed.length > 0) setImages(prev => [...prev, ...framed]);
   };
 
   const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
@@ -1477,20 +1471,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
                 <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onReorder={handleReorderImages} size={100} styles={styles} />
-                <ServiceImageCropper
-                  visible={pendingCropUris.length > 0}
-                  uris={pendingCropUris}
-                  onDone={handleCropperDone}
-                  onCancel={() => setPendingCropUris([])}
-                  palette={{
-                    bg: chrome.surf(0.98),
-                    card: chrome.surf(0.35),
-                    text: chrome.fg(0.92),
-                    sub: chrome.fg(0.55),
-                    accent: accentColor,
-                  }}
-                />
-                <Text style={styles.serviceSheetHint}>Add multiple images to showcase your service</Text>
+                <Text style={styles.serviceSheetHint}>Photos stay whole by default. Use Fill frame only when you want a tighter crop.</Text>
               </View>
 
               {/* Service Name */}
