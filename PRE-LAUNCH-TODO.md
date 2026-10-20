@@ -1191,3 +1191,31 @@ Before turning it on:
   saved cards. Wording is the user's call.
 - Apple Pay still needs a real Apple merchant ID (`merchant.com.cerviced` is a
   placeholder) before the "Also at checkout" row is true on iOS.
+
+## 25. "Session expired" on Apple Pay + address page back arrow — two PRs to merge (2026-10-20)
+
+(Numbered 25 because §22 is on another branch.)
+
+**Merge, then ship a new TestFlight build:**
+
+- **PR #146 `fix/sign-out-this-device-only`.** Logging out on one phone logged
+  the account out on every phone, because `supabase.auth.signOut()` defaults
+  to global scope. The other phones still look logged in, but Apple Pay
+  fails with "Your session has expired" (`create-payment-intent` gets
+  `session_not_found` from Auth → 401). Seen live 14:30–15:05 today. The fix
+  uses `scope: 'local'`; password reset still signs out everywhere on purpose.
+  Until it ships, the workaround on an affected phone is to log out and back in.
+- **PR #147 `fix/address-back-returns-to-cart`.** From checkout, the back
+  arrow on the address page went to Home. Now it returns to the cart with
+  Confirm Your Details open again, the same as Save does.
+
+Both have clean `tsc` and 155/155 test suites, but neither has been run on a
+device. Check on the phone: log out on phone A and pay on phone B. Then, from
+checkout, open add-address, press back, and confirm you land on the cart.
+
+**Still open after #147:** the iOS edge-swipe and Android hardware back from
+the address page go to the Profile menu, not the cart. The cart only reopens
+Confirm Your Details if the client goes back to the cart tab themselves.
+Closing this needs the address page to intercept back when it was opened
+from checkout (`usePreventRemove`, or a `BackHandler` plus
+`gestureEnabled: false`).
