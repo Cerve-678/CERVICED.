@@ -5,7 +5,7 @@
 
 #generated
 
-**2664 functions** across **365 files**.
+**2668 functions** across **365 files**.
 
 ### `src/components/` (48)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -318,12 +318,12 @@
 ### `src/services/becca/` (9)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
 - `askNormaliser.ts` — **normalizeAsk**
-- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isSafeLeadIn · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setPendingAction · understandWithFallback · verifyComposition
+- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
 - `matcher.ts` — scoreEntities · scorePhrases · **understand**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
 - `nvidiaInterpreter.ts` — validComposition · validInterpretation
-- `registry.ts` — **capabilitiesFor** · **getCapability** · **toToolSchema**
+- `registry.ts` — **capabilitiesFor** · **fitsSetup** · **getCapability** · **toToolSchema**
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 
 ### `src/services/becca/capabilities/` (3)

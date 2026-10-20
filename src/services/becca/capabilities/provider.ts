@@ -44,6 +44,17 @@ import {
 import type { Capability, CapabilityResult } from "../types";
 import { navChip, askChip, money } from "./shared";
 
+// Link-only providers (booking_mode 'external') take bookings on their own
+// booking site, so they only get capabilities marked `fitsLinkOnly`. Those
+// capabilities read `ctx.linkOnly` to keep their follow-ups to asks that also
+// fit — a chip offering "What's on today?" would only lead to "that isn't part
+// of your setup". Every message here routes to a fitting capability; see
+// beccaLinkOnly.test.ts.
+const linkOnlyInboxChip = askChip("inbox", "Any unread messages?", "Any unread messages?");
+const linkOnlyUpdatesChip = askChip("notifs", "Anything I've missed?", "Any updates?");
+const linkOnlyHoursChip = askChip("hours", "What are my hours?", "What are my working hours?");
+const linkOnlyReachChip = askChip("reach", "How's my reach?", "How many followers have I got?");
+
 const todaySchedule: Capability = {
   id: "pv.today",
   hat: "provider",
@@ -323,17 +334,20 @@ const inbox: Capability = {
     "any messages", "unread messages", "has anyone messaged", "my inbox",
     "client messages", "anyone got in touch", "new messages",
   ],
-  async run(): Promise<CapabilityResult> {
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
     const convos = await getProviderConversations();
     const unread = convos.filter((c) => (c.unread_count_provider ?? 0) > 0);
     if (unread.length === 0) {
       return {
         text: `No unread messages. You've got ${convos.length} conversation${convos.length !== 1 ? "s" : ""} in total.`,
-        suggestions: [
-          navChip("messages", "Open Inbox", "messages"),
-          askChip("today", "What's on today?", "What's on today?"),
-          askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
-        ],
+        suggestions: linkOnly
+          ? [navChip("messages", "Open Inbox", "messages"), linkOnlyUpdatesChip, linkOnlyHoursChip]
+          : [
+            navChip("messages", "Open Inbox", "messages"),
+            askChip("today", "What's on today?", "What's on today?"),
+            askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
+          ],
       };
     }
     return {
@@ -351,8 +365,12 @@ const inbox: Capability = {
           ];
         }),
         navChip("messages", "Open Inbox", "messages"),
-        askChip("waitlist", "Anyone on my waitlist?", "Who's on my waitlist?"),
-        askChip("today", "What's on today?", "What's on today?"),
+        ...(linkOnly
+          ? [linkOnlyUpdatesChip]
+          : [
+            askChip("waitlist", "Anyone on my waitlist?", "Who's on my waitlist?"),
+            askChip("today", "What's on today?", "What's on today?"),
+          ]),
       ],
     };
   },
@@ -508,17 +526,20 @@ const providerNotifications: Capability = {
     "what did i miss", "any news", "catch me up", "what's new", "whats new",
     "anything i should know", "any alerts",
   ],
-  async run(): Promise<CapabilityResult> {
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
     const rows = await getMyNotifications("provider");
     const unread = rows.filter((n) => !n.is_read);
     if (unread.length === 0) {
       return {
         text: "Nothing new — you're all caught up.",
-        suggestions: [
-          askChip("today", "What's on today?", "What's on today?"),
-          askChip("inbox", "Any unread messages?", "Any unread messages?"),
-          askChip("week", "How's my week?", "How busy am I this week?"),
-        ],
+        suggestions: linkOnly
+          ? [linkOnlyInboxChip, linkOnlyHoursChip, linkOnlyReachChip]
+          : [
+            askChip("today", "What's on today?", "What's on today?"),
+            askChip("inbox", "Any unread messages?", "Any unread messages?"),
+            askChip("week", "How's my week?", "How busy am I this week?"),
+          ],
       };
     }
     const lines = unread
@@ -527,22 +548,26 @@ const providerNotifications: Capability = {
       .join("\n\n");
     return {
       text: `${unread.length} unread update${unread.length !== 1 ? "s" : ""}:\n\n${lines}`,
-      suggestions: [
-        ...unread
-          .filter((notification) => !!notification.booking_id)
-          .slice(0, 4)
-          .map((notification) =>
-            navChip(
-              `booking-${notification.id}`,
-              `View booking: ${notification.title}`,
-              "BookingDetail",
-              { bookingId: notification.booking_id! },
+      suggestions: linkOnly
+        // No booking chips: a link-only pro's bookings aren't held by
+        // CERVICED, so there's no booking screen for them to open.
+        ? [navChip("notifs", "Open Notifications", "Notifications"), linkOnlyInboxChip, linkOnlyHoursChip]
+        : [
+          ...unread
+            .filter((notification) => !!notification.booking_id)
+            .slice(0, 4)
+            .map((notification) =>
+              navChip(
+                `booking-${notification.id}`,
+                `View booking: ${notification.title}`,
+                "BookingDetail",
+                { bookingId: notification.booking_id! },
+              ),
             ),
-          ),
-        navChip("notifs", "Open Notifications", "Notifications"),
-        askChip("inbox", "Any unread messages?", "Any unread messages?"),
-        askChip("today", "What's on today?", "What's on today?"),
-      ],
+          navChip("notifs", "Open Notifications", "Notifications"),
+          askChip("inbox", "Any unread messages?", "Any unread messages?"),
+          askChip("today", "What's on today?", "What's on today?"),
+        ],
     };
   },
 };
@@ -640,7 +665,8 @@ const myHours: Capability = {
     "what time do i close", "my opening hours", "my working days",
   ],
   excludeWhen: /\b(set|change|update|edit|add)\b/i,
-  async run(): Promise<CapabilityResult> {
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
     if (!profile) return { text: "I couldn't load your provider profile just now." };
 
@@ -648,6 +674,12 @@ const myHours: Capability = {
     const open = rows.filter((r) => !r.is_closed);
 
     if (open.length === 0) {
+      if (linkOnly) {
+        return {
+          text: "You haven't set your opening hours yet. They show on your About tab, and you need them to go live.",
+          suggestions: [navChip("schedule", "Set my hours", "schedule"), linkOnlyInboxChip],
+        };
+      }
       return {
         text: "You haven't set any working hours yet — clients can't book until you do.",
         suggestions: [
@@ -664,11 +696,13 @@ const myHours: Capability = {
 
     return {
       text: `You're open ${open.length} day${open.length !== 1 ? "s" : ""} a week:\n\n${lines}`,
-      suggestions: [
-        navChip("schedule", "Change my hours", "schedule"),
-        askChip("timeoff", "When am I off?", "What days off have I got?"),
-        askChip("capacity", "What's my daily limit?", "Am I full today?"),
-      ],
+      suggestions: linkOnly
+        ? [navChip("schedule", "Change my hours", "schedule"), linkOnlyInboxChip, linkOnlyUpdatesChip]
+        : [
+          navChip("schedule", "Change my hours", "schedule"),
+          askChip("timeoff", "When am I off?", "What days off have I got?"),
+          askChip("capacity", "What's my daily limit?", "Am I full today?"),
+        ],
     };
   },
 };
@@ -734,7 +768,16 @@ const myReach: Capability = {
     "who follows me", "my following", "how visible am i",
     "how many people see me", "my profile reach", "am i getting seen",
   ],
-  async run(): Promise<CapabilityResult> {
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
+    if (linkOnly) {
+      // No price list, so no service count to report.
+      const followers = await getMyFollowerCount();
+      return {
+        text: `**${followers}** client${followers !== 1 ? "s" : ""} follow you.`,
+        suggestions: [linkOnlyInboxChip, linkOnlyUpdatesChip],
+      };
+    }
     const profile = await getMyProviderProfile();
     if (!profile) return { text: "I couldn't load your provider profile just now." };
 
@@ -799,7 +842,15 @@ const availability: Capability = {
   hat: "provider",
   describe: "Set working hours, days off, availability",
   phrases: ["availability", "working hours", "day off", "time off", "holiday", "block out", "open hours", "close"],
-  async run(): Promise<CapabilityResult> {
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
+    if (linkOnly) {
+      // Their schedule is Opening Hours only: no blocked dates, no slots.
+      return {
+        text: "Set your opening hours in Opening Hours. They show on your About tab. Days off and bookings are handled on your own booking site.",
+        suggestions: [navChip("schedule", "Open Opening Hours", "schedule"), linkOnlyHoursChip],
+      };
+    }
     return {
       text: "Set your working hours, days off and availability in your schedule.",
       suggestions: [
@@ -1137,7 +1188,20 @@ const help: Capability = {
   hat: "provider",
   describe: "What can Becca do for my business",
   phrases: ["what can you do", "help", "how do you work", "what are you", "who are you"],
-  async run(): Promise<CapabilityResult> {
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
+    if (linkOnly) {
+      return {
+        text:
+          "## Your business assistant\n" +
+          "- **Messages** — unread messages from clients\n" +
+          "- **Updates** — notifications you've missed\n" +
+          "- **Opening hours** — what clients see on your About tab\n" +
+          "- **Reach** — how many clients follow you\n\n" +
+          "Your bookings, clients and prices live on your own booking site, so I can't see those. Ask a question, or choose a shortcut below.",
+        suggestions: [linkOnlyInboxChip, linkOnlyUpdatesChip, linkOnlyHoursChip, linkOnlyReachChip],
+      };
+    }
     return {
       text:
         "## Your business assistant\n" +

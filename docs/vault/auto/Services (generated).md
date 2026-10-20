@@ -50,13 +50,13 @@ _no named exports_
 `understand`
 
 ### `src/services/becca/navigationContract.ts`
-`CLIENT_BECCA_SCREENS` · `CLIENT_PROFILE_SCREENS` · `isBeccaNavigationSuggestion` · `PROVIDER_PUSH_NAV` · `PROVIDER_TAB_NAV`
+`CLIENT_BECCA_SCREENS` · `CLIENT_PROFILE_SCREENS` · `isBeccaNavigationSuggestion` · `LINK_ONLY_PROVIDER_NAV` · `PROVIDER_PUSH_NAV` · `PROVIDER_TAB_NAV`
 
 ### `src/services/becca/nvidiaInterpreter.ts`
 `nvidiaBeccaInterpreter`
 
 ### `src/services/becca/registry.ts`
-`capabilitiesFor` · `getCapability` · `toToolSchema`
+`capabilitiesFor` · `fitsSetup` · `getCapability` · `toToolSchema`
 
 ### `src/services/becca/serviceCatalogue.ts`
 `CATEGORY_LABELS` · `SERVICE_CATALOGUE`
