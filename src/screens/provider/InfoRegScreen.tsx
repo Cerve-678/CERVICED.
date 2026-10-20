@@ -76,7 +76,6 @@ import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
-import { ImageCropper, type CropShape } from '../../features/provider-registration/ImageCropper';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
@@ -1285,6 +1284,28 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
   const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
 
+  // Tapping a photo re-crops it with the iOS crop. iOS only crops while a
+  // photo is being picked (and never during a multi-select, which is why
+  // adding several at once can't crop), so this reopens the library on a
+  // single pick and swaps the result in at the same place in the order.
+  const handleRecropImage = async (index: number) => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permission Required', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return;
+    setImages(prev =>
+      prev.map((img, i) => (i === index ? { uri: asset.uri, fit: 'cover' } : img)),
+    );
+  };
+
   // Array order IS the stored order — it becomes service_images.sort_order on
   // save, and index 0 is the photo that leads the service everywhere it's
   // shown. Splice-then-insert rather than a swap, so dragging across several
@@ -1471,7 +1492,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
-                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onReorder={handleReorderImages} size={100} styles={styles} />
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onRecrop={handleRecropImage} onReorder={handleReorderImages} size={100} styles={styles} />
                 <Text style={styles.serviceSheetHint}>Photos stay whole by default. Use Fill frame only when you want a tighter crop.</Text>
               </View>
 
@@ -3369,14 +3390,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!providerData.logo) setLogoPage(0);
   }, [providerData.logo]);
 
-  // The logo is framed in the same drag-to-frame cropper as service photos.
-  // `logoCropUri` is the image the cropper is open on (null = closed).
-  // `logoSourceUri` is the uncropped photo picked this session, so Adjust
-  // re-frames the original rather than cropping an already-cropped copy.
-  const [logoCropUri, setLogoCropUri] = useState<string | null>(null);
-  const [logoSourceUri, setLogoSourceUri] = useState<string | null>(null);
-
-  // Change Logo: pick a new photo, then frame it.
+  // Picking and adjusting are the same thing: iOS only offers its crop (with
+  // pinch-to-zoom) while a photo is being picked, so every tap on the logo
+  // opens the library with the square crop on.
   const handleSelectLogo = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -3386,28 +3402,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
       quality: 0.8,
     });
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      setLogoSourceUri(asset.uri);
-      setLogoCropUri(asset.uri);
+      setProviderData(prev => ({ ...prev, logo: asset.uri }));
     }
-  };
-
-  // Adjust: re-frame the logo already chosen, without picking again. A saved
-  // logo from an earlier session has no original here, so that one is framed
-  // from the saved image itself.
-  const handleAdjustLogo = () => {
-    const source = logoSourceUri ?? providerData.logo;
-    if (source) setLogoCropUri(source);
-  };
-
-  const handleLogoCropDone = (framed: ServiceImageDraft[]) => {
-    setLogoCropUri(null);
-    const logo = framed[0]?.uri;
-    if (logo) setProviderData(prev => ({ ...prev, logo }));
   };
 
   // Handle data transfer from Acuity Scheduling URL
@@ -4337,7 +4340,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoContainer}
-                              onPress={() => { tapSelect(); handleAdjustLogo(); }}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Adjust logo"
@@ -4355,14 +4358,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   square's corner, so it hugs the edge instead of floating
                                   off it — offset = r - (r/√2) - badgeR, rounded. */}
                               <View style={styles.logoEditBadge}>
-                                <Ionicons name="crop" size={14} color={chrome.onAccent} />
+                                <Ionicons name="camera" size={14} color={chrome.onAccent} />
                               </View>
                             </TouchableOpacity>
                           </View>
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeSmallCard}
-                              onPress={() => { tapSelect(); handleAdjustLogo(); }}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Your logo on a small Home card. Adjust crop"
@@ -4373,7 +4376,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeLargeCard}
-                              onPress={() => { tapSelect(); handleAdjustLogo(); }}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Your logo on a large Home card. Adjust crop"
@@ -4390,14 +4393,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ))}
                     </View>
                     <Text style={styles.logoCaption}>{LOGO_PAGE_CAPTIONS[logoPage]}</Text>
-                    <TouchableOpacity
-                      onPress={() => { tapSelect(); handleSelectLogo(); }}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      style={styles.logoChangeLink}
-                    >
-                      <Text style={[styles.logoChangeLinkText, { color: adaptiveAccentColor }]}>Change Logo</Text>
-                    </TouchableOpacity>
                   </>
                 ) : (
                   <>
@@ -4419,23 +4414,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </>
                 )}
               </View>
-              <ImageCropper
-                visible={logoCropUri != null}
-                uris={logoCropUri ? [logoCropUri] : []}
-                onDone={handleLogoCropDone}
-                onCancel={() => setLogoCropUri(null)}
-                shapes={LOGO_CROP_SHAPES}
-                title="Your logo"
-                round
-                keepPng
-                palette={{
-                  bg: chrome.surf(0.98),
-                  card: chrome.surf(0.35),
-                  text: chrome.fg(0.92),
-                  sub: chrome.fg(0.55),
-                  accent: adaptiveAccentColor,
-                }}
-              />
 
             {/* Business Name */}
               <View
@@ -5863,9 +5841,6 @@ const LOGO_BADGE_OFFSET = Math.round(
  *  these too, or the preview shows a crop clients never see. */
 const LOGO_HOME_SMALL = { width: 160, height: 70, radius: 12 } as const;
 const LOGO_HOME_LARGE = { width: 282, height: 147, radius: 16 } as const;
-/** The logo is always framed square: the circle and both Home cards all
- *  fill from the same square image. */
-const LOGO_CROP_SHAPES: CropShape[] = [{ key: 'square', label: '1:1', ratio: 1 }];
 /** One caption per page of the logo swipe, in page order. */
 const LOGO_PAGE_CAPTIONS = [
   'Profile logo · tap to adjust',
@@ -6073,15 +6048,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   logoDotActive: {
     backgroundColor: P.accent,
-  },
-  logoChangeLink: {
-    marginTop: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  logoChangeLinkText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
   },
 
   // Full-bleed section: a hairline rule and generous space do the separating.
