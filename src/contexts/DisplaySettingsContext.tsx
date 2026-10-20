@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
 import { setTextAppearance } from '../utils/textAppearanceStore';
 import { setRegion as setRegionStore } from '../utils/regionStore';
+import { setLanguage as setLanguageStore } from '../i18n/languageStore';
 import {
   type FontChoiceKey,
   clampTextScale,
@@ -92,6 +93,7 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
         // gate opens, so the first paint is already correct.
         setTextAppearance({ scale: resolvedScale, fontFamily: fontFamilyForChoice(resolvedFont) });
         setRegionStore(resolvedRegion);
+        setLanguageStore(resolvedLang);
       } catch (error) {
         logger.error('Failed to load display settings:', error);
       }
@@ -112,6 +114,11 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setRegionStore(region);
   }, [region]);
+
+  // Mirror language into the module store that dateUtils and out-of-render
+  // translation (tr/trp) read. Set before children render so a screen's
+  // first paint at a new language already has localized dates.
+  setLanguageStore(language);
 
   const setTextScale = useCallback((scale: number) => {
     const snapped = snapTextScaleToStep(clampTextScale(scale));

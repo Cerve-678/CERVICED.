@@ -1,7 +1,11 @@
-import { en } from './catalogs/en';
+import { en, HELD_KEYS } from './catalogs/en';
 import { es } from './catalogs/es';
 import { fr } from './catalogs/fr';
-import type { BaseCatalog, Catalog, TranslationKey, TranslationParams } from './types';
+import { pl } from './catalogs/pl';
+import { de } from './catalogs/de';
+import { pluralCategory } from './plural';
+import { getLanguage } from './languageStore';
+import type { BaseCatalog, Catalog, PluralKey, TranslationKey, TranslationParams } from './types';
 
 // The pure translation resolver. No React and no I/O — the active language is
 // passed in (the React layer reads it from DisplaySettingsContext, see
@@ -9,35 +13,16 @@ import type { BaseCatalog, Catalog, TranslationKey, TranslationParams } from './
 
 /**
  * Keys HELD IN ENGLISH regardless of the chosen language: legal, refund /
- * cancellation, payment, and health-safety copy. CERVICED has no in-house
+ * cancellation, payment, age and health-safety copy. CERVICED has no in-house
  * legal review, so this copy is never machine-translated — the resolver always
  * returns the English source for these keys, even if a language catalog were
- * to contain a translation for one. Add a key here the moment its copy becomes
- * legal- or health-adjacent.
+ * to contain a translation for one. Each area declares its own held keys in
+ * its `<area>Held` array (see ./catalogs/en/index.ts).
  */
-export const DO_NOT_TRANSLATE: ReadonlySet<TranslationKey> = new Set<TranslationKey>([
-  'helpCentre.faq.cancel.a', // cancellation / refund policy
-  'helpCentre.faq.payment.a', // payment handling
-  'helpCentre.action.terms', // legal reference
-  'profile.appInfo.terms.title', // legal reference
-  'profile.appInfo.terms.sub', // legal reference
-  'providerAccount.appInfo.terms.title', // legal reference
-  'providerAccount.appInfo.terms.sub', // legal reference
-  // Beauty Maintenance: health-adjacent (patch test, prep, aftercare) and the
-  // UNREVIEWED reminders disclaimer.
-  'maintenance.disclaimer',
-  'maintenance.patch.title',
-  'maintenance.patch.recorded',
-  'maintenance.patch.check',
-  'maintenance.setup.q.patch',
-  'maintenance.setup.q.patchHint',
-  'maintenance.ctx.from',
-  'maintenance.ctx.currentNote',
-  'maintenance.ctx.aftercareWhen',
-]);
+export const DO_NOT_TRANSLATE: ReadonlySet<TranslationKey> = new Set<TranslationKey>(HELD_KEYS);
 
 /** Registered language catalogs, keyed by language code. */
-export const CATALOGS: Readonly<Record<string, Catalog>> = { en, es, fr };
+export const CATALOGS: Readonly<Record<string, Catalog>> = { en, es, fr, pl, de };
 
 /** Replace every `{name}` token with the matching param, leaving unknown
  *  tokens intact so a missing param is visible rather than silently blank. */
@@ -75,6 +60,44 @@ export function resolveTranslation(
 /** App-facing resolver bound to the registered catalogs and English source. */
 export function translate(lang: string, key: TranslationKey, params?: TranslationParams): string {
   return resolveTranslation(CATALOGS, DO_NOT_TRANSLATE, en, lang, key, params);
+}
+
+/**
+ * Plural resolver: picks `base.one|few|many|other` by the language's plural
+ * rule, falling back to `base.other` in that language, then to English. The
+ * count is always available to the template as `{count}`.
+ */
+export function translatePlural(
+  lang: string,
+  base: PluralKey,
+  count: number,
+  params?: TranslationParams,
+): string {
+  const allParams = { count, ...params };
+  const otherKey = `${base}.other` as TranslationKey;
+  const englishKey = (count === 1 ? `${base}.one` : otherKey) as TranslationKey;
+  if (lang === 'en' || DO_NOT_TRANSLATE.has(otherKey)) {
+    return interpolate(en[englishKey], allParams);
+  }
+  const catalog: Readonly<Record<string, string | undefined>> = CATALOGS[lang] ?? {};
+  const category = pluralCategory(lang, count);
+  const template = catalog[`${base}.${category}`] ?? catalog[otherKey] ?? en[englishKey];
+  return interpolate(template, allParams);
+}
+
+/**
+ * Translate in the CURRENT language, for code outside React render (an Alert
+ * raised from a context, a helper in src/utils). Inside a component use
+ * `useTranslation()` instead: only the hook re-renders when the language
+ * changes.
+ */
+export function tr(key: TranslationKey, params?: TranslationParams): string {
+  return translate(getLanguage(), key, params);
+}
+
+/** Plural form of `tr`, for code outside React render. */
+export function trp(base: PluralKey, count: number, params?: TranslationParams): string {
+  return translatePlural(getLanguage(), base, count, params);
 }
 
 /** Runtime guard for an arbitrary string being a known key (rarely needed —

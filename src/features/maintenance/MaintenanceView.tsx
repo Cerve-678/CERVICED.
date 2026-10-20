@@ -42,7 +42,7 @@ const FILTERS: { key: Filter; label: TranslationKey }[] = [
   { key: 'LASHES', label: 'maintenance.add.type.lashes' },
   { key: 'BROWS', label: 'maintenance.add.type.brows' },
   { key: 'AESTHETICS', label: 'maintenance.add.type.skin' },
-  { key: 'OTHER', label: 'maintenance.add.type.other' },
+  { key: 'OTHER', label: 'maintenance.add.type.misc' },
 ];
 
 const filterOf = (item: MaintenanceItem): Filter => categoryOf(item) ?? 'OTHER';
@@ -72,7 +72,7 @@ export function MaintenanceView({
   onMessageProviders, onViewBooking,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
-  const { t } = useTranslation();
+  const { t, tp } = useTranslation();
   const insets = useSafeAreaInsets();
   const S = useMemo(() => semanticColors(isDarkMode), [isDarkMode]);
   const [menuItem, setMenuItem] = useState<MaintenanceItem | null>(null);
@@ -328,7 +328,7 @@ export function MaintenanceView({
               >
                 <Ionicons name="sparkles-outline" size={18} color={P.accentText} />
                 <Text style={[ui.body, { color: P.text, flex: 1 }]}>
-                  {t(pickedCount === 1 ? 'maintenance.picked.one' : 'maintenance.picked.many', { count: pickedCount })}
+                  {tp('maintenance.picked', pickedCount)}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={P.sub} />
               </TouchableOpacity>

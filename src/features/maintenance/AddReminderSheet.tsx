@@ -17,7 +17,7 @@ import {
   MAINTENANCE_MAX_WEEKS, MAINTENANCE_MIN_WEEKS, type MaintenanceTypeKey,
 } from '../../constants/maintenanceServiceTypes';
 import type { MaintenancePastProvider, NewMaintenanceItem } from '../../types/maintenance';
-import type { TranslationKey, TranslationParams } from '../../i18n';
+import { useTranslation, type TranslationKey, type TranslationParams } from '../../i18n';
 import { dateToYMD, formatShortDayDate, toLocalDate } from '../../utils/dateUtils';
 import { scheduleNewReminder, type ReminderTiming } from '../../utils/maintenanceSuggestions';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -36,7 +36,7 @@ const TYPE_OPTIONS: { key: MaintenanceTypeKey | null; label: TranslationKey }[] 
   { key: 'nails_general', label: 'maintenance.add.type.nails' },
   { key: 'facial', label: 'maintenance.add.type.skin' },
   { key: 'brows_general', label: 'maintenance.add.type.brows' },
-  { key: null, label: 'maintenance.add.type.other' },
+  { key: null, label: 'maintenance.add.type.misc' },
 ];
 
 /** Common things people keep up with that the profile can't suggest. A pick
@@ -92,6 +92,7 @@ function chipFor(key: MaintenanceTypeKey | null): MaintenanceTypeKey | null {
 }
 
 export function AddReminderSheet({ visible, pastProviders, P, S, t, onClose, onAdd }: Props) {
+  const { tp } = useTranslation();
   const [title, setTitle] = useState('');
   const [typeKey, setTypeKey] = useState<MaintenanceTypeKey | null>('hair_general');
   const [mode, setMode] = useState<Mode>('repeats');
@@ -221,7 +222,7 @@ export function AddReminderSheet({ visible, pastProviders, P, S, t, onClose, onA
           <>
             <WeekStepper
               value={weeks} min={MAINTENANCE_MIN_WEEKS} max={MAINTENANCE_MAX_WEEKS} onChange={setWeeks} P={P}
-              unit={n => t(n === 1 ? 'maintenance.weeks.one' : 'maintenance.weeks.many', { count: n })}
+              unit={n => tp('maintenance.weeks', n)}
             />
             <Text style={[ui.label, { color: P.sub }]}>{t('maintenance.add.lastDone').toUpperCase()}</Text>
             {datePill(lastDone ? formatShortDayDate(lastDone) : t('maintenance.add.lastDoneUnknown'), 'lastDone')}

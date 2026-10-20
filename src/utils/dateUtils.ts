@@ -11,10 +11,19 @@
  * DisplaySettingsContext); a caller can also pass a region explicitly (the
  * settings screen does, to preview an order without changing the stored one).
  * Currency is NOT localised anywhere — all pricing stays GBP (£).
+ *
+ * Month and weekday NAMES follow the app language (languageStore, written by
+ * DisplaySettingsContext): "Wednesday 8th June 2026" in English, "miércoles,
+ * 8 de junio de 2026" in Spanish. The exported English name arrays below stay
+ * English on purpose — Becca parses typed day names against them — so display
+ * code uses dayName()/monthName()/ordinalDay() instead. Times stay "2:00pm"
+ * in every language for now.
  */
 
 import { getRegion } from './regionStore';
 import { REGION_OPTIONS } from './displaySettings';
+import { getLanguage } from '../i18n/languageStore';
+import { tr } from '../i18n/translate';
 
 /** The date-part order for a region code (defaults to DMY for anything unknown). */
 export function dateOrderForRegion(regionCode: string): 'DMY' | 'MDY' {
@@ -36,6 +45,107 @@ export const MONTH_NAMES_ABBREV = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ] as const;
+
+interface DateNames {
+  readonly daysFull: readonly string[];
+  readonly daysShort: readonly string[];
+  readonly monthsFull: readonly string[];
+  /** Month as it reads after a day number. Differs only in Polish, which
+   *  uses the genitive ("8 czerwca", not "8 czerwiec"). */
+  readonly monthsAfterDay: readonly string[];
+  readonly monthsShort: readonly string[];
+}
+
+const ES_MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const FR_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const DE_MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+const DATE_NAMES: Readonly<Record<string, DateNames>> = {
+  es: {
+    daysFull: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
+    daysShort: ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'],
+    monthsFull: ES_MONTHS,
+    monthsAfterDay: ES_MONTHS,
+    monthsShort: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'],
+  },
+  fr: {
+    daysFull: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+    daysShort: ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'],
+    monthsFull: FR_MONTHS,
+    monthsAfterDay: FR_MONTHS,
+    monthsShort: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+  },
+  de: {
+    daysFull: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
+    daysShort: ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'],
+    monthsFull: DE_MONTHS,
+    monthsAfterDay: DE_MONTHS,
+    monthsShort: ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.'],
+  },
+  pl: {
+    daysFull: ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'],
+    daysShort: ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'],
+    monthsFull: ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'],
+    monthsAfterDay: ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'],
+    monthsShort: ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'],
+  },
+};
+
+const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Weekday name (0 = Sunday) in the app language, capitalised to stand alone. */
+export function dayName(dayIndex: number, style: 'full' | 'short' = 'full', lang: string = getLanguage()): string {
+  const names = DATE_NAMES[lang];
+  if (!names) return (style === 'full' ? DAY_NAMES_FULL : DAY_NAMES_ABBREV)[dayIndex] ?? '';
+  return capitalize((style === 'full' ? names.daysFull : names.daysShort)[dayIndex] ?? '');
+}
+
+/** Month name (0 = January) in the app language, capitalised to stand alone. */
+export function monthName(monthIndex: number, style: 'full' | 'short' = 'full', lang: string = getLanguage()): string {
+  const names = DATE_NAMES[lang];
+  if (!names) return (style === 'full' ? MONTH_NAMES_FULL : MONTH_NAMES_ABBREV)[monthIndex] ?? '';
+  return capitalize((style === 'full' ? names.monthsFull : names.monthsShort)[monthIndex] ?? '');
+}
+
+/** Day of the month as an ordinal in the app language: "8th" in English,
+ *  "8." in German and Polish, "1er" / "8" in French, "8" in Spanish. */
+export function ordinalDay(day: number, lang: string = getLanguage()): string {
+  switch (lang) {
+    case 'de':
+    case 'pl':
+      return `${day}.`;
+    case 'fr':
+      return day === 1 ? '1er' : String(day);
+    case 'es':
+      return String(day);
+    default:
+      return ordinalSuffix(day);
+  }
+}
+
+/** Weekday + day + month (+ year), in the word order each language uses. */
+function formatWeekdayDayMonth(date: Date, withYear: boolean): string {
+  const lang = getLanguage();
+  const names = DATE_NAMES[lang];
+  const year = date.getFullYear();
+  if (!names) {
+    const base = `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())} ${MONTH_NAMES_FULL[date.getMonth()]}`;
+    return withYear ? `${base} ${year}` : base;
+  }
+  const weekday = names.daysFull[date.getDay()];
+  const month = names.monthsAfterDay[date.getMonth()];
+  const day = date.getDate();
+  switch (lang) {
+    case 'es':
+      return capitalize(`${weekday}, ${day} de ${month}${withYear ? ` de ${year}` : ''}`);
+    case 'de':
+      return `${weekday}, ${day}. ${month}${withYear ? ` ${year}` : ''}`;
+    case 'pl':
+      return capitalize(`${weekday}, ${day} ${month}${withYear ? ` ${year}` : ''}`);
+    default:
+      return capitalize(`${weekday} ${ordinalDay(day, lang)} ${month}${withYear ? ` ${year}` : ''}`);
+  }
+}
 
 /** "8" -> "8th", "2" -> "2nd", "11" -> "11th", "23" -> "23rd" */
 export function ordinalSuffix(day: number): string {
@@ -64,12 +174,7 @@ export function toLocalDate(input: string | Date): Date {
 
 /** "Wednesday 8th June 2026" */
 export function formatLongDate(input: string | Date): string {
-  const date = toLocalDate(input);
-  const weekday = DAY_NAMES_FULL[date.getDay()];
-  const day = ordinalSuffix(date.getDate());
-  const month = MONTH_NAMES_FULL[date.getMonth()];
-  const year = date.getFullYear();
-  return `${weekday} ${day} ${month} ${year}`;
+  return formatWeekdayDayMonth(toLocalDate(input), true);
 }
 
 /**
@@ -78,17 +183,14 @@ export function formatLongDate(input: string | Date): string {
  * year is noise rather than information.
  */
 export function formatLongDateNoYear(input: string | Date): string {
-  const date = toLocalDate(input);
-  const weekday = DAY_NAMES_FULL[date.getDay()];
-  const day = ordinalSuffix(date.getDate());
-  const month = MONTH_NAMES_FULL[date.getMonth()];
-  return `${weekday} ${day} ${month}`;
+  return formatWeekdayDayMonth(toLocalDate(input), false);
 }
 
 /** "Sat 3 Oct" — compact weekday + date for dense card headers. */
 export function formatShortDayDate(input: string | Date): string {
   const date = toLocalDate(input);
-  return `${DAY_NAMES_ABBREV[date.getDay()]} ${date.getDate()} ${MONTH_NAMES_ABBREV[date.getMonth()]}`;
+  const day = getLanguage() === 'de' ? `${date.getDate()}.` : String(date.getDate());
+  return `${dayName(date.getDay(), 'short')} ${day} ${monthName(date.getMonth(), 'short')}`;
 }
 
 /**
@@ -199,7 +301,9 @@ export function formatDurationMinutes(totalMinutes: number): string {
   if (!(totalMinutes > 0)) return '';
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  return `${h > 0 ? `${h}h` : ''}${h > 0 && m > 0 ? ' ' : ''}${m > 0 ? `${m}m` : ''}`;
+  const hours = h > 0 ? tr('common.duration.hours', { count: h }) : '';
+  const minutes = m > 0 ? tr('common.duration.minutes', { count: m }) : '';
+  return `${hours}${hours && minutes ? ' ' : ''}${minutes}`;
 }
 
 /** "YYYY-MM-DD" from a Date, in local time (no UTC shift). */
@@ -227,18 +331,19 @@ export function relativeDayLabel(input: string | Date): string | null {
   const compare = new Date(date);
   compare.setHours(0, 0, 0, 0);
   const diffDays = Math.round((compare.getTime() - today.getTime()) / 86400000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Tomorrow';
-  if (diffDays === -1) return 'Yesterday';
+  if (diffDays === 0) return tr('common.date.today');
+  if (diffDays === 1) return tr('common.date.tomorrow');
+  if (diffDays === -1) return tr('common.date.yesterday');
   return null;
 }
 
 /** "Wednesday 8th" — weekday + ordinal day, no month/year (for compact section headers). */
 export function formatSectionTitle(input: string | Date): string {
   const date = toLocalDate(input);
-  const weekday = DAY_NAMES_FULL[date.getDay()];
-  const day = ordinalSuffix(date.getDate());
-  return `${weekday} ${day}`;
+  const lang = getLanguage();
+  if (lang === 'es' || lang === 'fr') return `${dayName(date.getDay())} ${ordinalDay(date.getDate(), lang)}`;
+  if (lang === 'de' || lang === 'pl') return `${dayName(date.getDay())}, ${ordinalDay(date.getDate(), lang)}`;
+  return `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())}`;
 }
 
 /** "2m ago" / "3h ago" / "5d ago" / falls back to formatShortDate beyond ~a week. */
@@ -246,12 +351,12 @@ export function timeAgo(input: string | Date): string {
   const date = toLocalDate(input);
   const diffMs = Date.now() - date.getTime();
   const diffMinutes = Math.floor(diffMs / 60000);
-  if (diffMinutes < 1) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffMinutes < 1) return tr('common.time.justNow');
+  if (diffMinutes < 60) return tr('common.time.minutesAgo', { count: diffMinutes });
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 24) return tr('common.time.hoursAgo', { count: diffHours });
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 7) return tr('common.time.daysAgo', { count: diffDays });
   return formatShortDate(date);
 }
 

@@ -1,14 +1,8 @@
-import type { Catalog } from '../types';
+// French · settings. Typed against ../en/settings.ts; held keys are left out.
+import type { AreaCatalog } from '../../types';
+import type { settings as en } from '../en/settings';
 
-// French UI catalog (machine-quality translations of app-authored copy).
-//
-// Deliberately INCOMPLETE: keys listed in DO_NOT_TRANSLATE (legal / refund /
-// payment / health copy) are intentionally absent, so they fall back to the
-// English source and are never shown machine-translated. The resolver enforces
-// that regardless — this omission just keeps the file honest about it.
-export const fr: Catalog = {
-  'common.cancel': 'Annuler',
-
+export const settings: AreaCatalog<typeof en> = {
   'textSizing.title': 'Texte et taille',
   'textSizing.subtitle': "Ajustez l'apparence du texte dans l'aperçu ci-dessous.",
   'textSizing.section.preview': 'APERÇU',

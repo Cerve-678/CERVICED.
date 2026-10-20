@@ -45,7 +45,7 @@ const MAX_EVENTS = 3;
 
 export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
-  const { t } = useTranslation();
+  const { t, tp } = useTranslation();
   const insets = useSafeAreaInsets();
   const S = useMemo(() => semanticColors(isDarkMode), [isDarkMode]);
 
@@ -250,7 +250,7 @@ export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props)
                   {question(t('maintenance.setup.q.wear'), false)}
                   <WeekStepper
                     value={wearWeeks} min={MAINTENANCE_MIN_WEEKS} max={MAINTENANCE_MAX_WEEKS} onChange={setWearWeeks} P={P}
-                    unit={n => t(n === 1 ? 'maintenance.weeks.one' : 'maintenance.weeks.many', { count: n })}
+                    unit={n => tp('maintenance.weeks', n)}
                   />
                 </View>
                 <View style={styles.field}>
@@ -262,7 +262,7 @@ export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props)
                   {weeksIn !== null && (
                     <WeekStepper
                       value={weeksIn} min={0} max={wearWeeks} onChange={setWeeksIn} P={P}
-                      unit={n => t(n === 1 ? 'maintenance.weeksIn.one' : 'maintenance.weeksIn.many', { count: n })}
+                      unit={n => tp('maintenance.weeksIn', n)}
                     />
                   )}
                 </View>

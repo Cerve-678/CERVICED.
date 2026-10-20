@@ -5,7 +5,7 @@
 
 #generated
 
-**2646 functions** across **359 files**.
+**2658 functions** across **428 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -171,10 +171,12 @@
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 
-### `src/i18n/` (3)
-- `translate.ts` — **interpolate** · **isTranslationKey** · **resolveTranslation** · **translate**
+### `src/i18n/` (5)
+- `languageStore.ts` — **getLanguage** · **localeForLanguage** · **setLanguage**
+- `plural.ts` — **pluralCategory**
+- `translate.ts` — **interpolate** · **isTranslationKey** · **resolveTranslation** · **tr** · **translate** · **translatePlural** · **trp**
 - `useDynamicTranslation.ts` — **useDynamicTranslation**
-- `useTranslation.ts` — t · **useTranslation**
+- `useTranslation.ts` — t · tp · **useTranslation**
 
 ### `src/lib/` (1)
 - `sentry.ts` — **initSentry**
@@ -342,7 +344,7 @@
 - `cartUtils.ts` — **getCartSummary**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **toArgbHex**
-- `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
+- `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dayName** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · formatWeekdayDayMonth · **monthName** · **ordinalDay** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `dayTimelineRange.ts` — **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
 - `displaySettings.ts` — **clampTextScale** · **fontFamilyForChoice** · **isFontChoiceKey** · **isLanguageCode** · **isRegionCode** · **labelForTextScale** · **snapTextScaleToStep**

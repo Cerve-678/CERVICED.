@@ -13,7 +13,7 @@ import { MAINTENANCE_MAX_WEEKS, MAINTENANCE_MIN_WEEKS } from '../../constants/ma
 import type { MaintenanceItem } from '../../types/maintenance';
 import type { MaintenanceItemPatch } from '../../services/databaseService';
 import { snoozedDueOn } from './presentation';
-import type { TranslationKey, TranslationParams } from '../../i18n';
+import { useTranslation, type TranslationKey, type TranslationParams } from '../../i18n';
 import { dateToYMD, formatShortDayDate, toLocalDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import {
@@ -40,6 +40,7 @@ function addWeeksYMD(fromYMD: string, weeks: number): string {
 }
 
 export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Props) {
+  const { tp } = useTranslation();
   const [weeks, setWeeks] = useState(4);
   const [dueOn, setDueOn] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -137,7 +138,7 @@ export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Pr
               max={MAINTENANCE_MAX_WEEKS}
               onChange={setWeeks}
               P={P}
-              unit={n => t(n === 1 ? 'maintenance.weeks.one' : 'maintenance.weeks.many', { count: n })}
+              unit={n => tp('maintenance.weeks', n)}
             />
           </View>
         ) : (
