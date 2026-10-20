@@ -9,16 +9,19 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
+import { useAuth } from './AuthContext';
 import { setTextAppearance } from '../utils/textAppearanceStore';
 import { setRegion as setRegionStore } from '../utils/regionStore';
 import {
   type FontChoiceKey,
   clampTextScale,
   snapTextScaleToStep,
-  isFontChoiceKey,
   isLanguageCode,
   isRegionCode,
   fontFamilyForChoice,
+  fontChoiceStorageKey,
+  resolveStoredFontChoice,
+  LEGACY_FONT_CHOICE_KEY,
   DEFAULT_TEXT_SCALE,
   DEFAULT_FONT_CHOICE,
   DEFAULT_LANGUAGE,
@@ -29,6 +32,8 @@ import {
 // Mirrors ThemeContext's persistence pattern exactly: one AsyncStorage key per
 // field, loaded once on mount, written on change, with a memoized context value
 // so consumers don't re-render unless a value they read actually changes.
+// The body font is the exception: it is kept per account (keyed by user id) and
+// reloaded whenever the signed-in account changes; signed out it is the default.
 
 interface DisplaySettingsContextType {
   /** Text-size multiplier, one of the discrete steps in displaySettings.ts. */
@@ -53,11 +58,32 @@ interface DisplaySettingsContextType {
 const DisplaySettingsContext = createContext<DisplaySettingsContextType | undefined>(undefined);
 
 const TEXT_SCALE_KEY = '@cerviced_text_scale';
-const FONT_CHOICE_KEY = '@cerviced_font_choice';
 const LANGUAGE_KEY = '@cerviced_language';
 const REGION_KEY = '@cerviced_region';
 
+/**
+ * Read an account's font. An account with nothing saved yet takes over the old
+ * device-wide choice once, and that key is then removed so no second account
+ * on the phone inherits it too.
+ */
+async function loadAccountFontChoice(userId: string): Promise<FontChoiceKey> {
+  const accountKey = fontChoiceStorageKey(userId);
+  const [accountRaw, legacyRaw] = await Promise.all([
+    AsyncStorage.getItem(accountKey),
+    AsyncStorage.getItem(LEGACY_FONT_CHOICE_KEY),
+  ]);
+  if (accountRaw !== null) return resolveStoredFontChoice(accountRaw);
+  if (legacyRaw === null) return DEFAULT_FONT_CHOICE;
+
+  const adopted = resolveStoredFontChoice(legacyRaw);
+  await AsyncStorage.removeItem(LEGACY_FONT_CHOICE_KEY);
+  await AsyncStorage.setItem(accountKey, adopted);
+  return adopted;
+}
+
 export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
+  const { user, session } = useAuth();
+  const userId = user?.id ?? session?.user?.id ?? null;
   const [textScale, setTextScaleState] = useState<number>(DEFAULT_TEXT_SCALE);
   const [fontChoice, setFontChoiceState] = useState<FontChoiceKey>(DEFAULT_FONT_CHOICE);
   const [language, setLanguageState] = useState<string>(DEFAULT_LANGUAGE);
@@ -73,24 +99,18 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const [scaleRaw, fontRaw, langRaw, regionRaw] = await Promise.all([
+        const [scaleRaw, langRaw, regionRaw] = await Promise.all([
           AsyncStorage.getItem(TEXT_SCALE_KEY),
-          AsyncStorage.getItem(FONT_CHOICE_KEY),
           AsyncStorage.getItem(LANGUAGE_KEY),
           AsyncStorage.getItem(REGION_KEY),
         ]);
         if (cancelled) return;
         const resolvedScale = scaleRaw !== null ? snapTextScaleToStep(Number(scaleRaw)) : DEFAULT_TEXT_SCALE;
-        const resolvedFont = fontRaw !== null && isFontChoiceKey(fontRaw) ? fontRaw : DEFAULT_FONT_CHOICE;
         const resolvedLang = langRaw !== null && isLanguageCode(langRaw) ? langRaw : DEFAULT_LANGUAGE;
         const resolvedRegion = regionRaw !== null && isRegionCode(regionRaw) ? regionRaw : DEFAULT_REGION;
         setTextScaleState(resolvedScale);
-        setFontChoiceState(resolvedFont);
         setLanguageState(resolvedLang);
         setRegionState(resolvedRegion);
-        // Seed the stores the global Text wrapper / dateUtils read, before the
-        // gate opens, so the first paint is already correct.
-        setTextAppearance({ scale: resolvedScale, fontFamily: fontFamilyForChoice(resolvedFont) });
         setRegionStore(resolvedRegion);
       } catch (error) {
         logger.error('Failed to load display settings:', error);
@@ -98,6 +118,21 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // The font follows the signed-in account. Switching accounts always passes
+  // through signed-out, which resets to the default, so one account's font
+  // never shows on another's screens while the read is in flight.
+  useEffect(() => {
+    if (!userId) {
+      setFontChoiceState(DEFAULT_FONT_CHOICE);
+      return;
+    }
+    let cancelled = false;
+    loadAccountFontChoice(userId)
+      .then((choice) => { if (!cancelled) setFontChoiceState(choice); })
+      .catch((error) => { logger.error('Failed to load font choice:', error); });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   // Mirror the live text appearance into the module store the global Text
   // wrapper subscribes to (fontScaleClamp.ts). Runs on mount (seeding defaults)
@@ -123,10 +158,13 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
 
   const setFontChoice = useCallback((choice: FontChoiceKey) => {
     setFontChoiceState(choice);
-    AsyncStorage.setItem(FONT_CHOICE_KEY, choice).catch((error) => {
+    // Display settings are only reachable signed in; with no account there is
+    // nowhere to keep the choice, so it lasts until the next sign-in.
+    if (!userId) return;
+    AsyncStorage.setItem(fontChoiceStorageKey(userId), choice).catch((error) => {
       logger.error('Failed to save font choice:', error);
     });
-  }, []);
+  }, [userId]);
 
   const setLanguage = useCallback((code: string) => {
     setLanguageState(code);

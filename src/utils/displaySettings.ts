@@ -88,6 +88,22 @@ export function isFontChoiceKey(value: string): value is FontChoiceKey {
   return FONT_OPTIONS.some((f) => f.key === value);
 }
 
+/**
+ * The font is a per-account choice, so it is stored under the signed-in
+ * account's id. A device-wide key made one person's font every account's font
+ * on a shared phone.
+ */
+export const LEGACY_FONT_CHOICE_KEY = '@cerviced_font_choice';
+
+export function fontChoiceStorageKey(userId: string): string {
+  return `${LEGACY_FONT_CHOICE_KEY}:${userId}`;
+}
+
+/** A missing, corrupt or retired stored value reads as the default. */
+export function resolveStoredFontChoice(raw: string | null): FontChoiceKey {
+  return raw !== null && isFontChoiceKey(raw) ? raw : DEFAULT_FONT_CHOICE;
+}
+
 // ── Language ─────────────────────────────────────────────────────────────────
 
 export interface LanguageOption {
