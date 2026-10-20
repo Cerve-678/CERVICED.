@@ -773,11 +773,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setIsLoading(true);
     try {
       const providerId = booking.providerId ?? await getProviderIdByDisplayName(booking.providerName);
-      if (providerId) {
-        const alreadyReviewed = await hasReviewedBooking(booking.id);
-        if (!alreadyReviewed) {
-          await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
-        }
+      if (!providerId) {
+        throw new Error('Provider record is unavailable');
+      }
+      const alreadyReviewed = await hasReviewedBooking(booking.id);
+      if (!alreadyReviewed) {
+        await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
       }
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);

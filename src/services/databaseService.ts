@@ -4548,6 +4548,38 @@ export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
   return !!data;
 }
 
+export type BookingReviewState = {
+  bookingId: string;
+  tipAmount: number | null;
+};
+
+/**
+ * Review state for a set of bookings, fetched together for the Bookings list.
+ *
+ * The list used to initialise its rated/tipped buttons from empty component
+ * state on every mount. The database rows existed, but the next visit showed
+ * "Rate" and "Tip" again until a detail screen happened to be opened.
+ */
+export async function getBookingReviewStates(
+  bookingIds: readonly string[],
+): Promise<BookingReviewState[]> {
+  // `reviews.booking_id` is UUID. Never let a local optimistic `booking_*`
+  // id poison the whole PostgREST `.in()` cast.
+  const ids = [...new Set(bookingIds.filter(isUuid))];
+  if (ids.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("booking_id, tip_amount")
+    .in("booking_id", ids);
+
+  if (error) throw error;
+  return (data ?? []).map((row: { booking_id: string; tip_amount: number | null }) => ({
+    bookingId: row.booking_id,
+    tipAmount: row.tip_amount == null ? null : Number(row.tip_amount),
+  }));
+}
+
 /** The tip recorded against a booking, or null when there's no review/tip yet. */
 export async function getBookingTip(bookingId: string): Promise<number | null> {
   const { data } = await supabase

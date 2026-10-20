@@ -33,7 +33,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -448,6 +448,27 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [tippedBookings, setTippedBookings] = useState<Set<string>>(new Set());
 
+  const bookingIdsForReviewState = useMemo(
+    () => [...new Set([...todayBookings, ...upcomingBookings, ...pastBookings].map(booking => booking.id))],
+    [todayBookings, upcomingBookings, pastBookings],
+  );
+
+  // Keep the list buttons truthful after remounting or coming back from a
+  // booking detail screen. This is one batched read, not a request per card.
+  useEffect(() => {
+    let active = true;
+    getBookingReviewStates(bookingIdsForReviewState)
+      .then(states => {
+        if (!active) return;
+        setRatedBookings(new Set(states.map(state => state.bookingId)));
+        setTippedBookings(new Set(
+          states.filter(state => (state.tipAmount ?? 0) > 0).map(state => state.bookingId),
+        ));
+      })
+      .catch(error => logger.warn('[Bookings] review state failed to load', error));
+    return () => { active = false; };
+  }, [bookingIdsForReviewState]);
+
   // ✅ Track highlighted booking (from notification navigation) and recently added bookings
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
   const [recentlyAddedBookings, setRecentlyAddedBookings] = useState<Set<string>>(new Set());
@@ -702,19 +723,20 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       const providerId = selectedBooking.providerId
         ?? await getProviderIdByDisplayName(selectedBooking.providerName);
 
-      if (providerId) {
-        // Check not already reviewed
-        const alreadyReviewed = await hasReviewedBooking(selectedBooking.id);
-        if (!alreadyReviewed) {
-          await submitReview({
-            booking_id: selectedBooking.id,
-            provider_id: providerId,
-            service_id: null,
-            user_id: user.id,
-            rating,
-            ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
-          });
-        }
+      if (!providerId) {
+        throw new Error('Provider record is unavailable');
+      }
+      // Check not already reviewed
+      const alreadyReviewed = await hasReviewedBooking(selectedBooking.id);
+      if (!alreadyReviewed) {
+        await submitReview({
+          booking_id: selectedBooking.id,
+          provider_id: providerId,
+          service_id: null,
+          user_id: user.id,
+          rating,
+          ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
+        });
       }
 
       // Mark as rated in local state
