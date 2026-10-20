@@ -4,27 +4,28 @@
  * CERVICED to be found. There's no booking calendar here, because CERVICED
  * doesn't hold their bookings. Instead, top to bottom:
  *
- *  - a greeting, the Live pill and today's opening hours
+ *  - a greeting, today's date and opening hours, and whether they're live
  *  - until they're live, the go-live checklist: the four things the server
  *    publishes them on (logo, About, opening hours, a portfolio photo)
- *  - their whole week, read from the phone's own calendar (DiaryCard)
- *  - once live: this week's numbers against last week (tapping through to
- *    Analytics); Profile strength (what's still missing); and one fact from
- *    their own numbers ("Becca noticed")
+ *  - once live, tiles: Book taps this week (→ Analytics), new enquiries
+ *    (→ Messages), saves, profile views and search appearances; and one fact
+ *    from their own numbers from Becca
+ *  - their whole week, one line per day, from the phone's calendar (DiaryCard)
+ *  - once live, Profile strength: the next missing thing, the rest on a tap
+ *  - their Book button's link, with Test it and Change link
  *  - shortcuts: Add work, Hours, Branding
- *
- * No Announcements: the product owner removed them for link-only pros
- * (2026-10-19), so the free-day nudge from the design went with them.
  *  - Becca as a floating button, above the tab bar
  *
- * Product rules: docs/vault/Link-Only Providers.md. Design (approved
- * 2026-10-19): https://claude.ai/artifact/DrnMGFGGk5HJZW9ij1F9FN
+ * No Announcements: the product owner removed them for link-only pros
+ * (2026-10-19).
+ *
+ * Product rules: docs/vault/Link-Only Providers.md. Design B (chosen
+ * 2026-10-19): https://claude.ai/artifact/MJfLyQ2BLudDpneHpqbVMx
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -33,11 +34,14 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppDialog } from '../../components/AppDialog';
 import {
   getMyProviderDailyStats,
   getMyProviderProfile,
   getMyProviderSaverCount,
+  getProviderEnquirySummary,
   getProviderSpecialties,
+  type ProviderEnquirySummary,
 } from '../../services/databaseService';
 import { lastSevenDaysOfBookTaps, type DayBar } from '../../features/providers/linkOnlyAnalytics';
 import {
@@ -45,11 +49,13 @@ import {
   busiestBookTapLine,
   compareWeeks,
   greetingFor,
+  remainingStepsLine,
   todayHoursLabel,
   trendLabel,
   type ProfileStrengthKey,
   type WeekComparison,
 } from '../../features/providers/linkOnlyDashboard';
+import { displayExternalBookingUrl, openExternalBookingPage } from '../../features/providers/externalBookingLink';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
 import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV } from '../../utils/dateUtils';
 import type { DbProvider } from '../../types/database';
@@ -65,10 +71,15 @@ import type { ProviderHomeStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<ProviderHomeStackParamList, 'LinkOnlyHomeMain'>;
 
+const UP = '#3D8B5A';
+const DOWN = '#B0563C';
+const NOT_LIVE = '#B07A3C';
+
 export default function LinkOnlyHomeScreen() {
   const navigation = useNavigation<Nav>();
   const { palette } = useTheme();
   const { user } = useAuth();
+  const { showToast, DialogHost } = useAppDialog();
   const P = useMemo(
     () => ({
       bg: palette.bg,
@@ -90,10 +101,12 @@ export default function LinkOnlyHomeScreen() {
   const [profile, setProfile] = useState<DbProvider | null>(null);
   const [week, setWeek] = useState<{ comparison: WeekComparison; bars: DayBar[]; savers: number } | null>(null);
   const [specialityCount, setSpecialityCount] = useState<number | null>(null);
+  const [enquiries, setEnquiries] = useState<ProviderEnquirySummary | null>(null);
   const [weekFailed, setWeekFailed] = useState(false);
   const [status, setStatus] = useState<LinkOnlyGoLiveStatus | null>(null);
   const [hasRow, setHasRow] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [showAllSteps, setShowAllSteps] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,6 +148,15 @@ export default function LinkOnlyHomeScreen() {
               } catch (error) {
                 // Profile strength just stays hidden without it.
                 logger.error('[LinkOnlyHome] specialities load failed', error);
+              }
+            })(),
+            (async () => {
+              try {
+                const summary = await getProviderEnquirySummary(row.id);
+                if (active) setEnquiries(summary);
+              } catch (error) {
+                // The tile still opens Messages, just without a count.
+                logger.error('[LinkOnlyHome] enquiries load failed', error);
               }
             })(),
           ]);
@@ -181,8 +203,8 @@ export default function LinkOnlyHomeScreen() {
 
   const now = new Date();
   const firstName = user?.name?.trim().split(/\s+/)[0] ?? '';
-  const greeting = `${greetingFor(now)}${firstName ? `, ${firstName}` : ''} · ${DAY_NAMES_ABBREV[now.getDay()]} ${now.getDate()} ${MONTH_NAMES_ABBREV[now.getMonth()]}`;
   const hoursLabel = status ? todayHoursLabel(status.hours, now) : null;
+  const dateLine = `${DAY_NAMES_ABBREV[now.getDay()]} ${now.getDate()} ${MONTH_NAMES_ABBREV[now.getMonth()]}${hoursLabel ? ` · ${hoursLabel}` : ''}`;
 
   const strength = useMemo(() => {
     if (!status || !profile || specialityCount == null) return null;
@@ -201,14 +223,41 @@ export default function LinkOnlyHomeScreen() {
     });
   }, [status, profile, specialityCount]);
   const missing = strength?.items.filter(item => !item.done) ?? [];
-  const finished = strength?.items.filter(item => item.done) ?? [];
+  const nextStep = missing[0];
+  const restSteps = missing.slice(1);
+  const restLine = remainingStepsLine(restSteps);
 
   const beccaLine = week ? busiestBookTapLine(week.bars, now) : null;
   const tapsTrend = week ? trendLabel(week.comparison.thisWeek.bookTaps, week.comparison.lastWeek.bookTaps) : null;
+  const bookingLink = displayExternalBookingUrl(profile?.external_booking_url);
+
   const openBecca = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('BeccaStack', { screen: 'BeccaMain', params: {} });
   }, [navigation]);
+
+  const openMessages = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    navigation.getParent()?.navigate('LinkOnlyMessages', { screen: 'ProviderInbox' });
+  }, [navigation]);
+
+  const testBookingLink = useCallback(async () => {
+    if (!profile?.external_booking_url) return;
+    Haptics.selectionAsync().catch(() => {});
+    try {
+      await openExternalBookingPage(profile.external_booking_url);
+    } catch (error) {
+      logger.error('[LinkOnlyHome] booking link did not open', error);
+      showToast("Your booking link didn't open. Check it in Business Info.", 'error');
+    }
+  }, [profile?.external_booking_url, showToast]);
+
+  const latest = enquiries?.latest;
+  const enquiryPreview = latest?.message
+    ? `${latest.clientName?.trim().split(/\s+/)[0] ?? 'A client'}: ${latest.message}`
+    : enquiries
+      ? 'All caught up'
+      : 'Questions from your profile';
 
   return (
     <ThemedBackground>
@@ -219,16 +268,15 @@ export default function LinkOnlyHomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            {logoUrl ? (
-              <Image source={{ uri: logoUrl }} style={styles.avatar} contentFit="cover" transition={0} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarEmpty]}>
-                <Text style={styles.avatarText}>{initials}</Text>
-              </View>
-            )}
             <View style={styles.flex}>
-              <Text style={styles.name} numberOfLines={1}>Dashboard</Text>
-              <Text style={styles.greeting} numberOfLines={1}>{greeting}</Text>
+              <Text style={styles.greeting}>{greetingFor(now)}{firstName ? `, ${firstName}` : ''}</Text>
+              <Text style={styles.dateLine}>{dateLine}</Text>
+              {status && (
+                <View style={styles.liveLine}>
+                  <View style={[styles.liveDot, { backgroundColor: live ? UP : NOT_LIVE }]} />
+                  <Text style={styles.liveText}>{live ? 'Live on CERVICED' : 'Not live yet'}</Text>
+                </View>
+              )}
             </View>
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Notifications'); }}
@@ -238,21 +286,14 @@ export default function LinkOnlyHomeScreen() {
             >
               <Ionicons name="notifications-outline" size={18} color={P.sub} />
             </TouchableOpacity>
-          </View>
-
-          {status && (
-            <View style={styles.liveRow}>
-              <View style={styles.livePill}>
-                <View style={[styles.liveDot, { backgroundColor: live ? '#3D8B5A' : '#B07A3C' }]} />
-                <Text style={styles.liveText}>{live ? 'Live on CERVICED' : 'Not live yet'}</Text>
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={styles.avatar} contentFit="cover" transition={0} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarEmpty]}>
+                <Text style={styles.avatarText}>{initials}</Text>
               </View>
-              {!!hoursLabel && (
-                <View style={styles.livePill}>
-                  <Text style={styles.liveText}>{hoursLabel}</Text>
-                </View>
-              )}
-            </View>
-          )}
+            )}
+          </View>
 
           {hasRow === null && !loadFailed && <ActivityIndicator color={P.accent} style={styles.loader} />}
 
@@ -310,36 +351,35 @@ export default function LinkOnlyHomeScreen() {
             </View>
           )}
 
-          <DiaryCard P={P} hours={status?.hours ?? []} />
-
           {live && (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('LinkOnlyAnalytics'); }}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="This week's numbers. Open analytics"
-            >
-              <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>This week</Text>
-                <Text style={styles.count}>All analytics</Text>
-              </View>
-              {weekFailed ? (
-                <Text style={styles.body}>Couldn't load your numbers. Come back to this screen to try again.</Text>
-              ) : !week ? (
-                <ActivityIndicator color={P.accent} style={styles.loader} />
-              ) : (
-                <>
-                  <View style={styles.headlineRow}>
-                    <View>
-                      <Text style={styles.headline}>{week.comparison.thisWeek.bookTaps}</Text>
-                      <Text style={styles.headlineLabel}>Book taps</Text>
+            <View style={styles.tiles}>
+              <TouchableOpacity
+                style={[styles.tile, styles.wideTile]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('LinkOnlyAnalytics'); }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Book taps this week. Open analytics"
+              >
+                <View>
+                  <Text style={styles.eyebrow}>Book taps this week</Text>
+                  {weekFailed ? (
+                    <Text style={styles.body}>Couldn't load your numbers.</Text>
+                  ) : !week ? (
+                    <ActivityIndicator color={P.accent} style={styles.tileLoader} />
+                  ) : (
+                    <>
+                      <Text style={styles.wideNum}>{week.comparison.thisWeek.bookTaps}</Text>
                       {tapsTrend ? (
                         <Text style={[styles.trend, !tapsTrend.up && styles.trendDown]}>{tapsTrend.text} on last week</Text>
                       ) : (
-                        <Text style={styles.stepHint}>Clients sent to your booking page</Text>
+                        <Text style={styles.stepHint}>Clients sent to your page</Text>
                       )}
-                    </View>
+                    </>
+                  )}
+                </View>
+                <View style={styles.wideRight}>
+                  <Text style={styles.count}>All analytics ›</Text>
+                  {week && (
                     <View style={styles.bars}>
                       {week.bars.map((bar, index) => (
                         <View
@@ -354,75 +394,129 @@ export default function LinkOnlyHomeScreen() {
                         />
                       ))}
                     </View>
-                  </View>
-                  <View style={styles.miniStats}>
-                    <MiniStat styles={styles} value={week.comparison.thisWeek.profileViews} before={week.comparison.lastWeek.profileViews} label="Profile views" />
-                    {/* Saves are a running total, so there's no week to compare. */}
-                    <MiniStat styles={styles} value={week.savers} label="Saved you" />
-                    <MiniStat styles={styles} value={week.comparison.thisWeek.searchAppearances} before={week.comparison.lastWeek.searchAppearances} label="In searches" />
-                  </View>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
+                  )}
+                </View>
+              </TouchableOpacity>
 
-          {live && strength && missing.length > 0 && (
-            <View style={styles.card}>
-              <View style={styles.strengthHead}>
-                <StrengthRing percent={strength.percent} P={P} styles={styles} />
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>Profile strength</Text>
-                  <Text style={styles.body}>You're live. These help clients choose you.</Text>
-                </View>
+              <View style={styles.tileRow}>
+                <TouchableOpacity
+                  style={[styles.tile, styles.accentTile]}
+                  onPress={openMessages}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${enquiries?.unread ?? 0} new enquiries. Open messages`}
+                >
+                  <Ionicons name="chatbubble-outline" size={20} color={P.onAccent} />
+                  <Text style={[styles.tileNum, styles.onAccent]}>{enquiries ? enquiries.unread : '–'}</Text>
+                  <Text style={[styles.tileLabel, styles.onAccent]}>{enquiries?.unread === 1 ? 'New enquiry' : 'New enquiries'}</Text>
+                  <Text style={[styles.tileSub, styles.onAccentSoft]} numberOfLines={1}>{enquiryPreview}</Text>
+                </TouchableOpacity>
+                <StatTile
+                  styles={styles}
+                  P={P}
+                  icon="bookmark-outline"
+                  value={week?.savers}
+                  label="Saved you"
+                  // Saves are a running total, so there's no week to compare.
+                  sub="Clients who saved you"
+                />
               </View>
-              <View>
-                {missing.map(item => (
-                  <TouchableOpacity
-                    key={item.key}
-                    style={styles.todoRow}
-                    onPress={() => goToStep(item.key)}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                  >
-                    <View style={styles.todoIcon}><Ionicons name={STRENGTH_ICONS[item.key]} size={16} color={P.accent} /></View>
-                    <View style={styles.flex}>
-                      <Text style={styles.stepLabel}>{item.label}</Text>
-                      <Text style={styles.stepHint}>{item.hint}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={P.sub} />
-                  </TouchableOpacity>
-                ))}
+
+              <View style={styles.tileRow}>
+                <StatTile
+                  styles={styles}
+                  P={P}
+                  icon="eye-outline"
+                  value={week?.comparison.thisWeek.profileViews}
+                  before={week?.comparison.lastWeek.profileViews}
+                  label="Profile views"
+                />
+                <StatTile
+                  styles={styles}
+                  P={P}
+                  icon="search-outline"
+                  value={week?.comparison.thisWeek.searchAppearances}
+                  before={week?.comparison.lastWeek.searchAppearances}
+                  label="In searches"
+                />
               </View>
-              {finished.length > 0 && (
-                <View style={styles.doneChips}>
-                  {finished.map(item => (
-                    <View key={item.key} style={styles.doneChip}>
-                      <Ionicons name="checkmark" size={12} color={P.sub} />
-                      <Text style={styles.doneChipText}>{item.doneLabel}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
             </View>
           )}
 
           {live && beccaLine && (
-            <TouchableOpacity style={styles.card} onPress={openBecca} activeOpacity={0.85} accessibilityRole="button">
-              <View style={styles.tipRow}>
-                <View style={styles.tipIcon}><Ionicons name="sparkles" size={18} color={P.onAccent} /></View>
-                <View style={styles.flex}>
-                  <Text style={styles.tipEyebrow}>Becca noticed</Text>
-                  <Text style={styles.tipText}>{beccaLine}</Text>
-                </View>
-              </View>
-              <Text style={styles.count}>Ask Becca about it</Text>
+            <TouchableOpacity style={styles.beccaLine} onPress={openBecca} activeOpacity={0.85} accessibilityRole="button">
+              <Ionicons name="sparkles" size={18} color={P.accent} />
+              <Text style={[styles.body, styles.beccaText]}>
+                <Text style={styles.beccaName}>Becca: </Text>
+                {beccaLine}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={P.sub} />
             </TouchableOpacity>
           )}
 
-          <View style={styles.actions}>
-            <QuickAction styles={styles} P={P} icon="camera-outline" label="Add work" onPress={() => goToStep('portfolio')} />
-            <QuickAction styles={styles} P={P} icon="time-outline" label="Hours" onPress={() => goToStep('hours')} />
-            <QuickAction
+          <DiaryCard P={P} hours={status?.hours ?? []} />
+
+          {live && strength && nextStep && (
+            <View style={styles.card}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.cardTitle}>Profile strength</Text>
+                <Text style={styles.percent}>{strength.percent}%</Text>
+              </View>
+              <View style={styles.track} accessibilityLabel={`Profile ${strength.percent}% complete`}>
+                <View style={[styles.fill, { width: `${strength.percent}%` }]} />
+              </View>
+              <StrengthRow styles={styles} P={P} item={nextStep} eyebrow="Next" onPress={() => goToStep(nextStep.key)} />
+              {showAllSteps && restSteps.map(item => (
+                <StrengthRow key={item.key} styles={styles} P={P} item={item} onPress={() => goToStep(item.key)} />
+              ))}
+              {restLine && (
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowAllSteps(open => !open); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.count}>{showAllSteps ? 'Show less' : restLine}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {hasRow && (
+            <View style={styles.card}>
+              <View style={styles.linkHead}>
+                <View style={styles.tileIcon}><Ionicons name="link-outline" size={20} color={P.accent} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>Your Book button</Text>
+                  <Text style={styles.stepHint} numberOfLines={1}>{bookingLink ?? 'No booking link yet'}</Text>
+                </View>
+              </View>
+              <View style={styles.linkButtons}>
+                <TouchableOpacity
+                  style={[styles.outlineButton, !bookingLink && styles.disabled]}
+                  onPress={testBookingLink}
+                  disabled={!bookingLink}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.outlineButtonText}>Test it</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.softButton}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('BusinessInfo'); }}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.outlineButtonText}>{bookingLink ? 'Change link' : 'Add link'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.shortcuts}>
+            <Shortcut styles={styles} P={P} icon="camera-outline" label="Add work" onPress={() => goToStep('portfolio')} />
+            <Shortcut styles={styles} P={P} icon="time-outline" label="Hours" onPress={() => goToStep('hours')} />
+            <Shortcut
               styles={styles}
               P={P}
               icon="color-palette-outline"
@@ -443,6 +537,7 @@ export default function LinkOnlyHomeScreen() {
         <Ionicons name="sparkles" size={24} color={P.onAccent} />
       </TouchableOpacity>
 
+      <DialogHost />
     </ThemedBackground>
   );
 }
@@ -462,47 +557,66 @@ const STRENGTH_ICONS: Record<ProfileStrengthKey, IconName> = {
   payments: 'card-outline',
 };
 
-function MiniStat({ styles, value, before, label }: { styles: HomeStyles; value: number; before?: number; label: string }) {
-  const trend = before === undefined ? null : trendLabel(value, before);
+/** A small numbers tile. `value` undefined = still loading. */
+function StatTile({
+  styles,
+  P,
+  icon,
+  value,
+  before,
+  label,
+  sub,
+}: {
+  styles: HomeStyles;
+  P: HomePalette;
+  icon: IconName;
+  value: number | undefined;
+  before?: number | undefined;
+  label: string;
+  sub?: string;
+}) {
+  const trend = value === undefined || before === undefined ? null : trendLabel(value, before);
   return (
-    <View style={styles.miniStat}>
-      <Text style={styles.miniNum}>{value}</Text>
-      <Text style={styles.miniLabel}>{label}</Text>
-      {trend && <Text style={[styles.miniTrend, !trend.up && styles.trendDown]}>{trend.text}</Text>}
+    <View style={styles.tile}>
+      <Ionicons name={icon} size={20} color={P.accent} />
+      <Text style={styles.tileNum}>{value ?? '–'}</Text>
+      <Text style={styles.tileLabel}>{label}</Text>
+      {trend ? (
+        <Text style={[styles.trend, !trend.up && styles.trendDown]}>{trend.text}</Text>
+      ) : sub ? (
+        <Text style={styles.tileSub} numberOfLines={1}>{sub}</Text>
+      ) : null}
     </View>
   );
 }
 
-const RING_SIZE = 64;
-const RING_STROKE = 7;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
-
-function StrengthRing({ percent, P, styles }: { percent: number; P: HomePalette; styles: HomeStyles }) {
-  const filled = (Math.max(0, Math.min(100, percent)) / 100) * RING_LENGTH;
+function StrengthRow({
+  styles,
+  P,
+  item,
+  eyebrow,
+  onPress,
+}: {
+  styles: HomeStyles;
+  P: HomePalette;
+  item: { key: ProfileStrengthKey; label: string; hint: string };
+  eyebrow?: string;
+  onPress: () => void;
+}) {
   return (
-    <View style={styles.ring} accessibilityLabel={`Profile ${percent}% complete`}>
-      <Svg width={RING_SIZE} height={RING_SIZE}>
-        <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} stroke={P.accentDim} strokeWidth={RING_STROKE} fill="none" />
-        <Circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          stroke={P.accent}
-          strokeWidth={RING_STROKE}
-          strokeLinecap="round"
-          strokeDasharray={`${filled} ${RING_LENGTH}`}
-          fill="none"
-          // Start at 12 o'clock.
-          transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-        />
-      </Svg>
-      <Text style={styles.ringText}>{percent}%</Text>
-    </View>
+    <TouchableOpacity style={styles.todoRow} onPress={onPress} activeOpacity={0.7} accessibilityRole="button">
+      <View style={styles.todoIcon}><Ionicons name={STRENGTH_ICONS[item.key]} size={16} color={P.accent} /></View>
+      <View style={styles.flex}>
+        {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+        <Text style={styles.stepLabel}>{item.label}</Text>
+        {!eyebrow && <Text style={styles.stepHint}>{item.hint}</Text>}
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={P.sub} />
+    </TouchableOpacity>
   );
 }
 
-function QuickAction({
+function Shortcut({
   styles,
   P,
   icon,
@@ -516,9 +630,9 @@ function QuickAction({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.action} onPress={onPress} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={label}>
-      <View style={styles.tileIcon}><Ionicons name={icon} size={20} color={P.accent} /></View>
-      <Text style={styles.actionLabel} numberOfLines={1}>{label}</Text>
+    <TouchableOpacity style={styles.shortcut} onPress={onPress} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={label}>
+      <Ionicons name={icon} size={16} color={P.accent} />
+      <Text style={styles.shortcutLabel} numberOfLines={1}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -532,16 +646,16 @@ const createStyles = (P: HomePalette) =>
   StyleSheet.create({
     flex: { flex: 1 },
     content: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: P.surface },
-    avatarEmpty: { backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
-    avatarText: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.onAccent },
-    liveRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-    name: { fontFamily: 'BakbakOne-Regular', fontSize: 26, color: P.text },
-    livePill: { height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: P.accentDim, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    header: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+    greeting: { fontFamily: 'BakbakOne-Regular', fontSize: 26, lineHeight: 31, color: P.text },
+    dateLine: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', color: P.sub, marginTop: 3 },
+    liveLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 7 },
     liveDot: { width: 8, height: 8, borderRadius: 4 },
     liveText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.text },
-    iconButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
+    iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
+    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: P.surface },
+    avatarEmpty: { backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.onAccent },
     loader: { marginVertical: 24 },
     card: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, padding: 16, gap: 10 },
     cardTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
@@ -558,34 +672,41 @@ const createStyles = (P: HomePalette) =>
     footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub },
     primary: { height: 48, borderRadius: 24, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
     primaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.onAccent },
-    headlineRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 14 },
-    headline: { fontFamily: 'BakbakOne-Regular', fontSize: 48, lineHeight: 52, color: P.text },
-    headlineLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.text },
-    bars: { flex: 1, height: 64, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
+    tiles: { gap: 8 },
+    tileRow: { flexDirection: 'row', gap: 8 },
+    tile: { flex: 1, backgroundColor: P.card, borderRadius: 20, borderWidth: 1, borderColor: P.border, padding: 14, gap: 3 },
+    wideTile: { flexDirection: 'row', alignItems: 'flex-end', gap: 16, paddingHorizontal: 16 },
+    wideRight: { flex: 1, alignItems: 'flex-end', gap: 8 },
+    wideNum: { fontFamily: 'BakbakOne-Regular', fontSize: 44, lineHeight: 50, color: P.text, marginTop: 2 },
+    tileLoader: { marginVertical: 16, alignSelf: 'flex-start' },
+    accentTile: { backgroundColor: P.accent, borderColor: P.accent },
+    tileNum: { fontFamily: 'BakbakOne-Regular', fontSize: 28, lineHeight: 34, color: P.text, marginTop: 4 },
+    tileLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.text },
+    tileSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub },
+    onAccent: { color: P.onAccent },
+    onAccentSoft: { color: P.onAccent, opacity: 0.8 },
+    eyebrow: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: P.sub },
+    bars: { width: '100%', height: 56, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
     bar: { flex: 1, borderRadius: 4 },
-    miniStats: { flexDirection: 'row', gap: 8 },
-    miniStat: { flex: 1, backgroundColor: P.surface, borderRadius: 14, padding: 12 },
-    miniNum: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
-    miniLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', color: P.sub },
-    tileIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
-    becca: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
-    greeting: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', color: P.sub, marginTop: 2 },
-    trend: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: '#3D8B5A', marginTop: 1 },
-    trendDown: { color: '#B0563C' },
-    miniTrend: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', color: '#3D8B5A', marginTop: 2 },
-    strengthHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    ring: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
-    ringText: { position: 'absolute', fontFamily: 'BakbakOne-Regular', fontSize: 16, color: P.text },
-    todoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border },
+    trend: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: UP },
+    trendDown: { color: DOWN },
+    beccaLine: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: P.accentDim, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14 },
+    beccaText: { flex: 1, fontSize: 13, lineHeight: 18, color: P.text },
+    beccaName: { fontWeight: '700' },
+    percent: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.accent },
+    track: { height: 8, borderRadius: 4, backgroundColor: P.accentDim, overflow: 'hidden' },
+    fill: { height: '100%', borderRadius: 4, backgroundColor: P.accent },
+    todoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 },
     todoIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
-    doneChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    doneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 12, backgroundColor: P.surface },
-    doneChipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', color: P.sub },
-    tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-    tipIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
-    tipEyebrow: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: P.sub, marginBottom: 3 },
-    tipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, color: P.text },
-    actions: { flexDirection: 'row', gap: 8 },
-    action: { flex: 1, backgroundColor: P.card, borderRadius: 18, borderWidth: 1, borderColor: P.border, paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center', gap: 6 },
-    actionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12, color: P.text },
+    linkHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    tileIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
+    linkButtons: { flexDirection: 'row', gap: 8 },
+    outlineButton: { flex: 1, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+    softButton: { flex: 1, height: 44, borderRadius: 22, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
+    outlineButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, color: P.accent },
+    disabled: { opacity: 0.45 },
+    shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    shortcut: { height: 40, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.card, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    shortcutLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: P.text },
+    becca: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   });

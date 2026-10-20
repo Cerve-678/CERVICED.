@@ -323,11 +323,11 @@ Curated: [[Services]] · **48 files**
 - `src/services/beccaStorageService.ts` _(27)_
 - `src/navigation/types.ts` _(24)_
 - `src/navigation/client/tabs/BeccaNavigator.tsx` _(21)_
+- `src/screens/provider/LinkOnlyHomeScreen.tsx` _(21)_
 - `supabase/becca_chat_tables.sql` _(20)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(20)_
 - `src/services/becca/aiInterpreter.ts` _(18)_
 - `src/services/becca/nvidiaInterpreter.ts` _(18)_
-- `src/screens/provider/LinkOnlyHomeScreen.tsx` _(16)_
 - `src/services/becca/capabilities/provider.ts` _(10)_
 - `src/services/becca/registry.ts` _(10)_
 - `src/services/becca/aiRuntime.ts` _(9)_

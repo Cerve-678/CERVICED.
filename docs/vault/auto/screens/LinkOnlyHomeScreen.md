@@ -13,6 +13,7 @@ tags: [screen, provider]
 - [[BusinessInfoScreen\|BusinessInfo]]
 - [[InfoRegScreen\|EditProfile]]
 - `BeccaStack` _(navigator / dynamic)_
+- `LinkOnlyMessages` _(navigator / dynamic)_
 - [[NotificationsScreen\|Notifications]]
 - [[LinkOnlyAnalyticsScreen\|LinkOnlyAnalytics]]
 - [[BrandingScreen\|Branding]]
