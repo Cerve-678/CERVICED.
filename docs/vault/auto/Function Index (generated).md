@@ -5,7 +5,7 @@
 
 #generated
 
-**2657 functions** across **363 files**.
+**2658 functions** across **363 files**.
 
 ### `src/components/` (47)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -154,7 +154,7 @@
 - `SectionHeader.tsx` — **SectionHeader**
 - `serviceDraft.ts` — **createServiceDraft** · nextDraftId
 - `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
-- `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **useVerticalDragReorder**
+- `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
 ### `src/features/providers/` (15)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
