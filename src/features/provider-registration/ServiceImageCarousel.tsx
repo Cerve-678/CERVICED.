@@ -17,7 +17,7 @@ interface ServiceImageCarouselProps {
   onRemoveImage: (index: number) => void;
   /** Flip one photo between filling its box (cropping) and showing it whole. */
   onToggleFit: (index: number) => void;
-  /** A quick tap on a photo (not a hold): crop it again. */
+  /** Crop a photo again: its Crop button, or a quick tap on the photo. */
   onRecrop: (index: number) => void;
   /** Commit a drag: move the photo at `from` to sit at `to`. The first photo
    *  is the one that leads the service everywhere it's shown, so this is the
@@ -267,6 +267,23 @@ export function ServiceImageCarousel({
                 </View>
               )}
               {dragIndex == null && (
+                // A real button, like remove and Fill/Fit: it claims the touch
+                // before the drag responder, so it works even where a quick
+                // tap on the photo itself gets taken by the scrolling row.
+                <TouchableOpacity
+                  style={styles.cropButton}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    onRecrop(index);
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Crop this photo"
+                >
+                  <Text style={styles.fitToggleText}>Crop</Text>
+                </TouchableOpacity>
+              )}
+              {dragIndex == null && (
                 <TouchableOpacity
                   style={styles.fitToggle}
                   onPress={() => {
@@ -299,9 +316,9 @@ export function ServiceImageCarousel({
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Tap a photo to crop it, or hold it to drag — the first one leads
-          your service. Use Show whole to keep every edge, or Fill frame for a
-          tighter crop.
+          Tap Crop to crop a photo, or hold one to drag it — the first one
+          leads your service. Use Show whole to keep every edge, or Fill frame
+          for a tighter crop.
         </Text>
       )}
       {images.length > 0 && (

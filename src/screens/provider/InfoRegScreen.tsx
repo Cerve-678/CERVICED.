@@ -1292,21 +1292,26 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   // adding several at once can't crop), so this reopens the library on a
   // single pick and swaps the result in at the same place in the order.
   const handleRecropImage = async (index: number) => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please allow access to your photo library.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      const asset = result.assets?.[0];
+      if (result.canceled || !asset) return;
+      setImages(prev =>
+        prev.map((img, i) => (i === index ? { uri: asset.uri, fit: 'cover' } : img)),
+      );
+    } catch (e) {
+      // Without this a picker failure looked like the tap did nothing.
+      Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.recropServiceImage'));
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    const asset = result.assets?.[0];
-    if (result.canceled || !asset) return;
-    setImages(prev =>
-      prev.map((img, i) => (i === index ? { uri: asset.uri, fit: 'cover' } : img)),
-    );
   };
 
   // Array order IS the stored order — it becomes service_images.sort_order on
@@ -7535,6 +7540,15 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   // Sits on the first thumbnail so "the first one leads your service" is
   // visible on the strip itself, not only in the hint below it.
+  cropButton: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
   coverBadge: {
     position: 'absolute',
     bottom: 4,
