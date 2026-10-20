@@ -56,7 +56,7 @@ import type { ProviderRegistrationData, ServiceImageDraft } from '../../services
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo } from '../../components/FramedLogo';
@@ -80,6 +80,7 @@ import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
+import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
 import { SERVICE_BUFFER_BEFORE_OPTS, SERVICE_BUFFER_AFTER_OPTS } from '../../features/business-details/options';
@@ -2175,6 +2176,11 @@ interface PreviewModalProps {
   accentColor: string;
   portfolio: DbPortfolioItem[];
   venuePhotos: DbPortfolioItem[];
+  /** A link-only provider's clients see a different profile — Book on their
+   *  own page, specialities instead of a price list, no ratings or reviews —
+   *  so the preview shows that one. */
+  isLinkOnly: boolean;
+  specialities: readonly string[];
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -2184,6 +2190,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   accentColor,
   portfolio,
   venuePhotos,
+  isLinkOnly,
+  specialities,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -2338,7 +2346,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 {providerData.location ? ` · ${providerData.location.toUpperCase()}` : ''}
               </Text>
 
-              {/* Rating */}
+              {/* Rating — not for link-only: clients book them elsewhere, so
+                  there are no CERVICED reviews to rate them from. */}
+              {!isLinkOnly && (
               <View style={styles.previewRatingContainer}>
                 <View style={styles.previewStars}>
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -2347,12 +2357,41 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </View>
                 <Text style={[styles.previewRatingText, { color: heroText }, heroIsDark && styles.previewHeroTextShadow]}>{mockRating}</Text>
               </View>
+              )}
 
               {providerData.yearsExperience ? (
                 <Text style={[styles.previewYearsText, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>{providerData.yearsExperience} years experience</Text>
               ) : null}
 
-              {/* Slots with Bell */}
+              {/* Link-only: Book (their own page) with socials and messaging
+                  beside it, exactly as clients see it in place of the
+                  availability pill. Decorative here. */}
+              {isLinkOnly ? (
+                <View style={styles.previewLinkOnlyBookBlock}>
+                  <View style={styles.previewLinkOnlyBookRow}>
+                    <View style={[styles.previewLinkOnlyBookButton, { backgroundColor: PP.card, borderColor: PP.border }]}>
+                      <Text style={[styles.previewLinkOnlyBookText, { color: PP.text }]}>BOOK</Text>
+                      <Ionicons name="open-outline" size={15} color={PP.text} />
+                    </View>
+                    {providerData.instagram ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-instagram" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    {providerData.tiktok ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-tiktok" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                      <Ionicons name="chatbubble-outline" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                    </View>
+                  </View>
+                  <Text style={[styles.previewLinkOnlyCaption, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>
+                    Books on their own page — opens inside CERVICED
+                  </Text>
+                </View>
+              ) : (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2376,6 +2415,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   <BellIcon size={16} color={PP.sub} />
                 </View>
               </BlurView>
+              )}
             </View>
 
             {/* The content sheet rises over the hero photo with its own large
@@ -2413,8 +2453,14 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </TouchableOpacity>
               </BlurView>
 
+              {/* Link-only clients see specialities where the price list
+                  would be; their prices live on their own booking page. */}
+              {isLinkOnly && (
+                <ProviderSpecialitiesSection specialities={specialities} textColor={PP.text} accent={accentColor} />
+              )}
+
               {/* Services Section */}
-              {categoryNames.length > 0 && (
+              {!isLinkOnly && categoryNames.length > 0 && (
                 <View style={styles.previewServicesSection}>
                   <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>Services</Text>
 
@@ -2522,7 +2568,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
               {/* Reviews — this is a template/showcase view, not a live reflection
                   of real reviews, so the card always shows (matching
-                  ProviderProfileScreen) but deliberately stays empty. */}
+                  ProviderProfileScreen) but deliberately stays empty. Never
+                  for link-only, whose clients see no reviews section. */}
+              {!isLinkOnly && (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2536,6 +2584,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 />
                 <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Reviews</Text>
               </BlurView>
+              )}
 
               {/* Contact Section */}
               <BlurView
@@ -3321,6 +3370,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  // A link-only preview shows specialities, which this screen doesn't hold
+  // once the provider exists, so they're read when the preview opens. Before
+  // the first save they're still the ones picked at sign-up.
+  const [previewSpecialities, setPreviewSpecialities] = useState<string[]>([]);
+  useEffect(() => {
+    if (!showPreviewModal || !isLinkOnly) return;
+    if (!providerDbId) {
+      setPreviewSpecialities(signupSpecialties);
+      return;
+    }
+    let cancelled = false;
+    getProviderSpecialties(providerDbId)
+      .then(list => { if (!cancelled) setPreviewSpecialities(list); })
+      .catch(error => logger.error('InfoReg: loading specialities for the preview failed', error));
+    return () => { cancelled = true; };
+  }, [showPreviewModal, isLinkOnly, providerDbId, signupSpecialties]);
   const [currentCategory, setCurrentCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<string>('');
   const [editingService, setEditingService] = useState<ServiceData | null>(null);
@@ -4228,6 +4293,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           accentColor={adaptiveAccentColor}
           portfolio={workPhotos}
           venuePhotos={venuePhotos}
+          isLinkOnly={isLinkOnly}
+          specialities={previewSpecialities}
         />
 
         {/* No `edges` prop: under fullScreenModal the nested provider this sits
@@ -7768,6 +7835,45 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     letterSpacing: 0.4,
   },
   // Slots with Bell
+  // Mirrors ProviderProfileScreen's linkOnlyBook* styles.
+  previewLinkOnlyBookBlock: {
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  previewLinkOnlyBookRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookButton: {
+    height: 46,
+    flex: 1,
+    borderRadius: 23,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 1,
+  },
+  previewLinkOnlySocialButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewLinkOnlyCaption: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   previewSlotsPill: {
     flexDirection: 'row',
     alignItems: 'center',
