@@ -22,8 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  fix/remove-returning-client-points (2026-10-20), until 20261020120000 is applied
 ```
+
+### Written 2026-10-20 (no more +30 for booking the same provider again)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020120000 | `remove_returning_client_points` | **WRITTEN, NOT APPLIED.** Frontier at authoring: `20261019233000` (`20261019235500` written, unapplied, numbered below this). Redefines `award_points_on_booking_completed()` from the live definition (md5 `fc6b7188cddaff0fed1fe710440bd00c`) minus the `returning_client` (+30) block. Existing `returning_client` ledger rows (20 at authoring) are kept. The file records its own version. No app or function deploy needed. |
 
 ### Applied 2026-10-20 (link-only Dashboard counts)
 
