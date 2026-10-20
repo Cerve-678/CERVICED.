@@ -4338,6 +4338,42 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </Text>
               </View>
 
+              {providerData.logo && (
+                <View style={styles.logoPreviewSection}>
+                  <Text style={styles.logoPreviewTitle}>See it on Cerviced</Text>
+                  <Text style={styles.logoPreviewHint}>Swipe to check how your logo fills each Home card before you publish.</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    pagingEnabled
+                    decelerationRate="fast"
+                    contentContainerStyle={styles.logoPreviewCarousel}
+                    accessibilityLabel="Logo previews"
+                  >
+                    <View style={styles.logoPreviewPage}>
+                      <Text style={styles.logoPreviewLabel}>Profile logo</Text>
+                      <Image source={{ uri: providerData.logo }} style={styles.logoPreviewProfile} resizeMode="cover" fadeDuration={0} />
+                    </View>
+                    <View style={styles.logoPreviewPage}>
+                      <Text style={styles.logoPreviewLabel}>Home · compact</Text>
+                      <View style={styles.logoPreviewSmallCard}>
+                        <Image source={{ uri: providerData.logo }} style={styles.logoPreviewFill} resizeMode="cover" fadeDuration={0} />
+                      </View>
+                    </View>
+                    <View style={styles.logoPreviewPage}>
+                      <Text style={styles.logoPreviewLabel}>Home · feature card</Text>
+                      <View style={styles.logoPreviewLargeCard}>
+                        <Image source={{ uri: providerData.logo }} style={styles.logoPreviewFill} resizeMode="cover" fadeDuration={0} />
+                      </View>
+                    </View>
+                  </ScrollView>
+                  <TouchableOpacity onPress={() => { tapSelect(); handleSelectLogo(); }} accessibilityRole="button" style={styles.logoPreviewAdjust}>
+                    <Ionicons name="crop-outline" size={16} color={adaptiveAccentColor} />
+                    <Text style={[styles.logoPreviewAdjustText, { color: adaptiveAccentColor }]}>Adjust logo crop</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
             {/* Business Name */}
               <View
                 style={styles.inputGroup}
@@ -5894,6 +5930,79 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 13,
     color: fg(0.6),
     marginTop: 10,
+  },
+  logoPreviewSection: {
+    marginBottom: 24,
+  },
+  logoPreviewTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    color: fg(0.9),
+    marginBottom: 4,
+  },
+  logoPreviewHint: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    lineHeight: 17,
+    color: fg(0.62),
+    marginBottom: 12,
+  },
+  logoPreviewCarousel: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  logoPreviewPage: {
+    width: 232,
+    minHeight: 152,
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: surf(0.42),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: fg(0.12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoPreviewLabel: {
+    alignSelf: 'flex-start',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    color: fg(0.65),
+    marginBottom: 12,
+  },
+  logoPreviewProfile: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 2,
+    borderColor: surf(0.9),
+  },
+  logoPreviewSmallCard: {
+    width: 118,
+    height: 66,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  logoPreviewLargeCard: {
+    width: 202,
+    height: 84,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  logoPreviewFill: {
+    width: '100%',
+    height: '100%',
+  },
+  logoPreviewAdjust: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  logoPreviewAdjustText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
   },
 
   // Full-bleed section: a hairline rule and generous space do the separating.
