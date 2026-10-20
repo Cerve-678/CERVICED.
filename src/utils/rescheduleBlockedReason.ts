@@ -21,6 +21,7 @@
 
 import { BookingStatus } from '../types/booking';
 import { to24HourTime } from './dateUtils';
+import { tr } from '../i18n';
 
 export interface RescheduleBlock {
   title: string;
@@ -55,8 +56,8 @@ export function getRescheduleBlock(
 ): RescheduleBlock | null {
   if (status === BookingStatus.CANCELLED) {
     return {
-      title: 'Rescheduling is closed',
-      message: 'This booking was cancelled, so it can no longer be rescheduled.',
+      title: tr('clientBooking.rescheduleBlock.closedTitle'),
+      message: tr('clientBooking.rescheduleBlock.cancelled'),
     };
   }
   if (
@@ -65,31 +66,31 @@ export function getRescheduleBlock(
     status === BookingStatus.PROVIDER_NO_SHOW
   ) {
     return {
-      title: 'Rescheduling is closed',
-      message: 'This appointment has passed, so it can no longer be rescheduled.',
+      title: tr('clientBooking.rescheduleBlock.closedTitle'),
+      message: tr('clientBooking.rescheduleBlock.finished'),
     };
   }
   if (hasBookingDatePassed(bookingDate, bookingTime, now) && status !== BookingStatus.IN_PROGRESS) {
     return {
-      title: 'Rescheduling is closed',
-      message: 'The date for this appointment has passed, so it can no longer be rescheduled.',
+      title: tr('clientBooking.rescheduleBlock.closedTitle'),
+      message: tr('clientBooking.rescheduleBlock.datePassed'),
     };
   }
   if (status === BookingStatus.PENDING) {
     return audience === 'client'
       ? {
-          title: 'Not confirmed yet',
-          message: 'This booking is still waiting for the provider to confirm it. You can reschedule once it has been.',
+          title: tr('clientBooking.rescheduleBlock.notConfirmedTitle'),
+          message: tr('clientBooking.rescheduleBlock.notConfirmed'),
         }
       : {
-          title: 'Confirm this booking first',
-          message: 'This booking is still waiting for your confirmation. Confirm or decline it first, then you can reschedule.',
+          title: tr('clientBooking.rescheduleBlock.confirmFirstTitle'),
+          message: tr('clientBooking.rescheduleBlock.confirmFirst'),
         };
   }
   if (status !== BookingStatus.UPCOMING && status !== BookingStatus.IN_PROGRESS) {
     return {
-      title: 'Rescheduling is closed',
-      message: 'This booking can no longer be rescheduled.',
+      title: tr('clientBooking.rescheduleBlock.closedTitle'),
+      message: tr('clientBooking.rescheduleBlock.generic'),
     };
   }
   return null;
@@ -119,19 +120,19 @@ export function getStaleRequestBlock(
     if (openRequest === 'pending') return null;
     if (openRequest === 'provider_responded') {
       return {
-        title: 'Already answered',
-        message: `You've already offered ${otherPartyName} new times. It's waiting on them to choose one.`,
+        title: tr('clientBooking.rescheduleBlock.alreadyAnsweredTitle'),
+        message: tr('clientBooking.rescheduleBlock.alreadyAnswered', { name: otherPartyName }),
       };
     }
     return {
-      title: 'This request is no longer open',
-      message: 'This reschedule request has already been dealt with, or it has expired. There is nothing left to respond to.',
+      title: tr('clientBooking.rescheduleBlock.requestClosedTitle'),
+      message: tr('clientBooking.rescheduleBlock.requestClosed'),
     };
   }
   if (openRequest === 'provider_responded') return null;
   if (openRequest === 'pending') return null; // still waiting on the provider: the screen explains that itself
   return {
-    title: 'These times are no longer available',
-    message: `${otherPartyName}'s offer of new times is no longer open — it may have expired or been replaced. Your booking is unchanged.`,
+    title: tr('clientBooking.rescheduleBlock.offerGoneTitle'),
+    message: tr('clientBooking.rescheduleBlock.offerGone', { name: otherPartyName }),
   };
 }

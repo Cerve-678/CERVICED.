@@ -1,12 +1,13 @@
 import type { ConfirmedBooking } from '../../contexts/BookingContext';
 import { PaymentStatus } from '../../types/booking';
+import { tr, trp } from '../../i18n';
 
-export const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  card: 'Credit/Debit Card',
-  paypal: 'PayPal',
-  apple: 'Apple Pay',
-  google: 'Google Pay',
-};
+/** Payment method display names. `card` is a getter so it reads the current
+ *  language; the others are brand names and stay as they are. */
+export const PAYMENT_METHOD_LABELS: Record<string, string> = Object.defineProperties(
+  { paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay' } as Record<string, string>,
+  { card: { enumerable: true, get: () => tr('clientBooking.payment.method.card') } },
+);
 
 export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const servicePrice = booking.price || 0;
@@ -50,7 +51,7 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   // while payment_status is still 'pending', and labelling that "Deposit
   // Paid" would assert a payment that never happened. An unpaid booking
   // reads "Total Paid £0.00", which is simply true.
-  const paidLabel = !isUnpaid && isDeposit ? 'Deposit Paid' : 'Total Paid';
+  const paidLabel = !isUnpaid && isDeposit ? tr('clientBooking.payment.depositPaid') : tr('clientBooking.payment.totalPaid');
   const paidAmount = isUnpaid ? 0 : isDeposit ? depositAmount : amountPaidAtCheckout;
 
   return {
@@ -83,6 +84,9 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
  * 2026-10-03).
  */
 export interface RefundOutcome {
+  /** What happened, for choosing an icon/colour. Compare this, never the
+   *  title — the title is translated. */
+  state: 'pending' | 'refunded' | 'kept';
   title: string;
   message: string;
   /** Receipt rows for the client: label → signed £ amount. */
@@ -98,39 +102,47 @@ export function describeRefundOutcome(
   const kept = booking.policyRetainedAmount ?? 0;
   const refunded = booking.refundedAmount ?? 0;
   const money = (n: number) => `£${n.toFixed(2)}`;
+  // The messages and the "kept under policy" row are cancellation-policy and
+  // refund wording, held in English (clientBookingHeld); titles and status
+  // labels are plain UI and translated.
   const provider = booking.providerName?.trim() || 'Your provider';
-  const policy = noticeHours > 0 ? `${noticeHours}-hour cancellation policy` : 'cancellation policy';
-  const keptLine = `${provider} kept ${money(kept)} under their ${policy}.`;
+  const keptLine = noticeHours > 0
+    ? tr('clientBooking.refundOutcome.keptLineHours', { provider, amount: money(kept), hours: noticeHours })
+    : tr('clientBooking.refundOutcome.keptLine', { provider, amount: money(kept) });
+  const keptRow = tr('clientBooking.refundOutcome.keptRow');
 
   if (booking.paymentStatus === PaymentStatus.REFUND_PENDING) {
     return {
-      title: 'Refund pending',
+      state: 'pending',
+      title: tr('clientBooking.refundOutcome.refundPending'),
       message: kept > 0
-        ? `Your refund is being processed. ${keptLine}`
-        : 'Your refund is being processed. This will update once it has gone through.',
-      rows: kept > 0 ? [{ label: 'Kept under cancellation policy', amount: kept }] : [],
-      providerStatus: 'Refund pending',
+        ? tr('clientBooking.refundOutcome.pendingKept', { kept: keptLine })
+        : tr('clientBooking.refundOutcome.pending'),
+      rows: kept > 0 ? [{ label: keptRow, amount: kept }] : [],
+      providerStatus: tr('clientBooking.refundOutcome.refundPending'),
     };
   }
   if (kept > 0) {
     return {
-      title: refunded > 0 ? 'Refunded' : 'No refund',
+      state: refunded > 0 ? 'refunded' : 'kept',
+      title: refunded > 0 ? tr('clientBooking.refundOutcome.refunded') : tr('clientBooking.refundOutcome.noRefund'),
       message: refunded > 0
-        ? `${money(refunded)} refunded to you. ${keptLine}`
-        : `${keptLine} Nothing was refunded.`,
+        ? tr('clientBooking.refundOutcome.refundedKept', { amount: money(refunded), kept: keptLine })
+        : tr('clientBooking.refundOutcome.nothingRefunded', { kept: keptLine }),
       rows: [
-        ...(refunded > 0 ? [{ label: 'Refunded', amount: -refunded }] : []),
-        { label: 'Kept under cancellation policy', amount: kept },
+        ...(refunded > 0 ? [{ label: tr('clientBooking.refundOutcome.refunded'), amount: -refunded }] : []),
+        { label: keptRow, amount: kept },
       ],
-      providerStatus: `Policy enforced · ${money(kept)} kept`,
+      providerStatus: tr('clientBooking.refundOutcome.policyEnforced', { amount: money(kept) }),
     };
   }
   if (refunded > 0) {
     return {
-      title: 'Refunded',
-      message: `${money(refunded)} refunded to you. Banks usually take 5–10 working days to show it.`,
-      rows: [{ label: 'Refunded', amount: -refunded }],
-      providerStatus: `Refund issued · ${money(refunded)}`,
+      state: 'refunded',
+      title: tr('clientBooking.refundOutcome.refunded'),
+      message: tr('clientBooking.refundOutcome.refundedBanks', { amount: money(refunded) }),
+      rows: [{ label: tr('clientBooking.refundOutcome.refunded'), amount: -refunded }],
+      providerStatus: tr('clientBooking.refundOutcome.refundIssued', { amount: money(refunded) }),
     };
   }
   return null;
@@ -143,13 +155,18 @@ export function describeRefundOutcome(
  * way the server decides whether it was a late cancel.
  */
 export function describeSettlementTiming(hoursBefore: number | null, noticeHours: number): string | null {
+  // Cancellation-policy wording: held in English (clientBookingHeld).
   if (hoursBefore == null || !Number.isFinite(hoursBefore)) return null;
-  const notice = noticeHours > 0 ? `, inside your ${noticeHours}-hour notice` : '';
-  if (hoursBefore < 0) return 'Cancelled after the appointment start time.';
+  if (hoursBefore < 0) return tr('clientBooking.settlement.afterStart');
+  const inside = noticeHours > 0;
   if (hoursBefore < 1) {
-    const mins = Math.max(1, Math.round(hoursBefore * 60));
-    return `Cancelled ${mins} minute${mins === 1 ? '' : 's'} before${notice}.`;
+    const count = Math.max(1, Math.round(hoursBefore * 60));
+    return inside
+      ? trp('clientBooking.settlement.minutesInside', count, { hours: noticeHours })
+      : trp('clientBooking.settlement.minutes', count);
   }
-  const hrs = Math.floor(hoursBefore);
-  return `Cancelled ${hrs} hour${hrs === 1 ? '' : 's'} before${notice}.`;
+  const count = Math.floor(hoursBefore);
+  return inside
+    ? trp('clientBooking.settlement.hoursInside', count, { hours: noticeHours })
+    : trp('clientBooking.settlement.hours', count);
 }

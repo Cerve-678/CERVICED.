@@ -9,6 +9,7 @@
  */
 import type { ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { toLocalDate } from '../../utils/dateUtils';
+import { tr } from '../../i18n';
 
 /** The entry's start as a local Date. */
 export function externalBookingStart(entry: Pick<ClientExternalBookingWithProvider, 'booking_date' | 'start_time'>): Date {
@@ -58,22 +59,29 @@ const KNOWN_BOOKING_SITES: readonly [string, string][] = [
 /** "Fresha", "Treatwell" … for the "Booked on X" tag, from the provider's
  *  link. Falls back to "their site" rather than printing a raw hostname. */
 export function bookingSiteName(url: string | null | undefined): string {
-  if (!url) return 'their site';
+  return knownBookingSite(url) ?? tr('clientBooking.external.theirSite');
+}
+
+function knownBookingSite(url: string | null | undefined): string | null {
+  if (!url) return null;
   let host: string;
   try {
     host = new URL(/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`).hostname.toLowerCase();
   } catch {
-    return 'their site';
+    return null;
   }
   const match = KNOWN_BOOKING_SITES.find(([domain]) => host === domain || host.endsWith(`.${domain}`));
-  return match ? match[1] : 'their site';
+  return match ? match[1] : null;
 }
 
 /** "Booked on Fresha" / "Booked on their site". */
 export function bookedOnLabel(url: string | null | undefined): string {
-  return `Booked on ${bookingSiteName(url)}`;
+  const site = knownBookingSite(url);
+  return site
+    ? tr('clientBooking.external.bookedOn', { site })
+    : tr('clientBooking.external.bookedOnTheirSite');
 }
 
-/** The line every booked-elsewhere surface carries, so the wording stays one. */
-export const EXTERNAL_BOOKING_DISCLAIMER =
-  "CERVICED doesn't handle bookings made on other sites — we just keep track of them, so your beauty life stays organised.";
+/** The line every booked-elsewhere surface carries, so the wording stays one.
+ *  A liability statement, so it is held in English (clientBookingHeld). */
+export const EXTERNAL_BOOKING_DISCLAIMER = tr('clientBooking.external.disclaimer');

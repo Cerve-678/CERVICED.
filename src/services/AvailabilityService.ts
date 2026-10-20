@@ -18,7 +18,8 @@ import {
 import type { ClientBookedSpan } from './databaseService';
 import type { BookingConflictResult } from '../types/booking';
 import { logger } from '../utils/logger';
-import { formatTime12, formatShortDate } from '../utils/dateUtils';
+import { formatTime12, formatShortDate, dayName } from '../utils/dateUtils';
+import { tr } from '../i18n';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -193,10 +194,10 @@ export const resolveSlotOffer = (
 /** Human-readable reason, for the client-facing confirmation. */
 export const describeEmergencyReason = (reason: EmergencyReason, providerName: string): string => {
   switch (reason) {
-    case 'outside_hours': return `outside ${providerName}'s working hours`;
-    case 'blocked_date':  return `on a date ${providerName} has marked unavailable`;
-    case 'short_notice':  return `at shorter notice than ${providerName} normally accepts`;
-    case 'beyond_window': return `further ahead than ${providerName} normally takes bookings`;
+    case 'outside_hours': return tr('clientBooking.emergency.reason.outsideHours', { provider: providerName });
+    case 'blocked_date':  return tr('clientBooking.emergency.reason.blockedDate', { provider: providerName });
+    case 'short_notice':  return tr('clientBooking.emergency.reason.shortNotice', { provider: providerName });
+    case 'beyond_window': return tr('clientBooking.emergency.reason.beyondWindow', { provider: providerName });
   }
 };
 
@@ -266,11 +267,12 @@ interface WeeklyScheduleRows {
   windowRows: AvailabilityWindowRow[];
 }
 
-const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+// Strip / listing labels are display copy, read in the app language when the
+// summary is built (dayName from dateUtils).
+const dayInitial = (dow: number): string => dayName(dow, 'short').charAt(0).toUpperCase();
 // Sun-indexed full names + Mon→Sun reading order — same convention as
 // ProviderScheduleScreen's DAY_FULL/DISPLAY_ORDER, kept in sync deliberately
 // so the client-facing weekly listing and the provider's own editor agree.
-const DAY_FULL_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WEEK_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const weeklyScheduleRequests = new Map<string, Promise<WeeklyScheduleRows>>();
 
@@ -426,7 +428,7 @@ const buildWeeklyOpeningHours = ({
       );
       return {
         dayOfWeek: dow,
-        label: DAY_FULL_NAMES[dow] ?? '',
+        label: dayName(dow, 'full'),
         isOpen: true,
         hours: `${formatTime12(earliest.start_time)} - ${formatTime12(latest.end_time)}`,
       };
@@ -435,14 +437,14 @@ const buildWeeklyOpeningHours = ({
     if (legacy && !legacy.is_closed) {
       return {
         dayOfWeek: dow,
-        label: DAY_FULL_NAMES[dow] ?? '',
+        label: dayName(dow, 'full'),
         isOpen: true,
         hours: `${formatTime12(legacy.open_time)} - ${formatTime12(legacy.close_time)}`,
       };
     }
     return {
       dayOfWeek: dow,
-      label: DAY_FULL_NAMES[dow] ?? '',
+      label: dayName(dow, 'full'),
       isOpen: false,
       hours: null,
     };
@@ -675,10 +677,10 @@ const checkNoticeWindow = async (
   if (noticeHrs <= 0 || allowShortNotice) return null;
 
   if (slotStart.getTime() < Date.now() + noticeHrs * 60 * 60 * 1000) {
-    const who = row?.display_name?.trim() || 'This provider';
+    const who = row?.display_name?.trim() || tr('clientBooking.conflict.thisProvider');
     return {
       hasConflict: true,
-      message: `${who} needs at least ${noticeHrs}h notice — please pick a later slot.`,
+      message: tr('clientBooking.conflict.needsNotice', { provider: who, hours: noticeHrs }),
     };
   }
   return null;
@@ -1411,7 +1413,7 @@ export const AvailabilityService = {
           // another service" is unactionable when the other service is behind
           // a collapsed section belonging to a different provider.
           message: elsewhere
-            ? `This overlaps your ${elsewhere.providerName} appointment in this cart — you can't be in both places at once.`
+            ? tr('clientBooking.conflict.crossProviderClash', { provider: elsewhere.providerName })
             : `This time slot conflicts with another service in your cart`,
           // The provider name is baked into the message above, so CartScreen
           // can't string-match it into a short card label the way it does
@@ -1457,9 +1459,13 @@ export const AvailabilityService = {
           // can't recognise it by its text the way it recognises the fixed
           // ones. The card wants a short label, the dialog wants this.
           code: 'clientClash',
-          message:
-            `You already have an upcoming ${clashService ? `${clashService} ` : ''}appointment` +
-            `${clashProvider ? ` with ${clashProvider}` : ''} at this time.`,
+          message: clashService && clashProvider
+            ? tr('clientBooking.conflict.clientClashServiceProvider', { service: clashService, provider: clashProvider })
+            : clashService
+              ? tr('clientBooking.conflict.clientClashService', { service: clashService })
+              : clashProvider
+                ? tr('clientBooking.conflict.clientClashProvider', { provider: clashProvider })
+                : tr('clientBooking.conflict.clientClash'),
         });
       }
     }
@@ -1934,7 +1940,7 @@ export const AvailabilityService = {
       if (availRows.length === 0 && windowRows.length === 0) {
         return {
           state: 'unpublished',
-          headline: 'No schedule published',
+          headline: tr('clientBooking.availability.noSchedule'),
           detail: null,
           days: [],
           nextFree: null,
@@ -1993,7 +1999,7 @@ export const AvailabilityService = {
         days.push({
           date: dateStr,
           dayOfWeek: d.getDay(),
-          label: DAY_INITIALS[d.getDay()] ?? '',
+          label: dayInitial(d.getDay()),
           state,
           closesAt: windows.length > 0 ? formatTime12(windows[windows.length - 1]!.end_time) : null,
         });
@@ -2050,25 +2056,25 @@ export const AvailabilityService = {
       let headline: string;
       if (todayDay.state === 'open') {
         state = 'open';
-        headline = todayDay.closesAt ? `Open today until ${todayDay.closesAt}` : 'Open today';
+        headline = todayDay.closesAt ? tr('clientBooking.availability.openUntil', { time: todayDay.closesAt }) : tr('clientBooking.availability.openToday');
       } else if (todayDay.state === 'full') {
         state = 'full';
-        headline = 'Open today';
+        headline = tr('clientBooking.availability.openToday');
       } else if (todayDay.state === 'blocked') {
         state = 'blocked';
-        headline = 'Away today';
+        headline = tr('clientBooking.availability.awayToday');
       } else {
         state = 'closed';
-        headline = 'Closed today';
+        headline = tr('clientBooking.availability.closedToday');
       }
 
       let detail: string | null;
       if (nextFree) {
         detail = nextFree.date === todayStr
-          ? `Next free ${nextFree.time}`
-          : `Next free ${formatShortDate(nextFree.date)} ${nextFree.time}`;
+          ? tr('clientBooking.availability.nextFreeToday', { time: nextFree.time })
+          : tr('clientBooking.availability.nextFree', { date: formatShortDate(nextFree.date), time: nextFree.time });
       } else if (includeExtendedSearch) {
-        detail = 'No availability in the next few weeks';
+        detail = tr('clientBooking.availability.noneSoon');
       } else {
         detail = null;
       }

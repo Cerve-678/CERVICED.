@@ -4,6 +4,7 @@
 // src/utils/bookingConflicts.ts.
 
 import { toLocalDate, formatLongDateNoYear, to24HourTime } from './dateUtils';
+import { tr } from '../i18n';
 
 // Width of the window we probe for real availability when the client is
 // requesting a reschedule (before the provider has offered specific slots).
@@ -77,11 +78,11 @@ export function rescheduleCandidateDates(currentDate: string, now: Date = new Da
 export function rescheduleWindowLabel(currentDate: string, now: Date = new Date()): string {
   const start = rescheduleProbeStart(currentDate, now);
   if (start.getTime() <= tomorrowMidnight(now).getTime()) {
-    return `in the next ${RESCHEDULE_HORIZON_DAYS} days`;
+    return tr('clientBooking.rescheduleWindow.nextDays', { count: RESCHEDULE_HORIZON_DAYS });
   }
   const end = new Date(start);
   end.setDate(end.getDate() + RESCHEDULE_HORIZON_DAYS - 1);
-  return `between ${formatLongDateNoYear(start)} and ${formatLongDateNoYear(end)}`;
+  return tr('clientBooking.rescheduleWindow.between', { start: formatLongDateNoYear(start), end: formatLongDateNoYear(end) });
 }
 
 /**

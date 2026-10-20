@@ -23,6 +23,7 @@ import { SafeAreaView } from './SafeArea';
 import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../constants/providerThemes';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { useTranslation } from '../i18n';
 
 export interface AddOnPickerAddOn {
   id: string | number;
@@ -73,6 +74,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
 
   // Re-seed every time the popup opens for a (possibly different) service —
   // it's a fresh instance's worth of state per open, not a persistent editor.
+  const { t } = useTranslation();
   useEffect(() => {
     if (visible) setSelected(initialSelected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,7 +98,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
         <SafeAreaView style={styles.container}>
           <View style={[styles.header, { borderBottomColor: tokens.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.headerTitle, { color: tokens.text }]} numberOfLines={1}>Add-ons</Text>
+              <Text style={[styles.headerTitle, { color: tokens.text }]} numberOfLines={1}>{t('clientBooking.addOns.title')}</Text>
               <Text style={[styles.headerSubtitle, { color: tokens.sub }]} numberOfLines={1}>{serviceName}</Text>
             </View>
             <TouchableOpacity
@@ -150,7 +152,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
               activeOpacity={0.8}
             >
               <Text style={[styles.doneButtonText, { color: onAccentColor }]}>
-                {selected.length > 0 ? `Done • +£${total.toFixed(2)}` : 'Done'}
+                {selected.length > 0 ? t('clientBooking.addOns.doneWithTotal', { total: `+£${total.toFixed(2)}` }) : t('common.done')}
               </Text>
             </TouchableOpacity>
           </View>

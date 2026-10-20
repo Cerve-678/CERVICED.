@@ -87,7 +87,7 @@ describe('client screen performance contracts', () => {
   it('opens appointment details from client booking cards and labels in-progress clearly', () => {
     const source = readScreen('BookingsScreen');
 
-    expect(source).toContain("currentBooking.status === BookingStatus.IN_PROGRESS ? 'IN PROGRESS' : 'UPCOMING'");
+    expect(source).toContain("currentBooking.status === BookingStatus.IN_PROGRESS ? t('clientBooking.list.inProgress') : t('clientBooking.list.upcoming')");
     expect(source).toContain("const IN_PROGRESS_PURPLE = '#7B2FBE'");
     expect(source).toContain('onPress={() => handleBookingPress(currentBooking)}');
     expect(source).not.toContain('onPress={() => focusMapOnLocation(currentBooking.coordinates)}');

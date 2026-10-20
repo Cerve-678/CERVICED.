@@ -21,6 +21,7 @@ import {
   type PaymentBreakdown,
 } from '../types/booking';
 import { logger } from '../utils/logger';
+import { tr } from '../i18n';
 import { env } from '../utils/env';
 import { applyCancellationRefund } from '../services/databaseService';
 import { formatTime12, formatLongDate } from '../utils/dateUtils';
@@ -1530,7 +1531,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         isValid: false,
         conflicts: cartItems.map(item => ({
           cartItemId: item.id,
-          message: "Couldn't confirm this time is still available — please try again.",
+          message: tr('clientBooking.checkout.couldNotConfirm'),
         })),
       };
     }
@@ -1564,7 +1565,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const validation = await validateBookingsBeforeCheckout(cartItems, appointmentData);
         if (!validation.isValid) {
           const conflictMessages = validation.conflicts.map(c => c.message).join(' ');
-          throw new BookingError(conflictMessages || "We couldn't book that time. Please pick another.");
+          throw new BookingError(conflictMessages || tr('clientBooking.checkout.couldNotBook'));
         }
       }
 
@@ -1577,10 +1578,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const { providerIdCache, unresolvedNames } = await resolveCartProviderIds(cartItems);
 
       if (unresolvedNames.length > 0) {
-        throw new BookingError(
-          `We couldn't link ${unresolvedNames.join(', ')} to a registered provider, so the booking wasn't placed. ` +
-          `Please re-add the service from the provider's profile and try again.`
-        );
+        throw new BookingError(tr('clientBooking.checkout.unlinkedNotPlaced', { names: unresolvedNames.join(', ') }));
       }
 
       const resolvedProviderIds = [
@@ -1955,7 +1953,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             // RPC performs. See supabase/migrations/20260810180952_restore_
             // legacy_booking_writes_pending_stripe.sql.
             throw new Error(
-              `That time slot with ${item.providerDisplayName ?? item.providerName} is no longer available. Please choose a different time.`
+              tr('clientBooking.checkout.slotGoneWith', { provider: item.providerDisplayName ?? item.providerName })
             );
 
             } catch (itemError: any) {
@@ -1967,7 +1965,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 // caught a different-start-time overlap the app-side
                 // pre-check missed under concurrent requests. Same
                 // user-facing story either way: someone else got there first.
-                message = `That time slot with ${name} is no longer available. Please choose a different time.`;
+                message = tr('clientBooking.checkout.slotGoneWith', { provider: name });
               } else if (
                 typeof itemError?.message === 'string'
                 && itemError.message.length > 0
@@ -1986,7 +1984,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               ) {
                 message = itemError.message;
               } else {
-                message = `Your booking with ${name} couldn't be placed. Please check your connection and try again.`;
+                message = tr('clientBooking.checkout.notPlacedWith', { provider: name });
               }
               logger.error('[BookingContext] ❌ Booking not persisted for', name, itemError);
               persistFailures.push({ cartItemId: item.id, message });
@@ -1999,9 +1997,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         logger.error('[BookingContext] ❌ Could not persist bookings to Supabase:', outerError);
         const newIds = new Set(newBookings.map(nb => nb.id));
         await saveBookings(updatedBookings.filter(b => !newIds.has(b.id)));
-        throw new BookingError(
-          "We couldn't place your booking just now. Please check your connection and try again."
-        );
+        throw new BookingError(tr('clientBooking.checkout.notPlaced'));
       }
 
       // Adopt the Supabase booking ids locally so later operations (reschedule
@@ -2130,10 +2126,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   ): Promise<string> => {
     const { providerIdCache, unresolvedNames } = await resolveCartProviderIds(cartItems);
     if (unresolvedNames.length > 0) {
-      throw new BookingError(
-        `We couldn't link ${unresolvedNames.join(', ')} to a registered provider, so we couldn't reserve that time. ` +
-        `Please re-add the service from the provider's profile and try again.`
-      );
+      throw new BookingError(tr('clientBooking.checkout.unlinkedNotReserved', { names: unresolvedNames.join(', ') }));
     }
 
     // Recover a real services.id for any item whose cart copy doesn't carry
@@ -2145,13 +2138,13 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const schedule = scheduleByItemId[item.id];
       const providerId = providerIdCache[item.providerName];
       if (!schedule || !providerId) {
-        throw new BookingError("Missing appointment details — please pick your time again.");
+        throw new BookingError(tr('clientBooking.checkout.missingDetails'));
       }
       const pgTime = timeTo24(schedule.selectedTime);
       const endTimeStr = calculateEndTime(schedule.selectedTime, item.duration);
       const pgEndTime = timeTo24(endTimeStr);
       if (!pgTime || !pgEndTime) {
-        throw new BookingError("Couldn't confirm this time is still available — please try again.");
+        throw new BookingError(tr('clientBooking.checkout.couldNotConfirm'));
       }
       return {
         provider_id: providerId,
@@ -2175,7 +2168,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       await holdCartBookingSlots(batchId, holdItems);
     } catch (error: any) {
       if (error?.code === '23505' || error?.code === '23P01') {
-        throw new BookingError("That time slot is no longer available. Please choose a different time.");
+        throw new BookingError(tr('clientBooking.checkout.slotGone'));
       }
       // bookings_service_id_fkey: a cart item outlived the service it was
       // added from. validateCartBookings normally catches this first and
@@ -2184,9 +2177,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // It must NOT fall through to the generic "please try again" — the
       // batch will fail identically every time until the item is removed.
       if (error?.code === '23503' && /service_id/.test(error?.details ?? error?.message ?? '')) {
-        throw new BookingError(
-          "One of your services isn't offered any more. Pull down to refresh your cart, then remove the one that's flagged."
-        );
+        throw new BookingError(tr('clientBooking.checkout.serviceGone'));
       }
       throw error;
     }

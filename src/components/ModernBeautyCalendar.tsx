@@ -4,7 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { AvailabilityService } from '../services/AvailabilityService';
 import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
-import { formatLongDateNoYear } from '../utils/dateUtils';
+import { dayName, formatLongDateNoYear, monthName } from '../utils/dateUtils';
+import { useTranslation } from '../i18n';
 import { RequestTimePanel } from './RequestTimePanel';
 
 /** Emergency/by-request outline. Deliberately NOT the caller's accent: every
@@ -186,6 +187,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // Popup border — a low-alpha tint of the text colour, so it reads as a
   // hairline on either a light or dark backdrop without a separate flag.
   const popupBorder = useMemo(() => withAlpha(textColor, 0.14), [textColor]);
+  const { t } = useTranslation();
   const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<SlotsMap>({});
   const [showTimeSelection, setShowTimeSelection] = useState<boolean>(false);
@@ -620,13 +622,13 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     const startOfWeek = getStartOfWeek(currentWeek);
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
-    const startMonth = startOfWeek.toLocaleDateString('en-GB', { month: 'short' });
-    const endMonth = endOfWeek.toLocaleDateString('en-GB', { month: 'short' });
+    const startMonth = monthName(startOfWeek.getMonth(), 'short');
+    const endMonth = monthName(endOfWeek.getMonth(), 'short');
     const startDay = startOfWeek.getDate();
     const endDay = endOfWeek.getDate();
     return startMonth === endMonth
-      ? `${startMonth} ${startDay} - ${endDay}`
-      : `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
+      ? t('clientBooking.calendar.weekRangeSameMonth', { month: startMonth, start: startDay, end: endDay })
+      : t('clientBooking.calendar.weekRange', { startMonth, start: startDay, endMonth, end: endDay });
   };
 
   const getWeekDays = (): WeekDay[] => {
@@ -647,7 +649,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       days.push({
         date,
         dateString,
-        dayName: date.toLocaleDateString('en-GB', { weekday: 'short' }),
+        dayName: dayName(date.getDay(), 'short'),
         dayNumber: date.getDate(),
         isToday: date.toDateString() === new Date().toDateString(),
         ...dayData
@@ -661,7 +663,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const weekDays = getWeekDays();
 
   const calendarDays = getCalendarDays();
-  const weekDayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weekDayHeaders = [0, 1, 2, 3, 4, 5, 6].map(i => dayName(i, 'short'));
 
   // Sync availability map for the popup month view — used for dot indicators only.
   // No API calls; uses the same provider schedule logic as the week view fallback.
@@ -695,7 +697,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           onPress={handleExpand}
           activeOpacity={0.75}
           accessibilityRole="button"
-          accessibilityLabel={`Selected ${formatLongDateNoYear(selectedDate)} at ${selectedTime}. Tap to change.`}
+          accessibilityLabel={t('clientBooking.calendar.selectedA11y', { date: formatLongDateNoYear(selectedDate), time: selectedTime })}
         >
           <View style={styles.summaryTextWrap}>
             <Text style={[styles.summaryDate, { color: textColor }]} numberOfLines={1}>
@@ -703,7 +705,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
             </Text>
             <Text style={[styles.summaryTime, { color: accentColor }]}>{selectedTime}</Text>
           </View>
-          <Text style={[styles.summaryChange, { color: accentColor }]}>Change</Text>
+          <Text style={[styles.summaryChange, { color: accentColor }]}>{t('common.change')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -733,7 +735,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 <Text style={[styles.monthNavArrow, { color: textColor }]}>‹</Text>
               </TouchableOpacity>
               <Text style={[styles.monthTitle, { color: textColor }]}>
-                {calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                {t('clientBooking.calendar.monthYear', { month: monthName(calendarMonth.getMonth(), 'full'), year: calendarMonth.getFullYear() })}
               </Text>
               <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.monthNavButton}>
                 <Text style={[styles.monthNavArrow, { color: textColor }]}>›</Text>
@@ -808,14 +810,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
             <View style={styles.legendDoneRow}>
               <View style={styles.legendRow}>
                 <View style={[styles.legendDot, { backgroundColor: accentColor }]} />
-                <Text style={[styles.legendText, { color: subColor }]}>Available slots</Text>
+                <Text style={[styles.legendText, { color: subColor }]}>{t('clientBooking.calendar.availableSlots')}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setShowFullCalendar(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={[styles.calendarDoneButton, { backgroundColor: accentColor }]}
               >
-                <Text style={styles.calendarDoneText}>Done</Text>
+                <Text style={styles.calendarDoneText}>{t('common.done')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -844,7 +846,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {providerFound === false && (
         <View style={styles.notFoundBanner}>
           <Text style={[styles.notFoundText, { color: textColor }]}>
-            We couldn't find this provider's schedule. Try reopening their profile and scheduling again.
+            {t('clientBooking.calendar.scheduleNotFound')}
           </Text>
         </View>
       )}
@@ -859,7 +861,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {providerFound === true && providerUnpublished && (
         <View style={styles.notFoundBanner}>
           <Text style={[styles.notFoundText, { color: textColor }]}>
-            No current availability — please check back later.
+            {t('clientBooking.calendar.noAvailability')}
           </Text>
         </View>
       )}
@@ -936,7 +938,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // array used to do) reads as the app failing to load, and leaves them
         // no way to tell "everything's taken" from "they don't work today" —
         // which decides whether waiting for this provider is worth it.
-        const who = providerLabel ?? 'the provider';
+        const who = providerLabel ?? t('clientBooking.calendar.theProvider');
         const takesRequests = emergencyPolicy.outsideHours || emergencyPolicy.blockedDates
           || emergencyPolicy.shortNotice || emergencyPolicy.beyondWindow;
         const canRequest = allowRequests && takesRequests;
@@ -955,10 +957,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
-              accessibilityLabel={`Request a specific time from ${who}`}
+              accessibilityLabel={t('clientBooking.calendar.requestA11y', { provider: who })}
             >
               <Text style={[styles.requestLinkText, { color: EMERGENCY_OUTLINE }]}>
-                Request a time
+                {t('clientBooking.calendar.requestATime')}
               </Text>
               <Text style={[styles.requestLinkChevron, { color: EMERGENCY_OUTLINE }]}>⌄</Text>
           </TouchableOpacity>
@@ -1004,10 +1006,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     beyond-window requests never reaches this branch, because
                     it would have had request times of its own. */}
                 {currentSlots?.status === 'unavailable'
-                  ? `${who} isn't taking bookings this far ahead yet.`
+                  ? t('clientBooking.calendar.tooFarAhead', { provider: who })
                   : canRequest
-                    ? `${who} doesn't work this day — but you can request a time.`
-                    : `${who} doesn't work this day.`}
+                    ? t('clientBooking.calendar.dayOffCanRequest', { provider: who })
+                    : t('clientBooking.calendar.dayOff', { provider: who })}
               </Text>
               {canRequest && currentSlots?.status !== 'unavailable' && (
                 <View style={styles.closedDayAction}>{requestLink}</View>
@@ -1039,12 +1041,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // can't happen — a gap needs something either side of it.
         const blockedTally = { booked: 0, past: 0, notice: 0, tight: 0 };
         openTimes.forEach(slot => { if (slot.blocked) blockedTally[slot.blocked] += 1; });
+        const fullyBooked = openTimes.length > 0 && bookableCount === 0
+          && blockedTally.past === 0 && blockedTally.notice === 0;
         const dayBadge = openTimes.length > 0 && bookableCount === 0
-          ? (blockedTally.past === 0 && blockedTally.notice === 0
-              ? 'Fully booked'
+          ? (fullyBooked
+              ? t('clientBooking.calendar.fullyBooked')
               : blockedTally.past > 0
-                ? 'These times have passed'
-                : `Too soon — ${who} needs more notice`)
+                ? t('clientBooking.calendar.timesPassed')
+                : t('clientBooking.calendar.tooSoon', { provider: who }))
           : null;
 
         const renderGroup = (group: TimeSlot[]) => {
@@ -1077,10 +1081,13 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     accessibilityState={{ disabled: blocked }}
                     accessibilityLabel={
                       blocked
-                        ? `${slot.time}, ${slot.blocked === 'booked' ? 'already booked'
-                            : slot.blocked === 'past' ? 'already passed'
-                            : slot.blocked === 'tight' ? 'not enough time free here'
-                            : 'too soon to book'}`
+                        ? t('clientBooking.calendar.blockedSlotA11y', {
+                            time: slot.time,
+                            reason: slot.blocked === 'booked' ? t('clientBooking.calendar.blocked.booked')
+                              : slot.blocked === 'past' ? t('clientBooking.calendar.blocked.past')
+                              : slot.blocked === 'tight' ? t('clientBooking.calendar.blocked.tight')
+                              : t('clientBooking.calendar.blocked.notice'),
+                          })
                         : slot.time
                     }
                   >
@@ -1127,16 +1134,16 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               openTimes.length > 0 && renderGroup(openTimes)
             )}
 
-            {!showRequestPanel && dayBadge === 'Fully booked' && (
+            {!showRequestPanel && fullyBooked && (
               <Text style={[styles.fullDayHint, { color: subColor }]}>
-                Try another day, or join the waitlist on this provider's profile to be told if a space opens.
+                {t('clientBooking.calendar.fullyBookedHint')}
               </Text>
             )}
 
             {selectedIsRequest && !showRequestPanel && (
               <View style={[styles.selectedRequestBanner, { borderColor: EMERGENCY_OUTLINE }]}>
                 <Text style={[styles.selectedRequestText, { color: EMERGENCY_OUTLINE }]}>
-                  {selectedTime} is a request — {who} has to accept it
+                  {t('clientBooking.calendar.selectedIsRequest', { time: selectedTime, provider: who })}
                 </Text>
               </View>
             )}

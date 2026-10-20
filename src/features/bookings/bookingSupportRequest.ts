@@ -4,6 +4,7 @@ import { invokeSendSupportRequest, passRefundRequestToCerviced, requestBookingRe
 import { formatBookingRef } from './presentation';
 import { logger } from '../../utils/logger';
 import { PaymentStatus, type ConfirmedBooking, type RefundRequest } from '../../types/booking';
+import { tr, type TranslationKey } from '../../i18n';
 
 /**
  * A client asking about one booking, from the ⋯ menu on BookingDetailScreen:
@@ -48,6 +49,21 @@ export const SUPPORT_REASONS: Record<BookingSupportKind, readonly string[]> = {
     'How I was treated',
     OTHER_SUPPORT_REASON,
   ],
+};
+
+/** Display label for each reason. The reason itself stays English: it is what
+ *  the support ticket and request_booking_refund() record. */
+export const SUPPORT_REASON_LABEL_KEYS: Readonly<Record<string, TranslationKey>> = {
+  'The provider cancelled': 'clientBooking.support.reason.providerCancelled',
+  "The provider didn't turn up": 'clientBooking.support.reason.providerNoShow',
+  "The service wasn't what I booked": 'clientBooking.support.reason.notWhatIBooked',
+  'I was charged the wrong amount': 'clientBooking.support.reason.wrongAmount',
+  'I cancelled within their policy': 'clientBooking.support.reason.cancelledWithinPolicy',
+  'Lateness or a no-show': 'clientBooking.support.reason.lateness',
+  'Quality of the service': 'clientBooking.support.reason.quality',
+  'Hygiene or safety': 'clientBooking.support.reason.hygiene',
+  'How I was treated': 'clientBooking.support.reason.treatment',
+  [OTHER_SUPPORT_REASON]: 'clientBooking.support.reason.somethingElse',
 };
 
 export function isSupportRequestReady(reason: string | null, message: string): boolean {
@@ -95,16 +111,18 @@ export function getRefundRequestScope(booking: Pick<ConfirmedBooking, 'paymentSt
 export function describeRefundScope(
   booking: Pick<ConfirmedBooking, 'paymentStatus' | 'paymentType' | 'amountPaid' | 'remainingBalance' | 'providerName'>,
 ): { title: string; lines: string[] } {
+  // The lines are refund-policy statements, held in English
+  // (clientBookingHeld); only the titles are translated.
   const provider = booking.providerName?.trim() || 'your provider';
   const Provider = provider.charAt(0).toUpperCase() + provider.slice(1);
   const money = (n: number) => `£${n.toFixed(2)}`;
 
   if (getRefundRequestScope(booking) === 'off_app') {
     return {
-      title: 'Not paid through Cerviced',
+      title: tr('clientBooking.refundScope.notPaidTitle'),
       lines: [
-        "Nothing for this booking was paid through the Cerviced app, so there's nothing here Cerviced can refund.",
-        `Payments made in person, like cash, card on the day or a bank transfer, are between you and ${provider}. Please speak to them directly.`,
+        tr('clientBooking.refundScope.notPaidLine1'),
+        tr('clientBooking.refundScope.notPaidLine2', { provider }),
       ],
     };
   }
@@ -115,13 +133,13 @@ export function describeRefundScope(
   const lines: string[] = [];
   if (isDeposit) {
     lines.push(balance > 0
-      ? `Cerviced can only look at the ${money(paid)} deposit you paid in the app. The ${money(balance)} balance due at the appointment is between you and ${provider}.`
-      : `Cerviced can only look at the ${money(paid)} deposit you paid in the app. Anything paid to ${provider} in person is between you and them.`);
-    lines.push(`${Provider} can keep your deposit under their policy if you cancelled late, didn't turn up, or rescheduled late. If that's what happened, Cerviced won't overturn it. If it isn't, tell us below and we'll review it.`);
+      ? tr('clientBooking.refundScope.depositBalance', { paid: money(paid), balance: money(balance), provider })
+      : tr('clientBooking.refundScope.depositOnly', { paid: money(paid), provider }));
+    lines.push(tr('clientBooking.refundScope.depositKeep', { provider: Provider }));
   } else {
-    lines.push(`${Provider} can keep some or all of what you paid under their policy if you cancelled late, didn't turn up, or rescheduled late. If that's what happened, Cerviced won't overturn it. If it isn't, tell us below and we'll review it.`);
+    lines.push(tr('clientBooking.refundScope.fullKeep', { provider: Provider }));
   }
-  return { title: 'What Cerviced can review', lines };
+  return { title: tr('clientBooking.refundScope.reviewTitle'), lines };
 }
 
 export function buildBookingSupportDescription(

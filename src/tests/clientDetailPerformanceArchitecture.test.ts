@@ -39,7 +39,7 @@ describe('client detail screen performance and safety contracts', () => {
     // The To Do area is hidden for past bookings (nothing left to act on),
     // so the skeleton is gated on !isPast as well as !todoLoaded.
     expect(source).toContain('{!isPast && !todoLoaded && (');
-    expect(source).toContain('accessibilityLabel="Loading appointment tasks"');
+    expect(source).toContain("accessibilityLabel={t('clientBooking.detail.todo.loadingA11y')}");
     expect(source).toContain('st.todoLoadingCard');
     expect(source.indexOf('{!isPast && !todoLoaded && (')).toBeLessThan(
       source.indexOf('{!isPast && todoLoaded && todoLoadError && ('),
@@ -67,7 +67,7 @@ describe('client detail screen performance and safety contracts', () => {
 
     expect(source).toContain('setLoadError(true)');
     expect(source).toContain('setRetryNonce(value => value + 1)');
-    expect(source).toContain("We couldn't load this form.");
+    expect(source).toContain("t('clientBooking.intake.loadFailed')");
   });
 
   it('probes reschedule dates in bounded batches with an early exit', () => {
@@ -137,8 +137,8 @@ describe('client detail screen performance and safety contracts', () => {
 
     // The ⋯ menu opens the refund/complaint sheet, which files a support
     // ticket (fileBookingSupportRequest) and never moves money itself.
-    expect(source).toContain('accessibilityLabel="More options"');
-    expect(source).toContain('Request a refund');
+    expect(source).toContain("accessibilityLabel={t('clientBooking.detail.moreOptionsA11y')}");
+    expect(source).toContain("t('clientBooking.detail.requestRefund')");
     expect(source).toContain('fileBookingSupportRequest(');
     expect(source).not.toContain('refundProviderBooking(');
   });

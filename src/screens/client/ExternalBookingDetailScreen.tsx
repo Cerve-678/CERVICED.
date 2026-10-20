@@ -32,12 +32,14 @@ import {
 import { formatLongDateNoYear, formatTime12Safe } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
+import { useTranslation } from '../../i18n';
 import type { HomeStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'ExternalBookingDetail'>;
 
 const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   const styles = createStyles(P);
   const { showConfirm, showAlert, DialogHost } = useAppDialog();
   const { externalBookingId } = route.params;
@@ -86,16 +88,16 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
   }, [load]);
 
   const provider = entry?.provider ?? null;
-  const name = provider?.display_name ?? 'this professional';
+  const name = provider?.display_name ?? t('clientBooking.external.thisProfessional');
 
   const handleOpenPage = useCallback(() => {
     if (!provider?.external_booking_url) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     openExternalBookingPage(provider.external_booking_url).catch((error: unknown) => {
       logger.error('[ExternalBookingDetail] booking page failed to open', error);
-      Alert.alert("Couldn't open their booking page", 'Please try again in a moment.');
+      Alert.alert(t('clientBooking.external.pageFailed'), t('clientBooking.detail.tryAgainMoment'));
     });
-  }, [provider]);
+  }, [provider, t]);
 
   const handleMessage = useCallback(() => {
     if (!provider) return;
@@ -116,23 +118,23 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
         title: `${entry.service_label} · ${name}`,
         start: externalBookingStart(entry),
         location: provider?.location_text ?? null,
-        notes: `Booked on ${provider?.external_booking_url ?? 'their booking page'}. Check your email from ${name} for the confirmation and address.`,
+        notes: t('clientBooking.external.calendarNotes', { site: provider?.external_booking_url ?? t('clientBooking.external.theirBookingPage'), provider: name }),
         url: provider?.external_booking_url ?? null,
       });
     } catch (error) {
-      showAlert("Couldn't open your calendar", toUserMessage(error, 'Please try again in a moment.', 'ExternalBookingDetail.addToCalendar'));
+      showAlert(t('clientBooking.external.calendarFailed'), toUserMessage(error, t('clientBooking.detail.tryAgainMoment'), 'ExternalBookingDetail.addToCalendar'));
     }
-  }, [entry, name, provider, showAlert]);
+  }, [entry, name, provider, showAlert, t]);
 
   const handleRemove = useCallback(() => {
     if (!entry) return;
     showConfirm(
-      'Remove from your bookings?',
-      `This only removes it from your list in CERVICED. Your booking with ${name} stays as it is — to cancel it, go through them.`,
+      t('clientBooking.external.removeTitle'),
+      t('clientBooking.external.removeBody', { provider: name }),
       [
-        { text: 'Keep it', style: 'cancel' },
+        { text: t('clientBooking.external.keepIt'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('common.remove'),
           style: 'destructive',
           onPress: () => {
             setRemoving(true);
@@ -143,13 +145,13 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
               })
               .catch((error: unknown) => {
                 setRemoving(false);
-                showAlert("Couldn't remove it", toUserMessage(error, 'Please try again in a moment.', 'ExternalBookingDetail.remove'));
+                showAlert(t('clientBooking.external.removeFailed'), toUserMessage(error, t('clientBooking.detail.tryAgainMoment'), 'ExternalBookingDetail.remove'));
               });
           },
         },
       ],
     );
-  }, [entry, name, navigation, showConfirm, showAlert]);
+  }, [entry, name, navigation, showConfirm, showAlert, t]);
 
   if (state !== 'ready' || !entry) {
     return (
@@ -160,11 +162,11 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
           ) : (
             <>
               <Text style={styles.emptyTitle}>
-                {state === 'missing' ? "This booking isn't in your list any more" : "Couldn't load this booking"}
+                {state === 'missing' ? t('clientBooking.external.missing') : t('clientBooking.external.loadFailed')}
               </Text>
               {state === 'failed' && (
                 <TouchableOpacity onPress={retry} style={styles.retry} activeOpacity={0.7}>
-                  <Text style={styles.retryText}>Try again</Text>
+                  <Text style={styles.retryText}>{t('common.tryAgain')}</Text>
                 </TouchableOpacity>
               )}
             </>
@@ -195,19 +197,19 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
                 </View>
               )}
               <View style={styles.flex}>
-                <Text style={styles.providerName}>{provider?.display_name ?? 'No longer on CERVICED'}</Text>
+                <Text style={styles.providerName}>{provider?.display_name ?? t('clientBooking.external.noLongerOn')}</Text>
                 {!!subtitle && <Text style={styles.sub}>{subtitle}</Text>}
               </View>
             </View>
             <View style={styles.divider} />
             <View style={styles.factsRow}>
               <View style={styles.flex}>
-                <Text style={styles.label}>WHEN</Text>
+                <Text style={styles.label}>{t('clientBooking.external.when')}</Text>
                 <Text style={styles.value}>{formatLongDateNoYear(start)}</Text>
                 <Text style={styles.value}>{formatTime12Safe(start) ?? ''}</Text>
               </View>
               <View style={styles.flex}>
-                <Text style={styles.label}>SERVICE</Text>
+                <Text style={styles.label}>{t('clientBooking.external.service')}</Text>
                 <Text style={styles.value}>{entry.service_label}</Text>
               </View>
             </View>
@@ -220,34 +222,34 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
           <View style={styles.infoCard}>
             <Ionicons name="mail-outline" size={20} color={P.accent} />
             <View style={styles.flex}>
-              <Text style={styles.infoTitle}>Check your email</Text>
+              <Text style={styles.infoTitle}>{t('clientBooking.external.checkEmail')}</Text>
               <Text style={styles.infoBody}>
-                Your confirmation, address and appointment details come from {name}.
+                {t('clientBooking.external.checkEmailBody', { provider: name })}
               </Text>
             </View>
           </View>
 
           <View style={styles.plainCard}>
-            <Text style={styles.infoTitle}>Need to change or cancel?</Text>
+            <Text style={styles.infoTitle}>{t('clientBooking.external.changeTitle')}</Text>
             <Text style={styles.infoBody}>
-              Anything about this booking — cancelling, rescheduling, deposits — goes through {name}, on their booking page or by contacting them.
+              {t('clientBooking.external.changeBody', { provider: name })}
             </Text>
           </View>
 
           {provider?.external_booking_url ? (
             <TouchableOpacity style={styles.primary} onPress={handleOpenPage} activeOpacity={0.85}>
-              <Text style={styles.primaryText}>OPEN THEIR BOOKING PAGE</Text>
+              <Text style={styles.primaryText}>{t('clientBooking.external.openPage')}</Text>
               <Ionicons name="open-outline" size={15} color={P.onAccent} />
             </TouchableOpacity>
           ) : null}
           {provider ? (
             <TouchableOpacity style={styles.secondary} onPress={handleMessage} activeOpacity={0.85}>
-              <Text style={styles.secondaryText}>MESSAGE {name.toUpperCase()}</Text>
+              <Text style={styles.secondaryText}>{t('clientBooking.external.message', { provider: name.toUpperCase() })}</Text>
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity style={styles.secondary} onPress={handleAddToCalendar} activeOpacity={0.85}>
             <Ionicons name="calendar-outline" size={16} color={P.text} />
-            <Text style={styles.secondaryText}>ADD TO MY CALENDAR</Text>
+            <Text style={styles.secondaryText}>{t('clientBooking.external.addToCalendar')}</Text>
           </TouchableOpacity>
 
           <Text style={styles.disclaimer}>{EXTERNAL_BOOKING_DISCLAIMER}</Text>
@@ -261,7 +263,7 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
             {removing ? (
               <ActivityIndicator color={P.sub} />
             ) : (
-              <Text style={styles.removeText}>Remove from my bookings</Text>
+              <Text style={styles.removeText}>{t('clientBooking.external.remove')}</Text>
             )}
           </TouchableOpacity>
         </ScrollView>

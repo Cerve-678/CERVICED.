@@ -43,13 +43,14 @@ import type { DbPromotion } from '../types/database';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { localeForLanguage, useTranslation, type TranslationKey } from '../i18n';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Matches MultiBookingSheet's own formatShortDate — same "Wed, 12 Aug" style
 // used everywhere else a booked date is summarised.
 const formatShortDate = (dateStr: string): string =>
-  new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', {
+  new Date(dateStr + 'T12:00:00').toLocaleDateString(localeForLanguage(), {
     weekday: 'short', day: 'numeric', month: 'short',
   });
 
@@ -58,10 +59,10 @@ export type BookingStep = 'addons' | 'when' | 'pay' | 'confirm';
 /** The three steps the progress dots count. "addons" is deliberately absent:
  *  it's conditional on the service having any, so including it would make the
  *  same booking show a different number of steps depending on the service. */
-const PROGRESS_STEPS: { key: BookingStep; label: string }[] = [
-  { key: 'when', label: 'When' },
-  { key: 'pay', label: 'Pay' },
-  { key: 'confirm', label: 'Confirm' },
+const PROGRESS_STEPS: { key: BookingStep; labelKey: TranslationKey }[] = [
+  { key: 'when', labelKey: 'clientBooking.sheet.step.when' },
+  { key: 'pay', labelKey: 'clientBooking.sheet.step.pay' },
+  { key: 'confirm', labelKey: 'clientBooking.sheet.step.confirm' },
 ];
 
 /** Slim progress indicator — shows where you are and how much is left, which
@@ -74,6 +75,7 @@ export const StepProgress: React.FC<{
   subColor: string;
   borderColor: string;
 }> = ({ current, accentColor, subColor, borderColor }) => {
+  const { t } = useTranslation();
   const activeIndex = PROGRESS_STEPS.findIndex(s => s.key === current);
   if (activeIndex < 0) return null; // "addons" — no progress shown yet
   return (
@@ -101,7 +103,7 @@ export const StepProgress: React.FC<{
                   active && { fontWeight: '700' },
                 ]}
               >
-                {s.label}
+                {t(s.labelKey)}
               </Text>
             </View>
           </React.Fragment>
@@ -219,6 +221,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   onSubmit,
 }) => {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const bottomInset = useSystemBottomInset();
   const sheetBackground = backgroundColor;
   // Every other colour in this sheet (text/sub/border/surface) is derived
@@ -506,16 +509,16 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   const handleLocalApplyPromo = useCallback(async (_key: string, code: string): Promise<string | null> => {
     const trimmed = code.trim();
-    if (!trimmed) return 'Enter a code first.';
+    if (!trimmed) return t('clientBooking.sheet.promo.enterCode');
     try {
       const promo = await validatePromoCode(providerDisplayName, trimmed);
-      if (!promo) return 'This code isn’t valid for this provider.';
+      if (!promo) return t('clientBooking.sheet.promo.invalid');
       setLocalPromo(promo);
       return null;
     } catch {
-      return 'Could not check that code — please try again.';
+      return t('clientBooking.sheet.promo.checkFailed');
     }
-  }, [providerDisplayName]);
+  }, [providerDisplayName, t]);
 
   const handleLocalRemovePromo = useCallback(() => setLocalPromo(undefined), []);
 
@@ -551,14 +554,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     // step, which would otherwise leave an enabled "Add to Cart" that
     // silently does nothing because handleSubmit's own guard rejects it.
     if (step === 'when' || step === 'confirm') {
-      if (!selectedDate || !selectedTime) return 'Choose a date and time';
-      if (consultationScheduleMissing) return 'Choose a consultation time';
+      if (!selectedDate || !selectedTime) return t('clientBooking.sheet.chooseDateTime');
+      if (consultationScheduleMissing) return t('clientBooking.sheet.chooseConsultationTime');
     }
     // Fixable right here on "confirm", so unlike scheduling this one disables
     // the button rather than routing back to an earlier step.
-    if (step === 'confirm' && providerTermsGateUnmet) return 'Agree to the Terms & Conditions';
+    if (step === 'confirm' && providerTermsGateUnmet) return t('clientBooking.sheet.agreeToTerms');
     return null;
-  }, [step, selectedDate, selectedTime, consultationScheduleMissing, providerTermsGateUnmet]);
+  }, [step, selectedDate, selectedTime, consultationScheduleMissing, providerTermsGateUnmet, t]);
 
   // Whether handleSubmit's own requirements are met right now, regardless of
   // which step is showing — used by the edit-mode "Done" shortcut so a
@@ -703,8 +706,8 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           <View style={{ flex: 1 }}>
             <Text style={[styles.headerTitle, { color: tokens.text }]}>
               {step === 'addons'
-                ? 'Choose Add-ons'
-                : mode === 'add' ? 'Book Service' : 'Edit Booking'}
+                ? t('clientBooking.sheet.title.chooseAddOns')
+                : mode === 'add' ? t('clientBooking.sheet.title.book') : t('clientBooking.sheet.title.edit')}
             </Text>
             <Text style={[styles.headerSubtitle, { color: tokens.sub }]}>
               {service.name} • £{service.price}
@@ -780,14 +783,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             </View>
           ) : step === 'when' ? (
             <>
-              <Text style={[styles.stepQuestion, { color: tokens.text }]}>When works for you?</Text>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>{t('clientBooking.sheet.question.when')}</Text>
 
               {hasAddOns && (
                 <View style={styles.section}>
                   <View style={styles.summaryHeaderRow}>
-                    <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add-ons</Text>
+                    <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.addOns.title')}</Text>
                     <TouchableOpacity onPress={() => goToStep('addons')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change</Text>
+                      <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>{t('common.change')}</Text>
                     </TouchableOpacity>
                   </View>
                   {selectedAddOns.length > 0 ? (
@@ -798,21 +801,21 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       </View>
                     ))
                   ) : (
-                    <Text style={[styles.addOnsSummaryEmpty, { color: tokens.sub }]}>No add-ons selected</Text>
+                    <Text style={[styles.addOnsSummaryEmpty, { color: tokens.sub }]}>{t('clientBooking.sheet.noAddOns')}</Text>
                   )}
                 </View>
               )}
 
               {consultationRequired && (
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Consultation Required</Text>
+                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.sheet.consultation.title')}</Text>
                   <Text style={[styles.consultationNotice, { color: tokens.sub }]}>
-                    This provider requires a consultation before your first booking with them. Choose a time for it below — {consultationRequired.name} (£{consultationRequired.price}).
+                    {t('clientBooking.sheet.consultation.notice', { service: consultationRequired.name, price: `£${consultationRequired.price}` })}
                   </Text>
                   {isResolvingConsultationSlot && (
                     <View style={styles.resolvingRow}>
                       <ActivityIndicator size="small" color={adaptiveAccentColor} />
-                      <Text style={[styles.resolvingText, { color: tokens.sub }]}>Finding the earliest consultation slot…</Text>
+                      <Text style={[styles.resolvingText, { color: tokens.sub }]}>{t('clientBooking.sheet.consultation.finding')}</Text>
                     </View>
                   )}
                   <ModernBeautyCalendar
@@ -833,12 +836,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>
-                  {consultationRequired ? `Date & Time — ${service.name}` : 'Date & Time'}
+                  {consultationRequired ? t('clientBooking.sheet.dateTimeFor', { service: service.name }) : t('clientBooking.sheet.dateTime')}
                 </Text>
                 {isResolvingSlot && (
                   <View style={styles.resolvingRow}>
                     <ActivityIndicator size="small" color={adaptiveAccentColor} />
-                    <Text style={[styles.resolvingText, { color: tokens.sub }]}>Finding your earliest available time…</Text>
+                    <Text style={[styles.resolvingText, { color: tokens.sub }]}>{t('clientBooking.sheet.findingEarliest')}</Text>
                   </View>
                 )}
                 <ModernBeautyCalendar
@@ -860,10 +863,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             </>
           ) : step === 'pay' ? (
             <>
-              <Text style={[styles.stepQuestion, { color: tokens.text }]}>How would you like to pay?</Text>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>{t('clientBooking.sheet.question.pay')}</Text>
 
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Payment</Text>
+                <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.sheet.payment')}</Text>
                 <View style={styles.paymentButtons}>
                   {showFullPaymentOption && (
                     <TouchableOpacity
@@ -875,7 +878,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       onPress={() => setIsDepositOnly(false)}
                     >
                       <Text style={[styles.paymentOptionText, { color: tokens.sub }, !isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
-                        Pay Full Amount
+                        {t('clientBooking.sheet.payFull')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -893,9 +896,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
                         {depositPolicy
                           ? depositPolicy.depositType === 'fixed'
-                            ? `Pay Deposit (£${depositPolicy.depositAmount})`
-                            : `Pay Deposit (${depositPolicy.depositAmount}%)`
-                          : 'Pay Deposit (20%)'}
+                            ? t('clientBooking.sheet.payDepositAmount', { amount: `£${depositPolicy.depositAmount}` })
+                            : t('clientBooking.sheet.payDepositPercent', { percent: depositPolicy.depositAmount })
+                          : t('clientBooking.sheet.payDepositPercent', { percent: 20 })}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -905,17 +908,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     a missing choice, not as the provider's policy. */}
                 {!showFullPaymentOption && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
-                    This provider requires a deposit to book — paying in full isn't available for this service.
+                    {t('clientBooking.sheet.depositRequired')}
                   </Text>
                 )}
                 {showFullPaymentOption && depositPolicy?.depositAvailable === false && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
-                    This provider doesn't take deposits — the full amount is paid when you book.
+                    {t('clientBooking.sheet.noDeposits')}
                   </Text>
                 )}
                 {isDepositOnly && (
                   <Text style={[styles.depositRemainingText, { color: tokens.sub }]}>
-                    Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
+                    {t('clientBooking.sheet.remainingPayAtAppointment', { amount: `£${BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)}` })}
                   </Text>
                 )}
               </View>
@@ -925,7 +928,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   via CartItem.initialPromoCode still auto-applies there. */}
               {mode === 'add' && (
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Have a promo code?</Text>
+                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.sheet.promo.title')}</Text>
                   <PromoCodeRow
                     providerKey={providerKey}
                     {...(localPromo !== undefined ? { appliedPromo: localPromo } : {})}
@@ -942,12 +945,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               )}
 
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add notes</Text>
+                <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.sheet.notes.title')}</Text>
                 <TextInput
                   style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
                   value={notes}
                   onChangeText={setNotes}
-                  placeholder="Add special requests, allergies, or preferences..."
+                  placeholder={t('clientBooking.sheet.notes.placeholder')}
                   placeholderTextColor={tokens.sub}
                   multiline
                   numberOfLines={4}
@@ -965,29 +968,29 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     }, 100);
                   }}
                 />
-                <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
+                <Text style={[styles.characterCount, { color: tokens.sub }]}>{t('clientBooking.sheet.notes.count', { count: notes.length, max: 500 })}</Text>
               </View>
             </>
           ) : (
             <>
-              <Text style={[styles.stepQuestion, { color: tokens.text }]}>Does this look right?</Text>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>{t('clientBooking.sheet.question.confirm')}</Text>
 
               {service && (
                 <View style={styles.section}>
                   <View style={styles.summaryHeaderRow}>
-                    <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>Booking Summary</Text>
+                    <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>{t('clientBooking.sheet.summary')}</Text>
                     {/* The confirm step is where a mistake gets noticed, so
                         it has to offer a way back to the step that owns it
                         rather than making the client hunt for the ‹ button. */}
                     <TouchableOpacity onPress={() => goToStep('when')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change time</Text>
+                      <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>{t('clientBooking.sheet.changeTime')}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={[styles.summaryItemRow, { marginTop: 12 }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.summaryItemName, { color: tokens.text }]}>{service.name}</Text>
                       <Text style={[styles.summaryItemDateTime, { color: tokens.sub }]}>
-                        {selectedDate && selectedTime ? `${formatShortDate(selectedDate)} at ${selectedTime}` : 'Not scheduled yet'}
+                        {selectedDate && selectedTime ? t('clientBooking.sheet.dateAtTime', { date: formatShortDate(selectedDate), time: selectedTime }) : t('clientBooking.sheet.notScheduled')}
                       </Text>
                     </View>
                     <Text style={[styles.summaryItemPrice, { color: adaptiveAccentColor }]}>£{(service.price ?? 0).toFixed(2)}</Text>
@@ -1008,7 +1011,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.summaryItemName, { color: tokens.text }]}>{consultationRequired.name}</Text>
                         <Text style={[styles.summaryItemDateTime, { color: tokens.sub }]}>
-                          {consultationDate && consultationTime ? `${formatShortDate(consultationDate)} at ${consultationTime}` : 'Not scheduled yet'}
+                          {consultationDate && consultationTime ? t('clientBooking.sheet.dateAtTime', { date: formatShortDate(consultationDate), time: consultationTime }) : t('clientBooking.sheet.notScheduled')}
                         </Text>
                       </View>
                       <Text style={[styles.summaryItemPrice, { color: adaptiveAccentColor }]}>£{consultationRequired.price.toFixed(2)}</Text>
@@ -1023,11 +1026,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     <>
                       <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
                       <View style={styles.summaryAddOnRow}>
-                        <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Service total</Text>
+                        <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>{t('clientBooking.sheet.serviceTotal')}</Text>
                         <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryServiceTotal.toFixed(2)}</Text>
                       </View>
                       <View style={styles.summaryAddOnRow}>
-                        <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Remaining at appointment</Text>
+                        <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>{t('clientBooking.sheet.remainingAtAppointment')}</Text>
                         <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryRemaining.toFixed(2)}</Text>
                       </View>
                     </>
@@ -1042,11 +1045,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               {emergencyRequest && (
                 <View style={[styles.emergencyNotice, { borderColor: withAlpha(adaptiveAccentColor, 0.5) }]}>
                   <Text style={[styles.emergencyNoticeTitle, { color: tokens.text }]}>
-                    Requested outside {providerDisplayName}'s availability
+                    {t('clientBooking.sheet.emergency.title', { provider: providerDisplayName })}
                   </Text>
                   <Text style={[styles.emergencyNoticeText, { color: tokens.sub }]}>
-                    {providerDisplayName} has to accept this before it's confirmed. You'll be
-                    told either way.
+                    {t('clientBooking.sheet.emergency.text', { provider: providerDisplayName })}
                   </Text>
                 </View>
               )}
@@ -1065,7 +1067,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
-                      Read {providerDisplayName}'s Terms &amp; Conditions
+                      {t('clientBooking.sheet.terms.read', { provider: providerDisplayName })}
                     </Text>
                   </TouchableOpacity>
 
@@ -1079,7 +1081,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       activeOpacity={0.7}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: agreedToProviderTerms }}
-                      accessibilityLabel={`I agree to ${providerDisplayName}'s Terms and Conditions`}
+                      accessibilityLabel={t('clientBooking.sheet.terms.agreeA11y', { provider: providerDisplayName })}
                     >
                       <View
                         style={[
@@ -1091,7 +1093,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         {agreedToProviderTerms && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
                       </View>
                       <Text style={[styles.providerTermsAgreeText, { color: tokens.text }]}>
-                        I agree to {providerDisplayName}'s Terms &amp; Conditions
+                        {t('clientBooking.sheet.terms.agree', { provider: providerDisplayName })}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1121,9 +1123,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               onPress={() => goToStep('when')}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Next: choose appointment time"
+              accessibilityLabel={t('clientBooking.sheet.nextA11y')}
             >
-              <Text style={[styles.submitButtonText, { color: onAccentColor }]}>Next</Text>
+              <Text style={[styles.submitButtonText, { color: onAccentColor }]}>{t('common.next')}</Text>
             </TouchableOpacity>
           ) : (
             <>
@@ -1141,7 +1143,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               {step !== 'when' && (
                 <View style={styles.totalRow}>
                   <Text style={[styles.totalLabel, { color: tokens.text }]}>
-                    {isDepositOnly ? 'Deposit due now' : 'Total'}
+                    {isDepositOnly ? t('clientBooking.sheet.depositDueNow') : t('clientBooking.sheet.total')}
                   </Text>
                   <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
                 </View>
@@ -1169,14 +1171,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 >
                   <Text style={[styles.submitButtonText, { color: onAccentColor }]}>
                     {schedulingFixableElsewhere
-                      ? 'Choose a date and time'
+                      ? t('clientBooking.sheet.chooseDateTime')
                       : stepBlocker
                       ? stepBlocker
                       : step === 'confirm'
                       ? (mode === 'add'
-                          ? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart')
-                          : 'Save Changes')
-                      : 'Continue'}
+                          ? (emergencyRequest ? t('clientBooking.sheet.addRequestToCart') : t('clientBooking.sheet.addToCart'))
+                          : t('common.saveChanges'))
+                      : t('common.continue')}
                   </Text>
                 </TouchableOpacity>
 
@@ -1194,7 +1196,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     onPress={handleSubmit}
                     activeOpacity={0.8}
                   >
-                    <Text style={[styles.submitButtonText, { color: adaptiveAccentColor }]}>Done</Text>
+                    <Text style={[styles.submitButtonText, { color: adaptiveAccentColor }]}>{t('common.done')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1242,13 +1244,13 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
-                  {providerTerms?.title ?? 'Terms & Conditions'}
+                  {providerTerms?.title ?? t('clientBooking.sheet.terms.title')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => setShowProviderTerms(false)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Close terms"
+                  accessibilityLabel={t('clientBooking.sheet.terms.closeA11y')}
                 >
                   <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
                 </TouchableOpacity>
@@ -1258,7 +1260,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   {providerTerms?.body ?? ''}
                 </Text>
                 <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
-                  Written by {providerDisplayName}. These are their own terms, not CERVICED's.
+                  {t('clientBooking.sheet.terms.footnote', { provider: providerDisplayName })}
                 </Text>
               </ScrollView>
             </SafeAreaView>
@@ -1280,13 +1282,13 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
-                  Emergency Booking Policy
+                  {t('clientBooking.sheet.emergencyPolicy.title')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => setShowEmergencyPolicy(false)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Close emergency booking policy"
+                  accessibilityLabel={t('clientBooking.sheet.emergencyPolicy.closeA11y')}
                 >
                   <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
                 </TouchableOpacity>
@@ -1296,7 +1298,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   {emergencyPolicyText}
                 </Text>
                 <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
-                  Written by {providerDisplayName}, for times outside their normal availability.
+                  {t('clientBooking.sheet.emergencyPolicy.footnote', { provider: providerDisplayName })}
                 </Text>
               </ScrollView>
             </SafeAreaView>

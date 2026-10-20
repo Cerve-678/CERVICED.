@@ -21,12 +21,14 @@ import { HomeScreenProps } from '../../navigation/types';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { useTranslation } from '../../i18n';
 
 type Props = HomeScreenProps<'ClientIntakeForm'>;
 
 export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   const { formId, serviceName } = route.params;
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
 
   const [form, setForm]         = useState<IntakeForm | null>(null);
   const [answers, setAnswers]   = useState<Record<string, string>>({});
@@ -91,11 +93,11 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
     // Validate required fields
     const missing = form.questions.filter(q => q.required && !(answers[q.id]?.trim()));
     if (missing.length > 0) {
-      Alert.alert('Required fields', `Please answer: "${missing[0]?.label ?? 'the required question'}"`);
+      Alert.alert(t('clientBooking.intake.requiredTitle'), t('clientBooking.intake.pleaseAnswer', { question: missing[0]?.label ?? t('clientBooking.intake.theRequiredQuestion') }));
       return;
     }
     if (form.requiresSignature && !signature.trim()) {
-      Alert.alert('Signature required', 'Please type your full name to sign off on this form.');
+      Alert.alert(t('clientBooking.intake.signatureRequiredTitle'), t('clientBooking.intake.signatureRequired'));
       return;
     }
 
@@ -106,11 +108,11 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
       setSubmitted(true);
       setJustSubmitted(true);
     } catch {
-      Alert.alert('Error', 'Could not submit your form. Please try again.');
+      Alert.alert(t('common.error'), t('clientBooking.intake.submitFailed'));
     } finally {
       setSubmitting(false);
     }
-  }, [form, formId, answers, signature]);
+  }, [form, formId, answers, signature, t]);
 
   if (loading) {
     return (
@@ -124,14 +126,14 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
     return (
       <ThemedBackground style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: P.text, fontSize: 16 }}>
-          {loadError ? "We couldn't load this form." : 'Form not found.'}
+          {loadError ? t('clientBooking.intake.loadFailed') : t('clientBooking.intake.notFound')}
         </Text>
         {loadError && (
           <TouchableOpacity
             style={[styles.doneBtn, { backgroundColor: P.accent, marginTop: 16 }]}
             onPress={() => setRetryNonce(value => value + 1)}
           >
-            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>Try Again</Text>
+            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>{t('common.tryAgain')}</Text>
           </TouchableOpacity>
         )}
       </ThemedBackground>
@@ -149,7 +151,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: P.text }]}>Form</Text>
+          <Text style={[styles.headerTitle, { color: P.text }]}>{t('clientBooking.intake.headerTitle')}</Text>
           <View style={{ width: 36 }} />
         </View>
       </SafeAreaView>
@@ -158,16 +160,16 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
         /* ── Just-submitted success state — shown once, right after the client taps Submit ── */
         <View style={styles.successState}>
           <Text style={styles.successIcon}>✓</Text>
-          <Text style={[styles.successTitle, { color: P.text }]}>All done!</Text>
+          <Text style={[styles.successTitle, { color: P.text }]}>{t('clientBooking.intake.doneTitle')}</Text>
           <Text style={[styles.successSub, { color: P.sub }]}>
-            Your provider has received your responses and is all set for your appointment.
+            {t('clientBooking.intake.doneBody')}
           </Text>
           <TouchableOpacity
             style={[styles.doneBtn, { backgroundColor: P.accent }]}
             onPress={() => navigation.goBack()}
             activeOpacity={0.8}
           >
-            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>Back to Booking</Text>
+            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>{t('clientBooking.intake.backToBooking')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -183,7 +185,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             {submitted && (
               <View style={[styles.completedBanner, { backgroundColor: '#34C75920', borderColor: '#34C75955' }]}>
                 <Ionicons name="checkmark-circle" size={18} color="#34C759" />
-                <Text style={styles.completedBannerText}>Completed — your provider has these answers</Text>
+                <Text style={styles.completedBannerText}>{t('clientBooking.intake.completedBanner')}</Text>
               </View>
             )}
 
@@ -191,12 +193,12 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             <View style={[styles.introCard, { backgroundColor: P.accent + '14', borderColor: P.accent + '35' }]}>
               {!!serviceName && (
                 <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1, color: P.accentText, marginBottom: 6 }}>
-                  FOR: {serviceName.toUpperCase()}
+                  {t('clientBooking.intake.forService', { service: serviceName.toUpperCase() })}
                 </Text>
               )}
               <Text style={[styles.introTitle, { color: P.text }]}>{form.title}</Text>
               <Text style={[styles.introSub, { color: P.sub }]}>
-                Your provider needs this info before your appointment to give you the best possible service.
+                {t('clientBooking.intake.intro')}
               </Text>
             </View>
 
@@ -220,10 +222,10 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
                   <Text style={[styles.qNumber, { color: P.sub }]}>{form.questions.length + 1}.</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.qLabel, { color: P.text }]}>
-                      Full name as signature <Text style={{ color: '#FF3B30' }}>*</Text>
+                      {t('clientBooking.intake.signatureLabel')} <Text style={{ color: '#FF3B30' }}>*</Text>
                     </Text>
                     <Text style={[{ fontSize: 12, color: P.sub, marginTop: 2 }]}>
-                      By typing your name you confirm you have read and understood this form
+                      {t('clientBooking.intake.signatureConfirm')}
                     </Text>
                   </View>
                 </View>
@@ -232,7 +234,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
                   value={signature}
                   onChangeText={setSignature}
                   editable={!submitted}
-                  placeholder="Type your full name…"
+                  placeholder={t('clientBooking.intake.signaturePlaceholder')}
                   placeholderTextColor={P.sub}
                   autoCapitalize="words"
                 />
@@ -251,7 +253,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
               >
                 {submitting
                   ? <ActivityIndicator color={P.onAccent} size="small" />
-                  : <Text style={[styles.submitBtnText, { color: P.onAccent }]}>Submit Form</Text>
+                  : <Text style={[styles.submitBtnText, { color: P.onAccent }]}>{t('clientBooking.intake.submit')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -274,6 +276,10 @@ function QuestionInput({
   P:        AppTheme;
   readOnly?: boolean;
 }) {
+  const { t } = useTranslation();
+  // Stored answers stay English ('Yes' / 'No' / 'Acknowledged') — the provider
+  // reads them — so only what's drawn is translated.
+  const optionLabel = (opt: 'Yes' | 'No') => (opt === 'Yes' ? t('common.yes') : t('common.no'));
   return (
     <View style={[styles.qCard, { backgroundColor: P.card, borderColor: P.border }]}>
       <View style={styles.qLabelRow}>
@@ -290,7 +296,7 @@ function QuestionInput({
           value={value}
           onChangeText={onChange}
           editable={!readOnly}
-          placeholder="Your answer…"
+          placeholder={t('clientBooking.intake.answerPlaceholder')}
           placeholderTextColor={P.sub}
           multiline
           textAlignVertical="top"
@@ -321,7 +327,7 @@ function QuestionInput({
                 styles.yesnoText,
                 { color: value === opt ? (opt === 'Yes' ? '#34C759' : '#FF3B30') : P.sub },
               ]}>
-                {opt}
+                {optionLabel(opt)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -359,7 +365,7 @@ function QuestionInput({
       {question.type === 'policy' && (
         <>
           <View style={[styles.policyBody, { backgroundColor: P.bg, borderColor: P.border }]}>
-            <Text style={{ color: P.text, fontSize: 13, lineHeight: 20 }}>{question.body || 'No policy text provided.'}</Text>
+            <Text style={{ color: P.text, fontSize: 13, lineHeight: 20 }}>{question.body || t('clientBooking.intake.noPolicyText')}</Text>
           </View>
           <TouchableOpacity
             style={[
@@ -376,7 +382,7 @@ function QuestionInput({
             disabled={readOnly}
           >
             <Text style={[styles.yesnoText, { color: value === 'Acknowledged' ? '#34C759' : P.sub }]}>
-              {value === 'Acknowledged' ? '✓ Acknowledged' : 'I acknowledge this policy'}
+              {value === 'Acknowledged' ? t('clientBooking.intake.acknowledged') : t('clientBooking.intake.acknowledge')}
             </Text>
           </TouchableOpacity>
         </>

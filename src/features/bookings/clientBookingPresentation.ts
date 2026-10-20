@@ -1,15 +1,17 @@
 import type { BookingInfoPack } from '../../services/databaseService';
+import { getLanguage, translatePlural } from '../../i18n';
 
 const INFO_PACK_POPUP_MAX_CHARS = 240;
 
-/** Formats notice windows without exposing raw, unwieldy hour counts. */
-export function formatNoticeWindow(hours: number): string {
+/** Formats notice windows without exposing raw, unwieldy hour counts. Pass
+ *  `lang: 'en'` when the window sits inside a sentence held in English
+ *  (cancellation policy copy), so the sentence doesn't come out mixed. */
+export function formatNoticeWindow(hours: number, lang: string = getLanguage()): string {
   if (hours <= 0) return '';
   if (hours > 72 && hours % 24 === 0) {
-    const days = hours / 24;
-    return days === 1 ? '1 day' : `${days} days`;
+    return translatePlural(lang, 'clientBooking.notice.days', hours / 24);
   }
-  return hours === 1 ? '1 hour' : `${hours} hours`;
+  return translatePlural(lang, 'clientBooking.notice.hours', hours);
 }
 
 /** Short info packs are readable in a popup; longer ones need full-screen reading. */

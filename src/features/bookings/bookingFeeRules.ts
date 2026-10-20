@@ -1,4 +1,5 @@
 import type { BookingFeeCharge, BookingFeeKind, BookingFeeTerms } from '../../services/databaseService';
+import { localeForLanguage } from '../../i18n';
 
 // Display-side mirror of supabase/functions/_shared/bookingFeePlan.ts, so the
 // booking screen only offers what the server would accept. The server is the
@@ -31,7 +32,7 @@ export function feeChargeWindow(terms: BookingFeeTerms, nowMs: number): FeeCharg
       late: open && !!terms.lateFeePence && WENT_AHEAD.includes(terms.status),
       no_show: open && !!terms.noShowFeePence && terms.status === 'no_show',
     },
-    closesAtLabel: new Date(closes).toLocaleString('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit' }),
+    closesAtLabel: new Date(closes).toLocaleString(localeForLanguage(), { weekday: 'short', hour: 'numeric', minute: '2-digit' }),
   };
 }
 

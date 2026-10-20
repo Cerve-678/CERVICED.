@@ -14,6 +14,7 @@ import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../types/dat
 import type { ProviderLocationData } from './databaseService';
 import { getMyBookings } from './databaseService';
 import { logger } from '../utils/logger';
+import { tr } from '../i18n';
 import { formatTime12, formatShortDate, formatDurationMinutes } from '../utils/dateUtils';
 import { calculatePlatformFee } from '../features/cart/platformFee';
 
@@ -78,18 +79,18 @@ export class BookingService {
       const booking = bookings[item.id];
 
       if (!booking?.selectedDate) {
-        errors.push(`${item.serviceName} needs a date`);
+        errors.push(tr('clientBooking.validate.needsDate', { service: item.serviceName }));
       }
 
       if (!booking?.selectedTime) {
-        errors.push(`${item.serviceName} needs a time`);
+        errors.push(tr('clientBooking.validate.needsTime', { service: item.serviceName }));
       }
 
       // Validate date format
       if (booking?.selectedDate) {
         const date = new Date(booking.selectedDate);
         if (isNaN(date.getTime())) {
-          errors.push(`Invalid date for ${item.serviceName}`);
+          errors.push(tr('clientBooking.validate.invalidDate', { service: item.serviceName }));
         }
       }
 
@@ -100,7 +101,7 @@ export class BookingService {
         const is12Hour = /^\d{1,2}:\d{2}\s?(AM|PM|am|pm)$/i.test(time);
 
         if (!is24Hour && !is12Hour) {
-          errors.push(`Invalid time format for ${item.serviceName}`);
+          errors.push(tr('clientBooking.validate.invalidTime', { service: item.serviceName }));
         }
       }
     });
