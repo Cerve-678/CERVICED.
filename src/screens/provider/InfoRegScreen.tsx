@@ -3358,6 +3358,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const dragTargetRef = useRef(0);
   const dragLatestDxRef = useRef(0);
 
+  // The logo picker swipes from the profile circle to the two Home card
+  // sizes. Pages are as wide as the picker's own row, measured on layout.
+  const [logoPagerWidth, setLogoPagerWidth] = useState(0);
+  const [logoPage, setLogoPage] = useState(0);
+  // The swipe unmounts without a logo and comes back on page one, so the
+  // dots and caption have to come back to page one with it.
+  useEffect(() => {
+    if (!providerData.logo) setLogoPage(0);
+  }, [providerData.logo]);
+
   // Handle logo selection
   const handleSelectLogo = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -4281,79 +4291,105 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.docSub}>Business identity · how clients first find you</Text>
 
             {/* Plain circular avatar picker — no card chrome around it. The
-                surrounding panel was doing nothing the circle doesn't already
-                communicate, and the standard avatar treatment (circle + corner
-                camera badge) reads as tappable on its own. Business name and
-                the rest of Step 1 continue below, unchanged. */}
+                standard avatar treatment (circle + corner camera badge) reads
+                as tappable on its own. Once there's a logo, the circle is the
+                first page of a swipe: the next two pages are the same logo in
+                the small and large Home cards, at their real sizes, so the
+                provider sees each crop in place rather than in a list below.
+                Tapping any page reopens the crop. */}
               <View style={styles.logoSection}>
-                <TouchableOpacity
-                  style={styles.logoContainer}
-                  onPress={() => { tapSelect(); handleSelectLogo(); }}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={providerData.logo ? 'Change logo' : 'Add logo'}
-                >
-                  {providerData.logo ? (
-                    <Image
-                      source={{ uri: providerData.logo }}
-                      style={styles.providerLogo}
-                      resizeMode="cover"
-                      // Per the Scalability rules: without this any unrelated
-                      // re-render can retrigger the default fade-in as a flicker.
-                      fadeDuration={0}
-                    />
-                  ) : (
-                    <View style={styles.logoPlaceholder}>
-                      <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+                {providerData.logo ? (
+                  <>
+                    <View
+                      style={styles.logoPager}
+                      onLayout={e => setLogoPagerWidth(e.nativeEvent.layout.width)}
+                    >
+                      {logoPagerWidth > 0 && (
+                        <ScrollView
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          onMomentumScrollEnd={e =>
+                            setLogoPage(Math.round(e.nativeEvent.contentOffset.x / logoPagerWidth))
+                          }
+                        >
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoContainer}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Change logo"
+                              accessibilityHint="Swipe left to see it on Home"
+                            >
+                              <Image
+                                source={{ uri: providerData.logo }}
+                                style={styles.providerLogo}
+                                resizeMode="cover"
+                                // Per the Scalability rules: without this any unrelated
+                                // re-render can retrigger the default fade-in as a flicker.
+                                fadeDuration={0}
+                              />
+                              {/* Badge sits on the 45° diagonal of the circle rather than a
+                                  square's corner, so it hugs the edge instead of floating
+                                  off it — offset = r - (r/√2) - badgeR, rounded. */}
+                              <View style={styles.logoEditBadge}>
+                                <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                              </View>
+                            </TouchableOpacity>
+                          </View>
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoHomeSmallCard}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Your logo on a small Home card. Adjust crop"
+                            >
+                              <Image source={{ uri: providerData.logo }} style={styles.logoHomeFill} resizeMode="cover" fadeDuration={0} />
+                            </TouchableOpacity>
+                          </View>
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoHomeLargeCard}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Your logo on a large Home card. Adjust crop"
+                            >
+                              <Image source={{ uri: providerData.logo }} style={styles.logoHomeFill} resizeMode="cover" fadeDuration={0} />
+                            </TouchableOpacity>
+                          </View>
+                        </ScrollView>
+                      )}
                     </View>
-                  )}
-                  {/* Badge sits on the 45° diagonal of the circle rather than a
-                      square's corner, so it hugs the edge instead of floating
-                      off it — offset = r - (r/√2) - badgeR, rounded. */}
-                  <View style={styles.logoEditBadge}>
-                    <Ionicons name="camera" size={14} color={chrome.onAccent} />
-                  </View>
-                </TouchableOpacity>
-                <Text style={styles.logoCaption}>
-                  {providerData.logo ? 'Change Logo' : 'Add Logo'}
-                </Text>
+                    <View style={styles.logoDots} importantForAccessibility="no-hide-descendants">
+                      {LOGO_PAGE_CAPTIONS.map((caption, i) => (
+                        <View key={caption} style={[styles.logoDot, i === logoPage && styles.logoDotActive]} />
+                      ))}
+                    </View>
+                    <Text style={styles.logoCaption}>{LOGO_PAGE_CAPTIONS[logoPage]}</Text>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.logoContainer}
+                      onPress={() => { tapSelect(); handleSelectLogo(); }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add logo"
+                    >
+                      <View style={styles.logoPlaceholder}>
+                        <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+                      </View>
+                      <View style={styles.logoEditBadge}>
+                        <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.logoCaption}>Add Logo</Text>
+                  </>
+                )}
               </View>
-
-              {providerData.logo && (
-                <View style={styles.logoPreviewSection}>
-                  <Text style={styles.logoPreviewTitle}>See it on Cerviced</Text>
-                  <Text style={styles.logoPreviewHint}>Swipe to check how your logo fills each Home card before you publish.</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    pagingEnabled
-                    decelerationRate="fast"
-                    contentContainerStyle={styles.logoPreviewCarousel}
-                    accessibilityLabel="Logo previews"
-                  >
-                    <View style={styles.logoPreviewPage}>
-                      <Text style={styles.logoPreviewLabel}>Profile logo</Text>
-                      <Image source={{ uri: providerData.logo }} style={styles.logoPreviewProfile} resizeMode="cover" fadeDuration={0} />
-                    </View>
-                    <View style={styles.logoPreviewPage}>
-                      <Text style={styles.logoPreviewLabel}>Home · compact</Text>
-                      <View style={styles.logoPreviewSmallCard}>
-                        <Image source={{ uri: providerData.logo }} style={styles.logoPreviewFill} resizeMode="cover" fadeDuration={0} />
-                      </View>
-                    </View>
-                    <View style={styles.logoPreviewPage}>
-                      <Text style={styles.logoPreviewLabel}>Home · feature card</Text>
-                      <View style={styles.logoPreviewLargeCard}>
-                        <Image source={{ uri: providerData.logo }} style={styles.logoPreviewFill} resizeMode="cover" fadeDuration={0} />
-                      </View>
-                    </View>
-                  </ScrollView>
-                  <TouchableOpacity onPress={() => { tapSelect(); handleSelectLogo(); }} accessibilityRole="button" style={styles.logoPreviewAdjust}>
-                    <Ionicons name="crop-outline" size={16} color={adaptiveAccentColor} />
-                    <Text style={[styles.logoPreviewAdjustText, { color: adaptiveAccentColor }]}>Adjust logo crop</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
 
             {/* Business Name */}
               <View
@@ -5776,6 +5812,17 @@ const LOGO_BADGE_SIZE = 32;
 const LOGO_BADGE_OFFSET = Math.round(
   LOGO_SIZE / 2 - LOGO_SIZE / 2 / Math.SQRT2 - LOGO_BADGE_SIZE / 2,
 );
+/** The two Home card sizes a logo fills, copied from HomeScreen's
+ *  `brandCardBlur` (small) and `providerBlur` (large). If those change, change
+ *  these too, or the preview shows a crop clients never see. */
+const LOGO_HOME_SMALL = { width: 160, height: 70, radius: 12 } as const;
+const LOGO_HOME_LARGE = { width: 282, height: 147, radius: 16 } as const;
+/** One caption per page of the logo swipe, in page order. */
+const LOGO_PAGE_CAPTIONS = [
+  'Change Logo',
+  'Small Home card · tap to adjust',
+  'Large Home card · tap to adjust',
+] as const;
 
 const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: number) => {
   const isDark = P.isDark;
@@ -5931,78 +5978,52 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     color: fg(0.6),
     marginTop: 10,
   },
-  logoPreviewSection: {
-    marginBottom: 24,
+  // Full width of the section so each page can be exactly one swipe wide.
+  logoPager: {
+    alignSelf: 'stretch',
   },
-  logoPreviewTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 16,
-    color: fg(0.9),
-    marginBottom: 4,
-  },
-  logoPreviewHint: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    lineHeight: 17,
-    color: fg(0.62),
-    marginBottom: 12,
-  },
-  logoPreviewCarousel: {
-    gap: 12,
-    paddingRight: 20,
-  },
-  logoPreviewPage: {
-    width: 232,
-    minHeight: 152,
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: surf(0.42),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: fg(0.12),
+  // Every page is as tall as the tallest thing on any page (the large card),
+  // so the dots and caption below don't jump as the provider swipes.
+  logoPage: {
+    height: Math.max(LOGO_SIZE, LOGO_HOME_LARGE.height),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoPreviewLabel: {
-    alignSelf: 'flex-start',
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
-    color: fg(0.65),
-    marginBottom: 12,
-  },
-  logoPreviewProfile: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    borderWidth: 2,
-    borderColor: surf(0.9),
-  },
-  logoPreviewSmallCard: {
-    width: 118,
-    height: 66,
-    borderRadius: 14,
+  logoHomeSmallCard: {
+    width: LOGO_HOME_SMALL.width,
+    height: LOGO_HOME_SMALL.height,
+    borderRadius: LOGO_HOME_SMALL.radius,
     overflow: 'hidden',
+    backgroundColor: P.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: fg(0.12),
   },
-  logoPreviewLargeCard: {
-    width: 202,
-    height: 84,
-    borderRadius: 16,
+  logoHomeLargeCard: {
+    width: LOGO_HOME_LARGE.width,
+    height: LOGO_HOME_LARGE.height,
+    borderRadius: LOGO_HOME_LARGE.radius,
     overflow: 'hidden',
+    backgroundColor: P.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: fg(0.12),
   },
-  logoPreviewFill: {
+  logoHomeFill: {
     width: '100%',
     height: '100%',
   },
-  logoPreviewAdjust: {
-    alignSelf: 'flex-start',
+  logoDots: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
+    gap: 6,
     marginTop: 12,
-    paddingVertical: 8,
   },
-  logoPreviewAdjustText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
+  logoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: fg(0.2),
+  },
+  logoDotActive: {
+    backgroundColor: P.accent,
   },
 
   // Full-bleed section: a hairline rule and generous space do the separating.
