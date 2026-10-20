@@ -86,6 +86,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     hasCustomGradient: false,
     profileTheme: DEFAULT_PROVIDER_THEME,
     logo: null,
+    logoFraming: null,
     categories,
     categoryDescriptions: {},
     // Acuity exposes a single business category, so every imported category

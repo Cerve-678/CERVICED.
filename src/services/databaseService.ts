@@ -563,7 +563,7 @@ async function ownProviderIdExclusion(): Promise<string> {
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
+  "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(

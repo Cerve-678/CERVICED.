@@ -2,21 +2,28 @@ import React, { memo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '../../contexts/ThemeContext';
+import { FramedLogo } from '../../components/FramedLogo';
+import type { LogoCardSlot, LogoFraming } from '../../types/database';
 
 interface ProviderCardProps {
-  provider: { name: string; service: string; logo: any };
+  provider: { name: string; service: string; logo: any; logoFraming?: LogoFraming | null };
   onPress: () => void;
   style: any;
   blurStyle: any;
+  /** Which of the provider's framed card shapes this card is. Cards of any
+   *  other shape fill and centre the logo. */
+  logoSlot?: LogoCardSlot;
 }
 
 /** Compact provider card used by every Home discovery section. */
-export const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurStyle }) => {
+export const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurStyle, logoSlot }) => {
   const { palette: P } = useTheme();
   return (
     <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.75}>
       <View style={[blurStyle, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-        {provider.logo ? <Image source={provider.logo} style={styles.providerImage} contentFit="cover" transition={0} /> : (
+        {provider.logo?.uri && logoSlot && provider.logoFraming?.[logoSlot] ? (
+          <FramedLogo uri={provider.logo.uri} framing={provider.logoFraming} slot={logoSlot} style={styles.framedLogo} />
+        ) : provider.logo ? <Image source={provider.logo} style={styles.providerImage} contentFit="cover" transition={0} /> : (
           <View style={[styles.placeholderCard, { backgroundColor: P.surface }]}><Text style={[styles.placeholderText, { color: P.sub }]}>{provider.service}</Text></View>
         )}
       </View>
@@ -29,6 +36,7 @@ ProviderCard.displayName = 'ProviderCard';
 
 const styles = StyleSheet.create({
   providerImage: { position: 'absolute', width: '100%', height: '100%', borderRadius: 16 },
+  framedLogo: { borderRadius: 16 },
   placeholderCard: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   placeholderText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textAlign: 'center' },
   providerCardName: { fontSize: 12, fontWeight: '600', marginTop: 5, letterSpacing: 0.1 },

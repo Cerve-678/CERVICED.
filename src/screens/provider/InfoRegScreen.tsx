@@ -58,7 +58,10 @@ import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
-import type { DbPortfolioItem } from '../../types/database';
+import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
+import { FramedLogo } from '../../components/FramedLogo';
+import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
+import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
   DEFAULT_PROVIDER_THEME,
@@ -2869,6 +2872,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     hasCustomGradient: false,
     profileTheme: 'app',
     logo: null,
+    logoFraming: null,
     categories: {},
     categoryDescriptions: {},
     phone: '',
@@ -3409,8 +3413,41 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      setProviderData(prev => ({ ...prev, logo: asset.uri }));
+      // A new image makes the old card framing meaningless, so it resets.
+      setProviderData(prev => ({ ...prev, logo: asset.uri, logoFraming: null }));
     }
+  };
+
+  // The two Home cards are framed separately, in their own shape, by pinch
+  // and drag (iOS's crop only does squares). Only a zoom and an offset are
+  // stored per card; the logo image itself stays as picked.
+  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
+  const [logoImageRatio, setLogoImageRatio] = useState(1);
+
+  const handleFrameLogo = (slot: LogoCardSlot) => {
+    const logo = providerData.logo;
+    if (!logo) return;
+    Image.getSize(
+      logo,
+      (width, height) => {
+        setLogoImageRatio(width > 0 && height > 0 ? width / height : 1);
+        setFramingSlot(slot);
+      },
+      () => {
+        // Unmeasurable: frame it as square, which every logo is after the
+        // iOS crop anyway.
+        setLogoImageRatio(1);
+        setFramingSlot(slot);
+      },
+    );
+  };
+
+  const handleLogoFramed = (slot: LogoCardSlot, frame: LogoCardFrame) => {
+    setFramingSlot(null);
+    setProviderData(prev => ({
+      ...prev,
+      logoFraming: { ...(prev.logoFraming ?? {}), imageRatio: logoImageRatio, [slot]: frame },
+    }));
   };
 
   // Handle data transfer from Acuity Scheduling URL
@@ -4365,23 +4402,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeSmallCard}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleFrameLogo('small'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Your logo on a small Home card. Adjust crop"
+                              accessibilityLabel="Your logo on a small Home card. Adjust how it sits"
                             >
-                              <Image source={{ uri: providerData.logo }} style={styles.logoHomeFill} resizeMode="cover" fadeDuration={0} />
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="small" style={{ borderRadius: LOGO_CARD_SIZES.small.radius }} />
                             </TouchableOpacity>
                           </View>
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeLargeCard}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleFrameLogo('large'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Your logo on a large Home card. Adjust crop"
+                              accessibilityLabel="Your logo on a large Home card. Adjust how it sits"
                             >
-                              <Image source={{ uri: providerData.logo }} style={styles.logoHomeFill} resizeMode="cover" fadeDuration={0} />
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="large" style={{ borderRadius: LOGO_CARD_SIZES.large.radius }} />
                             </TouchableOpacity>
                           </View>
                         </ScrollView>
@@ -4414,6 +4451,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </>
                 )}
               </View>
+              <LogoCardFramer
+                slot={framingSlot}
+                uri={providerData.logo}
+                imageRatio={logoImageRatio}
+                initial={framingSlot ? providerData.logoFraming?.[framingSlot] : undefined}
+                onDone={handleLogoFramed}
+                onCancel={() => setFramingSlot(null)}
+                palette={{
+                  bg: chrome.surf(0.98),
+                  card: chrome.surf(0.35),
+                  text: chrome.fg(0.92),
+                  sub: chrome.fg(0.55),
+                  accent: adaptiveAccentColor,
+                  onAccent: chrome.onAccent,
+                }}
+              />
 
             {/* Business Name */}
               <View
@@ -5836,11 +5889,6 @@ const LOGO_BADGE_SIZE = 32;
 const LOGO_BADGE_OFFSET = Math.round(
   LOGO_SIZE / 2 - LOGO_SIZE / 2 / Math.SQRT2 - LOGO_BADGE_SIZE / 2,
 );
-/** The two Home card sizes a logo fills, copied from HomeScreen's
- *  `brandCardBlur` (small) and `providerBlur` (large). If those change, change
- *  these too, or the preview shows a crop clients never see. */
-const LOGO_HOME_SMALL = { width: 160, height: 70, radius: 12 } as const;
-const LOGO_HOME_LARGE = { width: 282, height: 147, radius: 16 } as const;
 /** One caption per page of the logo swipe, in page order. */
 const LOGO_PAGE_CAPTIONS = [
   'Profile logo · tap to adjust',
@@ -6009,31 +6057,27 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // Every page is as tall as the tallest thing on any page (the large card),
   // so the dots and caption below don't jump as the provider swipes.
   logoPage: {
-    height: Math.max(LOGO_SIZE, LOGO_HOME_LARGE.height),
+    height: Math.max(LOGO_SIZE, LOGO_CARD_SIZES.large.height),
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoHomeSmallCard: {
-    width: LOGO_HOME_SMALL.width,
-    height: LOGO_HOME_SMALL.height,
-    borderRadius: LOGO_HOME_SMALL.radius,
+    width: LOGO_CARD_SIZES.small.width,
+    height: LOGO_CARD_SIZES.small.height,
+    borderRadius: LOGO_CARD_SIZES.small.radius,
     overflow: 'hidden',
     backgroundColor: P.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: fg(0.12),
   },
   logoHomeLargeCard: {
-    width: LOGO_HOME_LARGE.width,
-    height: LOGO_HOME_LARGE.height,
-    borderRadius: LOGO_HOME_LARGE.radius,
+    width: LOGO_CARD_SIZES.large.width,
+    height: LOGO_CARD_SIZES.large.height,
+    borderRadius: LOGO_CARD_SIZES.large.radius,
     overflow: 'hidden',
     backgroundColor: P.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: fg(0.12),
-  },
-  logoHomeFill: {
-    width: '100%',
-    height: '100%',
   },
   logoDots: {
     flexDirection: 'row',

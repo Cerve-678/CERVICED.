@@ -29,7 +29,7 @@ import {
   updateProviderRegistrationRow,
   uploadPublicStorageObject,
 } from './databaseService';
-import type { DbProvider, BusinessType, ProviderBookingMode } from '../types/database';
+import type { DbProvider, BusinessType, LogoFraming, ProviderBookingMode } from '../types/database';
 import {
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
@@ -109,6 +109,9 @@ export interface ProviderRegistrationData {
   accentColor: string;
   profileTheme: string; // encoded colour-theme key (see src/constants/providerThemes.ts)
   logo: string | null;
+  /** How the logo sits in each Home card. Null = fill and centre. Cleared
+   *  whenever a new logo is picked, since it describes the old image. */
+  logoFraming: LogoFraming | null;
   categories: Record<string, ServiceData[]>;
   // Shown to clients under the category tab once selected — keyed the same
   // as `categories`, but optional per key since older/imported categories
@@ -616,6 +619,7 @@ export async function saveProviderToSupabase(
         longitude,
         about_text: data.aboutText,
         logo_url: logoUrl,
+        logo_framing: data.logoFraming ?? null,
         gradient: data.gradient,
         accent_color: data.accentColor,
         profile_theme: data.profileTheme || 'app',
@@ -675,6 +679,7 @@ export async function saveProviderToSupabase(
         longitude,
         about_text: data.aboutText,
         logo_url: logoUrl,
+        logo_framing: data.logoFraming ?? null,
         gradient: data.gradient,
         accent_color: data.accentColor,
         profile_theme: data.profileTheme || 'app',
@@ -918,6 +923,7 @@ export function providerRowToRegistrationData(
     accentColor: provider.accent_color || themeBrandingColours(provider.profile_theme).accentColor,
     profileTheme: provider.profile_theme || 'app',
     logo: provider.logo_url || null,
+    logoFraming: provider.logo_framing ?? null,
     categories: catalogue.categories,
     categoryDescriptions: catalogue.categoryDescriptions,
     phone: provider.phone || '',
