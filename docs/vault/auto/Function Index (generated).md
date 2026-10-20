@@ -5,7 +5,7 @@
 
 #generated
 
-**2646 functions** across **359 files**.
+**2649 functions** across **360 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -292,9 +292,10 @@
 - `TermsScreen.tsx` — TermsScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
 
-### `src/services/` (16)
+### `src/services/` (17)
 - `acuityTransferService.ts` — invoke · **transferFromAcuity**
 - `addressLookupService.ts` — **findAddressesByPostcode** · **resolvePostcodeAddress**
+- `authProfileSnapshot.ts` — **clearAuthProfileSnapshot** · **readAuthProfileSnapshot** · **saveAuthProfileSnapshot**
 - `AvailabilityService.ts` — findBackToBackSlotsForDate · firstOpen · offer · rather · twice
 - `biometricService.ts` — **authenticateWithBiometrics** · **disableBiometric** · **enableBiometric** · **getBiometricLabel** · **getBiometricRefreshToken** · **isBiometricAvailable** · **isBiometricEnabled** · **updateBiometricToken**
 - `bookingService.ts` — **applyRescheduleRequestRow** · **fetchBookingsFromSupabase**

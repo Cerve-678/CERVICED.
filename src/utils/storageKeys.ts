@@ -11,6 +11,10 @@ export const STORAGE_KEYS = {
   BOOKINGS_STORE_LEGACY: '@cerviced_bookings',
   /** Active mode: 'client' | 'provider' */
   ACTIVE_MODE:        '@active_mode',
+  /** The signed-in account's last confirmed profile, encrypted (written via
+   *  largeSecureStore, never plain AsyncStorage), so launch can open the app
+   *  without waiting on the server. See services/authProfileSnapshot.ts. */
+  AUTH_PROFILE_SNAPSHOT: '@cerviced_auth_profile_snapshot',
   /** User theme preference */
   THEME_PREFERENCE:   '@theme_preference',
   /** Bookmarked provider IDs */

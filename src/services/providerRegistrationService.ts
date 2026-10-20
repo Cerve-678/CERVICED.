@@ -258,11 +258,12 @@ function sniffImageType(
   return null;
 }
 
-/** Longest side, in pixels, of any image this app uploads. A phone shows a
- *  photo at most about 1,290 px wide (full-screen viewer), and an Explore card
- *  at a few hundred, so a 4,000-8,000 px original is 3-7 MB of download for
- *  nothing. At this size a JPEG is typically 200-400 KB. */
-export const MAX_UPLOAD_IMAGE_EDGE_PX = 1600;
+/** Longest side, in pixels, of any image this app uploads. The largest a
+ *  photo is ever shown is full screen width, 1,290 px on the biggest iPhone
+ *  (there is no pinch-zoom), and an Explore card is a few hundred. At 2,048 a
+ *  portrait photo is still 1,536 px wide, so nothing looks softer anywhere,
+ *  while a 4,000-8,000 px original's 3-7 MB drops to roughly 400-700 KB. */
+export const MAX_UPLOAD_IMAGE_EDGE_PX = 2048;
 
 async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
   // Use expo-file-system to read the local file reliably on both iOS and Android.
