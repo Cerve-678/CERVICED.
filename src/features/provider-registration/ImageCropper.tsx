@@ -18,57 +18,76 @@ import { logger } from '../../utils/logger';
 import type { ServiceImageDraft } from '../../services/providerRegistrationService';
 
 
-/** Framing presets, as width ÷ height. "Original" keeps the photo's own shape
- *  and skips cropping entirely — the provider is saying "this is already the
- *  picture I want", not picking a different rectangle. */
-const PRESETS: { key: string; label: string; ratio: number | null }[] = [
-  { key: 'original', label: 'Original', ratio: null },
-  { key: 'portrait', label: '4:5', ratio: 4 / 5 },
-  { key: 'square', label: '1:1', ratio: 1 },
-];
+/** A framing shape, as width ÷ height. A null ratio ("Original") keeps the
+ *  photo's own shape and skips cropping entirely — the provider is saying
+ *  "this is already the picture I want", not picking a different rectangle. */
+export interface CropShape {
+  key: string;
+  label: string;
+  ratio: number | null;
+}
 
-interface ServiceImageCropperProps {
+interface ImageCropperProps {
   visible: boolean;
   /** Local URIs straight from the picker, cropped one at a time in order. */
   uris: string[];
   onDone: (images: ServiceImageDraft[]) => void;
   onCancel: () => void;
   palette: { bg: string; card: string; text: string; sub: string; accent: string };
+  /** Shapes to choose between; the first is the starting one. With only one
+   *  shape the chooser is hidden. */
+  shapes: CropShape[];
+  /** Header text. Defaults to "Photo n of total". */
+  title?: string;
+  /** Draws the window as a circle — for a logo, which is shown in a circle.
+   *  The saved crop is still the square around it. */
+  round?: boolean;
+  /** Saves a PNG as PNG instead of JPEG, so a logo keeps its transparent
+   *  background. Anything that isn't a PNG is still saved as JPEG. */
+  keepPng?: boolean;
 }
 
 /**
- * Frames each newly-picked service photo before it's uploaded.
+ * Frames a newly-picked photo before it's uploaded. Used for the provider's
+ * logo; service photos stopped going through it (they stay whole by default
+ * and can be switched to "Fill frame" per tile instead).
  *
  * Two jobs, and the second one is invisible but arguably more important:
  *
  * 1. The provider chooses what stays in frame. Previously the app cropped
  *    every photo to whatever box the carousel happened to be, so a nail set or
  *    a face could lose its edges with nobody having chosen that.
- * 2. **Everything that passes through here is re-encoded as JPEG**, including
- *    photos the provider leaves on "Original". iOS hands back HEIC from the
- *    library, which used to be uploaded under a `.jpg` name and served as
- *    `image/jpeg` — fine on iOS, undecodable on Android and web. Rendering
- *    through the manipulator makes the bytes match the label.
+ * 2. **Everything that passes through here is re-encoded**, including photos
+ *    the provider leaves on "Original": JPEG, or PNG for a PNG when `keepPng`
+ *    is set. iOS hands back HEIC from the library, which used to be uploaded
+ *    under a `.jpg` name and served as `image/jpeg` — fine on iOS,
+ *    undecodable on Android and web. Rendering through the manipulator makes
+ *    the bytes match the label.
  *
  * The crop window is fixed and the photo pans behind it, rather than a
  * pinch-to-zoom canvas: it's a smaller surface to get wrong, and the offset
  * can be clamped so a crop can never include empty space.
  */
-export function ServiceImageCropper({
+export function ImageCropper({
   visible,
   uris,
   onDone,
   onCancel,
   palette,
-}: ServiceImageCropperProps) {
+  shapes,
+  title,
+  round = false,
+  keepPng = false,
+}: ImageCropperProps) {
+  const firstShapeKey = shapes[0]?.key ?? 'original';
   const [index, setIndex] = useState(0);
-  const [presetKey, setPresetKey] = useState('original');
+  const [presetKey, setPresetKey] = useState(firstShapeKey);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const resultsRef = useRef<ServiceImageDraft[]>([]);
 
   const uri = uris[index];
-  const preset = PRESETS.find(p => p.key === presetKey) ?? PRESETS[0]!;
+  const preset: CropShape = shapes.find(p => p.key === presetKey) ?? shapes[0] ?? { key: 'original', label: 'Original', ratio: null };
 
   // Offset of the photo behind the crop window, in display pixels. A ref
   // shadows the Animated value because the PanResponder needs to read the
@@ -89,7 +108,7 @@ export function ServiceImageCropper({
       },
       error => {
         if (cancelled) return;
-        logger.error('[ServiceImageCropper] could not measure image:', error);
+        logger.error('[ImageCropper] could not measure image:', error);
         // Unmeasurable means we can't compute a crop rect, so the photo can
         // still be used — just never cropped — rather than blocking the add.
         setNatural(null);
@@ -167,10 +186,10 @@ export function ServiceImageCropper({
     (images: ServiceImageDraft[]) => {
       resultsRef.current = [];
       setIndex(0);
-      setPresetKey('original');
+      setPresetKey(firstShapeKey);
       onDone(images);
     },
-    [onDone],
+    [onDone, firstShapeKey],
   );
 
   const handleUse = useCallback(async () => {
@@ -189,15 +208,17 @@ export function ServiceImageCropper({
         });
       }
       const rendered = await context.renderAsync();
-      const saved = await rendered.saveAsync({
-        format: SaveFormat.JPEG,
-        compress: 0.85,
-      });
+      const isPng = /\.png($|\?)/i.test(uri);
+      const saved = await rendered.saveAsync(
+        keepPng && isPng
+          ? { format: SaveFormat.PNG }
+          : { format: SaveFormat.JPEG, compress: 0.85 },
+      );
       resultsRef.current.push({ uri: saved.uri, fit: 'cover' });
     } catch (error) {
       // A manipulator failure must not cost the provider the photo — fall
       // back to the original file, which is exactly today's behaviour.
-      logger.error('[ServiceImageCropper] crop failed, using original:', error);
+      logger.error('[ImageCropper] crop failed, using original:', error);
       resultsRef.current.push({ uri, fit: 'cover' });
     } finally {
       setBusy(false);
@@ -208,16 +229,16 @@ export function ServiceImageCropper({
       finish(resultsRef.current);
     } else {
       setIndex(index + 1);
-      setPresetKey('original');
+      setPresetKey(firstShapeKey);
     }
-  }, [uri, busy, preset.ratio, layout, natural, frameH, frameW, index, uris.length, finish]);
+  }, [uri, busy, preset.ratio, layout, natural, frameH, frameW, keepPng, index, uris.length, finish, firstShapeKey]);
 
   const handleCancel = useCallback(() => {
     resultsRef.current = [];
     setIndex(0);
-    setPresetKey('original');
+    setPresetKey(firstShapeKey);
     onCancel();
-  }, [onCancel]);
+  }, [onCancel, firstShapeKey]);
 
   if (!visible || !uri) return null;
 
@@ -229,7 +250,7 @@ export function ServiceImageCropper({
             <Text style={[st.cancel, { color: palette.sub }]}>Cancel</Text>
           </TouchableOpacity>
           <Text style={[st.counter, { color: palette.text }]}>
-            Photo {index + 1} of {uris.length}
+            {title ?? `Photo ${index + 1} of ${uris.length}`}
           </Text>
           <View style={st.headerSpacer} />
         </View>
@@ -239,7 +260,11 @@ export function ServiceImageCropper({
         </Text>
 
         <View
-          style={[st.frame, { width: frameW, height: frameH }]}
+          style={[
+            st.frame,
+            { width: frameW, height: frameH },
+            round && { borderRadius: Math.min(frameW, frameH) / 2 },
+          ]}
           {...panResponder.panHandlers}
         >
           {layout ? (
@@ -262,36 +287,38 @@ export function ServiceImageCropper({
           )}
         </View>
 
-        <View style={st.presets}>
-          {PRESETS.map(p => {
-            const active = p.key === presetKey;
-            return (
-              <TouchableOpacity
-                key={p.key}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setPresetKey(p.key);
-                }}
-                activeOpacity={0.7}
-                style={[
-                  st.preset,
-                  {
-                    backgroundColor: active ? palette.accent : palette.card,
-                  },
-                ]}
-              >
-                <Text
+        {shapes.length > 1 && (
+          <View style={st.presets}>
+            {shapes.map(p => {
+              const active = p.key === presetKey;
+              return (
+                <TouchableOpacity
+                  key={p.key}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setPresetKey(p.key);
+                  }}
+                  activeOpacity={0.7}
                   style={[
-                    st.presetText,
-                    { color: active ? '#FFFFFF' : palette.text },
+                    st.preset,
+                    {
+                      backgroundColor: active ? palette.accent : palette.card,
+                    },
                   ]}
                 >
-                  {p.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[
+                      st.presetText,
+                      { color: active ? '#FFFFFF' : palette.text },
+                    ]}
+                  >
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         <TouchableOpacity
           onPress={handleUse}
