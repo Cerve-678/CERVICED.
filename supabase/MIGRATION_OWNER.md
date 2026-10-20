@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-20 (link-only Dashboard counts)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019234000 | `link_only_dashboard_extras` | **APPLIED 2026-10-20** by Claude (execute_sql, so the version is the authored one, not a wall-clock stamp), version recorded. Frontier at authoring: `20261019233000`; numbered below the then-unapplied `20261019235500` (listing claims) and `20261020120000` (returning-client points) so it couldn't push them below the frontier. `20261020120000` was applied by the time this landed, so `20261019235500` (listing claims, unapplied) is now below the frontier — record it by hand when it's applied. Adds read-only `get_my_link_only_dashboard_extras()` + indexes `client_external_bookings_provider_created_idx`, `bookmarks_provider_created_idx`, `users_saved_portfolio_gin`. Redefines nothing. Verified live as the one link-only provider. |
+
 ### Applied 2026-10-19 (expired holds cleared before a booking is saved)
 
 | Authored version | Name | Status |

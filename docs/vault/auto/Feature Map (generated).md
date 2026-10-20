@@ -63,7 +63,7 @@ Curated: [[Availability & Slots]] · **174 files**
 - `supabase/add_providers_availability_rpc.sql` _(31)_
 - `src/components/MultiBookingSheet.tsx` _(27)_
 - `src/utils/slotsRowText.ts` _(27)_
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(25)_
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(26)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
 - `src/features/providers/useProviderProfileData.ts` _(22)_
@@ -181,7 +181,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **79 files**
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(59)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
-- `src/screens/provider/InfoRegScreen.tsx` _(34)_
+- `src/screens/provider/InfoRegScreen.tsx` _(33)_
 - `src/services/providerRegistrationService.ts` _(30)_
 - `src/contexts/RegistrationContext.tsx` _(28)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
@@ -259,7 +259,7 @@ Curated: [[Booking Flow]] · **172 files**
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
-- `src/screens/provider/InfoRegScreen.tsx` _(58)_
+- `src/screens/provider/InfoRegScreen.tsx` _(57)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/services/bookingService.ts` _(54)_

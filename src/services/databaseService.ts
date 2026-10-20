@@ -7100,6 +7100,44 @@ export async function getMyProviderDailyStats(days: number): Promise<DbProviderD
   return (data ?? []) as DbProviderDailyStat[];
 }
 
+export interface LinkOnlyDashboardExtras {
+  /** Distinct clients who answered "Yes" to "Did you book?" in the last 7 UK days. */
+  saidBookedWeek: number;
+  /** The same for the 7 days before that, for the trend. */
+  saidBookedLastWeek: number;
+  /** Distinct clients who saved the provider in the last 7 UK days. */
+  newSaversWeek: number;
+  /** Their portfolio photo in the most clients' saved lists (all time). */
+  topPhoto: { id: string; imageUrl: string; label: string | null; saves: number } | null;
+}
+
+/** Counts across other people's rows for the link-only Dashboard, done
+ *  server-side — see 20261019234000_link_only_dashboard_extras.sql. Null when
+ *  the caller has no provider row. */
+export async function getMyLinkOnlyDashboardExtras(): Promise<LinkOnlyDashboardExtras | null> {
+  const { data, error } = await supabase.rpc("get_my_link_only_dashboard_extras");
+  if (error) throw error;
+  const row = ((data ?? []) as {
+    said_booked_week: number;
+    said_booked_last_week: number;
+    new_savers_week: number;
+    top_photo_id: string | null;
+    top_photo_url: string | null;
+    top_photo_label: string | null;
+    top_photo_saves: number | null;
+  }[])[0];
+  if (!row) return null;
+  return {
+    saidBookedWeek: row.said_booked_week,
+    saidBookedLastWeek: row.said_booked_last_week,
+    newSaversWeek: row.new_savers_week,
+    topPhoto:
+      row.top_photo_id && row.top_photo_url
+        ? { id: row.top_photo_id, imageUrl: row.top_photo_url, label: row.top_photo_label, saves: row.top_photo_saves ?? 0 }
+        : null,
+  };
+}
+
 /** How many clients saved (bookmarked) the calling provider. Server-side
  *  because bookmarks RLS only shows a user their own rows. */
 export async function getMyProviderSaverCount(): Promise<number> {
