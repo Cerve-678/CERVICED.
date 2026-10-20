@@ -37,13 +37,23 @@ const PAYMENTS: Section = {
     { key: 'providerPayments', icon: 'payment', title: 'Payment Updates', subtitle: 'Fees paid, refunds settled, dispute outcomes' },
   ],
 };
+// A count once a day, never names, so who saved you stays private.
+const SAVES_ROW: Section['rows'][number] = {
+  key: 'providerSaves', icon: 'bookmark', title: 'Saves', subtitle: 'A daily count of people who saved you',
+};
 const YOUR_BUSINESS: Section = {
   title: 'YOUR BUSINESS',
   rows: [
+    SAVES_ROW,
     { key: 'providerReviews', icon: 'star', title: 'Reviews', subtitle: 'When a client leaves a review' },
     { key: 'providerDailyRecap', icon: 'stack', title: 'Today’s Schedule', subtitle: 'A morning recap of the day ahead' },
     { key: 'providerFullyBooked', icon: 'bar-chart', title: 'Fully Booked', subtitle: 'When your calendar has no openings left' },
   ],
+};
+
+const LINK_ONLY_PROFILE: Section = {
+  title: 'YOUR PROFILE',
+  rows: [SAVES_ROW],
 };
 
 // These ask the provider to do something before a deadline, so muting them
@@ -56,7 +66,8 @@ const ALWAYS_ON: AlwaysOnRow[] = [
 ];
 
 export default function ProviderNotificationSettingsScreen({ navigation }: { navigation: { goBack: () => void } }) {
-  // Link-only providers take bookings outside the app, so only messages reach them.
+  // Link-only providers take bookings outside the app, so only messages and
+  // the daily saves count reach them.
   const { myBookingMode } = useAuth();
   const isLinkOnly = myBookingMode === 'external';
 
@@ -66,7 +77,7 @@ export default function ProviderNotificationSettingsScreen({ navigation }: { nav
       initial={DEFAULT_PROVIDER_NOTIF_PREFS}
       load={getProviderNotificationPreferences}
       save={saveProviderNotificationPreferences}
-      sections={isLinkOnly ? [MESSAGES] : [BOOKINGS, MESSAGES, PAYMENTS, YOUR_BUSINESS]}
+      sections={isLinkOnly ? [MESSAGES, LINK_ONLY_PROFILE] : [BOOKINGS, MESSAGES, PAYMENTS, YOUR_BUSINESS]}
       alwaysOn={isLinkOnly ? undefined : {
         title: 'NEEDS YOUR ANSWER',
         note: 'These always send, so nothing waiting on you runs out unseen. Everything you switch off below still shows in your notifications list.',

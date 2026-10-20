@@ -115,7 +115,9 @@ export type NotificationType =
   | "maintenance_due"
   /** Beauty Maintenance: the completed booking's provider wrote aftercare
    *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
-  | "aftercare_available";
+  | "aftercare_available"
+  /** Provider: a daily count of the people who saved them. Never names. */
+  | "provider_saved";
 
 export type NotificationPriority = "high" | "medium" | "low";
 

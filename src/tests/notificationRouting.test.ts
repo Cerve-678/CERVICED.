@@ -166,7 +166,7 @@ describe('notification preferences gate the push', () => {
   const prefKeys = ['bookingConfirm', 'bookingReminder', 'bookingUpdates', 'promotions', 'newProviders', 'weeklySummary', 'maintenanceReminders'];
   const providerPrefKeys = [
     'providerNewBookings', 'providerBookingChanges', 'providerReminders', 'providerForms',
-    'providerMessages', 'providerPayments', 'providerReviews', 'providerDailyRecap', 'providerFullyBooked',
+    'providerMessages', 'providerPayments', 'providerReviews', 'providerDailyRecap', 'providerFullyBooked', 'providerSaves',
   ];
 
   it('reads preferences on the send path', () => {
@@ -319,5 +319,29 @@ describe('notification routing — Beauty Maintenance', () => {
     expect(edgeFunction()).toContain("maintenance_due: 'maintenanceReminders'");
     expect(edgeFunction()).toContain("aftercare_available: 'maintenanceReminders'");
     expect(databaseService()).toMatch(/maintenanceReminders: false,\n};/);
+  });
+});
+
+describe('notification routing — daily saves count', () => {
+  // A new type is four places, and only the DB CHECK rejects a miss: tsc and
+  // jest stay green while every insert fails (memory: new-notification-type-
+  // is-four-places).
+  it('declares provider_saved in the DB check, both type unions and the push map', () => {
+    const migration = read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql');
+    expect(migration).toMatch(/notifications_type_check[\s\S]*'provider_saved'/);
+    expect(read('src', 'types', 'database.ts')).toContain('| "provider_saved"');
+    expect(read('src', 'screens', 'shared', 'NotificationsScreen.tsx')).toContain("| 'provider_saved'");
+    expect(edgeFunction()).toContain("provider_saved: 'providerSaves'");
+  });
+
+  it('never names who saved the provider', () => {
+    const migration = read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql');
+    const insert = migration.slice(migration.indexOf('insert into public.notifications'));
+    expect(insert).not.toMatch(/users\b|\.name\b|display_name/);
+  });
+
+  it('sends a link-only pro to their own analytics', () => {
+    const source = read('src', 'screens', 'shared', 'NotificationsScreen.tsx');
+    expect(source).toContain("navigateProviderHome('LinkOnlyAnalytics')");
   });
 });
