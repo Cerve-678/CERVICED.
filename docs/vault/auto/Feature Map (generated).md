@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **94 files**
 - … +64 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **177 files**
+Curated: [[Availability & Slots]] · **176 files**
 - `src/services/AvailabilityService.ts` _(333)_
 - `src/services/databaseService.ts` _(303)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **177 files**
 - `src/types/database.ts` _(21)_
 - `src/screens/client/BookingsScreen.tsx` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- … +147 more
+- … +146 more
 
 ## Payments
 Curated: [[Payments]] · **140 files**
@@ -368,9 +368,9 @@ Curated: [[Payments]] · **73 files**
 - `src/types/booking.ts` _(7)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/features/bookings/paymentPresentation.ts` _(5)_
+- `src/screens/client/ProfileInfoScreen.tsx` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/constants/feeTerms.ts` _(4)_
-- `src/screens/client/ProfileInfoScreen.tsx` _(4)_
 - `src/screens/provider/PoliciesScreen.tsx` _(4)_
 - `src/utils/policyDisplay.ts` _(4)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
