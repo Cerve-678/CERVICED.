@@ -1554,9 +1554,9 @@ Not built yet. The details below are the reasoning and file pointers.
 
 What happens today: when a client saves (bookmarks) a link-only pro, the
 pro is told nothing. The only place a save shows up is the saves count in
-Link-only Analytics. Saving is also the moment a client agrees to get that
-pro's announcements, so for a link-only pro a save is the closest thing to
-a booking signal they have. ("Did you book?" answers don't notify the pro
+Link-only Analytics. For a link-only pro a save is the closest thing to a
+booking signal they have. (Announcements to savers were removed for
+link-only pros on 2026-10-19, so a save no longer means anything else.) ("Did you book?" answers don't notify the pro
 either.)
 
 What it would take:
