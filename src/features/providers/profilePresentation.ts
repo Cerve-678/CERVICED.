@@ -1,20 +1,33 @@
 import type { ProviderProfileData } from './profileTypes';
 import type { BusinessType } from '../../types/database';
-import { BUSINESS_TYPE_META } from '../business-details/options';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
+import { tr, type TranslationKey } from '../../i18n';
 
 /**
- * Re-exported, not re-declared: the labels live in BUSINESS_TYPE_META
- * (features/business-details/options.ts) with the rest of what defines a
- * business type, so a provider picking "Home Studio" and a client reading it
- * on a search card can never be shown two different words for one DB value.
+ * The client-facing name of each business type. The English must match
+ * BUSINESS_TYPE_META's labels (features/business-details/options.ts) so a
+ * provider picking "Home Studio" and a client reading it on a search card see
+ * the same words for one DB value.
  */
-export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = {
-  salon: BUSINESS_TYPE_META.salon.label,
-  studio: BUSINESS_TYPE_META.studio.label,
-  home_based: BUSINESS_TYPE_META.home_based.label,
-  mobile: BUSINESS_TYPE_META.mobile.label,
+const BUSINESS_TYPE_LABEL_KEYS: Record<BusinessType, TranslationKey> = {
+  salon: 'discover.businessType.salon',
+  studio: 'discover.businessType.studio',
+  home_based: 'discover.businessType.homeBased',
+  mobile: 'discover.businessType.mobile',
 };
+
+// Getters, so every read is in the current language (English text matches
+// BUSINESS_TYPE_META). Callers re-render on a language change because they
+// use useTranslation().
+export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = Object.defineProperties(
+  {} as Record<BusinessType, string>,
+  Object.fromEntries(
+    (Object.keys(BUSINESS_TYPE_LABEL_KEYS) as BusinessType[]).map(type => [
+      type,
+      { get: () => tr(BUSINESS_TYPE_LABEL_KEYS[type]), enumerable: true },
+    ]),
+  ),
+);
 
 /**
  * Business type is shown as an icon rather than its words wherever it sits in

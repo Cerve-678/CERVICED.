@@ -42,6 +42,7 @@ import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotifica
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
+import { useTranslation, localeForLanguage, type TranslationKey } from '../../i18n';
 import { getDistanceKm } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
@@ -60,10 +61,34 @@ type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'H
 // Mobile). Mirrors SearchScreen.tsx's FilterOptions.
 // Filter chips for business type: 'all' plus every real business_type value,
 // labelled exactly as the provider's own picker labels them.
-const SERVICE_TYPE_FILTERS: { label: string; value: 'all' | BusinessType }[] = [
-  { label: 'All', value: 'all' },
-  ...BUSINESS_TYPE_OPTS.map(o => ({ label: o.label, value: o.value })),
+// Labels are this screen's own keys (not BUSINESS_TYPE_OPTS' English labels)
+// so they translate without depending on another file's shape.
+const BUSINESS_TYPE_LABEL_KEYS: Record<BusinessType, TranslationKey> = {
+  salon: 'discover.businessType.salon',
+  studio: 'discover.businessType.studio',
+  home_based: 'discover.businessType.homeBased',
+  mobile: 'discover.businessType.mobile',
+};
+const SERVICE_TYPE_FILTERS: { labelKey: TranslationKey; value: 'all' | BusinessType }[] = [
+  { labelKey: 'discover.category.all', value: 'all' },
+  ...BUSINESS_TYPE_OPTS.map(o => ({ labelKey: BUSINESS_TYPE_LABEL_KEYS[o.value], value: o.value })),
 ];
+const SORT_LABEL_KEYS: Record<string, TranslationKey> = {
+  recommended: 'discover.home.sort.recommended',
+  rating: 'discover.home.sort.topRated',
+  'price-low': 'discover.home.sort.priceLow',
+  'price-high': 'discover.home.sort.priceHigh',
+  distance: 'discover.home.sort.nearest',
+};
+// Keys stay the stable section ids; the heading is translated at render.
+const PROVIDER_CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
+  'HAIR STYLISTS': 'discover.home.providers.hair',
+  'NAIL TECHS': 'discover.home.providers.nails',
+  'LASH TECHS': 'discover.home.providers.lashes',
+  'MAKEUP ARTISTS': 'discover.home.providers.mua',
+  'BROW SPECIALISTS': 'discover.home.providers.brows',
+  'AESTHETIC PRACTITIONERS': 'discover.home.providers.aesthetics',
+};
 
 interface FilterOptions {
   sortBy: 'recommended' | 'nearest' | 'highest-rated' | 'available-now';
@@ -182,6 +207,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
 });
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { palette: P } = useTheme();
   // Measured per render, not read once inside the memo: the coach-mark tour
@@ -216,38 +242,38 @@ export default function HomeScreen() {
     return [
       {
         key: 'tabs',
-        title: 'Your home base',
-        body: 'Swipe or tap to move between Becca, Explore, Home, Cart, and Profile.',
+        title: t('discover.home.tour.tabsTitle'),
+        body: t('discover.home.tour.tabsBody'),
         target: { rect: tabRect },
         radius: Platform.OS === 'android' ? 0 : tabRect.height / 2,
         icon: 'apps',
       },
       {
         key: 'search',
-        title: 'Find a provider',
-        body: 'Search by name, treatment, or category to find who you want to book.',
+        title: t('discover.home.tour.searchTitle'),
+        body: t('discover.home.tour.searchBody'),
         target: { ref: searchIconRef },
         radius: 18,
         icon: 'search',
       },
       {
         key: 'bell',
-        title: "You'll be notified here",
-        body: 'Booking confirmations, reminders, and messages show up in your notifications.',
+        title: t('discover.home.tour.bellTitle'),
+        body: t('discover.home.tour.bellBody'),
         target: { ref: bellIconRef },
         radius: 18,
         icon: 'notifications',
       },
       {
         key: 'bookings',
-        title: 'Your bookings',
-        body: 'Everything you\'ve booked — upcoming and past — lives here.',
+        title: t('discover.home.tour.bookingsTitle'),
+        body: t('discover.home.tour.bookingsBody'),
         target: { ref: bookingsChipRef },
         radius: 18,
         icon: 'calendar',
       },
     ];
-  }, [screenW, screenH, insets.bottom]);
+  }, [screenW, screenH, insets.bottom, t]);
 
   // Which step keys this account still has coming; null until resolved.
   const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
@@ -336,13 +362,15 @@ export default function HomeScreen() {
       id: p.id,
       title: p.title,
       description: p.description ?? '',
-      discount: p.discount_text ?? (p.discount_percent ? `${p.discount_percent}% OFF` : p.discount_amount ? `£${p.discount_amount} OFF` : 'OFFER'),
+      discount: p.discount_text ?? (p.discount_percent
+        ? t('discover.offers.percentOff', { percent: p.discount_percent })
+        : p.discount_amount ? t('discover.offers.amountOff', { amount: `£${p.discount_amount}` }) : t('discover.offers.offerBadge')),
       validUntil: p.valid_until,
-      providerName: p.providers?.display_name ?? 'Provider',
+      providerName: p.providers?.display_name ?? t('discover.offers.providerFallback'),
       logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
       ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
     })),
-  [rawPromotions]);
+  [rawPromotions, t]);
 
   const currentOffers = useMemo(() => allOffers.slice(0, 15), [allOffers]);
 
@@ -982,14 +1010,14 @@ export default function HomeScreen() {
   const renderMaleSection = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.maleServices')}</Text>
         <TouchableOpacity
           onPress={toggleViewAllMaleServices}
           style={styles.viewAllButton}
           activeOpacity={0.7}
         >
           <Text style={[styles.viewAll, { color: P.sub }]}>
-            {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+            {viewAllMaleServices ? t('discover.home.viewLess') : t('discover.home.viewAll')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1034,7 +1062,7 @@ export default function HomeScreen() {
       {AUDIENCE_SERVICE_PHOTOS_ENABLED && maleServiceCards.length > 0 && (
         <>
           <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
-            POPULAR MEN'S SERVICES
+            {t('discover.home.popularMens')}
           </Text>
           <ScrollView
             horizontal
@@ -1062,14 +1090,14 @@ export default function HomeScreen() {
   const renderKidsSection = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>KIDS SERVICES</Text>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.kidsServices')}</Text>
         <TouchableOpacity
           onPress={toggleViewAllKidsServices}
           style={styles.viewAllButton}
           activeOpacity={0.7}
         >
           <Text style={[styles.viewAll, { color: P.sub }]}>
-            {viewAllKidsServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+            {viewAllKidsServices ? t('discover.home.viewLess') : t('discover.home.viewAll')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1097,7 +1125,7 @@ export default function HomeScreen() {
       {AUDIENCE_SERVICE_PHOTOS_ENABLED && kidsServiceCards.length > 0 && (
         <>
           <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
-            POPULAR KIDS' SERVICES
+            {t('discover.home.popularKids')}
           </Text>
           <ScrollView
             horizontal
@@ -1140,7 +1168,7 @@ export default function HomeScreen() {
         <View style={[styles.header, { borderBottomColor: P.border, paddingTop: insets.top + 8 }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.brandText, { color: P.text }]}>CERVICED</Text>
-            <Text style={[styles.welcomeText, { color: P.sub }]}>Find your next appointment</Text>
+            <Text style={[styles.welcomeText, { color: P.sub }]}>{t('discover.home.welcome')}</Text>
           </View>
           <View style={styles.headerIcons}>
             <TouchableOpacity
@@ -1148,7 +1176,7 @@ export default function HomeScreen() {
               style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
               onPress={navigateToSearch}
               activeOpacity={0.7}
-              accessibilityLabel="Search providers"
+              accessibilityLabel={t('discover.home.searchA11y')}
               accessibilityRole="button"
             >
               <SearchIcon size={18} color={P.sub} />
@@ -1158,7 +1186,7 @@ export default function HomeScreen() {
               style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
               onPress={navigateToNotifications}
               activeOpacity={0.7}
-              accessibilityLabel="Notifications"
+              accessibilityLabel={t('discover.home.notificationsA11y')}
               accessibilityRole="button"
             >
               <BellIcon size={18} color={P.sub} />
@@ -1174,7 +1202,7 @@ export default function HomeScreen() {
               onPress={navigateToBookings}
               activeOpacity={0.7}
             >
-              <Text style={[styles.bookingsChipText, { color: P.onAccent }]}>Bookings</Text>
+              <Text style={[styles.bookingsChipText, { color: P.onAccent }]}>{t('discover.home.bookings')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1184,9 +1212,9 @@ export default function HomeScreen() {
         {!selectedService && providersData.yourProviders.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
+              <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.saved.title')}</Text>
               <TouchableOpacity onPress={navigateToBookmarks}>
-                <Text style={[styles.viewAll, { color: P.sub }]}>VIEW ALL {'>'}</Text>
+                <Text style={[styles.viewAll, { color: P.sub }]}>{t('discover.home.viewAll')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -1210,13 +1238,13 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ) : null}
               <Text style={[styles.sectionTitle, { color: P.text }]}>
-                CHOOSE YOUR SERVICE
+                {t('discover.home.chooseService')}
               </Text>
             </View>
             {!selectedService && (
               <TouchableOpacity onPress={toggleViewAllServices}>
                 <Text style={[styles.viewAll, { color: P.sub }]}>
-                  {viewAllServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+                  {viewAllServices ? t('discover.home.viewLess') : t('discover.home.viewAll')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1246,13 +1274,13 @@ export default function HomeScreen() {
                     style={styles.filterButtonActive}
                     onPress={toggleFilters}
                     activeOpacity={0.7}
-                    accessibilityLabel="Filters"
+                    accessibilityLabel={t('discover.home.filtersA11y')}
                     accessibilityRole="button"
                     accessibilityState={{ expanded: filtersExpanded }}
                   >
                     <View style={styles.filterButtonBlur}>
                       <Text style={[styles.filterButtonText, { color: P.sub }]}>
-                        FILTERS {filtersExpanded ? '▲' : '▼'}
+                        {t('discover.home.filters')} {filtersExpanded ? '▲' : '▼'}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -1268,16 +1296,16 @@ export default function HomeScreen() {
                       >
                         {/* Header with Reset */}
                         <View style={styles.filterDropdownHeader}>
-                          <Text style={[styles.filterDropdownTitle, { color: P.text }]}>FILTER OPTIONS</Text>
+                          <Text style={[styles.filterDropdownTitle, { color: P.text }]}>{t('discover.home.filterOptions')}</Text>
                           <TouchableOpacity onPress={resetFilters}>
-                            <Text style={[styles.resetText, { color: P.accentText }]}>RESET</Text>
+                            <Text style={[styles.resetText, { color: P.accentText }]}>{t('discover.home.reset')}</Text>
                           </TouchableOpacity>
                         </View>
 
                         {/* Hair Type Selector for HAIR service */}
                         {selectedService === 'HAIR' && (
                           <View style={styles.filterSection}>
-                            <Text style={[styles.filterSectionTitle, { color: P.text }]}>HAIR TYPE</Text>
+                            <Text style={[styles.filterSectionTitle, { color: P.text }]}>{t('discover.home.hairType')}</Text>
                             <HairTypeSelector
                               onSelect={(hairType) => {
                                 setSelectedHairType(hairType);
@@ -1291,16 +1319,9 @@ export default function HomeScreen() {
 
                         {/* Sort By */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>SORT BY</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>{t('discover.home.sortBy')}</Text>
                           <View style={styles.filterChipsRow}>
                             {['recommended', 'rating', 'price-low', 'price-high', 'distance'].map((sort) => {
-                              const labels = {
-                                recommended: 'Recommended',
-                                rating: 'Top Rated',
-                                'price-low': 'Price ↑',
-                                'price-high': 'Price ↓',
-                                distance: 'Nearest',
-                              };
                               const isActive = activeFilters.sortBy === sort;
                               return (
                                 <TouchableOpacity
@@ -1326,7 +1347,7 @@ export default function HomeScreen() {
                                       }
                                     ]}
                                   >
-                                    {labels[sort as keyof typeof labels]}
+                                    {SORT_LABEL_KEYS[sort] ? t(SORT_LABEL_KEYS[sort]!) : sort}
                                   </Text>
                                 </TouchableOpacity>
                               );
@@ -1336,7 +1357,7 @@ export default function HomeScreen() {
 
                         {/* Price Range */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>PRICE RANGE</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>{t('discover.home.priceRange')}</Text>
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: '<£30', value: { min: 0, max: 30 } },
@@ -1381,13 +1402,13 @@ export default function HomeScreen() {
 
                         {/* Rating */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>MINIMUM RATING</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>{t('discover.home.minRating')}</Text>
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: '4.5+★', value: 4.5 },
                               { label: '4.0+★', value: 4.0 },
                               { label: '3.5+★', value: 3.5 },
-                              { label: 'Any', value: 0 },
+                              { label: t('discover.home.any'), value: 0 },
                             ].map((rating) => {
                               const isActive = activeFilters.rating === rating.value;
                               return (
@@ -1424,13 +1445,13 @@ export default function HomeScreen() {
 
                         {/* Distance */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>DISTANCE</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>{t('discover.home.distance')}</Text>
                           <View style={styles.filterChipsRow}>
                             {[
-                              { label: '<1mi', value: 1 },
-                              { label: '<3mi', value: 3 },
-                              { label: '<5mi', value: 5 },
-                              { label: 'Any', value: 999 },
+                              { label: t('discover.home.withinMiles', { miles: 1 }), value: 1 },
+                              { label: t('discover.home.withinMiles', { miles: 3 }), value: 3 },
+                              { label: t('discover.home.withinMiles', { miles: 5 }), value: 5 },
+                              { label: t('discover.home.any'), value: 999 },
                             ].map((distance) => {
                               const isActive = activeFilters.distance === distance.value;
                               return (
@@ -1467,12 +1488,12 @@ export default function HomeScreen() {
 
                         {/* Availability */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>AVAILABILITY</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>{t('discover.home.availability')}</Text>
                           <View style={styles.filterChipsRow}>
                             {[
-                              { label: 'Today', value: 'today' as const },
-                              { label: 'This Week', value: 'this-week' as const },
-                              { label: 'Any Time', value: 'any' as const },
+                              { label: t('common.date.today'), value: 'today' as const },
+                              { label: t('discover.home.thisWeek'), value: 'this-week' as const },
+                              { label: t('discover.home.anyTime'), value: 'any' as const },
                             ].map((avail) => {
                               const isActive = activeFilters.availability === avail.value;
                               return (
@@ -1509,7 +1530,7 @@ export default function HomeScreen() {
 
                         {/* Service Type */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>SERVICE TYPE</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>{t('discover.home.serviceType')}</Text>
                           <View style={styles.filterChipsRow}>
                             {/* Built from BUSINESS_TYPE_OPTS, not a hand-written
                                 copy of it — the filter chips a client picks
@@ -1541,7 +1562,7 @@ export default function HomeScreen() {
                                       }
                                     ]}
                                   >
-                                    {type.label}
+                                    {t(type.labelKey)}
                                   </Text>
                                 </TouchableOpacity>
                               );
@@ -1632,14 +1653,14 @@ export default function HomeScreen() {
             {(providersLoading || providersData.recommended.length > 0) && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>RECOMMENDED FOR YOU</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.recommended')}</Text>
                 <TouchableOpacity
                   onPress={toggleViewAllRecommended}
                   style={styles.viewAllButton}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.viewAll, { color: P.sub }]}>
-                    {viewAllRecommended ? 'VIEW LESS <' : 'VIEW ALL >'}
+                    {viewAllRecommended ? t('discover.home.viewLess') : t('discover.home.viewAll')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1670,7 +1691,7 @@ export default function HomeScreen() {
             {trending.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.trending')}</Text>
                 </View>
                 <ProviderRail providers={trending} keyPrefix="trending" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
               </View>
@@ -1681,7 +1702,7 @@ export default function HomeScreen() {
             {newProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.newOn')}</Text>
                 </View>
                 <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               </View>
@@ -1692,7 +1713,7 @@ export default function HomeScreen() {
             {topRated.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.topRated')}</Text>
                 </View>
                 <ProviderRail providers={topRated} keyPrefix="toprated" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
               </View>
@@ -1703,7 +1724,7 @@ export default function HomeScreen() {
             {recentlyViewed.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.recentlyViewed')}</Text>
                 </View>
                 <RoundProviderRail providers={recentlyViewed} keyPrefix="recent" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               </View>
@@ -1712,14 +1733,14 @@ export default function HomeScreen() {
             {/* BROWSE BY PROVIDER */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>BROWSE BY PROVIDER</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.browseByProvider')}</Text>
                 <TouchableOpacity
                   onPress={toggleViewAllProviders}
                   style={styles.viewAllButton}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.viewAll, { color: P.sub }]}>
-                    {viewAllProviders ? 'VIEW LESS <' : 'VIEW ALL >'}
+                    {viewAllProviders ? t('discover.home.viewLess') : t('discover.home.viewAll')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1733,7 +1754,7 @@ export default function HomeScreen() {
 
                     return (
                       <View key={category} style={styles.categorySection}>
-                        <Text style={[styles.categoryLabel, { color: P.text }]}>{category}</Text>
+                        <Text style={[styles.categoryLabel, { color: P.text }]}>{PROVIDER_CATEGORY_LABEL_KEYS[category] ? t(PROVIDER_CATEGORY_LABEL_KEYS[category]!) : category}</Text>
                         <ScrollView
                           horizontal
                           showsHorizontalScrollIndicator={false}
@@ -1758,7 +1779,7 @@ export default function HomeScreen() {
                 <View>
                   {providersData.hairProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR STYLISTS</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>{t('discover.home.providers.hair')}</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -1780,7 +1801,7 @@ export default function HomeScreen() {
 
                   {providersData.nailProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAIL TECHS</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>{t('discover.home.providers.nails')}</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -1818,12 +1839,12 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.sectionTitle, { color: P.text }]}>
-                  NEAR YOU{manualLocationLabel
+                  {t('discover.home.nearYou')}{manualLocationLabel
                     ? ` · ${manualLocationLabel.split(',')[0]!.toUpperCase()}`
-                    : locationIsCoarse ? ' · APPROXIMATE' : ''}
+                    : locationIsCoarse ? ` · ${t('discover.home.approximate')}` : ''}
                 </Text>
                 <Text style={[styles.viewAll, { color: P.sub }]}>
-                  {userCoords ? 'CHANGE' : 'SET AREA'}
+                  {userCoords ? t('discover.home.change') : t('discover.home.setArea')}
                 </Text>
               </TouchableOpacity>
 
@@ -1839,7 +1860,7 @@ export default function HomeScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.nearYouPromptText, { color: P.sub }]}>
-                    Enable location or choose your area to see providers near you
+                    {t('discover.home.nearYouPrompt')}
                   </Text>
                 </TouchableOpacity>
               ) : (
@@ -1869,9 +1890,9 @@ export default function HomeScreen() {
                 Temporarily pulled entirely via OFFERS_ENABLED, see FUTURE_LOGIC.md. */}
             {OFFERS_ENABLED && currentOffers.length > 0 && <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>CURRENT OFFERS</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.currentOffers')}</Text>
                 <TouchableOpacity onPress={handleViewAllOffers}>
-                  <Text style={[styles.viewAll, { color: P.sub }]}>VIEW ALL {'>'}</Text>
+                  <Text style={[styles.viewAll, { color: P.sub }]}>{t('discover.home.viewAll')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1905,7 +1926,7 @@ export default function HomeScreen() {
                           {offer.description}
                         </Text>
                         <Text style={[styles.offerValidText, { color: P.sub }]} numberOfLines={1}>
-                          Exp {new Date(offer.validUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          {t('discover.offers.expires', { date: new Date(offer.validUntil).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' }) })}
                         </Text>
                       </View>
                     </View>
@@ -1927,7 +1948,7 @@ export default function HomeScreen() {
             {previouslyBookedProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>BOOK AGAIN</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>{t('discover.home.bookAgain')}</Text>
                 </View>
 
                 <RoundProviderRail providers={previouslyBookedProviders.slice(0, 15)} keyPrefix="booked" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />

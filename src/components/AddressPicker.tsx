@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from '../i18n';
 
 export type AddressSelection = {
   address: string;
@@ -65,6 +66,7 @@ export const __formatAddressForTest = formatAddress;
  * selected, formatted street address rather than the provider's public area.
  */
 export default function AddressPicker({ value, onChange, accentColor = '#C2185B', disabled }: AddressPickerProps) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<AddressResult[]>([]);
@@ -104,25 +106,25 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
       setResults(formatted);
     } catch {
       setResults([]);
-      Alert.alert('Address search unavailable', 'Check your connection and try again, or enter your full address.');
+      Alert.alert(t('discover.address.searchUnavailableTitle'), t('discover.address.searchUnavailable'));
     } finally {
       setSearching(false);
     }
-  }, [query]);
+  }, [query, t]);
 
   const handleUseCurrentLocation = useCallback(async () => {
     setSearching(true);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert('Location permission needed', 'Allow location access to use your current address.');
+        Alert.alert(t('discover.address.permissionTitle'), t('discover.address.permission'));
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const [address] = await Location.reverseGeocodeAsync(position.coords);
       const formatted = address ? formatAddress(address) : '';
       if (!formatted) {
-        Alert.alert('Address not found', "We couldn't identify an address for your current location.");
+        Alert.alert(t('discover.address.notFoundTitle'), t('discover.address.notFound'));
         return;
       }
       setQuery(formatted);
@@ -132,11 +134,11 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
         key: formatted,
       }]);
     } catch {
-      Alert.alert('Location unavailable', "We couldn't retrieve your current address. Try searching instead.");
+      Alert.alert(t('discover.address.unavailableTitle'), t('discover.address.unavailable'));
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [t]);
 
   const selectAddress = (selection: AddressSelection) => {
     onChange(selection);
@@ -152,11 +154,11 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
         disabled={disabled}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel="Choose full business address"
+        accessibilityLabel={t('discover.address.chooseBusinessA11y')}
       >
         <Ionicons name="location-outline" size={20} color={accentColor} />
         <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
-          {value || 'Search and select your full address'}
+          {value || t('discover.address.fieldPlaceholder')}
         </Text>
         <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
       </TouchableOpacity>
@@ -172,10 +174,10 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
           <View style={styles.handle} />
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Choose your full address</Text>
-              <Text style={styles.subtitle}>Search by street and postcode, then select the matching address.</Text>
+              <Text style={styles.title}>{t('discover.address.title')}</Text>
+              <Text style={styles.subtitle}>{t('discover.address.subtitle')}</Text>
             </View>
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setVisible(false); }} hitSlop={12} accessibilityLabel="Close address picker">
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setVisible(false); }} hitSlop={12} accessibilityLabel={t('discover.address.closeA11y')}>
               <Ionicons name="close" size={24} color="#1C1C1E" />
             </TouchableOpacity>
           </View>
@@ -185,7 +187,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
             <TextInput
               value={query}
               onChangeText={text => { setQuery(text); setResults([]); }}
-              placeholder="42 Oak Street, London, N1 2AB"
+              placeholder={t('discover.address.example')}
               placeholderTextColor="#8B8B95"
               style={styles.input}
               autoCapitalize="words"
@@ -198,11 +200,11 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
 
           <View style={styles.actions}>
             <TouchableOpacity style={[styles.actionButton, { borderColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); search(); }} disabled={searching}>
-              <Text style={[styles.actionText, { color: accentColor }]}>Search address</Text>
+              <Text style={[styles.actionText, { color: accentColor }]}>{t('discover.address.search')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.currentButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleUseCurrentLocation(); }} disabled={searching}>
               <Ionicons name="navigate-outline" size={17} color="#1C1C1E" />
-              <Text style={styles.currentText}>Use current location</Text>
+              <Text style={styles.currentText}>{t('discover.address.useCurrent')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -214,7 +216,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
               </TouchableOpacity>
             ))}
             {results.length === 0 && !searching && (
-              <Text style={styles.empty}>Enter a street and postcode, then tap “Search address”.</Text>
+              <Text style={styles.empty}>{t('discover.address.empty', { action: t('discover.address.search') })}</Text>
             )}
           </ScrollView>
           {Platform.OS === 'ios' ? <View style={styles.safeBottom} /> : null}

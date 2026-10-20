@@ -29,12 +29,21 @@ import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { logger } from '../../utils/logger';
+import { useTranslation, type TranslationKey } from '../../i18n';
 
 
 type ServiceType = 'ALL' | 'HAIR' | 'NAILS' | 'MUA' | 'LASHES' | 'AESTHETICS' | 'BROWS';
-const SERVICE_TABS: { key: ServiceType; label: string }[] =
-  (['ALL', 'HAIR', 'NAILS', 'MUA', 'LASHES', 'AESTHETICS', 'BROWS'] as ServiceType[])
-    .map(s => ({ key: s, label: s }));
+const SERVICE_TYPES: readonly ServiceType[] = ['ALL', 'HAIR', 'NAILS', 'MUA', 'LASHES', 'AESTHETICS', 'BROWS'];
+// Tab keys are the stored category values; only the label is translated.
+const CATEGORY_LABEL_KEYS: Record<ServiceType, TranslationKey> = {
+  ALL: 'discover.category.all',
+  HAIR: 'discover.category.hair',
+  NAILS: 'discover.category.nails',
+  MUA: 'discover.category.mua',
+  LASHES: 'discover.category.lashes',
+  AESTHETICS: 'discover.category.aesthetics',
+  BROWS: 'discover.category.brows',
+};
 type BookmarkedProvidersScreenNavigationProp = StackNavigationProp<HomeStackParamList, 'BookmarkedProviders'>;
 
 interface Props {
@@ -97,6 +106,7 @@ const skeletonStyles = StyleSheet.create({
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
   const { theme, palette: P } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
 
@@ -130,6 +140,11 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     return counts;
   }, [bookings]);
 
+  const serviceTabs = useMemo(
+    () => SERVICE_TYPES.map(key => ({ key, label: t(CATEGORY_LABEL_KEYS[key]).toUpperCase() })),
+    [t],
+  );
+
   const filteredProviders = useMemo(
     () => selectedService === 'ALL'
       ? liveProviders
@@ -156,7 +171,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         // screen ended up with a back button that drew fine and did nothing.
         // A title is never interactive, so it should never take touches.
         <View style={styles.headerTitleRow} pointerEvents="none">
-          <Text style={[styles.screenTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
+          <Text style={[styles.screenTitle, { color: P.text }]}>{t('discover.saved.title')}</Text>
           {liveProviders.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
               <Text style={[styles.countBadgeText, { color: P.sub }]}>{liveProviders.length}</Text>
@@ -178,7 +193,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       // positioned View over the top of the screen for no reason. Leaving it
       // unset with headerTransparent already gives a transparent bar.
     });
-  }, [navigation, P, liveProviders.length]);
+  }, [navigation, P, liveProviders.length, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -237,12 +252,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           <Icon name="bookmark" size={26} color={P.accentText} />
         </View>
         <Text style={[styles.emptyTitle, { color: P.text }]}>
-          {liveProviders.length === 0 ? 'No Saved Providers' : `No ${selectedService} providers saved`}
+          {liveProviders.length === 0 ? t('discover.saved.emptyTitle') : t('discover.saved.emptyCategoryTitle', { category: t(CATEGORY_LABEL_KEYS[selectedService]) })}
         </Text>
         <Text style={[styles.emptySubtitle, { color: P.sub }]}>
           {liveProviders.length === 0
-            ? 'Save providers you love to find them quickly here'
-            : `You haven't bookmarked any ${selectedService.toLowerCase()} providers yet`}
+            ? t('discover.saved.emptySub')
+            : t('discover.saved.emptyCategorySub', { category: t(CATEGORY_LABEL_KEYS[selectedService]) })}
         </Text>
         {liveProviders.length === 0 ? (
           <TouchableOpacity
@@ -250,12 +265,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
             onPress={() => navigation.goBack()}
             activeOpacity={0.8}
           >
-            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>Explore Providers</Text>
+            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>{t('discover.saved.explore')}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
     </View>
-  ), [P, liveProviders.length, navigation, selectedService]);
+  ), [P, liveProviders.length, navigation, selectedService, t]);
 
   if (loading) {
     return (
@@ -287,7 +302,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         >
           {liveProviders.length > 0 && (
             <SlidingTabs
-              tabs={SERVICE_TABS}
+              tabs={serviceTabs}
               activeKey={selectedService}
               onPress={handleServicePress}
               accentColor={P.accent}
@@ -332,6 +347,7 @@ interface BookmarkGridCardProps {
 }
 
 const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove }: BookmarkGridCardProps) {
+  const { t, tp } = useTranslation();
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -378,7 +394,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
               </View>
               {hasOffer && (
                 <View style={[styles.offerChip, { backgroundColor: P.accent }]}>
-                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>OFFER</Text>
+                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>{t('discover.offers.offerBadge')}</Text>
                 </View>
               )}
             </View>
@@ -417,7 +433,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
             {appointmentCount > 0 && (
               <View style={[styles.visitsChip, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                 <Text style={[styles.visitsChipText, { color: P.text }]}>
-                  {appointmentCount} {appointmentCount === 1 ? 'appointment' : 'appointments'}
+                  {tp('discover.saved.appointments', appointmentCount)}
                 </Text>
               </View>
             )}

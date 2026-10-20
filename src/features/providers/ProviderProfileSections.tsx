@@ -19,6 +19,7 @@ import TabIcon from "../../components/TabIcon";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./useProviderProfileData";
+import { useTranslation } from "../../i18n";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -49,10 +50,11 @@ export const ProviderSpecialitiesSection = React.memo(function ProviderSpecialit
   textColor: string;
   accent: string;
 }) {
+  const { t } = useTranslation();
   if (specialities.length === 0) return null;
   return (
     <View style={styles.plainSection}>
-      <Text style={[styles.plainTitle, { color: textColor }]}>Specialities</Text>
+      <Text style={[styles.plainTitle, { color: textColor }]}>{t("discover.profile.specialities")}</Text>
       <View style={styles.chipRow}>
         {specialities.map(speciality => (
           <View
@@ -78,6 +80,7 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
   palette: SectionPalette;
   onSeeAll: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <BlurView
       intensity={palette.blurIntensity}
@@ -85,12 +88,12 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
       style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Reviews</Text>
+      <Text style={[styles.cardTitle, { color: palette.text }]}>{t("discover.profile.reviews")}</Text>
       {loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: palette.sub }]}>Loading reviews…</Text>
+        <Text style={[styles.bodyText, { color: palette.sub }]}>{t("discover.profile.loadingReviews")}</Text>
       ) : null}
       {!loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: palette.sub }]}>No reviews yet.</Text>
+        <Text style={[styles.bodyText, { color: palette.sub }]}>{t("discover.profile.noReviews")}</Text>
       ) : null}
       {reviews.slice(0, 5).map(review => (
         <View key={review.id} style={[styles.review, { borderBottomColor: palette.separator }]}>
@@ -114,7 +117,7 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
         </View>
       ))}
       <TouchableOpacity style={styles.textButton} onPress={onSeeAll} activeOpacity={0.6}>
-        <Text style={[styles.textButtonLabel, { color: palette.text }]}>See All Reviews</Text>
+        <Text style={[styles.textButtonLabel, { color: palette.text }]}>{t("discover.profile.seeAllReviews")}</Text>
       </TouchableOpacity>
     </BlurView>
   );
@@ -129,10 +132,11 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
   loading?: boolean;
   palette: SectionPalette;
 }) {
+  const { t } = useTranslation();
   if (loading) {
     return (
       <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }]}>
-        <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
+        <Text style={[styles.cardTitle, { color: palette.text }]}>{t("discover.profile.openingHours")}</Text>
         <View style={[styles.loadingLine, { backgroundColor: palette.separator }]} />
         <View style={[styles.loadingLine, styles.loadingLineShort, { backgroundColor: palette.separator }]} />
       </View>
@@ -147,7 +151,7 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
       style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
+      <Text style={[styles.cardTitle, { color: palette.text }]}>{t("discover.profile.openingHours")}</Text>
       {openingHours.map((day, index) => (
         <View
           key={day.dayOfWeek}
@@ -161,7 +165,7 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
             {day.label}
           </Text>
           <Text style={[styles.hoursValue, { color: day.isOpen ? palette.text : palette.sub }]}>
-            {day.isOpen ? day.hours : "Closed"}
+            {day.isOpen ? day.hours : t("discover.profile.closed")}
           </Text>
         </View>
       ))}
@@ -189,14 +193,15 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   onOpenPublicLink: (url: string) => void;
   onGetInTouch: () => void;
 }) {
+  const { t } = useTranslation();
   const rows = [
-    contact.location ? { label: "Location", value: contact.location, url: null, publicLink: false } : null,
-    contact.phone ? { label: "Phone", value: "Message ›", url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
-    contact.whatsapp ? { label: "WhatsApp", value: "Open ›", url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
-    contact.email ? { label: "Email", value: "Send ›", url: `mailto:${contact.email}`, publicLink: false } : null,
-    contact.instagram ? { label: "Instagram", value: `@${contact.instagram} ›`, url: `https://instagram.com/${contact.instagram}`, publicLink: true } : null,
-    contact.website ? { label: "Website", value: "Visit ›", url: contact.website, publicLink: true } : null,
-  ].filter((row): row is { label: string; value: string; url: string | null; publicLink: boolean } => row != null);
+    contact.location ? { id: "location", label: t("discover.profile.contactRow.location"), value: contact.location, url: null, publicLink: false } : null,
+    contact.phone ? { id: "phone", label: t("discover.profile.contactRow.phone"), value: t("discover.profile.contactAction.message"), url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
+    contact.whatsapp ? { id: "whatsapp", label: "WhatsApp", value: t("discover.profile.contactAction.open"), url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
+    contact.email ? { id: "email", label: t("discover.profile.contactRow.email"), value: t("discover.profile.contactAction.send"), url: `mailto:${contact.email}`, publicLink: false } : null,
+    contact.instagram ? { id: "instagram", label: "Instagram", value: `@${contact.instagram} ›`, url: `https://instagram.com/${contact.instagram}`, publicLink: true } : null,
+    contact.website ? { id: "website", label: t("discover.profile.contactRow.website"), value: t("discover.profile.contactAction.visit"), url: contact.website, publicLink: true } : null,
+  ].filter((row): row is { id: string; label: string; value: string; url: string | null; publicLink: boolean } => row != null);
 
   return (
     <BlurView
@@ -205,7 +210,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
       style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Contact</Text>
+      <Text style={[styles.cardTitle, { color: palette.text }]}>{t("discover.profile.contact")}</Text>
       {rows.map(row => {
         const content = (
           <>
@@ -215,7 +220,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
         );
         return row.url ? (
           <TouchableOpacity
-            key={row.label}
+            key={row.id}
             style={[styles.contactRow, { borderBottomColor: palette.separator }]}
             onPress={() => (row.publicLink ? onOpenPublicLink(row.url!) : onOpenLink(row.url!))}
             activeOpacity={0.75}
@@ -223,7 +228,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
             {content}
           </TouchableOpacity>
         ) : (
-          <View key={row.label} style={[styles.contactRow, { borderBottomColor: palette.separator }]}>
+          <View key={row.id} style={[styles.contactRow, { borderBottomColor: palette.separator }]}>
             {content}
           </View>
         );
@@ -233,7 +238,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
         onPress={onGetInTouch}
         activeOpacity={0.8}
       >
-        <Text style={styles.contactButtonText}>Get In Touch</Text>
+        <Text style={styles.contactButtonText}>{t("discover.profile.getInTouch")}</Text>
       </TouchableOpacity>
     </BlurView>
   );
@@ -254,6 +259,7 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   palette: SectionPalette;
   onOpenImage: (images: { uri: string }[], index: number) => void;
 }) {
+  const { t } = useTranslation();
   const venueImages = useMemo(
     () => venueItems.map(item => ({ uri: item.image_url })),
     [venueItems],
@@ -266,7 +272,7 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
       style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Additional Information</Text>
+      <Text style={[styles.cardTitle, { color: palette.text }]}>{t("discover.profile.additionalInfo")}</Text>
       {groups.map((group, index) => (
         <View key={group.label} style={[styles.infoBlock, index === 0 && styles.infoBlockFirst]}>
           <Text style={[styles.infoLabel, { color: palette.sub }]}>{group.label}</Text>
@@ -281,19 +287,19 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
       ))}
       {qualifications ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Qualifications</Text>
+          <Text style={[styles.infoLabel, { color: palette.sub }]}>{t("discover.profile.qualifications")}</Text>
           <Text style={[styles.infoText, { color: palette.text }]}>{qualifications}</Text>
         </View>
       ) : null}
       {goodToKnow ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Good to know</Text>
+          <Text style={[styles.infoLabel, { color: palette.sub }]}>{t("discover.profile.goodToKnow")}</Text>
           <Text style={[styles.infoText, { color: palette.text }]}>{goodToKnow}</Text>
         </View>
       ) : null}
       {venueItems.length > 0 ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Venue</Text>
+          <Text style={[styles.infoLabel, { color: palette.sub }]}>{t("discover.profile.venue")}</Text>
           <FlatList
             data={venueItems}
             horizontal
@@ -341,6 +347,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   onOpenImage: (images: { uri: string }[], index: number) => void;
   interactiveImages?: boolean;
 }) {
+  const { t } = useTranslation();
   const [showAll, setShowAll] = useState(false);
   // Measured per render rather than captured at module load, so the two-column
   // maths stays right after a rotation or in split-screen.
@@ -363,7 +370,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   if (loading) {
     return (
       <View style={styles.portfolioSection}>
-        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        <Text style={[styles.plainTitle, { color: palette.text }]}>{t("discover.profile.portfolio")}</Text>
         <View style={styles.columns}>
           {[0, 1].map(column => (
             <View key={column} style={[styles.loadingPortfolioTile, { backgroundColor: palette.separator }]} />
@@ -383,10 +390,10 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   return (
     <View style={styles.portfolioSection}>
       <View style={styles.portfolioHeading}>
-        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        <Text style={[styles.plainTitle, { color: palette.text }]}>{t("discover.profile.portfolio")}</Text>
         {items.length > INLINE_PORTFOLIO_LIMIT ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
-            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
+            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>{t("discover.profile.seeAllCount", { count: items.length })}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -423,13 +430,13 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         <SafeAreaView style={[styles.modal, { backgroundColor: palette.background }]}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={[styles.modalTitle, { color: palette.text }]}>Portfolio</Text>
+              <Text style={[styles.modalTitle, { color: palette.text }]}>{t("discover.profile.portfolio")}</Text>
               <Text style={[styles.modalSubtitle, { color: palette.sub }]}>{items.length} photos</Text>
             </View>
             <TouchableOpacity
               style={[styles.closeButton, { backgroundColor: palette.cardBackground }]}
               onPress={() => setShowAll(false)}
-              accessibilityLabel="Close portfolio"
+              accessibilityLabel={t("discover.profile.closePortfolioA11y")}
             >
               <Ionicons name="close" size={22} color={palette.text} />
             </TouchableOpacity>

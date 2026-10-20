@@ -12,7 +12,8 @@
 // availability at all. They sat behind a query whose answer was then thrown
 // away, so the row popped in a beat late for no reason.
 
-import { ordinalSuffix } from './dateUtils';
+import { ordinalDay } from './dateUtils';
+import { tr } from '../i18n/translate';
 
 /** The minimum an availability summary must expose for this decision. Kept
  *  structural rather than importing AvailabilitySummary, so this helper
@@ -44,11 +45,11 @@ export function resolveSlotsRow(args: {
   const { scheduleReleaseDay, availability, availabilityLoading } = args;
 
   if (scheduleReleaseDay != null) {
-    return { kind: 'text', text: `New slots drop on the ${ordinalSuffix(scheduleReleaseDay)}` };
+    return { kind: 'text', text: tr('discover.slots.releaseDay', { day: ordinalDay(scheduleReleaseDay) }) };
   }
   if (availabilityLoading) return { kind: 'waiting' };
 
   const headline =
     availability && availability.state !== 'unpublished' ? availability.headline : '';
-  return { kind: 'text', text: headline || 'Availability on request' };
+  return { kind: 'text', text: headline || tr('discover.slots.onRequest') };
 }

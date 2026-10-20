@@ -45,6 +45,7 @@ import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
 import { logger } from '../../utils/logger';
+import { useTranslation, tr, type TranslationKey } from '../../i18n';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
   resolveProviderPriceRange,
@@ -212,8 +213,26 @@ const CATEGORY_CODE_MAP: Record<string, string> = {
 // the free-text custom_service_type that gave it meaning was never searchable.
 // Providers still stamped OTHER are reachable by name and by their services —
 // they just aren't offered as a category to browse.
-const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics']
-  .map(c => ({ key: c, label: c }));
+// Tab keys are the English ids CATEGORY_CODE_MAP and selectedFilter use; only
+// the label is translated (in buildSearchOptions).
+const SEARCH_CATEGORY_KEYS: readonly { key: string; labelKey: TranslationKey }[] = [
+  { key: 'All', labelKey: 'discover.category.all' },
+  { key: 'Hair', labelKey: 'discover.category.hair' },
+  { key: 'Nails', labelKey: 'discover.category.nails' },
+  { key: 'Makeup', labelKey: 'discover.category.makeup' },
+  { key: 'Lashes', labelKey: 'discover.category.lashes' },
+  { key: 'Brows', labelKey: 'discover.category.brows' },
+  { key: 'Aesthetics', labelKey: 'discover.category.aesthetics' },
+];
+// Card pill: provider.service is the stored category code ('HAIR').
+const SEARCH_CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
+  HAIR: 'discover.category.hair',
+  NAILS: 'discover.category.nails',
+  MUA: 'discover.category.mua',
+  LASHES: 'discover.category.lashes',
+  BROWS: 'discover.category.brows',
+  AESTHETICS: 'discover.category.aesthetics',
+};
 
 // Price matching lives in src/utils/providerPriceMatch.ts, alongside the
 // tier fallback it needs — the card's displayed range and the Price filter's
@@ -228,62 +247,73 @@ const KM_TO_MILES = 0.621371;
 // instead of one big panel covering every filter at once. ──────────────────
 type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city' | 'hairType' | 'audience' | 'practice' | 'specialty';
 
-const SORT_OPTIONS = [
-  { value: 'recommended', label: 'Recommended' },
-  { value: 'rating', label: 'Top Rated' },
-  { value: 'price-low', label: 'Price: Low to High' },
-  { value: 'price-high', label: 'Price: High to Low' },
-  { value: 'distance', label: 'Nearest' },
-] as const;
+type Translate = ReturnType<typeof useTranslation>['t'];
+type TranslatePlural = ReturnType<typeof useTranslation>['tp'];
 
-const PRICE_OPTIONS = [
-  { label: '<£30', value: { min: 0, max: 30 } },
-  { label: '£30–£60', value: { min: 30, max: 60 } },
-  { label: '£60–£100', value: { min: 60, max: 100 } },
-  { label: '£100+', value: { min: 100, max: 9999 } },
-];
+/** Every option list the filter sheet and chips draw, in the current
+ *  language. Values are unchanged — only labels are translated. */
+function buildSearchOptions(t: Translate, tp: TranslatePlural) {
+  const SORT_OPTIONS = [
+    { value: 'recommended', label: t('discover.search.sort.recommended') },
+    { value: 'rating', label: t('discover.search.sort.topRated') },
+    { value: 'price-low', label: t('discover.search.sort.priceLow') },
+    { value: 'price-high', label: t('discover.search.sort.priceHigh') },
+    { value: 'distance', label: t('discover.search.sort.nearest') },
+  ] as const;
 
-const RATING_OPTIONS = [
-  { label: '4.5+ ★', value: 4.5 },
-  { label: '4.0+ ★', value: 4.0 },
-  { label: '3.5+ ★', value: 3.5 },
-  { label: 'Any rating', value: 0 },
-];
+  const PRICE_OPTIONS = [
+    { label: '<£30', value: { min: 0, max: 30 } },
+    { label: '£30–£60', value: { min: 30, max: 60 } },
+    { label: '£60–£100', value: { min: 60, max: 100 } },
+    { label: '£100+', value: { min: 100, max: 9999 } },
+  ];
 
-const DISTANCE_OPTIONS = [
-  { label: 'Under 1 mile', value: 1 },
-  { label: 'Under 3 miles', value: 3 },
-  { label: 'Under 5 miles', value: 5 },
-  { label: 'Any distance', value: 999 },
-];
+  const RATING_OPTIONS = [
+    { label: '4.5+ ★', value: 4.5 },
+    { label: '4.0+ ★', value: 4.0 },
+    { label: '3.5+ ★', value: 3.5 },
+    { label: t('discover.search.anyRating'), value: 0 },
+  ];
 
-// Derived from BUSINESS_TYPE_OPTS rather than restated: the types a client can
-// filter by must be exactly the types a provider can register as, with the same
-// labels the provider saw when picking one.
-const SERVICE_TYPE_OPTIONS: { label: string; value: 'all' | BusinessType }[] = [
-  { label: 'All', value: 'all' },
-  ...BUSINESS_TYPE_OPTS.map(o => ({ label: o.label, value: o.value })),
-];
+  const DISTANCE_OPTIONS = [
+    { label: tp('discover.search.underMiles', 1), value: 1 },
+    { label: tp('discover.search.underMiles', 3), value: 3 },
+    { label: tp('discover.search.underMiles', 5), value: 5 },
+    { label: t('discover.search.anyDistance'), value: 999 },
+  ];
 
-const FILTER_PILL_LABEL: Record<FilterKey, string> = {
-  sort: 'Sort',
-  price: 'Price',
-  rating: 'Rating',
-  distance: 'Distance',
-  type: 'Type',
-  availability: 'Availability',
-  city: 'City',
-  hairType: 'Hair Type',
-  audience: "Who It's For",
-  practice: 'How They Work',
-  specialty: 'Speciality',
-};
+  // Derived from BUSINESS_TYPE_OPTS rather than restated: the types a client
+  // can filter by must be exactly the types a provider can register as, named
+  // the same way (BUSINESS_TYPE_LABEL).
+  const SERVICE_TYPE_OPTIONS: { label: string; value: 'all' | BusinessType }[] = [
+    { label: t('discover.category.all'), value: 'all' },
+    ...BUSINESS_TYPE_OPTS.map(o => ({ label: BUSINESS_TYPE_LABEL[o.value], value: o.value })),
+  ];
 
-const AUDIENCE_OPTIONS: { label: string; value: 'women' | 'men' | 'kids' }[] = [
-  { label: 'Women', value: 'women' },
-  { label: 'Men', value: 'men' },
-  { label: 'Kids', value: 'kids' },
-];
+  const FILTER_PILL_LABEL: Record<FilterKey, string> = {
+    sort: t('discover.search.pill.sort'),
+    price: t('discover.search.pill.price'),
+    rating: t('discover.search.pill.rating'),
+    distance: t('discover.search.pill.distance'),
+    type: t('discover.search.pill.type'),
+    availability: t('discover.search.pill.availability'),
+    city: t('discover.search.pill.city'),
+    hairType: t('discover.search.pill.hairType'),
+    audience: t('discover.search.pill.audience'),
+    practice: t('discover.search.pill.practice'),
+    specialty: t('discover.search.pill.specialty'),
+  };
+
+  const AUDIENCE_OPTIONS: { label: string; value: 'women' | 'men' | 'kids' }[] = [
+    { label: t('discover.search.audience.women'), value: 'women' },
+    { label: t('discover.search.audience.men'), value: 'men' },
+    { label: t('discover.search.audience.kids'), value: 'kids' },
+  ];
+
+  const SEARCH_CATEGORY_TABS = SEARCH_CATEGORY_KEYS.map(c => ({ key: c.key, label: t(c.labelKey) }));
+
+  return { SORT_OPTIONS, PRICE_OPTIONS, RATING_OPTIONS, DISTANCE_OPTIONS, SERVICE_TYPE_OPTIONS, FILTER_PILL_LABEL, AUDIENCE_OPTIONS, SEARCH_CATEGORY_TABS };
+}
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
 
@@ -299,15 +329,16 @@ type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
 // case gets a badge — the card falls through to availInfo === null below,
 // same as an unresolved/no-data card. Filtering (availability === 'available'
 // || 'limited') already excludes both correctly; this only affects the badge. ──
-const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: string; color: string }>> = {
-  available: { label: 'Slots Available', color: '#4CAF50' },
-  limited:   { label: 'Slots Limited',   color: '#FF9500' },
+const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { labelKey: TranslationKey; color: string }>> = {
+  available: { labelKey: 'discover.search.slotsAvailable', color: '#4CAF50' },
+  limited:   { labelKey: 'discover.search.slotsLimited',   color: '#FF9500' },
 };
 
 
 
 // ── Provider Card — vertical, sits two-up (three-up on iPad) in the results grid ──────────────────
 const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, widthStyle }) => {
+  const { t } = useTranslation();
   const slideAnim = useRef(new Animated.Value(24)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const availInfo = provider.availability ? AVAILABILITY_INFO[provider.availability] : null;
@@ -340,13 +371,13 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
 
           <View style={[styles.servicePill, { backgroundColor: `${P.accent}18`, borderColor: `${P.accent}50` }]}>
             <Text style={[styles.servicePillText, { color: P.accentText }]}>
-              {provider.service}
+              {SEARCH_CATEGORY_LABEL_KEYS[provider.service] ? t(SEARCH_CATEGORY_LABEL_KEYS[provider.service]!).toUpperCase() : provider.service}
             </Text>
           </View>
 
           {provider.isLinkOnly ? (
             <View style={styles.metaRow}>
-              <Text style={[styles.reviewCount, { color: P.sub }]}>Books on their own page</Text>
+              <Text style={[styles.reviewCount, { color: P.sub }]}>{t('discover.search.booksOwnPage')}</Text>
             </View>
           ) : (
           <View style={styles.metaRow}>
@@ -387,7 +418,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
           <View style={styles.availBadgeSlot}>
             {availInfo && (
               <View style={[styles.availBadge, { backgroundColor: `${availInfo.color}22` }]}>
-                <Text style={[styles.availBadgeText, { color: availInfo.color }]} numberOfLines={1}>{availInfo.label}</Text>
+                <Text style={[styles.availBadgeText, { color: availInfo.color }]} numberOfLines={1}>{t(availInfo.labelKey)}</Text>
               </View>
             )}
           </View>
@@ -396,7 +427,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
 
       {/* Book Now */}
       <TouchableOpacity style={[styles.bookBtn, { backgroundColor: P.accent }]} onPress={onPress} activeOpacity={0.8}>
-        <Text style={[styles.bookBtnText, { color: P.onAccent }]}>Book Now</Text>
+        <Text style={[styles.bookBtnText, { color: P.onAccent }]}>{t('discover.image.bookNow')}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -405,6 +436,11 @@ ProviderCard.displayName = 'ProviderCard';
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
+  const { t, tp } = useTranslation();
+  const {
+    SORT_OPTIONS, PRICE_OPTIONS, RATING_OPTIONS, DISTANCE_OPTIONS, SERVICE_TYPE_OPTIONS,
+    FILTER_PILL_LABEL, AUDIENCE_OPTIONS, SEARCH_CATEGORY_TABS,
+  } = useMemo(() => buildSearchOptions(t, tp), [t, tp]);
   const bottomInset = useSystemBottomInset();
   // Concrete pixel cap for the filter sheet's scroll area. A percentage
   // maxHeight on the sheet + flexShrink on the ScrollView left the list
@@ -634,7 +670,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       } catch {
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData([]);
-        setProvidersError('Could not refresh providers. Pull down to try again.');
+        setProvidersError(tr('discover.search.refreshFailed'));
       } finally {
         if (requestId === providerRequestIdRef.current) setProvidersLoading(false);
       }
@@ -1108,7 +1144,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       .catch(() => {
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData([]);
-        setProvidersError('Could not refresh providers. Pull down to try again.');
+        setProvidersError(tr('discover.search.refreshFailed'));
       })
       .finally(() => {
         if (requestId === providerRequestIdRef.current) {
@@ -1137,26 +1173,26 @@ export default function SearchScreen({ navigation, route }: Props) {
   const activeFilterChips = useMemo(() => {
     const chips: { key: keyof FilterOptions; label: string }[] = [];
     if (activeFilters.sortBy !== 'recommended') {
-      chips.push({ key: 'sortBy', label: SORT_OPTIONS.find(o => o.value === activeFilters.sortBy)?.label ?? 'Sort' });
+      chips.push({ key: 'sortBy', label: SORT_OPTIONS.find(o => o.value === activeFilters.sortBy)?.label ?? FILTER_PILL_LABEL.sort });
     }
     if (activeFilters.priceRange) {
       const opt = PRICE_OPTIONS.find(o => o.value.min === activeFilters.priceRange!.min && o.value.max === activeFilters.priceRange!.max);
-      chips.push({ key: 'priceRange', label: opt?.label ?? 'Price' });
+      chips.push({ key: 'priceRange', label: opt?.label ?? FILTER_PILL_LABEL.price });
     }
     if (activeFilters.rating) {
       const opt = RATING_OPTIONS.find(o => o.value === activeFilters.rating);
-      chips.push({ key: 'rating', label: opt?.label ?? 'Rating' });
+      chips.push({ key: 'rating', label: opt?.label ?? FILTER_PILL_LABEL.rating });
     }
     if (activeFilters.distance && activeFilters.distance < 999) {
       const opt = DISTANCE_OPTIONS.find(o => o.value === activeFilters.distance);
-      chips.push({ key: 'distance', label: opt?.label ?? 'Distance' });
+      chips.push({ key: 'distance', label: opt?.label ?? FILTER_PILL_LABEL.distance });
     }
     if (activeFilters.serviceType && activeFilters.serviceType !== 'all') {
       const opt = SERVICE_TYPE_OPTIONS.find(o => o.value === activeFilters.serviceType);
-      chips.push({ key: 'serviceType', label: opt?.label ?? 'Type' });
+      chips.push({ key: 'serviceType', label: opt?.label ?? FILTER_PILL_LABEL.type });
     }
     if (activeFilters.availableOnly) {
-      chips.push({ key: 'availableOnly', label: 'Available now' });
+      chips.push({ key: 'availableOnly', label: t('discover.search.availableNow') });
     }
     if (activeFilters.city?.length) {
       chips.push({ key: 'city', label: activeFilters.city.join(', ') });
@@ -1165,26 +1201,26 @@ export default function SearchScreen({ navigation, route }: Props) {
       chips.push({ key: 'specialty', label: activeFilters.specialty.join(', ') });
     }
     if (activeFilters.skinTone) {
-      chips.push({ key: 'skinTone', label: `${activeFilters.skinTone} skin tone` });
+      chips.push({ key: 'skinTone', label: t('discover.search.skinToneChip', { tone: activeFilters.skinTone }) });
     }
     if (activeFilters.hairType) {
       chips.push({ key: 'hairType', label: activeFilters.hairType });
     }
     if (activeFilters.audience) {
       const opt = AUDIENCE_OPTIONS.find(o => o.value === activeFilters.audience);
-      chips.push({ key: 'audience', label: opt?.label ?? 'For' });
+      chips.push({ key: 'audience', label: opt?.label ?? FILTER_PILL_LABEL.audience });
     }
     if (activeFilters.walkInsWelcome) {
-      chips.push({ key: 'walkInsWelcome', label: 'Walk-ins welcome' });
+      chips.push({ key: 'walkInsWelcome', label: t('discover.search.walkIns') });
     }
     if (activeFilters.groupBookingsAvailable) {
-      chips.push({ key: 'groupBookingsAvailable', label: 'Group bookings' });
+      chips.push({ key: 'groupBookingsAvailable', label: t('discover.search.groupBookings') });
     }
     if (activeFilters.veganCrueltyFree) {
-      chips.push({ key: 'veganCrueltyFree', label: 'Vegan / cruelty-free' });
+      chips.push({ key: 'veganCrueltyFree', label: t('discover.search.vegan') });
     }
     return chips;
-  }, [activeFilters]);
+  }, [activeFilters, t, SORT_OPTIONS, PRICE_OPTIONS, RATING_OPTIONS, DISTANCE_OPTIONS, SERVICE_TYPE_OPTIONS, AUDIENCE_OPTIONS, FILTER_PILL_LABEL]);
 
   const hasActiveFilters = activeFilterChips.length > 0;
 
@@ -1223,7 +1259,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       // the field via setOptions' merge) is what's needed here.
       headerSearchBarOptions: undefined as any,
       headerBackVisible: true,
-      headerTitle: 'SEARCH',
+      headerTitle: t('discover.search.title'),
       headerTitleAlign: 'center',
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
       headerStyle: { backgroundColor: P.bg },
@@ -1248,16 +1284,16 @@ export default function SearchScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, P, hasActiveFilters, activeFilterChips.length]);
+  }, [navigation, P, hasActiveFilters, activeFilterChips.length, t]);
 
   // ── List header: just result count ─────────────────────────────────────────
   const renderHeader = useCallback(() => (
     <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
       <Text style={[styles.countText, { color: P.sub }]}>
-        {providersLoading ? 'Searching…' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
+        {providersLoading ? t('discover.search.searching') : tp('discover.search.providerCount', filteredProviders.length)}
       </Text>
     </View>
-  ), [filteredProviders.length, providersLoading, P]);
+  ), [filteredProviders.length, providersLoading, P, t, tp]);
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1269,8 +1305,8 @@ export default function SearchScreen({ navigation, route }: Props) {
           <TabIcon name="magnifying-glass" size={16} color={P.sub} />
           <TextInput
             style={[styles.searchInput, { color: P.text, fontFamily: 'Jura-VariableFont_wght' }]}
-            placeholder="Try 'nail art in Manchester'"
-            accessibilityLabel="Search providers, services or places"
+            placeholder={t('discover.search.placeholder')}
+            accessibilityLabel={t('discover.search.inputA11y')}
             placeholderTextColor={P.sub}
             value={searchQuery}
             onChangeText={handleSearchChange}
@@ -1327,7 +1363,7 @@ export default function SearchScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={styles.activeChipClearAll} onPress={resetFilters} activeOpacity={0.7}>
-              <Text style={[styles.activeChipClearAllText, { color: P.sub }]}>Clear all</Text>
+              <Text style={[styles.activeChipClearAllText, { color: P.sub }]}>{t('discover.search.clearAll')}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -1351,14 +1387,14 @@ export default function SearchScreen({ navigation, route }: Props) {
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={() => setFilterModalVisible(false)}
-            accessibilityLabel="Close filters"
+            accessibilityLabel={t('discover.search.closeFiltersA11y')}
           />
           <View style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(20, bottomInset + 16) }]}>
             <View style={styles.filterModalHeader}>
-              <Text style={[styles.filterModalTitle, { color: P.text }]}>FILTERS</Text>
+              <Text style={[styles.filterModalTitle, { color: P.text }]}>{t('discover.home.filters')}</Text>
               {hasActiveFilters && (
                 <TouchableOpacity onPress={resetFilters}>
-                  <Text style={[styles.filterModalReset, { color: P.accentText }]}>Reset</Text>
+                  <Text style={[styles.filterModalReset, { color: P.accentText }]}>{t('discover.search.reset')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1388,7 +1424,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.availableOnly ? P.onAccent : P.text }]}>
-                    Available now
+                    {t('discover.search.availableNow')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1475,8 +1511,8 @@ export default function SearchScreen({ navigation, route }: Props) {
               {locationState !== 'available' && (
                 <Text style={[styles.filterAvailabilityHint, { color: P.sub }]}>
                   {locationState === 'loading'
-                    ? 'Finding your location…'
-                    : 'Enable location permission to sort or filter by distance.'}
+                    ? t('discover.search.findingLocation')
+                    : t('discover.search.enableLocation')}
                 </Text>
               )}
 
@@ -1507,7 +1543,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   selected={activeFilters.city ?? []}
                   onChange={updateCityFilter}
                   palette={P}
-                  placeholder="Any city"
+                  placeholder={t('discover.search.anyCity')}
                 />
               </View>
 
@@ -1549,14 +1585,14 @@ export default function SearchScreen({ navigation, route }: Props) {
                       onChange={updateSpecialtyFilter}
                       options={specialityOptions}
                       palette={P}
-                      placeholder="Any speciality"
+                      placeholder={t('discover.search.anySpeciality')}
                     />
                   </View>
                 </>
               )}
 
               <View style={styles.filterSectionHead}>
-                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>Skin Tone</Text>
+                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{t('discover.search.skinTone')}</Text>
               </View>
               <View style={styles.pillGrid}>
                 {SKIN_TONES.map(tone => {
@@ -1607,7 +1643,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.walkInsWelcome ? P.onAccent : P.text }]}>
-                    Walk-ins welcome
+                    {t('discover.search.walkIns')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1620,7 +1656,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.groupBookingsAvailable ? P.onAccent : P.text }]}>
-                    Group bookings
+                    {t('discover.search.groupBookings')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1633,7 +1669,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.veganCrueltyFree ? P.onAccent : P.text }]}>
-                    Vegan / cruelty-free
+                    {t('discover.search.vegan')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1683,12 +1719,12 @@ export default function SearchScreen({ navigation, route }: Props) {
               || (!!activeFilters.priceRange && priceRangeLoading) ? (
               <>
                 <ActivityIndicator size="large" color={P.accent} />
-                <Text style={[styles.emptyTitle, { color: P.text }]}>Checking providers…</Text>
+                <Text style={[styles.emptyTitle, { color: P.text }]}>{t('discover.search.checking')}</Text>
               </>
             ) : (
               <>
                 <TabIcon name="magnifying-glass" size={44} color={P.border} />
-                <Text style={[styles.emptyTitle, { color: P.text }]}>{providersError ? 'Couldn’t load providers' : 'No providers found'}</Text>
+                <Text style={[styles.emptyTitle, { color: P.text }]}>{providersError ? t('discover.search.loadFailed') : t('discover.search.noneFound')}</Text>
                 {/* Name what actually emptied the grid. "Try adjusting your
                     filters" was the same sentence whether one filter was on or
                     six, and whether the search itself had matched nothing —
@@ -1696,18 +1732,18 @@ export default function SearchScreen({ navigation, route }: Props) {
                 <Text style={[styles.emptySub, { color: P.sub }]}>
                   {providersError
                     ?? (activeFilterChips.length > 0
-                      ? `No one matches ${activeFilterChips.map(c => c.label).join(' · ')}`
-                      : 'Try a different search term or category')}
+                      ? t('discover.search.noneMatch', { filters: activeFilterChips.map(c => c.label).join(' · ') })
+                      : t('discover.search.tryDifferent'))}
                 </Text>
                 {providersError && (
                   <TouchableOpacity accessibilityRole="button" onPress={handleRefresh} style={styles.emptyClearBtn}>
-                    <Text style={[styles.emptyClearText, { color: P.accent }]}>Try again</Text>
+                    <Text style={[styles.emptyClearText, { color: P.accent }]}>{t('common.tryAgain')}</Text>
                   </TouchableOpacity>
                 )}
                 {!providersError && activeFilterChips.length > 0 && (
                   <TouchableOpacity onPress={resetFilters} activeOpacity={0.7} style={styles.emptyClearBtn}>
                     <Text style={[styles.emptyClearText, { color: P.accent }]}>
-                      Clear {activeFilterChips.length === 1 ? 'this filter' : 'all filters'}
+                      {activeFilterChips.length === 1 ? t('discover.search.clearThisFilter') : t('discover.search.clearAllFilters')}
                     </Text>
                   </TouchableOpacity>
                 )}

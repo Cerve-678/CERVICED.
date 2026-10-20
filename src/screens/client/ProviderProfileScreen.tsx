@@ -92,7 +92,8 @@ import {
 } from "../../constants/providerThemes";
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
-import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { useTranslation, tr, trp, localeForLanguage, type TranslationKey } from "../../i18n";
+import { formatShortDate, formatLongDate, formatTime12, ordinalDay } from "../../utils/dateUtils";
 import { resolveSlotsRow } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
@@ -134,10 +135,10 @@ const StarIcon = ({ size, color }: { size: number; color: string }) => (
 // Client-facing wording for providers.team_size. Module scope, not inside the
 // component — it never varies, and as a component-local object it would be a
 // new identity on every render for the memo that reads it.
-const TEAM_SIZE_LABELS: Record<string, string> = {
-  solo: "Solo practitioner",
-  small_team: "Small team",
-  large_team: "Large team",
+const TEAM_SIZE_LABELS: Record<string, TranslationKey> = {
+  solo: "discover.profile.team.solo",
+  small_team: "discover.profile.team.small",
+  large_team: "discover.profile.team.large",
 };
 type ServiceData = ProviderProfileService;
 
@@ -260,6 +261,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
     // text), so in dark mode it appeared as a white slab. Follow the app
     // theme like every other surface instead.
     const { isDarkMode, palette: P } = useTheme();
+    const { t, tp } = useTranslation();
 
     // Hooks must run before any early return — `if (!isVisible) return null`
     // used to sit above this useMemo, so the hook count changed between
@@ -317,13 +319,13 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                 </Text>
                 {details.addOnCount > 0 && (
                   <Text style={[styles.successAddOns, { color: P.sub }]}>
-                    + {details.addOnCount} add-on{details.addOnCount > 1 ? "s" : ""}
+                    {tp("discover.profile.success.addOns", details.addOnCount)}
                   </Text>
                 )}
 
                 {details.when && (
                   <View style={[styles.successRow, { borderTopColor: P.border }]}>
-                    <Text style={[styles.successRowLabel, { color: P.sub }]}>When</Text>
+                    <Text style={[styles.successRowLabel, { color: P.sub }]}>{t("discover.profile.success.when")}</Text>
                     <Text style={[styles.successRowValue, { color: P.text }]} numberOfLines={2}>
                       {details.when}
                     </Text>
@@ -331,7 +333,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                 )}
 
                 <View style={[styles.successRow, { borderTopColor: P.border }]}>
-                  <Text style={[styles.successRowLabel, { color: P.sub }]}>Total</Text>
+                  <Text style={[styles.successRowLabel, { color: P.sub }]}>{t("discover.profile.success.total")}</Text>
                   <Text style={[styles.successRowValue, { color: adaptiveAccentColor }]}>
                     {details.total}
                   </Text>
@@ -341,7 +343,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                     reason: this one isn't confirmed by being paid for. */}
                 {details.isRequest && (
                   <Text style={styles.successRequestNote}>
-                    Outside their usual hours — they have to accept it before it's booked.
+                    {t("discover.profile.success.requestNote")}
                   </Text>
                 )}
               </View>
@@ -366,7 +368,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                   style={[styles.successCloseText, { color: P.text }]}
                   numberOfLines={1}
                 >
-                  Keep browsing
+                  {t("discover.profile.success.keepBrowsing")}
                 </Text>
               </TouchableOpacity>
 
@@ -380,7 +382,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                   activeOpacity={0.8}
                 >
                   <Text style={styles.successViewCartText} numberOfLines={1}>
-                    View cart
+                    {t("discover.profile.success.viewCart")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -417,6 +419,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
     adaptiveAccentColor,
     providerGradient,
   }) => {
+    const { t, tp } = useTranslation();
     const allReviews = reviews;
 
     const averageRating = useMemo(() => {
@@ -445,10 +448,9 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderContent}>
                 <View>
-                  <Text style={styles.modalTitle}>All Reviews</Text>
+                  <Text style={styles.modalTitle}>{t("discover.profile.allReviews")}</Text>
                   <Text style={styles.modalSubtitle}>
-                    @{providerName} • {averageRating} ★ ({allReviews.length}{" "}
-                    reviews)
+                    @{providerName} • {averageRating} ★ ({tp("discover.profile.reviewCount", allReviews.length)})
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -630,6 +632,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
     canBookProvider,
     onBookOffer,
   }) => {
+    const { t, tp } = useTranslation();
     const { width: screenWidth } = useWindowDimensions();
     const OP = themeTokens;
 
@@ -642,7 +645,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
     }, []);
 
     const formatDate = (iso: string) =>
-      new Date(iso).toLocaleDateString("en-GB", {
+      new Date(iso).toLocaleDateString(localeForLanguage(), {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -679,11 +682,10 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
             >
               <View>
                 <Text style={[offersStyles.headerTitle, { color: OP.text }]}>
-                  OFFERS
+                  {t("discover.offers.title")}
                 </Text>
                 <Text style={[offersStyles.headerSub, { color: OP.sub }]}>
-                  {providerName} — {promotions.length} active{" "}
-                  {promotions.length === 1 ? "offer" : "offers"}
+                  {providerName} — {tp("discover.profile.offers.activeCount", promotions.length)}
                 </Text>
               </View>
               <TouchableOpacity
@@ -721,7 +723,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                   ]}
                 >
                   <Text style={[offersStyles.emptyText, { color: OP.sub }]}>
-                    No active offers right now
+                    {t("discover.profile.offers.none")}
                   </Text>
                 </View>
               ) : (
@@ -749,8 +751,8 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                         <Text style={offersStyles.discountText}>
                           {promo.discount_text ||
                             (promo.discount_percent
-                              ? `${promo.discount_percent}% OFF`
-                              : `£${promo.discount_amount} OFF`)}
+                              ? t("discover.offers.percentOff", { percent: promo.discount_percent })
+                              : t("discover.offers.amountOff", { amount: `£${promo.discount_amount}` }))}
                         </Text>
                       </View>
                     )}
@@ -790,8 +792,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                     ) : null}
 
                     <Text style={[offersStyles.validity, { color: OP.sub }]}>
-                      Valid {formatDate(promo.valid_from)} –{" "}
-                      {formatDate(promo.valid_until)}
+                      {t("discover.profile.offers.valid", { from: formatDate(promo.valid_from), until: formatDate(promo.valid_until) })}
                     </Text>
 
                     {promo.promo_code ? (
@@ -810,7 +811,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                         <Text
                           style={[offersStyles.promoLabel, { color: OP.sub }]}
                         >
-                          CODE
+                          {t("discover.profile.offers.code")}
                         </Text>
                         <Text
                           style={[offersStyles.promoCode, { color: OP.text }]}
@@ -828,7 +829,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                             },
                           ]}
                         >
-                          {copiedCode === promo.promo_code ? "COPIED" : "COPY"}
+                          {copiedCode === promo.promo_code ? t("common.copied").toUpperCase() : t("common.copy").toUpperCase()}
                         </Text>
                       </TouchableOpacity>
                     ) : null}
@@ -847,7 +848,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                         }}
                         activeOpacity={0.85}
                       >
-                        <Text style={offersStyles.bookBtnText}>Book Now</Text>
+                        <Text style={offersStyles.bookBtnText}>{t("discover.image.bookNow")}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1033,6 +1034,7 @@ function UnclaimedProviderView({
   onBack: () => void;
   onClaim: () => void;
 }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   return (
     <View style={[unclaimedStyles.container, { backgroundColor: theme.bg }]}>
@@ -1041,7 +1043,7 @@ function UnclaimedProviderView({
           onPress={onBack}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={[unclaimedStyles.backButton, { backgroundColor: theme.surface }]}
-          accessibilityLabel="Go back"
+          accessibilityLabel={t("discover.profile.goBackA11y")}
           accessibilityRole="button"
         >
           <Text style={[unclaimedStyles.backButtonText, { color: theme.text }]}>←</Text>
@@ -1082,8 +1084,7 @@ function UnclaimedProviderView({
 
         <View style={[unclaimedStyles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[unclaimedStyles.noticeText, { color: theme.sub }]}>
-            This listing hasn't been claimed by its owner yet, so it isn't
-            bookable — details here were imported and may be out of date.
+            {t("discover.profile.unclaimedNotice")}
           </Text>
         </View>
       </ScrollView>
@@ -1094,7 +1095,7 @@ function UnclaimedProviderView({
           onPress={onClaim}
           activeOpacity={0.85}
         >
-          <Text style={unclaimedStyles.claimButtonText}>Claim this business</Text>
+          <Text style={unclaimedStyles.claimButtonText}>{t("discover.profile.claim")}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -1349,6 +1350,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   route,
 }) => {
   const { theme } = useTheme();
+  const { t, tp } = useTranslation();
   // Measured per render, not captured at module load: the offers panel rests
   // one panel-width offscreen and the full-screen image modal pages by width.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -1721,28 +1723,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // knotless?"). Same values Search's Speciality filter matches on. A
     // link-only profile shows them in their own section instead.
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
-      groups.push({ label: "Specialities", chips: [...provider.specialties] });
+      groups.push({ label: t("discover.profile.specialities"), chips: [...provider.specialties] });
     }
     if (provider.languagesSpoken.length > 0) {
-      groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
+      groups.push({ label: t("discover.profile.languages"), chips: [...provider.languagesSpoken] });
     }
-    const teamLabel = provider.teamSize
+    const teamLabelKey = provider.teamSize
       ? TEAM_SIZE_LABELS[provider.teamSize]
       : null;
-    if (teamLabel) groups.push({ label: "Team", chips: [teamLabel] });
+    if (teamLabelKey) groups.push({ label: t("discover.profile.team"), chips: [t(teamLabelKey)] });
     const credentials: string[] = [];
     if (provider.isInsuredSelfDeclared) {
-      credentials.push("Insured (self-declared)");
+      credentials.push(t("discover.profile.insuredSelfDeclared"));
     }
     if (provider.dbsCheckedSelfDeclared) {
-      credentials.push("DBS checked (self-declared)");
+      credentials.push(t("discover.profile.dbsSelfDeclared"));
     }
     if (credentials.length > 0) {
-      groups.push({ label: "Credentials", chips: credentials });
+      groups.push({ label: t("discover.profile.credentials"), chips: credentials });
     }
     if (provider.accessibilityTags.length > 0) {
       groups.push({
-        label: "Accessibility",
+        label: t("discover.profile.accessibility"),
         chips: [...provider.accessibilityTags],
       });
     }
@@ -1754,10 +1756,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       .map(v => PAYMENT_OPTS.find(o => o.value === v)?.label)
       .filter((l): l is string => !!l);
     if (paymentLabels.length > 0) {
-      groups.push({ label: "Payment methods", chips: paymentLabels });
+      groups.push({ label: t("discover.profile.paymentMethods"), chips: paymentLabels });
     }
     return groups;
-  }, [provider]);
+  }, [provider, t]);
 
   // One natural-language paragraph rather than a label/value dump — these are
   // five unrelated one-liners, and as rows they read like a spec sheet for
@@ -1765,21 +1767,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const goodToKnowText = useMemo(() => {
     if (!provider) return "";
     const sentences: string[] = [];
-    if (provider.walkInsWelcome) sentences.push("Walk-ins are welcome");
+    if (provider.walkInsWelcome) sentences.push(t("discover.profile.good.walkIns"));
     if (provider.groupBookingsAvailable) {
-      sentences.push("Group bookings are available");
+      sentences.push(t("discover.profile.good.groupBookings"));
     }
     if (provider.veganCrueltyFree) {
-      sentences.push("Products used are vegan and cruelty-free");
+      sentences.push(t("discover.profile.good.vegan"));
     }
     if (provider.travelRadius.trim()) {
-      sentences.push(`Travels up to ${provider.travelRadius.trim()}`);
+      sentences.push(t("discover.profile.good.travels", { radius: provider.travelRadius.trim() }));
     }
     if (provider.productsUsed.trim()) {
-      sentences.push(`Works with ${provider.productsUsed.trim()}`);
+      sentences.push(t("discover.profile.good.worksWith", { products: provider.productsUsed.trim() }));
     }
     return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
-  }, [provider]);
+  }, [provider, t]);
 
   // Hero info floats over the photo/gradient. Every theme always carries a
   // gradient now (saved as [backdrop, sheetColor]), so "is there a gradient"
@@ -1990,12 +1992,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
   usePreventRemove(hasUnsavedSelection, ({ data }) => {
     showConfirm(
-      "Are you sure you want to discard?",
+      tr("discover.profile.discardTitle"),
       undefined,
       [
-        { text: "Continue", style: "cancel" },
+        { text: tr("common.continue"), style: "cancel" },
         {
-          text: "Discard",
+          text: tr("discover.profile.discard"),
           style: "destructive",
           onPress: () => {
             setSelectedServiceIds(new Set());
@@ -2065,8 +2067,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         () => {},
       );
       showAlert(
-        "That's your profile",
-        "You can't add your own profile to Your Providers.",
+        tr("discover.profile.ownTitle"),
+        tr("discover.profile.ownCantSave"),
         "center",
       );
       return;
@@ -2129,7 +2131,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
     } catch (error) {
       logger.error("Bookmark toggle failed:", error);
-      Alert.alert("Error", "Failed to update bookmark");
+      Alert.alert(tr("common.error"), tr("discover.profile.bookmarkFailed"));
     } finally {
       setIsBookmarkLoading(false);
     }
@@ -2151,7 +2153,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (!provider) return;
     try {
       const shareOptions = {
-        message: `Check out @${provider.providerName} - ${provider.providerService} services in ${provider.location}. Rated ${provider.rating}/5 stars!`,
+        message: tr("discover.profile.shareMessage", { name: provider.providerName, service: provider.providerService, location: provider.location, rating: provider.rating }),
         title: `${provider.providerName} - ${provider.providerService}`,
         url: `https://app.yourapp.com/provider/${provider.id}`, // Replace with your app URL
       };
@@ -2169,7 +2171,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
     } catch (error) {
       logger.error("Error sharing:", error);
-      Alert.alert("Error", "Unable to share at this time.");
+      Alert.alert(tr("common.error"), tr("discover.profile.shareFailed"));
     }
   }, [provider]);
 
@@ -2252,7 +2254,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }));
       closeWaitlistModal();
     } catch {
-      setWaitlistError("Couldn't save — check your connection and try again.");
+      setWaitlistError(tr("discover.profile.waitlistSaveFailed"));
     }
     setWaitlistJoining(false);
   }, [
@@ -2277,7 +2279,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         return next;
       });
     } catch {
-      Alert.alert("Error", "Could not leave waitlist.");
+      Alert.alert(tr("common.error"), tr("discover.profile.waitlistLeaveFailed"));
     }
   }, []);
 
@@ -2308,27 +2310,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           Haptics.NotificationFeedbackType.Warning,
         ).catch(() => {});
         showAlert(
-          "That's your profile",
-          "These are your own contact details — this is what a client taps to reach you.",
+          tr("discover.profile.ownTitle"),
+          tr("discover.profile.ownContact"),
           "center",
         );
         return;
       }
       Linking.openURL(url).catch(() => {
-        Alert.alert("Couldn't open", "Please try again in a moment.");
+        Alert.alert(tr("discover.profile.openFailed"), tr("discover.profile.tryAgainMoment"));
       });
     },
     [isOwnProvider, showAlert],
   );
   const handlePublicContactLink = useCallback((url: string) => {
     Linking.openURL(url).catch(() => {
-      Alert.alert("Couldn't open", "Please try again in a moment.");
+      Alert.alert(tr("discover.profile.openFailed"), tr("discover.profile.tryAgainMoment"));
     });
   }, []);
 
   const handleGetInTouch = useCallback(() => {
     if (!provider || !providerDbId) {
-      Alert.alert("Not available", "Provider details are still loading.");
+      Alert.alert(tr("discover.profile.notAvailable"), tr("discover.profile.stillLoading"));
       return;
     }
     // get_or_create_provider_conversation raises self_conversation_not_allowed
@@ -2381,7 +2383,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       options.push({
         key: "phone",
         icon: "chatbubble-outline",
-        label: "Text message",
+        label: t("discover.profile.contactSheet.text"),
         detail: provider.phone,
         url: `sms:${provider.phone.replace(/\s/g, "")}`,
       });
@@ -2399,7 +2401,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       options.push({
         key: "email",
         icon: "mail-outline",
-        label: "Email",
+        label: t("discover.profile.contactRow.email"),
         detail: provider.email,
         url: `mailto:${provider.email}`,
       });
@@ -2417,7 +2419,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       options.push({
         key: "website",
         icon: "globe-outline",
-        label: "Website",
+        label: t("discover.profile.contactRow.website"),
         detail: provider.website,
         url: provider.website,
       });
@@ -2432,7 +2434,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       });
     }
     return options;
-  }, [provider]);
+  }, [provider, t]);
 
   // Configure the navigation header with your gradient and icons
   React.useLayoutEffect(() => {
@@ -2467,7 +2469,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             activeOpacity={0.7}
             disabled={isBookmarkLoading || !canSaveProvider}
             accessibilityLabel={
-              providerIsBookmarked ? "Remove bookmark" : "Bookmark provider"
+              providerIsBookmarked ? t("discover.profile.removeBookmarkA11y") : t("discover.profile.bookmarkA11y")
             }
             accessibilityRole="button"
           >
@@ -2480,7 +2482,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             style={styles.headerActionButton}
             onPress={handleShare}
             activeOpacity={0.7}
-            accessibilityLabel="Share"
+            accessibilityLabel={t("common.share")}
             accessibilityRole="button"
           >
             <ShareIcon size={18} color="#000" />
@@ -2616,7 +2618,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       })
       .catch((error: unknown) => {
         logger.error('[ProviderProfile] external booking link failed to open', error);
-        Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
+        Alert.alert(tr("discover.profile.bookingLinkFailed"), tr("discover.profile.tryAgainMoment"));
       });
   }, [recordStat, canSaveProvider]);
 
@@ -2636,8 +2638,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         await addMyExternalBooking({ providerId: providerDbId, ...result });
       } catch (error) {
         showAlert(
-          "Couldn't add it",
-          toUserMessage(error, "Please try again in a moment.", "ProviderProfile.addExternalBooking"),
+          tr("discover.profile.addExternalFailed"),
+          toUserMessage(error, tr("discover.profile.tryAgainMoment"), "ProviderProfile.addExternalBooking"),
         );
         throw error;
       }
@@ -2647,14 +2649,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // The sheet is a native modal; wait for it to close before the dialog.
       setTimeout(() => {
         showConfirm(
-          "Added to your bookings",
-          "You'll find it in your Upcoming bookings. Anything about it — changing or cancelling — goes through them.",
+          tr("discover.profile.externalAddedTitle"),
+          tr("discover.profile.externalAddedBody"),
           canOpenBookings
             ? [
-                { text: "Done", style: "cancel" },
-                { text: "View bookings", onPress: () => navigation.navigate("Bookings" as never) },
+                { text: tr("common.done"), style: "cancel" },
+                { text: tr("discover.profile.viewBookings"), onPress: () => navigation.navigate("Bookings" as never) },
               ]
-            : [{ text: "Done", style: "cancel" }],
+            : [{ text: tr("common.done"), style: "cancel" }],
         );
       }, 400);
     },
@@ -2670,7 +2672,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr("discover.profile.ownTitle"), tr("discover.profile.ownCantBook"), "center");
       return;
     }
 
@@ -2752,13 +2754,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
         // Show redirecting message and navigate to cart for immediate checkout
         const slotLabel = slot
-          ? `${formatShortDate(slot.date)} at ${formatTime12(slot.time)}`
+          ? tr("discover.profile.dateAtTime", { date: formatShortDate(slot.date), time: formatTime12(slot.time) })
           : null;
         showSuccessMessageWithAnimation(
-          "Redirecting to Checkout...",
+          tr("discover.profile.redirectingTitle"),
           slotLabel
-            ? `${service.name} booked for ${slotLabel}. Taking you to checkout.`
-            : `${service.name} added to cart. Taking you to checkout to pick a time.`,
+            ? tr("discover.profile.redirectingWithTime", { service: service.name, when: slotLabel })
+            : tr("discover.profile.redirectingNoTime", { service: service.name }),
           "checkout",
         );
 
@@ -2771,8 +2773,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       } catch (error) {
         logger.error("Error in Quick Book:", error);
         Alert.alert(
-          "Error",
-          "Failed to process quick booking. Please try again.",
+          tr("common.error"),
+          tr("discover.profile.quickBookFailed"),
         );
       }
     },
@@ -2879,7 +2881,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr("discover.profile.ownTitle"), tr("discover.profile.ownCantBook"), "center");
       return;
     }
     if (tryOpenExternalBooking()) return;
@@ -2889,7 +2891,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       setShowBookingSheet(true);
     } catch (error) {
       logger.error("Error opening booking sheet:", error);
-      Alert.alert("Error", "Failed to open booking options. Please try again.");
+      Alert.alert(tr("common.error"), tr("discover.profile.bookingOptionsFailed"));
     }
   }, [tryOpenExternalBooking, isOwnProvider, showAlert]);
 
@@ -3031,7 +3033,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr("discover.profile.ownTitle"), tr("discover.profile.ownCantBook"), "center");
       return;
     }
     // Defensive only — the "Select" entry point is already hidden for these
@@ -3094,7 +3096,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             isOwnProvider && { color: OP.sub },
           ]}
         >
-          {isOwnProvider ? "Your profile" : "Book"}
+          {isOwnProvider ? t("discover.profile.yourProfile") : t("discover.profile.book")}
         </Text>
       </TouchableOpacity>
     </BlurView>
@@ -3120,7 +3122,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr("discover.profile.ownTitle"), tr("discover.profile.ownCantBook"), "center");
     }, 500);
     return () => clearTimeout(timer);
   }, [route.params?.bookIntent, viewerChecked, isOwnProvider, showAlert]);
@@ -3223,14 +3225,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // sentence — with long-form dates the old concatenated version read
         // as an unbroken wall of text.
         const when = result.date
-          ? `${formatLongDate(result.date)} at ${formatTime12(result.time)}`
+          ? tr("discover.profile.dateAtTime", { date: formatLongDate(result.date), time: formatTime12(result.time) })
           : undefined;
 
         showSuccessMessageWithAnimation(
-          result.emergencyRequest ? "Request added" : "Added to cart",
+          result.emergencyRequest ? tr("discover.profile.requestAdded") : tr("discover.profile.addedToCart"),
           // Kept only as the accessible/fallback reading of the card; the
           // structured `details` below is what actually renders.
-          [service.name, when, `Total: £${totalPrice.toFixed(2)}`]
+          [service.name, when, tr("discover.profile.totalLine", { total: `£${totalPrice.toFixed(2)}` })]
             .filter(Boolean)
             .join("\n"),
           "cart",
@@ -3246,8 +3248,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       } catch (error) {
         logger.error("Error adding service to cart:", error);
         Alert.alert(
-          "Error",
-          "Failed to add service to cart. Please try again.",
+          tr("common.error"),
+          tr("discover.profile.addServiceFailed"),
         );
       }
     },
@@ -3307,11 +3309,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // auto-navigating away after a timeout.
         const requestCount = result.items.filter(i => i.emergencyRequest).length;
         showSuccessMessageWithAnimation(
-          "Added to cart",
-          `${result.items.length} services scheduled and added to your cart.`,
+          tr("discover.profile.addedToCart"),
+          trp("discover.profile.multiAdded", result.items.length),
           "cart",
           {
-            service: `${result.items.length} services`,
+            service: trp("discover.profile.servicesCount", result.items.length),
             addOnCount: result.items.reduce((n, i) => n + i.selectedAddOns.length, 0),
             total: `£${result.items
               .reduce(
@@ -3327,7 +3329,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         );
       } catch (error) {
         logger.error("Error adding multi-booking to cart:", error);
-        Alert.alert("Error", "Failed to add services to cart. Please try again.");
+        Alert.alert(tr("common.error"), tr("discover.profile.addServicesFailed"));
       }
     },
     [provider, providerDbId, addToCart, showSuccessMessageWithAnimation],
@@ -3344,7 +3346,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
     } catch (error) {
       logger.error("Cart navigation error:", error);
-      Alert.alert("Navigation Error", "Unable to navigate to cart");
+      Alert.alert(tr("common.error"), tr("discover.profile.cartNavFailed"));
     }
   }, [hideSuccessMessage, navigation]);
 
@@ -3355,21 +3357,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // long provider name pushed the text past the toast's edge and got clipped.
     // Let it wrap to whatever width the toast actually has.
     if (notificationMessageType === "bell") {
-      const fullName = provider?.providerName ?? "this provider";
+      const fullName = provider?.providerName ?? tr("discover.profile.thisProvider");
       // Name what the client actually signed up to receive. "Notifications
       // enabled" says nothing about WHEN anything arrives — for a provider
       // who drops their diary on a fixed day, that day IS the notification.
       const releaseDay = provider?.scheduleReleaseDay;
       if (!isNotificationsEnabled) {
-        return `You'll no longer be notified about ${fullName}`;
+        return tr("discover.profile.notifyOff", { name: fullName });
       }
       return releaseDay != null
-        ? `We'll tell you when ${fullName} releases new slots on the ${ordinalSuffix(releaseDay)}`
-        : `We'll tell you when ${fullName} releases new slots`;
+        ? tr("discover.profile.notifyOnDay", { name: fullName, day: ordinalDay(releaseDay) })
+        : tr("discover.profile.notifyOn", { name: fullName });
     } else {
       return providerIsBookmarked
-        ? `Added to Your Providers`
-        : `Removed from Your Providers`;
+        ? tr("discover.profile.bookmarkAdded")
+        : tr("discover.profile.bookmarkRemoved");
     }
   }, [
     notificationMessageType,
@@ -3411,8 +3413,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         <View style={[styles.loading, { backgroundColor: OP.bg }]}>
           <Text style={{ color: OP.sub, fontFamily: "Jura-VariableFont_wght" }}>
             {loadFailed
-              ? "Could not load provider. Please try again."
-              : "Provider not found"}
+              ? t("discover.profile.loadFailed")
+              : t("discover.profile.notFound")}
           </Text>
         </View>
       );
@@ -3596,7 +3598,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           style={styles.selectModeLinkRow}
         >
           <Text style={[styles.selectModeLinkText, { color: adaptiveAccentColor }]}>
-            {selectMode ? "Cancel" : "Select"}
+            {selectMode ? t("common.cancel") : t("common.select")}
           </Text>
         </TouchableOpacity>
       )}
@@ -3701,7 +3703,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           { color: adaptiveAccentColor },
                         ]}
                       >
-                        Available virtually
+                        {t("discover.profile.availableVirtually")}
                       </Text>
                     )}
                   <Text
@@ -3729,8 +3731,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     >
                       <Text style={[styles.seeMoreText, { color: OP.text }]}>
                         {expandedServices.has(service.id)
-                          ? "See less"
-                          : "See more"}
+                          ? t("discover.profile.seeLess")
+                          : t("discover.profile.seeMore")}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -3746,35 +3748,34 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <Text
                         style={[styles.serviceSafetyTitle, { color: OP.text }]}
                       >
-                        Treatment Safety
+                        {t("discover.profile.safety.title")}
                       </Text>
                       {service.patchTestRequired && (
                         <Text
                           style={[styles.serviceSafetyLine, { color: OP.sub }]}
                         >
-                          • Patch test required before this treatment
+                          {t("discover.profile.safety.patchTest")}
                         </Text>
                       )}
                       {!service.isPregnancySafe && (
                         <Text
                           style={[styles.serviceSafetyLine, { color: OP.sub }]}
                         >
-                          • Not recommended during pregnancy
+                          {t("discover.profile.safety.pregnancy")}
                         </Text>
                       )}
                       {!!service.minAge && (
                         <Text
                           style={[styles.serviceSafetyLine, { color: OP.sub }]}
                         >
-                          • Minimum age {service.minAge}
+                          {t("discover.profile.safety.minAge", { age: service.minAge })}
                         </Text>
                       )}
                       {(service.contraindications?.length ?? 0) > 0 && (
                         <Text
                           style={[styles.serviceSafetyLine, { color: OP.sub }]}
                         >
-                          • Not suitable if:{" "}
-                          {service.contraindications!.join(", ")}
+                          {t("discover.profile.safety.notSuitable", { conditions: service.contraindications!.join(", ") })}
                         </Text>
                       )}
                     </View>
@@ -3784,7 +3785,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <Text
                         style={[styles.serviceSafetyTitle, { color: OP.text }]}
                       >
-                        Suitable Skin Tones
+                        {t("discover.profile.skinTones")}
                       </Text>
                       <Text
                         style={[styles.serviceSafetyLine, { color: OP.sub }]}
@@ -3859,7 +3860,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             >
                               <Text style={[styles.editAddOnsLink, { color: adaptiveAccentColor }]}>
-                                {pickedAddOns.length > 0 ? 'Edit' : 'Add extras'}
+                                {pickedAddOns.length > 0 ? t("common.edit") : t("discover.profile.addExtras")}
                               </Text>
                             </TouchableOpacity>
                           )}
@@ -3894,8 +3895,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           ]}
                         >
                           {fullyBooked
-                              ? "Fully Booked"
-                              : "Book"}
+                              ? t("discover.profile.fullyBooked")
+                              : t("discover.profile.book")}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -3932,8 +3933,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             ]}
                           >
                             {wEntry.status === "notified"
-                              ? "Slot Held — Confirm!"
-                              : `Waiting · #${wEntry.position}`}
+                              ? t("discover.profile.slotHeld")
+                              : t("discover.profile.waitingPosition", { position: wEntry.position })}
                           </Text>
                           <TouchableOpacity
                             onPress={() => {
@@ -3983,7 +3984,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             { color: OP.sub },
                           ]}
                         >
-                          No openings next 2 wks
+                          {t("discover.profile.noOpenings")}
                         </Text>
                       );
                     }
@@ -4013,7 +4014,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             { color: adaptiveAccentColor },
                           ]}
                         >
-                          Waitlist
+                          {t("discover.profile.waitlist")}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -4208,18 +4209,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             >
               <View style={[styles.contactSheetGrabber, { backgroundColor: OP.border }]} />
               <Text style={[styles.contactSheetTitle, { color: OP.text }]}>
-                Your contact options
+                {t("discover.profile.contactSheet.title")}
               </Text>
               <Text style={[styles.contactSheetSub, { color: OP.sub }]}>
-                What anyone browsing your profile sees for general enquiries,
-                from the contact details you set in Business Profile → Contact.
-                In-app messaging isn't available on your own profile.
+                {t("discover.profile.contactSheet.sub")}
               </Text>
 
               {contactOptions.length === 0 ? (
                 <Text style={[styles.contactSheetEmpty, { color: OP.sub }]}>
-                  You haven't published any contact details yet. Add them in
-                  Business Profile → Contact so people browsing can get in touch.
+                  {t("discover.profile.contactSheet.empty")}
                 </Text>
               ) : (
                 <View style={styles.contactSheetList}>
@@ -4273,7 +4271,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 onPress={() => setContactSheetVisible(false)}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.contactSheetCloseText, { color: OP.text }]}>Close</Text>
+                <Text style={[styles.contactSheetCloseText, { color: OP.text }]}>{t("common.close")}</Text>
               </TouchableOpacity>
             </Pressable>
           </Pressable>
@@ -4335,11 +4333,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <View style={[styles.modalHeader, { borderBottomColor: OP.border }]}>
                   <View style={styles.modalHeaderContent}>
                     <View>
-                      <Text style={[styles.modalTitle, { color: OP.text }]}>All Services</Text>
+                      <Text style={[styles.modalTitle, { color: OP.text }]}>{t("discover.profile.allServices")}</Text>
                       <Text style={[styles.modalSubtitle, { color: OP.sub }]}>
-                        {selectedCategory} • {selectedCategoryServices.length}{" "}
-                        service
-                        {selectedCategoryServices.length === 1 ? "" : "s"}
+                        {selectedCategory} • {tp("discover.profile.servicesCount", selectedCategoryServices.length)}
                       </Text>
                     </View>
                     {/* Select mode toggles from the inline services header
@@ -4422,7 +4418,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.waitlistPopupTitle, { color: OP.text }]}>
-                    Join Waitlist
+                    {t("discover.profile.joinWaitlist")}
                   </Text>
                   {waitlistModal.service && (
                     <Text
@@ -4446,12 +4442,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
 
               <Text style={[styles.waitlistPopupSub, { color: OP.sub }]}>
-                We'll notify you when a slot opens up.
+                {t("discover.profile.waitlistSub")}
               </Text>
 
               {/* Availability toggle */}
               <Text style={[styles.waitlistPopupLabel, { color: OP.sub }]}>
-                AVAILABILITY
+                {t("discover.profile.waitlistAvailability")}
               </Text>
               <View
                 style={[
@@ -4477,7 +4473,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       },
                     ]}
                   >
-                    Anytime
+                    {t("discover.profile.anytime")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4496,7 +4492,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       { color: waitlistDateMode === "range" ? "#fff" : OP.sub },
                     ]}
                   >
-                    Date Range
+                    {t("discover.profile.dateRange")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -4520,7 +4516,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       color={OP.sub}
                     />
                     <Text style={[styles.waitlistDateLabel, { color: OP.sub }]}>
-                      From
+                      {t("discover.profile.from")}
                     </Text>
                     <Text
                       style={[
@@ -4532,12 +4528,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       ]}
                     >
                       {waitlistDateFrom
-                        ? waitlistDateFrom.toLocaleDateString("en-GB", {
+                        ? waitlistDateFrom.toLocaleDateString(localeForLanguage(), {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
                           })
-                        : "Select date"}
+                        : t("discover.profile.selectDate")}
                     </Text>
                     <Ionicons
                       name="chevron-forward"
@@ -4557,7 +4553,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       color={OP.sub}
                     />
                     <Text style={[styles.waitlistDateLabel, { color: OP.sub }]}>
-                      To
+                      {t("discover.profile.to")}
                     </Text>
                     <Text
                       style={[
@@ -4569,12 +4565,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       ]}
                     >
                       {waitlistDateTo
-                        ? waitlistDateTo.toLocaleDateString("en-GB", {
+                        ? waitlistDateTo.toLocaleDateString(localeForLanguage(), {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
                           })
-                        : "Select date"}
+                        : t("discover.profile.selectDate")}
                     </Text>
                     <Ionicons
                       name="chevron-forward"
@@ -4605,7 +4601,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           { color: adaptiveAccentColor },
                         ]}
                       >
-                        Done
+                        {t("common.done")}
                       </Text>
                     </TouchableOpacity>
                     <DateTimePicker
@@ -4638,7 +4634,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           { color: adaptiveAccentColor },
                         ]}
                       >
-                        Done
+                        {t("common.done")}
                       </Text>
                     </TouchableOpacity>
                     <DateTimePicker
@@ -4679,7 +4675,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 ]}
                 value={waitlistNotes}
                 onChangeText={setWaitlistNotes}
-                placeholder="Any preferences for the provider..."
+                placeholder={t("discover.profile.waitlistNotesPlaceholder")}
                 placeholderTextColor={OP.sub}
                 multiline
                 maxLength={280}
@@ -4706,7 +4702,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text
                     style={[styles.waitlistPopupCancelText, { color: OP.sub }]}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4722,7 +4718,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   activeOpacity={0.8}
                 >
                   <Text style={styles.waitlistJoinConfirmText}>
-                    {waitlistJoining ? "Joining..." : "Join Waitlist"}
+                    {waitlistJoining ? t("discover.profile.joining") : t("discover.profile.joinWaitlist")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -4758,7 +4754,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <Ionicons name="exit-outline" size={22} color="#FF9500" />
               </View>
               <Text style={[styles.leavePopupTitle, { color: OP.text }]}>
-                Leave Waitlist?
+                {t("discover.profile.leaveTitle")}
               </Text>
               {leaveConfirmEntry && (
                 <Text
@@ -4772,8 +4768,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </Text>
               )}
               <Text style={[styles.leavePopupBody, { color: OP.sub }]}>
-                You'll lose your place in the queue and won't be notified when a
-                slot opens up.
+                {t("discover.profile.leaveBody")}
               </Text>
               <View style={styles.waitlistPopupActions}>
                 <TouchableOpacity
@@ -4787,7 +4782,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text
                     style={[styles.waitlistPopupCancelText, { color: OP.sub }]}
                   >
-                    Keep my spot
+                    {t("discover.profile.keepSpot")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4795,7 +4790,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   onPress={handleConfirmLeave}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.leavePopupLeaveText}>Leave</Text>
+                  <Text style={styles.leavePopupLeaveText}>{t("discover.profile.leave")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -4831,7 +4826,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 style={styles.offersFloatTabGradient}
               >
                 <Text style={styles.offersFloatCount}>{promotions.length}</Text>
-                <Text style={styles.offersFloatLabel}>OFFERS</Text>
+                <Text style={styles.offersFloatLabel}>{t("discover.offers.title")}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -5060,32 +5055,32 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             onPress={openLinkOnlyBooking}
                             activeOpacity={0.85}
                             accessibilityRole="button"
-                            accessibilityLabel={`Book with ${provider.displayName} on their booking page`}
+                            accessibilityLabel={t("discover.profile.linkOnlyBookA11y", { name: provider.displayName })}
                           >
-                            <Text style={[styles.linkOnlyBookText, { color: OP.text }]}>BOOK</Text>
+                            <Text style={[styles.linkOnlyBookText, { color: OP.text }]}>{t("discover.profile.book").toUpperCase()}</Text>
                             <Ionicons name="open-outline" size={15} color={OP.text} />
                           </TouchableOpacity>
                           {provider.instagram
-                            ? socialButton("instagram", "logo-instagram", `Open @${provider.instagram} on Instagram`, () => {
+                            ? socialButton("instagram", "logo-instagram", t("discover.profile.openInstagramA11y", { handle: provider.instagram }), () => {
                                 recordStat("instagram_tap");
                                 Linking.openURL(`https://instagram.com/${provider.instagram}`).catch(() => {
-                                  Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
+                                  Alert.alert(tr("discover.profile.instagramFailed"), tr("discover.profile.tryAgainMoment"));
                                 });
                               })
                             : null}
                           {provider.tiktok
-                            ? socialButton("tiktok", "logo-tiktok", `Open @${provider.tiktok} on TikTok`, () => {
+                            ? socialButton("tiktok", "logo-tiktok", t("discover.profile.openTiktokA11y", { handle: provider.tiktok }), () => {
                                 Linking.openURL(`https://www.tiktok.com/@${provider.tiktok.replace(/^@/, "")}`).catch(() => {
-                                  Alert.alert("Couldn't open TikTok", "Please try again in a moment.");
+                                  Alert.alert(tr("discover.profile.tiktokFailed"), tr("discover.profile.tryAgainMoment"));
                                 });
                               })
                             : null}
-                          {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
+                          {socialButton("message", "chatbubble-outline", t("discover.profile.messageA11y", { name: provider.displayName }), handleGetInTouch)}
                         </View>
                         <Text
                           style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
                         >
-                          Books on their own page — opens inside CERVICED
+                          {t("discover.profile.linkOnlyCaption")}
                         </Text>
                       </View>
                     );
@@ -5133,7 +5128,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         onPress={handleNotificationToggle}
                         disabled={!canSaveProvider || isNotificationLoading}
                         activeOpacity={0.8}
-                        accessibilityLabel="Notifications"
+                        accessibilityLabel={t("discover.home.notificationsA11y")}
                         accessibilityRole="button"
                         accessibilityState={{ selected: isNotificationsEnabled, disabled: !canSaveProvider || isNotificationLoading }}
                       >
@@ -5152,13 +5147,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             `https://instagram.com/${provider.instagram}`,
                           ).catch(() => {
                             Alert.alert(
-                              "Couldn't open Instagram",
-                              "Please try again in a moment.",
+                              tr("discover.profile.instagramFailed"),
+                              tr("discover.profile.tryAgainMoment"),
                             );
                           });
                         }}
                         activeOpacity={0.8}
-                        accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                        accessibilityLabel={t("discover.profile.openInstagramA11y", { handle: provider.instagram })}
                         accessibilityRole="button"
                       >
                         <BlurView
@@ -5246,7 +5241,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               { color: infoTab === "about" ? OP.text : OP.sub },
                             ]}
                           >
-                            About
+                            {t("discover.profile.tab.about")}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -5266,7 +5261,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               { color: infoTab === "policy" ? OP.text : OP.sub },
                             ]}
                           >
-                            Policy
+                            {t("discover.profile.tab.policy")}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -5277,7 +5272,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     <>
                       {!hasProviderPolicyInfo(provider) && (
                         <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                          Relevant Information
+                          {t("discover.profile.relevantInfo")}
                         </Text>
                       )}
                       {/* Provider-WRITTEN bio: rendered via DynamicText so it
@@ -5299,7 +5294,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         activeOpacity={0.6}
                       >
                         <Text style={[styles.moreButtonText, { color: OP.text }]}>
-                          {showFullAbout ? "Show Less" : "More"}
+                          {showFullAbout ? t("common.showLess") : t("discover.profile.more")}
                         </Text>
                       </TouchableOpacity>
                     </>
@@ -5381,7 +5376,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         styles.policyImageFab,
                         { backgroundColor: adaptiveAccentColor },
                       ]}
-                      accessibilityLabel="View full policy details"
+                      accessibilityLabel={t("discover.profile.viewFullPolicyA11y")}
                       accessibilityRole="button"
                     >
                       <Ionicons
@@ -5411,7 +5406,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 collapsable={false}
               >
                 <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>
-                  Services
+                  {t("discover.profile.services")}
                 </Text>
 
                 {renderServiceCategoryBlock(visibleServices, () => {

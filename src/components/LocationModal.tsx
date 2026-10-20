@@ -11,6 +11,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { useTranslation } from '../i18n';
 
 interface LocationModalProps {
   visible: boolean;
@@ -57,13 +58,7 @@ const LOCATIONS = [
   'Sheffield, UK',
 ];
 
-const RADIUS_OPTIONS = [
-  { label: '1 mile', value: 1 },
-  { label: '5 miles', value: 5 },
-  { label: '10 miles', value: 10 },
-  { label: '25 miles', value: 25 },
-  { label: '50 miles', value: 50 },
-];
+const RADIUS_OPTIONS = [1, 5, 10, 25, 50] as const;
 
 export default function LocationModal({
   visible,
@@ -77,6 +72,7 @@ export default function LocationModal({
   // client Home, and the enterprise tokens are provider-hat only — they'd paint
   // brown/dusty-rose chrome inside the client's plum + blue-grey theme.
   const { palette: P } = useTheme();
+  const { t, tp } = useTranslation();
   const bottomInset = useSystemBottomInset();
 
   return (
@@ -93,12 +89,12 @@ export default function LocationModal({
           onPress={() => {}}
         >
           <View style={styles.header}>
-            <Text style={[styles.title, { color: P.text }]}>LOCATION &amp; RADIUS</Text>
+            <Text style={[styles.title, { color: P.text }]}>{t('discover.location.title')}</Text>
           </View>
 
           <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
             <View style={styles.sectionHead}>
-              <Text style={[styles.sectionTitle, { color: P.sub }]}>City</Text>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('discover.location.city')}</Text>
             </View>
             <View style={styles.pillGrid}>
               {LOCATIONS.map(location => (
@@ -113,16 +109,16 @@ export default function LocationModal({
             </View>
 
             <View style={styles.sectionHead}>
-              <Text style={[styles.sectionTitle, { color: P.sub }]}>Search radius</Text>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('discover.location.radius')}</Text>
             </View>
             <View style={[styles.pillGrid, styles.pillGridLast]}>
-              {RADIUS_OPTIONS.map(option => (
+              {RADIUS_OPTIONS.map(miles => (
                 <Chip
-                  key={option.value}
-                  label={option.label}
+                  key={miles}
+                  label={tp('discover.location.miles', miles)}
                   palette={P}
-                  isSelected={selectedRadius === option.value}
-                  onPress={() => onRadiusChange(option.value)}
+                  isSelected={selectedRadius === miles}
+                  onPress={() => onRadiusChange(miles)}
                 />
               ))}
             </View>
@@ -133,7 +129,7 @@ export default function LocationModal({
             onPress={onClose}
             activeOpacity={0.75}
           >
-            <Text style={[styles.applyButtonText, { color: P.onAccent }]}>Apply</Text>
+            <Text style={[styles.applyButtonText, { color: P.onAccent }]}>{t('common.apply')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

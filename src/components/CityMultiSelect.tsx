@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { UK_CITIES } from '../constants/ukCities';
 import { getCityAreaData, type CityAreaData } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { useTranslation } from '../i18n';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string;
@@ -42,6 +43,8 @@ interface CityMultiSelectProps {
  * appending to this array instead of composing one string.
  */
 export function CityMultiSelect({ selected, onChange, palette: t, placeholder }: CityMultiSelectProps) {
+  // `t` is the palette here, so the translator is `tx`.
+  const { t: tx } = useTranslation();
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
@@ -111,14 +114,14 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
         onPress={() => setVisible(true)}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel="Choose cities"
+        accessibilityLabel={tx('discover.cities.chooseA11y')}
       >
         <Ionicons name="location-outline" size={18} color={t.sub} />
         <Text
           style={[styles.fieldText, { color: selected.length ? t.text : t.sub }]}
           numberOfLines={1}
         >
-          {selected.length ? selected.join(', ') : (placeholder ?? 'Select cities')}
+          {selected.length ? selected.join(', ') : (placeholder ?? tx('discover.cities.placeholder'))}
         </Text>
         <Ionicons name="chevron-down" size={16} color={t.sub} />
       </TouchableOpacity>
@@ -129,8 +132,8 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
           <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: bottomInset + 16 }]}>
             <View style={[styles.handle, { backgroundColor: t.border }]} />
             <View style={styles.header}>
-              <Text style={[styles.title, { color: t.text }]}>Choose your cities</Text>
-              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel="Close city picker">
+              <Text style={[styles.title, { color: t.text }]}>{tx('discover.cities.title')}</Text>
+              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel={tx('discover.cities.closeA11y')}>
                 <Ionicons name="close" size={22} color={t.text} />
               </TouchableOpacity>
             </View>
@@ -140,7 +143,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search cities..."
+                placeholder={tx('discover.cities.search')}
                 placeholderTextColor={t.sub}
                 style={[styles.searchInput, { color: t.text }]}
                 autoCapitalize="words"
@@ -156,7 +159,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               <TextInput
                 value={otherText}
                 onChangeText={setOtherText}
-                placeholder="Other city or town..."
+                placeholder={tx('discover.cities.otherPlaceholder')}
                 placeholderTextColor={t.sub}
                 style={[styles.otherInput, { color: t.text }]}
                 autoCapitalize="words"
@@ -168,7 +171,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                 onPress={addOther}
                 disabled={!otherText.trim()}
                 hitSlop={8}
-                accessibilityLabel="Add city"
+                accessibilityLabel={tx('discover.cities.addA11y')}
               >
                 <Ionicons
                   name="add-circle"
@@ -203,9 +206,9 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                           style={styles.expandBtn}
                           onPress={() => toggleExpand(item)}
                           hitSlop={8}
-                          accessibilityLabel={`Pick a specific area of ${item}`}
+                          accessibilityLabel={tx('discover.cities.pickAreaA11y', { city: item })}
                         >
-                          <Text style={[styles.expandBtnText, { color: t.accent }]}>Area</Text>
+                          <Text style={[styles.expandBtnText, { color: t.accent }]}>{tx('discover.cities.area')}</Text>
                           <Ionicons
                             name={isExpanded ? 'chevron-up' : 'chevron-down'}
                             size={14}

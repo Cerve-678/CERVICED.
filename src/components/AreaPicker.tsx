@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { CITY_AREA_NAMES, getCityAreaData } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { useTranslation } from '../i18n';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
@@ -48,17 +49,15 @@ type Step = 'city' | 'region' | 'area';
  *  string so it can never collide with a real CITY_AREA_NAMES entry. */
 const OTHER_CITY = '__other__';
 
-const DEFAULT_SUBTITLE =
-  'Shown to a provider who travels to you, so they can check the distance ' +
-  'before accepting. Your full address stays hidden until they do.';
-
 export default function AreaPicker({
   value,
   onChange,
   accentColor = '#AF9197',
   disabled,
-  subtitle = DEFAULT_SUBTITLE,
+  subtitle: subtitleProp,
 }: AreaPickerProps) {
+  const { t } = useTranslation();
+  const subtitle = subtitleProp ?? t('discover.area.defaultSubtitle');
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>('city');
@@ -163,12 +162,12 @@ export default function AreaPicker({
 
   const heading =
     step === 'city'
-      ? 'Which city are you in?'
+      ? t('discover.area.whichCity')
       : step === 'region'
-        ? `Whereabouts in ${city}?`
+        ? t('discover.area.whereabouts', { city: city ?? '' })
         : city === OTHER_CITY
-          ? 'Where are you based?'
-          : `Pick your area in ${region}`;
+          ? t('discover.area.whereBased')
+          : t('discover.area.pickArea', { region: region ?? '' });
 
   return (
     <>
@@ -178,11 +177,11 @@ export default function AreaPicker({
         disabled={disabled}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel="Choose your area"
+        accessibilityLabel={t('discover.area.chooseA11y')}
       >
         <Ionicons name="map-outline" size={20} color={accentColor} />
         <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
-          {value || 'Select your area'}
+          {value || t('discover.area.placeholder')}
         </Text>
         <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
       </TouchableOpacity>
@@ -199,7 +198,7 @@ export default function AreaPicker({
                   <TouchableOpacity
                     onPress={back}
                     hitSlop={12}
-                    accessibilityLabel="Go back a step"
+                    accessibilityLabel={t('discover.area.backA11y')}
                     style={styles.backBtn}
                   >
                     <Ionicons name="chevron-back" size={20} color="#1C1C1E" />
@@ -210,7 +209,7 @@ export default function AreaPicker({
                   <Text style={styles.subtitle}>{subtitle}</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel="Close area picker">
+              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel={t('discover.area.closeA11y')}>
                 <Ionicons name="close" size={24} color="#1C1C1E" />
               </TouchableOpacity>
             </View>
@@ -235,7 +234,7 @@ export default function AreaPicker({
                 <TextInput
                   value={freeText}
                   onChangeText={setFreeText}
-                  placeholder={city === OTHER_CITY ? 'e.g. North West London' : 'e.g. Chinatown'}
+                  placeholder={city === OTHER_CITY ? t('discover.area.examplePlace') : t('discover.area.exampleArea')}
                   placeholderTextColor="#8B8B95"
                   style={styles.freeInput}
                   autoCapitalize="words"
@@ -250,7 +249,7 @@ export default function AreaPicker({
                   disabled={!freeText.trim()}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.confirmBtnText}>Use this area</Text>
+                  <Text style={styles.confirmBtnText}>{t('discover.area.useThis')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -262,7 +261,7 @@ export default function AreaPicker({
                     activeOpacity={0.85}
                   >
                     <Ionicons name="create-outline" size={17} color={accentColor} />
-                    <Text style={[styles.otherRowText, { color: accentColor }]}>Other city…</Text>
+                    <Text style={[styles.otherRowText, { color: accentColor }]}>{t('discover.area.otherCity')}</Text>
                   </TouchableOpacity>
                 )}
 
@@ -276,8 +275,7 @@ export default function AreaPicker({
 
                 {step === 'city' && cities.length === 0 ? (
                   <Text style={styles.empty}>
-                    No matching city — tap "Other city…" above to enter your area
-                    manually.
+                    {t('discover.area.noMatch', { action: t('discover.area.otherCity') })}
                   </Text>
                 ) : null}
 
@@ -307,7 +305,7 @@ export default function AreaPicker({
                       activeOpacity={0.85}
                     >
                       <Ionicons name="create-outline" size={17} color={accentColor} />
-                      <Text style={[styles.otherRowText, { color: accentColor }]}>Other…</Text>
+                      <Text style={[styles.otherRowText, { color: accentColor }]}>{t('discover.area.otherOption')}</Text>
                     </TouchableOpacity>
                   </>
                 )}

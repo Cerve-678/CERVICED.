@@ -21,6 +21,7 @@ import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
 import { mapProviderProfileData } from "./profileMapper";
 import type { ProviderProfileData } from "./profileTypes";
+import { tr, localeForLanguage } from "../../i18n";
 
 export interface ProviderReviewItem {
   id: number | string;
@@ -37,10 +38,10 @@ export const mapProviderReviews = (
 ): ProviderReviewItem[] =>
   rows.map((review) => ({
     id: review.id,
-    name: review.user?.name?.trim() || "Anonymous",
+    name: review.user?.name?.trim() || tr("discover.profile.anonymous"),
     rating: review.rating,
     comment: review.comment ?? "",
-    date: new Date(review.created_at).toLocaleDateString("en-GB", {
+    date: new Date(review.created_at).toLocaleDateString(localeForLanguage(), {
       day: "numeric",
       month: "short",
       year: "numeric",

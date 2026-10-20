@@ -171,6 +171,13 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** The active language, or null outside a DisplaySettingsProvider (an error
+ *  boundary, a screen rendered alone in a test). Unlike useDisplaySettings it
+ *  never throws — the i18n hook falls back to the language store instead. */
+export function useOptionalLanguage(): string | null {
+  return useContext(DisplaySettingsContext)?.language ?? null;
+}
+
 export function useDisplaySettings(): DisplaySettingsContextType {
   const context = useContext(DisplaySettingsContext);
   if (context === undefined) {

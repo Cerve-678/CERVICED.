@@ -53,6 +53,7 @@ import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
+import { useTranslation, type TranslationKey } from '../../i18n';
 
 
 // Mixes portfolio photos with service ("bookable") cards for a
@@ -207,16 +208,29 @@ interface SubTabProps {
   favouritesRef?: React.RefObject<View | null>;
 }
 
-const SUB_TABS = [
-  { key: 'discover' as const,   label: 'Discover' },
-  { key: 'favourites' as const, label: 'Favourites' },
+const SUB_TABS: readonly { key: 'discover' | 'favourites'; labelKey: TranslationKey }[] = [
+  { key: 'discover',   labelKey: 'discover.explore.tab.discover' },
+  { key: 'favourites', labelKey: 'discover.explore.tab.favourites' },
 ];
+
+// Filter keys are fixed English ids (filterMap / discoverTotals key off them);
+// only the chip label is translated.
+const FILTER_LABEL_KEYS: Record<string, TranslationKey> = {
+  All: 'discover.category.all',
+  Hair: 'discover.category.hair',
+  Nails: 'discover.category.nails',
+  Makeup: 'discover.category.makeup',
+  Aesthetics: 'discover.category.aesthetics',
+  Brows: 'discover.category.brows',
+  Lashes: 'discover.category.lashes',
+};
 
 // Both tabs match — same heavier BakbakOne treatment, sitting side by side
 // on the left. Underline-when-active, no shared SlidingTabs pill (that
 // treatment is used elsewhere — Bookings, the filter chips below).
 const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange, favouritesRef }) => {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   return (
     <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
       {SUB_TABS.map(tab => {
@@ -233,7 +247,7 @@ const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange, favouritesRef }) 
             style={styles.subTab}
           >
             <Text style={[styles.discoverLabel, { color: active ? P.text : P.sub }]}>
-              {tab.label}
+              {t(tab.labelKey)}
             </Text>
             <View style={[styles.subTabUnderline, { backgroundColor: active ? P.accent : 'transparent' }]} />
           </TouchableOpacity>
@@ -250,6 +264,7 @@ SubTabBar.displayName = 'SubTabBar';
 const ExploreScreen = memo(() => {
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const { isDarkMode, palette: P } = useTheme();
+  const { t, tp } = useTranslation();
   // Measured per render, not captured at module load: the masonry column
   // width is half the screen, so a stale width mis-sizes every card.
   const { width: screenWidth } = useWindowDimensions();
@@ -455,7 +470,7 @@ const ExploreScreen = memo(() => {
 
   // Filters
   const filters = useMemo(() => ['All', 'Hair', 'Nails', 'Makeup', 'Aesthetics', 'Brows', 'Lashes'], []);
-  const filterTabs = useMemo(() => filters.map(f => ({ key: f, label: f })), [filters]);
+  const filterTabs = useMemo(() => filters.map(f => ({ key: f, label: FILTER_LABEL_KEYS[f] ? t(FILTER_LABEL_KEYS[f]!) : f })), [filters, t]);
 
   const filterMap: Record<string, ServiceCategory> = useMemo(() => ({
     Hair: 'HAIR',
@@ -864,37 +879,37 @@ const ExploreScreen = memo(() => {
   const tourSteps = useMemo<CoachMarkStep[]>(() => [
     {
       key: 'heart',
-      title: 'Save it with a tap',
-      body: 'Heart any look, provider or service to keep it — no need to remember who posted it.',
+      title: t('discover.explore.tour.heartTitle'),
+      body: t('discover.explore.tour.heartBody'),
       target: { ref: tourHeartRef },
       radius: 15,
       icon: 'heart',
     },
     {
       key: 'price',
-      title: 'A price means you can book it',
-      body: 'Cards showing a price are a real service. Tap one and you book that exact service — not just the provider.',
+      title: t('discover.explore.tour.priceTitle'),
+      body: t('discover.explore.tour.priceBody'),
       target: { ref: tourPriceRef },
       radius: 10,
       icon: 'pricetag',
     },
     {
       key: 'favourites',
-      title: 'Everything you saved',
-      body: 'Your hearted looks, providers and services all collect under Favourites.',
+      title: t('discover.explore.tour.favouritesTitle'),
+      body: t('discover.explore.tour.favouritesBody'),
       target: { ref: tourFavouritesRef },
       radius: 10,
       icon: 'sparkles',
     },
     {
       key: 'saved',
-      title: 'Your providers',
-      body: 'Bookmarked providers live here, ready to rebook without searching again.',
+      title: t('discover.explore.tour.savedTitle'),
+      body: t('discover.explore.tour.savedBody'),
       target: { ref: tourSavedRef },
       radius: 18,
       icon: 'bookmark',
     },
-  ], []);
+  ], [t]);
 
   // Which step keys this account still has coming; null until resolved.
   const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
@@ -964,7 +979,7 @@ const ExploreScreen = memo(() => {
               >
                 <TabIcon name="magnifying-glass" size={18} color={P.sub} />
                 <Text style={[styles.searchInput, { color: P.sub }]} numberOfLines={1}>
-                  Search looks, styles, providers...
+                  {t('discover.explore.searchPlaceholder')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1022,7 +1037,7 @@ const ExploreScreen = memo(() => {
                         the grid doesn't shift down when it does. */}
                     <Text style={[styles.gridCount, { color: P.sub }]}>
                       {discoverTotals[selectedFilter] !== undefined
-                        ? `${discoverTotals[selectedFilter]} results`
+                        ? tp('discover.explore.results', discoverTotals[selectedFilter] ?? 0)
                         : ' '}
                     </Text>
                   </View>
@@ -1030,9 +1045,9 @@ const ExploreScreen = memo(() => {
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
                     <TabIcon name="magnifying-glass" size={48} color={P.sub} />
-                    <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
+                    <Text style={[styles.emptyText, { color: P.text }]}>{t('discover.explore.noLooks')}</Text>
                     <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                      Try a different search or filter
+                      {t('discover.explore.noLooksSub')}
                     </Text>
                   </View>
                 }
@@ -1057,16 +1072,16 @@ const ExploreScreen = memo(() => {
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridCount, { color: P.sub }]}>
-                    {favouriteItems.length} saved
+                    {t('discover.explore.savedCount', { count: favouriteItems.length })}
                   </Text>
                 </View>
               }
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <TabIcon name="heart" size={48} color={P.sub} />
-                  <Text style={[styles.emptyText, { color: P.text }]}>No favourites yet</Text>
+                  <Text style={[styles.emptyText, { color: P.text }]}>{t('discover.explore.noFavourites')}</Text>
                   <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                    Tap the heart on any look, provider or service to save it here
+                    {t('discover.explore.noFavouritesSub')}
                   </Text>
                 </View>
               }

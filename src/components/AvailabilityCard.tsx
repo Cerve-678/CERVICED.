@@ -19,6 +19,8 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import type { AvailabilityDayState, AvailabilitySummary } from '../services/AvailabilityService';
+import { useTranslation, type TranslationKey } from '../i18n';
+import { dayName } from '../utils/dateUtils';
 
 export interface AvailabilityCardProps {
   summary: AvailabilitySummary | null;
@@ -61,15 +63,13 @@ const STATE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   unpublished: 'calendar-outline',
 };
 
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
 // State meanings differ by audience: without booking visibility the dots show
 // opening hours only, so a client must not hear "free".
-const STATE_WORDS: Record<AvailabilityDayState, string> = {
-  open:    'open',
-  full:    'fully booked',
-  blocked: 'away',
-  closed:  'closed',
+const STATE_WORDS: Record<AvailabilityDayState, TranslationKey> = {
+  open:    'discover.availability.state.open',
+  full:    'discover.availability.state.full',
+  blocked: 'discover.availability.state.away',
+  closed:  'discover.availability.state.closed',
 };
 
 const DayDot: React.FC<{
@@ -79,11 +79,13 @@ const DayDot: React.FC<{
   isToday: boolean;
   subTextColor: string;
   textColor: string;
-}> = React.memo(({ label, dayOfWeek, state, isToday, subTextColor, textColor }) => (
+}> = React.memo(({ label, dayOfWeek, state, isToday, subTextColor, textColor }) => {
+  const { t } = useTranslation();
+  return (
   <View
     style={styles.dayCell}
     accessible
-    accessibilityLabel={`${isToday ? 'Today' : DAY_NAMES[dayOfWeek] ?? ''}: ${STATE_WORDS[state]}`}
+    accessibilityLabel={t('discover.availability.dayA11y', { day: isToday ? t('common.date.today') : dayName(dayOfWeek), state: t(STATE_WORDS[state]) })}
   >
     <Text
       style={[
@@ -101,7 +103,8 @@ const DayDot: React.FC<{
       accessibilityElementsHidden
     />
   </View>
-));
+  );
+});
 DayDot.displayName = 'DayDot';
 
 const AvailabilityCard: React.FC<AvailabilityCardProps> = React.memo(
@@ -119,6 +122,7 @@ const AvailabilityCard: React.FC<AvailabilityCardProps> = React.memo(
     onToggleNotifications,
     notificationsEnabled = false,
   }) => {
+    const { t } = useTranslation();
     const pressAnimatedValue = useRef(new Animated.Value(1)).current;
 
     const handlePressIn = useCallback(() => {
@@ -166,7 +170,7 @@ const AvailabilityCard: React.FC<AvailabilityCardProps> = React.memo(
       if (!loading) return null;
       return (
         <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
-          <Text style={[styles.headline, { color: subTextColor }]}>Checking availability…</Text>
+          <Text style={[styles.headline, { color: subTextColor }]}>{t('discover.availability.checking')}</Text>
         </BlurView>
       );
     }
@@ -195,7 +199,7 @@ const AvailabilityCard: React.FC<AvailabilityCardProps> = React.memo(
           </View>
           {onEditSchedule && (
             <View style={[styles.editChip, { borderColor }]}>
-              <Text style={[styles.editChipText, { color: accentColor }]}>EDIT</Text>
+              <Text style={[styles.editChipText, { color: accentColor }]}>{t('discover.availability.edit')}</Text>
               <Ionicons name="chevron-forward" size={11} color={accentColor} />
             </View>
           )}
@@ -204,7 +208,7 @@ const AvailabilityCard: React.FC<AvailabilityCardProps> = React.memo(
               style={styles.bellButton}
               onPress={onToggleNotifications}
               activeOpacity={0.65}
-              accessibilityLabel="Notify me about availability"
+              accessibilityLabel={t('discover.availability.notifyA11y')}
               accessibilityRole="button"
               accessibilityState={{ selected: notificationsEnabled }}
             >
@@ -253,7 +257,7 @@ const AvailabilityCard: React.FC<AvailabilityCardProps> = React.memo(
         onPress={handlePress}
         activeOpacity={1}
         accessibilityRole="button"
-        accessibilityLabel={`${summary.headline}. Edit your schedule.`}
+        accessibilityLabel={t('discover.availability.editA11y', { headline: summary.headline })}
       >
         <Animated.View style={animatedStyle}>{body}</Animated.View>
       </TouchableOpacity>

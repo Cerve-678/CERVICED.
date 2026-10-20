@@ -32,6 +32,7 @@ import Icon from './IconLibrary';
 import { fonts, spacing } from '../constants/PlatformDimensions';
 import { buildMoreLikeThis } from '../features/explore/moreLikeThis';
 import { savedCarouselImageId } from '../utils/savedCarouselImageId';
+import { useTranslation } from '../i18n';
 
 
 
@@ -382,6 +383,7 @@ function ModalBody({
   handleViewProfile,
   handleBookNow,
 }: ModalBodyProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   // Measured per render, not captured at module load: the carousel's page
   // offsets and the photo box's height are both derived from it.
@@ -841,7 +843,7 @@ function ModalBody({
                     color={P.onAccent}
                   />
                   <Text style={[styles.bookNowText, { color: P.onAccent }]}>
-                    {isBookableService ? 'Book Now' : 'View Profile'}
+                    {isBookableService ? t('discover.image.bookNow') : t('discover.image.viewProfile')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -912,8 +914,8 @@ function ModalBody({
                 ]}
               >
                 {moreLikeThisIsFallback
-                  ? 'You Might Also Like'
-                  : 'More Like This'}
+                  ? t('discover.image.youMightLike')
+                  : t('discover.image.moreLikeThis')}
               </Text>
               <ScrollView
                 horizontal
