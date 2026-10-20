@@ -18,7 +18,7 @@ export const settings = {
   'languageRegion.subtitle': 'Set your preferred language and region.',
   'languageRegion.section.language': 'LANGUAGE',
   'languageRegion.languageFootnote':
-    'As translations roll out, more of Cerviced follows your chosen language. Legal and health information is always shown in English.',
+    "Cerviced follows your chosen language. Sign-in, legal and health information, notifications and emails stay in English, and providers' own words appear as they wrote them.",
   'languageRegion.section.region': 'REGION',
   'languageRegion.regionRowDates': 'Dates {date}',
   'languageRegion.regionFootnote':

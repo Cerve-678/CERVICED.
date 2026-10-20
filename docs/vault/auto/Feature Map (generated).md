@@ -306,9 +306,9 @@ Curated: [[Contexts]] · **190 files**
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
 - `src/screens/provider/InfoRegScreen.tsx` _(13)_
+- `src/i18n/catalogs/en/settings.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- `supabase/fix_client_reliability_tracking.sql` _(12)_
 - … +160 more
 
 ## Becca / AI

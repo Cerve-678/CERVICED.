@@ -16,7 +16,7 @@ export const settings: AreaCatalog<typeof en> = {
   'languageRegion.subtitle': 'Ustaw preferowany język i region.',
   'languageRegion.section.language': 'JĘZYK',
   'languageRegion.languageFootnote':
-    'W miarę dodawania tłumaczeń coraz więcej Cerviced będzie w wybranym języku. Informacje prawne i zdrowotne są zawsze wyświetlane po angielsku.',
+    'Cerviced wyświetla się w wybranym języku. Logowanie, informacje prawne i zdrowotne, powiadomienia oraz e-maile pozostają po angielsku, a teksty specjalistów są widoczne tak, jak je napisali.',
   'languageRegion.section.region': 'REGION',
   'languageRegion.regionRowDates': 'Daty {date}',
   'languageRegion.regionFootnote':
