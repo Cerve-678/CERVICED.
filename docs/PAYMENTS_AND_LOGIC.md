@@ -28,7 +28,7 @@ Last updated: 18 October 2026.
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
 | Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
 | Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
-| PayPal at checkout (no-fee checkouts) | No | PR #118. Needs `create-payment-intent`, `finalize-payment-intent`, `stripe-webhook` deployed, a new app build, and Stripe's marketplace PayPal approval for live |
+| PayPal at checkout (no-fee checkouts) | Yes (test mode) | Merged #118 (6ae28727); `create-payment-intent` v17, `finalize-payment-intent` v15, `stripe-webhook` v9 deployed 19 Oct. The button needs a new app build. Live money also needs Stripe's marketplace PayPal approval and settlement to the Stripe balance |
 
 ---
 

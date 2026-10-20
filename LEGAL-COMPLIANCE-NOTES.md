@@ -601,7 +601,7 @@ pros instead of treating a save as consent; Terms say 30-day deletion grace.
 ## 20. PayPal at checkout (2026-10-19)
 
 **What it is:** clients can pay by PayPal as well as card, Apple Pay and Google
-Pay, processed through Stripe (`feat/paypal-checkout`, not deployed).
+Pay, processed through Stripe (merged #118 and deployed 2026-10-19, test mode).
 A checkout where a provider has a late arrival or no-show fee stays card-only,
 because that fee is charged off-session to a saved card. PayPal accounts are
 never saved. CERVICED doesn't store the PayPal payer name, email or ID that
