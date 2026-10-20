@@ -76,7 +76,7 @@ import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
-import { ServiceImageCropper } from '../../features/provider-registration/ServiceImageCropper';
+import { ImageCropper, type CropShape } from '../../features/provider-registration/ImageCropper';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
@@ -1278,7 +1278,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     if (!result.canceled && result.assets?.length) {
       // Straight into the cropper rather than into the set: every photo is
       // re-rendered to JPEG on the way through, which is also what stops an
-      // iOS HEIC being uploaded under a .jpg name (see ServiceImageCropper).
+      // iOS HEIC being uploaded under a .jpg name (see ImageCropper).
       setPendingCropUris(result.assets.map(a => a.uri));
     }
   };
@@ -1477,7 +1477,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
                 <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onReorder={handleReorderImages} size={100} styles={styles} />
-                <ServiceImageCropper
+                <ImageCropper
                   visible={pendingCropUris.length > 0}
                   uris={pendingCropUris}
                   onDone={handleCropperDone}
@@ -3387,7 +3387,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!providerData.logo) setLogoPage(0);
   }, [providerData.logo]);
 
-  // Handle logo selection
+  // The logo is framed in the same drag-to-frame cropper as service photos.
+  // `logoCropUri` is the image the cropper is open on (null = closed).
+  // `logoSourceUri` is the uncropped photo picked this session, so Adjust
+  // re-frames the original rather than cropping an already-cropped copy.
+  const [logoCropUri, setLogoCropUri] = useState<string | null>(null);
+  const [logoSourceUri, setLogoSourceUri] = useState<string | null>(null);
+
+  // Change Logo: pick a new photo, then frame it.
   const handleSelectLogo = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -3397,15 +3404,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.8,
     });
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      setProviderData(prev => ({ ...prev, logo: asset.uri }));
+      setLogoSourceUri(asset.uri);
+      setLogoCropUri(asset.uri);
     }
+  };
+
+  // Adjust: re-frame the logo already chosen, without picking again. A saved
+  // logo from an earlier session has no original here, so that one is framed
+  // from the saved image itself.
+  const handleAdjustLogo = () => {
+    const source = logoSourceUri ?? providerData.logo;
+    if (source) setLogoCropUri(source);
+  };
+
+  const handleLogoCropDone = (framed: ServiceImageDraft[]) => {
+    setLogoCropUri(null);
+    const logo = framed[0]?.uri;
+    if (logo) setProviderData(prev => ({ ...prev, logo }));
   };
 
   // Handle data transfer from Acuity Scheduling URL
@@ -4335,10 +4355,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoContainer}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleAdjustLogo(); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Change logo"
+                              accessibilityLabel="Adjust logo"
                               accessibilityHint="Swipe left to see it on Home"
                             >
                               <Image
@@ -4353,14 +4373,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   square's corner, so it hugs the edge instead of floating
                                   off it — offset = r - (r/√2) - badgeR, rounded. */}
                               <View style={styles.logoEditBadge}>
-                                <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                                <Ionicons name="crop" size={14} color={chrome.onAccent} />
                               </View>
                             </TouchableOpacity>
                           </View>
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeSmallCard}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleAdjustLogo(); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Your logo on a small Home card. Adjust crop"
@@ -4371,7 +4391,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeLargeCard}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleAdjustLogo(); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Your logo on a large Home card. Adjust crop"
@@ -4388,6 +4408,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ))}
                     </View>
                     <Text style={styles.logoCaption}>{LOGO_PAGE_CAPTIONS[logoPage]}</Text>
+                    <TouchableOpacity
+                      onPress={() => { tapSelect(); handleSelectLogo(); }}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      style={styles.logoChangeLink}
+                    >
+                      <Text style={[styles.logoChangeLinkText, { color: adaptiveAccentColor }]}>Change Logo</Text>
+                    </TouchableOpacity>
                   </>
                 ) : (
                   <>
@@ -4409,6 +4437,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </>
                 )}
               </View>
+              <ImageCropper
+                visible={logoCropUri != null}
+                uris={logoCropUri ? [logoCropUri] : []}
+                onDone={handleLogoCropDone}
+                onCancel={() => setLogoCropUri(null)}
+                shapes={LOGO_CROP_SHAPES}
+                title="Your logo"
+                round
+                keepPng
+                palette={{
+                  bg: chrome.surf(0.98),
+                  card: chrome.surf(0.35),
+                  text: chrome.fg(0.92),
+                  sub: chrome.fg(0.55),
+                  accent: adaptiveAccentColor,
+                }}
+              />
 
             {/* Business Name */}
               <View
@@ -5836,9 +5881,12 @@ const LOGO_BADGE_OFFSET = Math.round(
  *  these too, or the preview shows a crop clients never see. */
 const LOGO_HOME_SMALL = { width: 160, height: 70, radius: 12 } as const;
 const LOGO_HOME_LARGE = { width: 282, height: 147, radius: 16 } as const;
+/** The logo is always framed square: the circle and both Home cards all
+ *  fill from the same square image. */
+const LOGO_CROP_SHAPES: CropShape[] = [{ key: 'square', label: '1:1', ratio: 1 }];
 /** One caption per page of the logo swipe, in page order. */
 const LOGO_PAGE_CAPTIONS = [
-  'Change Logo',
+  'Profile logo · tap to adjust',
   'Small Home card · tap to adjust',
   'Large Home card · tap to adjust',
 ] as const;
@@ -6043,6 +6091,15 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   logoDotActive: {
     backgroundColor: P.accent,
+  },
+  logoChangeLink: {
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  logoChangeLinkText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
   },
 
   // Full-bleed section: a hairline rule and generous space do the separating.

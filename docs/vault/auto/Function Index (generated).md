@@ -5,7 +5,7 @@
 
 #generated
 
-**2642 functions** across **360 files**.
+**2644 functions** across **360 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -145,6 +145,7 @@
 - `BufferPicker.tsx` — **BufferPicker**
 - `ChipSelect.tsx` — **ChipSelect**
 - `DurationPicker.tsx` — **DurationPicker**
+- `ImageCropper.tsx` — finish · handleCancel · handleUse · **ImageCropper** · layout · panResponder
 - `InfoRegPager.tsx` — handleMomentumEnd · **InfoRegPager** · recordEnd
 - `infoRegSections.ts` — **infoRegSectionIndex**
 - `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
@@ -152,7 +153,6 @@
 - `SectionHeader.tsx` — **SectionHeader**
 - `serviceDraft.ts` — **createServiceDraft** · nextDraftId
 - `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
-- `ServiceImageCropper.tsx` — finish · handleCancel · handleUse · layout · panResponder · **ServiceImageCropper**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **useVerticalDragReorder**
 
 ### `src/features/providers/` (15)
@@ -254,7 +254,7 @@
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
-- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · allCategoryNames · applyDragPosition · categoryNames · chrome · chromeTheme · documentEnd · dotWindow · edgeForTheme · EditCategoryModal · editTheme · fgForTheme · filled · getCategoryDragResponder · goToSection · handleActivePageChange · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleCropperDone · handleDeleteCategory · handleDeleteService · handleInputFocus · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderImages · handleSave · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleToggleImageFit · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · resolveChromeTheme · retryLoadProvider · sectionSummaries · selectServiceType · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · serviceTypes · styles · submitOther · surfForTheme · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · toggleTag · TransferDataModal · typeOfCategory · useChrome · useScreenStyles
+- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · allCategoryNames · applyDragPosition · categoryNames · chrome · chromeTheme · documentEnd · dotWindow · edgeForTheme · EditCategoryModal · editTheme · fgForTheme · filled · getCategoryDragResponder · goToSection · handleActivePageChange · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleAdjustLogo · handleCropperDone · handleDeleteCategory · handleDeleteService · handleInputFocus · handleLogoCropDone · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderImages · handleSave · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleToggleImageFit · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · resolveChromeTheme · retryLoadProvider · sectionSummaries · selectServiceType · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · serviceTypes · styles · submitOther · surfForTheme · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · toggleTag · TransferDataModal · typeOfCategory · useChrome · useScreenStyles
 - `LinkOnlyAnalyticsScreen.tsx` — bars · days · LinkOnlyAnalyticsScreen · load · onRefresh · totals
 - `LinkOnlyHomeScreen.tsx` — createStyles · goToStep · LinkOnlyHomeScreen · MiniStat · openBecca · P · QuickAction · strength · StrengthRing · styles
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · specialtyOptions · styles

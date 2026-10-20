@@ -259,7 +259,7 @@ Curated: [[Booking Flow]] · **172 files**
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
-- `src/screens/provider/InfoRegScreen.tsx` _(58)_
+- `src/screens/provider/InfoRegScreen.tsx` _(59)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/services/bookingService.ts` _(54)_
@@ -302,10 +302,10 @@ Curated: [[Contexts]] · **182 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
 - `src/screens/client/CartScreen.tsx` _(16)_
+- `src/screens/provider/InfoRegScreen.tsx` _(15)_
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
-- `src/screens/provider/InfoRegScreen.tsx` _(13)_
 - `src/i18n/catalogs/en.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
