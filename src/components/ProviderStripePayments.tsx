@@ -319,7 +319,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </Card>
     </>}
     {section === 'settings' && <>
-      <Card title="When you get paid" sub="How long after an appointment your share is released to Stripe. Stripe then pays it into your bank, which usually takes a few more working days.">
+      <Card title="When you get paid" sub="How long after an appointment your share is released to our payment partners. They then pay it into your bank, which usually takes a few more working days.">
         {!!holdError && <Notice text={holdError} />}
         {holdUnavailable
           ? <Notice text="Finish setting up your professional profile to choose when you get paid." />

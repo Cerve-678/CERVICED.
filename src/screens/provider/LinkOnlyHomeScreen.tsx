@@ -8,11 +8,13 @@
  *  - until they're live, the go-live checklist: the four things the server
  *    publishes them on (logo, About, opening hours, a portfolio photo)
  *  - once live, tiles: Book taps this week (→ Analytics), new enquiries
- *    (→ Messages), saves, profile views and search appearances; and one fact
+ *    (→ Messages), saves (+ new this week), profile views and "Said they
+ *    booked" (clients who answered Yes to "Did you book?"); and one fact
  *    from their own numbers from Becca
  *  - their whole week, one line per day, from the phone's calendar (DiaryCard)
  *  - once live, Profile strength: the next missing thing, the rest on a tap
  *  - their Book button's link, with Test it and Change link
+ *  - once live, their most-saved photo, if anyone has saved one
  *  - shortcuts: Add work, Hours, Branding
  *  - Becca as a floating button, above the tab bar
  *
@@ -38,9 +40,11 @@ import { useAppDialog } from '../../components/AppDialog';
 import {
   getMyProviderDailyStats,
   getMyProviderProfile,
+  getMyLinkOnlyDashboardExtras,
   getMyProviderSaverCount,
   getProviderEnquirySummary,
   getProviderSpecialties,
+  type LinkOnlyDashboardExtras,
   type ProviderEnquirySummary,
 } from '../../services/databaseService';
 import { lastSevenDaysOfBookTaps, type DayBar } from '../../features/providers/linkOnlyAnalytics';
@@ -102,6 +106,7 @@ export default function LinkOnlyHomeScreen() {
   const [week, setWeek] = useState<{ comparison: WeekComparison; bars: DayBar[]; savers: number } | null>(null);
   const [specialityCount, setSpecialityCount] = useState<number | null>(null);
   const [enquiries, setEnquiries] = useState<ProviderEnquirySummary | null>(null);
+  const [extras, setExtras] = useState<LinkOnlyDashboardExtras | null>(null);
   const [weekFailed, setWeekFailed] = useState(false);
   const [status, setStatus] = useState<LinkOnlyGoLiveStatus | null>(null);
   const [hasRow, setHasRow] = useState<boolean | null>(null);
@@ -157,6 +162,15 @@ export default function LinkOnlyHomeScreen() {
               } catch (error) {
                 // The tile still opens Messages, just without a count.
                 logger.error('[LinkOnlyHome] enquiries load failed', error);
+              }
+            })(),
+            (async () => {
+              try {
+                const next = await getMyLinkOnlyDashboardExtras();
+                if (active) setExtras(next);
+              } catch (error) {
+                // "Said they booked" shows a dash and the photo card stays hidden.
+                logger.error('[LinkOnlyHome] dashboard extras load failed', error);
               }
             })(),
           ]);
@@ -417,8 +431,9 @@ export default function LinkOnlyHomeScreen() {
                   icon="bookmark-outline"
                   value={week?.savers}
                   label="Saved you"
-                  // Saves are a running total, so there's no week to compare.
-                  sub="Clients who saved you"
+                  // A running total, so the week shows as new saves, not a trend.
+                  sub={extras && extras.newSaversWeek > 0 ? `+${extras.newSaversWeek} this week` : 'Clients who saved you'}
+                  subUp={!!extras && extras.newSaversWeek > 0}
                 />
               </View>
 
@@ -434,10 +449,11 @@ export default function LinkOnlyHomeScreen() {
                 <StatTile
                   styles={styles}
                   P={P}
-                  icon="search-outline"
-                  value={week?.comparison.thisWeek.searchAppearances}
-                  before={week?.comparison.lastWeek.searchAppearances}
-                  label="In searches"
+                  icon="checkmark-done-outline"
+                  value={extras?.saidBookedWeek}
+                  before={extras?.saidBookedLastWeek}
+                  label="Said they booked"
+                  sub="Clients who tapped Book"
                 />
               </View>
             </View>
@@ -513,6 +529,22 @@ export default function LinkOnlyHomeScreen() {
             </View>
           )}
 
+          {live && extras?.topPhoto && (
+            <View style={[styles.card, styles.photoCard]}>
+              <Image source={{ uri: extras.topPhoto.imageUrl }} style={styles.topPhoto} contentFit="cover" transition={0} />
+              <View style={styles.flex}>
+                <Text style={styles.eyebrow}>Most-saved photo</Text>
+                <Text style={styles.cardTitle} numberOfLines={1}>{extras.topPhoto.label ?? 'Your work'}</Text>
+                <Text style={styles.stepHint}>
+                  Saved {extras.topPhoto.saves === 1 ? 'once' : `${extras.topPhoto.saves} times`} in Explore
+                </Text>
+                <TouchableOpacity onPress={() => goToStep('photos')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button">
+                  <Text style={[styles.count, styles.photoLink]}>Add more like this</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           <View style={styles.shortcuts}>
             <Shortcut styles={styles} P={P} icon="camera-outline" label="Add work" onPress={() => goToStep('portfolio')} />
             <Shortcut styles={styles} P={P} icon="time-outline" label="Hours" onPress={() => goToStep('hours')} />
@@ -566,6 +598,7 @@ function StatTile({
   before,
   label,
   sub,
+  subUp,
 }: {
   styles: HomeStyles;
   P: HomePalette;
@@ -574,6 +607,8 @@ function StatTile({
   before?: number | undefined;
   label: string;
   sub?: string;
+  /** Show `sub` in the trend-up colour. */
+  subUp?: boolean;
 }) {
   const trend = value === undefined || before === undefined ? null : trendLabel(value, before);
   return (
@@ -584,7 +619,7 @@ function StatTile({
       {trend ? (
         <Text style={[styles.trend, !trend.up && styles.trendDown]}>{trend.text}</Text>
       ) : sub ? (
-        <Text style={styles.tileSub} numberOfLines={1}>{sub}</Text>
+        <Text style={subUp ? styles.trend : styles.tileSub} numberOfLines={1}>{sub}</Text>
       ) : null}
     </View>
   );
@@ -705,6 +740,9 @@ const createStyles = (P: HomePalette) =>
     softButton: { flex: 1, height: 44, borderRadius: 22, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
     outlineButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, color: P.accent },
     disabled: { opacity: 0.45 },
+    photoCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14 },
+    topPhoto: { width: 76, height: 76, borderRadius: 14, backgroundColor: P.surface },
+    photoLink: { marginTop: 4 },
     shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     shortcut: { height: 40, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.card, flexDirection: 'row', alignItems: 'center', gap: 6 },
     shortcutLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: P.text },

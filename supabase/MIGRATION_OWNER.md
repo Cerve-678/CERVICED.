@@ -25,6 +25,20 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-20 (no more +30 for booking the same provider again)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020120000 | `remove_returning_client_points` | **APPLIED 2026-10-20** by Claude (MCP execute_sql) on the user's OK, version recorded; verified live: no `returning_client` in the function, new md5 `0c88c927c13abf46663c7953f9bf3a04`, trigger still attached. Frontier at authoring: `20261019233000` (`20261019235500` written, unapplied, numbered below this). Redefines `award_points_on_booking_completed()` from the live definition (md5 `fc6b7188cddaff0fed1fe710440bd00c`) minus the `returning_client` (+30) block. Existing `returning_client` ledger rows (20 at authoring) are kept. The file records its own version. No app or function deploy needed. |
+
+**Knock-on:** `20261019235500_listing_claims_checked_by_instagram` (written, unapplied) is now below the frontier. Renumber it above `20261020120000` before applying it, or `supabase migration up` skips it.
+
+### Applied 2026-10-20 (link-only Dashboard counts)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019234000 | `link_only_dashboard_extras` | **APPLIED 2026-10-20** by Claude (execute_sql, so the version is the authored one, not a wall-clock stamp), version recorded. Frontier at authoring: `20261019233000`; numbered below the then-unapplied `20261019235500` (listing claims) and `20261020120000` (returning-client points) so it couldn't push them below the frontier. `20261020120000` was applied by the time this landed, so `20261019235500` (listing claims, unapplied) is now below the frontier — record it by hand when it's applied. Adds read-only `get_my_link_only_dashboard_extras()` + indexes `client_external_bookings_provider_created_idx`, `bookmarks_provider_created_idx`, `users_saved_portfolio_gin`. Redefines nothing. Verified live as the one link-only provider. |
+
 ### Applied 2026-10-19 (expired holds cleared before a booking is saved)
 
 | Authored version | Name | Status |
