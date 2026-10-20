@@ -75,8 +75,8 @@ Curated: [[Availability & Slots]] · **177 files**
 
 ## Payments
 Curated: [[Payments]] · **140 files**
-- `src/screens/client/CartScreen.tsx` _(521)_
-- `src/services/databaseService.ts` _(208)_
+- `src/screens/client/CartScreen.tsx` _(530)_
+- `src/services/databaseService.ts` _(209)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/bookingService.ts` _(120)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -112,7 +112,7 @@ Curated: [[Booking Flow]] · **282 files**
 - `src/services/databaseService.ts` _(848)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/screens/client/CartScreen.tsx` _(642)_
+- `src/screens/client/CartScreen.tsx` _(645)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(562)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/client/BookingDetailScreen.tsx` _(418)_
@@ -253,7 +253,7 @@ Curated: [[Booking Flow]] · **173 files**
 - `src/screens/client/BookingDetailScreen.tsx` _(159)_
 - `src/screens/client/RescheduleScreen.tsx` _(143)_
 - `src/services/becca/capabilities/client.ts` _(132)_
-- `src/screens/client/CartScreen.tsx` _(121)_
+- `src/screens/client/CartScreen.tsx` _(124)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **173 files**
 
 ## Auth
 Curated: [[Contexts]] · **184 files**
-- `src/services/databaseService.ts` _(277)_
+- `src/services/databaseService.ts` _(281)_
 - `src/contexts/AuthContext.tsx` _(156)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/screens/auth/LoginScreen.tsx` _(119)_
@@ -347,7 +347,7 @@ Curated: [[Services]] · **48 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **73 files**
-- `src/screens/client/CartScreen.tsx` _(406)_
+- `src/screens/client/CartScreen.tsx` _(407)_
 - `src/services/databaseService.ts` _(96)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(62)_

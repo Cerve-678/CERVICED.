@@ -139,7 +139,12 @@ export function subscribeToAuthStateChanges(
 }
 
 export async function signOutCurrentSession(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  // 'local' ends only this device's session. The default ('global') also
+  // kills the account's sessions on every other phone, which keep a token
+  // that still passes RLS until it expires — so the app looks signed in
+  // there, but anything that checks the session server-side (payments)
+  // fails with a 401 "session expired".
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw error;
   invalidateOwnProviderIds();
 }
