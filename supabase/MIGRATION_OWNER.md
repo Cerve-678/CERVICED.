@@ -22,14 +22,16 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  fix/remove-returning-client-points (2026-10-20), until 20261020120000 is applied
+OWNER:  (none)
 ```
 
-### Written 2026-10-20 (no more +30 for booking the same provider again)
+### Applied 2026-10-20 (no more +30 for booking the same provider again)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261020120000 | `remove_returning_client_points` | **WRITTEN, NOT APPLIED.** Frontier at authoring: `20261019233000` (`20261019235500` written, unapplied, numbered below this). Redefines `award_points_on_booking_completed()` from the live definition (md5 `fc6b7188cddaff0fed1fe710440bd00c`) minus the `returning_client` (+30) block. Existing `returning_client` ledger rows (20 at authoring) are kept. The file records its own version. No app or function deploy needed. |
+| 20261020120000 | `remove_returning_client_points` | **APPLIED 2026-10-20** by Claude (MCP execute_sql) on the user's OK, version recorded; verified live: no `returning_client` in the function, new md5 `0c88c927c13abf46663c7953f9bf3a04`, trigger still attached. Frontier at authoring: `20261019233000` (`20261019235500` written, unapplied, numbered below this). Redefines `award_points_on_booking_completed()` from the live definition (md5 `fc6b7188cddaff0fed1fe710440bd00c`) minus the `returning_client` (+30) block. Existing `returning_client` ledger rows (20 at authoring) are kept. The file records its own version. No app or function deploy needed. |
+
+**Knock-on:** `20261019235500_listing_claims_checked_by_instagram` (written, unapplied) is now below the frontier. Renumber it above `20261020120000` before applying it, or `supabase migration up` skips it.
 
 ### Applied 2026-10-20 (link-only Dashboard counts)
 
