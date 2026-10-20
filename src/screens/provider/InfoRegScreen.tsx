@@ -1261,37 +1261,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
 
+  // Pick one photo, crop and adjust it in the iOS crop, done. One at a time
+  // because iOS offers no crop during a multi-select. The crop IS the framing,
+  // so the photo fills its frame wherever it's shown.
   const handleAddImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,   // pick several photos at once
-      selectionLimit: 10,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.length) {
-      // Keep the provider's complete original by default. They can switch an
-      // individual tile to "Fill frame" later when a tighter crop genuinely
-      // makes sense; opening every picked photo in a mandatory cropper made
-      // adding a simple service gallery feel like an editing task.
-      setImages(prev => [
-        ...prev,
-        ...result.assets.map(asset => ({ uri: asset.uri, fit: 'contain' as const })),
-      ]);
-    }
-  };
-
-  const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
-
-  // Tapping a photo re-crops it with the iOS crop. iOS only crops while a
-  // photo is being picked (and never during a multi-select, which is why
-  // adding several at once can't crop), so this reopens the library on a
-  // single pick and swaps the result in at the same place in the order.
-  const handleRecropImage = async (index: number) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
@@ -1305,30 +1278,18 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       });
       const asset = result.assets?.[0];
       if (result.canceled || !asset) return;
-      setImages(prev =>
-        prev.map((img, i) => (i === index ? { uri: asset.uri, fit: 'cover' } : img)),
-      );
+      setImages(prev => [...prev, { uri: asset.uri, fit: 'cover' }]);
     } catch (e) {
-      // Without this a picker failure looked like the tap did nothing.
-      Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.recropServiceImage'));
+      Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
     }
   };
+
+  const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
 
   // Array order IS the stored order — it becomes service_images.sort_order on
   // save, and index 0 is the photo that leads the service everywhere it's
   // shown. Splice-then-insert rather than a swap, so dragging across several
   // slots moves one photo through them instead of exchanging the two ends.
-  // Framing is per photo, not per service — a provider may want a wide shot
-  // shown whole and a close-up filling the frame in the same set.
-  const handleToggleImageFit = (index: number) => {
-    setImages(prev =>
-      prev.map((img, i) =>
-        i === index
-          ? { ...img, fit: img.fit === 'cover' ? 'contain' : 'cover' }
-          : img,
-      ),
-    );
-  };
 
   const handleReorderImages = (from: number, to: number) => {
     setImages(prev => {
@@ -1500,8 +1461,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
-                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onRecrop={handleRecropImage} onReorder={handleReorderImages} size={100} styles={styles} />
-                <Text style={styles.serviceSheetHint}>Photos stay whole by default. Use Fill frame only when you want a tighter crop.</Text>
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onReorder={handleReorderImages} size={100} styles={styles} />
               </View>
 
               {/* Service Name */}
@@ -7540,15 +7500,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   // Sits on the first thumbnail so "the first one leads your service" is
   // visible on the strip itself, not only in the hint below it.
-  cropButton: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
   coverBadge: {
     position: 'absolute',
     bottom: 4,
@@ -7566,21 +7517,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   // Bottom-right so it never sits under the remove button (top-right) or the
   // Cover badge (bottom-left).
-  fitToggle: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  fitToggleText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
   carouselHint: {
     marginTop: 8,
     fontSize: 11,
