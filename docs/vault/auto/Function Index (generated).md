@@ -5,7 +5,7 @@
 
 #generated
 
-**2673 functions** across **365 files**.
+**2676 functions** across **366 files**.
 
 ### `src/components/` (48)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -249,13 +249,14 @@
 - `SubscriptionScreen.tsx` — SubscriptionScreen
 - `UserProfileScreen.tsx` — handleBiometricToggle · handleLogout · UserProfileScreen
 
-### `src/screens/provider/` (31)
+### `src/screens/provider/` (32)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
 - `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
+- `FullCervicedFeaturesScreen.tsx` — createStyles · FullCervicedFeaturesScreen · styles
 - `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · allCategoryNames · applyDragPosition · categoryNames · chrome · chromeTheme · documentEnd · dotWindow · edgeForTheme · EditCategoryModal · editTheme · fgForTheme · filled · getCategoryDragResponder · goToSection · handleActivePageChange · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteCategory · handleDeleteService · handleFrameLogo · handleInputFocus · handleLogoFramed · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderImages · handleSave · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · resolveChromeTheme · retryLoadProvider · sectionSummaries · selectServiceType · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · serviceTypes · styles · submitOther · surfForTheme · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · toggleTag · TransferDataModal · typeOfCategory · useChrome · useScreenStyles
 - `LinkOnlyAnalyticsScreen.tsx` — bars · days · LinkOnlyAnalyticsScreen · load · onRefresh · totals
 - `LinkOnlyHomeScreen.tsx` — createStyles · goToStep · LinkOnlyHomeScreen · openBecca · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink

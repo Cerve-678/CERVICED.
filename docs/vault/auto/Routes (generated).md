@@ -66,6 +66,7 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderHomeMain`
 - `LinkOnlyHomeMain`
 - `LinkOnlyAnalytics`
+- `FullCervicedFeatures`
 - `BeccaStack`
 - `EditProfile`
 - `Branding`

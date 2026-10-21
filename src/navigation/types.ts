@@ -227,6 +227,8 @@ export type ProviderHomeStackParamList = {
   // instead of the booking calendar — see ProviderTabNavigator.
   LinkOnlyHomeMain: undefined;
   LinkOnlyAnalytics: undefined;
+  // What taking bookings through CERVICED would add (link-only providers).
+  FullCervicedFeatures: undefined;
   // The provider Becca stack, pushed from the link-only Home (link-only
   // providers have no Becca tab).
   BeccaStack: NavigatorScreenParams<ProviderBeccaStackParamList> | undefined;
@@ -319,6 +321,8 @@ export type ProviderServicesStackParamList = {
 // Provider Account Stack (settings for provider users)
 export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
+  // What taking bookings through CERVICED would add (link-only providers).
+  FullCervicedFeatures: undefined;
   // Link-only providers' Profile tab root: their public profile + edit rows.
   // Their own public profile, exactly as clients see it.
   MyPublicProfile: { providerId: string };

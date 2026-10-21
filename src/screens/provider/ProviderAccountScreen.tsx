@@ -407,6 +407,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <SettingsOption icon="storefront" title={t('providerAccount.linkOnly.businessInfo.title')} subtitle={t('providerAccount.linkOnly.businessInfo.sub')} onPress={() => navigation.navigate('BusinessInfo')} P={P} />
               <SettingsOption icon="calendar-today" title={t('providerAccount.linkOnly.hours.title')} subtitle={t('providerAccount.linkOnly.hours.sub')} onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
               <SettingsOption icon="receipt" title={t('providerAccount.linkOnly.policies.title')} subtitle={t('providerAccount.linkOnly.policies.sub')} onPress={() => navigation.navigate('Policies')} P={P} />
+              <SettingsOption icon="auto-awesome" title={t('providerAccount.linkOnly.fullCerviced.title')} subtitle={t('providerAccount.linkOnly.fullCerviced.sub')} onPress={() => navigation.navigate('FullCervicedFeatures')} P={P} />
             </View>
             )}
 

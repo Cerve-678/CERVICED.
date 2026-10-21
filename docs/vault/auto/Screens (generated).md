@@ -5,9 +5,9 @@
 
 #generated
 
-**79 screens.** Curated overview: [[Screens & Navigation]].
+**80 screens.** Curated overview: [[Screens & Navigation]].
 
-## Provider (33)
+## Provider (34)
 - `src/screens/client/ProviderChatScreen.tsx`
 - `src/screens/client/ProviderProfileScreen.tsx`
 - `src/screens/provider/AboutYouScreen.tsx`
@@ -16,6 +16,7 @@
 - `src/screens/provider/BusinessDetailsScreen.tsx`
 - `src/screens/provider/BusinessInfoScreen.tsx`
 - `src/screens/provider/BusinessProfileScreen.tsx`
+- `src/screens/provider/FullCervicedFeaturesScreen.tsx`
 - `src/screens/provider/InfoRegScreen.tsx`
 - `src/screens/provider/LinkOnlyAnalyticsScreen.tsx`
 - `src/screens/provider/LinkOnlyHomeScreen.tsx`
