@@ -31,6 +31,8 @@ import {
   providerHatAddedEmail,
   providerWelcomeEmail,
   refundRequestedProviderEmail,
+  payoutFailedSupportEmail,
+  moneySummaryEmail,
   supportRequestEmail,
 } from './emailTemplates.ts';
 
@@ -102,6 +104,20 @@ const every = () => [
   [
     'linkOnlyGoLiveReminderEmail',
     linkOnlyGoLiveReminderEmail({ name: HOSTILE, businessName: HOSTILE, remaining: [HOSTILE] }),
+  ],
+  [
+    'payoutFailedSupportEmail',
+    payoutFailedSupportEmail({
+      kind: 'transfer', provider: HOSTILE, amount: HOSTILE, booking: HOSTILE, why: HOSTILE, tries: HOSTILE, nextStep: HOSTILE,
+    }),
+  ],
+  [
+    'moneySummaryEmail',
+    moneySummaryEmail({
+      failed: [{ title: HOSTILE, amount: HOSTILE }],
+      owed: [{ title: HOSTILE, amount: HOSTILE }],
+      refunds: [{ title: HOSTILE, amount: HOSTILE }],
+    }),
   ],
 ] as Array<[string, { subject: string; html: string }]>;
 

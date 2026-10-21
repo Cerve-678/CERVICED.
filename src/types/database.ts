@@ -82,6 +82,8 @@ export type NotificationType =
   | "fee_payment_lapsed"
   | "refund_requested"
   | "refund_request_updated"
+  /** A payout to the provider (or their own bank payout) failed; they may need to fix their account. */
+  | "payout_failed"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"

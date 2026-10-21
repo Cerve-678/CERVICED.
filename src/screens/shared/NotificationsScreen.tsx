@@ -58,7 +58,7 @@ interface Notification {
       | 'cancellation_settled'
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
       | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed'
-      | 'refund_requested' | 'refund_request_updated'
+      | 'refund_requested' | 'refund_request_updated' | 'payout_failed'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
@@ -743,6 +743,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
         );
       }, 300);
+    } else if (notification.type === 'payout_failed') {
+      // Provider-only. The fix (Stripe account or bank details) lives on
+      // Payments, not on the booking the payout was for.
+      defer(() => {
+        navigateProviderHome('Payments');
+      }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
@@ -825,6 +831,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // Amber: a request someone still has to act on or decide.
     if (type === 'refund_requested') return '#FF9500';
     if (type === 'refund_request_updated') return P.accentText;
+    // Money that didn't reach the provider: they need to act.
+    if (type === 'payout_failed') return '#FF9500';
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
@@ -914,6 +922,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'payout_failed':
+        return 'Open Payments';
       case 'provider_saved':
         return 'View Analytics';
       case 'points_earned':
