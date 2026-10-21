@@ -5,9 +5,9 @@
 
 #generated
 
-**2658 functions** across **423 files**.
+**2662 functions** across **423 files**.
 
-### `src/components/` (46)
+### `src/components/` (47)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -23,6 +23,7 @@
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
+- `ErrorBoundary.tsx` — component · DefaultFallback
 - `HairTypeSelector.tsx` — **HairTypeSelector**
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · runPendingNavigation · selectImageIndex · trackCarouselOffset
@@ -75,7 +76,7 @@
 - `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
-- `DisplaySettingsContext.tsx` — **DisplaySettingsProvider** · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
+- `DisplaySettingsContext.tsx` — **DisplaySettingsProvider** · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings** · **useOptionalLanguage**
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
 - `RegistrationContext.tsx` — **RegistrationProvider** · resetData · updateData · **useRegistration** · value
 - `StatusBarTintContext.tsx` — claimDarkTopArea · releaseDarkTopArea · **StatusBarTintProvider** · **useDarkTopArea** · **useStatusBarTint** · value
@@ -380,6 +381,6 @@
 - `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**
 - `textAppearanceStore.ts` — **getTextAppearance** · **setTextAppearance** · **subscribeTextAppearance**
 - `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**
-- `userFacingError.ts` — **toUserMessage** · **toUserMessageAllowingDbGuard**
+- `userFacingError.ts` — **isSamePasswordError** · **toUserMessage** · **toUserMessageAllowingDbGuard**
 - `validation.ts` — **getPasswordStrength**
 - `withTimeout.ts` — **withTimeout**
