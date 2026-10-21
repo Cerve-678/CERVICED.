@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
-import type { BusinessType, LogoCardSlot, LogoFraming } from '../../types/database';
+import type { BusinessType } from '../../types/database';
 import {
   View,
   Text,
@@ -93,7 +93,6 @@ interface Provider {
   name: string;
   service: string;
   logo: any;
-  logoFraming: LogoFraming | null;
   rating: number;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
   businessType: BusinessType | null;
@@ -114,14 +113,12 @@ const ProviderRail = React.memo(function ProviderRail({
   onProviderPress,
   cardStyle,
   blurStyle,
-  logoSlot,
 }: {
   providers: Provider[];
   keyPrefix: string;
   onProviderPress: (provider: Provider) => void;
   cardStyle: any;
   blurStyle: any;
-  logoSlot: LogoCardSlot;
 }) {
   return (
     <FlatList
@@ -134,7 +131,6 @@ const ProviderRail = React.memo(function ProviderRail({
           onPress={() => onProviderPress(item)}
           style={cardStyle}
           blurStyle={blurStyle}
-          logoSlot={logoSlot}
         />
       )}
       showsHorizontalScrollIndicator={false}
@@ -451,7 +447,6 @@ export default function HomeScreen() {
       name: p.display_name,
       service: p.service_category,
       logo: p.logo_url ? { uri: p.logo_url } : null,
-      logoFraming: p.logo_framing ?? null,
       rating: (p as any).rating ?? 0,
       priceTier: (p as any).price_tier ?? null,
       businessType: (p as any).business_type ?? null,
@@ -1025,7 +1020,7 @@ export default function HomeScreen() {
               provider={provider}
               onPress={() => navigateToProvider(provider)}
               style={styles.brandCard}
-              blurStyle={styles.brandCardBlur} logoSlot="small"
+              blurStyle={styles.brandCardBlur}
             />
           ))}
         </ScrollView>
@@ -1093,7 +1088,7 @@ export default function HomeScreen() {
           ))}
         </View>
       ) : (
-        <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
+        <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
       )}
 
       {/* Actual matching service listings (services.audience =
@@ -1195,7 +1190,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ProviderRail providers={providersData.yourProviders.slice(0, 15)} keyPrefix="your" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
+            <ProviderRail providers={providersData.yourProviders.slice(0, 15)} keyPrefix="your" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
           </View>
         )}
 
@@ -1665,7 +1660,7 @@ export default function HomeScreen() {
                   ))}
                 </View>
               ) : (
-                <ProviderRail providers={recommendedProvidersList} keyPrefix="recommended" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
+                <ProviderRail providers={recommendedProvidersList} keyPrefix="recommended" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               )}
             </View>
             )}
@@ -1677,7 +1672,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
                 </View>
-                <ProviderRail providers={trending} keyPrefix="trending" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} logoSlot="large" />
+                <ProviderRail providers={trending} keyPrefix="trending" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
               </View>
             )}
 
@@ -1688,7 +1683,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
                 </View>
-                <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
+                <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               </View>
             )}
 
@@ -1699,7 +1694,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
                 </View>
-                <ProviderRail providers={topRated} keyPrefix="toprated" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} logoSlot="large" />
+                <ProviderRail providers={topRated} keyPrefix="toprated" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
               </View>
             )}
 
@@ -1751,7 +1746,7 @@ export default function HomeScreen() {
                               provider={provider}
                               onPress={() => navigateToProvider(provider)}
                               style={styles.providerCard}
-                              blurStyle={styles.providerBlur} logoSlot="large"
+                              blurStyle={styles.providerBlur}
                             />
                           ))}
                         </ScrollView>
@@ -1776,7 +1771,7 @@ export default function HomeScreen() {
                             provider={provider}
                             onPress={() => navigateToProvider(provider)}
                             style={styles.providerCard}
-                            blurStyle={styles.providerBlur} logoSlot="large"
+                            blurStyle={styles.providerBlur}
                           />
                         ))}
                       </ScrollView>
@@ -1798,7 +1793,7 @@ export default function HomeScreen() {
                             provider={provider}
                             onPress={() => navigateToProvider(provider)}
                             style={styles.providerCard}
-                            blurStyle={styles.providerBlur} logoSlot="large"
+                            blurStyle={styles.providerBlur}
                           />
                         ))}
                       </ScrollView>

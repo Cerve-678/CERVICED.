@@ -40,7 +40,10 @@ import {
   validatePromoCode,
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
-  getCheckoutFees, acceptCheckoutFees, type CheckoutFee } from '../../services/databaseService';
+  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards } from '../../services/databaseService';
+import {
+  savedCardBrandName, savedCardExpiryLabel, savedCardExpiryState, type SavedCard,
+} from '../../features/payments/savedCards';
 import {
   FEE_CONSENT_LINE,
   FEE_TERMS_BODY,
@@ -661,6 +664,28 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       setCardComplete(false);
     }, [isVisible]);
 
+    // The client's saved cards (Payment Methods), so they can pay with one in
+    // a tap. 'new' = type a card into the CardForm. Expired cards are left
+    // out: Stripe would only decline them. A failed load just shows the form.
+    const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
+    const [selectedCard, setSelectedCard] = useState<string>('new');
+    useEffect(() => {
+      if (!isVisible) return;
+      let cancelled = false;
+      setSavedCards([]);
+      setSelectedCard('new');
+      listSavedCards()
+        .then(cards => {
+          if (cancelled) return;
+          const usable = cards.filter(card => savedCardExpiryState(card) !== 'expired');
+          setSavedCards(usable);
+          if (usable[0]) setSelectedCard(usable[0].id);
+        })
+        .catch(err => logger.error('[checkout] could not load saved cards', err));
+      return () => { cancelled = true; };
+    }, [isVisible]);
+    const payingWithSavedCard = selectedCard !== 'new';
+
     // Apple Pay / Google Pay need a development build (env.isExpoGo).
     useEffect(() => {
       if (!isVisible || env.isExpoGo) return;
@@ -780,9 +805,13 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           // cerviced://safepay (forwarded to Stripe in App.tsx).
           ({ error: confirmError } = await confirmPayment(clientSecret, { paymentMethodType: 'PayPal' }));
         } else {
-          // The card details live only inside Stripe's CardForm — the app
-          // never sees them; confirmPayment reads them from the field.
-          ({ error: confirmError } = await confirmPayment(clientSecret, { paymentMethodType: 'Card' }));
+          // A saved card is confirmed by its Stripe id (it hangs off the
+          // same Customer the intent was made for). A new card's details
+          // live only inside Stripe's CardField — the app never sees them;
+          // confirmPayment reads them from the field.
+          ({ error: confirmError } = payingWithSavedCard
+            ? await confirmPayment(clientSecret, { paymentMethodType: 'Card', paymentMethodData: { paymentMethodId: selectedCard } })
+            : await confirmPayment(clientSecret, { paymentMethodType: 'Card' }));
         }
 
         if (confirmError) {
@@ -827,7 +856,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
 
     // Closing after a declined attempt leaves an unconfirmed intent open —
     // cancel it so CartScreen's hold release (wired into onClose) isn't
@@ -855,17 +884,13 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
-        {/* The card form brings the keyboard up; keep Pay above it. This
-            wraps the whole full-screen overlay on purpose: KeyboardAvoidingView
-            measures its own frame against the screen, so nested inside the
-            sheet (which starts marginTop: 100 down) it under-pads by that much
-            and the Pay button ends up under the keyboard. */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.paymentOverlay}
-        >
+        <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
+            {/* The card field brings the keyboard up; keep Pay above it. */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}
+            >
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
@@ -987,9 +1012,46 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                       </View>
                     </>
                   )}
-                  {!walletSupported && (
-                    <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Pay by card</Text>
+                  {savedCards.length > 0 && (
+                    <View accessibilityRole="radiogroup" style={styles.savedCardList}>
+                      <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Saved cards</Text>
+                      {[...savedCards.map(card => ({
+                        id: card.id,
+                        title: `${savedCardBrandName(card.brand)} •••• ${card.last4}`,
+                        sub: savedCardExpiryLabel(card),
+                      })), { id: 'new', title: 'Use a new card', sub: null as string | null }].map(option => {
+                        const selected = selectedCard === option.id;
+                        return (
+                          <TouchableOpacity
+                            key={option.id}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected, disabled: isProcessing }}
+                            disabled={isProcessing}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              setSelectedCard(option.id);
+                              setPayError(null);
+                            }}
+                            style={[styles.savedCardRow, {
+                              borderColor: selected ? P.accent : P.border,
+                              backgroundColor: selected ? P.accentDim : P.surface,
+                            }]}
+                          >
+                            <Ionicons name={option.id === 'new' ? 'add-circle-outline' : 'card-outline'} size={20} color={P.accent} />
+                            <View style={styles.savedCardText}>
+                              <Text style={[styles.savedCardTitle, { color: theme.text }]}>{option.title}</Text>
+                              {option.sub && <Text style={[styles.paySecureText, { color: P.sub }]}>{option.sub}</Text>}
+                            </View>
+                            <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? P.accent : P.sub} />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   )}
+                  {!payingWithSavedCard && (
+                  <>
+                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Card details</Text>
                   {/* Separate number / expiry / CVC / postcode boxes. On iOS,
                       backgroundColor paints the whole form behind Stripe's own
                       boxes, so it takes the sheet's colour and the boxes sit
@@ -1003,9 +1065,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                       borderColor: toArgbHex(P.border),
                       borderWidth: 1,
                       borderRadius: 14,
-                      cursorColor: toArgbHex(P.accent),
                       textColor: toArgbHex(theme.text),
                       placeholderColor: toArgbHex(P.sub),
+                      cursorColor: toArgbHex(P.accent),
                       textErrorColor: '#FFFF3B30',
                     }}
                     onFormComplete={details => {
@@ -1014,6 +1076,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                     }}
                     style={styles.cardForm}
                   />
+                  </>
+                  )}
                   {payError && (
                     <Text accessibilityRole="alert" style={[styles.paymentMethodName, styles.payErrorText]}>{payError}</Text>
                   )}
@@ -1025,12 +1089,12 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
               </ScrollView>
 
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: isProcessing || !canPay || !cardComplete ? P.accentDim : P.accent }]}
+                style={[styles.payButton, { backgroundColor: isProcessing || !canPay || !(payingWithSavedCard || cardComplete) ? P.accentDim : P.accent }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   handlePayment('card');
                 }}
-                disabled={isProcessing || !canPay || !cardComplete}
+                disabled={isProcessing || !canPay || !(payingWithSavedCard || cardComplete)}
               >
                 {isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
@@ -1038,9 +1102,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </KeyboardAvoidingView>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     );
   }
@@ -2393,6 +2457,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     parent?.navigate('Profile', {
       screen: 'ProfileInfo',
       params: { returnToTab: originTab },
+      // Keep the Profile menu underneath. Without this, a Profile tab that
+      // hadn't been opened yet is built with ProfileInfo as its only screen,
+      // so its back arrow had nowhere to go and fell through to Home.
+      initial: false,
     });
   }, [navigation]);
 
@@ -5831,9 +5899,28 @@ const styles = StyleSheet.create({
   },
   cardForm: {
     width: '100%',
-    // The native form doesn't size itself — iOS stacks number, then
-    // expiry/CVC, then country/postcode; Android adds field labels.
     height: Platform.OS === 'ios' ? 210 : 290,
+  },
+  savedCardList: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  savedCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderRadius: 14,
+  },
+  savedCardText: {
+    flex: 1,
+  },
+  savedCardTitle: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
   },
   payErrorText: {
     color: '#E06070',
