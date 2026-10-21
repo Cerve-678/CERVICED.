@@ -1267,11 +1267,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   // so the photo fills its frame wherever it's shown.
   const handleAddImage = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Please allow access to your photo library.');
-        return;
-      }
+      // This is the system photo picker, not a full-library read. On iOS it
+      // grants access only to the image the provider selects, so asking for
+      // media-library permission first is unnecessary and delays every tap.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
