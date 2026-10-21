@@ -79,6 +79,7 @@ export type NotificationType =
   | "fee_dispute_resolved"
   | "fee_payment_requested"
   | "fee_paid_by_client"
+  | "tip_received"
   | "fee_payment_lapsed"
   | "refund_requested"
   | "refund_request_updated"

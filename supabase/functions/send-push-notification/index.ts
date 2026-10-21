@@ -186,6 +186,7 @@ const PROVIDER_PREF_KEY_BY_TYPE: Record<string, string> = {
   refund_request_updated: 'providerPayments',
   fee_charged: 'providerPayments',
   fee_paid_by_client: 'providerPayments',
+  tip_received: 'providerPayments',
   fee_payment_lapsed: 'providerPayments',
   fee_dispute_resolved: 'providerPayments',
   // "Your Business"
