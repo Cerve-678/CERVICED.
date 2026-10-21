@@ -371,6 +371,11 @@ describe('notification routing — tip received', () => {
     expect(migration()).toMatch(/EXCEPTION WHEN OTHERS THEN\s+RAISE WARNING/);
   });
 
+  it('waits for the card fee and says what actually reaches the provider', () => {
+    expect(migration()).toMatch(/AFTER UPDATE OF payout_status[\s\S]*NEW\.payout_status = 'held'[\s\S]*NEW\.payout_pence IS NOT NULL/);
+    expect(migration()).toContain("' comes to you after the card fee. '");
+  });
+
   it('never names Stripe to the provider', () => {
     const insert = migration().slice(migration().indexOf('INSERT INTO public.notifications'));
     expect(insert.slice(0, insert.indexOf('EXCEPTION'))).not.toMatch(/stripe/i);

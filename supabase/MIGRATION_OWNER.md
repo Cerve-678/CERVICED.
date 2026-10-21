@@ -31,7 +31,7 @@ OWNER:  cerviced-c2 (2026-10-21) — 20261021195500_tip_received_notification
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261021195500 | `tip_received_notification` | **WRITTEN, NOT APPLIED.** Frontier at authoring: `20261021112728`. Widens `notifications_type_check` (restates `20261020150000`'s list + `tip_received`) and adds `notify_provider_tip_received()` + trigger `on_booking_tip_succeeded` on `booking_tips`. The insert catches its own errors so a failed notification can't roll back recording a paid tip. Verify the live CHECK list matches before applying. Deploy `send-push-notification` (adds `tip_received: 'providerPayments'`) with it. The file records its own version. |
+| 20261021195500 | `tip_received_notification` | **WRITTEN, NOT APPLIED.** Frontier at authoring: `20261021112728`. Widens `notifications_type_check` (restates `20261020150000`'s list + `tip_received`) and adds `notify_provider_tip_received()` + trigger `on_booking_tip_payout_ready` on `booking_tips` (fires when a paid tip's payout first becomes 'held', i.e. the card fee is known, so the message states the provider's real amount). The insert catches its own errors so a failed notification can't roll back recording a paid tip. Verify the live CHECK list matches before applying. Deploy `send-push-notification` (adds `tip_received: 'providerPayments'`) with it. The file records its own version. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 

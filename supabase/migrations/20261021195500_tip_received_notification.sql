@@ -1,9 +1,11 @@
 -- Tell the provider when a client tips them.
 --
--- A tip (booking_tips) becomes 'succeeded' in recordTipPaid (stripe-webhook or
--- booking-tip 'confirm'). This trigger writes a 'tip_received' notification to
--- the provider at that moment, whichever path recorded it, and only once
--- (the status can only move to 'succeeded' once).
+-- The notification says what actually reaches the provider, so it waits until
+-- the card fee is known: it fires when a paid tip's payout_status first becomes
+-- 'held' (payout_pence set). recordTipPaid does that in the same update that
+-- records the payment when Stripe already reports the fee; otherwise
+-- settlePendingTipFees does it on a later release-payouts run (every 15 min).
+-- Either way it fires once: nothing moves a payout back to 'held'.
 --
 -- The push is gated by the provider's "Payment Updates" switch
 -- (send-push-notification: tip_received → providerPayments); the in-app row is
@@ -64,14 +66,15 @@ BEGIN
       v_provider_user,
       'tip_received',
       coalesce(v_first_name, 'A client') || ' tipped you £' || to_char(NEW.amount_pence / 100.0, 'FM999990.00'),
-      CASE WHEN v_service IS NOT NULL THEN 'For their ' || v_service || '. ' ELSE '' END
-        || 'It''s paid out to you 24 hours after they paid, less the card fee.',
+      '£' || to_char(NEW.payout_pence / 100.0, 'FM999990.00') || ' comes to you after the card fee. '
+        || CASE WHEN v_service IS NOT NULL THEN 'For their ' || v_service || ', paid' ELSE 'Paid' END
+        || ' out in 24 hours.',
       'medium',
       true,
       NEW.booking_id,
       NEW.provider_id,
       'provider',
-      jsonb_build_object('tip_id', NEW.id, 'amount_pence', NEW.amount_pence)
+      jsonb_build_object('tip_id', NEW.id, 'amount_pence', NEW.amount_pence, 'payout_pence', NEW.payout_pence)
     );
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'tip_received notification failed for tip %: %', NEW.id, SQLERRM;
@@ -84,10 +87,12 @@ $function$;
 REVOKE EXECUTE ON FUNCTION public.notify_provider_tip_received() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS on_booking_tip_succeeded ON public.booking_tips;
-CREATE TRIGGER on_booking_tip_succeeded
-  AFTER UPDATE OF status ON public.booking_tips
+DROP TRIGGER IF EXISTS on_booking_tip_payout_ready ON public.booking_tips;
+CREATE TRIGGER on_booking_tip_payout_ready
+  AFTER UPDATE OF payout_status ON public.booking_tips
   FOR EACH ROW
-  WHEN (NEW.status = 'succeeded' AND OLD.status IS DISTINCT FROM 'succeeded')
+  WHEN (NEW.status = 'succeeded' AND NEW.payout_status = 'held'
+        AND OLD.payout_status IS DISTINCT FROM 'held' AND NEW.payout_pence IS NOT NULL)
   EXECUTE FUNCTION public.notify_provider_tip_received();
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
