@@ -217,7 +217,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     setSaving(false);
     if (syncError) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      showAlert('Error', 'Couldn\'t save your profile. Please try again.');
+      showAlert(t('common.error'), t('clientAccount.beautyProfile.saveFailed'));
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setSaved(draftSnapshot);
@@ -306,14 +306,14 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
       <ThemedBackground style={styles.bg}>
         <View style={styles.loadingWrap}>
           <Text style={{ color: P.text, marginBottom: 16 }}>
-            We couldn't load your beauty profile.
+            {t('clientAccount.beautyProfile.loadFailed')}
           </Text>
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: P.accent, borderColor: P.accent }]}
             onPress={() => { void loadProfile(); }}
             activeOpacity={0.75}
           >
-            <Text style={[styles.saveBtnText, { color: P.onAccent }]}>TRY AGAIN</Text>
+            <Text style={[styles.saveBtnText, { color: P.onAccent }]}>{t('common.tryAgain').toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
       </ThemedBackground>

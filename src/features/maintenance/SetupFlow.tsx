@@ -75,12 +75,12 @@ export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props)
 
   // Step 1 shows exactly the profile answers the rules will use.
   const profileAnswers = useMemo(() => {
-    return [...new Set(buildMaintenanceSuggestions(profile, EMPTY_SETUP_ANSWERS, [], today).map(s => s.answer))];
-  }, [profile, today]);
+    return [...new Set(buildMaintenanceSuggestions(profile, EMPTY_SETUP_ANSWERS, [], today, { t, tp }).map(s => s.answer))];
+  }, [profile, today, t, tp]);
 
   const suggestions = useMemo(
-    () => buildMaintenanceSuggestions(profile, answers, state.items, today),
-    [profile, answers, state.items, today],
+    () => buildMaintenanceSuggestions(profile, answers, state.items, today, { t, tp }),
+    [profile, answers, state.items, today, t, tp],
   );
   const chosen = suggestions.filter(s => !off.has(s.id));
 
@@ -238,7 +238,7 @@ export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props)
               {question(t('maintenance.setup.q.style'))}
               <View style={ui.chips}>
                 {STYLES.map(s => (
-                  <Chip key={s} label={PROTECTIVE_STYLE_LABELS[s]} on={style === s} onPress={() => setStyle(style === s ? null : s)} P={P} />
+                  <Chip key={s} label={t(PROTECTIVE_STYLE_LABELS[s])} on={style === s} onPress={() => setStyle(style === s ? null : s)} P={P} />
                 ))}
                 <Chip label={t('maintenance.setup.q.styleNo')} on={style === null} onPress={() => setStyle(null)} P={P} />
               </View>

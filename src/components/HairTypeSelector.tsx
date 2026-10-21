@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useTranslation } from '../i18n';
 
 interface HairType {
   id: string;
@@ -29,6 +30,7 @@ interface HairTypeSelectorProps {
 
 export const HairTypeSelector: React.FC<HairTypeSelectorProps> = ({ onSelect, onBack }) => {
   const { theme, isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const [selectedType, setSelectedType] = React.useState<string | null>(null);
 
   return (
@@ -64,7 +66,8 @@ export const HairTypeSelector: React.FC<HairTypeSelectorProps> = ({ onSelect, on
                 }
               ]}
             >
-              {hairType.name}
+              {/* `name` is "Type 2A"; only the word "Type" is translated. */}
+              {t('clientAccount.hairTypeSelector.type', { code: hairType.name.replace(/^Type /, '') })}
             </Text>
           </TouchableOpacity>
         );

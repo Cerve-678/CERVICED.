@@ -20,8 +20,11 @@
 
 import {
   getMaintenanceServiceType,
+  maintenanceTypeLabel,
   type MaintenanceTypeKey,
 } from '../constants/maintenanceServiceTypes';
+import { beautyOptionLabel } from '../features/beauty-profile/options';
+import { tr, trp, type PluralKey, type TranslationKey, type TranslationParams } from '../i18n';
 import type { BeautyData } from '../types/beautyProfile';
 import type {
   MaintenanceItem,
@@ -64,12 +67,19 @@ export const EMPTY_SETUP_ANSWERS: MaintenanceSetupAnswers = {
  *  related: it only decides when the client is prompted to book. */
 export const EVENT_BOOK_BY_WEEKS = 4;
 
-export const PROTECTIVE_STYLE_LABELS: Record<ProtectiveStyle, string> = {
-  braids: 'Braids',
-  twists: 'Twists',
-  locs: 'Locs',
-  wigs_weaves: 'Wigs or weaves',
+export const PROTECTIVE_STYLE_LABELS: Record<ProtectiveStyle, TranslationKey> = {
+  braids: 'clientAccount.suggest.style.braids',
+  twists: 'clientAccount.suggest.style.twists',
+  locs: 'clientAccount.suggest.style.locs',
+  wigs_weaves: 'clientAccount.suggest.style.wigsWeaves',
 };
+
+/** Translators the suggestion copy is built with: the component's `t`/`tp`
+ *  (so it rebuilds on a language change), or `tr`/`trp` outside React. */
+export interface SuggestionTranslate {
+  t: (key: TranslationKey, params?: TranslationParams) => string;
+  tp: (base: PluralKey, count: number, params?: TranslationParams) => string;
+}
 
 function addDays(from: Date, days: number): Date {
   const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
@@ -92,7 +102,14 @@ export function buildMaintenanceSuggestions(
   answers: MaintenanceSetupAnswers,
   existing: readonly MaintenanceItem[],
   today: Date,
+  { t, tp }: SuggestionTranslate = { t: tr, tp: trp },
 ): MaintenanceSuggestion[] {
+  // Titles and answers are display copy in the client's language (a chosen
+  // suggestion's title is saved as the reminder's name, like one they typed).
+  // The profile values they quote are stored English answers, shown through
+  // their labels; every rule below still matches on the stored values.
+  const opt = (value: string) => beautyOptionLabel(value, t);
+  const said = (key: TranslationKey, value: string) => t(key, { value: opt(value) });
   const covered = new Set(existing.map(i => i.typeKey).filter((k): k is MaintenanceTypeKey => k !== null));
   const hasTakedown = existing.some(i => i.kind === 'takedown');
   const out: MaintenanceSuggestion[] = [];
@@ -107,7 +124,7 @@ export function buildMaintenanceSuggestions(
       id: `type:${key}`,
       kind: 'service',
       typeKey: key,
-      title: type.label,
+      title: maintenanceTypeLabel(type, t),
       repeatWeeks: type.defaultWeeks,
       dueOn: dateToYMD(addDays(today, type.defaultWeeks * 7)),
       eventOn: null,
@@ -116,20 +133,20 @@ export function buildMaintenanceSuggestions(
   };
 
   // ── Hair ──────────────────────────────────────────────────────────────────
-  const hairAnswer = profile.hairType ? `Hair type: ${profile.hairType}` : null;
+  const hairAnswer = profile.hairType ? said('clientAccount.suggest.answer.hairType', profile.hairType) : null;
   if (profile.hairType && TEXTURED_HAIR_TYPES.has(profile.hairType)) {
     offer('wash_and_go', hairAnswer!);
     offer('silk_press', hairAnswer!);
     offer('deep_conditioning', hairAnswer!);
   }
-  if (profile.hairGoals.includes('Moisture')) offer('deep_conditioning', 'Hair goal: Moisture');
+  if (profile.hairGoals.includes('Moisture')) offer('deep_conditioning', said('clientAccount.suggest.answer.hairGoal', 'Moisture'));
   if (profile.treatmentHistory.includes('Relaxed / permed')) {
-    offer('relaxer_touch_up', 'Treatment history: Relaxed / permed');
+    offer('relaxer_touch_up', said('clientAccount.suggest.answer.treatment', 'Relaxed / permed'));
   }
   const colourAnswer =
-    profile.treatmentHistory.includes('Coloured') ? 'Treatment history: Coloured'
-    : profile.treatmentHistory.includes('Bleached / lightened') ? 'Treatment history: Bleached / lightened'
-    : profile.hairGoals.includes('Colour / highlights') ? 'Hair goal: Colour / highlights'
+    profile.treatmentHistory.includes('Coloured') ? said('clientAccount.suggest.answer.treatment', 'Coloured')
+    : profile.treatmentHistory.includes('Bleached / lightened') ? said('clientAccount.suggest.answer.treatment', 'Bleached / lightened')
+    : profile.hairGoals.includes('Colour / highlights') ? said('clientAccount.suggest.answer.hairGoal', 'Colour / highlights')
     : null;
   if (colourAnswer) offer('root_colour', colourAnswer);
   if (hairAnswer) offer('trim', hairAnswer);
@@ -137,19 +154,19 @@ export function buildMaintenanceSuggestions(
   // ── Protective style ──────────────────────────────────────────────────────
   const style = answers.protectiveStyle;
   if (style === 'locs') {
-    offer('loc_retwist', 'Protective style: Locs');
+    offer('loc_retwist', t('clientAccount.suggest.answer.protectiveStyle', { value: t(PROTECTIVE_STYLE_LABELS.locs) }));
   } else if (style && answers.protectiveWeeksIn !== null && !hasTakedown) {
-    const label = PROTECTIVE_STYLE_LABELS[style];
+    const label = t(PROTECTIVE_STYLE_LABELS[style]);
     const weeksLeft = Math.max(0, answers.protectiveWearWeeks - answers.protectiveWeeksIn);
     out.push({
       id: 'takedown',
       kind: 'takedown',
       typeKey: null,
-      title: `${label} take-down`,
+      title: t('clientAccount.suggest.takedownTitle', { style: label }),
       repeatWeeks: null,
       dueOn: dateToYMD(addDays(today, weeksLeft * 7)),
       eventOn: null,
-      answer: `${label}, usually kept in ${answers.protectiveWearWeeks} week${answers.protectiveWearWeeks === 1 ? '' : 's'}`,
+      answer: tp('clientAccount.suggest.answer.keptIn', answers.protectiveWearWeeks, { style: label }),
     });
   }
 
@@ -157,27 +174,27 @@ export function buildMaintenanceSuggestions(
   // A past "Lash extensions" treatment only counts while the client hasn't
   // told us they've stopped.
   if (profile.lashStatus === 'Currently have extensions') {
-    offer('lash_infill', 'Lashes: Currently have extensions');
+    offer('lash_infill', said('clientAccount.suggest.answer.lashes', 'Currently have extensions'));
   } else if (profile.lashStatus !== 'No extensions' && profile.treatmentHistory.includes('Lash extensions')) {
-    offer('lash_infill', 'Treatment history: Lash extensions');
+    offer('lash_infill', said('clientAccount.suggest.answer.treatment', 'Lash extensions'));
   } else if (profile.lashStatus === 'No extensions' && profile.lashStyle === 'Natural') {
     // Natural lashes, no extensions: a lift is the bookable lash service.
-    offer('lash_lift', 'Lashes: Natural, no extensions');
+    offer('lash_lift', t('clientAccount.suggest.answer.lashesNatural'));
   }
-  const nailAnswer = profile.nailShape ? `Nails: ${profile.nailShape}`
-    : profile.nailLength ? `Nails: ${profile.nailLength}`
+  const nailAnswer = profile.nailShape ? said('clientAccount.suggest.answer.nails', profile.nailShape)
+    : profile.nailLength ? said('clientAccount.suggest.answer.nails', profile.nailLength)
     : null;
   if (nailAnswer) {
     offer('nails_general', nailAnswer);
     offer('pedicure', nailAnswer);
   }
-  if (profile.browStyle === 'Laminated') offer('brow_lamination', 'Brows: Laminated');
-  else if (profile.browStyle) offer('brows_general', `Brows: ${profile.browStyle}`);
-  else if (profile.browCondition) offer('brows_general', `Brows: ${profile.browCondition}`);
+  if (profile.browStyle === 'Laminated') offer('brow_lamination', said('clientAccount.suggest.answer.brows', 'Laminated'));
+  else if (profile.browStyle) offer('brows_general', said('clientAccount.suggest.answer.brows', profile.browStyle));
+  else if (profile.browCondition) offer('brows_general', said('clientAccount.suggest.answer.brows', profile.browCondition));
   // Waxing is never suggested: the only related answer, "Sensitive areas", is
   // about skin sensitivity, and a treatment offered because of it is advice.
   // Clients add waxing themselves from "Add your own".
-  if (profile.skinType) offer('facial', `Skin type: ${profile.skinType}`);
+  if (profile.skinType) offer('facial', said('clientAccount.suggest.answer.skinType', profile.skinType));
 
   // ── Events ────────────────────────────────────────────────────────────────
   const todayYMD = dateToYMD(today);
@@ -193,7 +210,7 @@ export function buildMaintenanceSuggestions(
       repeatWeeks: null,
       dueOn: dateToYMD(bookBy) < todayYMD ? todayYMD : dateToYMD(bookBy),
       eventOn: event.date,
-      answer: `Event: ${name}`,
+      answer: t('clientAccount.suggest.answer.event', { value: name }),
     });
   });
 

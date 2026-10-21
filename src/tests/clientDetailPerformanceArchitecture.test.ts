@@ -53,7 +53,7 @@ describe('client detail screen performance and safety contracts', () => {
     expect(source).toContain('updateUserBeautyProfile(userId');
     expect(source).not.toContain("from '../../lib/supabase'");
     expect(source).not.toContain('supabase.auth.updateUser');
-    expect(source).toContain("We couldn't load your beauty profile.");
+    expect(source).toContain("t('clientAccount.beautyProfile.loadFailed')");
     expect(source).toContain('const loadRequestRef = useRef(0)');
     expect(source).toContain('activeUserIdRef.current !== userId');
     expect(source).toContain('setSaved(EMPTY_BEAUTY_DATA)');

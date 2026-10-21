@@ -27,7 +27,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
       expect(source).toContain('toUserMessage(');
       // A failure must not be able to render the "No messages yet" copy.
       expect(source).toContain('loadError ? (');
-      expect(source).toContain("Couldn't load messages");
+      expect(source).toContain("t('clientAccount.messages.loadErrorTitle')");
     });
 
     it('gives the provider inbox the same treatment, not just the client half', () => {
@@ -81,9 +81,9 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
         source.indexOf('{saveError ? ('),
         source.indexOf('</>'),
       );
-      expect(footer).toContain("Your last change hasn't been applied yet.");
+      expect(footer).toContain("t('clientAccount.notifications.saveErrorBody'");
       expect(footer).toContain('onPress={retrySave}');
-      expect(footer.indexOf('Preferences saved automatically.')).toBeGreaterThan(
+      expect(footer.indexOf("t('clientAccount.notifications.autoSaved')")).toBeGreaterThan(
         footer.indexOf(') : ('),
       );
       // The flush-on-unmount save still has no UI to report to, but must log.

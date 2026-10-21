@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { AppTheme } from '../../constants/theme';
+import { useTranslation } from '../../i18n';
 
 export const FONT_DISPLAY = 'BakbakOne-Regular';
 export const FONT_BODY = 'Jura-VariableFont_wght';
@@ -146,6 +147,7 @@ export function Chip({ label, on, onPress, P }: { label: string; on: boolean; on
 export function WeekStepper({
   value, min, max, onChange, P, unit,
 }: { value: number; min: number; max: number; onChange: (n: number) => void; P: AppTheme; unit: (n: number) => string }) {
+  const { t } = useTranslation();
   const step = (d: number) => {
     const next = Math.max(min, Math.min(max, value + d));
     if (next !== value) { hapticSelection(); onChange(next); }
@@ -158,7 +160,7 @@ export function WeekStepper({
         disabled={value <= min}
         activeOpacity={0.5}
         accessibilityRole="button"
-        accessibilityLabel="Fewer"
+        accessibilityLabel={t('clientAccount.maintenance.fewer')}
       >
         <Ionicons name="remove" size={16} color={P.accentText} />
       </TouchableOpacity>
@@ -169,7 +171,7 @@ export function WeekStepper({
         disabled={value >= max}
         activeOpacity={0.5}
         accessibilityRole="button"
-        accessibilityLabel="More"
+        accessibilityLabel={t('clientAccount.maintenance.more')}
       >
         <Ionicons name="add" size={16} color={P.accentText} />
       </TouchableOpacity>
@@ -217,10 +219,11 @@ export function Sheet({
   visible, onClose, P, children,
 }: { visible: boolean; onClose: () => void; P: AppTheme; children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoidingView style={ui.sheetWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={ui.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+        <Pressable style={ui.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} />
         <View style={[ui.sheet, { backgroundColor: P.bg, borderColor: P.border, paddingBottom: insets.bottom + 20 }]}>
           <View style={[ui.grab, { backgroundColor: P.border }]} />
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={ui.sheetBody}>

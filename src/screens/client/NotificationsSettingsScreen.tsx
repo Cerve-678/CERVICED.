@@ -22,6 +22,7 @@ import {
 } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
 import { reportError } from '../../utils/logger';
+import { useTranslation, tr } from '../../i18n';
 
 interface ToggleRowProps {
   icon: string;
@@ -53,6 +54,7 @@ const ToggleRow = ({ icon, title, subtitle, value, onToggle, palette: P }: Toggl
 export default function NotificationsSettingsScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   // These preferences are read live by the send-push-notification edge
   // function, so the screen lying in either direction has real consequences:
@@ -93,7 +95,7 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
         setLoadError(
           toUserMessage(
             err,
-            "We couldn't load your notification settings.",
+            tr('clientAccount.notifications.loadFailed'),
             '[NotificationsSettings] load failed',
           ),
         );
@@ -135,7 +137,7 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
         setSaveError(
           toUserMessage(
             err,
-            "We couldn't save that change.",
+            tr('clientAccount.notifications.saveFailed'),
             '[NotificationsSettings] save failed',
           ),
         );
@@ -175,9 +177,9 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
           <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: P.text }]}>Notifications</Text>
+        <Text style={[styles.title, { color: P.text }]}>{t('clientAccount.notifications.title')}</Text>
         <Text style={[styles.subtitle, { color: P.sub }]}>
-          Choose what you hear from us
+          {t('clientAccount.notifications.subtitle')}
         </Text>
 
         {loadState === 'loading' && (
@@ -191,51 +193,51 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
             would read them as their own saved choices. */}
         {loadState === 'error' && (
           <View style={[styles.stateBlock, styles.errorBlock, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.errorTitle, { color: P.text }]}>Settings unavailable</Text>
+            <Text style={[styles.errorTitle, { color: P.text }]}>{t('clientAccount.notifications.unavailable')}</Text>
             <Text style={[styles.errorBody, { color: P.sub }]}>
-              {loadError} We haven't changed anything — your existing preferences are still in place.
+              {t('clientAccount.notifications.loadErrorBody', { error: loadError ?? '' })}
             </Text>
             <TouchableOpacity
               onPress={load}
               activeOpacity={0.7}
               style={[styles.retryBtn, { borderColor: P.border }]}
             >
-              <Text style={[styles.retryBtnText, { color: P.accentText }]}>Try again</Text>
+              <Text style={[styles.retryBtnText, { color: P.accentText }]}>{t('common.tryAgain')}</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {loadState === 'ready' && (
           <>
-            <Text style={[styles.section, { color: P.accentText }]}>BOOKINGS</Text>
-            <ToggleRow icon="event-available" title="Booking Confirmed"   subtitle="Instant confirmation alerts"    value={prefs.bookingConfirm}  onToggle={() => toggle('bookingConfirm')}  palette={P} />
-            <ToggleRow icon="alarm"           title="Appointment Reminders" subtitle="Before your confirmed appointments"            value={prefs.bookingReminder} onToggle={() => toggle('bookingReminder')} palette={P} />
-            <ToggleRow icon="update"          title="Booking Updates"     subtitle="Changes, cancellations"          value={prefs.bookingUpdates}  onToggle={() => toggle('bookingUpdates')}  palette={P} />
+            <Text style={[styles.section, { color: P.accentText }]}>{t('clientAccount.notifications.section.bookings').toUpperCase()}</Text>
+            <ToggleRow icon="event-available" title={t('clientAccount.notifications.bookingConfirm')} subtitle={t('clientAccount.notifications.bookingConfirmSub')} value={prefs.bookingConfirm}  onToggle={() => toggle('bookingConfirm')}  palette={P} />
+            <ToggleRow icon="alarm"           title={t('clientAccount.notifications.reminders')} subtitle={t('clientAccount.notifications.remindersSub')} value={prefs.bookingReminder} onToggle={() => toggle('bookingReminder')} palette={P} />
+            <ToggleRow icon="update"          title={t('clientAccount.notifications.updates')} subtitle={t('clientAccount.notifications.updatesSub')} value={prefs.bookingUpdates}  onToggle={() => toggle('bookingUpdates')}  palette={P} />
 
             {/* Its own switch, separate from Appointment Reminders: maintenance
                 reminders are opt-in (off until the client turns them on here
                 or in Maintenance setup). The 24h prep line rides on the
                 Appointment Reminders switch above. */}
-            <Text style={[styles.section, { color: P.accentText }]}>BEAUTY MAINTENANCE</Text>
-            <ToggleRow icon="heart" title="Maintenance Reminders" subtitle="When something you track is due, and aftercare notes" value={prefs.maintenanceReminders} onToggle={() => toggle('maintenanceReminders')} palette={P} />
+            <Text style={[styles.section, { color: P.accentText }]}>{t('clientAccount.notifications.section.maintenance').toUpperCase()}</Text>
+            <ToggleRow icon="heart" title={t('clientAccount.notifications.maintenance')} subtitle={t('clientAccount.notifications.maintenanceSub')} value={prefs.maintenanceReminders} onToggle={() => toggle('maintenanceReminders')} palette={P} />
 
-            <Text style={[styles.section, { color: P.accentText }]}>DISCOVER</Text>
-            <ToggleRow icon="local-offer"  title="Offers & Promotions" subtitle="Deals from your saved providers" value={prefs.promotions}    onToggle={() => toggle('promotions')}    palette={P} />
-            <ToggleRow icon="person-add"   title="New Providers"       subtitle="Professionals near you"          value={prefs.newProviders}  onToggle={() => toggle('newProviders')}  palette={P} />
-            <ToggleRow icon="bar-chart"    title="Weekly Summary"      subtitle="Your beauty activity recap"      value={prefs.weeklySummary} onToggle={() => toggle('weeklySummary')} palette={P} />
+            <Text style={[styles.section, { color: P.accentText }]}>{t('clientAccount.notifications.section.discover').toUpperCase()}</Text>
+            <ToggleRow icon="local-offer"  title={t('clientAccount.notifications.promotions')} subtitle={t('clientAccount.notifications.promotionsSub')} value={prefs.promotions}    onToggle={() => toggle('promotions')}    palette={P} />
+            <ToggleRow icon="person-add"   title={t('clientAccount.notifications.newProviders')} subtitle={t('clientAccount.notifications.newProvidersSub')} value={prefs.newProviders}  onToggle={() => toggle('newProviders')}  palette={P} />
+            <ToggleRow icon="bar-chart"    title={t('clientAccount.notifications.weekly')} subtitle={t('clientAccount.notifications.weeklySub')} value={prefs.weeklySummary} onToggle={() => toggle('weeklySummary')} palette={P} />
 
             {saveError ? (
               <View style={styles.saveFailed}>
                 <Text style={[styles.saveFailedText, { color: P.text }]}>
-                  {saveError} Your last change hasn't been applied yet.
+                  {t('clientAccount.notifications.saveErrorBody', { error: saveError })}
                 </Text>
                 <TouchableOpacity onPress={retrySave} activeOpacity={0.7}>
-                  <Text style={[styles.saveRetryText, { color: P.accentText }]}>Retry</Text>
+                  <Text style={[styles.saveRetryText, { color: P.accentText }]}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <Text style={[styles.note, { color: P.sub }]}>
-                {saving ? 'Saving…' : 'Preferences saved automatically.'}
+                {saving ? t('common.saving') : t('clientAccount.notifications.autoSaved')}
               </Text>
             )}
           </>

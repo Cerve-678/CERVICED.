@@ -17,9 +17,9 @@ import { useTranslation } from '../../i18n';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import type { BeautyData, CategoryKey } from '../../types/beautyProfile';
 import {
-  CATEGORY_LABELS, CATEGORY_ORDER, type BeautyProfileStats,
+  categoryLabel, CATEGORY_ORDER, type BeautyProfileStats,
 } from '../../utils/beautyProfileStats';
-import { ALLERGENS } from './options';
+import { ALLERGENS, beautyOptionLabel } from './options';
 import { semanticColors } from '../maintenance/ui';
 import { CategoryEditor } from './CategoryEditor';
 import { highlightCategory, leadingCategory, type CategoryHighlight, type HighlightLabels } from './highlights';
@@ -51,7 +51,7 @@ export function MyProfileView({
   const { theme, isDarkMode, palette: P } = useTheme();
   const S = semanticColors(isDarkMode);
   const tapLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
-  const { t } = useTranslation();
+  const { t, tp } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const labels = useMemo<HighlightLabels>(() => ({
@@ -59,6 +59,7 @@ export function MyProfileView({
     medicalNote: t('beautyProfile.card.medicalNote'),
     photosOn: t('beautyProfile.photosOn'),
     photosOff: t('beautyProfile.photosOff'),
+    option: value => beautyOptionLabel(value, t),
   }), [t]);
 
   const editToggle = (
@@ -100,7 +101,7 @@ export function MyProfileView({
             {editToggle}
           </View>
           <View style={styles.focusTitleRow}>
-            <Text style={[styles.focusTitle, { color: P.text }]}>{CATEGORY_LABELS[selectedCategory]}</Text>
+            <Text style={[styles.focusTitle, { color: P.text }]}>{categoryLabel(selectedCategory, t)}</Text>
             <Text style={[styles.focusPct, { color: P.accentText }]}>{cat.complete ? '✓' : `${cat.percent}%`}</Text>
           </View>
           <View style={[styles.track, { backgroundColor: P.sep }]}>
@@ -108,10 +109,10 @@ export function MyProfileView({
           </View>
           <Text style={[styles.focusFieldsCount, { color: P.sub }]}>
             {isHealth
-              ? `${draft.allergies.length} of ${ALLERGENS.length} allergens flagged · ${draft.medicalNotes ? 'medical notes on file' : 'no medical notes'} · always shared`
+              ? t(draft.medicalNotes ? 'clientAccount.myProfile.healthCountNotes' : 'clientAccount.myProfile.healthCountNoNotes', { count: draft.allergies.length, total: ALLERGENS.length })
               : cat.fieldsTotal > 0
-                ? `${cat.fieldsSet} of ${cat.fieldsTotal} fields set · ${cat.selections} selection${cat.selections === 1 ? '' : 's'}`
-                : 'Always shared with your provider'}
+                ? tp('clientAccount.myProfile.fieldsSet', cat.selections, { set: cat.fieldsSet, total: cat.fieldsTotal })
+                : t('clientAccount.myProfile.alwaysShared')}
           </Text>
           <CategoryEditor category={selectedCategory} draft={draft} editing={editing} setDraft={setDraft} P={P} />
           {saveButton}
@@ -157,11 +158,11 @@ export function MyProfileView({
         onPress={() => onOpenCategory(h.key)}
         activeOpacity={0.5}
         accessibilityRole="button"
-        accessibilityLabel={`${CATEGORY_LABELS[h.key]}, ${h.lead ?? t('beautyProfile.notStarted')}`}
+        accessibilityLabel={`${categoryLabel(h.key, t)}, ${h.lead ?? t('beautyProfile.notStarted')}`}
       >
         <View style={styles.tileHead}>
           <View style={styles.tileLabelRow}>
-            <Text style={[styles.tileLabel, soft]} numberOfLines={2}>{CATEGORY_LABELS[h.key]}</Text>
+            <Text style={[styles.tileLabel, soft]} numberOfLines={2}>{categoryLabel(h.key, t)}</Text>
             {FEEDS_MAINTENANCE.has(h.key) && <Ionicons name="sync" size={10} color={strong ? P.onAccent : P.accentText} />}
           </View>
           {count ? <Text style={[styles.tileLabel, soft]}>{count}</Text> : null}
@@ -204,7 +205,7 @@ export function MyProfileView({
 
         <View style={styles.completeRow}>
           <Text style={[styles.completeText, { color: P.text }]}>
-            {stats.isEmpty ? 'NEW' : t('beautyProfile.percentComplete', { percent: stats.overallPercent })}
+            {stats.isEmpty ? t('common.new').toUpperCase() : t('beautyProfile.percentComplete', { percent: stats.overallPercent })}
           </Text>
           <Text style={[styles.completeSub, { color: P.sub }]}>
             {stats.isEmpty
@@ -224,7 +225,7 @@ export function MyProfileView({
         >
           <Ionicons name="shield-checkmark-outline" size={22} color={health.started ? S.ok : S.warn} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.hsTitle, { color: P.text }]}>{CATEGORY_LABELS.health}</Text>
+            <Text style={[styles.hsTitle, { color: P.text }]}>{categoryLabel('health', t)}</Text>
             <Text style={[styles.hsSub, { color: P.sub }]} numberOfLines={2}>
               {health.started
                 ? t('beautyProfile.health.onFile', { count: draft.allergies.length })

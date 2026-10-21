@@ -15,12 +15,13 @@ import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import type { BeautyData } from '../../types/beautyProfile';
-import { CATEGORY_LABELS, CATEGORY_ORDER, type BeautyProfileStats } from '../../utils/beautyProfileStats';
+import { categoryLabel, CATEGORY_ORDER, type BeautyProfileStats } from '../../utils/beautyProfileStats';
 import { dateToYMD } from '../../utils/dateUtils';
 import { countdownFor, groupMaintenanceItems, landingStubs, type CountdownUnit } from '../maintenance/presentation';
 import type { MaintenanceState } from '../maintenance/useMaintenance';
 import { FONT_BODY, FONT_DISPLAY, semanticColors, hapticLight, ui } from '../maintenance/ui';
 import { CARD_TRAITS, highlightCategory, type HighlightLabels } from './highlights';
+import { beautyOptionLabel } from './options';
 
 interface Props {
   profile: BeautyData;
@@ -68,6 +69,7 @@ export function BeautyLanding({
     medicalNote: t('beautyProfile.card.medicalNote'),
     photosOn: t('beautyProfile.photosOn'),
     photosOff: t('beautyProfile.photosOff'),
+    option: value => beautyOptionLabel(value, t),
   }), [t]);
   const traits = useMemo(
     () => CARD_TRAITS.map(key => highlightCategory(key, profile, labels)),
@@ -96,12 +98,12 @@ export function BeautyLanding({
       onPress={go(onOpenProfile)}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel={`${t('beautyProfile.myProfile')}, ${stats.isEmpty ? 'NEW' : t('beautyProfile.percentComplete', { percent: stats.overallPercent })}`}
+      accessibilityLabel={`${t('beautyProfile.myProfile')}, ${stats.isEmpty ? t('common.new').toUpperCase() : t('beautyProfile.percentComplete', { percent: stats.overallPercent })}`}
     >
       <View pointerEvents="none" style={[styles.halo, { borderColor: P.onAccent }]} />
       <View style={styles.rowBetween}>
         <Text style={[styles.kicker, { color: P.onAccent }]}>{t('beautyProfile.myProfile').toUpperCase()}</Text>
-        <Text style={[styles.kicker, onSoft]}>{stats.isEmpty ? 'NEW' : `${stats.overallPercent}%`}</Text>
+        <Text style={[styles.kicker, onSoft]}>{stats.isEmpty ? t('common.new').toUpperCase() : `${stats.overallPercent}%`}</Text>
       </View>
 
       {stats.isEmpty ? (
@@ -113,7 +115,7 @@ export function BeautyLanding({
         <View style={styles.traits}>
           {traits.map(h => (
             <View key={h.key} style={styles.trait}>
-              <Text style={[styles.traitLabel, onSoft]}>{CATEGORY_LABELS[h.key]}</Text>
+              <Text style={[styles.traitLabel, onSoft]}>{categoryLabel(h.key, t)}</Text>
               {h.lead ? (
                 <>
                   <Text
@@ -258,7 +260,7 @@ export function BeautyLanding({
       <View style={{ flex: 1 }}>
         <Text style={[styles.nudgeTitle, { color: P.text }]}>{t('beautyProfile.card.finishTitle').toUpperCase()}</Text>
         <Text style={[styles.nudgeSub, { color: P.sub }]} numberOfLines={2}>
-          {t('beautyProfile.card.finishSub', { sections: blank.map(k => CATEGORY_LABELS[k]).join(', ') })}
+          {t('beautyProfile.card.finishSub', { sections: blank.map(k => categoryLabel(k, t)).join(', ') })}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={P.sub} />

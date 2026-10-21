@@ -13,6 +13,7 @@ import Icon from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { useTranslation } from '../../i18n';
 
 interface SettingsOptionProps {
   icon: string;
@@ -42,6 +43,7 @@ SettingsOption.displayName = 'SettingsOption';
 
 export default function BeautyBillingScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <ThemedBackground style={styles.background}>
@@ -59,16 +61,16 @@ export default function BeautyBillingScreen({ navigation }: any) {
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: P.text }]}>My Profile</Text>
-          <Text style={[styles.subtitle, { color: P.sub }]}>Beauty preferences and payment details</Text>
+          <Text style={[styles.title, { color: P.text }]}>{t('clientAccount.billing.title')}</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>{t('clientAccount.billing.subtitle')}</Text>
 
           {/* Beauty */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Beauty</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{t('clientAccount.billing.beauty')}</Text>
             <SettingsOption
               icon="heart"
-              title="Beauty Profile"
-              subtitle="Hair, skin, interests"
+              title={t('clientAccount.billing.beautyProfile')}
+              subtitle={t('clientAccount.billing.beautyProfileSub')}
               onPress={() => navigation.navigate('BeautyProfile')}
               palette={P}
             />
@@ -76,18 +78,18 @@ export default function BeautyBillingScreen({ navigation }: any) {
 
           {/* Billing */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Billing</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{t('clientAccount.billing.billing')}</Text>
             <SettingsOption
               icon="payment"
-              title="Payment Methods"
-              subtitle="Cards, Apple Pay"
+              title={t('clientAccount.billing.paymentMethods')}
+              subtitle={t('clientAccount.billing.paymentMethodsSub')}
               onPress={() => navigation.navigate('PaymentMethods')}
               palette={P}
             />
             <SettingsOption
               icon="receipt"
-              title="Subscription & Billing"
-              subtitle="Plans, invoices"
+              title={t('clientAccount.billing.subscription')}
+              subtitle={t('clientAccount.billing.subscriptionSub')}
               onPress={() => navigation.navigate('Subscription')}
               palette={P}
             />

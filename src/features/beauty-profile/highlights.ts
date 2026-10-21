@@ -20,6 +20,9 @@ export interface HighlightLabels {
   medicalNote: string;
   photosOn: string;
   photosOff: string;
+  /** Display label for a stored answer (options.ts `beautyOptionLabel`).
+   *  Omitted, answers show as stored. */
+  option?: (value: string) => string;
 }
 
 export interface CategoryHighlight {
@@ -38,14 +41,18 @@ const nonEmpty = (values: (string | string[] | null | undefined)[]): string[] =>
 
 /** Answers for a category in priority order: the first becomes the lead. */
 function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): string[] {
+  // Stored answers go through the display-label map; the already-translated
+  // words in `L` (scalp template, medical note, photos) do not.
+  const o = (v: string) => (v && L.option ? L.option(v) : v);
+  const os = (vs: string[]) => vs.map(o);
   switch (key) {
-    case 'hair':        return nonEmpty([d.hairType, d.scalpCondition ? L.scalp(d.scalpCondition) : '', d.hairGoals, d.treatmentHistory]);
-    case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas]);
-    case 'nails':       return nonEmpty([d.nailShape, d.nailLength]);
-    case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.browCondition]);
-    case 'makeup':      return nonEmpty([d.makeupCoverage, d.makeupFinish, d.makeupEyes, d.makeupLips]);
-    case 'general':     return nonEmpty([d.styleVibe, d.serviceInterests]);
-    case 'personalisation': return nonEmpty([d.gender ? GENDER_LABELS[d.gender] : '']);
+    case 'hair':        return nonEmpty([o(d.hairType), d.scalpCondition ? L.scalp(o(d.scalpCondition)) : '', os(d.hairGoals), os(d.treatmentHistory)]);
+    case 'skin':        return nonEmpty([o(d.skinType), os(d.skinConcerns), d.sensitiveAreas]);
+    case 'nails':       return nonEmpty([o(d.nailShape), o(d.nailLength)]);
+    case 'lashesBrows': return nonEmpty([o(d.lashStyle), o(d.browStyle), o(d.lashStatus), o(d.browCondition)]);
+    case 'makeup':      return nonEmpty([o(d.makeupCoverage), o(d.makeupFinish), o(d.makeupEyes), o(d.makeupLips)]);
+    case 'general':     return nonEmpty([o(d.styleVibe), d.serviceInterests]);
+    case 'personalisation': return nonEmpty([d.gender ? o(GENDER_LABELS[d.gender]) : '']);
     case 'health':      return nonEmpty([d.allergies, d.medicalNotes.trim() ? L.medicalNote : '']);
     case 'consent':     return [d.photographyConsent ? L.photosOn : L.photosOff];
   }

@@ -12,18 +12,20 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import Icon from '../../components/IconLibrary';
+import { useTranslation, type TranslationKey } from '../../i18n';
 
-const PLAN_FEATURES = [
-  'Unlimited bookings',
-  'Priority provider matching',
-  'Exclusive member discounts',
-  'Early access to new providers',
-  'Monthly beauty box discount',
+const PLAN_FEATURES: TranslationKey[] = [
+  'clientAccount.subscription.feature.unlimited',
+  'clientAccount.subscription.feature.priority',
+  'clientAccount.subscription.feature.discounts',
+  'clientAccount.subscription.feature.earlyAccess',
+  'clientAccount.subscription.feature.beautyBox',
 ];
 
 export default function SubscriptionScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   return (
     <ThemedBackground style={styles.bg}>
@@ -40,9 +42,9 @@ export default function SubscriptionScreen({ navigation }: any) {
           <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: P.text }]}>Subscription</Text>
+        <Text style={[styles.title, { color: P.text }]}>{t('clientAccount.subscription.title')}</Text>
         <Text style={[styles.subtitle, { color: P.sub }]}>
-          Your plan and billing information
+          {t('clientAccount.subscription.subtitle')}
         </Text>
 
         {/* Current plan */}
@@ -52,21 +54,21 @@ export default function SubscriptionScreen({ navigation }: any) {
         }]}>
           <View style={styles.planTop}>
             <Icon name="star" size={22} color={P.accentText} />
-            <Text style={[styles.planName, { color: P.accentText }]}>Free Plan</Text>
+            <Text style={[styles.planName, { color: P.accentText }]}>{t('clientAccount.subscription.freePlan')}</Text>
           </View>
           <Text style={[styles.planDesc, { color: P.sub }]}>
-            You're currently on the free plan. Upgrade to unlock premium features.
+            {t('clientAccount.subscription.freePlanDesc')}
           </Text>
         </View>
 
         {/* Premium teaser */}
         <Text style={[styles.sectionLabel, { color: P.text }]}>CERVICED PREMIUM</Text>
-        <Text style={[styles.comingSoonBadge, { color: P.accentText }]}>Coming Soon</Text>
+        <Text style={[styles.comingSoonBadge, { color: P.accentText }]}>{t('clientAccount.subscription.comingSoon')}</Text>
         <View style={styles.featureList}>
           {PLAN_FEATURES.map(f => (
             <View key={f} style={styles.featureRow}>
               <Icon name="shield-check" size={16} color={P.accentText} />
-              <Text style={[styles.featureText, { color: P.sub }]}>{f}</Text>
+              <Text style={[styles.featureText, { color: P.sub }]}>{t(f)}</Text>
             </View>
           ))}
         </View>
@@ -76,7 +78,7 @@ export default function SubscriptionScreen({ navigation }: any) {
           onPress={() => Haptics.selectionAsync().catch(() => {})}
           activeOpacity={0.8}
         >
-          <Text style={[styles.notifyText, { color: P.onAccent }]}>NOTIFY ME WHEN AVAILABLE</Text>
+          <Text style={[styles.notifyText, { color: P.onAccent }]}>{t('clientAccount.subscription.notifyMe').toUpperCase()}</Text>
         </TouchableOpacity>
       </ScrollView>
     </ThemedBackground>

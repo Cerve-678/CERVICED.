@@ -34,6 +34,8 @@
 // type whose keyword is in the booked service's name. So a type that must win
 // a tie goes first ("Gel pedicure" is a pedicure, "Facial wax" is a wax).
 
+import type { TranslationKey } from '../i18n/types';
+
 /** Search tab codes (SearchScreen's CATEGORY_CODE_MAP values). */
 export type MaintenanceSearchCategory = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'AESTHETICS';
 
@@ -61,8 +63,9 @@ export type MaintenanceTypeKey =
 
 export interface MaintenanceServiceType {
   key: MaintenanceTypeKey;
-  /** What the client sees on a suggestion or a client-added item. A
-   *  booking-made item shows the booked service's own name instead. */
+  /** What the client sees on a suggestion or a client-added item, in
+   *  English (the source text). A booking-made item shows the booked
+   *  service's own name instead. Shown through `maintenanceTypeLabel`. */
   label: string;
   /** Which Search tab "Find a provider" opens. */
   searchCategory: MaintenanceSearchCategory;
@@ -109,6 +112,35 @@ const BY_KEY: ReadonlyMap<MaintenanceTypeKey, MaintenanceServiceType> = new Map(
 export function getMaintenanceServiceType(key: string | null | undefined): MaintenanceServiceType | null {
   if (!key) return null;
   return BY_KEY.get(key as MaintenanceTypeKey) ?? null;
+}
+
+/** Display-label keys for each type's `label`. */
+const MAINTENANCE_TYPE_LABEL_KEYS: Readonly<Record<MaintenanceTypeKey, TranslationKey>> = {
+  relaxer_touch_up: 'clientAccount.maintenanceType.relaxerTouchUp',
+  root_colour: 'clientAccount.maintenanceType.rootColour',
+  silk_press: 'clientAccount.maintenanceType.silkPress',
+  wash_and_go: 'clientAccount.maintenanceType.washAndGo',
+  deep_conditioning: 'clientAccount.maintenanceType.deepConditioning',
+  loc_retwist: 'clientAccount.maintenanceType.locRetwist',
+  trim: 'clientAccount.maintenanceType.trim',
+  hair_general: 'clientAccount.maintenanceType.hairGeneral',
+  pedicure: 'clientAccount.maintenanceType.pedicure',
+  gel_nails: 'clientAccount.maintenanceType.gelNails',
+  acrylic_infill: 'clientAccount.maintenanceType.acrylicInfill',
+  nails_general: 'clientAccount.maintenanceType.nailsGeneral',
+  lash_infill: 'clientAccount.maintenanceType.lashInfill',
+  lash_lift: 'clientAccount.maintenanceType.lashLift',
+  lashes_general: 'clientAccount.maintenanceType.lashesGeneral',
+  brow_lamination: 'clientAccount.maintenanceType.browLamination',
+  brow_tint: 'clientAccount.maintenanceType.browTint',
+  brows_general: 'clientAccount.maintenanceType.browsGeneral',
+  waxing: 'clientAccount.maintenanceType.waxing',
+  facial: 'clientAccount.maintenanceType.facial',
+};
+
+/** A type's label in the current language (pass `t` or `tr`). */
+export function maintenanceTypeLabel(type: MaintenanceServiceType, t: (key: TranslationKey) => string): string {
+  return t(MAINTENANCE_TYPE_LABEL_KEYS[type.key]);
 }
 
 /** Shortest and longest interval the steppers allow, in weeks. Mirrored by the

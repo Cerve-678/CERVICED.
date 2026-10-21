@@ -28,6 +28,7 @@ import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useTranslation } from '../../i18n';
 
 // Must be at least 16 to have an account (see validateDob in utils/validation.ts) —
 // encoded as the picker's maximumDate so the UI can't select an invalid date at all.
@@ -40,6 +41,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const bottomInset = useSystemBottomInset();
+  const { t } = useTranslation();
 
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
@@ -66,7 +68,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
   ];
 
   const handleSave = async () => {
-    if (!name.trim()) { Alert.alert('Name required'); return; }
+    if (!name.trim()) { Alert.alert(t('clientAccount.profileInfo.nameRequired')); return; }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
@@ -77,7 +79,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
     } catch {
       setLoading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Error', 'Couldn\'t save your changes. Please try again.');
+      Alert.alert(t('common.error'), t('clientAccount.profileInfo.saveFailed'));
       return;
     }
     setLoading(false);
@@ -98,14 +100,14 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
     // actually happens) differs when the provider hat must remain.
     const isDualRole = hatState.canSwitch;
     Alert.alert(
-      'Delete Account',
+      t('clientAccount.profileInfo.deleteAccount'),
       isDualRole
-        ? 'This removes your client profile, bookings and messages as a customer. Your provider/business account is not affected and you\'ll remain signed in.'
-        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.',
+        ? t('clientAccount.profileInfo.deleteDualBody')
+        : t('clientAccount.profileInfo.deleteBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             setDeletingAccount(true);
@@ -117,7 +119,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
               // provider mode and this screen unmounts the same way.
             } catch (err: any) {
               setDeletingAccount(false);
-              Alert.alert('Account not deleted', toUserMessage(err, 'Your account is still here — please try again.', 'ProfileInfoScreen.deleteProfile'));
+              Alert.alert(t('clientAccount.profileInfo.notDeletedTitle'), toUserMessage(err, t('clientAccount.profileInfo.notDeletedBody'), 'ProfileInfoScreen.deleteProfile'));
             }
           },
         },
@@ -143,12 +145,12 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: P.text }]}>Account</Text>
-          <Text style={[styles.subtitle, { color: P.sub }]}>Update your personal details</Text>
+          <Text style={[styles.title, { color: P.text }]}>{t('clientAccount.profileInfo.title')}</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>{t('clientAccount.profileInfo.subtitle')}</Text>
 
           {/* Email */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>EMAIL</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('clientAccount.profileInfo.email').toUpperCase()}</Text>
             <View
               style={[
                 inputStyle,
@@ -158,12 +160,12 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
             >
               <Text style={[styles.lockedText, { color: P.text }]}>{user?.email}</Text>
             </View>
-            <Text style={[styles.emailHint, { color: P.sub }]}>Your account sign-in email. To change this, contact support.</Text>
+            <Text style={[styles.emailHint, { color: P.sub }]}>{t('clientAccount.profileInfo.emailHint')}</Text>
           </View>
 
           {/* Name */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>YOUR NAME</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('clientAccount.profileInfo.name').toUpperCase()}</Text>
             <TextInput
               style={inputStyle}
               value={name}
@@ -176,7 +178,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
 
           {/* Phone */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>PHONE NUMBER</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('clientAccount.profileInfo.phone').toUpperCase()}</Text>
             <TextInput
               style={inputStyle}
               value={phone}
@@ -192,14 +194,14 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
               Geocoded through AddressPicker rather than typed free-text, so
               what's stored is a real, resolvable address. */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>YOUR ADDRESS</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('clientAccount.profileInfo.address').toUpperCase()}</Text>
             <AddressPicker
               value={clientAddress}
               onChange={selection => setClientAddress(selection.address)}
               accentColor={P.accent}
             />
             <Text style={[styles.emailHint, { color: P.sub }]}>
-              Only shared with a provider who travels to you, and only once your booking is confirmed.
+              {t('clientAccount.profileInfo.addressHint')}
             </Text>
           </View>
 
@@ -210,27 +212,27 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
               derived from the address, because most addresses people type
               carry no postcode to derive it from. */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>YOUR AREA</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('clientAccount.profileInfo.area').toUpperCase()}</Text>
             <AreaPicker
               value={clientArea}
               onChange={setClientArea}
               accentColor={P.accent}
             />
             <Text style={[styles.emailHint, { color: P.sub }]}>
-              Shared with a provider who travels to you as soon as they get your request, so they can check the distance before accepting.
+              {t('clientAccount.profileInfo.areaHint')}
             </Text>
           </View>
 
           {/* Date of birth */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>DATE OF BIRTH</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('clientAccount.profileInfo.dob').toUpperCase()}</Text>
             <TouchableOpacity
               style={[inputStyle, styles.dobRow]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowDobPicker(true); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.dobText, { color: dob ? P.text : P.sub }]}>
-                {dob ? formatShortDate(dob) : 'DD/MM/YYYY'}
+                {dob ? formatShortDate(dob) : t('clientAccount.profileInfo.dobPlaceholder')}
               </Text>
               <Ionicons name="calendar-outline" size={18} color={P.sub} />
             </TouchableOpacity>
@@ -259,9 +261,9 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
                 <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setShowDobPicker(false)} />
                 <View style={[styles.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, bottomInset + 16) }]}>
                   <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
-                    <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Date of Birth</Text>
+                    <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>{t('clientAccount.profileInfo.dobPickerTitle')}</Text>
                     <TouchableOpacity onPress={() => setShowDobPicker(false)}>
-                      <Text style={[styles.pickerDoneLabel, { color: P.accent }]}>Done</Text>
+                      <Text style={[styles.pickerDoneLabel, { color: P.accent }]}>{t('common.done')}</Text>
                     </TouchableOpacity>
                   </View>
                   <DateTimePicker
@@ -289,7 +291,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
           >
             {loading
               ? <ActivityIndicator color={P.onAccent} />
-              : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>SAVE CHANGES</Text>
+              : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>{t('common.saveChanges').toUpperCase()}</Text>
             }
           </TouchableOpacity>
 
@@ -302,7 +304,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
           >
             {deletingAccount
               ? <ActivityIndicator color="#c0392b" />
-              : <Text style={styles.deleteAccountText}>Delete Account</Text>
+              : <Text style={styles.deleteAccountText}>{t('clientAccount.profileInfo.deleteAccount')}</Text>
             }
           </TouchableOpacity>
         </ScrollView>

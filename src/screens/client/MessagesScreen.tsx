@@ -23,18 +23,21 @@ import {
 } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { toUserMessage } from '../../utils/userFacingError';
+import { useTranslation, tr, localeForLanguage } from '../../i18n';
 
+// Called during render; MessagesScreen calls useTranslation() so it re-renders
+// on a language change.
 function timeAgo(iso: string | null): string {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return tr('clientAccount.messages.justNow');
+  if (mins < 60) return tr('common.time.minutesAgo', { count: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return tr('common.time.hoursAgo', { count: hrs });
   const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  if (days < 7) return tr('common.time.daysAgo', { count: days });
+  return new Date(iso).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' });
 }
 
 function initials(name: string): string {
@@ -44,6 +47,7 @@ function initials(name: string): string {
 export default function MessagesScreen({ navigation }: any) {
   const { palette: OP } = useTheme();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [conversations, setConversations] = useState<UserConversationWithProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +66,7 @@ export default function MessagesScreen({ navigation }: any) {
       setLoadError(
         toUserMessage(
           err,
-          "We couldn't load your messages just now.",
+          tr('clientAccount.messages.loadFailed'),
           '[MessagesScreen] load conversations failed',
         ),
       );
@@ -109,7 +113,7 @@ export default function MessagesScreen({ navigation }: any) {
   }, [navigation]);
 
   const renderItem = useCallback(({ item }: { item: UserConversationWithProvider }) => {
-    const name = item.provider?.display_name ?? 'Provider';
+    const name = item.provider?.display_name ?? t('clientAccount.messages.providerFallback');
     const unread = item.unread_count_user > 0;
 
     return (
@@ -136,7 +140,7 @@ export default function MessagesScreen({ navigation }: any) {
               style={[styles.preview, { color: unread ? OP.text : OP.sub }, unread && styles.previewUnread]}
               numberOfLines={1}
             >
-              {item.last_message ?? 'Say hello 👋'}
+              {item.last_message ?? t('clientAccount.messages.sayHello')}
             </Text>
             {unread && (
               <View style={[styles.badge, { backgroundColor: OP.accent }]}>
@@ -149,7 +153,7 @@ export default function MessagesScreen({ navigation }: any) {
         </View>
       </TouchableOpacity>
     );
-  }, [OP, openChat]);
+  }, [OP, openChat, t]);
 
   if (loading) {
     return (
@@ -176,10 +180,10 @@ export default function MessagesScreen({ navigation }: any) {
           loadError && conversations.length > 0 ? (
             <View style={[styles.errorBanner, { backgroundColor: OP.card, borderColor: OP.border }]}>
               <Text style={[styles.errorBannerText, { color: OP.text }]}>
-                {loadError} This list may be out of date.
+                {t('clientAccount.messages.staleList', { error: loadError })}
               </Text>
               <TouchableOpacity onPress={onRefresh} activeOpacity={0.7}>
-                <Text style={[styles.errorRetry, { color: OP.accentText }]}>Retry</Text>
+                <Text style={[styles.errorRetry, { color: OP.accentText }]}>{t('common.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : null
@@ -187,21 +191,21 @@ export default function MessagesScreen({ navigation }: any) {
         ListEmptyComponent={
           loadError ? (
             <View style={styles.emptyState}>
-              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>Couldn't load messages</Text>
+              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>{t('clientAccount.messages.loadErrorTitle')}</Text>
               <Text style={[styles.emptyBody, { color: OP.sub }]}>{loadError}</Text>
               <TouchableOpacity
                 onPress={onRefresh}
                 activeOpacity={0.7}
                 style={[styles.retryBtn, { borderColor: OP.border, backgroundColor: OP.card }]}
               >
-                <Text style={[styles.retryBtnText, { color: OP.accentText }]}>Try again</Text>
+                <Text style={[styles.retryBtnText, { color: OP.accentText }]}>{t('common.tryAgain')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>No messages yet</Text>
+              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>{t('clientAccount.messages.emptyTitle')}</Text>
               <Text style={[styles.emptyBody, { color: OP.sub }]}>
-                Start a conversation from any provider's profile with "Get In Touch"
+                {t('clientAccount.messages.emptyBody')}
               </Text>
             </View>
           )
