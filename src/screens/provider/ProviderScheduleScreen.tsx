@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -36,7 +36,8 @@ import {
 import type { DbProviderAvailability, DbProviderBlockedDate, DbProviderAvailabilityOverride } from '../../types/database';
 import SlidingTabs from '../../components/SlidingTabs';
 import { logger } from '../../utils/logger';
-import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../../utils/dateUtils';
+import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD, dayName } from '../../utils/dateUtils';
+import { useTranslation } from '../../i18n';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 
@@ -68,12 +69,9 @@ const DARK = {
 
 // ─── Day helpers ──────────────────────────────────────────────────────────────
 const SCHEDULE_TABS = [
-  { key: 'hours' as const,   label: 'Weekly Hours' },
-  { key: 'blocked' as const, label: 'Blocked Dates' },
+  { key: 'hours' as const,   labelKey: 'providerBookings.schedule.tab.hours' as const },
+  { key: 'blocked' as const, labelKey: 'providerBookings.schedule.tab.blocked' as const },
 ];
-
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAY_FULL   = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon → Sun
 
 type DayRow = {
@@ -127,6 +125,11 @@ function formatYMD(ymd: string): string {
 export default function ProviderScheduleScreen() {
   const navigation = useNavigation();
   const { showToast, showConfirm, DialogHost } = useAppDialog();
+  const { t, tp } = useTranslation();
+  const scheduleTabs = useMemo(
+    () => SCHEDULE_TABS.map(tab => ({ key: tab.key, label: t(tab.labelKey) })),
+    [t],
+  );
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -267,7 +270,7 @@ export default function ProviderScheduleScreen() {
     const [ch, cm] = row.closeTime.split(':').map(Number);
     const open = (oh ?? 0) * 60 + (om ?? 0);
     const close = (ch ?? 0) * 60 + (cm ?? 0);
-    if (close - open < 180) { showToast('Use at least three working hours before adding a break.', 'info'); return; }
+    if (close - open < 180) { showToast(t('providerBookings.schedule.toast.breakNeedsHours'), 'info'); return; }
     const breakStart = Math.floor((open + close - 60) / 2 / 15) * 15;
     const toTime = (mins: number) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}:00`;
     setDays(prev => prev.map(d => d.dow === dow ? { ...d, closeTime: toTime(breakStart), dirty: true } : d));
@@ -299,7 +302,7 @@ export default function ProviderScheduleScreen() {
         || allWindows.some((w, index) => allWindows.some((other, otherIndex) =>
           index !== otherIndex && w.day_of_week === other.day_of_week && w.start_time < other.end_time && w.end_time > other.start_time,
         ));
-      if (invalid) { showToast('Each working period must be valid and cannot overlap another period.', 'error'); return; }
+      if (invalid) { showToast(t('providerBookings.schedule.toast.invalidPeriods'), 'error'); return; }
       await saveProviderWeeklySchedule(
         providerId,
         days.map(d => ({
@@ -314,7 +317,7 @@ export default function ProviderScheduleScreen() {
       setEditing(false);
       navigation.goBack();
     } catch {
-      showToast('Could not save hours. Please try again.', 'error');
+      showToast(t('providerBookings.schedule.toast.saveHoursFailed'), 'error');
     } finally {
       setSaving(false);
     }
@@ -327,21 +330,19 @@ export default function ProviderScheduleScreen() {
     try {
       const ymd = dateToYMD(blockPickerDate);
       if (blockedDates.some(b => b.blocked_date === ymd)) {
-        showToast('This date is already blocked.', 'info');
+        showToast(t('providerBookings.schedule.toast.alreadyBlocked'), 'info');
         return;
       }
       const existingBookings = await getProviderBookingsByDate(providerId, ymd);
       if (existingBookings.length > 0) {
         setAddingBlock(false);
         showConfirm(
-          existingBookings.length === 1
-            ? 'You have 1 booking on this date'
-            : `You have ${existingBookings.length} bookings on this date`,
-          'Blocking this date will not cancel or notify the client(s). You’ll need to handle those bookings yourself.',
+          tp('providerBookings.schedule.confirm.bookingsOnDate', existingBookings.length),
+          t('providerBookings.schedule.confirm.bookingsOnDateBody'),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Block anyway',
+              text: t('providerBookings.schedule.confirm.blockAnyway'),
               style: 'destructive',
               onPress: () => { void commitBlockDate(providerId, ymd); },
             },
@@ -351,7 +352,7 @@ export default function ProviderScheduleScreen() {
       }
       await commitBlockDate(providerId, ymd);
     } catch {
-      showToast('Could not block date. Please try again.', 'error');
+      showToast(t('providerBookings.schedule.toast.blockFailed'), 'error');
       setAddingBlock(false);
     }
   }
@@ -364,7 +365,7 @@ export default function ProviderScheduleScreen() {
       const updated = await getProviderBlockedDates(providerId);
       setBlockedDates(updated);
     } catch {
-      showToast('Could not block date. Please try again.', 'error');
+      showToast(t('providerBookings.schedule.toast.blockFailed'), 'error');
     } finally {
       setAddingBlock(false);
     }
@@ -375,7 +376,7 @@ export default function ProviderScheduleScreen() {
       await removeProviderBlockedDate(id, providerId ?? undefined);
       setBlockedDates(prev => prev.filter(b => b.id !== id));
     } catch {
-      showToast('Could not remove blocked date.', 'error');
+      showToast(t('providerBookings.schedule.toast.removeBlockFailed'), 'error');
     }
   }
 
@@ -407,9 +408,9 @@ export default function ProviderScheduleScreen() {
       });
       const updated = await getProviderAvailabilityOverrides(providerId, dateToYMD(new Date()));
       setOverrides(updated);
-      showToast('Custom hours saved.', 'success');
+      showToast(t('providerBookings.schedule.toast.customSaved'), 'success');
     } catch {
-      showToast('Could not save custom hours.', 'error');
+      showToast(t('providerBookings.schedule.toast.customSaveFailed'), 'error');
     } finally {
       setAddingOverride(false);
     }
@@ -420,7 +421,7 @@ export default function ProviderScheduleScreen() {
       await removeProviderAvailabilityOverride(id, providerId ?? undefined);
       setOverrides(prev => prev.filter(o => o.id !== id));
     } catch {
-      showToast('Could not remove custom hours.', 'error');
+      showToast(t('providerBookings.schedule.toast.customRemoveFailed'), 'error');
     }
   }
 
@@ -431,9 +432,9 @@ export default function ProviderScheduleScreen() {
         <KeyboardDismissView style={s.keyboardView}>
         {/* Header */}
         <View style={s.header}>
-          <Text style={[s.headerTitle, { color: P.text }]}>{hoursOnly ? 'Opening Hours' : 'My Schedule'}</Text>
+          <Text style={[s.headerTitle, { color: P.text }]}>{hoursOnly ? t('providerBookings.schedule.title.openingHours') : t('providerBookings.schedule.title.mySchedule')}</Text>
           <View style={s.headerActions}>
-            <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel="Close schedule">
+            <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel={t('providerBookings.schedule.closeA11y')}>
               <Ionicons name="close" size={22} color={P.sub} />
             </TouchableOpacity>
           </View>
@@ -443,7 +444,7 @@ export default function ProviderScheduleScreen() {
         {!hoursOnly && (
         <View style={[s.segWrap, { backgroundColor: P.surface }]}>
           <SlidingTabs
-            tabs={SCHEDULE_TABS}
+            tabs={scheduleTabs}
             activeKey={tab}
             onPress={setTab}
             accentColor={P.accent}
@@ -467,8 +468,8 @@ export default function ProviderScheduleScreen() {
               {days.map((day, idx) => (
                 <View key={day.dow} style={[s.dayRow, idx < days.length - 1 && [s.dayRowBorder, { borderBottomColor: P.border }]]}>
                   <View style={s.dayLeft}>
-                    <Text style={[s.dayLabel, { color: P.text }]}>{DAY_FULL[day.dow]}</Text>
-                    {!day.isOpen && <Text style={[s.closedTag, { color: P.sub }]}>Closed</Text>}
+                    <Text style={[s.dayLabel, { color: P.text }]}>{dayName(day.dow)}</Text>
+                    {!day.isOpen && <Text style={[s.closedTag, { color: P.sub }]}>{t('providerBookings.schedule.closed')}</Text>}
                   </View>
                   <View style={s.dayRight}>
                     {editing ? (
@@ -500,7 +501,7 @@ export default function ProviderScheduleScreen() {
                             ))}
                             <TouchableOpacity style={s.breakBtn} onPress={() => addSplitPeriod(day.dow)}>
                               <Ionicons name="add" size={14} color={P.accent} />
-                              <Text style={[s.breakTxt, { color: P.accent }]}>Add break</Text>
+                              <Text style={[s.breakTxt, { color: P.accent }]}>{t('providerBookings.schedule.addBreak')}</Text>
                             </TouchableOpacity>
                           </View>
                         )}
@@ -537,7 +538,7 @@ export default function ProviderScheduleScreen() {
               >
                 {saving
                   ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>{editing ? 'Save Hours' : 'Edit Hours'}</Text>
+                  : <Text style={[s.saveTxt, { color: P.ice }]}>{editing ? t('providerBookings.schedule.saveHours') : t('providerBookings.schedule.editHours')}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -557,11 +558,11 @@ export default function ProviderScheduleScreen() {
                       <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
                         <Text style={[s.pickerLabel, { color: P.text }]}>
                           {pickerTarget
-                            ? `${DAY_LABELS[pickerTarget.dow]} — ${pickerTarget.field === 'open' ? 'Open' : 'Close'}`
+                            ? t(pickerTarget.field === 'open' ? 'providerBookings.schedule.picker.dayOpen' : 'providerBookings.schedule.picker.dayClose', { day: dayName(pickerTarget.dow, 'short') })
                             : ''}
                         </Text>
                         <TouchableOpacity onPress={() => setPickerVisible(false)}>
-                          <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                          <Text style={[s.pickerDone, { color: P.accent }]}>{t('common.done')}</Text>
                         </TouchableOpacity>
                       </View>
                       <DateTimePicker
@@ -600,14 +601,14 @@ export default function ProviderScheduleScreen() {
           >
             {/* Add new blocked date */}
             <View style={[s.blockAddCard, { backgroundColor: P.surface }]}>
-              <Text style={[s.blockAddTitle, { color: P.text }]}>Block a Date</Text>
+              <Text style={[s.blockAddTitle, { color: P.text }]}>{t('providerBookings.schedule.blockTitle')}</Text>
               <TouchableOpacity style={[s.datePickBtn, { backgroundColor: P.card }]} onPress={() => setBlockPickerVisible(true)}>
                 <Ionicons name="calendar-outline" size={16} color={P.accent} />
                 <Text style={[s.datePickTxt, { color: P.text }]}>{formatYMD(dateToYMD(blockPickerDate))}</Text>
               </TouchableOpacity>
               <TextInput
                 style={[s.reasonInput, { backgroundColor: P.card, color: P.text }]}
-                placeholder="Reason (optional)"
+                placeholder={t('providerBookings.schedule.reasonPlaceholder')}
                 placeholderTextColor={P.sub}
                 value={blockReason}
                 onChangeText={setBlockReason}
@@ -621,7 +622,7 @@ export default function ProviderScheduleScreen() {
               >
                 {addingBlock
                   ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Block This Date</Text>
+                  : <Text style={[s.saveTxt, { color: P.ice }]}>{t('providerBookings.schedule.blockThisDate')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -638,9 +639,9 @@ export default function ProviderScheduleScreen() {
                     />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
                       <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
-                        <Text style={[s.pickerLabel, { color: P.text }]}>Select Date</Text>
+                        <Text style={[s.pickerLabel, { color: P.text }]}>{t('providerBookings.schedule.picker.selectDate')}</Text>
                         <TouchableOpacity onPress={() => setBlockPickerVisible(false)}>
-                          <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                          <Text style={[s.pickerDone, { color: P.accent }]}>{t('common.done')}</Text>
                         </TouchableOpacity>
                       </View>
                       <DateTimePicker
@@ -672,11 +673,11 @@ export default function ProviderScheduleScreen() {
             {blockedDates.length === 0 ? (
               <View style={s.emptyBlock}>
                 <Ionicons name="calendar-clear-outline" size={32} color={P.sub} />
-                <Text style={[s.emptyBlockTxt, { color: P.sub }]}>No blocked dates</Text>
+                <Text style={[s.emptyBlockTxt, { color: P.sub }]}>{t('providerBookings.schedule.noBlocked')}</Text>
               </View>
             ) : (
               <>
-                <Text style={[s.sectionLabel, { color: P.sub }]}>Blocked Days</Text>
+                <Text style={[s.sectionLabel, { color: P.sub }]}>{t('providerBookings.schedule.blockedDays')}</Text>
                 {blockedDates.map(b => (
                   <View key={b.id} style={[s.blockedRow, { backgroundColor: P.surface }]}>
                     <View style={s.blockedInfo}>
@@ -693,9 +694,9 @@ export default function ProviderScheduleScreen() {
 
             {/* ── Custom hours for a specific date ───────────────────────── */}
             <View style={[s.blockAddCard, { backgroundColor: P.surface, marginTop: 24 }]}>
-              <Text style={[s.blockAddTitle, { color: P.text }]}>Custom Hours for a Date</Text>
+              <Text style={[s.blockAddTitle, { color: P.text }]}>{t('providerBookings.schedule.customTitle')}</Text>
               <Text style={[s.blockedReason, { color: P.sub, marginBottom: 4 }]}>
-                Override your normal hours for a specific day — e.g. open later, close early.
+                {t('providerBookings.schedule.customBody')}
               </Text>
 
               {/* Date picker */}
@@ -722,7 +723,7 @@ export default function ProviderScheduleScreen() {
               >
                 {addingOverride
                   ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Save Custom Hours</Text>
+                  : <Text style={[s.saveTxt, { color: P.ice }]}>{t('providerBookings.schedule.saveCustom')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -735,9 +736,9 @@ export default function ProviderScheduleScreen() {
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideDatePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
                       <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
-                        <Text style={[s.pickerLabel, { color: P.text }]}>Select Date</Text>
+                        <Text style={[s.pickerLabel, { color: P.text }]}>{t('providerBookings.schedule.picker.selectDate')}</Text>
                         <TouchableOpacity onPress={() => setOverrideDatePickerVisible(false)}>
-                          <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                          <Text style={[s.pickerDone, { color: P.accent }]}>{t('common.done')}</Text>
                         </TouchableOpacity>
                       </View>
                       <DateTimePicker mode="date" value={overrideDate} onChange={(_, d) => { if (d) setOverrideDate(d); }} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} minimumDate={new Date()} style={{ width: '100%' }} />
@@ -758,9 +759,9 @@ export default function ProviderScheduleScreen() {
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideTimePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
                       <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
-                        <Text style={[s.pickerLabel, { color: P.text }]}>{overrideTimeField === 'open' ? 'Open Time' : 'Close Time'}</Text>
+                        <Text style={[s.pickerLabel, { color: P.text }]}>{overrideTimeField === 'open' ? t('providerBookings.schedule.picker.openTime') : t('providerBookings.schedule.picker.closeTime')}</Text>
                         <TouchableOpacity onPress={() => setOverrideTimePickerVisible(false)}>
-                          <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                          <Text style={[s.pickerDone, { color: P.accent }]}>{t('common.done')}</Text>
                         </TouchableOpacity>
                       </View>
                       <DateTimePicker mode="time" value={overridePickerDate} onChange={handleOverrideTimeChange} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} style={{ width: '100%' }} />
@@ -776,13 +777,13 @@ export default function ProviderScheduleScreen() {
             {/* Existing overrides list */}
             {overrides.length > 0 && (
               <>
-                <Text style={[s.sectionLabel, { color: P.sub, marginTop: 24 }]}>Custom Hours</Text>
+                <Text style={[s.sectionLabel, { color: P.sub, marginTop: 24 }]}>{t('providerBookings.schedule.customList')}</Text>
                 {overrides.map(o => (
                   <View key={o.id} style={[s.blockedRow, { backgroundColor: P.surface }]}>
                     <View style={s.blockedInfo}>
                       <Text style={[s.blockedDate, { color: P.text }]}>{formatYMD(o.availability_date)}</Text>
                       <Text style={[s.blockedReason, { color: P.sub }]}>
-                        {o.start_time && o.end_time ? `${formatTime(o.start_time)} → ${formatTime(o.end_time)}` : 'Closed'}
+                        {o.start_time && o.end_time ? `${formatTime(o.start_time)} → ${formatTime(o.end_time)}` : t('providerBookings.schedule.closed')}
                       </Text>
                     </View>
                     <TouchableOpacity style={s.trashBtn} onPress={() => handleRemoveOverride(o.id)}>

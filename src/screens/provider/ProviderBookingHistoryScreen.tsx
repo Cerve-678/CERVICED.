@@ -40,6 +40,7 @@ import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../../types/
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
+import { useTranslation, type TranslationKey } from '../../i18n';
 import { WAITLIST_HOLD_MS } from '../../constants/waitlist';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -72,17 +73,18 @@ type Palette = typeof LIGHT;
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-const STATUS: Record<string, { bg: string; darkBg: string; color: string; label: string }> = {
-  confirmed:   { bg: '#E8F5EE', darkBg: '#1B3D2A', color: '#2E7D52', label: 'Confirmed' },
-  pending:     { bg: '#FBF1E0', darkBg: '#3D2E10', color: '#B8730A', label: 'Pending' },
-  completed:   { bg: '#EAF0F6', darkBg: '#1E2C3A', color: '#3D6EA5', label: 'Completed' },
-  cancelled:   { bg: '#FDEAEA', darkBg: '#3D1B1B', color: '#C73535', label: 'Cancelled' },
-  no_show:     { bg: '#FDEAEA', darkBg: '#3D1B1B', color: '#C73535', label: 'No Show' },
-  in_progress: { bg: '#F3EAFF', darkBg: '#2E1A40', color: '#7B2FBE', label: 'In Progress' },
+const STATUS: Record<string, { bg: string; darkBg: string; color: string; labelKey: TranslationKey | null }> = {
+  confirmed:   { bg: '#E8F5EE', darkBg: '#1B3D2A', color: '#2E7D52', labelKey: 'providerBookings.status.confirmed' },
+  pending:     { bg: '#FBF1E0', darkBg: '#3D2E10', color: '#B8730A', labelKey: 'providerBookings.status.pending' },
+  completed:   { bg: '#EAF0F6', darkBg: '#1E2C3A', color: '#3D6EA5', labelKey: 'providerBookings.status.completed' },
+  cancelled:   { bg: '#FDEAEA', darkBg: '#3D1B1B', color: '#C73535', labelKey: 'providerBookings.status.cancelled' },
+  no_show:     { bg: '#FDEAEA', darkBg: '#3D1B1B', color: '#C73535', labelKey: 'providerBookings.status.noShowTitle' },
+  in_progress: { bg: '#F3EAFF', darkBg: '#2E1A40', color: '#7B2FBE', labelKey: 'providerBookings.status.inProgressTitle' },
 };
 
+/** An unknown status shows its raw value (labelKey null), as it always has. */
 function statusFor(s: string) {
-  return STATUS[s] ?? { bg: '#EDEDF0', darkBg: '#2E2E32', color: '#6C6C72', label: s };
+  return STATUS[s] ?? { bg: '#EDEDF0', darkBg: '#2E2E32', color: '#6C6C72', labelKey: null };
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -95,12 +97,12 @@ function fmtTime(s: string): string {
   return formatTime12(s);
 }
 
-function fmtDayLabel(dateStr: string): string {
-  if (dateStr === TODAY_STR) return 'Today';
+function fmtDayLabel(dateStr: string, t: (key: TranslationKey) => string): string {
+  if (dateStr === TODAY_STR) return t('common.date.today');
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  if (dateStr === toStr(yesterday)) return 'Yesterday';
+  if (dateStr === toStr(yesterday)) return t('common.date.yesterday');
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  if (dateStr === toStr(tomorrow)) return 'Tomorrow';
+  if (dateStr === toStr(tomorrow)) return t('common.date.tomorrow');
   return formatShortDate(dateStr);
 }
 
@@ -111,8 +113,8 @@ function fmtMoney(n: number): string {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'history', label: 'History' },
-  { key: 'todo',    label: 'To Do' },
+  { key: 'history', labelKey: 'providerBookings.history.tab.history' },
+  { key: 'todo',    labelKey: 'providerBookings.history.tab.todo' },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
@@ -120,11 +122,11 @@ type TabKey = typeof TABS[number]['key'];
 // Secondary filter shown only under the History tab — status chips over the
 // combined agenda list, replacing the old top-level per-status tabs.
 const HISTORY_FILTERS = [
-  { key: 'all',         label: 'All' },
-  { key: 'upcoming',    label: 'Upcoming' },
-  { key: 'in_progress', label: 'In Progress' },
-  { key: 'completed',   label: 'Completed' },
-  { key: 'cancelled',   label: 'Cancelled' },
+  { key: 'all',         labelKey: 'common.all',                                    emptyKey: 'providerBookings.history.empty.noBookings' },
+  { key: 'upcoming',    labelKey: 'providerBookings.history.filter.upcoming',      emptyKey: 'providerBookings.history.empty.noUpcoming' },
+  { key: 'in_progress', labelKey: 'providerBookings.status.inProgressTitle',       emptyKey: 'providerBookings.history.empty.noInProgress' },
+  { key: 'completed',   labelKey: 'providerBookings.status.completed',             emptyKey: 'providerBookings.history.empty.noCompleted' },
+  { key: 'cancelled',   labelKey: 'providerBookings.status.cancelled',             emptyKey: 'providerBookings.history.empty.noCancelled' },
 ] as const;
 
 type HistoryFilterKey = typeof HISTORY_FILTERS[number]['key'];
@@ -186,10 +188,11 @@ function filterBookings(bookings: BookingWithAddOns[], tab: TabKey, historyFilte
 function BookingCard({ booking, siblingCount, total, dark, P, onPress }: {
   booking: BookingWithAddOns; siblingCount: number; total: number; dark: boolean; P: Palette; onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const st    = statusFor(booking.status);
   const mappedStatus = mapDbBookingStatus(booking.status);
   const done  = mappedStatus === BookingStatus.CANCELLED || mappedStatus === BookingStatus.NO_SHOW;
-  const name  = booking.customer_name ?? 'Client';
+  const name  = booking.customer_name ?? t('providerBookings.clientFallback');
   const initials = name.trim().split(/\s+/).map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase();
   const isGroup = siblingCount > 1;
   const timeStr = fmtTime(booking.booking_time) + (booking.end_time ? ` – ${fmtTime(booking.end_time)}` : '');
@@ -216,15 +219,15 @@ function BookingCard({ booking, siblingCount, total, dark, P, onPress }: {
           )}
         </View>
         <Text style={[bc.service, { color: P.sub, textDecorationLine: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }]} numberOfLines={1}>
-          {isGroup ? `${booking.service_name_snapshot} + ${siblingCount - 1} more` : booking.service_name_snapshot}
+          {isGroup ? t('providerBookings.history.serviceAndMore', { service: booking.service_name_snapshot, count: siblingCount - 1 }) : booking.service_name_snapshot}
         </Text>
-        <Text style={[bc.time, { color: P.faint }]}>{fmtDayLabel(booking.booking_date)} · {timeStr}</Text>
+        <Text style={[bc.time, { color: P.faint }]}>{fmtDayLabel(booking.booking_date, t)} · {timeStr}</Text>
       </View>
 
       {/* Right side */}
       <View style={bc.right}>
         <View style={[bc.pill, { backgroundColor: dark ? st.darkBg : st.bg }]}>
-          <Text style={[bc.pillText, { color: st.color }]}>{st.label}</Text>
+          <Text style={[bc.pillText, { color: st.color }]}>{st.labelKey ? t(st.labelKey) : booking.status}</Text>
         </View>
         {total > 0 ? (
           <Text style={[bc.price, { color: done ? P.faint : P.text }]}>{fmtMoney(total)}</Text>
@@ -266,9 +269,10 @@ const bc = StyleSheet.create({
 function PendingPill({ group, dark, P, busy, onPress, onComplete }: {
   group: GroupedBooking; dark: boolean; P: Palette; busy: boolean; onPress: () => void; onComplete: () => void;
 }) {
+  const { t } = useTranslation();
   const { booking, siblings } = group;
   const isGroup = siblings.length > 1;
-  const name = booking.customer_name ?? 'Client';
+  const name = booking.customer_name ?? t('providerBookings.clientFallback');
 
   return (
     <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={[pp.pill, { backgroundColor: P.card }, !dark && bc.shadow]}>
@@ -277,7 +281,7 @@ function PendingPill({ group, dark, P, busy, onPress, onComplete }: {
       <View style={pp.body}>
         <Text style={[pp.line, { color: P.text }]} numberOfLines={1}>
           <Text style={pp.name}>{name}</Text>
-          <Text style={{ color: P.sub }}> · {isGroup ? `${booking.service_name_snapshot} + ${siblings.length - 1} more` : booking.service_name_snapshot}</Text>
+          <Text style={{ color: P.sub }}> · {isGroup ? t('providerBookings.history.serviceAndMore', { service: booking.service_name_snapshot, count: siblings.length - 1 }) : booking.service_name_snapshot}</Text>
         </Text>
       </View>
       <TouchableOpacity
@@ -286,7 +290,7 @@ function PendingPill({ group, dark, P, busy, onPress, onComplete }: {
         onPress={onComplete}
         style={[pp.completeBtn, { backgroundColor: P.accent, opacity: busy ? 0.6 : 1 }]}
       >
-        {busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={pp.completeBtnText}>Confirm</Text>}
+        {busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={pp.completeBtnText}>{t('common.confirm')}</Text>}
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -335,7 +339,12 @@ function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
 
 export default function ProviderBookingHistoryScreen({ navigation, route }: any) {
   const { isDarkMode: dark } = useTheme();
+  const { t, tp } = useTranslation();
   const P = dark ? DARK : LIGHT;
+  const historyFilterTabs = useMemo(
+    () => HISTORY_FILTERS.map(f => ({ key: f.key, label: t(f.labelKey) })),
+    [t],
+  );
 
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -489,8 +498,8 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   }, [bookings, activeTab, historyFilter]);
 
   const tabEmptyText: Record<TabKey, string> = {
-    todo:    'No pending bookings',
-    history: 'No bookings yet',
+    todo:    t('providerBookings.history.empty.noPending'),
+    history: t('providerBookings.history.empty.noBookingsYet'),
   };
 
   // ── Complete (pending → confirmed) ───────────────────────────────────────
@@ -500,16 +509,15 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   // same rule ProviderBookingDetailScreen's updateBookingStatus follows (see
   // fix_group_booking_atomic_actions.sql: all-or-nothing server-side).
   const handleComplete = useCallback((group: GroupedBooking) => {
-    const groupSuffix = group.siblings.length > 1
-      ? ` This confirms all ${group.siblings.length} of this client's services with you.`
-      : '';
     Alert.alert(
-      'Confirm Booking',
-      `The client will be notified that their booking is confirmed.${groupSuffix}`,
+      t('providerBookings.history.confirmAlert.title'),
+      group.siblings.length > 1
+        ? t('providerBookings.history.confirmAlert.bodyGroup', { count: group.siblings.length })
+        : t('providerBookings.history.confirmAlert.body'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Confirm',
+          text: t('common.confirm'),
           onPress: async () => {
             setCompletingId(group.booking.id);
             try {
@@ -528,8 +536,8 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
               const message =
                 typeof err?.message === 'string' && err.message.length > 0 && !err.message.includes('Network')
                   ? err.message
-                  : 'Please check your connection and try again.';
-              Alert.alert('Could not confirm', message);
+                  : t('providerBookings.history.checkConnection');
+              Alert.alert(t('providerBookings.history.confirmFailedTitle'), message);
             } finally {
               setCompletingId(null);
             }
@@ -537,7 +545,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
         },
       ],
     );
-  }, [fetchBookings]);
+  }, [fetchBookings, t]);
 
   // ── Waitlist invite ───────────────────────────────────────────────────────
 
@@ -612,11 +620,11 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
       const message =
         typeof err?.message === 'string' && err.message.length > 0 && !err.message.includes('Network')
           ? err.message
-          : 'The booking could not be created. Please check your connection and try again.';
-      Alert.alert('Invite failed', message);
+          : t('providerBookings.history.invite.failedBody');
+      Alert.alert(t('providerBookings.history.invite.failedTitle'), message);
     }
     setInviting(false);
-  }, [inviteModal.entry, providerDbId, inviteDate, inviteTime]);
+  }, [inviteModal.entry, providerDbId, inviteDate, inviteTime, t]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -635,9 +643,9 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
           </TouchableOpacity>
 
           <View style={s.headerBody}>
-            <Text style={[s.headerTitle, { color: P.text }]}>Bookings</Text>
+            <Text style={[s.headerTitle, { color: P.text }]}>{t('providerBookings.history.title')}</Text>
             <Text style={[s.headerSub, { color: P.sub }]} numberOfLines={1}>
-              {counts.todo > 0 ? `${counts.todo} to do` : 'All caught up'}
+              {counts.todo > 0 ? t('providerBookings.history.toDoCount', { count: counts.todo }) : t('providerBookings.history.allCaughtUp')}
             </Text>
           </View>
 
@@ -670,7 +678,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                 activeOpacity={0.7}
               >
                 <Text style={[s.primaryTabText, { color: active ? P.text : P.sub, fontWeight: active ? '700' : '600' }]}>
-                  {tab.label}{count && count > 0 ? `  ${count}` : ''}
+                  {t(tab.labelKey)}{count && count > 0 ? `  ${count}` : ''}
                 </Text>
               </TouchableOpacity>
             );
@@ -692,7 +700,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
             {unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && items.length === 0 ? (
               <View style={s.emptyWrap}>
                 <Ionicons name="checkmark-done-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
-                <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
+                <Text style={[s.emptyTitle, { color: P.text }]}>{t('providerBookings.history.empty.title')}</Text>
                 <Text style={[s.emptySub, { color: P.sub }]}>{tabEmptyText['todo']}</Text>
               </View>
             ) : (
@@ -708,9 +716,9 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[wl.clientName, { color: P.text }]}>
-                        {unreadMessages} unread {unreadMessages === 1 ? 'message' : 'messages'}
+                        {tp('providerBookings.history.unreadMessages', unreadMessages)}
                       </Text>
-                      <Text style={[wl.serviceName, { color: P.sub }]}>Tap to open Inbox</Text>
+                      <Text style={[wl.serviceName, { color: P.sub }]}>{t('providerBookings.history.tapToOpenInbox')}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={16} color={P.sub} style={{ opacity: 0.5 }} />
                   </TouchableOpacity>
@@ -718,7 +726,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
 
                 {rescheduleRequestRows.length > 0 && (
                   <>
-                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: 0 }]}>RESCHEDULE REQUESTS</Text>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: 0 }]}>{t('providerBookings.history.section.reschedule')}</Text>
                     {rescheduleRequestRows.map(({ req, booking }) => (
                       <TouchableOpacity
                         key={req.id}
@@ -736,20 +744,22 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={[wl.clientName, { color: P.text }]} numberOfLines={1}>
-                              {booking.customer_name ?? 'Client'}
+                              {booking.customer_name ?? t('providerBookings.clientFallback')}
                             </Text>
                             <Text style={[wl.serviceName, { color: P.sub }]} numberOfLines={1}>
                               {booking.service_name_snapshot}
                             </Text>
                           </View>
                           <View style={[wl.posBadge, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
-                            <Text style={[wl.posBadgeText, { color: '#FF9500' }]}>Awaiting response</Text>
+                            <Text style={[wl.posBadgeText, { color: '#FF9500' }]}>{t('providerBookings.history.awaitingResponse')}</Text>
                           </View>
                         </View>
                         <Text style={[wl.preferredDates, { color: P.sub }]}>
-                          Was {formatShortDate(req.original_date)} at {formatTime12(req.original_time)}
+                          {t('providerBookings.history.reschedule.was', { date: formatShortDate(req.original_date), time: formatTime12(req.original_time) })}
                           {req.requested_dates && req.requested_dates.length > 0
-                            ? ` — client asked for ${req.requested_dates.length > 1 ? `${req.requested_dates.length} alternatives` : formatShortDate(req.requested_dates[0]!)}`
+                            ? req.requested_dates.length > 1
+                              ? tp('providerBookings.history.reschedule.askedAlternatives', req.requested_dates.length)
+                              : t('providerBookings.history.reschedule.askedFor', { date: formatShortDate(req.requested_dates[0]!) })
                             : ''}
                         </Text>
                       </TouchableOpacity>
@@ -759,7 +769,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
 
                 {waitlist.length > 0 && (
                   <>
-                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: (unreadMessages > 0 || rescheduleRequestRows.length > 0) ? 8 : 0 }]}>WAITLIST</Text>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: (unreadMessages > 0 || rescheduleRequestRows.length > 0) ? 8 : 0 }]}>{t('providerBookings.history.section.waitlist')}</Text>
                     {waitlist.map(entry => (
                       <View key={entry.id} style={[wl.card, { backgroundColor: P.card, marginBottom: 10 }, !dark && bc.shadow]}>
                         <View style={wl.cardTop}>
@@ -770,7 +780,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={[wl.clientName, { color: P.text }]} numberOfLines={1}>
-                              {entry.user_name_snapshot ?? 'Client'}
+                              {entry.user_name_snapshot ?? t('providerBookings.clientFallback')}
                             </Text>
                             <Text style={[wl.serviceName, { color: P.sub }]} numberOfLines={1}>
                               {entry.service_name_snapshot}
@@ -778,7 +788,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                           </View>
                           <View style={[wl.posBadge, { backgroundColor: entry.status === 'notified' ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)' }]}>
                             <Text style={[wl.posBadgeText, { color: entry.status === 'notified' ? '#34C759' : '#FF9500' }]}>
-                              {entry.status === 'notified' ? 'Holding Slot' : `Waiting · #${entry.position}`}
+                              {entry.status === 'notified' ? t('providerBookings.history.waitlist.holding') : t('providerBookings.history.waitlist.waiting', { position: entry.position })}
                             </Text>
                           </View>
                         </View>
@@ -790,22 +800,22 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                             constant only mirrors it for display. */}
                         {entry.status === 'notified' && entry.notified_at ? (
                           <Text style={[wl.preferredDates, { color: '#34C759' }]}>
-                            Expires around {formatTime12(new Date(new Date(entry.notified_at).getTime() + WAITLIST_HOLD_MS))} if not confirmed
+                            {t('providerBookings.history.waitlist.expires', { time: formatTime12(new Date(new Date(entry.notified_at).getTime() + WAITLIST_HOLD_MS)) })}
                           </Text>
                         ) : null}
                         {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
                         {entry.preferred_dates && entry.preferred_dates.length > 0 ? (
                           <Text style={[wl.preferredDates, { color: P.sub }]}>
-                            Preferred: {entry.preferred_dates.length > 1
-                              ? `${formatShortDate(entry.preferred_dates[0]!)} – ${formatShortDate(entry.preferred_dates[1]!)}`
-                              : `${formatShortDate(entry.preferred_dates[0]!)} onward`}
+                            {entry.preferred_dates.length > 1
+                              ? t('providerBookings.history.waitlist.preferredRange', { from: formatShortDate(entry.preferred_dates[0]!), to: formatShortDate(entry.preferred_dates[1]!) })
+                              : t('providerBookings.history.waitlist.preferredOnward', { date: formatShortDate(entry.preferred_dates[0]!) })}
                           </Text>
                         ) : null}
                         <View style={wl.actions}>
                           {entry.status === 'waiting' && (
                             <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent }]} activeOpacity={0.8}
                               onPress={() => setInviteModal({ visible: true, entry })}>
-                              <Text style={wl.inviteBtnText}>Schedule & Invite</Text>
+                              <Text style={wl.inviteBtnText}>{t('providerBookings.history.waitlist.scheduleInvite')}</Text>
                             </TouchableOpacity>
                           )}
                           <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8}
@@ -814,7 +824,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                                 .then(() => setWaitlist(prev => prev.filter(e => e.id !== entry.id)))
                                 .catch(() => {});
                             }}>
-                            <Text style={[wl.removeBtnText, { color: P.sub }]}>Remove</Text>
+                            <Text style={[wl.removeBtnText, { color: P.sub }]}>{t('common.remove')}</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -824,7 +834,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
 
                 {items.length > 0 && (
                   <>
-                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: waitlist.length > 0 ? 8 : 0 }]}>PENDING</Text>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: waitlist.length > 0 ? 8 : 0 }]}>{t('providerBookings.history.section.pending')}</Text>
                     {items.map(group => (
                       <View key={group.booking.id} style={{ marginBottom: 8 }}>
                         <PendingPill
@@ -850,7 +860,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
           <>
             <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
               <SlidingTabs
-                tabs={HISTORY_FILTERS}
+                tabs={historyFilterTabs}
                 activeKey={historyFilter}
                 onPress={handleHistoryFilterPress}
                 accentColor={P.accent}
@@ -885,9 +895,9 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
               ListEmptyComponent={
                 <View style={s.emptyWrap}>
                   <Ionicons name="calendar-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
-                  <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{t('providerBookings.history.empty.title')}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
-                    {historyFilter === 'all' ? tabEmptyText[activeTab] : `No ${HISTORY_FILTERS.find(f => f.key === historyFilter)?.label.toLowerCase()} bookings`}
+                    {historyFilter === 'all' ? tabEmptyText[activeTab] : t(HISTORY_FILTERS.find(f => f.key === historyFilter)?.emptyKey ?? 'providerBookings.history.empty.noBookings')}
                   </Text>
                 </View>
               }
@@ -906,9 +916,9 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   <Ionicons name="calendar-outline" size={20} color={P.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[wl.popupTitle, { color: P.text }]}>Schedule Appointment</Text>
+                  <Text style={[wl.popupTitle, { color: P.text }]}>{t('providerBookings.history.invite.title')}</Text>
                   <Text style={[wl.popupSub, { color: P.sub }]} numberOfLines={1}>
-                    {inviteModal.entry?.user_name_snapshot ?? 'Client'} · {inviteModal.entry?.service_name_snapshot}
+                    {inviteModal.entry?.user_name_snapshot ?? t('providerBookings.clientFallback')} · {inviteModal.entry?.service_name_snapshot}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => setInviteModal({ visible: false, entry: null })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.6}>
@@ -919,25 +929,25 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                 <View style={[wl.prefRow, { backgroundColor: P.accentSoft, borderColor: P.accent + '30' }]}>
                   <Ionicons name="information-circle-outline" size={14} color={P.accent} />
                   <Text style={[wl.prefText, { color: P.accent }]}>
-                    Client prefers: {inviteModal.entry.preferred_dates.map(d => formatShortDate(d)).join(' – ')}
+                    {t('providerBookings.history.invite.clientPrefers', { dates: inviteModal.entry.preferred_dates.map(d => formatShortDate(d)).join(' – ') })}
                   </Text>
                 </View>
               )}
-              <Text style={[wl.popupLabel, { color: P.sub }]}>DATE</Text>
+              <Text style={[wl.popupLabel, { color: P.sub }]}>{t('providerBookings.history.invite.dateHeader')}</Text>
               <View style={[wl.dateBlock, { borderColor: P.sub + '30' }]}>
                 <TouchableOpacity style={[wl.dateRow, { borderBottomColor: P.sub + '20' }]} onPress={() => openInvitePicker('date')} activeOpacity={0.7}>
                   <Ionicons name="calendar-outline" size={15} color={P.sub} />
-                  <Text style={[wl.dateLabel, { color: P.sub }]}>Date</Text>
+                  <Text style={[wl.dateLabel, { color: P.sub }]}>{t('providerBookings.history.invite.date')}</Text>
                   <Text style={[wl.dateValue, { color: inviteDate ? P.text : P.sub, opacity: inviteDate ? 1 : 0.5 }]}>
-                    {inviteDate ? formatLongDate(inviteDate) : 'Select date'}
+                    {inviteDate ? formatLongDate(inviteDate) : t('providerBookings.history.invite.selectDate')}
                   </Text>
                   <Ionicons name="chevron-forward" size={13} color={P.sub} style={{ opacity: 0.4 }} />
                 </TouchableOpacity>
                 <TouchableOpacity style={wl.dateRow} onPress={() => openInvitePicker('time')} activeOpacity={0.7}>
                   <Ionicons name="time-outline" size={15} color={P.sub} />
-                  <Text style={[wl.dateLabel, { color: P.sub }]}>Time</Text>
+                  <Text style={[wl.dateLabel, { color: P.sub }]}>{t('providerBookings.history.invite.time')}</Text>
                   <Text style={[wl.dateValue, { color: inviteTime ? P.text : P.sub, opacity: inviteTime ? 1 : 0.5 }]}>
-                    {inviteTime ? formatTime12(inviteTime) : 'Select time'}
+                    {inviteTime ? formatTime12(inviteTime) : t('providerBookings.history.invite.selectTime')}
                   </Text>
                   <Ionicons name="chevron-forward" size={13} color={P.sub} style={{ opacity: 0.4 }} />
                 </TouchableOpacity>
@@ -945,7 +955,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
               {Platform.OS === 'ios' && showInviteDatePicker && (
                 <View>
                   <TouchableOpacity style={[wl.pickerDone, { borderBottomColor: P.sub + '20' }]} onPress={() => setShowInviteDatePicker(false)} activeOpacity={0.7}>
-                    <Text style={[wl.pickerDoneText, { color: P.accent }]}>Done</Text>
+                    <Text style={[wl.pickerDoneText, { color: P.accent }]}>{t('common.done')}</Text>
                   </TouchableOpacity>
                   <DateTimePicker value={inviteDate ?? new Date()} mode="date" display="spinner" minimumDate={new Date()} onChange={(_, d) => { if (d) setInviteDate(d); }} />
                 </View>
@@ -953,14 +963,14 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
               {Platform.OS === 'ios' && showInviteTimePicker && (
                 <View>
                   <TouchableOpacity style={[wl.pickerDone, { borderBottomColor: P.sub + '20' }]} onPress={() => setShowInviteTimePicker(false)} activeOpacity={0.7}>
-                    <Text style={[wl.pickerDoneText, { color: P.accent }]}>Done</Text>
+                    <Text style={[wl.pickerDoneText, { color: P.accent }]}>{t('common.done')}</Text>
                   </TouchableOpacity>
                   <DateTimePicker value={inviteTime ?? new Date()} mode="time" display="spinner" onChange={(_, d) => { if (d) setInviteTime(d); }} />
                 </View>
               )}
               <View style={wl.popupActions}>
                 <TouchableOpacity style={[wl.cancelBtn, { borderColor: P.sub + '40' }]} onPress={() => setInviteModal({ visible: false, entry: null })} activeOpacity={0.7}>
-                  <Text style={[wl.cancelText, { color: P.sub }]}>Cancel</Text>
+                  <Text style={[wl.cancelText, { color: P.sub }]}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[wl.confirmBtn, { backgroundColor: P.accent, opacity: (!inviteDate || !inviteTime || inviting) ? 0.5 : 1 }]}
@@ -968,7 +978,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   disabled={!inviteDate || !inviteTime || inviting}
                   activeOpacity={0.8}
                 >
-                  <Text style={wl.confirmText}>{inviting ? 'Sending…' : 'Confirm & Invite'}</Text>
+                  <Text style={wl.confirmText}>{inviting ? t('providerBookings.history.invite.sending') : t('providerBookings.history.invite.confirm')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

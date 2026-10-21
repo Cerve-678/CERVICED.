@@ -24,6 +24,7 @@ import { useAppDialog } from '../../components/AppDialog';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { formatShortDate } from '../../utils/dateUtils';
+import { useTranslation, localeForLanguage } from '../../i18n';
 import {
   getMyProviderServices,
   getProviderInfoPacksByUserId,
@@ -75,7 +76,7 @@ function serviceColor(s: string) {
 
 function fmtDate(d: string) {
   const dt = new Date(d + 'T00:00:00');
-  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return dt.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 // ─── Pack Card ────────────────────────────────────────────────────────────────
@@ -86,6 +87,7 @@ function PackCard({
   pack: InfoPack; dark: boolean; P: typeof LIGHT_P; index: number;
   onPress: () => void; onSend: () => void; onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
   useEffect(() => {
@@ -99,7 +101,7 @@ function PackCard({
   const sc = serviceColor(pack.service);
   const pillBg = dark ? sc.dbg : sc.bg;
   const pillLabel = pack.serviceNames.length === 0
-    ? 'ALL SERVICES'
+    ? t('providerBookings.infoPack.allServices').toUpperCase()
     : pack.serviceNames.length === 1
       ? pack.serviceNames[0]!.toUpperCase()
       : `${pack.serviceNames[0]!.toUpperCase()} +${pack.serviceNames.length - 1}`;
@@ -122,14 +124,14 @@ function PackCard({
               onPress={onDelete} activeOpacity={0.75}
             >
               <Ionicons name="trash-outline" size={14} color="#FF453A" />
-              <Text style={[pc.actionText, { color: '#FF453A' }]}>Delete</Text>
+              <Text style={[pc.actionText, { color: '#FF453A' }]}>{t('common.delete')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[pc.actionBtn, { flex: 1, backgroundColor: P.iconBg }]}
               onPress={onSend} activeOpacity={0.75}
             >
               <Ionicons name="send-outline" size={14} color={P.accent} />
-              <Text style={[pc.actionText, { color: P.accent }]}>Send to client</Text>
+              <Text style={[pc.actionText, { color: P.accent }]}>{t('providerBookings.infoPack.sendToClient')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -169,6 +171,7 @@ function SendSheet({
   bookings: BookingWithAddOns[]; loading: boolean; sendingBookingId: string | null;
   onPickBooking: (booking: BookingWithAddOns) => void; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const slideAnim = useRef(new Animated.Value(500)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   // `pack` goes null the instant `visible` does (both come from the same
@@ -206,7 +209,7 @@ function SendSheet({
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
           <View style={[ss.handle, { backgroundColor: P.border }]} />
-          <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
+          <Text style={[ss.title, { color: P.text }]}>{t('providerBookings.infoPack.sendTitle')}</Text>
           {renderPack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{renderPack.title}</Text>}
           {loading ? (
             <View style={{ paddingVertical: 30, alignItems: 'center' }}>
@@ -214,7 +217,7 @@ function SendSheet({
             </View>
           ) : bookings.length === 0 ? (
             <Text style={[ss.emptyText, { color: P.sub }]}>
-              No upcoming bookings to send this to yet.
+              {t('providerBookings.infoPack.noUpcoming')}
             </Text>
           ) : (
             <ScrollView style={ss.bookingList} showsVerticalScrollIndicator={false}>
@@ -230,7 +233,7 @@ function SendSheet({
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[ss.bookingClient, { color: P.text }]} numberOfLines={1}>
-                        {b.customer_name || 'Client'}
+                        {b.customer_name || t('providerBookings.clientFallback')}
                       </Text>
                       <Text style={[ss.bookingMeta, { color: P.sub }]} numberOfLines={1}>
                         {b.service_name_snapshot} · {formatShortDate(b.booking_date)}
@@ -271,6 +274,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const { isDarkMode: dark } = useTheme();
   const { user } = useAuth();
   const { showToast, showConfirm, DialogHost } = useAppDialog();
+  const { t } = useTranslation();
   const P = dark ? DARK_P : LIGHT_P;
 
   const [view,       setView]       = useState<'list' | 'create'>('list');
@@ -325,7 +329,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   }, [user?.id]);
 
   const handleSave = useCallback(async () => {
-    if (!title.trim() || !content.trim()) { showToast('Please add a title and content.', 'warning'); return; }
+    if (!title.trim() || !content.trim()) { showToast(t('providerBookings.infoPack.toast.titleAndContent'), 'warning'); return; }
     if (!user?.id) return;
     let data: ProviderInfoPackRow;
     try {
@@ -338,7 +342,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
         content: content.trim(),
       });
     } catch {
-      showToast('Could not save info pack.', 'error'); return;
+      showToast(t('providerBookings.infoPack.toast.saveFailed'), 'error'); return;
     }
     const newPack: InfoPack = {
       id: data.id,
@@ -353,7 +357,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     Keyboard.dismiss();
     setView('list');
     if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [title, selectedServices, content, user?.id, resetForm, showToast]);
+  }, [title, selectedServices, content, user?.id, resetForm, showToast, t]);
 
   const performDelete = useCallback(async (id: string) => {
     try {
@@ -362,20 +366,20 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
       logger.error('[InfoPacks] delete failed:', error);
-      showToast('Could not delete this pack. Please try again.', 'error');
+      showToast(t('providerBookings.infoPack.toast.deleteFailed'), 'error');
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handleDelete = useCallback((pack: InfoPack) => {
     showConfirm(
-      'Delete this pack?',
-      `"${pack.title}" will be permanently deleted. This can't be undone.`,
+      t('providerBookings.infoPack.delete.title'),
+      t('providerBookings.infoPack.delete.body', { title: pack.title }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => { void performDelete(pack.id); } },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => { void performDelete(pack.id); } },
       ],
     );
-  }, [performDelete, showConfirm]);
+  }, [performDelete, showConfirm, t]);
 
   const handleOpenSend = useCallback(async (pack: InfoPack) => {
     setSending(pack);
@@ -385,12 +389,12 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       setSendBookings(all.filter(b => b.status === 'pending' || b.status === 'confirmed'));
     } catch (error) {
       logger.error('[InfoPacks] failed to load bookings to send to:', error);
-      showToast('Could not load your bookings. Please try again.', 'error');
+      showToast(t('providerBookings.infoPack.toast.loadBookingsFailed'), 'error');
       setSendBookings([]);
     } finally {
       setLoadingSendBookings(false);
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handlePickBookingForSend = useCallback(async (booking: BookingWithAddOns) => {
     if (!sending) return;
@@ -398,15 +402,15 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     try {
       await attachInfoPackToBooking(booking.id, sending.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(`Sent to ${booking.customer_name || 'client'}.`, 'success');
+      showToast(booking.customer_name ? t('providerBookings.infoPack.toast.sentTo', { name: booking.customer_name }) : t('providerBookings.infoPack.toast.sentToClient'), 'success');
       setSending(null);
     } catch (error) {
       logger.error('[InfoPacks] send failed:', error);
-      showToast('Could not send this pack. Please try again.', 'error');
+      showToast(t('providerBookings.infoPack.toast.sendFailed'), 'error');
     } finally {
       setSendingBookingId(null);
     }
-  }, [sending, showToast]);
+  }, [sending, showToast, t]);
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -438,29 +442,29 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
           </TouchableOpacity>
 
           <Text style={[s.screenTitle, { color: P.text }]}>
-            {view === 'list' ? 'Info Packs' : 'New Pack'}
+            {view === 'list' ? t('providerBookings.infoPack.title.list') : t('providerBookings.infoPack.title.new')}
           </Text>
 
           {view === 'list' ? (
             <TouchableOpacity onPress={() => setView('create')} style={[s.newBtn, { backgroundColor: P.accent }]} activeOpacity={0.82}>
               <Ionicons name="add" size={16} color="#fff" />
-              <Text style={s.newBtnText}>New</Text>
+              <Text style={s.newBtnText}>{t('common.new')}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               onPress={() => setPreviewing({
                 id: 'draft',
-                title: title.trim() || 'Untitled pack',
+                title: title.trim() || t('providerBookings.infoPack.preview.untitled'),
                 service: selectedServices.length > 0 ? selectedServices[0]!.toUpperCase() : 'GENERAL',
                 serviceNames: selectedServices,
-                content: content.trim() || 'Nothing written yet.',
+                content: content.trim() || t('providerBookings.infoPack.preview.empty'),
                 createdAt: '',
               })}
               style={[s.newBtn, { backgroundColor: '#30D158' }]}
               activeOpacity={0.82}
             >
               <Ionicons name="eye-outline" size={15} color="#fff" />
-              <Text style={s.newBtnText}>Preview</Text>
+              <Text style={s.newBtnText}>{t('providerBookings.infoPack.previewBtn')}</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -489,10 +493,10 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                 <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                   <Ionicons name="document-text-outline" size={36} color={P.sub} />
                 </View>
-                <Text style={[s.emptyTitle, { color: P.text }]}>No info packs yet</Text>
-                <Text style={[s.emptySub, { color: P.sub }]}>Create aftercare guides, prep tips, and more to send clients instantly</Text>
+                <Text style={[s.emptyTitle, { color: P.text }]}>{t('providerBookings.infoPack.empty.title')}</Text>
+                <Text style={[s.emptySub, { color: P.sub }]}>{t('providerBookings.infoPack.empty.body')}</Text>
                 <TouchableOpacity style={[s.emptyBtn, { backgroundColor: P.accent }]} onPress={() => setView('create')} activeOpacity={0.85}>
-                  <Text style={s.emptyBtnText}>Create first pack</Text>
+                  <Text style={s.emptyBtnText}>{t('providerBookings.infoPack.empty.cta')}</Text>
                 </TouchableOpacity>
               </View>
             }
@@ -507,11 +511,11 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               automaticallyAdjustKeyboardInsets
               showsVerticalScrollIndicator={false}
             >
-              <Text style={[s.fieldLabel, { color: P.sub }]}>TITLE</Text>
+              <Text style={[s.fieldLabel, { color: P.sub }]}>{t('providerBookings.infoPack.field.title')}</Text>
               <View style={[s.inputWrap, { backgroundColor: P.card, borderColor: P.border }]}>
                 <TextInput
                   style={[s.input, { color: P.text }]}
-                  placeholder="e.g. Lash Aftercare Guide"
+                  placeholder={t('providerBookings.infoPack.field.titlePlaceholder')}
                   placeholderTextColor={P.sub}
                   value={title}
                   onChangeText={setTitle}
@@ -521,7 +525,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               </View>
 
               <View style={s.fieldLabelRow}>
-                <Text style={[s.fieldLabel, { color: P.sub, marginBottom: 0 }]}>ATTACHES TO SERVICES</Text>
+                <Text style={[s.fieldLabel, { color: P.sub, marginBottom: 0 }]}>{t('providerBookings.infoPack.field.services')}</Text>
                 {myServices.length > 1 && (
                   <TouchableOpacity
                     onPress={() => {
@@ -531,17 +535,17 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                     activeOpacity={0.7}
                   >
                     <Text style={[s.selectAllText, { color: P.accent }]}>
-                      {selectedServices.length === myServices.length ? 'Clear all' : 'Select all'}
+                      {selectedServices.length === myServices.length ? t('providerBookings.infoPack.field.clearAll') : t('providerBookings.infoPack.field.selectAll')}
                     </Text>
                   </TouchableOpacity>
                 )}
               </View>
               <Text style={[s.fieldHint, { color: P.sub }]}>
-                Pick the services this pack goes with — it's sent automatically when a client books them. Leave empty to attach to every booking.
+                {t('providerBookings.infoPack.field.servicesHint')}
               </Text>
               <View style={s.serviceChipsWrap}>
                 {myServices.length === 0 ? (
-                  <Text style={[s.fieldHint, { color: P.sub }]}>No services on your profile yet — the pack will attach to all bookings.</Text>
+                  <Text style={[s.fieldHint, { color: P.sub }]}>{t('providerBookings.infoPack.field.noServices')}</Text>
                 ) : myServices.map((name) => {
                   const selected = selectedServices.includes(name);
                   return (
@@ -561,11 +565,11 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                 })}
               </View>
 
-              <Text style={[s.fieldLabel, { color: P.sub }]}>CONTENT</Text>
+              <Text style={[s.fieldLabel, { color: P.sub }]}>{t('providerBookings.infoPack.field.content')}</Text>
               <View style={[s.inputWrap, s.textAreaWrap, { backgroundColor: P.card, borderColor: P.border }]}>
                 <TextInput
                   style={[s.input, s.textArea, { color: P.text }]}
-                  placeholder={'Aftercare instructions, prep tips, what to expect…'}
+                  placeholder={t('providerBookings.infoPack.field.contentPlaceholder')}
                   placeholderTextColor={P.sub}
                   value={content}
                   onChangeText={setContent}
@@ -575,7 +579,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               </View>
 
               <TouchableOpacity style={[s.saveBtn, { backgroundColor: P.accent }]} onPress={handleSave} activeOpacity={0.85}>
-                <Text style={s.saveBtnText}>Save Info Pack</Text>
+                <Text style={s.saveBtnText}>{t('providerBookings.infoPack.save')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </KeyboardDismissView>
@@ -607,7 +611,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                   {previewing.title}
                 </Text>
                 <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: P.accent, marginBottom: 14 }}>
-                  {previewing.serviceNames.length === 0 ? 'ALL SERVICES' : previewing.serviceNames.join(', ').toUpperCase()}
+                  {previewing.serviceNames.length === 0 ? t('providerBookings.infoPack.allServices').toUpperCase() : previewing.serviceNames.join(', ').toUpperCase()}
                 </Text>
                 <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
                   <Text style={{ fontSize: 15, lineHeight: 23, color: P.text }}>
@@ -619,7 +623,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                   activeOpacity={0.85}
                   onPress={() => setPreviewing(null)}
                 >
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Close</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>{t('common.close')}</Text>
                 </TouchableOpacity>
               </>
             )}

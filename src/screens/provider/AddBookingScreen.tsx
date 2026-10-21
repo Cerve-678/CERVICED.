@@ -42,6 +42,7 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { formatTime12, formatShortDate, dateToYMD, overridesFromDate } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
 import { isDarkColor } from '../../constants/providerThemes';
+import { useTranslation } from '../../i18n';
 
 const WARN = '#E8A13A';
 
@@ -88,6 +89,7 @@ function timeToMinutes(t: string): number {
 export default function AddBookingScreen() {
   const navigation = useNavigation();
   const { showToast, showConfirm, DialogHost } = useAppDialog();
+  const { t, tp } = useTranslation();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const onAccent = isDarkColor(P.accent) ? '#fff' : '#1B2740';
@@ -171,11 +173,11 @@ export default function AddBookingScreen() {
         setAvailabilityOverrides(overrides);
       }
     } catch {
-      showToast('Could not load your clients and services.', 'error');
+      showToast(t('providerBookings.add.toast.loadFailed'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -364,19 +366,19 @@ export default function AddBookingScreen() {
 
   function handleContinue() {
     if (!clientId || !serviceId) {
-      showToast('Choose a client and service first.', 'info');
+      showToast(t('providerBookings.add.toast.chooseFirst'), 'info');
       return;
     }
     if (isTimeAlreadyPassed) {
-      showToast('That time has already passed today. Pick a later time.', 'info');
+      showToast(t('providerBookings.add.toast.timePassed'), 'info');
       return;
     }
     if (!selectedSlotIsValid) {
-      showToast('Pick one of the available times, or switch to Custom time.', 'info');
+      showToast(t('providerBookings.add.toast.pickSlot'), 'info');
       return;
     }
     if (conflictBooking) {
-      showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
+      showToast(t('providerBookings.add.toast.alreadyBooked'), 'info');
       return;
     }
     setPhase('confirm');
@@ -410,7 +412,7 @@ export default function AddBookingScreen() {
         overrideScheduling,
         extraMinutes,
       });
-      showToast('Booking added and the client has been notified.', 'success');
+      showToast(t('providerBookings.add.toast.added'), 'success');
       // AddBooking is presented as a modal (see ProviderHomeNavigator's modal
       // Group) — navigating straight to a card-presented tab route without
       // dismissing first fights the native modal-dismiss transition and can
@@ -434,7 +436,7 @@ export default function AddBookingScreen() {
         goToCalendar();
       }
     } catch (error) {
-      const message = (error instanceof Error ? error.message : 'Could not add this booking.').replace(/^Error:\s*/, '');
+      const message = (error instanceof Error ? error.message : t('providerBookings.add.toast.addFailed')).replace(/^Error:\s*/, '');
 
       // Scheduling-POLICY warning (booking window / minimum notice /
       // provider-blocked date) — not overridden yet, so give the provider
@@ -445,11 +447,11 @@ export default function AddBookingScreen() {
       if (!overrideScheduling && OVERRIDABLE_PATTERN.test(message)) {
         setCreating(false);
         showConfirm(
-          "Couldn't add this booking",
-          `${message} You can proceed anyway if this is intentional.`,
+          t('providerBookings.add.override.title'),
+          t('providerBookings.add.override.body', { message }),
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Proceed anyway', style: 'destructive', onPress: () => submitBooking(true) },
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('providerBookings.add.override.proceed'), style: 'destructive', onPress: () => submitBooking(true) },
           ],
         );
         return;
@@ -475,19 +477,19 @@ export default function AddBookingScreen() {
 
   function handleCreate() {
     if (!clientId || !serviceId) {
-      showToast('Choose a client and service first.', 'info');
+      showToast(t('providerBookings.add.toast.chooseFirst'), 'info');
       return;
     }
     if (isTimeAlreadyPassed) {
-      showToast('That time has already passed today. Go back and pick a later time.', 'info');
+      showToast(t('providerBookings.add.toast.timePassedGoBack'), 'info');
       return;
     }
     if (conflictBooking) {
-      showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
+      showToast(t('providerBookings.add.toast.alreadyBooked'), 'info');
       return;
     }
     if (safetyRequired && !safetyAcknowledged) {
-      showToast('Confirm you’ve told the client the safety information first.', 'info');
+      showToast(t('providerBookings.add.toast.safetyAckFirst'), 'info');
       return;
     }
     // isBlockedDate is deliberately not a client-side hard stop — it's a
@@ -503,15 +505,15 @@ export default function AddBookingScreen() {
         <KeyboardDismissView style={s.keyboardView}>
           <View style={[s.header, { borderBottomColor: P.border }]}>
             {phase === 'confirm' && (
-              <TouchableOpacity style={[s.backBtn, { backgroundColor: P.surface }]} onPress={() => setPhase('details')} accessibilityLabel="Back">
+              <TouchableOpacity style={[s.backBtn, { backgroundColor: P.surface }]} onPress={() => setPhase('details')} accessibilityLabel={t('common.back')}>
                 <Ionicons name="chevron-back" size={20} color={P.sub} />
               </TouchableOpacity>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={[s.title, { color: P.text }]}>{phase === 'details' ? 'Add Booking' : 'Confirm Details'}</Text>
-              <Text style={[s.subtitle, { color: P.sub }]}>{phase === 'details' ? 'For an existing Cerviced client' : 'Review contact info and add notes'}</Text>
+              <Text style={[s.title, { color: P.text }]}>{phase === 'details' ? t('providerBookings.add.title.add') : t('providerBookings.add.title.confirm')}</Text>
+              <Text style={[s.subtitle, { color: P.sub }]}>{phase === 'details' ? t('providerBookings.add.subtitle.add') : t('providerBookings.add.subtitle.confirm')}</Text>
             </View>
-            <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel="Close">
+            <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel={t('common.close')}>
               <Ionicons name="close" size={22} color={P.sub} />
             </TouchableOpacity>
           </View>
@@ -526,7 +528,7 @@ export default function AddBookingScreen() {
                   <View style={s.stepDotWrap}>
                     <View style={[s.stepDot, { borderColor: done || active ? P.accent : P.border }, (done || active) && { backgroundColor: P.accent }]} />
                     <Text style={[s.stepLabel, { color: active ? P.accent : P.sub }, active && { fontWeight: '700' }]}>
-                      {key === 'details' ? 'Details' : 'Confirm'}
+                      {key === 'details' ? t('providerBookings.add.step.details') : t('common.confirm')}
                     </Text>
                   </View>
                 </React.Fragment>
@@ -542,32 +544,32 @@ export default function AddBookingScreen() {
                   long client list doesn't dominate the screen. Search filters
                   the list while picking. ── */}
               <View style={s.sectionHead}>
-                <Text style={[s.label, { color: P.text }]}>Client</Text>
+                <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.client')}</Text>
                 {selectedClient && (
-                  <TouchableOpacity onPress={() => setClientId(null)}><Text style={[s.changeLink, { color: P.accent }]}>Change</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setClientId(null)}><Text style={[s.changeLink, { color: P.accent }]}>{t('common.change')}</Text></TouchableOpacity>
                 )}
               </View>
               {clients.length === 0 ? (
-                <Text style={[s.empty, { color: P.sub }]}>No existing clients yet. Manual bookings are only for clients with a Cerviced account — ask them to sign up, then book them in here.</Text>
+                <Text style={[s.empty, { color: P.sub }]}>{t('providerBookings.add.noClients')}</Text>
               ) : selectedClient ? (
                 <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.accent }]}>
-                  <View><Text style={[s.choiceTitle, { color: P.text }]}>{selectedClient.customer_name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>{selectedClient.customer_email || 'Cerviced client'}</Text></View>
+                  <View><Text style={[s.choiceTitle, { color: P.text }]}>{selectedClient.customer_name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>{selectedClient.customer_email || t('providerBookings.add.cervicedClient')}</Text></View>
                   <Ionicons name="checkmark-circle" size={21} color={P.accent} />
                 </View>
               ) : (
                 <>
                   <View style={[s.searchRow, { backgroundColor: P.surface, borderColor: P.border }]}>
                     <Ionicons name="search" size={15} color={P.sub} />
-                    <TextInput value={clientSearch} onChangeText={setClientSearch} placeholder="Search clients" placeholderTextColor={P.sub} style={[s.searchInput, { color: P.text }]} autoCorrect={false} />
+                    <TextInput value={clientSearch} onChangeText={setClientSearch} placeholder={t('providerBookings.add.searchClients')} placeholderTextColor={P.sub} style={[s.searchInput, { color: P.text }]} autoCorrect={false} />
                     {clientSearch.length > 0 && (
                       <TouchableOpacity onPress={() => setClientSearch('')}><Ionicons name="close-circle" size={16} color={P.sub} /></TouchableOpacity>
                     )}
                   </View>
                   {filteredClients.length === 0 ? (
-                    <Text style={[s.empty, { color: P.sub }]}>No clients match “{clientSearch.trim()}”.</Text>
+                    <Text style={[s.empty, { color: P.sub }]}>{t('providerBookings.add.noClientsMatch', { query: clientSearch.trim() })}</Text>
                   ) : filteredClients.map(client => (
                     <TouchableOpacity key={client.user_id} onPress={() => { setClientId(client.user_id); setClientSearch(''); }} style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
-                      <View><Text style={[s.choiceTitle, { color: P.text }]}>{client.customer_name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>{client.customer_email || 'Cerviced client'}</Text></View>
+                      <View><Text style={[s.choiceTitle, { color: P.text }]}>{client.customer_name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>{client.customer_email || t('providerBookings.add.cervicedClient')}</Text></View>
                     </TouchableOpacity>
                   ))}
                 </>
@@ -582,14 +584,14 @@ export default function AddBookingScreen() {
               {clientId && (
               <>
               <View style={s.sectionHead}>
-                <Text style={[s.label, { color: P.text }]}>Service</Text>
+                <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.service')}</Text>
                 {selectedService && (
-                  <TouchableOpacity onPress={() => pickService('')}><Text style={[s.changeLink, { color: P.accent }]}>Change</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => pickService('')}><Text style={[s.changeLink, { color: P.accent }]}>{t('common.change')}</Text></TouchableOpacity>
                 )}
               </View>
               {selectedService ? (
                 <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.accent }]}>
-                  <View><Text style={[s.choiceTitle, { color: P.text }]}>{selectedService.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>£{Number(selectedService.price).toFixed(2)} · {selectedService.duration_minutes} min</Text></View>
+                  <View><Text style={[s.choiceTitle, { color: P.text }]}>{selectedService.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>£{Number(selectedService.price).toFixed(2)} · {t('providerBookings.add.minutes', { minutes: selectedService.duration_minutes })}</Text></View>
                   <Ionicons name="checkmark-circle" size={21} color={P.accent} />
                 </View>
               ) : (
@@ -597,18 +599,18 @@ export default function AddBookingScreen() {
                   {services.length > SERVICE_SEARCH_THRESHOLD && (
                     <View style={[s.searchRow, { backgroundColor: P.surface, borderColor: P.border }]}>
                       <Ionicons name="search" size={15} color={P.sub} />
-                      <TextInput value={serviceSearch} onChangeText={setServiceSearch} placeholder="Search services" placeholderTextColor={P.sub} style={[s.searchInput, { color: P.text }]} autoCorrect={false} />
+                      <TextInput value={serviceSearch} onChangeText={setServiceSearch} placeholder={t('providerBookings.add.searchServices')} placeholderTextColor={P.sub} style={[s.searchInput, { color: P.text }]} autoCorrect={false} />
                       {serviceSearch.length > 0 && (
                         <TouchableOpacity onPress={() => setServiceSearch('')}><Ionicons name="close-circle" size={16} color={P.sub} /></TouchableOpacity>
                       )}
                     </View>
                   )}
                   {filteredServices.length === 0 ? (
-                    <Text style={[s.empty, { color: P.sub }]}>No services match “{serviceSearch.trim()}”.</Text>
+                    <Text style={[s.empty, { color: P.sub }]}>{t('providerBookings.add.noServicesMatch', { query: serviceSearch.trim() })}</Text>
                   ) : filteredServices.map(service => (
                     <TouchableOpacity key={service.id} onPress={() => pickService(service.id)} style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
-                      <View><Text style={[s.choiceTitle, { color: P.text }]}>{service.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>£{Number(service.price).toFixed(2)} · {service.duration_minutes} min</Text></View>
-                      {(service.add_ons?.length ?? 0) > 0 && <Text style={[s.choiceMeta, { color: P.sub }]}>{service.add_ons!.length} add-on{service.add_ons!.length !== 1 ? 's' : ''}</Text>}
+                      <View><Text style={[s.choiceTitle, { color: P.text }]}>{service.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>£{Number(service.price).toFixed(2)} · {t('providerBookings.add.minutes', { minutes: service.duration_minutes })}</Text></View>
+                      {(service.add_ons?.length ?? 0) > 0 && <Text style={[s.choiceMeta, { color: P.sub }]}>{tp('providerBookings.add.addOnCount', service.add_ons!.length)}</Text>}
                     </TouchableOpacity>
                   ))}
                 </>
@@ -618,7 +620,7 @@ export default function AddBookingScreen() {
                   above is what makes room for them without overloading. */}
               {selectedService && serviceAddOns.length > 0 && (
                 <>
-                  <Text style={[s.label, { color: P.text }]}>Add-ons</Text>
+                  <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.addOns')}</Text>
                   {serviceAddOns.map(addOn => {
                     const on = selectedAddOnIds.includes(addOn.id);
                     return (
@@ -637,14 +639,14 @@ export default function AddBookingScreen() {
                   what slots/conflicts even look like. */}
               {selectedService && (
                 <>
-                  <Text style={[s.label, { color: P.text }]}>Extra time</Text>
+                  <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.extraTime')}</Text>
                   <Text style={[s.choiceMeta, { color: P.sub, marginTop: -4, marginBottom: 6 }]}>
-                    Block out more time for this booking. Doesn’t change price.
+                    {t('providerBookings.add.extraTimeHint')}
                   </Text>
                   <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.border, justifyContent: 'space-between' }]}>
                     <Text style={[s.choiceTitle, { color: P.text }]}>
-                      {extraMinutes === 0 ? 'None' : `+${extraMinutes} min`}
-                      {' · '}{(selectedService.duration_minutes + extraMinutes)} min total
+                      {extraMinutes === 0 ? t('common.none') : t('providerBookings.add.extraMinutes', { minutes: extraMinutes })}
+                      {' · '}{t('providerBookings.add.totalMinutes', { minutes: selectedService.duration_minutes + extraMinutes })}
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                       <TouchableOpacity
@@ -676,7 +678,7 @@ export default function AddBookingScreen() {
                   service, offering a slot that later turns out to conflict. */}
               {selectedService && (
               <>
-              <Text style={[s.label, { color: P.text }]}>When</Text>
+              <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.when')}</Text>
               {/* Date is always chosen up top — both the slots list and the
                   custom-time picker operate on this date. */}
               <TouchableOpacity onPress={() => setDatePickerVisible(true)} style={[s.whenBtn, { backgroundColor: P.surface }]}>
@@ -689,7 +691,7 @@ export default function AddBookingScreen() {
                   below with an offer to move that booking). */}
               <View style={[s.whenTabs, { backgroundColor: P.surface }]}>
                 <SlidingTabs
-                  tabs={[{ key: 'slots', label: 'Available' }, { key: 'custom', label: 'Custom time' }]}
+                  tabs={[{ key: 'slots', label: t('providerBookings.add.tab.available') }, { key: 'custom', label: t('providerBookings.add.tab.custom') }]}
                   activeKey={whenMode}
                   onPress={k => setWhenMode(k as 'slots' | 'custom')}
                   accentColor={P.accent}
@@ -716,7 +718,7 @@ export default function AddBookingScreen() {
                     })}
                   </View>
                 ) : (
-                  <Text style={[s.slotsEmpty, { color: P.sub }]}>No free slots that day — use “Custom time” to squeeze one in.</Text>
+                  <Text style={[s.slotsEmpty, { color: P.sub }]}>{t('providerBookings.add.noSlots')}</Text>
                 )
               ) : (
                 <>
@@ -735,11 +737,9 @@ export default function AddBookingScreen() {
                     <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
                       <Ionicons name="warning-outline" size={16} color={WARN} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[s.conflictTitle, { color: P.text }]}>This day is marked blocked</Text>
+                        <Text style={[s.conflictTitle, { color: P.text }]}>{t('providerBookings.add.blocked.title')}</Text>
                         <Text style={[s.conflictSub, { color: P.sub }]}>
-                          {blockedDates.find(b => b.blocked_date === dateYMD)?.reason
-                            || dayOverride?.reason
-                            || 'You’ve marked this date unavailable.'} You can still add this booking as a squeeze-in — you'll be asked to confirm.
+                          {t('providerBookings.add.blocked.body', { reason: blockedDates.find(b => b.blocked_date === dateYMD)?.reason || dayOverride?.reason || t('providerBookings.add.blocked.defaultReason') })}
                         </Text>
                       </View>
                     </View>
@@ -757,9 +757,9 @@ export default function AddBookingScreen() {
                     <View style={[s.conflict, { borderColor: P.accent + '55', backgroundColor: P.accent + '14' }]}>
                       <Ionicons name="information-circle-outline" size={16} color={P.accent} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[s.conflictTitle, { color: P.text }]}>Outside usual working hours</Text>
+                        <Text style={[s.conflictTitle, { color: P.text }]}>{t('providerBookings.add.outside.title')}</Text>
                         <Text style={[s.conflictSub, { color: P.sub }]}>
-                          This time is outside your normal schedule for this day — the booking will still go through as a squeeze-in.
+                          {t('providerBookings.add.outside.body')}
                         </Text>
                       </View>
                     </View>
@@ -776,9 +776,9 @@ export default function AddBookingScreen() {
                 <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
                   <Ionicons name="alert-circle-outline" size={16} color={WARN} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.conflictTitle, { color: P.text }]}>That time has already passed today</Text>
+                    <Text style={[s.conflictTitle, { color: P.text }]}>{t('providerBookings.add.passed.title')}</Text>
                     <Text style={[s.conflictSub, { color: P.sub }]}>
-                      Pick a later time today, or a different date.
+                      {t('providerBookings.add.passed.body')}
                     </Text>
                   </View>
                 </View>
@@ -793,9 +793,9 @@ export default function AddBookingScreen() {
                 <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
                   <Ionicons name="warning-outline" size={16} color={WARN} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.conflictTitle, { color: P.text }]}>This time is already booked</Text>
+                    <Text style={[s.conflictTitle, { color: P.text }]}>{t('providerBookings.add.conflict.title')}</Text>
                     <Text style={[s.conflictSub, { color: P.sub }]}>
-                      {conflictBooking.service_name_snapshot} at {formatTime12(conflictBooking.booking_time)}. You can't double-book a slot — move that appointment first, or pick another time.
+                      {t('providerBookings.add.conflict.body', { service: conflictBooking.service_name_snapshot, time: formatTime12(conflictBooking.booking_time) })}
                     </Text>
                     <TouchableOpacity
                       onPress={() => {
@@ -838,7 +838,7 @@ export default function AddBookingScreen() {
                       style={[s.conflictBtn, { borderColor: P.accent }]}
                     >
                       <Ionicons name="calendar-outline" size={13} color={P.accent} />
-                      <Text style={[s.conflictBtnText, { color: P.accent }]}>Reschedule that booking</Text>
+                      <Text style={[s.conflictBtnText, { color: P.accent }]}>{t('providerBookings.add.conflict.reschedule')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -847,7 +847,7 @@ export default function AddBookingScreen() {
               )}
 
               <TouchableOpacity onPress={handleContinue} disabled={!canContinue} style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 12 }, !canContinue && s.saveBtnDim]}>
-                <Text style={[s.saveTxt, { color: onAccent }]}>Continue</Text>
+                <Text style={[s.saveTxt, { color: onAccent }]}>{t('common.continue')}</Text>
               </TouchableOpacity>
             </ScrollView>
           ) : (
@@ -855,16 +855,16 @@ export default function AddBookingScreen() {
               {/* ── Confirm ── the transition target once client/service/when are
                   locked in: review who's being booked and what for, then add
                   any notes before actually creating the booking. ── */}
-              <Text style={[s.label, { color: P.text, marginTop: 0 }]}>Client</Text>
+              <Text style={[s.label, { color: P.text, marginTop: 0 }]}>{t('providerBookings.add.label.client')}</Text>
               <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.choiceTitle, { color: P.text }]}>{selectedClient?.customer_name}</Text>
-                  <Text style={[s.choiceMeta, { color: P.sub }]}>{selectedClient?.customer_email || 'Cerviced client'}</Text>
-                  <Text style={[s.choiceMeta, { color: P.sub }]}>{clientPhone || 'No phone number on file'}</Text>
+                  <Text style={[s.choiceMeta, { color: P.sub }]}>{selectedClient?.customer_email || t('providerBookings.add.cervicedClient')}</Text>
+                  <Text style={[s.choiceMeta, { color: P.sub }]}>{clientPhone || t('providerBookings.add.noPhone')}</Text>
                 </View>
               </View>
 
-              <Text style={[s.label, { color: P.text }]}>Appointment</Text>
+              <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.appointment')}</Text>
               <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.choiceTitle, { color: P.text }]}>{selectedService?.name}</Text>
@@ -873,12 +873,12 @@ export default function AddBookingScreen() {
                   </Text>
                   {selectedAddOnIds.length > 0 && (
                     <Text style={[s.choiceMeta, { color: P.sub }]}>
-                      {selectedAddOnIds.length} add-on{selectedAddOnIds.length !== 1 ? 's' : ''}
+                      {tp('providerBookings.add.addOnCount', selectedAddOnIds.length)}
                     </Text>
                   )}
                   {extraMinutes > 0 && (
                     <Text style={[s.choiceMeta, { color: P.sub }]}>
-                      +{extraMinutes} min extra time blocked out
+                      {t('providerBookings.add.extraBlockedOut', { minutes: extraMinutes })}
                     </Text>
                   )}
                 </View>
@@ -886,13 +886,13 @@ export default function AddBookingScreen() {
 
               {safetyRequired && (
                 <>
-                  <Text style={[s.label, { color: P.text }]}>Safety information</Text>
+                  <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.safety')}</Text>
                   <View style={[s.safetyBox, { backgroundColor: P.surface, borderColor: P.border }]}>
                     {!!selectedService?.patch_test_required && (
-                      <Text style={[s.safetyLine, { color: P.sub }]}>• The provider requires a patch test before this treatment</Text>
+                      <Text style={[s.safetyLine, { color: P.sub }]}>{t('providerBookings.add.safety.patchTest')}</Text>
                     )}
                     {selectedService?.is_pregnancy_safe === false && (
-                      <Text style={[s.safetyLine, { color: P.sub }]}>• The provider has flagged this treatment as not recommended during pregnancy</Text>
+                      <Text style={[s.safetyLine, { color: P.sub }]}>{t('providerBookings.add.safety.pregnancy')}</Text>
                     )}
                   </View>
                   <TouchableOpacity
@@ -901,16 +901,16 @@ export default function AddBookingScreen() {
                     activeOpacity={0.75}
                   >
                     <Ionicons name={safetyAcknowledged ? 'checkbox' : 'square-outline'} size={20} color={safetyAcknowledged ? P.accent : P.sub} />
-                    <Text style={[s.ackText, { color: P.text }]}>I've told the client this treatment's safety information above</Text>
+                    <Text style={[s.ackText, { color: P.text }]}>{t('providerBookings.add.safety.ack')}</Text>
                   </TouchableOpacity>
                 </>
               )}
 
-              <Text style={[s.label, { color: P.text }]}>Notes</Text>
-              <TextInput value={notes} onChangeText={setNotes} placeholder="Notes (optional)" placeholderTextColor={P.sub} style={[s.notesInput, { backgroundColor: P.surface, color: P.text }]} multiline />
+              <Text style={[s.label, { color: P.text }]}>{t('providerBookings.add.label.notes')}</Text>
+              <TextInput value={notes} onChangeText={setNotes} placeholder={t('providerBookings.add.notesPlaceholder')} placeholderTextColor={P.sub} style={[s.notesInput, { backgroundColor: P.surface, color: P.text }]} multiline />
 
               <TouchableOpacity onPress={handleCreate} disabled={creating || !canSubmit} style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 12 }, (!canSubmit || creating) && s.saveBtnDim]}>
-                {creating ? <ActivityIndicator color={onAccent} /> : <Text style={[s.saveTxt, { color: onAccent }]}>Add Booking</Text>}
+                {creating ? <ActivityIndicator color={onAccent} /> : <Text style={[s.saveTxt, { color: onAccent }]}>{t('providerBookings.add.title.add')}</Text>}
               </TouchableOpacity>
             </ScrollView>
           )}
@@ -922,9 +922,9 @@ export default function AddBookingScreen() {
                   <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setDatePickerVisible(false)} />
                   <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
                     <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
-                      <Text style={[s.pickerLabel, { color: P.text }]}>Select Date</Text>
+                      <Text style={[s.pickerLabel, { color: P.text }]}>{t('providerBookings.add.selectDate')}</Text>
                       <TouchableOpacity onPress={() => setDatePickerVisible(false)}>
-                        <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                        <Text style={[s.pickerDone, { color: P.accent }]}>{t('common.done')}</Text>
                       </TouchableOpacity>
                     </View>
                     <DateTimePicker mode="date" value={date} onChange={(_, d) => { if (d) setDate(d); }} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} minimumDate={new Date()} style={{ width: '100%' }} />
@@ -944,9 +944,9 @@ export default function AddBookingScreen() {
                   <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setTimePickerVisible(false)} />
                   <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
                     <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
-                      <Text style={[s.pickerLabel, { color: P.text }]}>Select Time</Text>
+                      <Text style={[s.pickerLabel, { color: P.text }]}>{t('providerBookings.add.selectTime')}</Text>
                       <TouchableOpacity onPress={() => setTimePickerVisible(false)}>
-                        <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                        <Text style={[s.pickerDone, { color: P.accent }]}>{t('common.done')}</Text>
                       </TouchableOpacity>
                     </View>
                     <DateTimePicker mode="time" value={time} onChange={(_, d) => { if (d) setTime(d); }} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} style={{ width: '100%' }} />

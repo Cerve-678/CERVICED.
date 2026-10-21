@@ -1,5 +1,7 @@
 import { BookingStatus } from '../types/booking';
 import { to24HourTime } from './dateUtils';
+import { tr } from '../i18n/translate';
+import type { TranslationKey } from '../i18n/types';
 
 /**
  * Everything wrong with a booking that a provider can only see by comparing
@@ -41,6 +43,24 @@ export interface ScheduleIssue {
   kind: ScheduleIssueKind;
   /** Short provider-facing wording, ready to render. */
   label: string;
+}
+
+/** The catalog key for each kind's provider-facing wording. Screens that hold
+ *  the issues in a memo translate by kind at render, so a language change
+ *  shows up without recomputing the issues. */
+export const SCHEDULE_ISSUE_LABEL_KEYS: Readonly<Record<ScheduleIssueKind, TranslationKey>> = {
+  overlap: 'providerBookings.scheduleIssue.overlap',
+  time_unavailable: 'providerBookings.scheduleIssue.timeUnavailable',
+  not_working: 'providerBookings.scheduleIssue.notWorking',
+  blocked_date: 'providerBookings.scheduleIssue.blockedDate',
+  unconfirmed_past_start: 'providerBookings.scheduleIssue.unconfirmedPastStart',
+  needs_closing_out: 'providerBookings.scheduleIssue.needsClosingOut',
+  missing_end_time: 'providerBookings.scheduleIssue.missingEndTime',
+  emergency_request: 'providerBookings.scheduleIssue.emergencyRequest',
+};
+
+function issue(kind: ScheduleIssueKind): ScheduleIssue {
+  return { kind, label: tr(SCHEDULE_ISSUE_LABEL_KEYS[kind]) };
 }
 
 /** The minimum a booking has to expose to be checked. */
@@ -194,7 +214,7 @@ function resolveSpan(booking: ScheduleCheckBooking): Span | null {
  * slot and said yes to being asked.
  */
 function emergencyIssue(): ScheduleIssue {
-  return { kind: 'emergency_request', label: 'Outside your hours by request' };
+  return issue('emergency_request');
 }
 
 /**
@@ -236,10 +256,7 @@ export function findScheduleIssues(
     if (!span) continue;
 
     if (span.assumedLength) {
-      add(booking.id, {
-        kind: 'missing_end_time',
-        label: 'No end time saved — length assumed',
-      });
+      add(booking.id, issue('missing_end_time'));
     }
 
     // A blocked date is reported on its own. Reporting "not working" or
@@ -248,7 +265,7 @@ export function findScheduleIssues(
     if (blocked.has(booking.bookingDate)) {
       add(booking.id, booking.isEmergencyRequest
         ? emergencyIssue()
-        : { kind: 'blocked_date', label: "On a date you've blocked off" });
+        : issue('blocked_date'));
     } else {
       const windows = context.windowsByDate.get(booking.bookingDate);
       // Absent (rather than empty) means this date was never resolved, so
@@ -257,7 +274,7 @@ export function findScheduleIssues(
         if (windows.length === 0) {
           add(booking.id, booking.isEmergencyRequest
             ? emergencyIssue()
-            : { kind: 'not_working', label: "On a day you're not working" });
+            : issue('not_working'));
         } else {
           // Must fit ENTIRELY inside ONE window. Spanning the gap between two
           // windows is the break the provider deliberately left themselves.
@@ -269,10 +286,7 @@ export function findScheduleIssues(
           if (!fits) {
             add(booking.id, booking.isEmergencyRequest
               ? emergencyIssue()
-              : {
-                  kind: 'time_unavailable',
-                  label: 'This time is no longer available in your schedule',
-                });
+              : issue('time_unavailable'));
           }
         }
       }
@@ -283,10 +297,7 @@ export function findScheduleIssues(
       const startsAt = new Date(y, m - 1, d, Math.floor(span.start / 60), span.start % 60, 0, 0);
       const endsAt = new Date(y, m - 1, d, Math.floor(span.end / 60), span.end % 60, 0, 0);
       if (booking.status === BookingStatus.PENDING && startsAt.getTime() <= nowMs) {
-        add(booking.id, {
-          kind: 'unconfirmed_past_start',
-          label: 'Still unconfirmed and its start time has passed',
-        });
+        add(booking.id, issue('unconfirmed_past_start'));
       }
       // Confirmed/in-progress work that finished LONG ago and still hasn't
       // closed out. The grace period matters: process_auto_complete_bookings()
@@ -299,10 +310,7 @@ export function findScheduleIssues(
         (booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS) &&
         endsAt.getTime() + STALE_COMPLETION_GRACE_MS <= nowMs
       ) {
-        add(booking.id, {
-          kind: 'needs_closing_out',
-          label: 'Finished a while ago and still open — mark it complete or a no-show',
-        });
+        add(booking.id, issue('needs_closing_out'));
       }
     }
 
@@ -328,7 +336,7 @@ export function findScheduleIssues(
       }
     }
     for (const id of overlapping) {
-      add(id, { kind: 'overlap', label: 'Overlaps another booking' });
+      add(id, issue('overlap'));
     }
   }
 

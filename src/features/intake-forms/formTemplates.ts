@@ -1,5 +1,6 @@
 import type { IntakeFormQuestion } from '../../services/databaseService';
 import type { ServiceCategory } from '../../types/database';
+import type { TranslationKey } from '../../i18n/types';
 
 // ── Form templates ───────────────────────────────────────────────────────────
 // Templates follow the provider's service type (HAIR, NAILS, …), not whatever
@@ -22,6 +23,41 @@ export interface FormTemplate {
    *  templates inside their own type. Never a reason to offer a template. */
   keywords:  string[];
   questions: Omit<IntakeFormQuestion, 'id'>[];
+}
+
+// Display copy for each template's picker card, by template id. The English
+// `label` / `subtitle` on the template stay the source (and the label still
+// seeds a new form's title — a provider's own, editable content). The QUESTION
+// text is never translated: it is copied into the provider's saved form as
+// their content, and its health-safety wording is held in English anyway.
+// Patch-test, medical-history and Terms keys are held in English too.
+const TEMPLATE_TEXT_KEYS: Readonly<Record<string, { label: TranslationKey; subtitle: TranslationKey }>> = {
+  hair:   { label: 'providerBookings.forms.template.hair.label',   subtitle: 'providerBookings.forms.template.hair.subtitle' },
+  nails:  { label: 'providerBookings.forms.template.nails.label',  subtitle: 'providerBookings.forms.template.nails.subtitle' },
+  lashes: { label: 'providerBookings.forms.template.lashes.label', subtitle: 'providerBookings.forms.template.lashes.subtitle' },
+  brows:  { label: 'providerBookings.forms.template.brows.label',  subtitle: 'providerBookings.forms.template.brows.subtitle' },
+  skin:   { label: 'providerBookings.forms.template.skin.label',   subtitle: 'providerBookings.forms.template.skin.subtitle' },
+  mua:    { label: 'providerBookings.forms.template.mua.label',    subtitle: 'providerBookings.forms.template.mua.subtitle' },
+  'patchtest-hair':   { label: 'providerBookings.forms.template.patchTest.label', subtitle: 'providerBookings.forms.template.patchTestHair.subtitle' },
+  'patchtest-lashes': { label: 'providerBookings.forms.template.patchTest.label', subtitle: 'providerBookings.forms.template.patchTestLashes.subtitle' },
+  'patchtest-brows':  { label: 'providerBookings.forms.template.patchTest.label', subtitle: 'providerBookings.forms.template.patchTestBrows.subtitle' },
+  'patchtest-skin':   { label: 'providerBookings.forms.template.patchTest.label', subtitle: 'providerBookings.forms.template.patchTestSkin.subtitle' },
+  'medicalhistory-skin': { label: 'providerBookings.forms.template.medicalHistory.label', subtitle: 'providerBookings.forms.template.medicalHistory.subtitle' },
+  general: { label: 'providerBookings.forms.template.general.label', subtitle: 'providerBookings.forms.template.general.subtitle' },
+  'policy-agreement': { label: 'providerBookings.forms.template.policy.label', subtitle: 'providerBookings.forms.template.policy.subtitle' },
+  'terms-and-conditions': { label: 'providerBookings.forms.template.terms.label', subtitle: 'providerBookings.forms.template.terms.subtitle' },
+};
+
+/** A template's name in the app language (its English label if unmapped). */
+export function templateLabel(tpl: FormTemplate, t: (key: TranslationKey) => string): string {
+  const keys = TEMPLATE_TEXT_KEYS[tpl.id];
+  return keys ? t(keys.label) : tpl.label;
+}
+
+/** A template's one-line description in the app language. */
+export function templateSubtitle(tpl: FormTemplate, t: (key: TranslationKey) => string): string {
+  const keys = TEMPLATE_TEXT_KEYS[tpl.id];
+  return keys ? t(keys.subtitle) : tpl.subtitle;
 }
 
 const TEMPLATES: FormTemplate[] = [
