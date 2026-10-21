@@ -33,11 +33,12 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
+import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
@@ -52,6 +53,10 @@ import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { useAppDialog } from '../../components/AppDialog';
 import { getRescheduleBlock, getStaleRequestBlock, type OpenRequestStatus } from '../../utils/rescheduleBlockedReason';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+
+const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 // ==================== TYPES ====================
 
@@ -237,6 +242,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   );
   const { user } = useAuth();
   const { addToCart } = useCart();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const {
     upcomingBookings,
@@ -759,11 +765,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [selectedBooking, rating, reviewText, user]);
 
-  // Tips are stored on the booking's review row (reviews.tip_amount), which
-  // requires a review to exist first — setBookingTip returns false rather
-  // than silently dropping the tip when there's nothing to attach it to.
-  // This previously only set local component state (tippedBookings), so the
-  // tip was discarded on unmount and the provider never saw it.
+  // A tip is a distinct Stripe payment, not a number attached to a review.
   const handleTipSubmit = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedBooking || tipAmount <= 0) {
@@ -773,16 +775,23 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     setIsLoading(true);
     try {
-      const attached = await setBookingTip(selectedBooking.id, tipAmount);
-      if (!attached) {
-        setIsLoading(false);
-        Alert.alert('Rate First', 'Tips are added to your review, so please rate this appointment before leaving a tip.');
-        return;
+      const sheet = await startBookingTipPayment(selectedBooking.id, Math.round(tipAmount * 100));
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Cerviced', returnURL: 'cerviced://stripe-redirect',
+        customerId: sheet.customerId, customerEphemeralKeySecret: sheet.ephemeralKeySecret,
+        paymentIntentClientSecret: sheet.clientSecret, appearance: buildPaymentSheetAppearance(P, P.text),
+      });
+      if (initError) throw new Error(initError.message || 'Could not open tip payment.');
+      const { error: paymentError } = await presentPaymentSheet();
+      if (paymentError) {
+        if (paymentError.code === 'Canceled') return;
+        throw new Error(paymentError.message || 'Your tip did not go through.');
       }
+      await confirmBookingTipPayment(sheet.tipId);
 
       setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
       setShowTipModal(false);
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been added to your review for ${selectedBooking.providerName}.`);
+      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been paid to ${selectedBooking.providerName}.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -792,7 +801,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBooking, tipAmount]);
+  }, [selectedBooking, tipAmount, initPaymentSheet, presentPaymentSheet, P]);
 
   const retryLoadBookings = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
