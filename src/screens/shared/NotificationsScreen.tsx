@@ -70,7 +70,8 @@ interface Notification {
       | 'info_pack_received' | 'intake_form_completed' | 'address_released'
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
       | 'schedule_fully_booked' | 'points_earned'
-      | 'maintenance_due'    | 'aftercare_available';
+      | 'maintenance_due'    | 'aftercare_available'
+      | 'provider_saved';
   title: string;
   message: string;
   timestamp: string;
@@ -169,11 +170,13 @@ const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { textStyles } = useFont();
-  const { user, hatState } = useAuth();
+  const { user, hatState, myBookingMode } = useAuth();
   const activeMode = hatState.active;
   const isProvider = activeMode === 'provider';
   const isProviderRef = useRef(false);
   isProviderRef.current = isProvider;
+  const myBookingModeRef = useRef(myBookingMode);
+  myBookingModeRef.current = myBookingMode;
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -747,13 +750,15 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
-    } else if (notification.type === 'points_earned') {
-      // Loyalty points earned — open the Rewards screen, which lives in the
-      // client Profile tab's stack. Client-only (already guarded above via
-      // CLIENT_ONLY_TYPES), so no provider branch is needed. Same dismiss-then-
-      // navigate-via-root-ref pattern as the other client deep-links.
+    } else if (notification.type === 'provider_saved') {
+      // The daily saves count. Both analytics screens show saves; a link-only
+      // pro's lives on Home, a full provider's on the Profile tab.
       defer(() => {
-        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+        if (myBookingModeRef.current === 'external') {
+          navigateProviderHome('LinkOnlyAnalytics');
+        } else {
+          dismissThenNavigate(() => navigateNested('Profile', 'Analytics'));
+        }
       }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
@@ -826,7 +831,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available'].includes(type)) return P.accentText;
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved'].includes(type)) return P.accentText;
     return '#FF9800';
   };
 
@@ -909,6 +914,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'provider_saved':
+        return 'View Analytics';
       case 'points_earned':
         return 'View Points';
       case 'maintenance_due':
@@ -1105,7 +1112,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {/* ✅ Filter Tabs */}
         <View style={styles.filterContainer}>
           <SlidingTabs
-            tabs={(isProvider
+            tabs={(isProvider && myBookingMode === 'external'
+              // Link-only: no CERVICED bookings and no reviews, so those two
+              // tabs would always be empty.
+              ? [
+                  { key: 'all', label: 'All' },
+                  { key: 'unread', label: 'Unread', count: unreadCount },
+                ]
+              : isProvider
               ? [
                   { key: 'all', label: 'All' },
                   { key: 'unread', label: 'Unread', count: unreadCount },

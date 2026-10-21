@@ -192,6 +192,7 @@ const PROVIDER_PREF_KEY_BY_TYPE: Record<string, string> = {
   review_received: 'providerReviews',
   daily_recap: 'providerDailyRecap',
   schedule_fully_booked: 'providerFullyBooked',
+  provider_saved: 'providerSaves',
 };
 
 // Must match DEFAULT_NOTIF_PREFS and DEFAULT_PROVIDER_NOTIF_PREFS in databaseService.ts.
@@ -212,6 +213,7 @@ const DEFAULT_PREFS: Record<string, boolean> = {
   providerReviews: true,
   providerDailyRecap: true,
   providerFullyBooked: true,
+  providerSaves: true,
 };
 
 /**

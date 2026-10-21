@@ -449,7 +449,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="badge" title={t('providerAccount.account.info.title')} subtitle={t('providerAccount.account.info.sub')} onPress={() => navigation.navigate('AccountInfo')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t('providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
+              <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.notifications.sub' : 'providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
             </View>
 
             {/* ── Accessibility & Support ─────────────────────────────────── */}
