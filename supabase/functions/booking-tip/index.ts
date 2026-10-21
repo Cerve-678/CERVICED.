@@ -37,17 +37,43 @@ Deno.serve(async (req) => {
       const { data, error } = await admin.from('booking_tips').insert({ booking_id: booking.id, provider_id: provider.id, client_user_id: user.id, amount_pence: body.amountPence }).select('id, status, amount_pence, payment_intent_id').single();
       if (error) throw error;
       tip = data;
-    } else if (tip.amount_pence !== body.amountPence || tip.status === 'failed') {
-      const { data, error } = await admin.from('booking_tips').update({ amount_pence: body.amountPence, status: 'pending', payment_intent_id: null, failure_reason: null }).eq('id', tip.id).eq('status', tip.status).select('id, status, amount_pence, payment_intent_id').single();
+    }
+    const previousIntentId: string | null = tip.payment_intent_id;
+    let intent = previousIntentId ? await stripe.paymentIntents.retrieve(previousIntentId) : null;
+    if (intent?.status === 'succeeded') {
+      // Paid but not yet recorded (webhook still in flight): record it, never charge twice.
+      await recordTipPaid(admin, stripe, tip.id, intent.id);
+      return json({ error: 'This appointment has already been tipped.' }, 409);
+    }
+    if (intent?.status === 'processing') return json({ error: 'Your last tip is still processing.' }, 409);
+    if (tip.amount_pence !== body.amountPence || tip.status === 'failed' || (intent && intent.status !== 'canceled' && intent.amount !== body.amountPence)) {
+      // A new amount must never leave the old intent payable: recordTipPaid
+      // only accepts an intent whose amount matches the ledger, so paying a
+      // stale one would take the money without ever recording or paying it out.
+      // Stripe first, ledger second, so a failed write heals on the next tap.
+      if (intent && (intent.status === 'requires_payment_method' || intent.status === 'requires_confirmation')) {
+        if (intent.amount !== body.amountPence) intent = await stripe.paymentIntents.update(intent.id, { amount: body.amountPence });
+      } else if (intent && intent.status !== 'canceled') {
+        await stripe.paymentIntents.cancel(intent.id);
+        intent = null;
+      }
+      const { data, error } = await admin.from('booking_tips').update({ amount_pence: body.amountPence, status: 'pending', failure_reason: null }).eq('id', tip.id).eq('status', tip.status).select('id, status, amount_pence, payment_intent_id').single();
       if (error) throw error;
       tip = data;
     }
-    let intent = tip.payment_intent_id ? await stripe.paymentIntents.retrieve(tip.payment_intent_id) : null;
     const customerId = await getOrCreateStripeCustomer(admin, stripe, user);
     if (!intent || intent.status === 'canceled') {
-      intent = await stripe.paymentIntents.create({ amount: tip.amount_pence, currency: 'gbp', customer: customerId, payment_method_types: ['card'], metadata: { booking_tip_id: tip.id, booking_id: booking.id, provider_id: provider.id, user_id: user.id } }, { idempotencyKey: `booking_tip_${tip.id}` });
-      const { error } = await admin.from('booking_tips').update({ payment_intent_id: intent.id }).eq('id', tip.id).is('payment_intent_id', null);
+      // The key names the intent being replaced, so a retry of the same
+      // attempt dedupes but a replacement for a cancelled one is a new request.
+      intent = await stripe.paymentIntents.create({ amount: tip.amount_pence, currency: 'gbp', customer: customerId, payment_method_types: ['card'], metadata: { booking_tip_id: tip.id, booking_id: booking.id, provider_id: provider.id, user_id: user.id } }, { idempotencyKey: `booking_tip_${tip.id}_${previousIntentId ?? 'first'}_${tip.amount_pence}` });
+      const swap = admin.from('booking_tips').update({ payment_intent_id: intent.id }).eq('id', tip.id);
+      const { data: swapped, error } = await (previousIntentId ? swap.eq('payment_intent_id', previousIntentId) : swap.is('payment_intent_id', null)).select('id');
       if (error) throw error;
+      if (!swapped?.length) {
+        // Another tap recorded a different intent first. Never hand out one the ledger doesn't know.
+        await stripe.paymentIntents.cancel(intent.id).catch(() => {});
+        return json({ error: 'Please try your tip again.' }, 409);
+      }
     }
     if (!intent.client_secret) throw new Error('Tip payment could not be started');
     const ephemeral = await stripe.ephemeralKeys.create({ customer: customerId }, { apiVersion: '2024-12-18.acacia' });
