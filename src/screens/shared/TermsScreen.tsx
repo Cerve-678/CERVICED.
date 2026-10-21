@@ -83,7 +83,7 @@ const SECTIONS = [
       'Prices are in pounds sterling and are set by each provider. The total you pay in the app, including any deposit and Cerviced\'s service fee, is shown before you pay.',
       'You can pay in the app by card, Apple Pay, Google Pay or PayPal. Payments are processed securely by Stripe, and Cerviced never sees or stores your full card number or your PayPal login. Stripe\'s own terms also apply, and PayPal\'s terms apply when you pay with PayPal. If a provider has a late arrival or no-show fee, that booking is paid by card, because the fee may be charged to it after the appointment. If a provider asks you to save your card for an agreed fee, Stripe stores it, not us.',
       'If a price is clearly wrong because of a mistake, for example a treatment listed at a fraction of its usual price, we or the provider may cancel the booking and refund you in full.',
-      'After a completed appointment you can choose to tip the provider in the app. A tip is optional and is a separate card payment. It goes to the provider, less the card processing fee, and Cerviced keeps none of it.',
+      'After a completed appointment you can choose to tip the provider in the app. A tip is optional and is a separate card payment. It goes to the provider, less the card processing fee, and Cerviced keeps none of it. Tips can\'t be refunded, so check the amount before you pay.',
       'Anything you agree with the provider at the appointment, such as adding a treatment or a tip paid in person, is between you and the provider and isn\'t paid through the app.',
     ].join('\n\n'),
   },

@@ -2250,7 +2250,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a Tip</Text>
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  Show your appreciation for {selectedBooking?.providerName}. It's paid by card and goes to them, less the card processing fee. CERVICED keeps none of it.
+                  Show your appreciation for {selectedBooking?.providerName}. It's paid by card and goes to them, less the card processing fee. CERVICED keeps none of it. Tips can't be refunded.
                 </Text>
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>

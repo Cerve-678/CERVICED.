@@ -177,14 +177,15 @@ review: a client can tip without rating and rate without tipping.
 - `reviews.tip_amount` is the old recorded-only amount (no money moved). Nothing
   writes or reads it any more; 2 rows hold a value. Drop the column later.
 
-**Gaps:** no refund path for a tip (neither `refund-payment` nor
-`reconcileRefund` knows about `booking_tips`), so a refund or chargeback after
-the transfer lands on CERVICED's balance and isn't taken back from the
-provider (and the provider Terms' "reversed money is taken back" line isn't
-true for tips yet). A refunded or disputed tip still on hold is skipped
-forever rather than marked reversed. Whether tips are refundable at all is a product/legal call, not yet
-made. Tip payouts aren't netted against shortfalls. Providers can't see their
-tips anywhere in the app yet.
+**Non-refundable** (user, 21 Oct): the client Terms and the tip sheet say so,
+and no refund path touches `booking_tips` on purpose.
+
+**Gaps:** a client can still dispute a tip with their bank. A chargeback
+after the transfer lands on CERVICED's balance and isn't taken back from the
+provider (the provider Terms' "reversed money is taken back" line isn't true
+for tips yet). A disputed tip still on hold is skipped forever rather than
+marked reversed. Tip payouts aren't netted against shortfalls. Providers can't see their
+tips in the app yet.
 
 ## 7. Security & the data boundary
 
@@ -216,7 +217,7 @@ tips anywhere in the app yet.
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |
 | CERVICED's fee on a partial refund | Kept; returned on a full refund |
 | Off-app payments | Never tracked by the app |
-| Tips | In-app card payment after a completed appointment; provider pays Stripe's card fee, CERVICED takes nothing; £1–£500; 24h payout hold (21 Oct) |
+| Tips | In-app card payment after a completed appointment; provider pays Stripe's card fee, CERVICED takes nothing; £1–£500; 24h payout hold; **non-refundable** (21 Oct) |
 
 ## 9. Known gaps and launch blockers
 
