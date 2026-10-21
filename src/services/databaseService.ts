@@ -11089,6 +11089,77 @@ interface ProviderFeeEarningRow {
   release_after: string | null; charged_at: string | null; disputed_at: string | null; dispute_resolved_at: string | null;
 }
 
+export interface ProviderTipEarning extends ProviderBookingTip {
+  id: string;
+  bookingId: string;
+  paidAt: string | null;
+  serviceName: string | null;
+  customerName: string | null;
+}
+
+/**
+ * Latest 50 tips clients paid this provider. Filtered to the caller's OWN
+ * provider row, not just RLS: booking_tips is also readable by the client who
+ * paid, so a pro who has tipped someone else would otherwise see that tip here.
+ */
+export async function getProviderTipEarnings(): Promise<ProviderTipEarning[]> {
+  const { data: { user }, error: authError } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return [];
+  const { data, error } = await supabase.from('booking_tips')
+    .select('id, booking_id, amount_pence, payout_pence, payout_status, release_after, paid_at, providers!inner(user_id)')
+    .eq('providers.user_id', user.id)
+    .eq('status', 'succeeded')
+    .order('paid_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as {
+    id: string; booking_id: string; amount_pence: number; payout_pence: number | null;
+    payout_status: ProviderBookingTip['payoutStatus']; release_after: string | null; paid_at: string | null;
+  }[];
+  if (rows.length === 0) return [];
+  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
+    .select('id, service_name_snapshot, customer_name')
+    .in('id', rows.map(row => row.booking_id));
+  if (bookingsError) throw bookingsError;
+  return rows.map(row => {
+    const booking = bookings?.find(b => b.id === row.booking_id);
+    return {
+      id: row.id,
+      bookingId: row.booking_id,
+      amountPence: row.amount_pence,
+      payoutPence: row.payout_pence,
+      payoutStatus: row.payout_status,
+      releaseAfter: row.release_after,
+      paidAt: row.paid_at,
+      serviceName: booking?.service_name_snapshot ?? null,
+      customerName: booking?.customer_name ?? null,
+    };
+  });
+}
+
+/**
+ * Paid tips on the caller's own bookings, in pounds keyed by booking id, for
+ * Analytics. `sinceDate` (YYYY-MM-DD) bounds it by appointment date to match
+ * the bookings Analytics loaded; null = all time. Filtered to the caller's own
+ * provider row because booking_tips is also readable by the client who paid.
+ */
+export async function getProviderTipsByBooking(sinceDate: string | null): Promise<Map<string, number>> {
+  const { data: { user }, error: authError } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return new Map();
+  let query = supabase.from('booking_tips')
+    .select('booking_id, amount_pence, providers!inner(user_id), bookings!inner(booking_date)')
+    .eq('providers.user_id', user.id)
+    .eq('status', 'succeeded');
+  if (sinceDate) query = query.gte('bookings.booking_date', sinceDate);
+  // One tip per booking, so this matches the bookings Analytics can hold.
+  const { data, error } = await query.limit(5000);
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as { booking_id: string; amount_pence: number }[];
+  return new Map(rows.map(row => [row.booking_id, row.amount_pence / 100]));
+}
+
 /** Latest 50 charged fees (RLS scopes booking_fee_charges to the caller's own). */
 export async function getProviderFeeEarnings(): Promise<ProviderFeeEarning[]> {
   const { data, error } = await supabase.from('booking_fee_charges')
