@@ -5,9 +5,9 @@
 
 #generated
 
-**2674 functions** across **365 files**.
+**2677 functions** across **366 files**.
 
-### `src/components/` (48)
+### `src/components/` (49)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -28,6 +28,7 @@
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · runPendingNavigation · selectImageIndex · trackCarouselOffset
 - `IslandPillTabBar.tsx` — goToTab · IslandPillTabBar · **tabBarSpotlightRect**
+- `IssueRefundSheet.tsx` — close · formatPence · IssueRefundSheet · loadState · preview · re · submit
 - `KeyboardDismissView.tsx` — **KeyboardDismissView**
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — LocationModal
@@ -40,7 +41,7 @@
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — ProviderFontPicker
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
-- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · IconCard · load · loadMore · money · Notice · openStripe · PaymentAction · ProviderStripePayments · requestRefund · StatusBadge
+- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · openStripe · PaymentAction · ProviderStripePayments · StatusBadge
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
@@ -266,7 +267,7 @@
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
 - `ProviderAnalyticsScreen.tsx` — AnimatedFillBar · AnimatedPath · bookingServiceMap · bucketNoun · buildInsight · chartBars · chartData · CompletionRing · fetchBookingsForRange · fetchSupportingMetrics · fmtGBP · hasCompletedInRange · inRange · insightText · kpi · maxBarIndex · monthKey · monthlyRatings · months · monthsAgo · onRefresh · period · prevPeriod · ProviderAnalyticsScreen · quadChartWidth · quadWidth · ranked · RatingAnalytics · ratingChartWidth · recent · RecentStream · revenueOf · reviewsInRange · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · topServices · TopServices · totalForBookings
 - `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
-- `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · cancelBooking · canDispute · catLabel · chipRow · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · CR · displayDuration · formatPence · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleRefund · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · handleSubmitDispute · isAddressReleased · loadRefundState · parseMin · Perf · ProviderBookingDetailScreen · re · refreshBookingStatus · refundPreview · releaseAddressNow · relevantInfoPacks · Row · s · show · submitPassOn · submitRefund · to12 · toggleInitTime · updateBookingStatus
+- `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · cancelBooking · canDispute · catLabel · chipRow · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · CR · displayDuration · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleRefund · handleRefunded · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · handleSubmitDispute · isAddressReleased · parseMin · Perf · ProviderBookingDetailScreen · refreshBookingStatus · releaseAddressNow · relevantInfoPacks · Row · s · show · submitPassOn · to12 · toggleInitTime · updateBookingStatus
 - `ProviderBookingHistoryScreen.tsx` — agendaSort · BookingCard · counts · fetchBookings · fetchUnreadMessages · fetchWaitlist · filterBookings · fmtDayLabel · fmtMoney · fmtTime · handleComplete · handleConfirmInvite · handleHistoryFilterPress · handleTabPress · isHistoryStatus · items · matchesHistoryFilter · onRefresh · openInvitePicker · pendingCount · PendingPill · ProviderBookingHistoryScreen · rescheduleRequestCount · rescheduleRequestRows · SkeletonList · statusFor · waitlistCount
 - `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · ClientHistorySheet · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleMessage · handleRebook · handleSend · handleSheetChange · handleViewHistory · initials · load · ProviderClienteleScreen · snapPoints · TabBar · tomorrow9am
 - `ProviderCommunicationsScreen.tsx` — flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod
