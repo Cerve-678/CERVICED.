@@ -555,7 +555,7 @@ export default function LinkOnlyHomeScreen() {
               <View style={styles.tileIcon}><Ionicons name="sparkles-outline" size={20} color={P.accent} /></View>
               <View style={styles.flex}>
                 <Text style={styles.cardTitle}>Get more from CERVICED</Text>
-                <Text style={styles.stepHint}>In-app bookings, payments, reviews, tips and more</Text>
+                <Text style={styles.stepHint}>Client beauty profiles, announcements, automations and more</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={P.sub} />
             </TouchableOpacity>

@@ -21,40 +21,43 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Feature = { icon: IconName; title: string; body: string };
 
+// Ordered by what other booking apps are least likely to have (user,
+// 2026-10-21): the client-knowledge and growth tools lead, the booking and
+// payment basics come last. In-app chat is NOT listed: link-only pros
+// already have Messages.
 const SECTIONS: { title: string; features: Feature[] }[] = [
   {
-    title: 'Bookings',
+    title: 'Know every client',
     features: [
-      { icon: 'calendar-outline', title: 'Clients book in the app', body: 'Your diary, booking requests and confirmations all in one place, with your opening hours and availability shown live.' },
-      { icon: 'swap-horizontal-outline', title: 'Reschedules and cancellations', body: 'Clients reschedule and cancel in the app, within your reschedule limits, and your cancellation policy decides what they get back.' },
-      { icon: 'people-outline', title: 'A waitlist', body: 'When you\'re full, clients can join your waitlist and get offered a slot when one opens.' },
+      { icon: 'sparkles-outline', title: 'Client beauty profiles', body: 'Before each appointment, see the client\'s hair, skin and preferences for that treatment, with allergies and medical notes flagged.' },
+      { icon: 'document-text-outline', title: 'Info packs and consultation forms', body: 'Send prep and aftercare info with each booking, and get consultation answers back before the client arrives.' },
+      { icon: 'albums-outline', title: 'Your client list', body: 'Every client\'s bookings, history and notes in one place.' },
     ],
   },
   {
-    title: 'Getting paid',
+    title: 'Grow your business',
     features: [
-      { icon: 'card-outline', title: 'Card, Apple Pay, Google Pay and PayPal', body: 'Clients pay when they book and the money is paid out to your bank through Stripe, on the timing you choose.' },
-      { icon: 'lock-closed-outline', title: 'Deposits', body: 'Take a deposit to secure a booking instead of the full price.' },
-      { icon: 'alarm-outline', title: 'Late and no-show fees', body: 'Charge a fee when a client is very late or doesn\'t turn up.' },
-      { icon: 'heart-outline', title: 'Tips', body: 'Clients can tip you in the app after their appointment.' },
+      { icon: 'megaphone-outline', title: 'Announcements', body: 'Message all your clients, or just the ones you pick, straight away or scheduled for later.' },
+      { icon: 'gift-outline', title: 'Promotions and promo codes', body: 'Run offers and give clients codes to use at checkout.' },
+      { icon: 'calendar-number-outline', title: 'Release-day alerts', body: 'Pick a day each month and clients who follow you get a reminder to book.' },
+      { icon: 'stats-chart-outline', title: 'Full analytics', body: 'Your bookings and earnings over time, not just profile views and Book taps.' },
     ],
   },
   {
-    title: 'Being found',
+    title: 'Runs itself',
     features: [
-      { icon: 'pricetags-outline', title: 'Your price list on your profile', body: 'Clients see your services and prices before they book.' },
-      { icon: 'star-outline', title: 'Star ratings and reviews', body: 'Clients can rate you after their appointment, and good reviews help you stand out.' },
+      { icon: 'notifications-outline', title: 'Reminders and check-ins', body: 'Appointment reminders, review requests, aftercare check-ins and birthday greetings go out for you.' },
+      { icon: 'sunny-outline', title: 'Daily booking recap', body: 'Start each morning with a summary of your day.' },
+      { icon: 'checkmark-done-outline', title: 'Auto-confirm and waitlist', body: 'Confirm bookings automatically, and when you\'re full, offer freed-up slots to your waitlist without lifting a finger.' },
+    ],
+  },
+  {
+    title: 'Bookings and payments',
+    features: [
+      { icon: 'calendar-outline', title: 'Clients book in the app', body: 'Your diary, requests and confirmations in one place, with reschedules and cancellations handled under your own policy.' },
+      { icon: 'card-outline', title: 'Card, Apple Pay, Google Pay and PayPal', body: 'Paid out to your bank through Stripe, on the timing you choose. Take deposits, late and no-show fees, and tips.' },
+      { icon: 'star-outline', title: 'Price list, ratings and reviews', body: 'Clients see your prices and reviews before they book.' },
       { icon: 'search-outline', title: 'More of Search', body: 'Show up when clients filter by price, availability, rating or hair type. Right now you only appear by category, speciality, area and accessibility.' },
-      { icon: 'gift-outline', title: 'Offers and promo codes', body: 'Run offers and give clients codes to use at checkout.' },
-    ],
-  },
-  {
-    title: 'Looking after clients',
-    features: [
-      { icon: 'document-text-outline', title: 'Info packs and consultation forms', body: 'Send aftercare and prep info, and collect consultation answers before the appointment.' },
-      { icon: 'albums-outline', title: 'Your client list', body: 'Every client\'s bookings and notes in one place.' },
-      { icon: 'notifications-outline', title: 'Reminders and automations', body: 'Appointment reminders, aftercare check-ins and birthday greetings go out for you.' },
-      { icon: 'stats-chart-outline', title: 'Booking and earnings analytics', body: 'See your bookings and earnings, not just profile views and Book taps.' },
     ],
   },
 ];
