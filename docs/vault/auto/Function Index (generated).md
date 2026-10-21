@@ -5,7 +5,7 @@
 
 #generated
 
-**2669 functions** across **366 files**.
+**2674 functions** across **367 files**.
 
 ### `src/components/` (48)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -93,7 +93,7 @@
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 
-### `src/features/bookings/` (16)
+### `src/features/bookings/` (17)
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · kindLabel · load · payFee · pounds · run
 - `bookingFeeRules.ts` — **feeChargeWindow** · **feeDisputeOpen** · **liveFee**
@@ -110,6 +110,7 @@
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen**
 - `reviewState.ts` — **mergeBookingReviewStates**
 - `timelineBookings.ts` — **withoutReplacedCancellations**
+- `tipWindow.ts` — enforces · **isTipWindowOpen** · minutesOfDay · **tipWindowClosesAt**
 
 ### `src/features/business-details/` (2)
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
@@ -230,7 +231,7 @@
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
 - `BeautyProfileScreen.tsx` — BeautyProfileScreen · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openSetup · pickedCount · stats · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · tick
-- `BookingsScreen.tsx` — applyLocation · bookingIdsForReviewState · bookingListKeyExtractor · BookingsScreen · confirmRebook · createStyles · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handleBookWaitlistEntry · handleConfirmWaitlistHold · handleDeclineWaitlistHold · handleExternalBookingPress · handleLeaveWaitlistEntry · handleRatingSubmit · handleRebook · handleTap · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · HiddenDevMenuTrigger · isMessagingAvailable · listItems · onRefresh · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · pastBookingsFiltered · pastCategories · refreshBookingActionItems · refreshUserLocation · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · retryLoadBookings · routeCoordinates · startLocationUpdates · styles · to · toggleFilter · virtualizedListRows · WaitlistCard
+- `BookingsScreen.tsx` — applyLocation · bookingIdsForReviewState · bookingListKeyExtractor · BookingsScreen · confirmRebook · createStyles · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handleBookWaitlistEntry · handleConfirmWaitlistHold · handleDeclineWaitlistHold · handleExternalBookingPress · handleLeaveWaitlistEntry · handleRatingSubmit · handleRebook · handleTap · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · HiddenDevMenuTrigger · isMessagingAvailable · isTipClosed · listItems · onRefresh · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · pastBookingsFiltered · pastCategories · refreshBookingActionItems · refreshUserLocation · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · retryLoadBookings · routeCoordinates · startLocationUpdates · styles · to · toggleFilter · virtualizedListRows · WaitlistCard
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · filteredProviders · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · renderEmptyState · SkeletonProviderCard
 - `CartScreen.tsx` — abandonOutstandingCheckout · addOnsSummary · backFromSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartCheckoutFooter · cartProviderRows · CartProviderSection · CartScreen · checkoutProviderSections · checkoutRenderUnits · checkoutTotalsFrom · clearItemIssue · depositPolicyArg · displayedItemIssues · dynamicStyles · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · flagged · flaggedProviderKeys · flaggedProvidersKey · formatCardNumber · formatExpiry · formatNameList · frozenCheckoutTotals · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleClose · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveFromCart · handleRemoveOne · handleReviewConfirm · handleScrollTargetLaidOut · handleScrollToIndexFailed · hasDeposit · hasUnscheduledItems · identifyCartConflicts · itemPromoDiscounts · itemsByProvider · jumpToRow · localItemIssues · navigateToProvider · onRefresh · openAddressSettings · outside · paymentSheetCartItems · platformFee · pricedCheckoutItems · priceOf · priceOfItem · promoSavingsShown · providerNamesKey · renderAddOns · renderCartProviderRow · renderCheckoutUnit · reportTargetOffset · SummaryShell · timestamp · toCartIssue · toggleProviderCollapsed · totalPrice
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer

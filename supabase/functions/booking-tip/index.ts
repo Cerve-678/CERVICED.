@@ -6,6 +6,23 @@ import { recordTipPaid } from '../_shared/recordTipPaid.ts';
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, { apiVersion: '2024-12-18.acacia', httpClient: Stripe.createFetchHttpClient() });
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+const TIP_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+/** Booking dates/times are UK wall-clock; the window is 48h after the end. */
+function tipWindowOpen(date: string, time: string, now = Date.now()): boolean {
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, mi] = time.split(':').map(Number);
+  if (![y, mo, d, h, mi].every(Number.isFinite)) return true;
+  const asUtc = Date.UTC(y, mo - 1, d, h, mi);
+  // London's offset at that moment (0 in winter, +1h in summer).
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(new Date(asUtc)).map(p => [p.type, p.value]));
+  const londonAsUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
+  const end = asUtc - (londonAsUtc - asUtc);
+  return now < end + TIP_WINDOW_MS;
+}
+
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 Deno.serve(async (req) => {
@@ -26,8 +43,9 @@ Deno.serve(async (req) => {
       return json({ status: recorded ? 'succeeded' : 'processing' });
     }
     if (body?.action !== 'start' || typeof body.bookingId !== 'string' || !Number.isInteger(body.amountPence) || body.amountPence < 100 || body.amountPence > 50000) return json({ error: 'Choose a tip between £1 and £500.' }, 400);
-    const { data: booking } = await admin.from('bookings').select('id, user_id, provider_id, status').eq('id', body.bookingId).maybeSingle();
+    const { data: booking } = await admin.from('bookings').select('id, user_id, provider_id, status, booking_date, booking_time, end_time').eq('id', body.bookingId).maybeSingle();
     if (!booking || booking.user_id !== user.id || booking.status !== 'completed') return json({ error: 'Tips are available after a completed appointment.' }, 409);
+    if (!tipWindowOpen(booking.booking_date, booking.end_time ?? booking.booking_time)) return json({ error: 'Tipping closes 48 hours after the appointment.' }, 409);
     const { data: provider } = await admin.from('providers').select('id, stripe_account_id, stripe_payouts_enabled').eq('id', booking.provider_id).maybeSingle();
     if (!provider?.stripe_account_id || !provider.stripe_payouts_enabled) return json({ error: 'This provider cannot receive online tips yet.' }, 409);
     const { data: existing } = await admin.from('booking_tips').select('id, status, amount_pence, payment_intent_id').eq('booking_id', booking.id).maybeSingle();

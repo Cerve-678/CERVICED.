@@ -39,6 +39,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
+import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
@@ -1278,6 +1279,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Check if booking has been rated or tipped
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);
   const hasBookingBeenTipped = useCallback((bookingId: string) => tippedBookings.has(bookingId), [tippedBookings]);
+  // Tipping closes 48 hours after the appointment (the server enforces it too).
+  const isTipClosed = useCallback(
+    (b: ConfirmedBooking) => !hasBookingBeenTipped(b.id) && !isTipWindowOpen(b.bookingDate, b.endTime || b.bookingTime),
+    [hasBookingBeenTipped],
+  );
 
   // Stable renderItem reference so the outer bookings FlatList doesn't hand a
   // brand-new function to every row on every parent re-render.
@@ -1620,7 +1626,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                     <TouchableOpacity
                                       style={[
                                         styles.tipButton,
-                                        hasBookingBeenTipped(booking.id) && styles.buttonDisabled
+                                        (hasBookingBeenTipped(booking.id) || isTipClosed(booking)) && styles.buttonDisabled
                                       ]}
                                       onPress={() => {
                                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1631,10 +1637,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         setSelectedBooking(booking);
                                         setShowTipModal(true);
                                       }}
-                                      disabled={hasBookingBeenTipped(booking.id)}
+                                      disabled={hasBookingBeenTipped(booking.id) || isTipClosed(booking)}
                                     >
                                       <Text style={styles.buttonText}>
-                                        {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : 'Tip'}
+                                        {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : isTipClosed(booking) ? 'Tip closed' : 'Tip'}
                                       </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
@@ -1724,7 +1730,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         <TouchableOpacity
                                           style={[
                                             styles.tipButton,
-                                            hasBookingBeenTipped(currentBooking.id) && styles.buttonDisabled
+                                            (hasBookingBeenTipped(currentBooking.id) || isTipClosed(currentBooking)) && styles.buttonDisabled
                                           ]}
                                           onPress={() => {
                                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1735,10 +1741,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             setSelectedBooking(currentBooking);
                                             setShowTipModal(true);
                                           }}
-                                          disabled={hasBookingBeenTipped(currentBooking.id)}
+                                          disabled={hasBookingBeenTipped(currentBooking.id) || isTipClosed(currentBooking)}
                                         >
                                           <Text style={styles.buttonText}>
-                                            {hasBookingBeenTipped(currentBooking.id) ? 'Tipped ✓' : 'Tip'}
+                                            {hasBookingBeenTipped(currentBooking.id) ? 'Tipped ✓' : isTipClosed(currentBooking) ? 'Tip closed' : 'Tip'}
                                           </Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
@@ -1830,7 +1836,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             <TouchableOpacity
                                               style={[
                                                 styles.tipButton,
-                                                hasBookingBeenTipped(booking.id) && styles.buttonDisabled
+                                                (hasBookingBeenTipped(booking.id) || isTipClosed(booking)) && styles.buttonDisabled
                                               ]}
                                               onPress={() => {
                                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1841,10 +1847,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                                 setSelectedBooking(booking);
                                                 setShowTipModal(true);
                                               }}
-                                              disabled={hasBookingBeenTipped(booking.id)}
+                                              disabled={hasBookingBeenTipped(booking.id) || isTipClosed(booking)}
                                             >
                                               <Text style={styles.buttonText}>
-                                                {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : 'Tip'}
+                                                {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : isTipClosed(booking) ? 'Tip closed' : 'Tip'}
                                               </Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
@@ -2250,7 +2256,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a Tip</Text>
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  Show your appreciation for {selectedBooking?.providerName}. It's paid by card and goes to them, less the card processing fee. CERVICED keeps none of it. Tips can't be refunded.
+                  Show your appreciation for {selectedBooking?.providerName}. It's paid by card and all of it goes to them: CERVICED covers the card fee. You can tip for 48 hours after your appointment. Tips can't be refunded.
                 </Text>
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>

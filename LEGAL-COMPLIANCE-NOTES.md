@@ -132,8 +132,10 @@ into component state via a custom form — this is not a PCI-DSS-compliant flow
 touch app-controlled state in the clear). (Update 21 Oct 2026: bookings,
 PayPal and tips now go through Stripe in test mode — Stripe's CardForm /
 PaymentSheet, no raw card fields in app state. Tips became a real Stripe card
-payment on 21 Oct, see docs/PAYMENTS_AND_LOGIC.md §6a. Tips are non-refundable
-(user decision 21 Oct; Terms §9 and the tip sheet say so). Open on tips: no
+payment on 21 Oct, see docs/PAYMENTS_AND_LOGIC.md §6a. Tips are non-refundable,
+go to the provider in full (CERVICED covers the card fee) and can only be
+left for 48 hours after the appointment (user decisions 21 Oct; Terms §9,
+§31 and the tip sheet say so). Open on tips: no
 chargeback path exists for one, and §31's "money reversed after you've been
 paid is taken back" isn't true for tips yet. The original wording below predates all of that.) Before
 this handles real transactions: integrate a proper

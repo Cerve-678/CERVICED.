@@ -153,9 +153,12 @@ review: a client can tip without rating and rate without tipping.
 | Who | Pays / receives |
 |---|---|
 | Client | The tip they chose, £1–£500, by card (PaymentSheet) |
-| Provider | The tip less Stripe's actual card fee |
-| CERVICED | Nothing (no platform fee on tips) — decided by the user 21 Oct |
+| Provider | The whole tip |
+| CERVICED | Nothing, and pays Stripe's card fee on the tip (about 1.5% + 20p on a UK card) — decided by the user 21 Oct |
 
+- **Window:** a tip can be started until 48 hours after the appointment's end
+  time (UK time). `booking-tip` refuses after that; the app greys the button
+  out as "Tip closed".
 - `booking-tip` (`start`) checks the booking is the caller's and `completed`,
   and that the provider's Stripe account can receive payouts; link-only pros
   and pros without payouts can't be tipped online. One tip per booking
@@ -168,10 +171,13 @@ review: a client can tip without rating and rate without tipping.
 - The app shows "paid" only once the tip is recorded; otherwise "processing"
   and the webhook finishes it.
 - `stripe-webhook` (`payment_intent.succeeded`) or `booking-tip` (`confirm`)
-  runs `recordTipPaid`: reads Stripe's real fee from the balance transaction
-  and holds the payout for **24h** (not the provider's chosen payout hold).
-  If Stripe hasn't reported the fee yet, the payout waits and
-  `settlePendingTipFees` fills it in on the next `release-payouts` run.
+  runs `recordTipPaid`: payout = the whole tip, held for **24h** (not the
+  provider's chosen payout hold). Stripe's fee is recorded in
+  `stripe_fee_pence` for CERVICED's books when Stripe has reported it.
+- The tip is its own charge (it comes after the booking was paid), so Stripe
+  charges the full per-transaction fee on it, including the fixed 20p. The
+  transfer uses `source_transaction` and may equal the whole charge; Stripe
+  debits its fee from CERVICED's balance.
 - `release-payouts` transfers held tips after 24h, skipping any charge that is
   disputed or refunded.
 - `reviews.tip_amount` is the old recorded-only amount (no money moved). Nothing
@@ -217,7 +223,7 @@ tips in the app yet.
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |
 | CERVICED's fee on a partial refund | Kept; returned on a full refund |
 | Off-app payments | Never tracked by the app |
-| Tips | In-app card payment after a completed appointment; provider pays Stripe's card fee, CERVICED takes nothing; £1–£500; 24h payout hold; **non-refundable** (21 Oct) |
+| Tips | In-app card payment within **48h** of a completed appointment; provider gets **100%**, CERVICED takes nothing and covers Stripe's card fee; £1–£500; 24h payout hold; **non-refundable** (21 Oct) |
 
 ## 9. Known gaps and launch blockers
 
