@@ -2702,30 +2702,40 @@ export async function getProviderClientele(): Promise<
   );
 }
 
-/** All bookings for a specific client with the current provider */
+/** All bookings for a specific client with the current provider.
+ *
+ * Detail screens already hold the provider id on the booking they opened.
+ * Passing it avoids a second, serial providers lookup before the history query.
+ * RLS still scopes the bookings read to the authenticated provider, so this is
+ * only a performance hint — it does not grant access to another provider. */
 export async function getClientBookingHistory(
   clientUserId: string,
+  knownProviderId?: string,
 ): Promise<import("../types/database").DbBooking[]> {
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
+  let providerId = knownProviderId;
+  if (!providerId) {
+    const {
+      data: { user },
+    } = await getSessionUser();
+    if (!user) throw new Error("Not authenticated");
 
-  const { data: provider } = await supabase
-    .from("providers")
-    .select("id")
-    .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .single();
+    const { data: provider } = await supabase
+      .from("providers")
+      .select("id")
+      .eq("user_id", user.id)
+      .order("is_active", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
 
-  if (!provider) return [];
+    if (!provider) return [];
+    providerId = provider.id;
+  }
 
   const { data, error } = await supabase
     .from("bookings")
     .select("*")
-    .eq("provider_id", provider.id)
+    .eq("provider_id", providerId)
     .eq("user_id", clientUserId)
     .neq("status", "on_hold")
     .order("booking_date", { ascending: false });

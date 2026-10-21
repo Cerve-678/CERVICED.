@@ -1569,7 +1569,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         setClientHistoryVisible(true);
                         setClientHistoryLoading(true);
                         try {
-                          const h = await getClientBookingHistory(clientUserId);
+                          const h = await getClientBookingHistory(clientUserId, booking.providerId);
                           setClientHistoryBookings(h);
                         } catch (err) {
                           logger.error('[ProviderBookingDetail] client booking history load failed:', err);
