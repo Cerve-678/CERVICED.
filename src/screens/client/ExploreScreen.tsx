@@ -338,6 +338,11 @@ const ExploreScreen = memo(() => {
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
+  // The feed failed to load (usually the 8s timeout while the server is
+  // stalled). Kept apart from "loaded and empty" so the grid can say it
+  // couldn't load rather than claiming the category has no looks.
+  const [discoverFailed, setDiscoverFailed] = useState(false);
+  const [discoverRetryKey, setDiscoverRetryKey] = useState(0);
   const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
   // The header count per filter: the whole feed's size, not how many pages
   // have loaded so far (portfolioItems grows as the client scrolls).
@@ -592,25 +597,36 @@ const ExploreScreen = memo(() => {
     const cached = discoverFeedCache.current.get(selectedFilter);
     if (cached) {
       setPortfolioItems(cached);
+      // Switching here mid-way through another filter's fetch cancels that
+      // fetch, which skips its finally — so the skeleton is cleared here or
+      // it would stay up over this filter's already-loaded feed.
+      setPortfolioLoading(false);
+      setDiscoverFailed(false);
       return;
     }
 
     let cancelled = false;
     setPortfolioLoading(true);
+    setDiscoverFailed(false);
 
     loadDiscoverFeed(selectedFilter)
       .then(feed => {
         if (!cancelled) setPortfolioItems(feed);
       })
-      .catch(() => {
-        if (!cancelled) setPortfolioItems([]);
+      .catch(error => {
+        logger.warn('Failed to load Explore feed:', error);
+        if (cancelled) return;
+        setPortfolioItems([]);
+        setDiscoverFailed(true);
       })
       .finally(() => {
         if (!cancelled) setPortfolioLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [selectedFilter, loadDiscoverFeed]);
+    // discoverRetryKey re-runs this for the "Try again" button; a failed
+    // load is never cached, so the retry fetches afresh.
+  }, [selectedFilter, loadDiscoverFeed, discoverRetryKey]);
 
   const loadDiscoverTotal = useCallback((filter: string) => {
     const category = filter !== 'All' ? filterMap[filter] : undefined;
@@ -643,8 +659,15 @@ const ExploreScreen = memo(() => {
     setPortfolioRefreshing(true);
     loadDiscoverTotal(selectedFilter);
     loadDiscoverFeed(selectedFilter)
-      .then(feed => setPortfolioItems(feed))
-      .catch(() => setPortfolioItems([]))
+      .then(feed => {
+        setPortfolioItems(feed);
+        setDiscoverFailed(false);
+      })
+      .catch(error => {
+        logger.warn('Failed to refresh Explore feed:', error);
+        setPortfolioItems([]);
+        setDiscoverFailed(true);
+      })
       .finally(() => setPortfolioRefreshing(false));
   }, [selectedFilter, loadDiscoverFeed, loadDiscoverTotal]);
 
@@ -1028,13 +1051,33 @@ const ExploreScreen = memo(() => {
                   </View>
                 }
                 ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <TabIcon name="magnifying-glass" size={48} color={P.sub} />
-                    <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
-                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                      Try a different search or filter
-                    </Text>
-                  </View>
+                  discoverFailed ? (
+                    <View style={styles.emptyContainer}>
+                      <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                      <Text style={[styles.emptyText, { color: P.text }]}>Couldn't load looks</Text>
+                      <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                        Check your connection and try again
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.retryButton, { backgroundColor: P.accent }]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          setDiscoverRetryKey(key => key + 1);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.retryButtonText, { color: P.onAccent }]}>Try again</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyContainer}>
+                      <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                      <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
+                      <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                        Try a different search or filter
+                      </Text>
+                    </View>
+                  )
                 }
               />
             )}
@@ -1195,6 +1238,16 @@ const styles = StyleSheet.create({
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
     marginTop: spacing.sm,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    fontSize: fonts.body.medium,
+    fontWeight: '600',
   },
 
 });
