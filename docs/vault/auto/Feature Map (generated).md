@@ -96,8 +96,8 @@ Curated: [[Payments]] · **141 files**
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(37)_
-- `src/screens/shared/TermsScreen.tsx` _(35)_
 - `supabase/provider_reminder_jobs.sql` _(34)_
+- `src/screens/shared/TermsScreen.tsx` _(33)_
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/booking.ts` _(32)_
 - `src/features/bookings/BookingFeeCard.tsx` _(30)_
