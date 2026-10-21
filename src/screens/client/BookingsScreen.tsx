@@ -33,7 +33,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getCachedMyExternalBookings, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -236,6 +236,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     [theme, isDarkMode, P, screenWidth, screenHeight],
   );
   const { user } = useAuth();
+  const userId = user?.id;
   const { addToCart } = useCart();
 
   const {
@@ -338,13 +339,18 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // load rather than by reading the clock during render.
   const [externalBookings, setExternalBookings] = useState<{ rows: ClientExternalBookingWithProvider[]; loadedAt: number }>({ rows: [], loadedAt: 0 });
   useFocusEffect(useCallback(() => {
-    if (!user?.id) return;
+    if (!userId) return;
     let active = true;
+    // Render a just-added entry immediately, then reconcile from the server.
+    // Without this, navigating here from "Did you book?" showed an empty
+    // Bookings screen until the joined provider query had finished.
+    const cached = getCachedMyExternalBookings(userId);
+    if (cached) setExternalBookings({ rows: cached, loadedAt: Date.now() });
     getMyExternalBookings()
       .then(rows => { if (active) setExternalBookings({ rows, loadedAt: Date.now() }); })
       .catch((error: unknown) => logger.warn('[Bookings] booked-elsewhere entries failed to load', error));
     return () => { active = false; };
-  }, [user?.id]));
+  }, [userId]));
   const externalSplit = useMemo(() => {
     const { upcoming, past } = splitExternalBookings(externalBookings.rows, new Date(externalBookings.loadedAt));
     const cutoff = externalBookings.loadedAt - PAST_BOOKINGS_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
