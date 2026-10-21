@@ -81,7 +81,7 @@ Curated: [[Payments]] · **141 files**
 - `src/services/bookingService.ts` _(120)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
-- `src/components/ProviderStripePayments.tsx` _(108)_
+- `src/components/ProviderStripePayments.tsx` _(109)_
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/features/bookings/receipt.ts` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
@@ -109,11 +109,11 @@ Curated: [[Payments]] · **141 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **283 files**
-- `src/services/databaseService.ts` _(883)_
+- `src/services/databaseService.ts` _(897)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(645)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(544)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(547)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/client/BookingDetailScreen.tsx` _(419)_
 - `src/screens/client/BookingsScreen.tsx` _(356)_
@@ -247,7 +247,7 @@ Curated: [[Booking Flow]] · **55 files**
 Curated: [[Booking Flow]] · **174 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
-- `src/services/databaseService.ts` _(234)_
+- `src/services/databaseService.ts` _(235)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/BookingDetailScreen.tsx` _(160)_
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **174 files**
 - … +144 more
 
 ## Auth
-Curated: [[Contexts]] · **186 files**
+Curated: [[Contexts]] · **187 files**
 - `src/services/databaseService.ts` _(282)_
 - `src/contexts/AuthContext.tsx` _(156)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **186 files**
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
-- … +156 more
+- … +157 more
 
 ## Becca / AI
 Curated: [[Services]] · **48 files**
