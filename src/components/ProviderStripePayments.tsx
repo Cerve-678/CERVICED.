@@ -165,6 +165,13 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     { key: 'payouts', label: 'Payouts', icon: 'wallet-outline' },
     { key: 'settings', label: 'Payment settings', icon: 'options-outline' },
   ] as const;
+  // Until Stripe setup is finished there is nothing to show: no balance, no
+  // booking payments, no payouts. The provider sees only the connect card,
+  // plus Payment settings, which doesn't depend on Stripe.
+  const needsConnect = !!account && !account.detailsSubmitted;
+  const dashboardReady = !!account && !needsConnect;
+  const visibleTabs = dashboardReady ? tabs : tabs.filter(tab => tab.key === 'overview' || tab.key === 'settings');
+  const shownSection = dashboardReady || section === 'settings' ? section : 'overview';
   const setupReady = account?.payoutsEnabled;
   const manageAccount = !!account && (!!setupReady || (account.detailsSubmitted && !account.requirementsDue));
   const accountTitle = !account ? 'Checking your payout account' : setupReady ? 'Your payout account is connected'
@@ -178,8 +185,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>Test mode · no real money moves</Text>}
     </View>
     <View style={styles.tabs}>
-      {tabs.map(tab => {
-        const selected = section === tab.key;
+      {visibleTabs.map(tab => {
+        const selected = shownSection === tab.key;
         return <TouchableOpacity key={tab.key} accessibilityRole="tab" accessibilityState={{ selected }}
           onPress={() => { void Haptics.selectionAsync().catch(() => {}); setSection(tab.key); }} activeOpacity={0.75}
           style={[styles.tab, { backgroundColor: selected ? C.accent : C.card, borderColor: selected ? C.accent : C.border }]}>
@@ -190,16 +197,28 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         </TouchableOpacity>;
       })}
     </View>
-    <View style={styles.refreshRow}>
+    {!needsConnect && <View style={styles.refreshRow}>
       <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: C.sub }]}>{loading ? 'Updating your payments…' : 'Your payment information'}</Text>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh all payment information" disabled={loading || busy}
         onPress={() => { setLoading(true); void load(); }} style={styles.refresh}>
         {loading ? <ActivityIndicator size="small" color={C.accentText} /> : <Ionicons name="refresh-outline" size={20} color={C.accentText} />}
       </TouchableOpacity>
-    </View>
+    </View>}
     {!!error && <Notice text={error} />}
 
-    {section === 'overview' && <>
+    {shownSection === 'overview' && !account && !error && <ActivityIndicator color={C.accentText} style={{ marginVertical: 40 }} />}
+
+    {shownSection === 'overview' && needsConnect && <View style={[styles.connect, { backgroundColor: C.card, borderColor: C.border }]}>
+      <View style={[styles.connectIcon, { backgroundColor: C.surface }]}><Ionicons name="card-outline" size={26} color={C.accentText} /></View>
+      <Text style={[styles.connectTitle, { color: C.text }]}>Get paid for online bookings</Text>
+      <Text style={[styles.description, { color: C.sub, textAlign: 'center' }]}>Connect your payout account with Stripe. Your balance, booking payments and payouts will appear here once it's set up.</Text>
+      <View style={{ alignSelf: 'stretch' }}>
+        {busy ? <ActivityIndicator color={C.accentText} style={{ marginTop: 16 }} />
+          : <PaymentAction disabled={busy} label={account.connected ? 'Continue with Stripe' : 'Connect with Stripe'} onPress={() => void openStripe('onboard')} />}
+      </View>
+    </View>}
+
+    {shownSection === 'overview' && dashboardReady && <>
       {!!financeError && <Notice text={financeError} />}
       <View style={[styles.hero, { backgroundColor: C.accent }]}>
         <Text style={[styles.heroLabel, { color: C.bg }]}>AVAILABLE IN STRIPE</Text>
@@ -261,7 +280,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </>}
     </>}
 
-    {section === 'bookings' && <>
+    {shownSection === 'bookings' && <>
       <Text style={[styles.sectionTitle, { color: C.text }]}>Booking payments</Text>
       <Text style={[styles.sectionNote, { color: C.sub }]}>Latest 50 online payments. Open a booking payment to see your share and release status.</Text>
       {!!payoutError && <Notice text={payoutError} />}
@@ -284,7 +303,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </>}
     </>}
 
-    {section === 'payouts' && <>
+    {shownSection === 'payouts' && <>
       <Text style={[styles.sectionTitle, { color: C.text }]}>From booking to bank</Text>
       <View style={[styles.journey, { backgroundColor: C.surface }]}>
         {[
@@ -310,7 +329,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         {account?.connected && <PaymentAction disabled={busy} label="Manage payout account" onPress={() => void openStripe('dashboard')} />}
       </Card>
     </>}
-    {section === 'settings' && <>
+    {shownSection === 'settings' && <>
       <Card title="When you get paid" sub="How long after an appointment your share is released to our payment partners. They then pay it into your bank, which usually takes a few more working days.">
         {!!holdError && <Notice text={holdError} />}
         {holdUnavailable
@@ -418,6 +437,9 @@ function PaymentAction({ label, onPress, disabled, secondary = false }: { label:
 }
 const styles = StyleSheet.create({
   intro: { paddingTop: 8, paddingBottom: 22, gap: 8 },
+  connect: { borderWidth: 1, borderRadius: 24, padding: 24, alignItems: 'center', gap: 10, marginTop: 8 },
+  connectIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  connectTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, textAlign: 'center' },
   eyebrow: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.6 },
   description: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, lineHeight: 22 },
   caption: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18 },

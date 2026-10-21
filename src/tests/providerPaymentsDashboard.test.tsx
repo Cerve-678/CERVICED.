@@ -178,3 +178,24 @@ test("shows the server's own reason when it refuses a timing change", async () =
   fireEvent.press(ui.getByText('7 days'));
   await waitFor(() => expect(ui.getByText('Only a professional account can change payout timing.')).toBeTruthy());
 });
+
+test('before Stripe is set up, the dashboard is just the connect card — Payment settings still works', async () => {
+  (getConnectStatus as jest.Mock).mockResolvedValue({ connected: false, payoutsEnabled: false, detailsSubmitted: false });
+  (getProviderFinance as jest.Mock).mockResolvedValue({ connected: false, livemode: false, available: [], pending: [], payouts: [], hasMore: false });
+  (getProviderPayouts as jest.Mock).mockResolvedValue([]);
+  const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
+  await waitFor(() => expect(ui.getByText('Connect with Stripe')).toBeTruthy());
+  expect(ui.queryByText('AVAILABLE IN STRIPE')).toBeNull();
+  expect(ui.queryByText('Recent booking activity')).toBeNull();
+  expect(ui.queryByRole('tab', { name: 'Booking payments' })).toBeNull();
+  expect(ui.queryByRole('tab', { name: 'Payouts' })).toBeNull();
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
+  expect(ui.getByText('Deposit settings')).toBeTruthy();
+});
+
+test('a half-finished Stripe setup offers to continue rather than start again', async () => {
+  (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: false, detailsSubmitted: false, requirementsDue: 3 });
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('Continue with Stripe')).toBeTruthy());
+  expect(ui.queryByText('AVAILABLE IN STRIPE')).toBeNull();
+});
