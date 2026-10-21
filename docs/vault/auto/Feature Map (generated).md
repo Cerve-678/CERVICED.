@@ -163,20 +163,20 @@ Curated: [[Notifications]] · **170 files**
 - `src/screens/provider/ProviderAutomationsScreen.tsx` _(38)_
 - `supabase/fix_pending_booking_provider_reminder.sql` _(38)_
 - `supabase/waitlist_holds.sql` _(32)_
+- `src/i18n/catalogs/en.ts` _(31)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(29)_
 - `supabase/phase1_schema.sql` _(29)_
 - `src/navigation/RootNavigation.tsx` _(28)_
 - `supabase/consolidate_address_release_notification.sql` _(28)_
 - `src/screens/client/BookingsScreen.tsx` _(27)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(26)_
-- `src/i18n/catalogs/en.ts` _(25)_
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
 - `src/screens/client/NotificationsSettingsScreen.tsx` _(23)_
 - … +140 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **79 files**
+Curated: [[Provider Onboarding & Go-Live]] · **80 files**
 - `src/services/databaseService.ts` _(79)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **79 files**
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
-- … +49 more
+- … +50 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **55 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **173 files**
 - … +143 more
 
 ## Auth
-Curated: [[Contexts]] · **184 files**
+Curated: [[Contexts]] · **185 files**
 - `src/services/databaseService.ts` _(282)_
 - `src/contexts/AuthContext.tsx` _(156)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **184 files**
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
-- … +154 more
+- … +155 more
 
 ## Becca / AI
 Curated: [[Services]] · **48 files**
@@ -331,18 +331,18 @@ Curated: [[Services]] · **48 files**
 - `src/services/becca/capabilities/provider.ts` _(12)_
 - `src/services/becca/navigationContract.ts` _(10)_
 - `src/services/becca/registry.ts` _(10)_
+- `src/i18n/catalogs/en.ts` _(9)_
 - `src/services/becca/aiRuntime.ts` _(9)_
 - `src/utils/env.ts` _(9)_
 - `src/navigation/provider/ProviderTabNavigator.tsx` _(8)_
 - `src/navigation/client/ClientTabNavigator.tsx` _(6)_
 - `src/navigation/provider/tabs/ProviderHomeNavigator.tsx` _(6)_
-- `src/i18n/catalogs/en.ts` _(5)_
 - `src/i18n/catalogs/fr.ts` _(5)_
 - `src/screens/shared/TermsScreen.tsx` _(5)_
 - `src/i18n/catalogs/es.ts` _(4)_
+- `src/screens/shared/HelpCentreScreen.tsx` _(4)_
 - `src/services/becca/askNormaliser.ts` _(4)_
 - `src/services/becca/capabilities/shared.ts` _(4)_
-- `src/navigation/provider/tabs/ProviderServicesNavigator.tsx` _(3)_
 - … +18 more
 
 ## Cart & checkout
