@@ -82,14 +82,21 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
     }
     setLoading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    // Checkout sends the client here to set an address mid-booking, and
-    // passes the tab it came from. Saving hops straight back to it, where the
-    // cart is still mounted and reopens Confirm Your Details — goBack() would
-    // land on ProfileMain and strand them a tab away from the checkout they
-    // were in the middle of.
+    leave();
+  };
+
+  // Checkout sends the client here to set an address mid-booking, and passes
+  // the tab it came from. Leaving — by saving or by the back arrow — hops
+  // straight back to it, where the cart is still mounted and reopens Confirm
+  // Your Details; goBack() would land on ProfileMain and strand them a tab
+  // away from the checkout they were in the middle of. This screen is then
+  // popped so the Profile tab opens on its own menu next time, not on a stale
+  // copy of this page that still points back at the cart.
+  const leave = () => {
     const returnToTab: string | undefined = route?.params?.returnToTab;
-    if (returnToTab) navigation.getParent()?.navigate(returnToTab);
-    else navigation.goBack();
+    if (!returnToTab) { navigation.goBack(); return; }
+    navigation.getParent()?.navigate(returnToTab);
+    if (navigation.getState().index > 0) navigation.pop();
   };
 
   const handleDeleteAccount = () => {
@@ -137,7 +144,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
           {/* Header */}
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); leave(); }}
             activeOpacity={0.7}
           >
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>

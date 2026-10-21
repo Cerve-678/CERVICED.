@@ -2457,6 +2457,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     parent?.navigate('Profile', {
       screen: 'ProfileInfo',
       params: { returnToTab: originTab },
+      // Keep the Profile menu underneath. Without this, a Profile tab that
+      // hadn't been opened yet is built with ProfileInfo as its only screen,
+      // so its back arrow had nowhere to go and fell through to Home.
+      initial: false,
     });
   }, [navigation]);
 
