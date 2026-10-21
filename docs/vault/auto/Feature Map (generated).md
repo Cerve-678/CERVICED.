@@ -76,7 +76,7 @@ Curated: [[Availability & Slots]] · **176 files**
 ## Payments
 Curated: [[Payments]] · **141 files**
 - `src/screens/client/CartScreen.tsx` _(530)_
-- `src/services/databaseService.ts` _(220)_
+- `src/services/databaseService.ts` _(221)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
 - `src/services/bookingService.ts` _(120)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -96,8 +96,8 @@ Curated: [[Payments]] · **141 files**
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(37)_
+- `src/screens/shared/TermsScreen.tsx` _(35)_
 - `supabase/provider_reminder_jobs.sql` _(34)_
-- `src/screens/shared/TermsScreen.tsx` _(33)_
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/booking.ts` _(32)_
 - `src/features/bookings/BookingFeeCard.tsx` _(30)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **283 files**
 - `src/screens/client/CartScreen.tsx` _(645)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(562)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/client/BookingDetailScreen.tsx` _(419)_
+- `src/screens/client/BookingDetailScreen.tsx` _(422)_
 - `src/screens/client/BookingsScreen.tsx` _(357)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_

@@ -290,13 +290,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         setHasRated(true);
         setRatedBookings(prev => new Set(prev).add(bookingId));
       })
-      .catch(() => {});
+      // The buttons just stay in their default state; the server still blocks a second review or tip.
+      .catch(err => logger.warn('[BookingDetail] review state failed to load:', err));
     getBookingTip(bookingId)
       .then(tip => {
         if (cancelled || tip == null || tip <= 0) return;
         setTippedBookings(prev => new Set(prev).add(bookingId));
       })
-      .catch(() => {});
+      .catch(err => logger.warn('[BookingDetail] tip state failed to load:', err));
     return () => { cancelled = true; };
   }, [bookingId]);
 
@@ -820,10 +821,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         if (paymentError.code === 'Canceled') return;
         throw new Error(paymentError.message || 'Your tip did not go through.');
       }
-      await confirmBookingTipPayment(sheet.tipId);
-      setTippedBookings(prev => new Set(prev).add(booking.id));
+      const tipStatus = await confirmBookingTipPayment(sheet.tipId);
+      if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(booking.id));
       setShowTipModal(false);
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been paid to ${booking.providerName}.`);
+      setSuccessMessage(tipStatus === 'succeeded'
+        ? `Your £${tipAmount.toFixed(2)} tip has been paid to ${booking.providerName}.`
+        : `Your £${tipAmount.toFixed(2)} tip for ${booking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);

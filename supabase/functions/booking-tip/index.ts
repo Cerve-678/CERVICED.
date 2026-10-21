@@ -22,8 +22,8 @@ Deno.serve(async (req) => {
       if (!tip || tip.client_user_id !== user.id) return json({ error: 'Tip not found' }, 404);
       if (tip.status === 'succeeded') return json({ status: 'succeeded' });
       if (!tip.payment_intent_id) return json({ error: 'Payment is not ready' }, 409);
-      await recordTipPaid(admin, stripe, tip.id, tip.payment_intent_id);
-      return json({ status: 'processing' });
+      const recorded = await recordTipPaid(admin, stripe, tip.id, tip.payment_intent_id);
+      return json({ status: recorded ? 'succeeded' : 'processing' });
     }
     if (body?.action !== 'start' || typeof body.bookingId !== 'string' || !Number.isInteger(body.amountPence) || body.amountPence < 100 || body.amountPence > 50000) return json({ error: 'Choose a tip between £1 and £500.' }, 400);
     const { data: booking } = await admin.from('bookings').select('id, user_id, provider_id, status').eq('id', body.bookingId).maybeSingle();
@@ -47,16 +47,12 @@ Deno.serve(async (req) => {
     }
     if (intent?.status === 'processing') return json({ error: 'Your last tip is still processing.' }, 409);
     if (tip.amount_pence !== body.amountPence || tip.status === 'failed' || (intent && intent.status !== 'canceled' && intent.amount !== body.amountPence)) {
-      // A new amount must never leave the old intent payable: recordTipPaid
-      // only accepts an intent whose amount matches the ledger, so paying a
-      // stale one would take the money without ever recording or paying it out.
-      // Stripe first, ledger second, so a failed write heals on the next tap.
-      if (intent && (intent.status === 'requires_payment_method' || intent.status === 'requires_confirmation')) {
-        if (intent.amount !== body.amountPence) intent = await stripe.paymentIntents.update(intent.id, { amount: body.amountPence });
-      } else if (intent && intent.status !== 'canceled') {
-        await stripe.paymentIntents.cancel(intent.id);
-        intent = null;
-      }
+      // A new amount always gets a new intent. Updating the open one in place
+      // would keep its client_secret live, so a payment sheet already open
+      // elsewhere could charge the new amount before the ledger caught up.
+      // Cancelling kills the old secret; the swap below records the new one.
+      if (intent && intent.status !== 'canceled') await stripe.paymentIntents.cancel(intent.id);
+      intent = null;
       const { data, error } = await admin.from('booking_tips').update({ amount_pence: body.amountPence, status: 'pending', failure_reason: null }).eq('id', tip.id).eq('status', tip.status).select('id, status, amount_pence, payment_intent_id').single();
       if (error) throw error;
       tip = data;

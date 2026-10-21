@@ -129,11 +129,14 @@ raising with counsel if the assistant's framing is ever questioned.
 `CartScreen.tsx`'s `PaymentModal` collects raw card number/expiry/CVC directly
 into component state via a custom form — this is not a PCI-DSS-compliant flow
 (card data should be tokenized by a processor like Stripe/Adyen and never
-touch app-controlled state in the clear). Per existing project notes, no real
-payment provider is wired up yet. (Tips are no longer recorded-only: since
-21 Oct 2026 they are a real Stripe card payment, see docs/PAYMENTS_AND_LOGIC.md
-§6a. Open: the Terms don't say whether a tip can be refunded, and no refund
-path exists for one.) Before this handles real transactions: integrate a proper
+touch app-controlled state in the clear). (Update 21 Oct 2026: bookings,
+PayPal and tips now go through Stripe in test mode — Stripe's CardForm /
+PaymentSheet, no raw card fields in app state. Tips became a real Stripe card
+payment on 21 Oct, see docs/PAYMENTS_AND_LOGIC.md §6a. Open on tips: the Terms
+don't say whether a tip can be refunded, no refund or chargeback path exists
+for one, and §31's "money reversed after you've been paid is taken back" isn't
+true for tips yet. The original wording below predates all of that.) Before
+this handles real transactions: integrate a proper
 processor, remove raw card-field collection from app state entirely, and make
 sure marketing/T&Cs copy doesn't imply a payment guarantee that isn't real yet.
 

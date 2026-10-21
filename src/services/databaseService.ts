@@ -4541,12 +4541,14 @@ export async function submitReview(review: {
 export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
   // maybeSingle, not single: "no review yet" is the normal case and single()
   // treats it as a PGRST116 error. This is called on every booking-detail mount.
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("reviews")
     .select("id")
     .eq("booking_id", bookingId)
     .maybeSingle();
 
+  // A failed read must not look like "not reviewed yet": that re-shows Rate.
+  if (error) throw error;
   return !!data;
 }
 
@@ -4622,9 +4624,12 @@ export async function startBookingTipPayment(bookingId: string, amountPence: num
 }
 
 /** The webhook is authoritative; this closes the normal app path promptly. */
-export async function confirmBookingTipPayment(tipId: string): Promise<void> {
+export async function confirmBookingTipPayment(tipId: string): Promise<'succeeded' | 'processing'> {
   const { data, error } = await supabase.functions.invoke('booking-tip', { body: { action: 'confirm', tipId } });
   if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your tip is processing. Please check again shortly.');
+  // 'processing' = Stripe has it but it isn't recorded yet (the webhook will
+  // finish it). Only 'succeeded' may be shown to the client as paid.
+  return data?.status === 'succeeded' ? 'succeeded' : 'processing';
 }
 
 // ─────────────────────────────────────────────────────────

@@ -785,11 +785,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         if (paymentError.code === 'Canceled') return;
         throw new Error(paymentError.message || 'Your tip did not go through.');
       }
-      await confirmBookingTipPayment(sheet.tipId);
-
-      setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
+      const tipStatus = await confirmBookingTipPayment(sheet.tipId);
+      if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
       setShowTipModal(false);
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been paid to ${selectedBooking.providerName}.`);
+      setSuccessMessage(tipStatus === 'succeeded'
+        ? `Your £${tipAmount.toFixed(2)} tip has been paid to ${selectedBooking.providerName}.`
+        : `Your £${tipAmount.toFixed(2)} tip for ${selectedBooking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);

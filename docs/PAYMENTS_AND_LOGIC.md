@@ -161,8 +161,12 @@ review: a client can tip without rating and rate without tipping.
   and pros without payouts can't be tipped online. One tip per booking
   (`booking_tips.booking_id` UNIQUE). The server owns every amount and write;
   clients can only read their own rows, providers theirs.
-- Changing the amount before paying updates the open PaymentIntent (or cancels
-  it and makes a new one), so a stale intent is never left payable.
+- Changing the amount before paying cancels the open PaymentIntent and makes a
+  new one, so a payment sheet still open on the old amount can't charge.
+  If Stripe ever takes an amount the ledger didn't expect (a race), the
+  amount Stripe actually took is recorded and paid out, and it's logged.
+- The app shows "paid" only once the tip is recorded; otherwise "processing"
+  and the webhook finishes it.
 - `stripe-webhook` (`payment_intent.succeeded`) or `booking-tip` (`confirm`)
   runs `recordTipPaid`: reads Stripe's real fee from the balance transaction
   and holds the payout for **24h** (not the provider's chosen payout hold).
@@ -176,7 +180,9 @@ review: a client can tip without rating and rate without tipping.
 **Gaps:** no refund path for a tip (neither `refund-payment` nor
 `reconcileRefund` knows about `booking_tips`), so a refund or chargeback after
 the transfer lands on CERVICED's balance and isn't taken back from the
-provider. Whether tips are refundable at all is a product/legal call, not yet
+provider (and the provider Terms' "reversed money is taken back" line isn't
+true for tips yet). A refunded or disputed tip still on hold is skipped
+forever rather than marked reversed. Whether tips are refundable at all is a product/legal call, not yet
 made. Tip payouts aren't netted against shortfalls. Providers can't see their
 tips anywhere in the app yet.
 
