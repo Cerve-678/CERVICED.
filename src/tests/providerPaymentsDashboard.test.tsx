@@ -2,13 +2,13 @@ import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderStripePayments from '../components/ProviderStripePayments';
-import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderRefundState, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays } from '../services/providerPaymentService';
+import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderRefundState, getProviderFeeEarnings, getProviderTipEarnings, getPayoutHoldDays, setPayoutHoldDays } from '../services/providerPaymentService';
 
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'dismiss' }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../services/providerPaymentService', () => ({
-  getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(),
+  getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(), getProviderTipEarnings: jest.fn(),
   getConnectLink: jest.fn(), refundProviderBooking: jest.fn(), getProviderRefundState: jest.fn(),
   getPayoutHoldDays: jest.fn(), setPayoutHoldDays: jest.fn(),
 }));
@@ -32,6 +32,7 @@ jest.mock('../features/business-details/BusinessDetailsKit', () => {
 beforeEach(() => {
   jest.clearAllMocks();
   (getProviderFeeEarnings as jest.Mock).mockResolvedValue([]);
+  (getProviderTipEarnings as jest.Mock).mockResolvedValue([]);
   (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: true, detailsSubmitted: true });
   (getPayoutHoldDays as jest.Mock).mockResolvedValue(1);
   (getProviderPayouts as jest.Mock).mockResolvedValue([{
@@ -158,6 +159,19 @@ test('lists late and no-show fees with the provider\'s share and where the money
   expect(ui.getByText('No-show fee · Hair appointment')).toBeTruthy();
   expect(ui.getByText('£19.50')).toBeTruthy();
   expect(ui.getByText('Released to Stripe')).toBeTruthy();
+});
+
+test('lists tips with the provider\'s share after the card fee', async () => {
+  (getProviderTipEarnings as jest.Mock).mockResolvedValue([{
+    id: 'tip', bookingId: 'booking', amountPence: 1000, payoutPence: 945, payoutStatus: 'transferred',
+    releaseAfter: null, paidAt: '2026-10-21T10:00:00Z', serviceName: 'Hair appointment', customerName: 'Test client',
+  }]);
+  const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
+  await waitFor(() => expect(ui.getByText('Tip · Hair appointment')).toBeTruthy());
+  expect(ui.getByText('£9.45')).toBeTruthy();
+  expect(ui.getByText('Paid out')).toBeTruthy();
 });
 
 test('an account with no professional profile is told to finish setting one up, not offered a choice that cannot save', async () => {

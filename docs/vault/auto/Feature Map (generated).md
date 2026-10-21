@@ -86,8 +86,8 @@ Curated: [[Payments]] · **141 files**
 - `src/features/bookings/receipt.ts` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/screens/client/BookingDetailScreen.tsx` _(77)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(56)_
 - `src/features/bookings/paymentPresentation.ts` _(55)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(55)_
 - `src/types/database.ts` _(55)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/client/BookingsScreen.tsx` _(44)_
@@ -109,11 +109,11 @@ Curated: [[Payments]] · **141 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **283 files**
-- `src/services/databaseService.ts` _(883)_
+- `src/services/databaseService.ts` _(923)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(645)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(544)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(549)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/client/BookingDetailScreen.tsx` _(419)_
 - `src/screens/client/BookingsScreen.tsx` _(356)_
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **55 files**
 - … +25 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **174 files**
+Curated: [[Booking Flow]] · **175 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
 - `src/services/databaseService.ts` _(234)_
@@ -275,11 +275,11 @@ Curated: [[Booking Flow]] · **174 files**
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_
-- … +144 more
+- … +145 more
 
 ## Auth
-Curated: [[Contexts]] · **186 files**
-- `src/services/databaseService.ts` _(282)_
+Curated: [[Contexts]] · **187 files**
+- `src/services/databaseService.ts` _(290)_
 - `src/contexts/AuthContext.tsx` _(156)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/screens/auth/LoginScreen.tsx` _(119)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **186 files**
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
-- … +156 more
+- … +157 more
 
 ## Becca / AI
 Curated: [[Services]] · **48 files**

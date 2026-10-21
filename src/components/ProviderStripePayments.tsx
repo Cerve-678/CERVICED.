@@ -10,7 +10,7 @@ import { useAppDialog } from './AppDialog';
 import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
 import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getProviderTipEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
@@ -33,6 +33,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [account, setAccount] = useState<ConnectStatus | null>(null);
   const [payouts, setPayouts] = useState<ProviderPayout[]>([]);
   const [feeEarnings, setFeeEarnings] = useState<ProviderFeeEarning[]>([]);
+  const [tipEarnings, setTipEarnings] = useState<ProviderTipEarning[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -76,6 +77,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       // replacing the booking payments error above.
       getProviderFeeEarnings().then(rows => {
         if (sequence === loadSequence.current) setFeeEarnings(rows);
+      }).catch(() => {}),
+      // Tips too: secondary, so a failed read just leaves the list hidden.
+      getProviderTipEarnings().then(rows => {
+        if (sequence === loadSequence.current) setTipEarnings(rows);
       }).catch(() => {}),
     ]);
     if (sequence === loadSequence.current) setLoading(false);
@@ -301,6 +306,21 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <StatusBadge label={feeStatusLabel(fee)} attention={fee.openDispute || fee.payoutStatus === 'failed'} />
         </View>)}
       </>}
+      {tipEarnings.length > 0 && <>
+        <Text style={[styles.sectionTitle, { color: C.text }]}>Tips</Text>
+        <Text style={[styles.sectionNote, { color: C.sub }]}>What clients tipped you after their appointment. Your share after the card fee. Tips can't be refunded.</Text>
+        {tipEarnings.map(tip => <View key={tip.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={styles.bookingHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: C.text }]}>Tip{tip.serviceName ? ` · ${tip.serviceName}` : ''}</Text>
+              <Text style={[styles.description, { color: C.text }]}>{tip.customerName || 'Client'}</Text>
+              {!!tip.paidAt && <Text style={[styles.caption, { color: C.sub }]}>Tipped {date(new Date(tip.paidAt).getTime())} · {money(tip.amountPence, 'gbp')}</Text>}
+            </View>
+            <Text style={[styles.amountSmall, { color: C.text }]}>{tip.payoutPence != null ? money(tip.payoutPence, 'gbp') : money(tip.amountPence, 'gbp')}</Text>
+          </View>
+          <StatusBadge label={tipStatusLabel(tip)} attention={tip.payoutStatus === 'failed'} />
+        </View>)}
+      </>}
     </>}
 
     {shownSection === 'payouts' && <>
@@ -368,6 +388,16 @@ function feeStatusLabel(fee: ProviderFeeEarning): string {
     case 'held': return fee.releaseAfter ? `Released from ${date(new Date(fee.releaseAfter).getTime())}` : 'Held';
     case 'transferred': return 'Released to Stripe';
     case 'reversed': return 'Taken back after a bank dispute';
+    case 'failed': return 'Needs attention';
+    case 'cancelled': return 'Cancelled';
+    default: return 'Processing';
+  }
+}
+function tipStatusLabel(tip: ProviderTipEarning): string {
+  switch (tip.payoutStatus) {
+    case 'held': return tip.releaseAfter ? `Paid out from ${date(new Date(tip.releaseAfter).getTime())}` : 'Held';
+    case 'transferred': return 'Paid out';
+    case 'reversed': return 'Reversed by the client\'s bank';
     case 'failed': return 'Needs attention';
     case 'cancelled': return 'Cancelled';
     default: return 'Processing';
