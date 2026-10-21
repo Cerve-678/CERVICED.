@@ -74,7 +74,9 @@ import {
   BookingInfoPack,
   ProviderInfoPackRow,
   ProviderAddressPolicy,
+  getProviderBookingTip,
 } from '../../services/databaseService';
+import { formatTipAmount, providerTipNote, type ProviderBookingTip } from '../../features/provider-bookings/tipPresentation';
 import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
 import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate } from '../../utils/dateUtils';
@@ -177,6 +179,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     passedProviderBooking?.clientUserId ?? null
   );
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
+  // A tip the client paid in the app after the appointment (booking_tips).
+  const [tip, setTip] = useState<ProviderBookingTip | null>(null);
   const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
@@ -450,6 +454,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       })
       .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
   }, [clientUserId]);
+
+  useEffect(() => {
+    if (!bookingId) return;
+    let active = true;
+    getProviderBookingTip(bookingId)
+      .then(next => { if (active) setTip(next); })
+      // No tip row is the honest fallback; the money is still recorded server-side.
+      .catch((err) => logger.error('[ProviderBookingDetail] tip load failed:', err));
+    return () => { active = false; };
+  }, [bookingId]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -2084,6 +2098,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Text style={[styles.totalLabel, { color: P.text }]}>TOTAL</Text>
                   <Text style={[styles.totalValue, { color: P.text }]}>£{totalPrice.toFixed(2)}</Text>
                 </View>
+
+                {/* A tip is its own card payment after the appointment, so it
+                    sits under the total rather than being added into it. */}
+                {tip && (
+                  <View style={styles.tipBlock}>
+                    <Row
+                      label="Tip from client"
+                      value={formatTipAmount(tip)}
+                      textColor={P.text}
+                      divColor={rowDiv}
+                      valueColor="#34C759"
+                      bold
+                      last
+                    />
+                    <Text style={[styles.tipNote, { color: P.sub }]}>{providerTipNote(tip)}</Text>
+                  </View>
+                )}
               </View>
 
               {/* ── Reschedule section ── */}
@@ -3927,6 +3958,8 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: 'BakbakOne-Regular',
   },
+  tipBlock: { marginTop: 14 },
+  tipNote: { fontSize: 12, lineHeight: 17, marginTop: 4 },
 
   // ── Completion banner ──
   completionBanner: {

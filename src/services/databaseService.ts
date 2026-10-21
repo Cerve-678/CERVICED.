@@ -64,6 +64,7 @@ import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
+import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -4631,6 +4632,34 @@ export async function setBookingTip(
 
   if (error) throw error;
   return (data?.length ?? 0) > 0;
+}
+
+/**
+ * The paid tip on one of the provider's own bookings, or null when there isn't
+ * one. Reads booking_tips only (the provider-read RLS policy scopes it to their
+ * bookings) — never the old recorded-only reviews.tip_amount.
+ */
+export async function getProviderBookingTip(bookingId: string): Promise<ProviderBookingTip | null> {
+  const { data, error } = await supabase
+    .from("booking_tips")
+    .select("amount_pence, payout_pence, payout_status, release_after")
+    .eq("booking_id", bookingId)
+    .eq("status", "succeeded")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as {
+    amount_pence: number;
+    payout_pence: number | null;
+    payout_status: ProviderBookingTip["payoutStatus"];
+    release_after: string | null;
+  };
+  return {
+    amountPence: row.amount_pence,
+    payoutPence: row.payout_pence,
+    payoutStatus: row.payout_status,
+    releaseAfter: row.release_after,
+  };
 }
 
 export interface BookingTipPaymentSheet {
