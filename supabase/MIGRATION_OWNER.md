@@ -22,14 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-be (Claude session, 2026-10-20) — 20261020150000_provider_saved_digest
+OWNER:  (none)
 ```
 
-### Written 2026-10-20 (daily "people saved you" count)
+### Applied 2026-10-21 (daily "people saved you" count)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261020150000 | `provider_saved_digest` | **WRITTEN, NOT APPLIED.** Frontier at authoring: `20261020140000` (verified live). Adds notification type `provider_saved` (CHECK rebuilt from the live constraint), private table `provider_saver_digest_counted` (RLS on, no policies, backfilled with every existing save), index `bookmarks_created_at_idx`, `process_provider_saved_digest()` and cron `provider-saved-digest` at 18:00 UTC. Redefines nothing else. The file records its own version. The push switch (`providerSaves`) needs `send-push-notification` redeployed from feat/provider-saved-digest. |
+| 20261020150000 | `provider_saved_digest` | **APPLIED 2026-10-21** by Claude (Supabase CLI `db query -f`) on the user's OK, version recorded by the file. Verified live: `provider_saved` in the CHECK (49 → 50 types), table RLS on with 0 policies and no `authenticated` select, 13/13 existing saves backfilled, cron `provider-saved-digest` `0 18 * * *`, `authenticated` cannot execute the function, and a rolled-back dry run returned 0. Frontier at authoring: `20261020140000` (re-verified the morning of the apply). Adds notification type `provider_saved` (CHECK rebuilt from the live constraint), private table `provider_saver_digest_counted` (RLS on, no policies, backfilled with every existing save), index `bookmarks_created_at_idx`, `process_provider_saved_digest()` and cron `provider-saved-digest` at 18:00 UTC. Redefines nothing else. The file records its own version. `send-push-notification` DEPLOYED 2026-10-21 as v20 from feat/provider-saved-digest (verify_jwt true). Live v19 was byte-identical to PR #137's file first; v20 adds only the `providerSaves` mapping and default. |
 
 ### Applied 2026-10-20 (per-card logo framing)
 
