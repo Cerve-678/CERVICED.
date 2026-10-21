@@ -1267,11 +1267,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   // so the photo fills its frame wherever it's shown.
   const handleAddImage = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Please allow access to your photo library.');
-        return;
-      }
+      // No permission request first: picking from the library needs none on
+      // iOS or Android, and asking added a round trip before every picker.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -3252,11 +3249,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Explore, and inside Additional Information on the client's profile.
   const handleAddPortfolioImages = useCallback(async (category?: string) => {
     if (!user?.id || !providerDbId) return;
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
+    // No permission request first: picking from the library needs none on
+    // iOS or Android, and asking added a round trip before every picker.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
@@ -3428,11 +3422,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // pinch-to-zoom) while a photo is being picked, so every tap on the logo
   // opens the library with the square crop on.
   const handleSelectLogo = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
+    // No permission request first: picking from the library needs none on
+    // iOS or Android, and asking added a round trip before every picker.
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
