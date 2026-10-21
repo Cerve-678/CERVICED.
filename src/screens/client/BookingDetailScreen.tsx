@@ -43,7 +43,8 @@ import {
   getInfoPacksByBooking, markInfoPackViewed, BookingInfoPack,
   ProviderReschedulePolicy,
   getRebookableService,
-  setBookingTip,
+  startBookingTipPayment,
+  confirmBookingTipPayment,
   getBookingTip,
   getRefundRequestsForBooking,
 } from '../../services/databaseService';
@@ -63,6 +64,11 @@ import { A4_PRINT_SIZE, buildClientReceiptHTML } from '../../features/bookings/r
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
+import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
+
+const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -88,6 +94,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   useFont();
   const { bookingId } = route.params;
   const { isDarkMode, palette: C } = useTheme();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { user, hatState } = useAuth();
   const activeMode = hatState.active;
   const { addToCart } = useCart();
@@ -773,11 +780,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setIsLoading(true);
     try {
       const providerId = booking.providerId ?? await getProviderIdByDisplayName(booking.providerName);
-      if (providerId) {
-        const alreadyReviewed = await hasReviewedBooking(booking.id);
-        if (!alreadyReviewed) {
-          await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
-        }
+      if (!providerId) {
+        throw new Error('Provider record is unavailable');
+      }
+      const alreadyReviewed = await hasReviewedBooking(booking.id);
+      if (!alreadyReviewed) {
+        await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
       }
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);
@@ -791,27 +799,31 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
    * discarded on unmount and the provider never saw it — while the UI said
    * "Thank you for tipping".
    *
-   * Tips are stored on the booking's review row (reviews.tip_amount), which
-   * requires a review to exist, so an unrated booking is asked to rate first.
-   * Nothing is marked as tipped unless the write actually succeeded.
+   * A tip is its own Stripe payment and payout ledger entry. The webhook is
+   * authoritative; the explicit confirmation only makes the usual app path
+   * update immediately.
    */
   const handleTipSubmit = useCallback(async () => {
     if (!booking || tipAmount <= 0) { Alert.alert('Invalid Tip', 'Please enter a valid tip amount.'); return; }
     setIsLoading(true);
     try {
-      const attached = await setBookingTip(booking.id, tipAmount);
-      if (!attached) {
-        Alert.alert(
-          'Rate First',
-          'Tips are added to your review, so please rate this appointment before leaving a tip.',
-        );
-        return;
+      const sheet = await startBookingTipPayment(booking.id, Math.round(tipAmount * 100));
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Cerviced', returnURL: 'cerviced://stripe-redirect',
+        customerId: sheet.customerId, customerEphemeralKeySecret: sheet.ephemeralKeySecret,
+        paymentIntentClientSecret: sheet.clientSecret,
+        appearance: buildPaymentSheetAppearance(C, C.text),
+      });
+      if (initError) throw new Error(initError.message || 'Could not open tip payment.');
+      const { error: paymentError } = await presentPaymentSheet();
+      if (paymentError) {
+        if (paymentError.code === 'Canceled') return;
+        throw new Error(paymentError.message || 'Your tip did not go through.');
       }
+      await confirmBookingTipPayment(sheet.tipId);
       setTippedBookings(prev => new Set(prev).add(booking.id));
       setShowTipModal(false);
-      // Deliberately does NOT say the tip was paid — no payment provider is
-      // wired up for tips, so this records the amount for the provider only.
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been added to your review for ${booking.providerName}.`);
+      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been paid to ${booking.providerName}.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -821,7 +833,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     } finally {
       setIsLoading(false);
     }
-  }, [booking, tipAmount]);
+  }, [booking, tipAmount, initPaymentSheet, presentPaymentSheet, C]);
 
   /**
    * Open the real chat thread with this provider.
