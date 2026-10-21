@@ -14,6 +14,7 @@ import Svg, { Defs, Mask, Rect as SvgRect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
+import { useTranslation } from '../i18n';
 import { isTargetOnScreen } from '../utils/coachMarkTargets';
 
 const PAD = 8; // breathing room between the real element and the spotlight edge
@@ -85,6 +86,7 @@ const measureStep = (step: CoachMarkStep): Promise<Rect | null> => {
  */
 export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, onFinish }) => {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   // Measured per render, not captured at module load: the spotlight mask and
   // card placement are absolute coordinates, so a stale screen size puts them
   // in the wrong place after a rotation or in split-screen.
@@ -305,12 +307,12 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
                 </View>
               )}
               <Text style={[styles.stepLabel, { color: P.accentText }]}>
-                STEP {stepIndex + 1} OF {steps.length}
+                {t('shared.coachMark.stepOf', { step: stepIndex + 1, total: steps.length })}
               </Text>
               <View style={{ flex: 1 }} />
               {!isLast && (
                 <TouchableOpacity onPress={skip} activeOpacity={0.5} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Text style={[styles.skipText, { color: P.sub }]}>Skip</Text>
+                  <Text style={[styles.skipText, { color: P.sub }]}>{t('shared.coachMark.skip')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -341,7 +343,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <Ionicons name="chevron-back" size={13} color={P.sub} />
-                    <Text style={[styles.backText, { color: P.sub }]}>BACK</Text>
+                    <Text style={[styles.backText, { color: P.sub }]}>{t('shared.coachMark.back')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -349,7 +351,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
                   onPress={advance}
                   activeOpacity={0.75}
                 >
-                  <Text style={[styles.nextText, { color: P.onAccent }]}>{isLast ? 'GOT IT' : 'NEXT'}</Text>
+                  <Text style={[styles.nextText, { color: P.onAccent }]}>{isLast ? t('shared.coachMark.gotIt') : t('shared.coachMark.next')}</Text>
                   {!isLast && <Ionicons name="arrow-forward" size={13} color={P.onAccent} style={{ marginLeft: 5 }} />}
                 </TouchableOpacity>
               </View>

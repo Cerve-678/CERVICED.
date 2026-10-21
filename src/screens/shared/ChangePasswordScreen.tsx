@@ -19,10 +19,12 @@ import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { validatePassword } from '../../utils/validation';
 import { logger } from '../../utils/logger';
 import { useAppDialog } from '../../components/AppDialog';
-import { toUserMessage, SAME_PASSWORD_MESSAGE } from '../../utils/userFacingError';
+import { toUserMessage, isSamePasswordError } from '../../utils/userFacingError';
+import { useTranslation } from '../../i18n';
 
 export default function ChangePasswordScreen({ navigation }: any) {
   const { isDarkMode, palette: P } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const [next, setNext] = useState('');
@@ -42,16 +44,16 @@ export default function ChangePasswordScreen({ navigation }: any) {
 
   const handleSave = async () => {
     if (!next.trim() || !confirm.trim()) {
-      showAlert('Missing fields', 'Please fill in all fields.', 'center');
+      showAlert(t('shared.changePassword.missingFields.title'), t('shared.changePassword.missingFields.body'), 'center');
       return;
     }
     if (next !== confirm) {
-      showAlert('Mismatch', 'New passwords do not match.', 'center');
+      showAlert(t('shared.changePassword.mismatch.title'), t('shared.changePassword.mismatch.body'), 'center');
       return;
     }
     const passwordError = validatePassword(next);
     if (passwordError) {
-      showAlert('Weak password', passwordError, 'center');
+      showAlert(t('shared.changePassword.weak.title'), passwordError, 'center');
       return;
     }
     setLoading(true);
@@ -59,10 +61,10 @@ export default function ChangePasswordScreen({ navigation }: any) {
     try {
       await updateCurrentPassword(next);
     } catch (e) {
-      const message = toUserMessage(e, "Couldn't update your password. Please try again.", 'ChangePasswordScreen.updateCurrentPassword');
+      const message = toUserMessage(e, t('shared.changePassword.updateFailed'), 'ChangePasswordScreen.updateCurrentPassword');
       // Rejecting a no-op (new password same as the current one) isn't really
       // a failure, so "Error" reads wrong as the title for it specifically.
-      const title = message === SAME_PASSWORD_MESSAGE ? 'Please try again' : 'Error';
+      const title = isSamePasswordError(e) ? t('shared.changePassword.samePassword.title') : t('common.error');
       showAlert(title, message, 'center');
       return;
     } finally {
@@ -75,8 +77,8 @@ export default function ChangePasswordScreen({ navigation }: any) {
         logger.error('[email] password-changed email failed to send:', e);
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showConfirm('Done', 'Your password has been updated.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
+      showConfirm(t('common.done'), t('shared.changePassword.updated'), [
+        { text: t('common.ok'), onPress: () => navigation.goBack() },
       ], 'center');
     }
   };
@@ -98,17 +100,17 @@ export default function ChangePasswordScreen({ navigation }: any) {
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: P.text }]}>Change Password</Text>
-          <Text style={[styles.subtitle, { color: P.sub }]}>Update your account credentials</Text>
+          <Text style={[styles.title, { color: P.text }]}>{t('shared.changePassword.title')}</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>{t('shared.changePassword.subtitle')}</Text>
 
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>NEW PASSWORD</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('shared.changePassword.newLabel')}</Text>
             <View style={rowStyle}>
               <TextInput
                 style={inputStyle}
                 value={next}
                 onChangeText={setNext}
-                placeholder="Min. 8 characters"
+                placeholder={t('shared.changePassword.newPlaceholder')}
                 placeholderTextColor={P.sub}
                 secureTextEntry={!showNext}
                 autoCapitalize="none"
@@ -118,7 +120,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowNext(v => !v); }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.eyeText, { color: P.sub }]}>{showNext ? 'Hide' : 'Show'}</Text>
+                <Text style={[styles.eyeText, { color: P.sub }]}>{showNext ? t('shared.password.hide') : t('shared.password.show')}</Text>
               </TouchableOpacity>
             </View>
             {next.length > 0 && (
@@ -127,13 +129,13 @@ export default function ChangePasswordScreen({ navigation }: any) {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: P.sub }]}>CONFIRM NEW PASSWORD</Text>
+            <Text style={[styles.label, { color: P.sub }]}>{t('shared.changePassword.confirmLabel')}</Text>
             <View style={rowStyle}>
               <TextInput
                 style={inputStyle}
                 value={confirm}
                 onChangeText={setConfirm}
-                placeholder="Re-enter new password"
+                placeholder={t('shared.changePassword.confirmPlaceholder')}
                 placeholderTextColor={P.sub}
                 secureTextEntry={!showConfirmField}
                 autoCapitalize="none"
@@ -143,7 +145,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowConfirmField(v => !v); }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.eyeText, { color: P.sub }]}>{showConfirmField ? 'Hide' : 'Show'}</Text>
+                <Text style={[styles.eyeText, { color: P.sub }]}>{showConfirmField ? t('shared.password.hide') : t('shared.password.show')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -156,7 +158,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
           >
             {loading
               ? <ActivityIndicator color={P.onAccent} />
-              : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>UPDATE PASSWORD</Text>
+              : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>{t('shared.changePassword.submit')}</Text>
             }
           </TouchableOpacity>
         </ScrollView>

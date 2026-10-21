@@ -15,12 +15,14 @@ import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScre
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import OffersScreen from '../../../screens/client/OffersScreen';
 import { HomeStackParamList } from '../../types';
+import { useTranslation } from '../../../i18n';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 
 export default function HomeNavigator() {
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <HomeStack.Navigator>
@@ -34,7 +36,7 @@ export default function HomeNavigator() {
       <HomeStack.Screen
         name="ProviderChat"
         component={ProviderChatScreen}
-        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: t('common.back') }}
       />
 
       {/* PUSH NAVIGATION - Full screen as you requested */}
@@ -42,9 +44,9 @@ export default function HomeNavigator() {
         name="ProviderProfile"
         component={ProviderProfileScreen}
         options={{
-          title: 'Provider Profile',
+          title: t('shared.nav.providerProfile'),
           presentation: 'card', // Push navigation
-          headerBackTitle: 'Home',
+          headerBackTitle: t('shared.nav.home'),
           headerStyle: {
             backgroundColor: theme.background,
           },
@@ -60,9 +62,9 @@ export default function HomeNavigator() {
         name="BookmarkedProviders"
         component={BookmarkedProvidersScreen}
         options={{
-          title: 'Your Providers',
+          title: t('shared.nav.yourProviders'),
           presentation: 'card', // Push navigation
-          headerBackTitle: 'Home',
+          headerBackTitle: t('shared.nav.home'),
           headerStyle: {
             backgroundColor: theme.background,
           },
@@ -78,12 +80,12 @@ export default function HomeNavigator() {
         name="Search"
         component={SearchScreen}
         options={{
-          title: 'Find Your Cervice',
+          title: t('shared.nav.findYourCervice'),
           animation: 'none',
-          headerBackTitle: 'Back',
+          headerBackTitle: t('common.back'),
           headerTransparent: true,
           headerSearchBarOptions: {
-            placeholder: 'Search providers...',
+            placeholder: t('shared.nav.searchProvidersPlaceholder'),
             hideWhenScrolling: false,
             autoCapitalize: 'none',
             placement: 'stacked',
@@ -96,9 +98,9 @@ export default function HomeNavigator() {
         name="Bookings"
         component={BookingsScreen}
         options={{
-          title: 'Track Appointment',
+          title: t('shared.nav.trackAppointment'),
           presentation: 'card',
-          headerBackTitle: 'Home',
+          headerBackTitle: t('shared.nav.home'),
           headerTransparent: false,
           headerShadowVisible: false,
           headerTitleStyle: {
@@ -153,7 +155,7 @@ export default function HomeNavigator() {
       {/* SWIPE-DOWN MODAL - Notifications (formSheet style on iOS) */}
       <HomeStack.Group screenOptions={{
         presentation: 'modal',
-        headerBackTitle: 'Close',
+        headerBackTitle: t('common.close'),
         headerStyle: {
           backgroundColor: 'transparent',
         },

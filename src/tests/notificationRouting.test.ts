@@ -76,7 +76,9 @@ describe('notification routing — post-dismiss navigation', () => {
     expect(source).toContain('PROVIDER_INLINE_BOOKING_ACTION_TYPES');
     expect(source).toContain("'booking_pending'");
     expect(source).toContain("'booking_cancelled'");
-    expect(source).toContain("return isProvider ? 'View Booking' : 'View Past Bookings'");
+    expect(source).toContain(
+      "return isProvider ? t('shared.notifications.action.viewBooking') : t('shared.notifications.action.viewPastBookings')",
+    );
     expect(source).toContain('PROVIDER_INLINE_BOOKING_ACTION_TYPES.has(item.type)');
     expect(source).toContain("navigateProviderHome('BookingDetail'");
   });

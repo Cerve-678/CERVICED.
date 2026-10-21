@@ -21,11 +21,23 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { invokeSendSupportRequest } from '../../services/databaseService';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { toUserMessage } from '../../utils/userFacingError';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
-const CATEGORIES = ['Bug / Crash', 'Booking Issue', 'Provider Issue', 'Payment', 'Account', 'Other'];
+// `value` is what the support request stores and emails, so it stays English;
+// only the chip label is translated.
+const CATEGORIES: ReadonlyArray<{ value: string; labelKey: TranslationKey }> = [
+  { value: 'Bug / Crash', labelKey: 'shared.reportProblem.category.bug' },
+  { value: 'Booking Issue', labelKey: 'shared.reportProblem.category.booking' },
+  { value: 'Provider Issue', labelKey: 'shared.reportProblem.category.provider' },
+  { value: 'Payment', labelKey: 'shared.reportProblem.category.payment' },
+  { value: 'Account', labelKey: 'shared.reportProblem.category.account' },
+  { value: 'Other', labelKey: 'shared.reportProblem.category.somethingElse' },
+];
 
 export default function ReportProblemScreen({ navigation }: any) {
   const { theme, isDarkMode, palette: P } = useTheme();
+  const { t } = useTranslation();
   const { hatState } = useAuth();
   const activeMode = hatState.active;
   const insets = useSafeAreaInsets();
@@ -34,8 +46,8 @@ export default function ReportProblemScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!category) { Alert.alert('Select a category'); return; }
-    if (!description.trim()) { Alert.alert('Please describe the issue'); return; }
+    if (!category) { Alert.alert(t('shared.reportProblem.selectCategory')); return; }
+    if (!description.trim()) { Alert.alert(t('shared.reportProblem.describeIssue')); return; }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
@@ -51,17 +63,20 @@ export default function ReportProblemScreen({ navigation }: any) {
       // something to quote back at us. Deliberately not conditional on the
       // email having gone out — the report is saved either way.
       Alert.alert(
-        'Report Sent',
-        `Thank you — we'll look into this and get back to you if needed.\n\nYour reference is #${ticketNumber}.`,
-        [{ text: 'Done', onPress: () => navigation.goBack() }],
+        t('shared.reportProblem.sent.title'),
+        t('shared.reportProblem.sent.body', { ticketNumber }),
+        [{ text: t('common.done'), onPress: () => navigation.goBack() }],
       );
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       // Never say it sent when it didn't — hand them the address instead, so a
       // report isn't simply lost because the send failed.
       Alert.alert(
-        "Couldn't send your report",
-        `${toUserMessage(e, 'Please try again in a moment.', 'ReportProblemScreen.handleSubmit')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+        t('shared.reportProblem.failed.title'),
+        t('shared.reportProblem.failed.body', {
+          reason: toUserMessage(e, t('shared.reportProblem.failed.fallback'), 'ReportProblemScreen.handleSubmit'),
+          email: SUPPORT_EMAIL,
+        }),
       );
     } finally {
       setLoading(false);
@@ -87,14 +102,14 @@ export default function ReportProblemScreen({ navigation }: any) {
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: P.text }]}>Report a Problem</Text>
+          <Text style={[styles.title, { color: P.text }]}>{t('shared.reportProblem.title')}</Text>
           <Text style={[styles.subtitle, { color: P.sub }]}>
-            Tell us what went wrong and we'll fix it
+            {t('shared.reportProblem.subtitle')}
           </Text>
 
-          <Text style={[styles.label, { color: P.sub }]}>CATEGORY</Text>
+          <Text style={[styles.label, { color: P.sub }]}>{t('shared.reportProblem.categoryLabel')}</Text>
           <View style={styles.chips}>
-            {CATEGORIES.map(cat => (
+            {CATEGORIES.map(({ value: cat, labelKey }) => (
               <TouchableOpacity
                 key={cat}
                 style={[
@@ -108,13 +123,13 @@ export default function ReportProblemScreen({ navigation }: any) {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.chipText, { color: chipActive(cat) ? '#fff' : P.sub }]}>
-                  {cat}
+                  {t(labelKey)}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={[styles.label, { color: P.sub, marginTop: 8 }]}>DESCRIPTION</Text>
+          <Text style={[styles.label, { color: P.sub, marginTop: 8 }]}>{t('shared.reportProblem.descriptionLabel')}</Text>
           <TextInput
             style={[
               styles.textArea,
@@ -126,7 +141,7 @@ export default function ReportProblemScreen({ navigation }: any) {
             ]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Describe what happened..."
+            placeholder={t('shared.reportProblem.descriptionPlaceholder')}
             placeholderTextColor={P.sub}
             multiline
             numberOfLines={5}
@@ -144,7 +159,7 @@ export default function ReportProblemScreen({ navigation }: any) {
           >
             {loading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={[styles.submitText, { color: '#fff' }]}>SEND REPORT</Text>
+              : <Text style={[styles.submitText, { color: '#fff' }]}>{t('shared.reportProblem.submit')}</Text>
             }
           </TouchableOpacity>
         </ScrollView>

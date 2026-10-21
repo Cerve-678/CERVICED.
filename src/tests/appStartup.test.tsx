@@ -26,7 +26,10 @@ jest.mock('../utils/storage', () => ({
 }));
 jest.mock('../contexts/AuthContext', () => ({ AuthProvider: ({ children }: any) => children }));
 jest.mock('../contexts/ThemeContext', () => ({ ThemeProvider: ({ children }: any) => children }));
-jest.mock('../contexts/DisplaySettingsContext', () => ({ DisplaySettingsProvider: ({ children }: any) => children }));
+jest.mock('../contexts/DisplaySettingsContext', () => ({
+  DisplaySettingsProvider: ({ children }: any) => children,
+  useOptionalLanguage: () => null,
+}));
 jest.mock('../contexts/RegistrationContext', () => ({ RegistrationProvider: ({ children }: any) => children }));
 jest.mock('../contexts/FontContext', () => ({ FontProvider: ({ children }: any) => children }));
 jest.mock('../contexts/CartContext', () => ({ CartProvider: ({ children }: any) => children }));

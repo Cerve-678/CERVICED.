@@ -22,6 +22,7 @@ import LinkOnlyHomeScreen from '../../../screens/provider/LinkOnlyHomeScreen';
 import LinkOnlyAnalyticsScreen from '../../../screens/provider/LinkOnlyAnalyticsScreen';
 import ProviderBeccaNavigator from './ProviderBeccaNavigator';
 import { ProviderHomeStackParamList } from '../../types';
+import { useTranslation } from '../../../i18n';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 const ProviderHomeStack = createNativeStackNavigator<ProviderHomeStackParamList>();
@@ -35,6 +36,7 @@ const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
  */
 export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?: boolean }) {
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <ProviderHomeStack.Navigator initialRouteName={linkOnly ? 'LinkOnlyHomeMain' : 'ProviderHomeMain'}>
@@ -146,7 +148,7 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
 
       <ProviderHomeStack.Group screenOptions={{
         presentation: 'modal',
-        headerBackTitle: 'Close',
+        headerBackTitle: t('common.close'),
         headerStyle: {
           backgroundColor: 'transparent',
         },

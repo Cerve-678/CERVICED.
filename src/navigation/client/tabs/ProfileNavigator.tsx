@@ -28,12 +28,14 @@ import CartScreen from '../../../screens/client/CartScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import { ProfileStackParamList } from '../../types';
+import { useTranslation } from '../../../i18n';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 export default function ProfileNavigator() {
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <ProfileStack.Navigator>
@@ -111,22 +113,22 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="ProviderChat"
         component={ProviderChatScreen}
-        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: t('common.back') }}
       />
 
       <ProfileStack.Screen
         name="Messages"
         component={MessagesScreen}
-        options={{ headerShown: true, title: 'Messages', headerBackTitle: 'Back' }}
+        options={{ headerShown: true, title: t('shared.nav.messages'), headerBackTitle: t('common.back') }}
       />
 
       <ProfileStack.Screen
         name="ProviderProfile"
         component={ProviderProfileScreen}
         options={{
-          title: 'Provider Profile',
+          title: t('shared.nav.providerProfile'),
           presentation: 'card',
-          headerBackTitle: 'Profile',
+          headerBackTitle: t('shared.nav.profile'),
           headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
@@ -148,9 +150,9 @@ export default function ProfileNavigator() {
         name="Bookings"
         component={BookingsScreen}
         options={{
-          title: 'Track Appointment',
+          title: t('shared.nav.trackAppointment'),
           presentation: 'card',
-          headerBackTitle: 'Profile',
+          headerBackTitle: t('shared.nav.profile'),
           headerTransparent: false,
           headerShadowVisible: false,
           headerTitleStyle: {
@@ -189,7 +191,7 @@ export default function ProfileNavigator() {
         name="BookmarkedProviders"
         component={BookmarkedProvidersScreen}
         options={{
-          title: 'Saved Providers',
+          title: t('shared.nav.savedProviders'),
           presentation: 'card',
           headerShown: false,
         }}
@@ -197,7 +199,7 @@ export default function ProfileNavigator() {
 
       <ProfileStack.Group screenOptions={{
         presentation: 'fullScreenModal',
-        headerBackTitle: 'Close',
+        headerBackTitle: t('common.close'),
         headerStyle: { backgroundColor: theme.background },
         headerTintColor: theme.text,
       }}>
@@ -205,7 +207,7 @@ export default function ProfileNavigator() {
           name="Notifications"
           component={NotificationsScreen}
           options={{
-            title: 'Notifications',
+            title: t('shared.nav.notifications'),
             presentation: 'formSheet',
             headerShown: false,
           }}
@@ -224,7 +226,7 @@ export default function ProfileNavigator() {
           name="InfoReg"
           component={InfoRegScreen}
           options={{
-            title: 'Provider Registration',
+            title: t('shared.nav.providerRegistration'),
             presentation: 'fullScreenModal',
             headerShown: false,
           }}

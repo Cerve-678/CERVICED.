@@ -12,42 +12,54 @@
  * `logger`/`reportError` at the throw site and by `toUserMessage` itself.
  */
 import { reportError } from './logger';
+import { tr } from '../i18n/translate';
+import type { TranslationKey } from '../i18n/types';
 
 /**
  * Supabase Auth's own guard against "changing" a password to its current
- * value — 422 same_password. Exported so a caller can special-case its
- * dialog title: this isn't really a failure, just a rejected no-op, so
- * "Error" reads wrong next to it.
+ * value — 422 same_password. Matched on the raw error (not on the friendly
+ * copy, which is translated) so a caller can special-case its dialog title:
+ * this isn't really a failure, just a rejected no-op, so "Error" reads wrong
+ * next to it.
  */
-export const SAME_PASSWORD_MESSAGE = 'Your new password needs to be different from your current one.';
+const SAME_PASSWORD_PATTERN = /new password should be different/i;
 
-const FRIENDLY_PATTERNS: { test: RegExp; message: string }[] = [
+export function isSamePasswordError(error: unknown): boolean {
+  const raw =
+    typeof error === 'string'
+      ? error
+      : (error as { message?: unknown } | null)?.message;
+  return typeof raw === 'string' && SAME_PASSWORD_PATTERN.test(raw);
+}
+
+// Copy is stored as a translation key and resolved with tr() when an error is
+// mapped, so it follows the language picked at that moment.
+const FRIENDLY_PATTERNS: { test: RegExp; messageKey: TranslationKey }[] = [
   { test: /network|fetch failed|timeout|offline|connect/i,
-    message: 'No internet connection. Please check your network and try again.' },
+    messageKey: 'shared.error.offline' },
   { test: /rate limit|too many/i,
-    message: 'Too many attempts. Please wait a moment and try again.' },
+    messageKey: 'shared.error.rateLimited' },
   // Only Supabase auth says "already registered", so this stays safe to make
   // email-specific; the generic clause below still covers duplicate-key writes.
   { test: /already registered|already been registered/i,
-    message: 'An account with this email already exists. Try logging in instead.' },
+    messageKey: 'shared.error.emailTaken' },
   { test: /already exists|duplicate key/i,
-    message: 'That already exists. Please check your details and try again.' },
+    messageKey: 'shared.error.duplicate' },
   { test: /invalid email|unable to validate email/i,
-    message: "That email address doesn't look right. Please check it and try again." },
+    messageKey: 'shared.error.invalidEmail' },
   { test: /password.*weak|weak.*password/i,
-    message: "Your password isn't strong enough. Try mixing letters, numbers, and symbols." },
+    messageKey: 'shared.error.weakPassword' },
   { test: /password.*(short|characters)/i,
-    message: 'Your password needs to be at least 8 characters long.' },
-  { test: /new password should be different/i, message: SAME_PASSWORD_MESSAGE },
+    messageKey: 'shared.error.shortPassword' },
+  { test: SAME_PASSWORD_PATTERN, messageKey: 'shared.error.samePassword' },
   { test: /invalid login|invalid credentials|email not confirmed/i,
-    message: "That email or password doesn't match an account." },
+    messageKey: 'shared.error.invalidLogin' },
   { test: /permission|row-level security|not authorized|unauthorized|jwt/i,
-    message: "You don't have permission to do that. Try signing out and back in." },
+    messageKey: 'shared.error.permission' },
   { test: /payment|card|declined/i,
-    message: 'That payment could not be completed. Please check your details or try another card.' },
+    messageKey: 'shared.error.payment' },
 ];
 
-const GENERIC = 'Something went wrong. Please try again.';
 
 /**
  * @param error    the caught error, in any shape
@@ -58,7 +70,7 @@ const GENERIC = 'Something went wrong. Please try again.';
  */
 export function toUserMessage(
   error: unknown,
-  fallback: string = GENERIC,
+  fallback: string = tr('shared.error.generic'),
   context?: string,
 ): string {
   reportError(error, context);
@@ -70,7 +82,7 @@ export function toUserMessage(
   if (typeof raw !== 'string' || !raw.trim()) return fallback;
 
   const match = FRIENDLY_PATTERNS.find(p => p.test.test(raw));
-  return match ? match.message : fallback;
+  return match ? tr(match.messageKey) : fallback;
 }
 
 /**
@@ -100,24 +112,24 @@ export function toUserMessage(
  * UUID, "caller"). Translating a guard that already speaks to the user throws
  * away the specific number or name that made it worth showing.
  */
-const GUARD_TRANSLATIONS: { test: RegExp; message: string }[] = [
+const GUARD_TRANSLATIONS: { test: RegExp; messageKey: TranslationKey }[] = [
   // provider_update_booking_status()'s state machine: "Invalid status
   // transition: in_progress -> in_progress". Raw DB status strings, and the
   // real cause is almost always a screen acting on a status that has since
   // moved on somewhere else.
   { test: /invalid status transition/i,
-    message: 'This booking has already been updated somewhere else. Check its current status and try again.' },
+    messageKey: 'shared.error.guard.statusMoved' },
   // The group RPCs name the offending booking by UUID, which is meaningless
   // to a provider and needlessly exposes an internal id.
   { test: /not owned by caller|no provider profile for caller|is not part of group/i,
-    message: "You don't have permission to change this booking. Try signing out and back in." },
+    messageKey: 'shared.error.guard.notOwner' },
   { test: /^no (proposals|selections) supplied/i,
-    message: 'Add at least one date and time first.' },
+    messageKey: 'shared.error.guard.noProposals' },
 ];
 
 export function toUserMessageAllowingDbGuard(
   error: unknown,
-  fallback: string = GENERIC,
+  fallback: string = tr('shared.error.generic'),
   context?: string,
 ): string {
   const code = (error as { code?: unknown } | null)?.code;
@@ -125,7 +137,7 @@ export function toUserMessageAllowingDbGuard(
   if (code === 'P0001' && typeof raw === 'string' && raw.trim()) {
     reportError(error, context);
     const translated = GUARD_TRANSLATIONS.find(g => g.test.test(raw));
-    return translated ? translated.message : raw;
+    return translated ? tr(translated.messageKey) : raw;
   }
   return toUserMessage(error, fallback, context);
 }

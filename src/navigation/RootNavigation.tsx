@@ -8,6 +8,7 @@ import ProviderTabNavigation from './provider/ProviderTabNavigator';
 import { RootStackParamList } from './types';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useTranslation } from '../i18n';
 import { navigationRef } from './navigationRef';
 import { requestMode, resolveModeChange } from './modeController';
 import { handleNotificationTap } from '../services/notificationTapHandler';
@@ -37,6 +38,7 @@ export default function RootNavigation() {
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
 
   // The switch overlay always uses the DESTINATION hat's real accent (not a
   // hardcoded placeholder color) — same "you're switching identity" signal
@@ -163,10 +165,10 @@ export default function RootNavigation() {
               two trees look alike on arrival, so direction is the only cue the
               user gets that the switch did what they expected. */}
           <Text style={[styles.switchFrom, { color: switchingDestinationTheme.sub }]}>
-            Leaving {switchingTo === 'provider' ? 'Client' : 'Provider'} Mode
+            {switchingTo === 'provider' ? t('shared.modeSwitch.leavingClient') : t('shared.modeSwitch.leavingProvider')}
           </Text>
           <Text style={[styles.switchText, { color: switchingDestinationTheme.text }]}>
-            Switching to {switchingTo === 'provider' ? 'Provider' : 'Client'} Mode
+            {switchingTo === 'provider' ? t('shared.modeSwitch.toProvider') : t('shared.modeSwitch.toClient')}
           </Text>
         </View>
       </View>
