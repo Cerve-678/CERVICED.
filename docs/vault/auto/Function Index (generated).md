@@ -5,7 +5,7 @@
 
 #generated
 
-**2658 functions** across **423 files**.
+**2668 functions** across **423 files**.
 
 ### `src/components/` (46)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -61,13 +61,14 @@
 ### `src/components/signup/` (1)
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
 
-### `src/constants/` (8)
-- `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
+### `src/constants/` (9)
+- `hairTypes.ts` — **hairTypeLabel**
+- `maintenanceServiceTypes.ts` — **getMaintenanceServiceType** · **maintenanceTypeLabel**
 - `payoutTiming.ts` — **isPayoutHoldDays** · **payoutHoldLabel** · **payoutHoldSentence**
 - `PlatformDimensions.ts` — for
 - `providerFonts.ts` — **resolveProviderFontFamily**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
-- `skinTones.ts` — **matchesSkinTone**
+- `skinTones.ts` — **matchesSkinTone** · **skinToneLabel**
 - `support.ts` — **supportMailtoUrl**
 - `waitlist.ts` — changes
 
@@ -75,7 +76,7 @@
 - `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
-- `DisplaySettingsContext.tsx` — **DisplaySettingsProvider** · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
+- `DisplaySettingsContext.tsx` — **DisplaySettingsProvider** · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings** · **useOptionalLanguage**
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
 - `RegistrationContext.tsx` — **RegistrationProvider** · resetData · updateData · **useRegistration** · value
 - `StatusBarTintContext.tsx` — claimDarkTopArea · releaseDarkTopArea · **StatusBarTintProvider** · **useDarkTopArea** · **useStatusBarTint** · value
@@ -85,11 +86,12 @@
 - `languages.ts` — **recognizeLanguage**
 - `portfolioFeed.ts` — **getAllPortfolioItems** · **getPortfolioByCategory** · **getPortfolioByProvider** · **getPortfolioItemById** · **getProviderForItem** · **searchPortfolio**
 
-### `src/features/beauty-profile/` (4)
+### `src/features/beauty-profile/` (5)
 - `BeautyLanding.tsx` — **BeautyLanding** · go · groups · maintenanceBody · S · stubs · traits
 - `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · sectionHead · setSingle · sub · toggleAllergen · toggleMulti
-- `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
+- `highlights.ts` — **highlightCategory** · **leadingCategory** · o · orderedAnswers · os
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
+- `options.ts` — **beautyOptionLabel**
 
 ### `src/features/bookings/` (15)
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
@@ -339,7 +341,7 @@
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
-- `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
+- `beautyProfileStats.ts` — **categoryLabel** · **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `cartUtils.ts` — **getCartSummary**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
@@ -355,7 +357,7 @@
 - `fuzzyMatch.ts` — levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar**
 - `hairTypeMatch.ts` — **matchesHairType**
 - `logger.ts` — **clearLogBuffer** · formatArgs · **getLogBuffer** · **installAuthErrorFilter** · noop · pushToBuffer · **reportError** · **setErrorReporter** · **subscribeToLogBuffer**
-- `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer · **scheduleNewReminder**
+- `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer · opt · said · **scheduleNewReminder**
 - `masonryHeight.ts` — **getMasonryItemHeight** · hashToUnit
 - `mergeSavedExploreCards.ts` — **mergeSavedExploreCards**
 - `newestAddedItem.ts` — **newestAddedItem**
