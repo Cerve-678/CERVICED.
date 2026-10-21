@@ -1517,3 +1517,136 @@ in Aesthetics.
   `search_category` from AESTHETICS to BODY in the same migration.
 - A decision on providers still stamped OTHER: offer them BODY, or leave
   them as they are.
+
+---
+
+## Link-only pros still see full-service features (2026-10-20)
+
+### What it means
+
+A link-only pro (`providers.booking_mode = 'external'`) takes bookings
+through their own link, not through CERVICED. Their tabs, Home, Business
+Info and Opening Hours were already rebuilt for that. The places below
+still assume a full CERVICED provider: they show booking tools, booking
+words, or promises that only make sense when CERVICED handles the booking.
+None of it is broken. It just makes the two kinds of provider look the same
+when they aren't.
+
+### Decided (user, 2026-10-20)
+
+- **Saved notification:** a daily count with no names ("3 people saved you
+  today"), at most one a day. It goes to **every provider**, not just
+  link-only. It's on by default, with a toggle to turn it off.
+- **Notifications tabs (link-only):** All / Unread only.
+- **Settings row (link-only):** "Messages and saves".
+- **Policies (link-only):** plain text only. Cancellation notice,
+  reschedules and a note; no fee card and no deposit options. The profile
+  says they're handled on the pro's booking site.
+- **Becca (link-only):** only the capabilities that fit (the "probably
+  fine" list in item 5). Anything else gets "that isn't part of your
+  setup". She doesn't read the phone diary yet.
+- **Help Centre:** one set of provider FAQs for **all** pros, with the
+  link-only answers inside it. The user approves the wording.
+
+Not built yet. The details below are the reasoning and file pointers.
+
+### 1. "Someone saved you" notification — missing
+
+What happens today: when a client saves (bookmarks) a link-only pro, the
+pro is told nothing. The only place a save shows up is the saves count in
+Link-only Analytics. For a link-only pro a save is the closest thing to a
+booking signal they have. (Announcements to savers were removed for
+link-only pros on 2026-10-19, so a save no longer means anything else.) ("Did you book?" answers don't notify the pro
+either.)
+
+What it would take:
+
+- A DB trigger on `bookmarks` insert. Notifications are owned by triggers
+  here, not app code. It inserts a provider-role row of a new type, e.g.
+  `provider_saved`.
+- Add the type to `notifications_type_check` (rebuild the whole list, the
+  way the no-show dispute migration did), to `NotificationsScreen`'s
+  type/route/colour maps, and to push gating.
+- Bundle saves together so it doesn't fire per tap. For example one
+  notification per day ("3 people saved you today") or a 24h debounce,
+  like the 10-minute one `notify_on_new_chat_message` uses. Don't send a
+  second one if a client un-saves and saves again.
+- Decisions for the user: name the client, or just give a count? (That's a
+  privacy question: a save is close to private.) Link-only pros only, or
+  every provider? Can the pro turn it off?
+
+### 2. Notifications filter tabs say Bookings and Reviews
+
+`src/screens/shared/NotificationsScreen.tsx` (provider tabs, ~line 1110)
+shows link-only pros **All / Unread / Bookings / Reviews**. They have no
+CERVICED bookings and no reviews section, so both tabs are always empty.
+For a link-only pro the tabs could be All / Unread / Messages, plus Saves
+if item 1 is built.
+
+### 3. Settings row says "Bookings, messages, reminders"
+
+`providerAccount.account.notifications.sub` (`src/i18n/catalogs/en.ts`)
+describes the Notifications row on the Profile tab. For link-only pros
+that should be "Messages" (plus "and saves" if item 1 is built). The row
+also opens the notification list itself, not any settings, so the
+subtitle promises something to configure that isn't there for anyone.
+
+### 4. Policies screen offers late/no-show fees and deposits — the biggest one
+
+Business → Policies opens the full `PoliciesScreen` for link-only pros. It
+offers "Deposit kept" / "Full charge" on late cancellation, "Keep deposit"
+on no-shows, and the **Late & no-show fees** card. That card says fees are
+"charged to the client's saved card … Clients agree to them at checkout."
+None of that can happen for a link-only pro: there's no CERVICED checkout,
+no saved card and no booking to mark as a no-show. What they type in still
+reaches clients, though. `buildPolicyDisplayRows` (`src/utils/policyDisplay.ts`)
+puts "Late fee" / "No-show fee" rows on their public profile. So a client
+can be shown a fee policy worded as if CERVICED runs it, for a booking
+CERVICED never sees.
+
+What it would take: a link-only version of Policies. Hide the fee card and
+the deposit options, and keep plain policy text (cancellation notice,
+reschedules, a note), shown on the profile as "their policy, handled on
+their booking site". This is legal-adjacent (the app shouldn't look like
+it attests to off-app payments, see CLAUDE.md), so run
+`cerviced-legal-flagger` on the wording when it's built.
+
+### 5. Becca answers as if they were a full provider
+
+Becca is a "yes" for link-only, but `src/services/becca/capabilities/provider.ts`
+gives them all 22 provider capabilities, and none check booking mode. Asked
+"what's on today" or "how am I doing", a link-only pro gets answers about
+CERVICED bookings they don't have, or gets sent to screens their tabs don't
+include. Rough split, to confirm with the user:
+
+- **Booking-only, so wrong for them as they stand:** `pv.today`, `pv.week`,
+  `pv.gaps`, `pv.waitlist`, `pv.capacity`, `pv.analytics` (booking volume
+  and revenue; they have Link-only Analytics instead).
+- **Features they don't have:** `pv.clients`, `pv.lapsed`, `pv.forms`,
+  `pv.infopacks`, `pv.automations`, `pv.reviews`, `pv.services` /
+  `pv.myservices` (no price list), `pv.address` (address release is hidden
+  for them).
+- **Probably fine:** `pv.inbox`, `pv.notifications`, `pv.hours`,
+  `pv.reach`, `pv.help` (once its "what I can do" list matches),
+  `pv.timeoff` / `pv.availability` (check against the hours-only schedule).
+- **Could be rewired rather than hidden:** `pv.today` / `pv.week` could
+  read the phone-calendar diary the link-only Home already shows.
+
+This is a registry change, a `bookingMode` filter in `capabilitiesFor`,
+not a `matcher.ts` change. Take it through `cerviced-becca-intelligence`.
+
+### 6. Help Centre has nothing for them
+
+`HelpCentreScreen` shows the same five FAQs to everyone: how to book,
+cancel, Becca, points, payment. All of them are client questions. A
+link-only pro gets nothing about their own setup: how their Book button
+and link work, what going live needs, what saves and announcements are.
+(Full providers have the same gap.)
+
+### Already done for link-only (so nobody redoes it)
+
+Tabs (Home / Portfolio / Messages / Profile), Home dashboard, Opening Hours
+(hours-only schedule), Business Info (no business type or address
+release), the inbox ("General enquiries", no booking filters), the
+bookmarked-client "now live" wording, and the "you're live" / go-live
+reminder emails.
