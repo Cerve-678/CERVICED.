@@ -39,6 +39,9 @@ const BOOKING_TYPES = new Set([
   'fee_dispute_resolved',
   'fee_payment_requested',
   'fee_paid_by_client',
+  // A client tipped after the appointment: opens that booking, where the
+  // provider sees the tip and when it's paid out.
+  'tip_received',
   'fee_payment_lapsed',
   'refund_requested',
   'refund_request_updated',
