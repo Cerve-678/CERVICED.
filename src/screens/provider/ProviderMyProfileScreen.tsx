@@ -1686,8 +1686,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
               {tab === 'dashboard' ? (
                 <>
-                  {setup.percent === 100 ? null : statusSection}
-
                   {/* ── What clients say ───────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
 
@@ -2034,6 +2032,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
+                  {/* Keep this receipt of the provider's setup visible even
+                      once every step is complete. It belongs after the
+                      dashboard detail rather than being hidden or moved to
+                      the Services tab. */}
+                  {statusSection}
+
                 </>
               ) : (
                 <>
@@ -2089,8 +2093,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       />
                     ))
                   )}
-
-                  {setup.percent === 100 ? statusSection : null}
                 </>
               )}
             </View>
