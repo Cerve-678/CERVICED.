@@ -201,7 +201,13 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                 const modes: RefundMode[] = state.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
                 const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours) : null;
                 const optionCopy: Record<RefundMode, { title: string; sub: string; value: string }> = {
-                  full: { title: 'Full refund', sub: `Everything ${name} paid that hasn't come back yet`, value: formatPence(held) },
+                  full: {
+                    title: 'Full refund',
+                    sub: state.paidAs === 'deposit'
+                      ? `The deposit ${name} paid in app, less anything already refunded`
+                      : `Everything ${name} paid that hasn't come back yet`,
+                    value: formatPence(held),
+                  },
                   custom: { title: 'Partial refund', sub: 'Choose an amount', value: '' },
                 };
                 const total = Math.max(held, 1);
@@ -212,7 +218,16 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                         <Text style={{ color: P.text, fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>{booking.serviceName || 'Booking'}</Text>
                         <Text style={[styles.amount, { color: P.text }]}>{formatPence(state.sharePence)}</Text>
                       </View>
-                      <Text style={{ color: P.sub, fontSize: 12, marginTop: 2 }}>Paid in app</Text>
+                      <Text style={{ color: P.sub, fontSize: 12, marginTop: 2 }}>
+                        {state.paidAs === 'deposit'
+                          ? `Deposit paid in app · booking price ${formatPence(state.bookingPricePence)}`
+                          : 'Paid in full in app'}
+                      </Text>
+                      {state.paidAs === 'deposit' && (
+                        <Text style={{ color: P.sub, fontSize: 12, marginTop: 4 }}>
+                          Only the deposit went through CERVICED, so only the deposit can be refunded here.
+                        </Text>
+                      )}
                       {settled && (
                         <View style={[styles.settled, { backgroundColor: green + '1A' }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

@@ -81,7 +81,7 @@ export function Card({ title, sub, children }: { title: string; sub?: string; ch
 export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline }: {
   label: string; value: string; onChange?: (v: string) => void;
   placeholder?: string; readOnly?: boolean; note?: string;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad'; multiline?: boolean;
+  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'decimal-pad'; multiline?: boolean;
 }) {
   const C = useBusinessPalette();
   return (

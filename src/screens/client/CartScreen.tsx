@@ -16,9 +16,14 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Appearance,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -34,7 +39,18 @@ import {
   ProviderDepositPolicy,
   validatePromoCode,
   getServiceSafetyFlags,
-  prepareCheckout, cancelCheckout, getMyLastClientAddress } from '../../services/databaseService';
+  prepareCheckout, cancelCheckout, getMyLastClientAddress,
+  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards } from '../../services/databaseService';
+import {
+  savedCardBrandName, savedCardExpiryLabel, savedCardExpiryState, type SavedCard,
+} from '../../features/payments/savedCards';
+import {
+  FEE_CONSENT_LINE,
+  FEE_TERMS_BODY,
+  FEE_TERMS_HEADING,
+  FEE_TERMS_SHA256,
+  FEE_TERMS_VERSION,
+} from '../../constants/feeTerms';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -60,15 +76,16 @@ import { calculatePlatformFee } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
-// includes the SDK-compatible Stripe module, so it can show the card
-// PaymentSheet; wallet payments still require a development build.
+// includes the SDK-compatible Stripe module, so it can show the card form;
+// wallet payments still require a development build.
 const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
 
 // Expo SDK 57 ships a compatible Stripe module in Expo Go, so use the real
-// hook in both Expo Go and custom native builds.
-const useStripe: () => { initPaymentSheet: (...args: any[]) => Promise<any>; presentPaymentSheet: (...args: any[]) => Promise<any> } =
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require('@stripe/stripe-react-native').useStripe;
+// module in both Expo Go and custom native builds.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const StripeRN: typeof import('@stripe/stripe-react-native') = require('@stripe/stripe-react-native');
+const { CardForm, PlatformPay, PlatformPayButton, useStripe } = StripeRN;
+const GOOGLE_PAY_TEST_ENV = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_test_') === true;
 
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
@@ -195,6 +212,7 @@ function SummaryShell({
     // come back zero without it. Same pattern as ImageDetailModal and
     // ProviderProfileScreen.
     <SafeAreaProvider>
+    <WindowControlsInsetProvider>
       <SafeAreaView style={[styles.summaryScreen, { backgroundColor: P.bg }]} edges={['top', 'bottom', 'left', 'right']}>
         <View style={[styles.summaryHeader, { borderBottomColor: P.border }]}>
           <TouchableOpacity
@@ -227,6 +245,7 @@ function SummaryShell({
           <View style={styles.reviewButtonRow}>{actions}</View>
         </View>
       </SafeAreaView>
+    </WindowControlsInsetProvider>
     </SafeAreaProvider>
   );
 }
@@ -609,6 +628,8 @@ PaymentModal.displayName = 'PaymentModal';
 // The sheet authorises a server-priced reservation. The authenticated endpoint
 // and signed webhook share capture/finalisation logic, including recovery when
 // the app closes and refunds if the reservation can no longer be fulfilled.
+const PAYPAL_NAVY = '#003087';
+
 const StripePaymentModal: React.FC<PaymentModalProps> = memo(
   ({
     isVisible,
@@ -621,14 +642,101 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentPending,
     onBookingFailed,
   }) => {
-    const { theme, palette: P } = useTheme();
+    const { theme, palette: P, isDarkMode } = useTheme();
     // See the mock PaymentModal above — same reason, same fix.
     const bottomInset = useSystemBottomInset();
-    const { initPaymentSheet, presentPaymentSheet } = useStripe();
+    const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
     const processingRef = useRef(false);
+    const [cardComplete, setCardComplete] = useState(false);
+    const [walletSupported, setWalletSupported] = useState(false);
+    // A declined card or a failed bank check stays in this sheet so the
+    // client can fix it and try again.
+    const [payError, setPayError] = useState<string | null>(null);
+    // The intent this checkout opened. A retry reuses it (the server hands
+    // back the same one per checkout); closing the sheet cancels it.
+    const openIntentRef = useRef<string | null>(null);
 
-    const handlePayment = useCallback(async () => {
+    useEffect(() => {
+      if (!isVisible) return;
+      openIntentRef.current = null;
+      setPayError(null);
+      setCardComplete(false);
+    }, [isVisible]);
+
+    // The client's saved cards (Payment Methods), so they can pay with one in
+    // a tap. 'new' = type a card into the CardForm. Expired cards are left
+    // out: Stripe would only decline them. A failed load just shows the form.
+    const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
+    const [selectedCard, setSelectedCard] = useState<string>('new');
+    useEffect(() => {
+      if (!isVisible) return;
+      let cancelled = false;
+      setSavedCards([]);
+      setSelectedCard('new');
+      listSavedCards()
+        .then(cards => {
+          if (cancelled) return;
+          const usable = cards.filter(card => savedCardExpiryState(card) !== 'expired');
+          setSavedCards(usable);
+          if (usable[0]) setSelectedCard(usable[0].id);
+        })
+        .catch(err => logger.error('[checkout] could not load saved cards', err));
+      return () => { cancelled = true; };
+    }, [isVisible]);
+    const payingWithSavedCard = selectedCard !== 'new';
+
+    // Apple Pay / Google Pay need a development build (env.isExpoGo).
+    useEffect(() => {
+      if (!isVisible || env.isExpoGo) return;
+      let cancelled = false;
+      isPlatformPaySupported({ googlePay: { testEnv: GOOGLE_PAY_TEST_ENV } })
+        .then(supported => { if (!cancelled) setWalletSupported(supported); })
+        .catch(err => logger.error('[checkout] could not check wallet support', err));
+      return () => { cancelled = true; };
+    }, [isVisible, isPlatformPaySupported]);
+
+    // On iOS, Stripe's CardForm draws its boxes and text in the phone's own
+    // light/dark style and ignores the colours it's given, and app.json pins
+    // the phone side to light — so in the app's dark mode the form came out
+    // as a bright white block. While this sheet is open, run iOS in the
+    // app's mode so the form matches it, and hand it back on close. The app's
+    // theme doesn't move: 'auto' already equals this value, and a manual
+    // light/dark choice never reads the phone's setting.
+    useEffect(() => {
+      if (!isVisible || Platform.OS !== 'ios') return;
+      Appearance.setColorScheme(isDarkMode ? 'dark' : 'light');
+      return () => Appearance.setColorScheme('unspecified');
+    }, [isVisible, isDarkMode]);
+    // Late/no-show fees the client must agree to before their card is saved
+    // for them. null = still loading; [] = this checkout has none.
+    const [fees, setFees] = useState<CheckoutFee[] | null>(null);
+    const [feesError, setFeesError] = useState(false);
+    const [agreedToFees, setAgreedToFees] = useState(false);
+    const [feesAttempt, setFeesAttempt] = useState(0);
+    const [showFeeTerms, setShowFeeTerms] = useState(false);
+
+    useEffect(() => {
+      if (!isVisible || !checkoutBatchId) return;
+      let cancelled = false;
+      setFees(null); setFeesError(false); setAgreedToFees(false);
+      getCheckoutFees(checkoutBatchId)
+        .then(rows => { if (!cancelled) setFees(rows); })
+        .catch(err => {
+          logger.error('[checkout] could not load provider fees', err);
+          if (!cancelled) setFeesError(true);
+        });
+      return () => { cancelled = true; };
+    }, [isVisible, checkoutBatchId, feesAttempt]);
+
+    const hasFees = (fees?.length ?? 0) > 0;
+    const canPay = fees !== null && (!hasFees || agreedToFees);
+    // Same rule as create-payment-intent: a late/no-show fee is charged later
+    // to a saved card, so those checkouts are card-only. Hidden in Expo Go,
+    // which can't return from PayPal's page.
+    const paypalShown = fees !== null && !hasFees && !env.isExpoGo;
+
+    const handlePayment = useCallback(async (method: 'card' | 'wallet' | 'paypal') => {
       const timestamp = () => new Date().toISOString().split('T')[1];
 
       if (processingRef.current) {
@@ -637,6 +745,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       }
       processingRef.current = true;
       setIsProcessing(true);
+      setPayError(null);
 
       let paymentStarted = false;
       let createdIntentId: string | undefined;
@@ -644,83 +753,88 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
         }
+        if (hasFees) {
+          await acceptCheckoutFees(checkoutBatchId, {
+            termsVersion: FEE_TERMS_VERSION,
+            termsSha256: FEE_TERMS_SHA256,
+            appPlatform: Platform.OS,
+            appVersion: Constants.expoConfig?.version ?? null,
+          });
+        }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
-        const { clientSecret, paymentIntentId } = await createPaymentIntent(checkoutBatchId);
+        const { clientSecret, paymentIntentId, paypalAvailable } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
-
-        // Theme the sheet to match the app's own palette instead of Stripe's
-        // generic default. These are flat colours rather than Stripe's
-        // light/dark pair on purpose: the palette already resolves to the
-        // app's own dark mode, which is not necessarily the OS setting Stripe
-        // would otherwise auto-detect.
-        // Every value goes through toArgbHex: the palette's translucent tokens
-        // (sub, border) are CSS rgba() strings, which Stripe rejects outright
-        // rather than falling back on.
-        const stripeColors = {
-          primary: toArgbHex(P.accent),
-          background: toArgbHex(P.bg),
-          componentBackground: toArgbHex(P.surface),
-          componentBorder: toArgbHex(P.border),
-          componentDivider: toArgbHex(P.border),
-          primaryText: toArgbHex(theme.text),
-          secondaryText: toArgbHex(P.sub),
-          componentText: toArgbHex(theme.text),
-          placeholderText: toArgbHex(P.sub),
-          icon: toArgbHex(P.sub),
-          error: '#FFFF3B30',
-        };
-
-        const { error: initError } = await initPaymentSheet({
-          merchantDisplayName: 'Cerviced',
-          returnURL: 'cerviced://stripe-redirect',
-          allowsDelayedPaymentMethods: false,
-          paymentIntentClientSecret: clientSecret,
-          appearance: {
-            colors: stripeColors,
-            shapes: { borderRadius: 20, borderWidth: 1 },
-            primaryButton: {
-              colors: {
-                background: toArgbHex(P.accent),
-                text: toArgbHex(P.onAccent),
-                border: toArgbHex(P.accent),
-              },
-              shapes: { borderRadius: 20 },
-            },
-          },
-          // Requires a real Apple merchant ID registered in your Apple
-          // Developer account and linked in the Stripe Dashboard — the
-          // placeholder in app.json's plugin config ("merchant.com.cerviced")
-          // unblocks the build but Apple Pay won't actually appear/function
-          // until that registration is real.
-          ...(!env.isExpoGo ? { applePay: { merchantCountryCode: 'GB' } } : {}),
-          // Works in Stripe test mode. app.json enables Google Pay for
-          // Android; production still requires a fully configured Stripe
-          // account and release signing.
-          ...(!env.isExpoGo ? { googlePay: { merchantCountryCode: 'GB', testEnv: process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_test_') === true } } : {}),
-        });
-        if (initError) {
-          throw new Error(initError.message || 'Could not start payment.');
+        openIntentRef.current = paymentIntentId;
+        if (method === 'paypal' && !paypalAvailable) {
+          // The server decides; nothing is authorised, so card still works.
+          setPayError('PayPal isn\'t available for this booking. Please pay by card.');
+          return;
         }
 
-        const { error: presentError } = await presentPaymentSheet();
-        if (presentError) {
-          if (presentError.code === 'Canceled') {
-            if (__DEV__) logger.log(`[${timestamp()}] Payment sheet cancelled by user`);
-            // Stripe's own sheet dismiss bypasses this modal's normal close
-            // path entirely — call onClose explicitly so CartScreen's
-            // release-the-hold-batch logic (wired into onClose) still runs
-            // instead of leaving the slot reserved until the TTL sweep.
-            await cancelPaymentIntent(checkoutBatchId, paymentIntentId);
-            onClose();
+        let confirmError: { code: string; message: string; localizedMessage?: string; declineCode?: string; type?: string } | undefined;
+        if (method === 'wallet') {
+          // The wallet sheet shows the amount it's given, so give it the
+          // server-priced intent's amount rather than the cart's own sum.
+          const { paymentIntent, error: retrieveError } = await retrievePaymentIntent(clientSecret);
+          if (retrieveError || !paymentIntent) {
+            // Nothing has been authorised yet — keep the checkout and let
+            // them try again rather than releasing the hold over a blip.
+            logger.error(`[${timestamp()}] could not read the payment amount`, retrieveError);
+            setPayError('We couldn\'t start Apple Pay or Google Pay. Please try again.');
             return;
           }
-          throw new Error(presentError.message || 'Payment failed. Please try again.');
+          const amount = (paymentIntent.amount / 100).toFixed(2);
+          ({ error: confirmError } = await confirmPlatformPayPayment(clientSecret, {
+            // Requires a real Apple merchant ID registered in your Apple
+            // Developer account and linked in the Stripe Dashboard — the
+            // placeholder in app.json's plugin config ("merchant.com.cerviced")
+            // unblocks the build but Apple Pay won't actually appear/function
+            // until that registration is real.
+            applePay: {
+              merchantCountryCode: 'GB',
+              currencyCode: 'GBP',
+              cartItems: [{ label: 'Cerviced', amount, paymentType: PlatformPay.PaymentType.Immediate }],
+            },
+            // Works in Stripe test mode. app.json enables Google Pay for
+            // Android; production still requires a fully configured Stripe
+            // account and release signing.
+            googlePay: { testEnv: GOOGLE_PAY_TEST_ENV, merchantName: 'Cerviced', merchantCountryCode: 'GB', currencyCode: 'GBP' },
+          }));
+        } else if (method === 'paypal') {
+          // Opens PayPal's own page; the SDK brings the client back on
+          // cerviced://safepay (forwarded to Stripe in App.tsx).
+          ({ error: confirmError } = await confirmPayment(clientSecret, { paymentMethodType: 'PayPal' }));
+        } else {
+          // A saved card is confirmed by its Stripe id (it hangs off the
+          // same Customer the intent was made for). A new card's details
+          // live only inside Stripe's CardField — the app never sees them;
+          // confirmPayment reads them from the field.
+          ({ error: confirmError } = payingWithSavedCard
+            ? await confirmPayment(clientSecret, { paymentMethodType: 'Card', paymentMethodData: { paymentMethodId: selectedCard } })
+            : await confirmPayment(clientSecret, { paymentMethodType: 'Card' }));
+        }
+
+        if (confirmError) {
+          // Nothing was authorised, so the intent can be retried as-is.
+          // Leave the sheet open rather than throwing the checkout away.
+          if (confirmError.code !== 'Canceled') {
+            logger.error(`[${timestamp()}] payment confirmation failed`, confirmError);
+            // Card errors (declines, wrong CVC, failed bank check) are written
+            // by Stripe for the cardholder; anything else is ours to word.
+            const isCardError = confirmError.type === 'card_error' || !!confirmError.declineCode;
+            setPayError(isCardError
+              ? (confirmError.localizedMessage || confirmError.message)
+              : method === 'paypal'
+                ? 'That PayPal payment didn\'t go through. Please try again, or pay by card.'
+                : 'That payment didn\'t go through. Please check your details and try again.');
+          }
+          return;
         }
 
         if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
         paymentStarted = true;
         await capturePaymentIntent(checkoutBatchId, paymentIntentId);
-        await onPaymentSuccess('card', paymentIntentId);
+        await onPaymentSuccess(method === 'paypal' ? 'paypal' : 'card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
         onPaymentComplete();
@@ -742,13 +856,41 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setIsProcessing(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, P, theme]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
+
+    // Closing after a declined attempt leaves an unconfirmed intent open —
+    // cancel it so CartScreen's hold release (wired into onClose) isn't
+    // racing a live intent.
+    const handleClose = useCallback(async () => {
+      // Shares the Pay lock so a tap on Pay can't race the cancel.
+      if (processingRef.current) return;
+      const intentId = openIntentRef.current;
+      if (intentId && checkoutBatchId) {
+        processingRef.current = true;
+        setIsProcessing(true);
+        openIntentRef.current = null;
+        try { await cancelPaymentIntent(checkoutBatchId, intentId); }
+        catch (err) {
+          logger.error('[checkout] could not cancel the open payment on close', err);
+          onPaymentPending?.();
+          return;
+        } finally {
+          processingRef.current = false;
+          setIsProcessing(false);
+        }
+      }
+      onClose();
+    }, [checkoutBatchId, onClose, onPaymentPending]);
 
     return (
       <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
-            <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
+            {/* The card field brings the keyboard up; keep Pay above it. */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}
+            >
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity
@@ -757,14 +899,14 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   accessibilityLabel="Close payment"
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    onClose();
+                    handleClose();
                   }}
                 >
                   <Text style={[styles.paymentCloseText, { color: theme.text }]}>×</Text>
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                   <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Order Summary</Text>
                   {effectiveCartItems.map(({ item, effectivePrice, isDeposit }) => (
@@ -784,24 +926,175 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   </View>
                 </View>
 
-                {/* Card entry, Apple Pay, and Google Pay all happen inside
-                    Stripe's own Payment Sheet (opened by the button below) —
-                    never in this component's state. */}
+                {feesError && (
+                  <TouchableOpacity accessibilityRole="button" onPress={() => setFeesAttempt(n => n + 1)}
+                    style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[styles.paymentMethodName, { color: theme.text }]}>
+                      We couldn't load this booking's fees. Tap to try again.
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {hasFees && (
+                  <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Late & no-show fees</Text>
+                    {fees!.map(fee => (
+                      <View key={fee.providerId} style={styles.orderItem}>
+                        <Text style={[styles.orderItemName, { color: theme.text }]}>
+                          {fee.providerName}
+                          {fee.lateFeePence != null && `\n£${(fee.lateFeePence / 100).toFixed(2)} if you arrive more than ${fee.graceMinutes} minutes late`}
+                          {fee.noShowFeePence != null && `\n£${(fee.noShowFeePence / 100).toFixed(2)} if you don't turn up`}
+                        </Text>
+                      </View>
+                    ))}
+                    <TouchableOpacity accessibilityRole="button" onPress={() => setShowFeeTerms(v => !v)} activeOpacity={0.7}>
+                      <Text style={[styles.paymentMethodName, { color: P.accent, marginTop: 6 }]}>
+                        {showFeeTerms ? 'Hide the terms' : `Read the ${FEE_TERMS_HEADING} terms`}
+                      </Text>
+                    </TouchableOpacity>
+                    {showFeeTerms && (
+                      <Text style={[styles.paymentMethodName, { color: P.sub, marginTop: 6 }]}>{FEE_TERMS_BODY}</Text>
+                    )}
+                    <TouchableOpacity
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: agreedToFees }}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setAgreedToFees(v => !v);
+                      }}
+                      activeOpacity={0.7}
+                      style={[styles.orderItem, { alignItems: 'flex-start', marginTop: 8 }]}
+                    >
+                      <Ionicons name={agreedToFees ? 'checkbox' : 'square-outline'} size={20} color={P.accent} />
+                      <Text style={[styles.paymentMethodName, { color: theme.text, marginLeft: 8 }]}>
+                        {FEE_CONSENT_LINE}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Card details are typed into Stripe's own CardForm,
+                    wallets open Apple/Google's own sheet and PayPal its own
+                    page — none of them pass through this component's state. */}
                 <View style={styles.paymentMethods}>
-                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Payment</Text>
-                  <Text style={[styles.paymentMethodName, { color: P.sub }]}>
-                    Enter your card details securely with Stripe. Available wallet options appear on the next screen.
-                  </Text>
+                  {(walletSupported || paypalShown) && (
+                    <>
+                      {walletSupported && (
+                        <PlatformPayButton
+                          type={PlatformPay.ButtonType.Default}
+                          appearance={isDarkMode ? PlatformPay.ButtonStyle.White : PlatformPay.ButtonStyle.Black}
+                          borderRadius={dimensions.button.large.borderRadius}
+                          disabled={isProcessing || !canPay}
+                          onPress={() => { handlePayment('wallet'); }}
+                          style={styles.walletButton}
+                        />
+                      )}
+                      {paypalShown && (
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel="Pay with PayPal"
+                          disabled={isProcessing || !canPay}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            handlePayment('paypal');
+                          }}
+                          style={[styles.walletButton, styles.paypalButton, walletSupported && styles.paypalButtonBelowWallet,
+                            (isProcessing || !canPay) && styles.paypalButtonDisabled]}
+                        >
+                          <Ionicons name="logo-paypal" size={18} color={PAYPAL_NAVY} />
+                          <Text style={styles.paypalButtonText}>Pay with PayPal</Text>
+                        </TouchableOpacity>
+                      )}
+                      <View style={styles.payDivider}>
+                        <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
+                        <Text style={[styles.payDividerText, { color: P.sub }]}>or pay by card</Text>
+                        <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
+                      </View>
+                    </>
+                  )}
+                  {savedCards.length > 0 && (
+                    <View accessibilityRole="radiogroup" style={styles.savedCardList}>
+                      <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Saved cards</Text>
+                      {[...savedCards.map(card => ({
+                        id: card.id,
+                        title: `${savedCardBrandName(card.brand)} •••• ${card.last4}`,
+                        sub: savedCardExpiryLabel(card),
+                      })), { id: 'new', title: 'Use a new card', sub: null as string | null }].map(option => {
+                        const selected = selectedCard === option.id;
+                        return (
+                          <TouchableOpacity
+                            key={option.id}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected, disabled: isProcessing }}
+                            disabled={isProcessing}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              setSelectedCard(option.id);
+                              setPayError(null);
+                            }}
+                            style={[styles.savedCardRow, {
+                              borderColor: selected ? P.accent : P.border,
+                              backgroundColor: selected ? P.accentDim : P.surface,
+                            }]}
+                          >
+                            <Ionicons name={option.id === 'new' ? 'add-circle-outline' : 'card-outline'} size={20} color={P.accent} />
+                            <View style={styles.savedCardText}>
+                              <Text style={[styles.savedCardTitle, { color: theme.text }]}>{option.title}</Text>
+                              {option.sub && <Text style={[styles.paySecureText, { color: P.sub }]}>{option.sub}</Text>}
+                            </View>
+                            <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? P.accent : P.sub} />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                  {!payingWithSavedCard && (
+                  <>
+                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Card details</Text>
+                  {/* Separate number / expiry / CVC / postcode boxes. On iOS,
+                      backgroundColor paints the whole form behind Stripe's own
+                      boxes, so it takes the sheet's colour and the boxes sit
+                      straight on the sheet; their text follows the light/dark
+                      mode set in the effect above. On Android it fills the
+                      boxes themselves and the text colours below apply. */}
+                  <CardForm
+                    disabled={isProcessing}
+                    cardStyle={{
+                      backgroundColor: toArgbHex(Platform.OS === 'ios' ? P.bg : P.card),
+                      borderColor: toArgbHex(P.border),
+                      borderWidth: 1,
+                      borderRadius: 14,
+                      textColor: toArgbHex(theme.text),
+                      placeholderColor: toArgbHex(P.sub),
+                      cursorColor: toArgbHex(P.accent),
+                      textErrorColor: '#FFFF3B30',
+                    }}
+                    onFormComplete={details => {
+                      setCardComplete(details.complete);
+                      setPayError(null);
+                    }}
+                    style={styles.cardForm}
+                  />
+                  </>
+                  )}
+                  {payError && (
+                    <Text accessibilityRole="alert" style={[styles.paymentMethodName, styles.payErrorText]}>{payError}</Text>
+                  )}
+                  <View style={styles.paySecureRow}>
+                    <Ionicons name="lock-closed" size={12} color={P.sub} />
+                    <Text style={[styles.paySecureText, { color: P.sub }]}>Card details go straight to Stripe</Text>
+                  </View>
                 </View>
               </ScrollView>
 
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: isProcessing ? P.accentDim : P.accent }]}
+                style={[styles.payButton, { backgroundColor: isProcessing || !canPay || !(payingWithSavedCard || cardComplete) ? P.accentDim : P.accent }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  handlePayment();
+                  handlePayment('card');
                 }}
-                disabled={isProcessing}
+                disabled={isProcessing || !canPay || !(payingWithSavedCard || cardComplete)}
               >
                 {isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
@@ -809,7 +1102,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </KeyboardAvoidingView>
           </View>
         </View>
       </Modal>
@@ -2164,6 +2457,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     parent?.navigate('Profile', {
       screen: 'ProfileInfo',
       params: { returnToTab: originTab },
+      // Keep the Profile menu underneath. Without this, a Profile tab that
+      // hadn't been opened yet is built with ProfileInfo as its only screen,
+      // so its back arrow had nowhere to go and fell through to Home.
+      initial: false,
     });
   }, [navigation]);
 
@@ -2288,13 +2585,20 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
   }, [items, itemsByProvider]);
 
-  // Keyed on the sorted, deduped provider-name SET rather than `items`
-  // itself — editing one item's time/notes/add-ons/deposit choice produces a
-  // new `items` array reference without changing which providers are in the
-  // cart, and used to retrigger this fetch anyway.
+  // Keyed on the sorted, deduped [provider-name, providerId] pairs rather
+  // than `items` itself — editing one item's time/notes/add-ons/deposit
+  // choice produces a new `items` array reference without changing which
+  // providers are in the cart, and used to retrigger this fetch anyway.
+  // The name is still what the fetch result gets keyed back under (it's the
+  // grouping key used everywhere else in this screen), but the providerId
+  // rides along so the actual lookup doesn't depend on that name still
+  // matching the provider's CURRENT display_name — see
+  // getProviderCheckoutMetadata's doc comment for why an exact-name match
+  // alone false-flags a live, bookable provider who has since renamed.
   const providerNamesKey = useMemo(
     () => JSON.stringify(
-      [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))].sort(),
+      [...new Map(items.map(i => [i.providerDisplayName ?? i.providerName, i.providerId ?? null] as const))]
+        .sort(([a], [b]) => a.localeCompare(b)),
     ),
     [items],
   );
@@ -2302,8 +2606,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Fetch checkout-facing provider metadata in one bounded request whenever
   // the providers represented in the cart change.
   useEffect(() => {
-    const names: string[] = JSON.parse(providerNamesKey);
-    if (names.length === 0) {
+    const entries: [string, string | null][] = JSON.parse(providerNamesKey);
+    const names = entries.map(([key]) => key);
+    if (entries.length === 0) {
       setProviderDepositPolicies({});
       setMobileProviderNames([]);
       setCheckoutMetadataError(false);
@@ -2313,7 +2618,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
     let cancelled = false;
     setIsCheckoutMetadataLoading(true);
-    getProviderCheckoutMetadata(names)
+    const queries = entries.map(([key, providerId]) => ({ key, providerId: providerId ?? undefined }));
+    getProviderCheckoutMetadata(queries)
       .then(({ depositPolicies, mobileProviderNames }) => {
         if (cancelled) return;
         setProviderDepositPolicies(depositPolicies);
@@ -5548,6 +5854,89 @@ const styles = StyleSheet.create({
   },
   paymentMethods: {
     marginBottom: spacing.xxl,
+  },
+  walletButton: {
+    height: 48,
+    width: '100%',
+  },
+  // PayPal's own brand colours (gold button, navy mark) — a third-party
+  // button, like Apple Pay's, rather than one in the app's palette.
+  paypalButton: {
+    backgroundColor: '#FFC439',
+    borderRadius: dimensions.button.large.borderRadius,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  paypalButtonBelowWallet: {
+    marginTop: spacing.md,
+  },
+  paypalButtonDisabled: {
+    opacity: 0.5,
+  },
+  paypalButtonText: {
+    color: PAYPAL_NAVY,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  payDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginVertical: spacing.lg,
+  },
+  payDividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  payDividerText: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  cardForm: {
+    width: '100%',
+    height: Platform.OS === 'ios' ? 210 : 290,
+  },
+  savedCardList: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  savedCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderRadius: 14,
+  },
+  savedCardText: {
+    flex: 1,
+  },
+  savedCardTitle: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+  },
+  payErrorText: {
+    color: '#E06070',
+    marginTop: spacing.sm,
+  },
+  paySecureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: spacing.md,
+  },
+  paySecureText: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   paymentMethodsTitle: {
     fontSize: fonts.body.large,

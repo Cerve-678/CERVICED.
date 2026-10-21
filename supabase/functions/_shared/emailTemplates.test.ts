@@ -19,16 +19,40 @@ import {
   claimVerificationEmail,
   clientHatAddedEmail,
   clientWelcomeEmail,
+  feePaymentRequestEmail,
   generalWelcomeEmail,
+  LINK_ONLY_GO_LIVE_STEPS,
+  linkOnlyClientHatAddedEmail,
+  linkOnlyGoLiveReminderEmail,
+  linkOnlyHatAddedEmail,
+  linkOnlyLiveEmail,
+  linkOnlyWelcomeEmail,
   passwordChangedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
+  refundRequestedProviderEmail,
   supportRequestEmail,
 } from './emailTemplates.ts';
 
 /** No whitespace: firstNameOf() splits on it, so this survives whole. */
 const HOSTILE = `<script>alert(1)</script>&"'`;
 const AMPERSAND = 'Curls&Co';
+
+const BOOKING = {
+  providerName: 'Amara Lash Studio',
+  service: 'Classic lash full set',
+  date: 'Wednesday, 14 October 2026',
+  time: '2:30pm',
+  location: '12 Rose Street',
+  reference: 'CRV-7K2QMX',
+  basePrice: 65,
+  addOns: [{ name: 'Lash bath', price: 8 }],
+  serviceCharge: 1.99,
+  depositAmount: 0,
+  amountPaid: 74.99,
+  paymentType: 'full',
+  paymentStatus: 'paid_in_full',
+};
 
 const every = () => [
   ['clientWelcomeEmail', clientWelcomeEmail({ name: HOSTILE })],
@@ -40,12 +64,24 @@ const every = () => [
   [
     'bookingConfirmationEmail',
     bookingConfirmationEmail({
-      clientName: HOSTILE,
+      ...BOOKING,
       providerName: HOSTILE,
       service: HOSTILE,
       date: HOSTILE,
       time: HOSTILE,
       location: HOSTILE,
+      reference: HOSTILE,
+      addOns: [{ name: HOSTILE, price: 5 }],
+    }),
+  ],
+  [
+    'refundRequestedProviderEmail',
+    refundRequestedProviderEmail({
+      clientName: HOSTILE,
+      service: HOSTILE,
+      date: HOSTILE,
+      time: HOSTILE,
+      reason: HOSTILE,
     }),
   ],
   [
@@ -59,12 +95,27 @@ const every = () => [
     }),
   ],
   ['generalWelcomeEmail', generalWelcomeEmail({ name: HOSTILE })],
+  ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: HOSTILE, businessName: HOSTILE })],
+  ['linkOnlyClientHatAddedEmail', linkOnlyClientHatAddedEmail({ name: HOSTILE })],
+  [
+    'linkOnlyGoLiveReminderEmail',
+    linkOnlyGoLiveReminderEmail({ name: HOSTILE, businessName: HOSTILE, remaining: [HOSTILE] }),
+  ],
 ] as Array<[string, { subject: string; html: string }]>;
 
 describe('email templates', () => {
   it.each(every())('%s never lets raw markup into the body', (_name, mail) => {
     expect(mail.html).not.toContain('<script');
     expect(mail.html).toContain('&lt;script&gt;');
+  });
+
+  // Emails never follow the reader's dark mode (user, 2026-10-19).
+  it.each(every())('%s asks mail apps to keep it light', (_name, mail) => {
+    expect(mail.html).toContain('<meta name="color-scheme" content="light only" />');
+    expect(mail.html).toContain('color-scheme: light only');
+    expect(mail.html).not.toMatch(/prefers-color-scheme:\s*dark/);
   });
 
   it.each(every())('%s emits a subject and a body', (_name, mail) => {
@@ -77,7 +128,7 @@ describe('email templates', () => {
   it('keeps subject lines as plain text, not HTML', () => {
     expect(
       bookingConfirmationEmail({
-        clientName: 'Sarah',
+        ...BOOKING,
         providerName: AMPERSAND,
         service: 'Gel manicure & art',
         date: 'Friday, 12 September 2026',
@@ -136,5 +187,89 @@ describe('email templates', () => {
     expect(ops).not.toContain('You&#39;re receiving this because you have a CERVICED account');
     expect(ops).not.toContain("You're receiving this because you have a CERVICED account");
     expect(ops).toContain('Support inbox');
+  });
+});
+
+describe('booking confirmation money', () => {
+  it('itemises the services, the platform fee and a pay-in-full total', () => {
+    const { html } = bookingConfirmationEmail(BOOKING);
+    expect(html).toContain('Lash bath');
+    expect(html).toContain('Cerviced platform fee');
+    expect(html).toContain('£74.99');
+    expect(html).toContain('Paid in full');
+    expect(html).not.toContain('Due to provider');
+  });
+
+  it("shows a deposit as the provider's own figure, with the balance due", () => {
+    const { html } = bookingConfirmationEmail({
+      ...BOOKING,
+      paymentType: 'deposit',
+      paymentStatus: 'deposit_paid',
+      depositAmount: 20,
+      amountPaid: 21.99,
+    });
+    expect(html).toContain('Deposit paid to provider');
+    expect(html).toContain('£20.00');
+    expect(html).not.toContain('£21.99');
+    expect(html).toContain('Due to provider at appointment');
+    expect(html).toContain('£53.00');
+  });
+
+  it('never calls a hand-added unpaid booking paid in full', () => {
+    const { html } = bookingConfirmationEmail({
+      ...BOOKING,
+      serviceCharge: 0,
+      amountPaid: 0,
+      paymentType: 'full',
+      paymentStatus: 'pending',
+    });
+    expect(html).not.toContain('Paid in full');
+    expect(html).toContain('Awaiting payment');
+    expect(html).not.toContain('platform fee');
+    expect(html).toContain('£73.00');
+  });
+
+  // Link-only pros book on their own page: nothing sent to them may tell them
+  // to add services, prices or availability, which they don't have here.
+  it.each([
+    ['linkOnlyWelcomeEmail', linkOnlyWelcomeEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyHatAddedEmail', linkOnlyHatAddedEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyLiveEmail', linkOnlyLiveEmail({ name: 'Ada', businessName: 'Ada Lashes' })],
+    ['linkOnlyClientHatAddedEmail', linkOnlyClientHatAddedEmail({ name: 'Ada' })],
+  ])('%s never asks a link-only pro for services, pricing or availability', (_name, mail) => {
+    expect(mail.html).not.toMatch(/services &amp; pricing|availability|services and bookings/i);
+  });
+
+  it('lists the four link-only go-live steps in the welcome', () => {
+    const { html } = linkOnlyWelcomeEmail({ name: 'Ada' });
+    for (const step of LINK_ONLY_GO_LIVE_STEPS) expect(html).toContain(step);
+  });
+
+  it('counts only the steps still left in the reminder', () => {
+    expect(linkOnlyGoLiveReminderEmail({ name: 'Ada', remaining: ['Add your logo'] }).subject)
+      .toBe("You're one step from going live on CERVICED");
+    const two = linkOnlyGoLiveReminderEmail({ name: 'Ada', remaining: ['Add your logo', 'Write your About'] });
+    expect(two.subject).toBe("You're 2 steps from going live on CERVICED");
+    expect(two.html).toContain('Write your About');
+    expect(two.html).not.toContain('Set your opening hours');
+  });
+});
+
+describe('fee payment request email', () => {
+  const base = {
+    name: 'Sam Lee', amount: '£15.00', feeLabel: 'no-show fee', providerName: AMPERSAND,
+    service: 'Classic lash full set', payBy: 'Mon 26 Oct',
+    payUrl: 'https://invoice.stripe.com/i/acct_1/test_abc?s=ap&x=1',
+  };
+
+  it('names the amount and provider in a plain-text subject', () => {
+    expect(feePaymentRequestEmail(base).subject).toBe('Please pay your £15.00 no-show fee to Curls&Co');
+  });
+
+  it('escapes every caller value in the body, including the link', () => {
+    const { html } = feePaymentRequestEmail({ ...base, providerName: HOSTILE, service: HOSTILE });
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('href="https://invoice.stripe.com/i/acct_1/test_abc?s=ap&amp;x=1"');
+    expect(html).toContain('Mon 26 Oct');
   });
 });

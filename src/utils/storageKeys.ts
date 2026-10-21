@@ -11,6 +11,10 @@ export const STORAGE_KEYS = {
   BOOKINGS_STORE_LEGACY: '@cerviced_bookings',
   /** Active mode: 'client' | 'provider' */
   ACTIVE_MODE:        '@active_mode',
+  /** The signed-in account's last confirmed profile, encrypted (written via
+   *  largeSecureStore, never plain AsyncStorage), so launch can open the app
+   *  without waiting on the server. See services/authProfileSnapshot.ts. */
+  AUTH_PROFILE_SNAPSHOT: '@cerviced_auth_profile_snapshot',
   /** User theme preference */
   THEME_PREFERENCE:   '@theme_preference',
   /** Bookmarked provider IDs */
@@ -21,6 +25,11 @@ export const STORAGE_KEYS = {
   USER_LEARNING:      '@cerviced_learning',
   /** Cart items — survives app close/kill so an in-progress checkout isn't lost */
   CART_ITEMS:          '@cerviced_cart',
+  /** Set once the Welcome screen's full intro animation has played on this device */
+  WELCOME_INTRO_SEEN:  '@cerviced_welcome_intro_seen',
+  /** Device calendar ids a link-only provider chose to show as their diary on
+   *  Home. Device-only on purpose: the events never leave the phone. */
+  DIARY_CALENDAR_IDS:  '@cerviced_diary_calendar_ids',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];

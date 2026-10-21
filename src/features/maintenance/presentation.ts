@@ -1,0 +1,249 @@
+// src/features/maintenance/presentation.ts
+//
+// Pure derivation of how each maintenance item reads on screen: its state
+// pill, its progress bar, which group it sits in, and the "N due" count the
+// Profile tab and the Beauty Profile card show. No I/O; today is passed in.
+//
+// The state here is display-only. Whether a PUSH goes out is decided
+// server-side by process_maintenance_reminders(), which applies the same
+// "already booked" rule (see supabase/migrations/20261018180000_beauty_maintenance.sql).
+
+import {
+  getMaintenanceServiceType,
+  type MaintenanceSearchCategory,
+} from '../../constants/maintenanceServiceTypes';
+import type { MaintenanceItem } from '../../types/maintenance';
+import { dateToYMD, toLocalDate } from '../../utils/dateUtils';
+
+/** An item counts as "due soon" this many days ahead of its due date. */
+export const DUE_SOON_DAYS = 7;
+
+export type MaintenanceItemState =
+  /** Client paused it. Nothing is counted or pushed. */
+  | 'paused'
+  /** The client already has an upcoming booking that covers it. */
+  | 'booked'
+  | 'overdue'
+  | 'due_today'
+  | 'due_soon'
+  | 'on_track'
+  /** No due date to show (should not happen for saved rows). */
+  | 'unscheduled';
+
+export interface ItemPresentation {
+  state: MaintenanceItemState;
+  /** Whole days from today to the due date; negative when overdue. */
+  daysUntilDue: number | null;
+  /** 0–100, how far through its interval the item is. Null hides the bar. */
+  progressPercent: number | null;
+}
+
+/** Upcoming bookings the screen already knows about, used to mark an item
+ *  "booked" so it isn't counted as needing the client. */
+export interface UpcomingCoverage {
+  serviceIds: ReadonlySet<string>;
+  providerIds: ReadonlySet<string>;
+}
+
+export const NO_COVERAGE: UpcomingCoverage = { serviceIds: new Set(), providerIds: new Set() };
+
+function dayDiff(fromYMD: string, toYMD: string): number {
+  const ms = toLocalDate(toYMD).getTime() - toLocalDate(fromYMD).getTime();
+  return Math.round(ms / 86400000);
+}
+
+/**
+ * True when an upcoming booking already covers this item. Matches the
+ * service when the item has one; a provider-only link counts too, since that
+ * is the only thing the client told us. An unlinked item never matches —
+ * there is nothing to compare it against.
+ */
+export function isCoveredByUpcomingBooking(item: MaintenanceItem, coverage: UpcomingCoverage): boolean {
+  if (item.kind === 'event') return false;
+  if (item.serviceId) return coverage.serviceIds.has(item.serviceId);
+  if (item.providerId) return coverage.providerIds.has(item.providerId);
+  return false;
+}
+
+export function presentMaintenanceItem(
+  item: MaintenanceItem,
+  todayYMD: string,
+  coverage: UpcomingCoverage = NO_COVERAGE,
+): ItemPresentation {
+  const daysUntilDue = item.dueOn ? dayDiff(todayYMD, item.dueOn) : null;
+
+  let progressPercent: number | null = null;
+  if (item.dueOn && !item.paused) {
+    const start = item.lastDoneOn ?? item.createdAt.slice(0, 10);
+    const span = dayDiff(start, item.dueOn);
+    const elapsed = dayDiff(start, todayYMD);
+    progressPercent = span <= 0 ? 100 : Math.max(0, Math.min(100, Math.round((elapsed / span) * 100)));
+  }
+
+  let state: MaintenanceItemState;
+  if (item.paused) state = 'paused';
+  else if (daysUntilDue === null) state = 'unscheduled';
+  else if (isCoveredByUpcomingBooking(item, coverage)) state = 'booked';
+  else if (daysUntilDue < 0) state = 'overdue';
+  else if (daysUntilDue === 0) state = 'due_today';
+  else if (daysUntilDue <= DUE_SOON_DAYS) state = 'due_soon';
+  else state = 'on_track';
+
+  return { state, daysUntilDue, progressPercent };
+}
+
+const NEEDS_ATTENTION: ReadonlySet<MaintenanceItemState> = new Set(['overdue', 'due_today', 'due_soon']);
+
+/** Whether this state counts toward the "N due" badge. */
+export function needsAttention(state: MaintenanceItemState): boolean {
+  return NEEDS_ATTENTION.has(state);
+}
+
+/** The "N due" number on the Profile tab row and the Maintenance card. */
+export function countDueItems(
+  items: readonly MaintenanceItem[],
+  todayYMD: string,
+  coverage: UpcomingCoverage = NO_COVERAGE,
+): number {
+  return items.filter(i => needsAttention(presentMaintenanceItem(i, todayYMD, coverage).state)).length;
+}
+
+export interface PresentedItem {
+  item: MaintenanceItem;
+  view: ItemPresentation;
+}
+
+export interface MaintenanceGroups {
+  needsAttention: PresentedItem[];
+  comingUp: PresentedItem[];
+  events: PresentedItem[];
+  paused: PresentedItem[];
+  /** The soonest item that needs the client, for the landing card. */
+  next: PresentedItem | null;
+}
+
+function byDue(a: PresentedItem, b: PresentedItem): number {
+  const ad = a.item.dueOn ?? '9999-12-31';
+  const bd = b.item.dueOn ?? '9999-12-31';
+  return ad < bd ? -1 : ad > bd ? 1 : a.item.title.localeCompare(b.item.title);
+}
+
+/** Group items the way the Maintenance screen lists them: by what the client
+ *  should do, not by type. */
+export function groupMaintenanceItems(
+  items: readonly MaintenanceItem[],
+  todayYMD: string,
+  coverage: UpcomingCoverage = NO_COVERAGE,
+): MaintenanceGroups {
+  const presented = items.map(item => ({ item, view: presentMaintenanceItem(item, todayYMD, coverage) }));
+  const paused = presented.filter(p => p.view.state === 'paused').sort(byDue);
+  const events = presented.filter(p => p.item.kind === 'event' && p.view.state !== 'paused').sort(byDue);
+  const rest = presented.filter(p => p.item.kind !== 'event' && p.view.state !== 'paused');
+  const attention = rest.filter(p => needsAttention(p.view.state)).sort(byDue);
+  const comingUp = rest.filter(p => !needsAttention(p.view.state)).sort(byDue);
+  const eventsDue = events.filter(p => needsAttention(p.view.state));
+
+  return {
+    needsAttention: attention,
+    comingUp,
+    events,
+    paused,
+    next: [...attention, ...eventsDue].sort(byDue)[0] ?? null,
+  };
+}
+
+export type CountdownUnit =
+  | 'daysOver' | 'dayOver' | 'today' | 'day' | 'days' | 'weeks' | 'booked' | 'bookNow' | 'noDate';
+
+/** The big-number stub on the Beauty Profile landing: a number (or none, for
+ *  "today"/"booked") plus what it counts, and the tone to draw it in. */
+export interface Countdown {
+  value: number | null;
+  unit: CountdownUnit;
+  tone: 'bad' | 'warn' | 'ok' | 'mute';
+}
+
+export function countdownFor({ item, view }: PresentedItem): Countdown {
+  const d = view.daysUntilDue;
+  switch (view.state) {
+    case 'booked': return { value: null, unit: 'booked', tone: 'ok' };
+    case 'overdue':
+      if (item.kind === 'event') return { value: null, unit: 'bookNow', tone: 'warn' };
+      return { value: -(d ?? 0), unit: d === -1 ? 'dayOver' : 'daysOver', tone: 'bad' };
+    case 'due_today':
+      return item.kind === 'event'
+        ? { value: null, unit: 'bookNow', tone: 'warn' }
+        : { value: null, unit: 'today', tone: 'warn' };
+    case 'due_soon': return { value: d, unit: d === 1 ? 'day' : 'days', tone: 'warn' };
+    case 'on_track':
+      return d !== null && d >= 14
+        ? { value: Math.round(d / 7), unit: 'weeks', tone: 'mute' }
+        : { value: d, unit: d === 1 ? 'day' : 'days', tone: 'mute' };
+    default: return { value: null, unit: 'noDate', tone: 'mute' };
+  }
+}
+
+/** The items the landing shows as stubs: what needs the client first, then
+ *  what's coming up, each by due date. Paused items never appear. */
+export function landingStubs(groups: MaintenanceGroups, limit = 3): PresentedItem[] {
+  const due = (p: PresentedItem) => needsAttention(p.view.state);
+  const first = [...groups.needsAttention, ...groups.events.filter(due)].sort(byDue);
+  const later = [...groups.comingUp, ...groups.events.filter(p => !due(p))].sort(byDue);
+  return [...first, ...later].slice(0, limit);
+}
+
+// ── Your rhythm ──────────────────────────────────────────────────────────────
+
+/** How far Snooze moves an item. Its push cycle restarts on the new date
+ *  (maintenance_items_before_update), still gated by the client's opt-in. */
+export const SNOOZE_DAYS = 7;
+
+/** A week from today, or a week past the due date if that's later, so an
+ *  overdue item doesn't snooze into the past. */
+export function snoozedDueOn(item: MaintenanceItem, todayYMD: string): string {
+  const base = item.dueOn && item.dueOn > todayYMD ? item.dueOn : todayYMD;
+  const d = toLocalDate(base);
+  d.setDate(d.getDate() + SNOOZE_DAYS);
+  return dateToYMD(d);
+}
+
+/** What the "Next up" card says about an item's interval. Never claims a
+ *  habit next to a provider's recommendation: when the provider's figure is
+ *  the one in use, that's what's shown. */
+export type RhythmLine =
+  /** "Your last {from} bookings were about {weeks} weeks apart." */
+  | { kind: 'learned'; weeks: number; from: number }
+  /** "{provider} recommends every {weeks} weeks." */
+  | { kind: 'provider'; weeks: number; provider: string }
+  /** "Every {weeks} weeks, set by you." */
+  | { kind: 'client'; weeks: number }
+  | null;
+
+/** Learned gaps read to the nearest half week ("3½"), never finer: they come
+ *  from a handful of bookings, not a measurement. */
+export function learnedWeeks(days: number): number {
+  return Math.max(1, Math.round((days / 7) * 2) / 2);
+}
+
+export function rhythmLineFor(item: MaintenanceItem): RhythmLine {
+  if (item.repeatWeeks === null) return null;
+  switch (item.intervalSource) {
+    case 'learned':
+      return item.learnedDays !== null && item.learnedFrom !== null
+        ? { kind: 'learned', weeks: learnedWeeks(item.learnedDays), from: item.learnedFrom }
+        : null;
+    case 'provider':
+      return item.providerName ? { kind: 'provider', weeks: item.repeatWeeks, provider: item.providerName } : null;
+    case 'client':
+      return { kind: 'client', weeks: item.repeatWeeks };
+    default:
+      return null;
+  }
+}
+
+/** Which filter chip an item sits under. Take-downs are hair; events and
+ *  untyped reminders sit under "Other" (null). */
+export function categoryOf(item: MaintenanceItem): MaintenanceSearchCategory | null {
+  if (item.kind === 'takedown') return 'HAIR';
+  return getMaintenanceServiceType(item.typeKey)?.searchCategory ?? null;
+}

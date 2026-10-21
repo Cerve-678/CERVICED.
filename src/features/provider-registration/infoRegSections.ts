@@ -13,6 +13,11 @@ export const INFO_REG_SECTIONS = [
   { key: 'policies', num: '05', title: 'Address Confirmation', short: 'Address', sub: 'Business setup, address release' },
 ] as const;
 
+/** A link-only provider (booking_mode 'external') takes bookings on their own
+ *  page, so Services and Address Confirmation don't apply. The first three
+ *  keep their positions, so indices into either list agree. */
+export const LINK_ONLY_INFO_REG_SECTIONS = INFO_REG_SECTIONS.slice(0, 3);
+
 export type InfoRegSection = (typeof INFO_REG_SECTIONS)[number];
 export type InfoRegSectionKey = InfoRegSection['key'];
 

@@ -163,7 +163,11 @@ describe('notification routing — deep-link payload', () => {
 });
 
 describe('notification preferences gate the push', () => {
-  const prefKeys = ['bookingConfirm', 'bookingReminder', 'bookingUpdates', 'promotions', 'newProviders', 'weeklySummary'];
+  const prefKeys = ['bookingConfirm', 'bookingReminder', 'bookingUpdates', 'promotions', 'newProviders', 'weeklySummary', 'maintenanceReminders'];
+  const providerPrefKeys = [
+    'providerNewBookings', 'providerBookingChanges', 'providerReminders', 'providerForms',
+    'providerMessages', 'providerPayments', 'providerReviews', 'providerDailyRecap', 'providerFullyBooked', 'providerSaves',
+  ];
 
   it('reads preferences on the send path', () => {
     // Every toggle on NotificationsSettingsScreen was decorative: the column
@@ -180,15 +184,17 @@ describe('notification preferences gate the push', () => {
     expect(userQueries.length).toBe(1);
   });
 
-  it('gates only clients, only known types, and fails open', () => {
+  it('gates each hat by its own map, only known types, and fails open', () => {
     const source = edgeFunction();
     const fn = source.slice(
       source.indexOf('function pushAllowedByPrefs'),
       source.indexOf('serve(async (req)'),
     );
 
-    // A provider's operational alerts are not governed by a client screen.
-    expect(fn).toContain("if (recipientRole !== 'client') return true");
+    // A client switch never mutes a provider alert, and the reverse.
+    expect(fn).toContain("recipientRole === 'client' ? CLIENT_PREF_KEY_BY_TYPE");
+    expect(fn).toContain("recipientRole === 'provider' ? PROVIDER_PREF_KEY_BY_TYPE");
+    expect(fn).toContain('if (!map) return true');
     // An unmapped type means "no toggle covers this", never "suppress it".
     expect(fn).toContain('if (!key) return true');
     // Only an explicit false suppresses — a malformed/partial prefs object
@@ -201,14 +207,14 @@ describe('notification preferences gate the push', () => {
     // diverge, a user sees one thing on the settings screen and gets another.
     const appDefaults = databaseService().slice(
       databaseService().indexOf('const DEFAULT_NOTIF_PREFS'),
-      databaseService().indexOf('/** Load the user\'s notification preferences'),
+      databaseService().indexOf('/** The signed-in user\'s whole stored preferences object'),
     );
     const edgeDefaults = edgeFunction().slice(
       edgeFunction().indexOf('const DEFAULT_PREFS'),
       edgeFunction().indexOf('/** True when this notification may be pushed'),
     );
 
-    for (const key of prefKeys) {
+    for (const key of [...prefKeys, ...providerPrefKeys]) {
       const app = new RegExp(`${key}:\\s*(true|false)`).exec(appDefaults)?.[1];
       const edge = new RegExp(`${key}:\\s*(true|false)`).exec(edgeDefaults)?.[1];
       expect(app).toBeDefined();
@@ -216,17 +222,126 @@ describe('notification preferences gate the push', () => {
     }
   });
 
-  it('maps every gated type to a real preference key', () => {
+  const mapEntries = (name: string, end: string) => {
     const source = edgeFunction();
-    const map = source.slice(
-      source.indexOf('const PREF_KEY_BY_TYPE'),
-      source.indexOf('const DEFAULT_PREFS'),
-    );
-    const mapped = [...map.matchAll(/^\s*(\w+): '(\w+)',$/gm)];
+    const map = source.slice(source.indexOf(`const ${name}`), source.indexOf(end));
+    return [...map.matchAll(/^\s*(\w+): '(\w+)',$/gm)].map(([, type, key]) => ({ type, key }));
+  };
+  const clientMap = () => mapEntries('CLIENT_PREF_KEY_BY_TYPE', 'const PROVIDER_PREF_KEY_BY_TYPE');
+  const providerMap = () => mapEntries('PROVIDER_PREF_KEY_BY_TYPE', 'const DEFAULT_PREFS');
 
-    expect(mapped.length).toBeGreaterThan(0);
-    for (const [, , key] of mapped) {
-      expect(prefKeys).toContain(key);
+  it('maps every gated type to a real preference key of its own hat', () => {
+    expect(clientMap().length).toBeGreaterThan(0);
+    for (const { key } of clientMap()) expect(prefKeys).toContain(key);
+    expect(providerMap().length).toBeGreaterThan(0);
+    for (const { key } of providerMap()) expect(providerPrefKeys).toContain(key);
+  });
+
+  it('gives every provider switch at least one notification it mutes', () => {
+    // A row with nothing mapped to it would be a switch that does nothing.
+    const screen = read('src', 'screens', 'provider', 'ProviderNotificationSettingsScreen.tsx');
+    const mappedKeys = new Set(providerMap().map(entry => entry.key));
+    for (const key of providerPrefKeys) {
+      expect(screen).toContain(`key: '${key}'`);
+      expect(mappedKeys).toContain(key);
     }
+  });
+
+  it('never lets a provider mute what needs their answer', () => {
+    const muted = new Set(providerMap().map(entry => entry.type));
+    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed']) {
+      expect(muted).not.toContain(type);
+    }
+  });
+
+  it('saves each hat without overwriting the other hat\'s keys', () => {
+    const service = databaseService();
+    const section = service.slice(
+      service.indexOf('async function mergeNotificationPreferences'),
+      service.indexOf('/** Turn Beauty Maintenance pushes on or off'),
+    );
+    expect(section).toContain('notification_preferences: { ...stored, ...patch }');
+    expect(section).toContain('mergeNotificationPreferences(pickPreferences(DEFAULT_NOTIF_PREFS');
+    expect(section).toContain('mergeNotificationPreferences(pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS');
+  });
+
+  it('opens the provider settings from the Account tab, not the list', () => {
+    const account = read('src', 'screens', 'provider', 'ProviderAccountScreen.tsx');
+    expect(account).toContain("navigation.navigate('NotificationSettings')");
+    expect(account).not.toContain("navigation.navigate('Notifications')");
+  });
+});
+
+describe('notification routing — Beauty Maintenance', () => {
+  const migration = () =>
+    read('supabase', 'migrations', '20261018180000_beauty_maintenance.sql');
+  const types = ['maintenance_due', 'aftercare_available'];
+
+  it('declares both types everywhere a notification type has to exist', () => {
+    // Memory: new-notification-type-is-four-places. tsc and jest were green
+    // while the DB CHECK rejected every insert of a type missing from it.
+    const union = read('src', 'types', 'database.ts');
+    const check = migration().slice(migration().indexOf('ADD CONSTRAINT notifications_type_check'));
+    for (const type of types) {
+      expect(union).toContain(`| "${type}"`);
+      expect(notificationsScreen()).toContain(`'${type}'`);
+      expect(tapHandler()).toContain(`'${type}'`);
+      expect(check).toContain(`'${type}'::text`);
+    }
+  });
+
+  it('opens the Maintenance view from both entry points, never a booking', () => {
+    const route = "navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId })";
+    expect(tapHandler()).toContain(route);
+    expect(notificationsScreen()).toContain(route);
+    const bookingTypes = tapHandler().slice(
+      tapHandler().indexOf('const BOOKING_TYPES'),
+      tapHandler().indexOf(']);', tapHandler().indexOf('const BOOKING_TYPES')),
+    );
+    for (const type of types) expect(bookingTypes).not.toContain(`'${type}'`);
+  });
+
+  it('keeps both types client-only in the in-app list', () => {
+    const source = notificationsScreen();
+    const clientOnly = source.slice(
+      source.indexOf('const CLIENT_ONLY_TYPES'),
+      source.indexOf(']);', source.indexOf('const CLIENT_ONLY_TYPES')),
+    );
+    for (const type of types) expect(clientOnly).toContain(`'${type}'`);
+  });
+
+  it('carries the item id, not item detail, in the push payload', () => {
+    expect(edgeFunction()).toContain("payload.record.metadata?.['maintenance_item_id']");
+    expect(pushService()).toContain("row.metadata?.['maintenance_item_id']");
+  });
+
+  it('gates both pushes behind the opt-in maintenance toggle, off by default', () => {
+    expect(edgeFunction()).toContain("maintenance_due: 'maintenanceReminders'");
+    expect(edgeFunction()).toContain("aftercare_available: 'maintenanceReminders'");
+    expect(databaseService()).toMatch(/maintenanceReminders: false,\n};/);
+  });
+});
+
+describe('notification routing — daily saves count', () => {
+  // A new type is four places, and only the DB CHECK rejects a miss: tsc and
+  // jest stay green while every insert fails (memory: new-notification-type-
+  // is-four-places).
+  it('declares provider_saved in the DB check, both type unions and the push map', () => {
+    const migration = read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql');
+    expect(migration).toMatch(/notifications_type_check[\s\S]*'provider_saved'/);
+    expect(read('src', 'types', 'database.ts')).toContain('| "provider_saved"');
+    expect(read('src', 'screens', 'shared', 'NotificationsScreen.tsx')).toContain("| 'provider_saved'");
+    expect(edgeFunction()).toContain("provider_saved: 'providerSaves'");
+  });
+
+  it('never names who saved the provider', () => {
+    const migration = read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql');
+    const insert = migration.slice(migration.indexOf('insert into public.notifications'));
+    expect(insert).not.toMatch(/users\b|\.name\b|display_name/);
+  });
+
+  it('sends a link-only pro to their own analytics', () => {
+    const source = read('src', 'screens', 'shared', 'NotificationsScreen.tsx');
+    expect(source).toContain("navigateProviderHome('LinkOnlyAnalytics')");
   });
 });

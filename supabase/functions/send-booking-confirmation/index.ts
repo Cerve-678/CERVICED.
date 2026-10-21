@@ -18,6 +18,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
+import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -35,24 +36,12 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** "2026-08-26" -> "Wednesday, 26 August 2026", matching the app's formatLongDate. */
-function formatLongDate(ymd: string): string {
-  const [y, m, d] = ymd.split('-').map(Number);
-  if (!y || !m || !d) return ymd;
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-  });
-}
-
-/** "14:30:00" -> "2:30pm", matching the app's formatTime12. */
-function formatTime12(value: string): string {
-  const [hRaw, minRaw] = value.split(':');
-  const h = Number(hRaw);
-  if (Number.isNaN(h)) return value;
-  const suffix = h >= 12 ? 'pm' : 'am';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  const displayHour = h >= 12 ? String(hour12) : String(hour12).padStart(2, '0');
-  return `${displayHour}:${minRaw ?? '00'}${suffix}`;
+/** Same shape as the app's formatBookingRef: "CRV-" + the stored ref, else
+ *  the first 8 hex characters of the id. */
+function formatBookingRef(b: { booking_ref?: string | null; id: string }): string {
+  const stored = b.booking_ref?.trim();
+  if (stored) return `CRV-${stored.toUpperCase()}`;
+  return b.id.replace(/-/g, '').slice(0, 8).toUpperCase();
 }
 
 serve(async (req) => {
@@ -74,8 +63,9 @@ serve(async (req) => {
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
       .select(
-        'id, customer_name, customer_email, provider_name_snapshot, service_name_snapshot, ' +
-        'provider_address_snapshot, client_address, booking_date, booking_time, provider_id',
+        'id, customer_email, provider_name_snapshot, service_name_snapshot, ' +
+        'provider_address_snapshot, client_address, booking_date, booking_time, provider_id, ' +
+        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status',
       )
       .eq('id', bookingId)
       .maybeSingle();
@@ -88,11 +78,15 @@ serve(async (req) => {
     // (see memory `mobile-vs-fixed-address-is-business-type`: the venue is
     // decided by business_type, never by whether client_address happens to be
     // populated).
-    const { data: provider } = await supabase
-      .from('providers')
-      .select('business_type')
-      .eq('id', booking.provider_id)
-      .maybeSingle();
+    // Independent reads: the venue rule needs the provider's business_type,
+    // and the itemised services need the add-on snapshots written alongside
+    // the booking (claim_cart_booking_slots sets the money and the status in
+    // the same UPDATE that queues this email, so both are final by now).
+    const [{ data: provider }, { data: addOns, error: addOnsError }] = await Promise.all([
+      supabase.from('providers').select('business_type').eq('id', booking.provider_id).maybeSingle(),
+      supabase.from('booking_add_ons').select('name_snapshot, price_snapshot').eq('booking_id', booking.id).limit(50),
+    ]);
+    if (addOnsError) throw addOnsError;
 
     const isMobile = provider?.business_type === 'mobile';
     const location = (isMobile ? booking.client_address : booking.provider_address_snapshot)
@@ -102,12 +96,19 @@ serve(async (req) => {
     // text, so a service called "Gel manicure & art" no longer reaches the
     // inbox as "Gel manicure &amp; art".
     const { subject, html } = bookingConfirmationEmail({
-      clientName: booking.customer_name || 'there',
-      providerName: booking.provider_name_snapshot || 'your provider',
+      providerName: booking.provider_name_snapshot?.trim() || 'your provider',
       service: booking.service_name_snapshot || 'your appointment',
       date: formatLongDate(booking.booking_date),
       time: formatTime12(booking.booking_time),
       location,
+      reference: formatBookingRef(booking),
+      basePrice: Number(booking.base_price) || 0,
+      addOns: (addOns ?? []).map((a) => ({ name: a.name_snapshot ?? 'Add-on', price: Number(a.price_snapshot) || 0 })),
+      serviceCharge: Number(booking.service_charge) || 0,
+      depositAmount: Number(booking.deposit_amount) || 0,
+      amountPaid: Number(booking.amount_paid) || 0,
+      paymentType: booking.payment_type ?? 'full',
+      paymentStatus: booking.payment_status ?? 'pending',
     });
 
     const res = await fetch('https://api.resend.com/emails', {

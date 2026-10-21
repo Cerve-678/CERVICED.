@@ -18,12 +18,14 @@ import {
   setAuthAutoRefresh,
   signOutCurrentSession,
   subscribeToAuthStateChanges,
-  getProviderIdForUserId,
+  getProviderOwnershipForUserId,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/withTimeout';
+import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnapshot } from '../services/authProfileSnapshot';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
+import type { ProviderBookingMode } from '../types/database';
 
 export type AccountType = 'user' | 'provider';
 
@@ -99,13 +101,18 @@ interface AuthContextType {
    *  'resolved' means ownership is unknown, and callers must withhold whatever
    *  an owner is never allowed to see rather than assume non-ownership. */
   myProviderIdStatus: OwnedProviderLookupStatus;
+  /** Who takes this account's bookings as a provider: 'external' for a
+   *  link-only professional (their own booking page), 'cerviced' otherwise,
+   *  null for an account with no provider hat. Resolved with myProviderId,
+   *  and from the sign-up answer before the providers row exists. */
+  myBookingMode: ProviderBookingMode | null;
   switchMode: () => Promise<void>;
   upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
     dobDay?: string; dobMonth?: string; dobYear?: string;
     serviceInterests?: string[]; serviceLocations?: string[];
     yearsExperience?: string;
-    priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+    priceRange?: string; externalBookingUrl?: string; preferredContactMethods?: string[];
     accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
     preferredPaymentMethods?: string[];
     referralSource?: string;
@@ -172,20 +179,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [myProviderId, setMyProviderId] = useState<string | null>(null);
   const [myProviderIdStatus, setMyProviderIdStatus] =
     useState<OwnedProviderLookupStatus>('pending');
+  const [myBookingMode, setMyBookingMode] = useState<ProviderBookingMode | null>(null);
   useEffect(() => {
     // Logged out: nobody owns anything, and there's nothing to look up.
     // Settled immediately so a signed-out browser isn't made to wait.
     if (!user?.id) {
       setMyProviderId(null);
+      setMyBookingMode(null);
       setMyProviderIdStatus('resolved');
       return;
     }
     let cancelled = false;
     setMyProviderIdStatus('pending');
-    void getProviderIdForUserId(user.id)
-      .then((id) => {
+    void getProviderOwnershipForUserId(user.id)
+      .then(({ providerId, bookingMode }) => {
         if (cancelled) return;
-        setMyProviderId(id);
+        setMyProviderId(providerId);
+        setMyBookingMode(bookingMode);
         setMyProviderIdStatus('resolved');
       })
       .catch((error: unknown) => {
@@ -198,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.warn('[AuthContext] Could not resolve owned provider id:', error);
         if (cancelled) return;
         setMyProviderId(null);
+        setMyBookingMode(null);
         setMyProviderIdStatus('failed');
       });
     return () => {
@@ -235,6 +246,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // profile loader in a ref so it does not close over stale role-resolution
   // logic without repeatedly tearing down the Supabase subscription.
   const loadUserProfileRef = useRef<(activeSession: Session) => Promise<void>>(async () => {});
+  // Launch only: the first profile load may open the app from the saved
+  // profile copy instead of waiting on the server (authProfileSnapshot.ts).
+  const startupRestorePendingRef = useRef(true);
+  // True while `user` came from a users-row read this session, so only a
+  // confirmed profile is ever saved. A metadata fallback never is, and nor is
+  // the restored copy itself: re-saving it would renew its date on every
+  // launch and its 30-day limit would never apply.
+  const profileConfirmedRef = useRef(false);
+
+  // Keep the saved copy current with every confirmed change to `user`,
+  // including edits made in the app after launch.
+  useEffect(() => {
+    if (isLoggedIn && user && profileConfirmedRef.current) {
+      void saveAuthProfileSnapshot(user);
+    }
+  }, [isLoggedIn, user]);
 
   // Expo Go can't receive remote push (dropped in SDK 53) — mirror notification
   // rows as local notifications instead so content is still visible while
@@ -305,6 +332,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           Alert.alert('Signed out', "You've been signed out. Please sign in again.");
         }
         intentionalLogoutRef.current = false;
+        // Signed out here or by the server (password changed elsewhere, token
+        // revoked): the saved profile copy goes with the session.
+        profileConfirmedRef.current = false;
+        void clearAuthProfileSnapshot();
         setUser(null);
         setIsLoggedIn(false);
         setSession(null);
@@ -317,6 +348,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadUserProfileRef.current(session);
       } else {
         profileLoadVersion.current += 1;
+        // Launch found no session (or it couldn't be refreshed), so the next
+        // profile load is a sign-in, which waits for the server rather than
+        // any saved copy, and the copy of whoever was signed in goes.
+        startupRestorePendingRef.current = false;
+        profileConfirmedRef.current = false;
+        void clearAuthProfileSnapshot();
         setUser(null);
         setIsLoggedIn(false);
         setIsLoading(false);
@@ -333,6 +370,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUserProfile = useCallback(async (session: Session) => {
     const version = ++profileLoadVersion.current;
     const isCurrent = () => version === profileLoadVersion.current;
+    // Set when launch opened the app from the saved profile copy.
+    let shownFromSnapshot = false;
+    // Consumed up front so that only the very first load after launch, with
+    // any outcome, can ever use the copy.
+    const isLaunchRestore = startupRestorePendingRef.current;
+    startupRestorePendingRef.current = false;
     try {
       logger.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
 
@@ -346,6 +389,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const meta = session.user.user_metadata as Record<string, any>;
+
+      // Launch: open the app straight away from the last confirmed profile,
+      // then refresh it from the server below. The first request after the
+      // API has been idle is the slowest one, and this used to hold the
+      // loading screen for it. Any later load (sign-in, reactivation, hat
+      // changes) still waits for the server as before.
+      if (isLaunchRestore) {
+        const saved = await readAuthProfileSnapshot<UserData>(session.user.id);
+        if (!isCurrent()) return;
+        if (saved) {
+          const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+          if (!isCurrent()) return;
+          setActiveMode(resolveRestoredMode(savedMode, saved.accountType, saved.hasClientProfile === true));
+          profileConfirmedRef.current = false;
+          setUser(saved);
+          setIsLoggedIn(true);
+          setIsLoading(false);
+          shownFromSnapshot = true;
+          logger.log('[AuthContext] opened from saved profile — refreshing in background');
+        }
+      }
 
       let profile = null;
       let profileError: Error | null = null;
@@ -361,11 +425,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!isCurrent()) return;
 
+      if (profileError && shownFromSnapshot) {
+        // Already showing the saved profile, which is better than session
+        // metadata. Keep it; the next launch or sign-in tries again.
+        logger.warn('[AuthContext] profile refresh failed — keeping saved profile:', profileError.message);
+        registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
+        return;
+      }
+
       if (profileError) {
         // Transient failure — network, 401 from expired token before auto-refresh
         // completes, RLS policy, etc. Session is valid; keep the user logged in
         // using whatever is known from session metadata.
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
+        profileConfirmedRef.current = false;
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         if (!isCurrent()) return;
@@ -400,6 +473,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // but isLoggedIn stays false so RootNavigation never shows the main app.
         if (profile.deletion_requested_at) {
           logger.log('[AuthContext] account pending deletion — holding for reactivation prompt');
+          profileConfirmedRef.current = false;
+          void clearAuthProfileSnapshot();
           setUser({
             id: profile.id,
             name: profile.name ?? '',
@@ -450,6 +525,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, restoredMode).catch(() => {});
         }
         if (!isCurrent()) return;
+        profileConfirmedRef.current = true;
         setUser(userData);
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
@@ -460,6 +536,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         //     user_metadata carries name/role from signUp call.
         // (b) Missing row for an existing account.
         // In both cases: session is valid, keep the user logged in.
+        profileConfirmedRef.current = false;
+        void clearAuthProfileSnapshot();
         if (meta?.['name']) {
           logger.log('[AuthContext] no profile row — signup race, using metadata fallback');
           const role = (meta['role'] as AccountType) ?? 'user';
@@ -499,6 +577,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Unexpected JS error. Don't sign the user out — the session is still valid.
       // Fall back to session metadata so they stay in the app.
       logger.error('[AuthContext] unexpected error in loadUserProfile:', error);
+      // Already showing the saved profile: keep it rather than downgrading
+      // to session metadata.
+      if (shownFromSnapshot) return;
+      // The metadata user below must never be saved over a real copy.
+      profileConfirmedRef.current = false;
       try {
         const meta = session.user.user_metadata as Record<string, any>;
         const role = (meta?.['role'] as AccountType) ?? 'user';
@@ -588,7 +671,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dobDay?: string; dobMonth?: string; dobYear?: string;
       serviceInterests?: string[]; serviceLocations?: string[];
       yearsExperience?: string;
-      priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+      priceRange?: string; externalBookingUrl?: string; preferredContactMethods?: string[];
       accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
       preferredPaymentMethods?: string[];
       referralSource?: string;
@@ -653,14 +736,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
-    await updateUserContactDetails(updated.id, {
-      name: updated.name,
-      phone: updated.phone ?? '',
-      // Only written when this call is actually changing it, so an unrelated
-      // updateUser({ name }) can't wipe a saved address.
-      ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
-      ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
-    });
+    // Some provider fields (for example businessName) are already persisted
+    // by their owning screen. Do not turn a local AuthContext refresh into an
+    // unrelated second contact-details write; only persist when this call
+    // actually changes a contact/address field owned by this function.
+    if (
+      partial.name !== undefined
+      || partial.phone !== undefined
+      || partial.clientAddress !== undefined
+      || partial.clientArea !== undefined
+    ) {
+      await updateUserContactDetails(updated.id, {
+        name: updated.name,
+        phone: updated.phone ?? '',
+        // Only written when this call is actually changing it, so an unrelated
+        // updateUser({ name }) can't wipe a saved address.
+        ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
+        ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
+      });
+    }
     setUser(updated);
   }, [user, session]);
 
@@ -668,6 +762,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Mark as intentional so the SIGNED_OUT event handler suppresses the alert
     intentionalLogoutRef.current = true;
     const loggedOutUserId = user?.id;
+    profileConfirmedRef.current = false;
     // Clear local state immediately — navigator switches to auth screens right away
     setUser(null);
     setIsLoggedIn(false);
@@ -688,6 +783,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
     ]).catch(() => {});
+    await clearAuthProfileSnapshot();
     await unregisterPushToken().catch(() => {});
     // Biometric enrollment intentionally survives logout — the entire point
     // of enabling Face ID is to skip password re-entry on the NEXT sign-in,
@@ -781,13 +877,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus,
+    myProviderId, myProviderIdStatus, myBookingMode,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus,
+    myProviderId, myProviderIdStatus, myBookingMode,
     switchMode, upgradeToProvider, addClientProfile, login, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,

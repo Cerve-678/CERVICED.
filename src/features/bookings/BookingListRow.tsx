@@ -14,7 +14,7 @@ import type { BookingCardProps } from './presentationTypes';
  * two are interchangeable per-section.
  */
 export const BookingListRow = React.memo<BookingCardProps>(
-  ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false, actionCount = 0 }) => {
+  ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false }) => {
     const { isDarkMode, palette: P } = useTheme();
     const styles = useMemo(() => createStyles(isDarkMode, P), [isDarkMode, P]);
     const highlightAnim = useRef(new Animated.Value(isHighlighted ? 1 : 0)).current;
@@ -86,9 +86,6 @@ export const BookingListRow = React.memo<BookingCardProps>(
               </View>
             )}
             {isRecentlyAdded && booking.status === BookingStatus.UPCOMING && <View style={styles.recentlyAddedDot} />}
-            {actionCount > 0 && booking.status !== BookingStatus.CANCELLED && (
-              <View style={styles.actionBadge}><Text style={styles.actionBadgeText}>!</Text></View>
-            )}
           </View>
           <View style={styles.info}>
             <View style={styles.infoTopRow}>
@@ -142,6 +139,4 @@ const createStyles = (isDarkMode: boolean, P: ReturnType<typeof useTheme>['palet
   rescheduleBadge: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, marginTop: 6 },
   rescheduleBadgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3, color: P.onAccent },
   recentlyAddedDot: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#4CAF50', borderWidth: 2, borderColor: isDarkMode ? '#2C2C2E' : '#FFFFFF', zIndex: 10 },
-  actionBadge: { position: 'absolute', bottom: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, zIndex: 2, borderWidth: 1.5, borderColor: isDarkMode ? '#2C2C2E' : '#FFFFFF' },
-  actionBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', lineHeight: 13 },
 });

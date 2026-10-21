@@ -24,7 +24,7 @@ const conversations = [
   { id: 'enquiry-1', user_id: 'visitor', client: { name: 'Visitor' }, has_booking: false, unread_count_provider: 1, last_message: 'Do you offer braids?', last_message_at: null },
   { id: 'client-1', user_id: 'client', client: { name: 'Booked Client' }, has_booking: true, unread_count_provider: 0, last_message: 'See you tomorrow', last_message_at: null },
 ];
-const navigation = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn() };
+const navigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => true), setParams: jest.fn() };
 
 beforeEach(() => {
   jest.clearAllMocks();

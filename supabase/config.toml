@@ -28,9 +28,14 @@ verify_jwt = true
 verify_jwt = false
 
 # Woken only by pg_cron (process_due_payouts) with the service_role key as the
-# bearer, never by a user session — the function additionally checks the bearer
-# equals the service role key before moving any money.
+# bearer, never by a user session — the function additionally confirms the bearer
+# is a real service key (_shared/serviceAuth.ts) before moving any money.
 [functions.release-payouts]
+verify_jwt = true
+
+# A client starts or confirms only their own completed-booking tip. The
+# function verifies the JWT again and owns every Stripe/database write.
+[functions.booking-tip]
 verify_jwt = true
 
 # Called by the owning provider (their JWT) or by admin tooling with the
@@ -448,9 +453,6 @@ enabled = true
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
 
-[functions.stripe-webhook]
-verify_jwt = false
-
 [functions.stripe-connect-return]
 verify_jwt = false
 
@@ -460,11 +462,12 @@ verify_jwt = true
 [functions.create-payment-intent]
 verify_jwt = true
 
+[functions.client-saved-cards]
+verify_jwt = true
+
 [functions.finalize-payment-intent]
 verify_jwt = true
 
-[functions.release-payouts]
-verify_jwt = true
-
-[functions.refund-payment]
+# Provider-only (their JWT): charge or refund a late/no-show fee.
+[functions.booking-fee]
 verify_jwt = true

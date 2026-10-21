@@ -1,6 +1,8 @@
 # Payments
 #security #client-decides
 
+> **Current money logic lives in `docs/PAYMENTS_AND_LOGIC.md`.** This note is older and partly out of date (e.g. Stripe payments are no longer disabled).
+
 Money on a booking. **This is the biggest trust gap in the app** → [[Client vs Server Authority]] #1–#3.
 
 ## The money fields (on `bookings`)

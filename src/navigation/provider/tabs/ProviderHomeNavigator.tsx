@@ -16,7 +16,11 @@ import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
+import BusinessInfoScreen from '../../../screens/provider/BusinessInfoScreen';
 import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
+import LinkOnlyHomeScreen from '../../../screens/provider/LinkOnlyHomeScreen';
+import LinkOnlyAnalyticsScreen from '../../../screens/provider/LinkOnlyAnalyticsScreen';
+import ProviderBeccaNavigator from './ProviderBeccaNavigator';
 import { ProviderHomeStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 
@@ -24,11 +28,33 @@ const ProviderHomeStack = createNativeStackNavigator<ProviderHomeStackParamList>
 
 const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
 
-export default function ProviderHomeNavigator() {
+/**
+ * `linkOnly` — a link-only provider (booking_mode 'external') has no booking
+ * calendar, so their Home starts on LinkOnlyHomeMain. The rest of the stack
+ * is shared; the link-only Home only pushes the screens that apply to them.
+ */
+export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?: boolean }) {
   const { theme } = useTheme();
 
   return (
-    <ProviderHomeStack.Navigator>
+    <ProviderHomeStack.Navigator initialRouteName={linkOnly ? 'LinkOnlyHomeMain' : 'ProviderHomeMain'}>
+      <ProviderHomeStack.Screen
+        name="LinkOnlyHomeMain"
+        component={LinkOnlyHomeScreen}
+        options={{ headerShown: false }}
+      />
+      <ProviderHomeStack.Screen
+        name="LinkOnlyAnalytics"
+        component={LinkOnlyAnalyticsScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Link-only providers have no Becca tab, so Becca is pushed from
+          their Home as its own stack. */}
+      <ProviderHomeStack.Screen
+        name="BeccaStack"
+        component={ProviderBeccaNavigator}
+        options={{ headerShown: false }}
+      />
       <ProviderHomeStack.Screen
         name="ProviderHomeMain"
         component={ProviderHomeScreen}
@@ -88,6 +114,12 @@ export default function ProviderHomeNavigator() {
       <ProviderHomeStack.Screen
         name="Policies"
         component={PoliciesScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="BusinessInfo"
+        component={BusinessInfoScreen}
         options={{ headerShown: false }}
       />
 

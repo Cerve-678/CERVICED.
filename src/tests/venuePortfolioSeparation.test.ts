@@ -62,13 +62,15 @@ describe("venue photos are split from the work gallery", () => {
   });
 
   it("excludes venue rows from every portfolio query a client can see", () => {
-    // getPortfolioItems (Explore's feed), searchPortfolio (Becca + text
-    // search) and getSavedPortfolioDetails (Explore's Favourites tab) return
+    // getExplorePortfolioItems (Explore's feed), getPortfolioItems (Becca's
+    // inspiration browse), searchPortfolio (Becca + text search) and
+    // getSavedPortfolioDetails (Explore's Favourites tab) return
     // other providers' portfolio rows; getProviderPortfolio returns one
-    // provider's, and a client reads it on their profile. Each needs the
+    // provider's, and a client reads it on their profile. getDiscoverFeedTotal
+    // counts Explore's feed, so it must skip the same rows. Each needs the
     // is-null OR neq form: a bare .neq() drops NULL-category rows too.
     const source = readFileSync("src/services/databaseService.ts", "utf8");
     const clause = "category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}";
-    expect(source.split(clause).length - 1).toBe(4);
+    expect(source.split(clause).length - 1).toBe(6);
   });
 });

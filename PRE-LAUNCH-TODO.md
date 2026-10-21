@@ -1074,3 +1074,148 @@ locked. Run `cerviced-legal-flagger` / `cerviced-security-review` on it, and
 consider a note in `LEGAL-COMPLIANCE-NOTES.md`.
 
 Build on its own branch (`feat/home-screen-widgets`) off `main`.
+
+## 24. Redeploying edge functions, and the late/no-show fees launch checks (2026-10-18)
+
+Numbered 24 because §22 (Instagram handle verification) and §23 (saved cards)
+are on unmerged branches.
+
+**When to redeploy.** Nothing needs deploying right now: the live
+`create-payment-intent` matches `main` as of `b6c0255` (late/no-show fees), and
+`release-payouts`, `stripe-webhook`, `apply-cancellation-refund`, `booking-fee`
+and `refund-payment` match `main` as of `38c6e8b9` (refund payout protection,
+deployed 2026-10-18).
+Redeploy only when:
+- a change touches anything under `supabase/functions/` (including `_shared/`,
+  which every function that imports it needs redeployed);
+- the saved-cards branch merges into `main`. Then redeploy
+  `create-payment-intent` and `client-saved-cards`, and check that the merge
+  kept the fees' consent check and `setup_future_usage`;
+- a change ships with a migration. Run the SQL first, then deploy.
+
+Always deploy from an up-to-date `main`. A function deployed from an older
+branch silently removes whatever `main` added to it, such as the fee payout
+loop or the bank-dispute reversal.
+
+```
+cd ~/Desktop/CERVICEDD/CERVICED.
+git checkout main && git pull
+supabase functions deploy <function-name> --project-ref ztrfpfvvejzaysrelmfm
+```
+
+Run one line per changed function. Each ends "Deployed Functions…", and
+"Docker is not running" is harmless. Before switching the shared folder to
+`main`, make sure no other session has uncommitted work in it, or have Claude
+deploy from a fresh copy of `main`.
+
+**Late/no-show fees: before real customers.**
+- [ ] Run the test-mode checklist end to end: set fees, tick box at checkout,
+      charge late fee, charge no-show fee, dispute → keep, dispute → refund,
+      declined card, 24h window closes, one fee per booking, fee payout released.
+- [ ] Lawyer review of Terms §6, the checkout tick-box line
+      (`src/constants/feeTerms.ts`) and the Privacy Policy saved-cards
+      paragraph. See LEGAL-COMPLIANCE-NOTES §17.
+- [ ] Put the same §6 wording on the website.
+- [ ] Provider terms must say a bank chargeback is taken back from their payout.
+- [ ] Rescheduled bookings pick up the provider's current fees, not the ones
+      originally agreed. Decide whether that's acceptable.
+- [x] Beauty Maintenance migration renumbered to `20261018180000` (above the
+      frontier) and re-verified against live on 2026-10-18; its constraint list
+      keeps the fee and refund-request notification types.
+
+**Going live: option B, chosen by the user on 2026-10-18.** One Supabase project switches to live
+Stripe keys. Release builds (`preview`, `production` in eas.json) already use
+the real Stripe checkout with Apple Pay, on the TEST publishable key, so
+nothing real moves until this list is done. **Do not ship a public App Store
+build until it is**: a test key in a public build takes bookings with no money.
+- [ ] Stripe account fully activated for live payments (business details, bank).
+- [ ] Apple Pay certificate also uploaded for LIVE mode in Stripe, if Stripe
+      shows separate test and live Apple Pay settings.
+- [ ] Set the live secrets in Supabase (the user, never in chat):
+      `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`,
+      using the live webhook endpoints created in the Stripe dashboard.
+- [ ] Swap `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` in eas.json (preview +
+      production) and `.env.local` to the `pk_live_` key. The app refuses to pay
+      when the app key and server key are in different modes, so all of them
+      change together.
+- [ ] Providers re-onboard to Stripe Connect in live mode (test accounts don't carry over).
+- [ ] After the switch, every test is a real charge. Refund yourself, and
+      keep test bookings off real providers.
+- [ ] Security review and legal review of the Stripe flow (auto-memory
+      stripe-payment-intent-integration), and the fee terms (LEGAL-COMPLIANCE-NOTES §17).
+
+---
+
+## 23. Saved cards + fee consent record — built on `feat/saved-cards-fee-consent-record`, not live (2026-10-19)
+
+(Numbered 23 because §22, Instagram handle verification, is on another branch.
+Supersedes `feat/saved-payment-methods` and `feat/combined-saved-cards-fees`.)
+
+Clients can save cards on Payment Methods and reuse them at checkout. Stripe
+holds the card; CERVICED stores only the Stripe Customer id, in the
+service-role-only `client_stripe_customers` table. A card saved on Payment
+Methods is on-session only. A card is saved for off-session use only at a
+checkout with late/no-show fees, after the client's agreement is recorded in
+`fee_consent_records` (wording version + sha256, frozen amounts, DB time).
+
+Inert until all of these happen, in order:
+
+1. Apply `20261019120000_saved_cards_and_fee_consent_records.sql` (check
+   `supabase/MIGRATION_OWNER.md`; frontier at authoring 20261019011825).
+2. Deploy `client-saved-cards`, `create-payment-intent` and `booking-fee`,
+   outside peak hours: the PaymentIntent idempotency key was renamed, so a
+   checkout mid-flight at deploy time can leave one orphaned, uncaptured intent.
+   Between steps 1 and 2 the live functions still read
+   `checkout_batches.fee_consent_at`, which the new RPC keeps stamping — but an
+   app build from before this branch calls the old one-argument
+   `accept_checkout_fees`, which step 1 drops, so its fee checkouts fail.
+3. Then a migration dropping `users.stripe_customer_id` and its two guard
+   triggers/functions (unused after step 2; never before it).
+4. `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED=true` (§1). Until then Payment Methods
+   shows the old explainer and checkout doesn't use saved cards.
+
+Before turning it on:
+
+- **Verify in Stripe test mode which `setup_future_usage` a card saved from the
+  checkout sheet ends up with.** The ephemeral-key Payment Sheet's own "save"
+  checkbox may save it as `off_session`, which contradicts the on-session scope.
+  If so, move checkout to a Customer Session with
+  `payment_method_save_usage: 'on_session'` (needs a newer Stripe API version
+  than the `2024-12-18.acacia` the functions pin). "Add a card" on Payment
+  Methods is on-session by construction (SetupIntent `usage: 'on_session'`).
+- **Account deletion doesn't delete the Stripe Customer.** When the deletion
+  grace period completes, call `stripe.customers.del(...)` from a service-role
+  function — before the auth user goes, since `client_stripe_customers`
+  cascades away with it.
+- **Privacy Policy** doesn't name Stripe or say a Stripe Customer is kept for
+  saved cards. Wording is the user's call.
+- Apple Pay still needs a real Apple merchant ID (`merchant.com.cerviced` is a
+  placeholder) before the "Also at checkout" row is true on iOS.
+
+## 25. "Session expired" on Apple Pay + address page back arrow — two PRs to merge (2026-10-20)
+
+(Numbered 25 because §22 is on another branch.)
+
+**Merge, then ship a new TestFlight build:**
+
+- **PR #146 `fix/sign-out-this-device-only`.** Logging out on one phone logged
+  the account out on every phone, because `supabase.auth.signOut()` defaults
+  to global scope. The other phones still look logged in, but Apple Pay
+  fails with "Your session has expired" (`create-payment-intent` gets
+  `session_not_found` from Auth → 401). Seen live 14:30–15:05 today. The fix
+  uses `scope: 'local'`; password reset still signs out everywhere on purpose.
+  Until it ships, the workaround on an affected phone is to log out and back in.
+- **PR #147 `fix/address-back-returns-to-cart`.** From checkout, the back
+  arrow on the address page went to Home. Now it returns to the cart with
+  Confirm Your Details open again, the same as Save does.
+
+Both have clean `tsc` and 155/155 test suites, but neither has been run on a
+device. Check on the phone: log out on phone A and pay on phone B. Then, from
+checkout, open add-address, press back, and confirm you land on the cart.
+
+**Still open after #147:** the iOS edge-swipe and Android hardware back from
+the address page go to the Profile menu, not the cart. The cart only reopens
+Confirm Your Details if the client goes back to the cart tab themselves.
+Closing this needs the address page to intercept back when it was opened
+from checkout (`usePreventRemove`, or a `BackHandler` plus
+`gestureEnabled: false`).

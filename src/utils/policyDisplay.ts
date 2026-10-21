@@ -19,6 +19,11 @@ export interface PolicyDisplayData {
   depositType?: string;
   depositAmount?: string;
   noShowAction?: string;
+  noShowGraceMinutes?: string;
+  /** £ amounts the provider can charge after the appointment ('' = none).
+   *  Each booking freezes them at checkout, capped at half its price. */
+  lateFee?: string;
+  noShowFee?: string;
   policyImageUrl?: string;
   /** Free-text refund disclosure only — never a percentage/amount, since
    *  this app has no refund-processing infra and doesn't calculate or
@@ -91,13 +96,22 @@ export interface PolicyDisplayRow {
  * actually enforces. A frozen booking snapshot has no equivalent enforced
  * number (only the descriptive text was ever captured), so callers reading a
  * snapshot should omit this parameter.
+ *
+ * `linkOnly`: a link-only provider takes bookings on their own site, so
+ * nothing on CERVICED applies a notice window, keeps a deposit or charges a
+ * fee for them. Their rows are the plain policy text only: no deposit,
+ * penalty, no-show or fee rows, and their own notice rather than the
+ * enforced column (which defaults to 24 for every provider). Rows for values
+ * stored before they switched to link-only stay hidden too.
  */
 export function buildPolicyDisplayRows(
   policy: PolicyDisplayData | null | undefined,
   enforcedCancellationNoticeHours?: number,
+  options?: { linkOnly?: boolean },
 ): PolicyDisplayRow[] {
   const rows: PolicyDisplayRow[] = [];
   if (!policy) return rows;
+  if (options?.linkOnly) return buildLinkOnlyPolicyRows(policy);
 
   // "required" is only true for the deposit_required mode — under
   // client_choice the client can still pay in full, so labelling the deposit
@@ -148,12 +162,20 @@ export function buildPolicyDisplayRows(
     rows.push({
       icon: 'close-circle-outline',
       label: 'No-show',
-      value: policy.noShowAction === 'warn'
-        ? 'Warning issued'
-        : policy.noShowAction === 'charge_deposit'
-          ? 'Deposit charged'
-          : 'Full charge',
+      // 'charge_full' was never enforced and is read as keeping the deposit;
+      // an actual extra charge is the no-show fee row below.
+      value: policy.noShowAction === 'warn' ? 'Warning issued' : 'Deposit kept',
     });
+  }
+
+  const lateFee = feeLabel(policy.lateFee);
+  if (lateFee) {
+    const grace = Number(policy.noShowGraceMinutes) || 0;
+    rows.push({ icon: 'alarm-outline', label: 'Late fee', value: grace > 0 ? `${lateFee} after ${grace} min` : lateFee });
+  }
+  const noShowFee = feeLabel(policy.noShowFee);
+  if (noShowFee) {
+    rows.push({ icon: 'close-circle-outline', label: 'No-show fee', value: noShowFee });
   }
 
   if (policy.cancelNote) {
@@ -165,6 +187,37 @@ export function buildPolicyDisplayRows(
   }
 
   return rows;
+}
+
+function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] {
+  const rows: PolicyDisplayRow[] = [];
+  if (policy.cancelNotice && policy.cancelNotice !== 'none') {
+    rows.push({ icon: 'time-outline', label: 'Cancellation', value: `${policy.cancelNotice} notice` });
+  }
+  const rescheduleParts: string[] = [];
+  if (policy.rescheduleNotice && policy.rescheduleNotice !== 'same_day') {
+    rescheduleParts.push(`${policy.rescheduleNotice} notice`);
+  }
+  if (policy.maxReschedules && policy.maxReschedules !== 'unlimited') {
+    rescheduleParts.push(`max ${policy.maxReschedules}`);
+  }
+  if (rescheduleParts.length > 0) {
+    rows.push({ icon: 'calendar-outline', label: 'Reschedule', value: rescheduleParts.join(' · ') });
+  }
+  if (policy.cancelNote) {
+    rows.push({ icon: 'information-circle-outline', label: 'Note', value: policy.cancelNote });
+  }
+  if (policy.refundPolicyNote) {
+    rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
+  }
+  return rows;
+}
+
+/** "£10" / "£12.50" for a policy fee, or null when there's no valid fee. */
+function feeLabel(value: string | undefined): string | null {
+  if (!value || !/^\d+(\.\d{1,2})?$/.test(value) || Number(value) <= 0) return null;
+  const n = Number(value);
+  return `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
 }
 
 /**

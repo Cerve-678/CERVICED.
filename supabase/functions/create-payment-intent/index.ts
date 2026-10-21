@@ -1,13 +1,18 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
+import { getOrCreateStripeCustomer } from '../_shared/stripeCustomer.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Must match client-saved-cards: the ephemeral keys both return are read by
+// the same mobile SDK.
+const STRIPE_API_VERSION = '2024-12-18.acacia';
+
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: STRIPE_API_VERSION,
   httpClient: Stripe.createFetchHttpClient(),
 });
 
@@ -70,7 +75,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
     const { data: holds, error: holdsError } = await admin.from('bookings')
-      .select('provider_id').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
+      .select('provider_id, late_fee_pence, no_show_fee_pence').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
     if (holdsError || !holds?.length) throw new Error('No active reservations');
     const providerIds = [...new Set(holds.map(row => row.provider_id))];
     const { data: providers, error: providersError } = await admin.from('providers')
@@ -82,6 +87,22 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // A provider with a late or no-show fee needs the card saved for an
+    // off-session charge after the appointment — and the client's recorded
+    // agreement (fee_consent_records, written by accept_checkout_fees before
+    // this call), or nothing is saved for off-session use.
+    const hasFees = holds.some(row => (row.late_fee_pence ?? 0) > 0 || (row.no_show_fee_pence ?? 0) > 0);
+    if (hasFees) {
+      const { data: consent, error: consentError } = await admin.from('fee_consent_records')
+        .select('id').eq('checkout_batch_id', batch.id).eq('user_id', user.id).maybeSingle();
+      if (consentError) throw consentError;
+      if (!consent) {
+        return new Response(JSON.stringify({ code: 'fee_consent_required', error: 'Please agree to the provider\'s late and no-show fees to continue.' }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Stripe only ever receives the database-calculated amount.
     const amountInPence = Math.round(Number(batch.amount_due) * 100);
     if (!Number.isSafeInteger(amountInPence) || amountInPence <= 0) {
@@ -91,18 +112,41 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const paymentIntent = batch.payment_intent_id
+    // Every checkout uses the client's Stripe Customer, so the Payment Sheet
+    // lists their saved cards and can offer to save a new one. Only a checkout
+    // with agreed fees saves the card for off-session use; without fees no
+    // code path charges a saved card without the client present. UNVERIFIED:
+    // with the ephemeral-key Payment Sheet, the sheet's own "save" checkbox
+    // may confirm with setup_future_usage=off_session. Check a checkout-saved
+    // card in Stripe test mode before enabling payments; if so, move to a
+    // Customer Session with payment_method_save_usage='on_session'.
+    const customerId = await getOrCreateStripeCustomer(admin, stripe, {
+      id: user.id, email: user.email,
+    });
+
+    let paymentIntent = batch.payment_intent_id
       ? await stripe.paymentIntents.retrieve(batch.payment_intent_id)
       : await stripe.paymentIntents.create({
       amount: amountInPence,
       currency: batch.currency,
+      customer: customerId,
       metadata: { user_id: user.id, checkout_batch_id: batch.id },
-      payment_method_types: ['card'],
+      // PayPal only when nothing has to be saved for later: a late/no-show fee
+      // is charged off-session by booking-fee, which charges cards only.
+      // Apple Pay and Google Pay ride on 'card'.
+      payment_method_types: hasFees ? ['card'] : ['card', 'paypal'],
+      ...(hasFees ? { setup_future_usage: 'off_session' as const } : {}),
       // The sheet authorises only. Server settlement captures, then confirms
       // the reserved bookings; signed webhooks recover interrupted requests
       // and refund captured payments whose reservations became unavailable.
       capture_method: 'manual',
-    }, { idempotencyKey: `checkout_create_${batch.id}` });
+    }, { idempotencyKey: `checkout_create_saved_cards_${batch.id}` });
+
+    // An intent started before saved cards shipped has no Customer; attach it
+    // while it can still change, so the sheet's saved cards line up.
+    if (!paymentIntent.customer && paymentIntent.status === 'requires_payment_method') {
+      paymentIntent = await stripe.paymentIntents.update(paymentIntent.id, { customer: customerId });
+    }
 
     if (paymentIntent.status === 'canceled' || paymentIntent.status === 'succeeded') {
       return new Response(JSON.stringify({ error: 'This payment is already closed. Check your bookings.' }), {
@@ -121,11 +165,20 @@ Deno.serve(async (req: Request) => {
       throw new Error('Checkout is no longer available');
     }
 
+    const ephemeralKey = await stripe.ephemeralKeys.create(
+      { customer: customerId }, { apiVersion: STRIPE_API_VERSION },
+    );
+
     return new Response(
       JSON.stringify({
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         livemode: paymentIntent.livemode,
+        customerId,
+        ephemeralKeySecret: ephemeralKey.secret,
+        // What this intent can be confirmed with — the app shows a PayPal
+        // button only when 'paypal' is in here (never for fee checkouts).
+        paymentMethodTypes: paymentIntent.payment_method_types,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

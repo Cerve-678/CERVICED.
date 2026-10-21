@@ -23,7 +23,8 @@ import {
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -52,14 +53,20 @@ import { useAppDialog } from '../../components/AppDialog';
 // Supabase registration service
 import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
+import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
-import type { DbPortfolioItem } from '../../types/database';
+import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
+import { FramedLogo } from '../../components/FramedLogo';
+import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
+import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
+  DEFAULT_PROVIDER_THEME,
   resolveProviderTheme,
+  themeBrandingColours,
   withAlpha,
   isDarkColor,
   blend,
@@ -72,8 +79,8 @@ import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
-import { ServiceImageCropper } from '../../features/provider-registration/ServiceImageCropper';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
+import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
 import { SERVICE_BUFFER_BEFORE_OPTS, SERVICE_BUFFER_AFTER_OPTS } from '../../features/business-details/options';
@@ -84,6 +91,7 @@ import { createServiceDraft } from '../../features/provider-registration/service
 import { InfoRegPager } from '../../features/provider-registration/InfoRegPager';
 import {
   INFO_REG_SECTIONS as EDITOR_SECTIONS,
+  LINK_ONLY_INFO_REG_SECTIONS as LINK_ONLY_EDITOR_SECTIONS,
   infoRegSectionIndex,
   type InfoRegSectionKey as EditorSectionKey,
 } from '../../features/provider-registration/infoRegSections';
@@ -177,7 +185,7 @@ type CancelNotice     = 'none' | '24h' | '48h' | '72h';
 type CancelPenalty    = 'none' | 'deposit' | 'full';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
-type NoShowAction     = 'none' | 'warn' | 'charge_deposit' | 'charge_full';
+type NoShowAction     = 'none' | 'warn' | 'charge_deposit';
 type WaitlistSelectionMethod = 'fifo' | 'manual';
 
 interface ProviderPolicies {
@@ -1160,10 +1168,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
   const [images, setImages] = useState<ServiceImageDraft[]>(service?.images || []);
-  // Freshly-picked URIs waiting to be framed. They are deliberately NOT added
-  // to `images` yet — a provider who backs out of the cropper should end up
-  // with the set they started with, not a half-added batch.
-  const [pendingCropUris, setPendingCropUris] = useState<string[]>([]);
   const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
@@ -1258,29 +1262,27 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
 
+  // Pick one photo, crop and adjust it in the iOS crop, done. One at a time
+  // because iOS offers no crop during a multi-select. The crop IS the framing,
+  // so the photo fills its frame wherever it's shown.
   const handleAddImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please allow access to your photo library.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      const asset = result.assets?.[0];
+      if (result.canceled || !asset) return;
+      setImages(prev => [...prev, { uri: asset.uri, fit: 'cover' }]);
+    } catch (e) {
+      Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,   // pick several photos at once
-      selectionLimit: 10,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.length) {
-      // Straight into the cropper rather than into the set: every photo is
-      // re-rendered to JPEG on the way through, which is also what stops an
-      // iOS HEIC being uploaded under a .jpg name (see ServiceImageCropper).
-      setPendingCropUris(result.assets.map(a => a.uri));
-    }
-  };
-
-  const handleCropperDone = (framed: ServiceImageDraft[]) => {
-    setPendingCropUris([]);
-    if (framed.length > 0) setImages(prev => [...prev, ...framed]);
   };
 
   const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
@@ -1289,17 +1291,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   // save, and index 0 is the photo that leads the service everywhere it's
   // shown. Splice-then-insert rather than a swap, so dragging across several
   // slots moves one photo through them instead of exchanging the two ends.
-  // Framing is per photo, not per service — a provider may want a wide shot
-  // shown whole and a close-up filling the frame in the same set.
-  const handleToggleImageFit = (index: number) => {
-    setImages(prev =>
-      prev.map((img, i) =>
-        i === index
-          ? { ...img, fit: img.fit === 'cover' ? 'contain' : 'cover' }
-          : img,
-      ),
-    );
-  };
 
   const handleReorderImages = (from: number, to: number) => {
     setImages(prev => {
@@ -1471,21 +1462,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
-                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onReorder={handleReorderImages} size={100} styles={styles} />
-                <ServiceImageCropper
-                  visible={pendingCropUris.length > 0}
-                  uris={pendingCropUris}
-                  onDone={handleCropperDone}
-                  onCancel={() => setPendingCropUris([])}
-                  palette={{
-                    bg: chrome.surf(0.98),
-                    card: chrome.surf(0.35),
-                    text: chrome.fg(0.92),
-                    sub: chrome.fg(0.55),
-                    accent: accentColor,
-                  }}
-                />
-                <Text style={styles.serviceSheetHint}>Add multiple images to showcase your service</Text>
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onReorder={handleReorderImages} size={100} styles={styles} />
               </View>
 
               {/* Service Name */}
@@ -2199,6 +2176,11 @@ interface PreviewModalProps {
   accentColor: string;
   portfolio: DbPortfolioItem[];
   venuePhotos: DbPortfolioItem[];
+  /** A link-only provider's clients see a different profile — Book on their
+   *  own page, specialities instead of a price list, no ratings or reviews —
+   *  so the preview shows that one. */
+  isLinkOnly: boolean;
+  specialities: readonly string[];
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -2208,6 +2190,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   accentColor,
   portfolio,
   venuePhotos,
+  isLinkOnly,
+  specialities,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -2362,7 +2346,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 {providerData.location ? ` · ${providerData.location.toUpperCase()}` : ''}
               </Text>
 
-              {/* Rating */}
+              {/* Rating — not for link-only: clients book them elsewhere, so
+                  there are no CERVICED reviews to rate them from. */}
+              {!isLinkOnly && (
               <View style={styles.previewRatingContainer}>
                 <View style={styles.previewStars}>
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -2371,12 +2357,41 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </View>
                 <Text style={[styles.previewRatingText, { color: heroText }, heroIsDark && styles.previewHeroTextShadow]}>{mockRating}</Text>
               </View>
+              )}
 
               {providerData.yearsExperience ? (
                 <Text style={[styles.previewYearsText, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>{providerData.yearsExperience} years experience</Text>
               ) : null}
 
-              {/* Slots with Bell */}
+              {/* Link-only: Book (their own page) with socials and messaging
+                  beside it, exactly as clients see it in place of the
+                  availability pill. Decorative here. */}
+              {isLinkOnly ? (
+                <View style={styles.previewLinkOnlyBookBlock}>
+                  <View style={styles.previewLinkOnlyBookRow}>
+                    <View style={[styles.previewLinkOnlyBookButton, { backgroundColor: PP.card, borderColor: PP.border }]}>
+                      <Text style={[styles.previewLinkOnlyBookText, { color: PP.text }]}>BOOK</Text>
+                      <Ionicons name="open-outline" size={15} color={PP.text} />
+                    </View>
+                    {providerData.instagram ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-instagram" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    {providerData.tiktok ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-tiktok" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                      <Ionicons name="chatbubble-outline" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                    </View>
+                  </View>
+                  <Text style={[styles.previewLinkOnlyCaption, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>
+                    Books on their own page — opens inside CERVICED
+                  </Text>
+                </View>
+              ) : (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2400,6 +2415,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   <BellIcon size={16} color={PP.sub} />
                 </View>
               </BlurView>
+              )}
             </View>
 
             {/* The content sheet rises over the hero photo with its own large
@@ -2437,8 +2453,14 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </TouchableOpacity>
               </BlurView>
 
+              {/* Link-only clients see specialities where the price list
+                  would be; their prices live on their own booking page. */}
+              {isLinkOnly && (
+                <ProviderSpecialitiesSection specialities={specialities} textColor={PP.text} accent={accentColor} />
+              )}
+
               {/* Services Section */}
-              {categoryNames.length > 0 && (
+              {!isLinkOnly && categoryNames.length > 0 && (
                 <View style={styles.previewServicesSection}>
                   <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>Services</Text>
 
@@ -2546,7 +2568,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
               {/* Reviews — this is a template/showcase view, not a live reflection
                   of real reviews, so the card always shows (matching
-                  ProviderProfileScreen) but deliberately stays empty. */}
+                  ProviderProfileScreen) but deliberately stays empty. Never
+                  for link-only, whose clients see no reviews section. */}
+              {!isLinkOnly && (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2560,6 +2584,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 />
                 <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Reviews</Text>
               </BlurView>
+              )}
 
               {/* Contact Section */}
               <BlurView
@@ -2703,7 +2728,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // stay pale enough for dark status-bar content to read fine on top.
   const statusBarStyle = 'dark-content' as const;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
+  // Link-only providers (own booking page) only fill in Identity, About &
+  // Portfolio and Contact here. Mode comes from the providers row once it
+  // exists and from the sign-up answer before that — see AuthContext.
+  const isLinkOnly = myBookingMode === 'external';
   // Themed (not native Alert) specifically for the "this will pause your
   // account" warning on deleting the last service — everything else on this
   // screen still uses Alert.alert, left as-is.
@@ -2839,22 +2868,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Form state
   const [providerData, setProviderData] = useState<ProviderRegistrationData>({
     providerName: '',
-    providerService: 'HAIR',
-    serviceCategories: ['HAIR'],
+    // Nothing is selected until the provider chose it at sign-up or chooses
+    // it themselves here. This matters for link-only providers too: their
+    // own booking page must not cause CERVICED to invent business details.
+    providerService: '',
+    serviceCategories: [],
     categoryServiceTypes: {},
     customServiceType: '',
     location: '',
     aboutText: '',
     scheduleReleaseDay: null,
-    gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
+    // The default theme's own colours, which is what this signup saves, so a
+    // new provider's profile matches Branding until they choose something.
+    // (Was a coral/teal/blue placeholder gradient, saved for real and shown
+    // to clients behind the profile top.)
+    ...themeBrandingColours(DEFAULT_PROVIDER_THEME),
     hasCustomGradient: false,
-    // Was '#7B1FA2' (a hardcoded purple) — showed as the accent everywhere
-    // in this screen (chip fills, save buttons, template picker) for every
-    // brand-new signup, before they'd ever chosen anything. Defaults to the
-    // app's own accent instead, matching chromeTheme's app-default.
-    accentColor: lightTheme.accent,
     profileTheme: 'app',
     logo: null,
+    logoFraming: null,
     categories: {},
     categoryDescriptions: {},
     phone: '',
@@ -2863,7 +2895,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     website: '',
     tiktok: '',
     whatsapp: '',
-    preferredContactMethods: ['in_app'],
+    preferredContactMethods: [],
     externalBookingUrl: '',
     yearsExperience: '',
     businessType: '',
@@ -2876,7 +2908,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     preferredPaymentMethods: [],
     fullAddress: '',
     fullAddressCoordinates: null,
-    addressReleasePolicy: 'on_confirmation',
+    addressReleasePolicy: null,
     backgroundImage: null,
     isVerified: false,
     rating: 0,
@@ -2902,6 +2934,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // write — see the load effect below for why.
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
   const [policiesLoaded, setPoliciesLoaded] = useState(false);
+  // Whether booking_policies already held anything for this provider. A
+  // link-only provider's policies are optional and theirs to write, so a first
+  // save must not file CERVICED's defaults on their behalf.
+  const [policiesOnFile, setPoliciesOnFile] = useState(false);
+  // Specialities picked at sign-up (users.specialties). Written to
+  // provider_specialties on the first save, which is the first moment a
+  // providers row exists for them to belong to.
+  const [signupSpecialties, setSignupSpecialties] = useState<string[]>([]);
 
   // True until the existing-provider fetch settles — without this the form
   // renders with empty defaults ('Provider Registration', blank fields, the
@@ -3055,6 +3095,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   (interest): interest is string =>
                     typeof interest === 'string' && SERVICE_CATEGORIES.includes(interest),
                 );
+                setSignupSpecialties(
+                  (prefill.specialties ?? []).filter(
+                    (specialty): specialty is string => typeof specialty === 'string' && specialty.trim() !== '',
+                  ),
+                );
                 setProviderData(prev => ({
                   ...prev,
                   ...(prefilledServiceTypes.length
@@ -3070,6 +3115,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   email: prev.email || prefill.business_email || '',
                   instagram: prev.instagram || prefill.instagram || '',
                   website: prev.website || prefill.website || '',
+                  // Asked on SignUpStep1 ("I use my own booking link").
+                  externalBookingUrl: prev.externalBookingUrl || prefill.external_booking_url || '',
                   tiktok: prev.tiktok || prefill.tiktok || '',
                   businessType: prev.businessType || prefilledBusinessType || '',
                   teamSize: prev.teamSize || prefilledTeamSize || '',
@@ -3133,6 +3180,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         // profile save, since depositOnly is no longer a mirror of
         // depositRequired.
         setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) });
+        setPoliciesOnFile(true);
         setPoliciesLoaded(true);
       })
       // Deliberately leaves policiesLoaded false on failure — this screen no
@@ -3322,6 +3370,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  // A link-only preview shows specialities, which this screen doesn't hold
+  // once the provider exists, so they're read when the preview opens. Before
+  // the first save they're still the ones picked at sign-up.
+  const [previewSpecialities, setPreviewSpecialities] = useState<string[]>([]);
+  useEffect(() => {
+    if (!showPreviewModal || !isLinkOnly) return;
+    if (!providerDbId) {
+      setPreviewSpecialities(signupSpecialties);
+      return;
+    }
+    let cancelled = false;
+    getProviderSpecialties(providerDbId)
+      .then(list => { if (!cancelled) setPreviewSpecialities(list); })
+      .catch(error => logger.error('InfoReg: loading specialities for the preview failed', error));
+    return () => { cancelled = true; };
+  }, [showPreviewModal, isLinkOnly, providerDbId, signupSpecialties]);
   const [currentCategory, setCurrentCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<string>('');
   const [editingService, setEditingService] = useState<ServiceData | null>(null);
@@ -3350,7 +3414,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const dragTargetRef = useRef(0);
   const dragLatestDxRef = useRef(0);
 
-  // Handle logo selection
+  // The logo picker swipes from the profile circle to the two Home card
+  // sizes. Pages are as wide as the picker's own row, measured on layout.
+  const [logoPagerWidth, setLogoPagerWidth] = useState(0);
+  const [logoPage, setLogoPage] = useState(0);
+  // The swipe unmounts without a logo and comes back on page one, so the
+  // dots and caption have to come back to page one with it.
+  useEffect(() => {
+    if (!providerData.logo) setLogoPage(0);
+  }, [providerData.logo]);
+
+  // Picking and adjusting are the same thing: iOS only offers its crop (with
+  // pinch-to-zoom) while a photo is being picked, so every tap on the logo
+  // opens the library with the square crop on.
   const handleSelectLogo = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -3367,8 +3443,41 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      setProviderData(prev => ({ ...prev, logo: asset.uri }));
+      // A new image makes the old card framing meaningless, so it resets.
+      setProviderData(prev => ({ ...prev, logo: asset.uri, logoFraming: null }));
     }
+  };
+
+  // The two Home cards are framed separately, in their own shape, by pinch
+  // and drag (iOS's crop only does squares). Only a zoom and an offset are
+  // stored per card; the logo image itself stays as picked.
+  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
+  const [logoImageRatio, setLogoImageRatio] = useState(1);
+
+  const handleFrameLogo = (slot: LogoCardSlot) => {
+    const logo = providerData.logo;
+    if (!logo) return;
+    Image.getSize(
+      logo,
+      (width, height) => {
+        setLogoImageRatio(width > 0 && height > 0 ? width / height : 1);
+        setFramingSlot(slot);
+      },
+      () => {
+        // Unmeasurable: frame it as square, which every logo is after the
+        // iOS crop anyway.
+        setLogoImageRatio(1);
+        setFramingSlot(slot);
+      },
+    );
+  };
+
+  const handleLogoFramed = (slot: LogoCardSlot, frame: LogoCardFrame) => {
+    setFramingSlot(null);
+    setProviderData(prev => ({
+      ...prev,
+      logoFraming: { ...(prev.logoFraming ?? {}), imageRatio: logoImageRatio, [slot]: frame },
+    }));
   };
 
   // Handle data transfer from Acuity Scheduling URL
@@ -3534,13 +3643,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Missing Information', 'Please enter your location.');
       return;
     }
-    if (!providerData.businessType) {
-      Alert.alert('Missing Information', 'Please choose your business type — it decides whether clients come to you or you travel to them, and which address-sharing options you get.');
-      return;
-    }
-    if (!providerData.fullAddress.trim()) {
-      Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
-      return;
+    // Business type and the private address drive CERVICED's own booking
+    // flow (who travels, when the address is released). A link-only
+    // provider's bookings happen on their own page, so neither is asked —
+    // but their booking link is, since it's the only way clients book them.
+    if (isLinkOnly) {
+      if (!normalizeExternalBookingUrl(providerData.externalBookingUrl)) {
+        Alert.alert('Missing Information', 'Please add your booking link — it\'s where clients go when they tap Book.');
+        return;
+      }
+    } else {
+      if (!providerData.businessType) {
+        Alert.alert('Missing Information', 'Please choose your business type — it decides whether clients come to you or you travel to them, and which address-sharing options you get.');
+        return;
+      }
+      if (!providerData.fullAddress.trim()) {
+        Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
+        return;
+      }
     }
     if (!user?.id) {
       Alert.alert('Not Logged In', 'Please log in to save your profile.');
@@ -3555,12 +3675,34 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     setIsSubmitting(true);
     try {
-      await saveProviderToSupabase(user.id, providerData, !isEditMode && termsAccepted);
+      await saveProviderToSupabase(
+        user.id,
+        {
+          ...providerData,
+          externalBookingUrl: isLinkOnly
+            ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
+            : providerData.externalBookingUrl,
+          bookingMode: isLinkOnly ? 'external' : 'cerviced',
+        },
+        !isEditMode && termsAccepted,
+      );
+      // First save only: the providers row now exists, so the specialities
+      // answered at sign-up can finally be attached to it. Without this they
+      // never reached the profile hero or Search's Speciality filter.
+      // Best-effort — the profile itself is saved, and they can be set again
+      // in Services & Pricing (or the Portfolio tab for link-only).
+      if (!isEditMode && signupSpecialties.length) {
+        try {
+          await replaceMyProviderSpecialties(signupSpecialties);
+        } catch (error) {
+          logger.error('InfoReg: carrying sign-up specialities over failed', error);
+        }
+      }
       // Only round-trip booking_policies if it actually loaded successfully —
       // writing the in-memory `policies` back while it's still stuck at
       // DEFAULT_POLICIES (a failed load) would silently wipe out whatever a
       // provider had already saved via Business Profile → Policies.
-      if (policiesLoaded) {
+      if (policiesLoaded && (policiesOnFile || !isLinkOnly)) {
         await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
       }
       // Same guard, same reason: only write the terms back once we know what
@@ -3582,7 +3724,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, policiesLoaded, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted]);
+  }, [providerData, user, policies, policiesLoaded, policiesOnFile, signupSpecialties, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
 
   // The pager owns swipe tracking; this callback is the single imperative
   // entry point used by timeline tabs, Next buttons and validation shortcuts.
@@ -3703,7 +3845,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         providerData.providerService === 'OTHER'
           ? filled(providerData.customServiceType)
           : filled(providerData.providerService);
-      return [
+      const summaries: {
+        section: EditorSectionKey;
+        title: string;
+        rows: { label: string; value: string; required?: boolean }[];
+      }[] = [
         {
           section: 'identity',
           title: 'Business identity',
@@ -3734,6 +3880,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             { label: 'Instagram', value: filled(providerData.instagram) },
             { label: 'Website', value: filled(providerData.website) },
             { label: 'TikTok', value: filled(providerData.tiktok) },
+            ...(isLinkOnly
+              ? [{ label: 'Booking link', value: filled(providerData.externalBookingUrl), required: true }]
+              : []),
           ],
         },
         {
@@ -3768,8 +3917,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           ],
         },
       ];
+      // Services and Address Confirmation aren't pages for a link-only
+      // provider, so nothing on them can be "still needed".
+      return isLinkOnly
+        ? summaries.filter(g => g.section !== 'services' && g.section !== 'policies')
+        : summaries;
     },
-    [providerData, workPhotos.length, serviceCount, categoryNames.length],
+    [providerData, workPhotos.length, serviceCount, categoryNames.length, isLinkOnly],
   );
 
   // Only genuinely-required, genuinely-empty fields — this is what the roll-up
@@ -3989,9 +4143,61 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     );
   }
 
+  // The closing note and the CERVICED terms row — the last thing before
+  // Publish. It ends whichever page is last: Address for a CERVICED provider,
+  // Contact for a link-only one (who has no Services or Address pages).
+  const documentEnd = (
+    <View style={styles.docEnd}>
+      <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
+      <Text style={styles.reviewFootnote}>
+        Publishing saves your profile and policies. You can come back and
+        change any of this at any time.
+      </Text>
+
+      {/* alignSelf:'stretch' is load-bearing. docEnd is
+          alignItems:'center', so without it this box sizes to its
+          content — and termsRowText's flex:1 inside an
+          unconstrained row collapses the label to zero width. The
+          checkbox rendered, the words didn't. */}
+      <View style={[styles.termsBox, { marginTop: 16, alignSelf: 'stretch' }]}>
+        <TouchableOpacity
+          style={styles.termsRow}
+          activeOpacity={0.75}
+          onPress={() => { tapSelect(); setTermsAccepted(prev => !prev); }}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: termsAccepted }}
+        >
+          <View
+            style={[
+              styles.termsCheckbox,
+              termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+            ]}
+          >
+            {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
+          </View>
+          <Text style={styles.termsRowText}>
+            I agree to the{' '}
+            {/* Its own onPress so tapping the words opens the terms
+                instead of toggling the box underneath. */}
+            <Text
+              style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
+              onPress={() => { tapSelect(); setShowTermsModal(true); }}
+            >
+              CERVICED Terms &amp; Conditions
+            </Text>
+            {providerData.termsAcceptedAt
+              ? ` — agreed ${formatLongDate(providerData.termsAcceptedAt)}`
+              : ''}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <InfoRegChromeContext.Provider value={chromeTheme}>
     <SafeAreaProvider>
+    <WindowControlsInsetProvider>
       {/* Plain painted View instead of <ThemedBackground> — that component
           reads the app's shared ThemeContext directly, so it would follow
           the APP's dark/light mode, not this screen's own chrome theme
@@ -4087,6 +4293,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           accentColor={adaptiveAccentColor}
           portfolio={workPhotos}
           venuePhotos={venuePhotos}
+          isLinkOnly={isLinkOnly}
+          specialities={previewSpecialities}
         />
 
         {/* No `edges` prop: under fullScreenModal the nested provider this sits
@@ -4135,7 +4343,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
           <InfoRegPager
             ref={pagerRef}
-            sections={EDITOR_SECTIONS}
+            sections={isLinkOnly ? LINK_ONLY_EDITOR_SECTIONS : EDITOR_SECTIONS}
             activeIndex={activePage}
             pageWidth={screenWidth}
             scrollEnabled={!draggingCategory && !serviceDrag.draggingKey}
@@ -4176,43 +4384,121 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.docSub}>Business identity · how clients first find you</Text>
 
             {/* Plain circular avatar picker — no card chrome around it. The
-                surrounding panel was doing nothing the circle doesn't already
-                communicate, and the standard avatar treatment (circle + corner
-                camera badge) reads as tappable on its own. Business name and
-                the rest of Step 1 continue below, unchanged. */}
+                standard avatar treatment (circle + corner camera badge) reads
+                as tappable on its own. Once there's a logo, the circle is the
+                first page of a swipe: the next two pages are the same logo in
+                the small and large Home cards, at their real sizes, so the
+                provider sees each crop in place rather than in a list below.
+                Tapping any page reopens the crop. */}
               <View style={styles.logoSection}>
-                <TouchableOpacity
-                  style={styles.logoContainer}
-                  onPress={() => { tapSelect(); handleSelectLogo(); }}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={providerData.logo ? 'Change logo' : 'Add logo'}
-                >
-                  {providerData.logo ? (
-                    <Image
-                      source={{ uri: providerData.logo }}
-                      style={styles.providerLogo}
-                      resizeMode="cover"
-                      // Per the Scalability rules: without this any unrelated
-                      // re-render can retrigger the default fade-in as a flicker.
-                      fadeDuration={0}
-                    />
-                  ) : (
-                    <View style={styles.logoPlaceholder}>
-                      <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+                {providerData.logo ? (
+                  <>
+                    <View
+                      style={styles.logoPager}
+                      onLayout={e => setLogoPagerWidth(e.nativeEvent.layout.width)}
+                    >
+                      {logoPagerWidth > 0 && (
+                        <ScrollView
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          onMomentumScrollEnd={e =>
+                            setLogoPage(Math.round(e.nativeEvent.contentOffset.x / logoPagerWidth))
+                          }
+                        >
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoContainer}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Adjust logo"
+                              accessibilityHint="Swipe left to see it on Home"
+                            >
+                              <Image
+                                source={{ uri: providerData.logo }}
+                                style={styles.providerLogo}
+                                resizeMode="cover"
+                                // Per the Scalability rules: without this any unrelated
+                                // re-render can retrigger the default fade-in as a flicker.
+                                fadeDuration={0}
+                              />
+                              {/* Badge sits on the 45° diagonal of the circle rather than a
+                                  square's corner, so it hugs the edge instead of floating
+                                  off it — offset = r - (r/√2) - badgeR, rounded. */}
+                              <View style={styles.logoEditBadge}>
+                                <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                              </View>
+                            </TouchableOpacity>
+                          </View>
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoHomeSmallCard}
+                              onPress={() => { tapSelect(); handleFrameLogo('small'); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Your logo on a small Home card. Adjust how it sits"
+                            >
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="small" style={{ borderRadius: LOGO_CARD_SIZES.small.radius }} />
+                            </TouchableOpacity>
+                          </View>
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoHomeLargeCard}
+                              onPress={() => { tapSelect(); handleFrameLogo('large'); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Your logo on a large Home card. Adjust how it sits"
+                            >
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="large" style={{ borderRadius: LOGO_CARD_SIZES.large.radius }} />
+                            </TouchableOpacity>
+                          </View>
+                        </ScrollView>
+                      )}
                     </View>
-                  )}
-                  {/* Badge sits on the 45° diagonal of the circle rather than a
-                      square's corner, so it hugs the edge instead of floating
-                      off it — offset = r - (r/√2) - badgeR, rounded. */}
-                  <View style={styles.logoEditBadge}>
-                    <Ionicons name="camera" size={14} color={chrome.onAccent} />
-                  </View>
-                </TouchableOpacity>
-                <Text style={styles.logoCaption}>
-                  {providerData.logo ? 'Change Logo' : 'Add Logo'}
-                </Text>
+                    <View style={styles.logoDots} importantForAccessibility="no-hide-descendants">
+                      {LOGO_PAGE_CAPTIONS.map((caption, i) => (
+                        <View key={caption} style={[styles.logoDot, i === logoPage && styles.logoDotActive]} />
+                      ))}
+                    </View>
+                    <Text style={styles.logoCaption}>{LOGO_PAGE_CAPTIONS[logoPage]}</Text>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.logoContainer}
+                      onPress={() => { tapSelect(); handleSelectLogo(); }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add logo"
+                    >
+                      <View style={styles.logoPlaceholder}>
+                        <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+                      </View>
+                      <View style={styles.logoEditBadge}>
+                        <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.logoCaption}>Add Logo</Text>
+                  </>
+                )}
               </View>
+              <LogoCardFramer
+                slot={framingSlot}
+                uri={providerData.logo}
+                imageRatio={logoImageRatio}
+                initial={framingSlot ? providerData.logoFraming?.[framingSlot] : undefined}
+                onDone={handleLogoFramed}
+                onCancel={() => setFramingSlot(null)}
+                palette={{
+                  bg: chrome.surf(0.98),
+                  card: chrome.surf(0.35),
+                  text: chrome.fg(0.92),
+                  sub: chrome.fg(0.55),
+                  accent: adaptiveAccentColor,
+                  onAccent: chrome.onAccent,
+                }}
+              />
 
             {/* Business Name */}
               <View
@@ -4295,6 +4581,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </View>
                 )}
               </View>
+
+              {/* Business Type, for link-only pros only. Everyone else sees it
+                  on 05 · Address Confirmation, a page link-only pros don't
+                  get. Locked here like Business Name and Service Type above:
+                  Business Info is its one editor. */}
+              {isLinkOnly && (
+                <View style={styles.inputGroup}>
+                  <RequiredLabel styles={styles}>Business Type</RequiredLabel>
+                  <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                    <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                    <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                      {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                    </Text>
+                  </View>
+                  <Text style={styles.inputHint}>
+                    Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.
+                  </Text>
+                </View>
+              )}
 
               {/* Location */}
               <View
@@ -4649,11 +4954,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
+              {/* Only a link-only provider books through a link. A CERVICED
+                  provider takes bookings in-app, so a link here would be a
+                  setting nothing reads. */}
+              {isLinkOnly && (
               <View
                 style={styles.inputGroup}
                 ref={registerField('externalBookingUrl')}
               >
-                <Text style={styles.inputLabel}>External Booking Link (optional)</Text>
+                <Text style={styles.inputLabel}>Your booking link</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -4668,9 +4977,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   />
                 </View>
                 <Text style={styles.inputHint}>
-                  Already booking through Fresha, Treatwell, Acuity, or similar? Paste the link and clients will book directly there — Cerviced's in-app booking is skipped for your profile.
+                  Your Fresha, Treatwell, Acuity or similar page. When clients tap Book, it opens inside CERVICED.
                 </Text>
               </View>
+              )}
 
               {/* Years of Experience moved to Business Profile → Business
                   Details → Business Info — it's an ongoing business fact a
@@ -4679,17 +4989,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   screen untouched (hero preview reads it) so an existing
                   value is never lost by editing/saving here. */}
 
-              <TouchableOpacity
-                style={styles.docNextButton}
-                onPress={() => {
-                  tapSelect();
-                  goToSection('services');
-                }}
-                activeOpacity={0.55}
-              >
-                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Services</Text>
-                <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
-              </TouchableOpacity>
+              {isLinkOnly ? documentEnd : (
+                <TouchableOpacity
+                  style={styles.docNextButton}
+                  onPress={() => {
+                    tapSelect();
+                    goToSection('services');
+                  }}
+                  activeOpacity={0.55}
+                >
+                  <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Services</Text>
+                  <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
+                </TouchableOpacity>
+              )}
 
             </View>
               </View>
@@ -4697,6 +5009,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
             </View>
 
+            {/* ── 04 · Services ── and ── 05 · Policies ── CERVICED-booking
+                setup only; a link-only provider takes bookings on their own
+                page, so neither page exists for them. */}
+            {!isLinkOnly && (<>
             {/* ── 04 · Services ── */}
             <View style={{ width: screenWidth }}>
               {mountedPages.has(3) && (
@@ -5384,57 +5700,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   briefly drawn checked-but-disabled off isEditMode, which
                   meant the underlying value was still false and the first tap
                   did nothing visible. */}
-              <View style={styles.docEnd}>
-                <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
-                <Text style={styles.reviewFootnote}>
-                  Publishing saves your profile and policies. You can come back and
-                  change any of this at any time.
-                </Text>
-
-                {/* alignSelf:'stretch' is load-bearing. docEnd is
-                    alignItems:'center', so without it this box sizes to its
-                    content — and termsRowText's flex:1 inside an
-                    unconstrained row collapses the label to zero width. The
-                    checkbox rendered, the words didn't. */}
-                <View style={[styles.termsBox, { marginTop: 16, alignSelf: 'stretch' }]}>
-                  <TouchableOpacity
-                    style={styles.termsRow}
-                    activeOpacity={0.75}
-                    onPress={() => { tapSelect(); setTermsAccepted(prev => !prev); }}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: termsAccepted }}
-                  >
-                    <View
-                      style={[
-                        styles.termsCheckbox,
-                        termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
-                      ]}
-                    >
-                      {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
-                    </View>
-                    <Text style={styles.termsRowText}>
-                      I agree to the{' '}
-                      {/* Its own onPress so tapping the words opens the terms
-                          instead of toggling the box underneath. */}
-                      <Text
-                        style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-                        onPress={() => { tapSelect(); setShowTermsModal(true); }}
-                      >
-                        CERVICED Terms &amp; Conditions
-                      </Text>
-                      {providerData.termsAcceptedAt
-                        ? ` — agreed ${formatLongDate(providerData.termsAcceptedAt)}`
-                        : ''}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              {documentEnd}
             </View>
 
               </View>
               </ScrollView>
               )}
             </View>
+            </>)}
           </InfoRegPager>
 
           {/* Publish — the document's single commit action, and the only
@@ -5519,6 +5792,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           <DialogHost />
         </SafeAreaView>
       </View>
+    </WindowControlsInsetProvider>
     </SafeAreaProvider>
     </InfoRegChromeContext.Provider>
   );
@@ -5647,6 +5921,12 @@ const LOGO_BADGE_SIZE = 32;
 const LOGO_BADGE_OFFSET = Math.round(
   LOGO_SIZE / 2 - LOGO_SIZE / 2 / Math.SQRT2 - LOGO_BADGE_SIZE / 2,
 );
+/** One caption per page of the logo swipe, in page order. */
+const LOGO_PAGE_CAPTIONS = [
+  'Profile logo · tap to adjust',
+  'Small Home card · tap to adjust',
+  'Large Home card · tap to adjust',
+] as const;
 
 const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: number) => {
   const isDark = P.isDark;
@@ -5801,6 +6081,49 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 13,
     color: fg(0.6),
     marginTop: 10,
+  },
+  // Full width of the section so each page can be exactly one swipe wide.
+  logoPager: {
+    alignSelf: 'stretch',
+  },
+  // Every page is as tall as the tallest thing on any page (the large card),
+  // so the dots and caption below don't jump as the provider swipes.
+  logoPage: {
+    height: Math.max(LOGO_SIZE, LOGO_CARD_SIZES.large.height),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoHomeSmallCard: {
+    width: LOGO_CARD_SIZES.small.width,
+    height: LOGO_CARD_SIZES.small.height,
+    borderRadius: LOGO_CARD_SIZES.small.radius,
+    overflow: 'hidden',
+    backgroundColor: P.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: fg(0.12),
+  },
+  logoHomeLargeCard: {
+    width: LOGO_CARD_SIZES.large.width,
+    height: LOGO_CARD_SIZES.large.height,
+    borderRadius: LOGO_CARD_SIZES.large.radius,
+    overflow: 'hidden',
+    backgroundColor: P.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: fg(0.12),
+  },
+  logoDots: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 12,
+  },
+  logoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: fg(0.2),
+  },
+  logoDotActive: {
+    backgroundColor: P.accent,
   },
 
   // Full-bleed section: a hairline rule and generous space do the separating.
@@ -7261,21 +7584,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   // Bottom-right so it never sits under the remove button (top-right) or the
   // Cover badge (bottom-left).
-  fitToggle: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  fitToggleText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
   carouselHint: {
     marginTop: 8,
     fontSize: 11,
@@ -7527,6 +7835,45 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     letterSpacing: 0.4,
   },
   // Slots with Bell
+  // Mirrors ProviderProfileScreen's linkOnlyBook* styles.
+  previewLinkOnlyBookBlock: {
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  previewLinkOnlyBookRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookButton: {
+    height: 46,
+    flex: 1,
+    borderRadius: 23,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 1,
+  },
+  previewLinkOnlySocialButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewLinkOnlyCaption: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   previewSlotsPill: {
     flexDirection: 'row',
     alignItems: 'center',

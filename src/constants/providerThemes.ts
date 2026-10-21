@@ -159,7 +159,7 @@ export function buildMonochromeTheme(mainColor: string, sheet: string = SHEET_BG
 // still covers pink for anyone who wants it.)
 
 const PRESET_DEFS: { key: string; name: string; description: string; backdrop: string; card: string; accent: string; gradient?: [string, string]; suggestedSheet: string }[] = [
-  { key: 'app',        name: 'App',         description: 'Matches the CERVICED app look',        backdrop: '#3B2A22', card: '#FFFFFF', accent: '#4A2C1E', suggestedSheet: 'beige' },
+  { key: 'app',        name: 'App',         description: 'Matches the CERVICED app look',        backdrop: '#4A2C20', card: '#FFFFFF', accent: '#4A2C1E', suggestedSheet: 'beige' },
   { key: 'blush',      name: 'Blush',       description: 'Soft pink cards and backdrop',         backdrop: '#F2D4DE', card: '#FDF5F7', accent: '#E9799F', suggestedSheet: 'blush' },
   { key: 'grey',       name: 'Grey',        description: 'Clean neutral grey',                   backdrop: '#D6D6DA', card: '#F7F7F8', accent: '#5F6068', suggestedSheet: 'mist' },
   // Charcoal keeps its dark hero but uses the shared neutral card like every
@@ -271,4 +271,17 @@ export function resolveProviderTheme(key: string | null | undefined): ProviderTh
   const preset = PROVIDER_THEMES.find(t => t.key === base) ?? PROVIDER_THEMES[0]!;
   const d = preset.tokens;
   return sheet === SHEET_BG ? d : buildThemeTokens(d.hero, d.card, d.accent, sheet, d.gradient);
+}
+
+/** The hero gradient and accent a theme key puts on the profile — the same
+ *  pair a Branding save writes for it. Sign-up, the booking-link import and
+ *  the profile loader start from this, so a provider who never opens Branding
+ *  shows clients exactly the colours Branding shows them, rather than a
+ *  placeholder gradient that nobody chose. */
+export function themeBrandingColours(key: string | null | undefined): {
+  gradient: [string, string];
+  accentColor: string;
+} {
+  const tokens = resolveProviderTheme(key);
+  return { gradient: [...tokens.gradient], accentColor: tokens.accent };
 }

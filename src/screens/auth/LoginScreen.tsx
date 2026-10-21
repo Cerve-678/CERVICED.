@@ -2,9 +2,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
-  ActivityIndicator,
   Alert,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -35,6 +33,8 @@ import {
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { Ionicons } from '@expo/vector-icons';
+import { FieldRow, FormCard, PrimaryButton, ScreenTitle, useFieldInputStyle } from '../../components/signup/FormKit';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { useAuth } from '../../contexts/AuthContext';
@@ -111,10 +111,8 @@ export default function LoginScreen({ navigation }: Props) {
     setErrors(validate());
   };
 
-  const renderError = (field: 'email' | 'password') => {
-    if (!touched[field] || !errors[field]) return null;
-    return <Text style={[styles.errorText, { color: '#DC2626' }]}>{errors[field]}</Text>;
-  };
+  const inputStyle = useFieldInputStyle();
+  const fieldError = (field: 'email' | 'password') => (touched[field] ? errors[field] : undefined);
 
   const handleBiometricLogin = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -225,145 +223,107 @@ export default function LoginScreen({ navigation }: Props) {
 
       <KeyboardDismissView style={styles.flex}>
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: 120 }]}
+          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back */}
           <TouchableOpacity
-            style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
+            style={[styles.backBtn, { backgroundColor: t.card, borderColor: t.border }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
             activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
           >
-            <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
+            <Ionicons name="chevron-back" size={20} color={t.text} />
           </TouchableOpacity>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: t.text }]}>Welcome Back</Text>
-          </View>
+          <ScreenTitle title="Welcome back" subtitle="Log in to your account." />
 
-          {/* Form Card */}
-          <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.border }]}>
-            {/* Email */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: t.sub }]}>EMAIL</Text>
-              <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: touched['email'] && errors.email ? '#DC2626' : t.border }]}>
-                <TextInput
-                  style={[styles.input, { color: t.text }]}
-                  value={email}
-                  onChangeText={setEmail}
-                  onBlur={() => markTouched('email')}
-                  placeholder="sarah@example.com"
-                  placeholderTextColor={t.sub}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              {renderError('email')}
-            </View>
-
-            {/* Password */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: t.sub }]}>PASSWORD</Text>
-              <View style={[styles.inputWrap, styles.passwordInputWrap, { backgroundColor: t.surface, borderColor: touched['password'] && errors.password ? '#DC2626' : t.border }]}>
-                <TextInput
-                  style={[styles.input, styles.passwordInput, { color: t.text }]}
-                  value={password}
-                  onChangeText={setPassword}
-                  onBlur={() => markTouched('password')}
-                  placeholder="••••••••"
-                  placeholderTextColor={t.sub}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                />
+          <FormCard>
+            <FieldRow label="EMAIL" error={fieldError('email')}>
+              <TextInput
+                style={inputStyle} value={email} onChangeText={setEmail} onBlur={() => markTouched('email')}
+                placeholder="sarah@example.com" placeholderTextColor={t.sub}
+                keyboardType="email-address" autoCapitalize="none" textContentType="emailAddress"
+              />
+            </FieldRow>
+            <FieldRow
+              label="PASSWORD"
+              error={fieldError('password')}
+              right={(
                 <TouchableOpacity
-                  style={styles.eyeBtn}
                   onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={10}
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.sub} />
                 </TouchableOpacity>
-              </View>
-              {renderError('password')}
-            </View>
-
-            {/* Forgot password */}
-            <TouchableOpacity
-              style={styles.forgotLink}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('ForgotPassword'); }}
-              activeOpacity={0.6}
+              )}
             >
-              <Text style={[styles.forgotLinkText, { color: t.accent }]}>Forgot password?</Text>
-            </TouchableOpacity>
+              <TextInput
+                style={inputStyle} value={password} onChangeText={setPassword} onBlur={() => markTouched('password')}
+                placeholder="••••••••" placeholderTextColor={t.sub} secureTextEntry={!showPassword}
+                autoCapitalize="none" textContentType="password"
+              />
+            </FieldRow>
+          </FormCard>
 
-            {/* Biometric */}
-            {biometricEnabled && (
-              <TouchableOpacity
-                style={[styles.biometricBtn, { borderColor: t.accent }]}
-                onPress={handleBiometricLogin}
-                activeOpacity={0.6}
-                disabled={isLoading}
-              >
-                <Text style={[styles.biometricText, { color: t.accent }]}>
-                  Sign in with {biometricLabel}
-                </Text>
-              </TouchableOpacity>
-            )}
+          <TouchableOpacity
+            style={styles.forgotLink}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('ForgotPassword'); }}
+            activeOpacity={0.6}
+            hitSlop={8}
+          >
+            <Text style={[styles.forgotLinkText, { color: t.accentText }]}>Forgot password?</Text>
+          </TouchableOpacity>
 
-            {/* Submit */}
+          <PrimaryButton label="LOG IN" onPress={handleLogin} loading={isLoading} />
+
+          {biometricEnabled && (
             <TouchableOpacity
-              style={[styles.submitBtn, { backgroundColor: t.accent }]}
-              onPress={handleLogin}
-              activeOpacity={0.75}
+              style={[styles.outlineBtn, { borderColor: t.accent, marginTop: 10 }]}
+              onPress={handleBiometricLogin}
+              activeOpacity={0.6}
               disabled={isLoading}
             >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.submitText}>LOG IN</Text>
-              )}
+              <Ionicons name="scan-outline" size={18} color={t.accentText} />
+              <Text style={[styles.outlineText, { color: t.accentText }]}>Sign in with {biometricLabel}</Text>
             </TouchableOpacity>
+          )}
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
-              <Text style={[styles.dividerLabel, { color: t.sub }]}>OR</Text>
-              <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
-            </View>
-
-            {/* Social */}
-            <View style={styles.socialRow}>
-              {(['Instagram', 'Google'] as const).map(p => (
-                <TouchableOpacity
-                  key={p}
-                  style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-                  onPress={() => handleSocialLogin(p)}
-                  activeOpacity={0.6}
-                >
-                  <Text style={[styles.socialLabel, { color: t.text }]}>{p}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-                onPress={handleAppleLogin}
-                activeOpacity={0.6}
-                disabled={isLoading}
-              >
-                <Text style={[styles.socialLabel, { color: t.text }]}>Apple</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Sign Up link */}
-            <View style={styles.signUpRow}>
-              <Text style={[styles.signUpText, { color: t.sub }]}>
-                Don't have an account?{' '}
-              </Text>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('SignUpStep1'); }}>
-                <Text style={[styles.signUpLink, { color: t.accent }]}>Sign Up</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.divider}>
+            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
+            <Text style={[styles.dividerLabel, { color: t.sub }]}>OR CONTINUE WITH</Text>
+            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
           </View>
+
+          <TouchableOpacity
+            style={[styles.appleBtn, { backgroundColor: t.text }]}
+            onPress={handleAppleLogin}
+            activeOpacity={0.75}
+            disabled={isLoading}
+            accessibilityLabel="Continue with Apple"
+          >
+            <Ionicons name="logo-apple" size={18} color={t.bg} />
+            <Text style={[styles.outlineText, { color: t.bg }]}>Continue with Apple</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.outlineBtn, { borderColor: t.border, marginTop: 10 }]}
+            onPress={() => handleSocialLogin('Google')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.outlineText, { color: t.text }]}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.signUpText, { color: t.sub }]}>
+            Don't have an account?{' '}
+            <Text
+              style={{ color: t.accentText, fontWeight: '700' }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('SignUpStep1'); }}
+            >
+              Sign up
+            </Text>
+          </Text>
         </ScrollView>
       </KeyboardDismissView>
     </ThemedBackground>
@@ -371,141 +331,16 @@ export default function LoginScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
   flex: { flex: 1 },
-  scroll: { paddingHorizontal: 16 },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  backIcon: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-  },
-  header: { marginBottom: 28 },
-  headerTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 32,
-    letterSpacing: 1,
-  },
-  formCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 20,
-  },
-  fieldGroup: { marginBottom: 16 },
-  fieldLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  inputWrap: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'android' ? 10 : 13,
-  },
-  input: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    letterSpacing: 0.3,
-    padding: 0,
-  },
-  passwordInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  passwordInput: {
-    flex: 1,
-  },
-  eyeBtn: { paddingLeft: 8 },
-  eyeText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  errorText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    marginTop: 5,
-    marginLeft: 2,
-  },
-  forgotLink: {
-    alignSelf: 'flex-end',
-    marginBottom: 16,
-    marginTop: -4,
-  },
-  forgotLinkText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  biometricBtn: {
-    borderRadius: 100,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-  biometricText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    letterSpacing: 0.5,
-  },
-  submitBtn: {
-    borderRadius: 100,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  submitText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    letterSpacing: 1,
-    color: '#FFFFFF',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
+  scroll: { paddingHorizontal: 16, flexGrow: 1 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
+  forgotLink: { alignSelf: 'flex-end', paddingVertical: 14 },
+  forgotLinkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700' },
+  outlineBtn: { minHeight: 56, borderRadius: 100, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  appleBtn: { minHeight: 56, borderRadius: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  outlineText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '700' },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 24 },
   dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  dividerLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-    letterSpacing: 2,
-    marginHorizontal: 16,
-  },
-  socialRow: { flexDirection: 'row', gap: 10 },
-  socialBtn: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  socialLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  signUpRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  signUpText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-  },
-  signUpLink: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-  },
+  dividerLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
+  signUpText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, textAlign: 'center', marginTop: 24 },
 });

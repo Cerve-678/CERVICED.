@@ -8,6 +8,7 @@
 import { ProviderRegistrationData } from './providerRegistrationService';
 import { extractProviderProfileFromUrl } from './databaseService';
 import { reportError } from '../utils/logger';
+import { DEFAULT_PROVIDER_THEME, themeBrandingColours } from '../constants/providerThemes';
 
 interface ExtractedProfile {
   providerName?: string;
@@ -79,11 +80,13 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     // Acuity has no equivalent concept to import — provider sets this
     // themselves afterward via InfoRegScreen/ProviderAutomationsScreen.
     scheduleReleaseDay: null,
-    gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
+    // Nothing to import for branding, so start from the default theme's own
+    // colours — the ones Branding shows — not a placeholder.
+    ...themeBrandingColours(DEFAULT_PROVIDER_THEME),
     hasCustomGradient: false,
-    accentColor: '#7B1FA2',
-    profileTheme: 'app',
+    profileTheme: DEFAULT_PROVIDER_THEME,
     logo: null,
+    logoFraming: null,
     categories,
     categoryDescriptions: {},
     // Acuity exposes a single business category, so every imported category

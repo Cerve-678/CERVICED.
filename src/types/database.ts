@@ -74,6 +74,14 @@ export type NotificationType =
   | "provider_no_show"
   | "payment_success"
   | "cancellation_settled"
+  | "fee_charged"
+  | "fee_disputed"
+  | "fee_dispute_resolved"
+  | "fee_payment_requested"
+  | "fee_paid_by_client"
+  | "fee_payment_lapsed"
+  | "refund_requested"
+  | "refund_request_updated"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"
@@ -101,7 +109,15 @@ export type NotificationType =
   | "daily_recap" // provider's automated today's-schedule summary (provider-facing)
   | "schedule_fully_booked" // provider's whole calendar has no openings in their alert window (provider-facing)
   | "pending_booking_reminder" // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
-  | "points_earned"; // client earned loyalty points (client-facing)
+  | "points_earned" // client earned loyalty points (client-facing)
+  /** Beauty Maintenance: something the client tracks is due. Generic copy;
+   *  metadata.maintenance_item_id says which item. Opt-in only. */
+  | "maintenance_due"
+  /** Beauty Maintenance: the completed booking's provider wrote aftercare
+   *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
+  | "aftercare_available"
+  /** Provider: a daily count of the people who saved them. Never names. */
+  | "provider_saved";
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -122,6 +138,30 @@ export type TransactionType =
   | "remaining"
   | "tip"
   | "refund";
+
+// ── Logo framing ─────────────────────────────────────────
+
+/** How the logo sits in one Home card: `zoom` multiplies the size at which
+ *  the logo just fills the card (1 = fills it, as with no framing; below 1
+ *  shows more of it, down to the whole logo); `x`/`y` move the logo's centre
+ *  from the card's centre, as a fraction of the card's width/height. */
+export interface LogoCardFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+/** The provider's per-card logo framing (`providers.logo_framing`).
+ *  `imageRatio` is the logo image's width ÷ height, which the frames are
+ *  relative to. A missing card means "fill and centre", the default. */
+export interface LogoFraming {
+  imageRatio: number;
+  small?: LogoCardFrame;
+  large?: LogoCardFrame;
+}
+
+/** The two Home card shapes a logo is framed for. */
+export type LogoCardSlot = 'small' | 'large';
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -176,6 +216,8 @@ export interface DbUser {
   deletion_requested_at: string | null;
 }
 
+export type ProviderBookingMode = "cerviced" | "external";
+
 export interface DbProvider {
   id: string;
   // Nullable for unclaimed/scraped rows (see is_claimed below) — a provider
@@ -202,6 +244,9 @@ export interface DbProvider {
   about_text: string | null;
   slots_text: string | null;
   logo_url: string | null;
+  /** Per-card framing for the small and large Home cards. Null = every card
+   *  fills and centres the logo. */
+  logo_framing: LogoFraming | null;
   gradient: string[] | null;
   accent_color: string | null;
   background_image_url: string | null;
@@ -214,10 +259,16 @@ export interface DbProvider {
   tiktok: string | null;
   preferred_contact_methods: string[] | null;
   whatsapp_number: string | null;
-  // When set, client-facing "Book" CTAs open this URL (Fresha, Treatwell,
-  // Acuity, etc.) instead of Cerviced's in-app booking flow. Null/empty =
-  // book entirely in-app, unchanged from before this column existed.
+  // The provider's own booking page (Fresha, Treatwell, Acuity, etc.). Only
+  // used for booking when booking_mode is 'external' — a CERVICED-mode
+  // provider can have one filled in and still takes bookings in-app.
   external_booking_url: string | null;
+  /** Who takes this provider's bookings. 'external' = a link-only provider:
+   *  their Book button opens external_booking_url, and the price list,
+   *  ratings and CERVICED's booking flow don't apply. Never infer this from
+   *  external_booking_url being filled in — read this column. The DB requires
+   *  a link whenever this is 'external' and refuses bookings rows for them. */
+  booking_mode: ProviderBookingMode;
   rating: number;
   review_count: number;
   years_experience: number | null;
@@ -865,6 +916,7 @@ export type ProviderWithServices = Pick<
   | "preferred_contact_methods"
   | "whatsapp_number"
   | "external_booking_url"
+  | "booking_mode"
   | "rating"
   | "years_experience"
   | "is_verified"
@@ -884,6 +936,7 @@ export type ProviderWithServices = Pick<
   | "travel_radius"
   | "products_used"
   | "hair_types_catered"
+  | "preferred_payment_methods"
 > & {
   /** Only the automation flags needed by the public profile UI. */
   automation_settings: Pick<
@@ -930,6 +983,7 @@ export type PublicProviderSummary = Pick<
   | 'display_name'
   | 'service_category'
   | 'logo_url'
+  | 'logo_framing'
   | 'location_text'
   | 'service_locations'
   | 'latitude'
@@ -943,7 +997,39 @@ export type PublicProviderSummary = Pick<
   | 'vegan_cruelty_free'
   | 'is_featured'
   | 'created_at'
+  | 'booking_mode'
 >;
+
+/** A client's own record of a booking they made on a link-only provider's
+ *  booking page ("Did you book?"). CERVICED doesn't handle the booking itself;
+ *  only the client can read or remove the row, and it can't be edited. */
+export interface DbClientExternalBooking {
+  id: string;
+  client_id: string;
+  provider_id: string;
+  /** YYYY-MM-DD, the client's UK local date. */
+  booking_date: string;
+  /** HH:MM:SS as Postgres returns a `time`. */
+  start_time: string;
+  service_label: string;
+  created_at: string;
+}
+
+/** One day of a provider's own profile counters (UK date). Days with no
+ *  activity have no row. */
+export interface DbProviderDailyStat {
+  day: string;
+  profile_views: number;
+  book_taps: number;
+  search_appearances: number;
+  instagram_taps: number;
+}
+
+export type ProviderStatKind =
+  | 'profile_view'
+  | 'book_tap'
+  | 'search_appearance'
+  | 'instagram_tap';
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {

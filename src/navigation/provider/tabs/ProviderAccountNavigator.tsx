@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderAccountScreen from '../../../screens/provider/ProviderAccountScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
-import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
+import ProviderNotificationSettingsScreen from '../../../screens/provider/ProviderNotificationSettingsScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
@@ -34,19 +34,34 @@ import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import ProviderAccountInfoScreen from '../../../screens/provider/ProviderAccountInfoScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
+import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import { ProviderAccountStackParamList } from '../../types';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
 
 const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
+// The client-facing profile, opened by its owner to see it as clients do. It
+// already knows when the viewer owns it (no Book for yourself, contact sheet
+// instead of chat), so nothing here leads into a client-only flow.
+const MyPublicProfileComponent = ProviderProfileScreen as React.ComponentType<any>;
 
+/**
+ * Also a link-only provider's Profile tab: the same Settings screen, where
+ * ProviderAccountScreen swaps in their own hero buttons and Your Business rows
+ * (see useAuth().myBookingMode).
+ */
 export default function ProviderAccountNavigator() {
-
   return (
-    <ProviderAccountStack.Navigator>
+    <ProviderAccountStack.Navigator initialRouteName="ProviderAccountMain">
       <ProviderAccountStack.Screen
         name="ProviderAccountMain"
         component={ProviderAccountScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="MyPublicProfile"
+        component={MyPublicProfileComponent}
         options={{ headerShown: false }}
       />
 
@@ -59,13 +74,12 @@ export default function ProviderAccountNavigator() {
         }}
       />
 
+      {/* The notifications list itself lives on the Home tab (bell button,
+          push taps); this tab only holds which ones push. */}
       <ProviderAccountStack.Screen
-        name="Notifications"
-        component={NotificationsScreen}
-        options={{
-          headerShown: false,
-          presentation: 'formSheet',
-        }}
+        name="NotificationSettings"
+        component={ProviderNotificationSettingsScreen}
+        options={{ headerShown: false }}
       />
 
       <ProviderAccountStack.Screen

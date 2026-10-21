@@ -11,7 +11,8 @@ import {
   Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
@@ -127,7 +128,13 @@ CarouselCard.displayName = 'CarouselCard';
 // ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderAccountScreen({ navigation }: any) {
-  const { user, logout, switchMode, hatState } = useAuth();
+  const { user, logout, switchMode, hatState, myBookingMode } = useAuth();
+  // This screen is a link-only provider's Profile tab. The CERVICED-booking
+  // shortcuts (Analytics, Offers, Clientele, Schedule, Booking history) don't
+  // apply to them — their analytics are on Home — so they get Edit profile and
+  // Branding in the hero, and a Your Business section of the parts of a
+  // profile they have, in place of those.
+  const isLinkOnly = myBookingMode === 'external';
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
   const { t } = useTranslation();
@@ -285,8 +292,27 @@ export default function ProviderAccountScreen({ navigation }: any) {
               minimumFontScale={0.7}
             />
             <Text style={[styles.previewSub, { color: P.sub }]}>
-              {t('providerAccount.hero.sub')}
+              {isLinkOnly ? t('providerAccount.linkOnly.hero.sub') : t('providerAccount.hero.sub')}
             </Text>
+            {isLinkOnly && (
+            <View style={styles.previewStats}>
+              <TouchableOpacity
+                style={[styles.previewStat, { backgroundColor: P.accent }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('EditProfile'); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.previewStatNum, { color: '#FFFFFF' }]}>{t('providerAccount.linkOnly.hero.edit')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Branding'); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.previewStatNum, { color: P.text }]}>{t('providerAccount.linkOnly.hero.branding')}</Text>
+              </TouchableOpacity>
+            </View>
+            )}
+            {!isLinkOnly && (
             <View style={styles.previewStats}>
               <TouchableOpacity
                 style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
@@ -315,6 +341,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 <Text style={[styles.previewStatLbl, { color: P.sub }]}>{t('providerAccount.hero.clienteleSub')}</Text>
               </TouchableOpacity>
             </View>
+            )}
             </View>
           </View>
 
@@ -322,6 +349,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
 
             {/* ── Small persistent ring badge — demoted, NOT a hero. Kept per
                 explicit confirmation; sized/positioned to match the mockup. ── */}
+            {!isLinkOnly && (<>
             <TouchableOpacity
               style={[styles.ringInline, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.shadow }]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('BusinessProfile'); }}
@@ -371,6 +399,16 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 <CarouselCard key="booking-history" icon="stack" title={t('providerAccount.myBusiness.history.title')} subtitle={t('providerAccount.myBusiness.history.sub')} onPress={() => navigation.navigate('BookingHistory')} P={P} />
               </View>
             </View>
+            </>)}
+
+            {isLinkOnly && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.yourBusiness')}</Text>
+              <SettingsOption icon="storefront" title={t('providerAccount.linkOnly.businessInfo.title')} subtitle={t('providerAccount.linkOnly.businessInfo.sub')} onPress={() => navigation.navigate('BusinessInfo')} P={P} />
+              <SettingsOption icon="calendar-today" title={t('providerAccount.linkOnly.hours.title')} subtitle={t('providerAccount.linkOnly.hours.sub')} onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
+              <SettingsOption icon="receipt" title={t('providerAccount.linkOnly.policies.title')} subtitle={t('providerAccount.linkOnly.policies.sub')} onPress={() => navigation.navigate('Policies')} P={P} />
+            </View>
+            )}
 
             {/* ── Account: twin toggle cards + plain rows ────────────────── */}
             <View style={styles.twinRow}>
@@ -411,7 +449,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="badge" title={t('providerAccount.account.info.title')} subtitle={t('providerAccount.account.info.sub')} onPress={() => navigation.navigate('AccountInfo')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t('providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('Notifications')} P={P} />
+              <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.notifications.sub' : 'providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
             </View>
 
             {/* ── Accessibility & Support ─────────────────────────────────── */}

@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useFocusEffect, useIsFocused, NavigationProp } from '@react-navigation/native';
 import { useExploreFocusStore } from '../../stores/useExploreFocusStore';
@@ -39,10 +39,12 @@ import { withTimeout } from '../../utils/withTimeout';
 // Data types
 import { PortfolioItem, ServiceCategory } from '../../types/providers';
 import {
-  getPortfolioItems,
+  getExplorePortfolioItems,
   getDiscoverServices,
+  getDiscoverFeedTotal,
   getSavedPortfolioDetails,
   prefetchProviderBySlug,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import type { PortfolioItemWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 
@@ -83,16 +85,20 @@ import { logger } from '../../utils/logger';
 // virtualized list it mounts every item it receives. Feed it a window that
 // grows near the end so opening Explore does not decode and render an entire
 // discovery catalogue before the first frame is useful.
-const INITIAL_EXPLORE_ITEMS = 24;
+const INITIAL_EXPLORE_ITEMS = 20;
 const EXPLORE_BATCH_SIZE = 18;
 const LOAD_MORE_THRESHOLD = 900;
 const LOAD_MORE_COOLDOWN_MS = 300;
-// Explore combines two sources before deduplicating. Keeping each source
-// bounded avoids fetching the full catalogue (portfolio used to request 200
-// rows) just to paint the first 24 cards. The already-present load-more flow
-// progressively mounts the resulting feed as the person browses.
-const DISCOVER_PORTFOLIO_LIMIT = 60;
-const DISCOVER_SERVICE_LIMIT = 30;
+// Only the first viewport belongs on the critical path. Further source pages
+// are fetched as the client reaches the end of this initial window.
+const DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20;
+const DISCOVER_INITIAL_SERVICE_LIMIT = 10;
+
+type DiscoverPageCursor = {
+  portfolioOffset: number;
+  serviceOffset: number;
+  hasMore: boolean;
+};
 
 function isNearGridEnd(event: NativeSyntheticEvent<NativeScrollEvent>): boolean {
   const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -332,9 +338,18 @@ const ExploreScreen = memo(() => {
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
+  // The feed failed to load (usually the 8s timeout while the server is
+  // stalled). Kept apart from "loaded and empty" so the grid can say it
+  // couldn't load rather than claiming the category has no looks.
+  const [discoverFailed, setDiscoverFailed] = useState(false);
+  const [discoverRetryKey, setDiscoverRetryKey] = useState(0);
   const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
+  // The header count per filter: the whole feed's size, not how many pages
+  // have loaded so far (portfolioItems grows as the client scrolls).
+  const [discoverTotals, setDiscoverTotals] = useState<Record<string, number>>({});
   const [discoverVisibleCount, setDiscoverVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
   const discoverLoadMoreAtRef = useRef(0);
+  const discoverPageLoadingRef = useRef(false);
   const favouritesLoadMoreAtRef = useRef(0);
 
   useEffect(() => {
@@ -359,6 +374,7 @@ const ExploreScreen = memo(() => {
   // since writing it must never itself trigger a render. Pull-to-refresh is
   // the only thing allowed to discard an entry and force a fresh shuffle.
   const discoverFeedCache = useRef<Map<string, PortfolioItem[]>>(new Map());
+  const discoverPageCursors = useRef<Map<string, DiscoverPageCursor>>(new Map());
 
   // Map a Supabase portfolio row to the local PortfolioItem shape
   const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => {
@@ -465,8 +481,8 @@ const ExploreScreen = memo(() => {
       Promise.all([
         // Explore is a browse surface, including for providers viewing their
         // own public work. Do not hide a provider's images from this feed.
-        getPortfolioItems(category, DISCOVER_PORTFOLIO_LIMIT, { excludeOwnProvider: false }),
-        getDiscoverServices(category, DISCOVER_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
+        getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT),
+        getDiscoverServices(category, DISCOVER_INITIAL_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
       ]),
       8_000,
       'Explore feed',
@@ -495,7 +511,78 @@ const ExploreScreen = memo(() => {
       serviceCards.filter(c => keep.has(c.id)),
     );
     discoverFeedCache.current.set(filter, feed);
+    discoverPageCursors.current.set(filter, {
+      portfolioOffset: portfolioData.length,
+      serviceOffset: serviceData.length,
+      hasMore:
+        portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
+        serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+    });
     return feed;
+  }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
+
+  const loadNextDiscoverPage = useCallback(async (filter: string) => {
+    const cursor = discoverPageCursors.current.get(filter);
+    if (!cursor?.hasMore || discoverPageLoadingRef.current) return;
+
+    const category = filter !== 'All' ? filterMap[filter] : undefined;
+    discoverPageLoadingRef.current = true;
+    try {
+      const [portfolioData, serviceData] = await withTimeout(
+        Promise.all([
+          getExplorePortfolioItems(
+            category,
+            DISCOVER_INITIAL_PORTFOLIO_LIMIT,
+            cursor.portfolioOffset,
+          ),
+          getDiscoverServices(
+            category,
+            DISCOVER_INITIAL_SERVICE_LIMIT,
+            undefined,
+            { excludeOwnProvider: false },
+            cursor.serviceOffset,
+          ),
+        ]),
+        8_000,
+        'More Explore results',
+      );
+
+      discoverPageCursors.current.set(filter, {
+        portfolioOffset: cursor.portfolioOffset + portfolioData.length,
+        serviceOffset: cursor.serviceOffset + serviceData.length,
+        hasMore:
+          portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
+          serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+      });
+
+      setPortfolioItems(existing => {
+        const knownUris = new Set(
+          existing
+            .map(card => (card.image as { uri?: string } | undefined)?.uri)
+            .filter((uri): uri is string => Boolean(uri)),
+        );
+        const portfolioCards = portfolioData.map(mapDbPortfolioItem);
+        const serviceCards = serviceData.flatMap(mapDbServiceToCards);
+        const nextCards = interleaveDiscoverFeed(portfolioCards, serviceCards)
+          .filter(card => {
+            const uri = (card.image as { uri?: string } | undefined)?.uri;
+            if (!uri || knownUris.has(uri)) return false;
+            knownUris.add(uri);
+            return true;
+          });
+        const updated = [...existing, ...nextCards];
+        discoverFeedCache.current.set(filter, updated);
+        return updated;
+      });
+      // The user has already reached the end of the rendered window. Reveal
+      // the first part of this newly-arrived page immediately instead of
+      // requiring a second scroll gesture after the network response.
+      setDiscoverVisibleCount(current => current + EXPLORE_BATCH_SIZE);
+    } catch (error) {
+      logger.warn('Failed to load more Explore results:', error);
+    } finally {
+      discoverPageLoadingRef.current = false;
+    }
   }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
 
   // Fetch the mixed discovery feed whenever the category filter changes —
@@ -510,25 +597,47 @@ const ExploreScreen = memo(() => {
     const cached = discoverFeedCache.current.get(selectedFilter);
     if (cached) {
       setPortfolioItems(cached);
+      // Switching here mid-way through another filter's fetch cancels that
+      // fetch, which skips its finally — so the skeleton is cleared here or
+      // it would stay up over this filter's already-loaded feed.
+      setPortfolioLoading(false);
+      setDiscoverFailed(false);
       return;
     }
 
     let cancelled = false;
     setPortfolioLoading(true);
+    setDiscoverFailed(false);
 
     loadDiscoverFeed(selectedFilter)
       .then(feed => {
         if (!cancelled) setPortfolioItems(feed);
       })
-      .catch(() => {
-        if (!cancelled) setPortfolioItems([]);
+      .catch(error => {
+        logger.warn('Failed to load Explore feed:', error);
+        if (cancelled) return;
+        setPortfolioItems([]);
+        setDiscoverFailed(true);
       })
       .finally(() => {
         if (!cancelled) setPortfolioLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [selectedFilter, loadDiscoverFeed]);
+    // discoverRetryKey re-runs this for the "Try again" button; a failed
+    // load is never cached, so the retry fetches afresh.
+  }, [selectedFilter, loadDiscoverFeed, discoverRetryKey]);
+
+  const loadDiscoverTotal = useCallback((filter: string) => {
+    const category = filter !== 'All' ? filterMap[filter] : undefined;
+    getDiscoverFeedTotal(category)
+      .then(total => setDiscoverTotals(existing => ({ ...existing, [filter]: total })))
+      .catch(error => logger.warn('Failed to count Explore results:', error));
+  }, [filterMap]);
+
+  useEffect(() => {
+    if (discoverTotals[selectedFilter] === undefined) loadDiscoverTotal(selectedFilter);
+  }, [selectedFilter, discoverTotals, loadDiscoverTotal]);
 
   // Other filters load on demand and remain cached for this screen session.
   // Eagerly prefetching every alternative cost 24 speculative database
@@ -538,18 +647,29 @@ const ExploreScreen = memo(() => {
   // for the currently-selected filter — discards that filter's cache entry
   // and re-fetches, leaving every other filter's cached order untouched.
   const handleRefreshDiscover = useCallback(() => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     discoverFeedCache.current.delete(selectedFilter);
+    discoverPageCursors.current.delete(selectedFilter);
     // A refresh replaces the feed rather than extending the current one.
     // Return to the lightweight initial window so a deeply-scrolled session
     // does not mount the same large card count against all-new image URLs.
     setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
     discoverLoadMoreAtRef.current = 0;
     setPortfolioRefreshing(true);
+    loadDiscoverTotal(selectedFilter);
     loadDiscoverFeed(selectedFilter)
-      .then(feed => setPortfolioItems(feed))
-      .catch(() => setPortfolioItems([]))
+      .then(feed => {
+        setPortfolioItems(feed);
+        setDiscoverFailed(false);
+      })
+      .catch(error => {
+        logger.warn('Failed to refresh Explore feed:', error);
+        setPortfolioItems([]);
+        setDiscoverFailed(true);
+      })
       .finally(() => setPortfolioRefreshing(false));
-  }, [selectedFilter, loadDiscoverFeed]);
+  }, [selectedFilter, loadDiscoverFeed, loadDiscoverTotal]);
 
   // Fetch favourites whenever the tab is opened or the saved-ids list changes
   // (e.g. hearting/unhearting something while already on this tab).
@@ -692,15 +812,19 @@ const ExploreScreen = memo(() => {
   const handleDiscoverScrollSettled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
-      if (discoverVisibleCount >= portfolioItems.length || !isNearGridEnd(event)) return;
+      if (!isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - discoverLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
       discoverLoadMoreAtRef.current = now;
+      if (discoverVisibleCount >= portfolioItems.length) {
+        void loadNextDiscoverPage(selectedFilter);
+        return;
+      }
       setDiscoverVisibleCount(current =>
         Math.min(portfolioItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [discoverVisibleCount, portfolioItems.length],
+    [discoverVisibleCount, portfolioItems.length, loadNextDiscoverPage, selectedFilter],
   );
 
   const handleFavouritesScrollSettled = useCallback(
@@ -916,19 +1040,44 @@ const ExploreScreen = memo(() => {
                 onRefresh={handleRefreshDiscover}
                 ListHeaderComponent={
                   <View style={styles.gridHeader}>
+                    {/* Total only — never the pages loaded so far. A blank line
+                        holds the header's height until the count arrives, so
+                        the grid doesn't shift down when it does. */}
                     <Text style={[styles.gridCount, { color: P.sub }]}>
-                      {portfolioItems.length} results
+                      {discoverTotals[selectedFilter] !== undefined
+                        ? `${discoverTotals[selectedFilter]} results`
+                        : ' '}
                     </Text>
                   </View>
                 }
                 ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <TabIcon name="magnifying-glass" size={48} color={P.sub} />
-                    <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
-                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                      Try a different search or filter
-                    </Text>
-                  </View>
+                  discoverFailed ? (
+                    <View style={styles.emptyContainer}>
+                      <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                      <Text style={[styles.emptyText, { color: P.text }]}>Couldn't load looks</Text>
+                      <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                        Check your connection and try again
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.retryButton, { backgroundColor: P.accent }]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          setDiscoverRetryKey(key => key + 1);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.retryButtonText, { color: P.onAccent }]}>Try again</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyContainer}>
+                      <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                      <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
+                      <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                        Try a different search or filter
+                      </Text>
+                    </View>
+                  )
                 }
               />
             )}
@@ -1089,6 +1238,16 @@ const styles = StyleSheet.create({
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
     marginTop: spacing.sm,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    fontSize: fonts.body.medium,
+    fontWeight: '600',
   },
 
 });

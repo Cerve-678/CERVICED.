@@ -36,6 +36,7 @@ import {
   useStatusBarTint,
 } from './src/contexts/StatusBarTintContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { WindowControlsInsetProvider } from './src/components/SafeArea';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
@@ -77,7 +78,9 @@ function StripeReturnHandler() {
   useEffect(() => {
     const { Linking } = require('react-native');
     const handle = (url: string | null) => {
-      if (url?.startsWith('cerviced://stripe-redirect')) {
+      // confirmPayment's redirects (PayPal) come back on <scheme>://safepay —
+      // the SDK builds that URL itself from urlScheme.
+      if (url && (url.startsWith('cerviced://stripe-redirect') || /^cerviced:\/\/safepay(?:[/?#]|$)/.test(url))) {
         handleURLCallback(url).catch(() => {});
       }
     };
@@ -213,6 +216,7 @@ export default Sentry.wrap(function App() {
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaProvider>
+        <WindowControlsInsetProvider>
           <AuthProvider>
             <ThemeProvider>
               <DisplaySettingsProvider>
@@ -245,6 +249,7 @@ export default Sentry.wrap(function App() {
               </DisplaySettingsProvider>
             </ThemeProvider>
           </AuthProvider>
+        </WindowControlsInsetProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

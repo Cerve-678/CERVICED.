@@ -18,9 +18,25 @@ describe('client screen performance contracts', () => {
   it('bounds the initial Explore queries and never keeps the feed spinner forever', () => {
     const source = readScreen('ExploreScreen');
 
-    expect(source).toContain('DISCOVER_PORTFOLIO_LIMIT = 60');
+    expect(source).toContain('DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20');
+    expect(source).toContain('DISCOVER_INITIAL_SERVICE_LIMIT = 10');
+    expect(source).toContain('const loadNextDiscoverPage');
+    expect(source).toContain('getExplorePortfolioItems(');
+    expect(source).toContain('cursor.portfolioOffset');
     expect(source).toContain("withTimeout(");
     expect(source).toContain("'Explore feed'");
+  });
+
+  it('uses a lean public projection for Explore portfolio cards', () => {
+    const source = readScreen('ExploreScreen');
+    const database = fs.readFileSync(
+      path.join(__dirname, '..', 'services', 'databaseService.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT)');
+    expect(database).toContain('const EXPLORE_PORTFOLIO_SELECT');
+    expect(database).toContain('.select(EXPLORE_PORTFOLIO_SELECT)');
   });
 
   it('progressively mounts Explore cards and only measures fallback ratios', () => {
@@ -30,7 +46,7 @@ describe('client screen performance contracts', () => {
       'utf8',
     );
 
-    expect(source).toContain('const INITIAL_EXPLORE_ITEMS = 24');
+    expect(source).toContain('const INITIAL_EXPLORE_ITEMS = 20');
     expect(source).toContain('portfolioItems.slice(0, discoverVisibleCount)');
     expect(source).toContain('favouriteItems.slice(0, favouritesVisibleCount)');
     expect(source).toContain('.filter(i => i.aspectRatioIsFallback)');
@@ -80,7 +96,7 @@ describe('client screen performance contracts', () => {
   it('loads cart provider checkout metadata in one request', () => {
     const source = readScreen('CartScreen');
 
-    expect(source).toContain('getProviderCheckoutMetadata(names)');
+    expect(source).toContain('getProviderCheckoutMetadata(queries)');
     expect(source).not.toContain('getMobileProviderDisplayNames(names)');
     expect(source).not.toContain(
       'getProviderDepositPoliciesByDisplayNames(names)',

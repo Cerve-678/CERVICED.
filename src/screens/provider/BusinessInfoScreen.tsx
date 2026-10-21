@@ -27,25 +27,32 @@
  */
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   getMyProviderProfileContext,
   getUserBusinessInfo,
+  getUserSignupPrefillInfo,
+  updateMyStagedProviderAnswers,
   updateUserBusinessInfo,
   updateProviderContactDetails,
   updateMyServiceCategory,
 } from '../../services/databaseService';
 import { useAppDialog } from '../../components/AppDialog';
+import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import {
-  Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
+  Card, ChipGroup, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
+  ACCESSIBILITY_OPTS,
   ADDRESS_RELEASE_OPTS,
   BUSINESS_TYPE_OPTS,
+  PAYMENT_OPTS,
   SERVICE_TYPE_OPTS,
   isAddressReleaseAllowed,
   reconcileAddressReleasePolicy,
@@ -60,6 +67,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
+  const { updateUser, myBookingMode } = useAuth();
+  // Only a link-only provider books through their link; for everyone else the
+  // field would be a setting nothing reads, so it isn't offered or written.
+  const isLinkOnly = myBookingMode === 'external';
 
   const [userId, setUserId]         = useState<string | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -90,6 +101,12 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [website, setWebsite]             = useState('');
   const [externalBookingUrl, setExternalBookingUrl] = useState('');
   const [yearsExperience, setYearsExperience] = useState('');
+  // Link-only only. A link-only pro has no About You or Payments screen, so
+  // Business Info is where these two live for them. Same storage as those
+  // screens: accessibility_notes is '|'-joined ACCESSIBILITY_OPTS values,
+  // preferred_payment_methods is canonical lowercase PAYMENT_OPTS values.
+  const [accessibility, setAccessibility]   = useState<string[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -140,6 +157,29 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setWebsite(providerData.website ?? '');
           setExternalBookingUrl(providerData.external_booking_url ?? '');
           setYearsExperience(providerData.years_experience != null ? String(providerData.years_experience) : '');
+          setAccessibility(providerData.accessibility_notes?.split('|').filter(Boolean) ?? []);
+          setPaymentMethods(providerData.preferred_payment_methods ?? []);
+        } else {
+          // No providers row yet — a link-only provider can reach this screen
+          // before their first Edit Profile save creates one. Show what they
+          // already answered at sign-up instead of blank fields.
+          const signup = await getUserSignupPrefillInfo(context.userId);
+          if (signup) {
+            const name = signup.business_name ?? signup.name ?? '';
+            setBusinessName(name);
+            setSavedName(name);
+            const category = SERVICE_TYPE_OPTS.find(o => signup.service_interests?.includes(o.value))?.value ?? null;
+            setServiceCategory(category as ServiceCategory | null);
+            setSavedServiceCategory(category as ServiceCategory | null);
+            setBookingEmail(signup.business_email ?? '');
+            setInstagram(signup.instagram ?? '');
+            setWebsite(signup.website ?? '');
+            setExternalBookingUrl(signup.external_booking_url ?? '');
+            setYearsExperience(signup.years_experience != null ? String(signup.years_experience) : '');
+            setAccessibility(signup.accessibility_notes?.split('|').filter(Boolean) ?? []);
+            setPaymentMethods(signup.preferred_payment_methods ?? []);
+            setBusinessType((signup.business_type as BusinessType | null) ?? null);
+          }
         }
       } catch {
         flash('Could not load business details', 'error');
@@ -186,6 +226,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const pendingCategoryLabel =
     SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '';
 
+  const normalizedBookingUrl = normalizeExternalBookingUrl(externalBookingUrl);
+
   function isValidEmail(email: string) {
     return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
@@ -201,6 +243,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
     if (!businessName.trim()) { flash('Enter your business name', 'error'); return; }
     if (!isValidEmail(businessEmail)) { flash('Enter a valid business email', 'error'); return; }
     if (!isValidEmail(bookingEmail))  { flash('Enter a valid public enquiry email', 'error'); return; }
+    if (isLinkOnly && !normalizedBookingUrl) { flash('Enter your booking link', 'error'); return; }
     // Only when the picker is actually on screen. A provider whose saved
     // type is OTHER with no label (possible for older rows) would otherwise be
     // blocked from saving anything at all on this screen, by a validation
@@ -250,6 +293,14 @@ export default function BusinessInfoScreen({ navigation }: any) {
 
       const ops: Promise<void>[] = [];
 
+      // Only a link-only pro edits these here; everyone else edits them in
+      // About You / Payments, so they're never written from this screen.
+      const linkOnlyFields = {
+        external_booking_url: normalizedBookingUrl,
+        accessibility_notes: accessibility.length ? accessibility.join('|') : null,
+        preferred_payment_methods: paymentMethods,
+      };
+
       const trimmedName = businessName.trim();
       const nameChanged = trimmedName.length > 0 && trimmedName !== savedName;
 
@@ -278,13 +329,30 @@ export default function BusinessInfoScreen({ navigation }: any) {
           email: bookingEmail.trim() || null,
           instagram: instagram.trim() || null,
           website: website.trim() || null,
-          external_booking_url: externalBookingUrl.trim() || null,
+          ...(isLinkOnly ? linkOnlyFields : {}),
           years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
+        }));
+      } else if (userId) {
+        // No profile yet: stage the answers where the first Edit Profile save
+        // picks them up, rather than closing as if they'd been saved.
+        ops.push(updateMyStagedProviderAnswers(userId, {
+          years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
+          instagram: instagram.trim() || null,
+          website: website.trim() || null,
+          ...(isLinkOnly ? linkOnlyFields : {}),
+          ...(isLinkOnly && businessType ? { business_type: businessType } : {}),
         }));
       }
 
       await Promise.all(ops);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      // Provider Settings remains mounted beneath this screen and falls back
+      // to AuthContext while it refreshes providers.display_name. Keep that
+      // immediate value aligned with the saved public name so the previous
+      // business name cannot flash or persist after navigating back.
+      if (nameChanged) {
+        await updateUser({ businessName: trimmedName });
+      }
       navigation.goBack();
     } catch (e: any) {
       // AllowingDbGuard, not the plain version: the service-type cooldown
@@ -439,9 +507,15 @@ export default function BusinessInfoScreen({ navigation }: any) {
               )}
             </Card>
 
+            {/* Every provider picks where they see clients; it's shown on
+                their profile. When the address is released only matters to
+                CERVICED's own booking flow, so a link-only provider (who books
+                on their own page) isn't shown that part. */}
             <Card
               title="Business Type"
-              sub="Where you see clients. This decides whether — and when — your address is shared with them."
+              sub={isLinkOnly
+                ? 'Where you see clients. Shown on your profile.'
+                : 'Where you see clients. This decides whether — and when — your address is shared with them.'}
             >
               <RadioGroup
                 options={BUSINESS_TYPE_OPTS}
@@ -460,7 +534,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   offered excludes 'always' (see ADDRESS_RELEASE_BY_BUSINESS_TYPE)
                   because the address on file for a mobile provider is usually
                   their home. */}
-              {businessType && (
+              {businessType && !isLinkOnly && (
                 <View style={{ marginTop: 18 }}>
                   <Text style={[s.cardTitle, { color: C.text, marginBottom: 4 }]}>Address Release</Text>
                   <Text style={[s.cardSub, { color: C.sub }]}>
@@ -487,15 +561,43 @@ export default function BusinessInfoScreen({ navigation }: any) {
               )}
             </Card>
 
-            <Card title="External Booking Link" sub="Already booking through Fresha, Treatwell, Acuity, or similar?">
-              <Field
-                label="Booking Link"
-                value={externalBookingUrl}
-                onChange={setExternalBookingUrl}
-                placeholder="e.g. your Fresha or Acuity booking page"
-                note="When set, clients tap Book and go straight to this link — Cerviced's in-app booking is skipped for your profile. Leave blank to keep booking in-app."
-              />
-            </Card>
+            {isLinkOnly && (
+              <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">
+                <Field
+                  label="Booking Link"
+                  value={externalBookingUrl}
+                  onChange={setExternalBookingUrl}
+                  placeholder="e.g. your Fresha or Acuity booking page"
+                  note="When clients tap Book on your profile, this page opens inside CERVICED."
+                />
+              </Card>
+            )}
+
+            {isLinkOnly && (
+              <Card title="Accessibility" sub="Help clients with access needs find you.">
+                <ChipGroup
+                  options={ACCESSIBILITY_OPTS}
+                  selected={accessibility}
+                  onToggle={v => setAccessibility(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+                />
+              </Card>
+            )}
+
+            {isLinkOnly && (
+              <Card title="Payment Methods" sub="Shown on your profile so clients know how they can pay you.">
+                <ChipGroup
+                  options={PAYMENT_OPTS.map(o => o.label)}
+                  selected={PAYMENT_OPTS.filter(o => paymentMethods.includes(o.value)).map(o => o.label)}
+                  onToggle={label => {
+                    const opt = PAYMENT_OPTS.find(o => o.label === label);
+                    if (!opt) return;
+                    setPaymentMethods(prev =>
+                      prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value],
+                    );
+                  }}
+                />
+              </Card>
+            )}
 
             {/* A provider's own client-facing Terms & Conditions are authored
                 as a FORM (booking_intake_forms, is_terms) via the
@@ -509,7 +611,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 canonical lowercase preferred_contact_methods write path. This
                 card used to re-implement it with mismatched capitalized chip
                 labels, silently desyncing what clients' contact sheets check —
-                link out rather than duplicating the writer again. */}
+                link out rather than duplicating the writer again. Not shown
+                to a link-only pro (owner's call, 2026-10-19) — their Business
+                Info carries Accessibility and Payment Methods instead. */}
+            {!isLinkOnly && (
             <TouchableOpacity
               style={[s.card, { backgroundColor: C.surface, borderColor: C.border, flexDirection: 'row', alignItems: 'center' }]}
               onPress={() => navigation.navigate('Communications')}
@@ -521,6 +626,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.sub} />
             </TouchableOpacity>
+            )}
 
             <SaveButton saving={saving} onPress={handleSave} />
           </ScrollView>

@@ -50,6 +50,7 @@
  * where each tap goes is the caller's business.
  */
 import {
+  countProviderPortfolioItems,
   countProviderServices,
   getMyProviderProfile,
   getProviderAvailability,
@@ -57,7 +58,7 @@ import {
 } from '../../services/databaseService';
 import { resolveDepositMode } from '../../utils/depositPolicy';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
-import type { DbProvider } from '../../types/database';
+import type { DbProvider, DbProviderAvailability } from '../../types/database';
 
 export interface GoLiveStatus {
   /** Blocking — mirrors check_and_set_provider_live() exactly. */
@@ -356,6 +357,70 @@ export async function fetchGoLiveStatus(
     ...deriveRecommendedGoLiveFields(profile),
     brandingSet: !!profile.logo_url,
     stripeSet: deriveStripeGoLiveField(profile),
+    isLive: !!profile.has_gone_live,
+  };
+}
+
+// ── Link-only providers ─────────────────────────────────────────────────────
+//
+// A link-only provider (booking_mode 'external') takes bookings on their own
+// page, so none of the CERVICED-booking steps above apply. The server's
+// external branch of check_and_set_provider_live() publishes them on exactly
+// four things, and this list mirrors it — never add a step here the server
+// doesn't also gate on (migration 20261018200000_link_only_providers).
+
+export interface LinkOnlyGoLiveStatus {
+  logoSet: boolean;
+  aboutSet: boolean;
+  /** At least one open day in their weekly hours (provider_availability). */
+  hoursSet: boolean;
+  /** At least one portfolio photo. */
+  portfolioSet: boolean;
+  portfolioCount: number;
+  /** Their weekly opening hours, as read for `hoursSet` — Home's diary uses
+   *  them to tell a free day from a day off. */
+  hours: DbProviderAvailability[];
+  /** providers.has_gone_live — the authority, never re-derived. */
+  isLive: boolean;
+}
+
+export type LinkOnlyGoLiveStepKey = 'logo' | 'about' | 'hours' | 'portfolio';
+
+export interface LinkOnlyGoLiveStep {
+  key: LinkOnlyGoLiveStepKey;
+  label: string;
+  hint: string;
+  done: boolean;
+}
+
+export function buildLinkOnlyGoLiveSteps(status: LinkOnlyGoLiveStatus): LinkOnlyGoLiveStep[] {
+  return [
+    { key: 'logo', label: 'Add your logo', hint: 'It shows on your profile and in search', done: status.logoSet },
+    { key: 'about', label: 'Write your About', hint: 'A few lines about you and your work', done: status.aboutSet },
+    { key: 'hours', label: 'Set your opening hours', hint: 'Shown to clients on your profile', done: status.hoursSet },
+    { key: 'portfolio', label: 'Add portfolio photos', hint: 'At least one photo of your work', done: status.portfolioSet },
+  ];
+}
+
+/** The caller's own link-only go-live status. Null when they have no
+ *  providers row yet (it's created on their first profile save). Throws on a
+ *  failed read — a failed read is not "not live". */
+export async function fetchLinkOnlyGoLiveStatus(
+  knownProfile?: DbProvider | null,
+): Promise<LinkOnlyGoLiveStatus | null> {
+  const profile = knownProfile ?? (await getMyProviderProfile());
+  if (!profile) return null;
+  const [availability, portfolioCount] = await Promise.all([
+    getProviderAvailability(profile.id),
+    countProviderPortfolioItems(profile.id),
+  ]);
+  return {
+    logoSet: !!profile.logo_url?.trim(),
+    aboutSet: !!profile.about_text?.trim(),
+    hoursSet: availability.some(day => !day.is_closed),
+    portfolioSet: portfolioCount > 0,
+    portfolioCount,
+    hours: availability,
     isLive: !!profile.has_gone_live,
   };
 }

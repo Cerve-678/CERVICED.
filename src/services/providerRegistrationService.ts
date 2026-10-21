@@ -3,11 +3,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 // Only for getSize (reading an image's true pixel dimensions) — this service
 // renders nothing.
 import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
-import { lightTheme } from '../constants/theme';
+import { themeBrandingColours } from '../constants/providerThemes';
 import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import { normalizeServiceImages } from '../utils/serviceImageDraft';
 export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
@@ -28,7 +29,7 @@ import {
   updateProviderRegistrationRow,
   uploadPublicStorageObject,
 } from './databaseService';
-import type { DbProvider, BusinessType } from '../types/database';
+import type { DbProvider, BusinessType, LogoFraming, ProviderBookingMode } from '../types/database';
 import {
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
@@ -108,6 +109,9 @@ export interface ProviderRegistrationData {
   accentColor: string;
   profileTheme: string; // encoded colour-theme key (see src/constants/providerThemes.ts)
   logo: string | null;
+  /** How the logo sits in each Home card. Null = fill and centre. Cleared
+   *  whenever a new logo is picked, since it describes the old image. */
+  logoFraming: LogoFraming | null;
   categories: Record<string, ServiceData[]>;
   // Shown to clients under the category tab once selected — keyed the same
   // as `categories`, but optional per key since older/imported categories
@@ -136,6 +140,10 @@ export interface ProviderRegistrationData {
   // When set, clients booking this provider are sent to this URL (Fresha,
   // Treatwell, Acuity, etc.) instead of Cerviced's in-app booking flow.
   externalBookingUrl: string;
+  /** Written only when the providers row is first created — from the
+   *  sign-up answer. Switching mode later is its own action, not a side
+   *  effect of an ordinary profile save. Omitted = 'cerviced'. */
+  bookingMode?: ProviderBookingMode;
   yearsExperience: string;
   // Address privacy
   // '' is this form's "not answered yet"; the four real values are the
@@ -253,11 +261,14 @@ function sniffImageType(
   return null;
 }
 
-export async function uploadToStorage(
-  bucket: string,
-  storagePath: string,
-  localUri: string
-): Promise<string> {
+/** Longest side, in pixels, of any image this app uploads. The largest a
+ *  photo is ever shown is full screen width, 1,290 px on the biggest iPhone
+ *  (there is no pinch-zoom), and an Explore card is a few hundred. At 2,048 a
+ *  portrait photo is still 1,536 px wide, so nothing looks softer anywhere,
+ *  while a 4,000-8,000 px original's 3-7 MB drops to roughly 400-700 KB. */
+export const MAX_UPLOAD_IMAGE_EDGE_PX = 2048;
+
+async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
   // Use expo-file-system to read the local file reliably on both iOS and Android.
   // fetch(localUri) can fail with "Network request failed" for file:// URIs in RN.
   const base64 = await FileSystem.readAsStringAsync(localUri, {
@@ -270,6 +281,59 @@ export async function uploadToStorage(
   for (let i = 0; i < binaryStr.length; i++) {
     bytes[i] = binaryStr.charCodeAt(i);
   }
+  return bytes;
+}
+
+/**
+ * A smaller copy of an oversized photo, or null to upload the original.
+ * Only shrinks; an image already within MAX_UPLOAD_IMAGE_EDGE_PX is left
+ * byte-for-byte alone, so it isn't recompressed for no gain. PNGs stay PNG
+ * (logos rely on their transparency); everything else becomes JPEG. Any
+ * failure falls back to the original, the same as before this existed:
+ * a slow upload is better than a lost photo.
+ *
+ * Not a privacy control: re-encoding drops photo metadata (including GPS)
+ * from the images it shrinks, but an image that is already small enough, or
+ * that falls back to the original, keeps whatever metadata it had.
+ */
+async function shrinkImageForUpload(
+  localUri: string,
+  sniffedMime: string | undefined,
+): Promise<string | null> {
+  try {
+    // Rendered once to read the upright (EXIF-applied) size, then reused as
+    // the resize source so the file is only decoded once.
+    const original = await ImageManipulator.manipulate(localUri).renderAsync();
+    const { width, height } = original;
+    if (Math.max(width, height) <= MAX_UPLOAD_IMAGE_EDGE_PX) return null;
+    const resized = await ImageManipulator.manipulate(original)
+      .resize(width >= height
+        ? { width: MAX_UPLOAD_IMAGE_EDGE_PX }
+        : { height: MAX_UPLOAD_IMAGE_EDGE_PX })
+      .renderAsync();
+    const saved = await resized.saveAsync(
+      sniffedMime === 'image/png'
+        ? { format: SaveFormat.PNG }
+        : { format: SaveFormat.JPEG, compress: 0.8 },
+    );
+    return saved.uri;
+  } catch (error) {
+    logger.warn('[uploadToStorage] could not shrink image, uploading original:', error);
+    return null;
+  }
+}
+
+export async function uploadToStorage(
+  bucket: string,
+  storagePath: string,
+  localUri: string
+): Promise<string> {
+  let bytes = await readLocalFileBytes(localUri);
+
+  // Oversized photos are shrunk before upload, so every screen that shows
+  // them later downloads a few hundred KB rather than several MB.
+  const shrunkUri = await shrinkImageForUpload(localUri, sniffImageType(bytes)?.mime);
+  if (shrunkUri) bytes = await readLocalFileBytes(shrunkUri);
 
   // Content type comes from the bytes, never from the name. Only if the bytes
   // are unrecognisable do we fall back to reading the local URI's extension.
@@ -430,10 +494,18 @@ export async function saveProviderToSupabase(
   // required for every business_type now, including 'mobile' (a private base
   // address, never shown to clients). Fails fast, before any upload or DB
   // write, so a bad address never leaves partial state behind.
-  const addressCoords = await geocodeAndValidateUkAddress(
-    data.fullAddress || '',
-    data.fullAddressCoordinates,
-  );
+  //
+  // Except for a link-only provider (booking_mode 'external'): their bookings
+  // happen on their own page, so CERVICED never releases an address to a
+  // client and Edit Profile never asks for one. Requiring it here made their
+  // profile impossible to save.
+  const isLinkOnly = data.bookingMode === 'external';
+  const addressCoords = isLinkOnly
+    ? null
+    : await geocodeAndValidateUkAddress(
+        data.fullAddress || '',
+        data.fullAddressCoordinates,
+      );
 
   // 1. Upload logo if it's a local file. Path is versioned with Date.now()
   // (matching the pattern already used for portfolio/promotions uploads)
@@ -547,6 +619,7 @@ export async function saveProviderToSupabase(
         longitude,
         about_text: data.aboutText,
         logo_url: logoUrl,
+        logo_framing: data.logoFraming ?? null,
         gradient: data.gradient,
         accent_color: data.accentColor,
         profile_theme: data.profileTheme || 'app',
@@ -606,6 +679,7 @@ export async function saveProviderToSupabase(
         longitude,
         about_text: data.aboutText,
         logo_url: logoUrl,
+        logo_framing: data.logoFraming ?? null,
         gradient: data.gradient,
         accent_color: data.accentColor,
         profile_theme: data.profileTheme || 'app',
@@ -638,6 +712,7 @@ export async function saveProviderToSupabase(
         automation_settings: mergedAutomationSettings,
         is_active: true,
         terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
+        booking_mode: data.bookingMode ?? 'cerviced',
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown database error';
@@ -664,12 +739,16 @@ export async function saveProviderToSupabase(
   // clients on every browse. See restrict_provider_full_address.sql. Real
   // coordinates come from the validation at the top of this function (step 0)
   // — see require_provider_address.sql for how they're used.
-  await setMyProviderFullAddress(
-    providerId,
-    data.fullAddress || null,
-    addressCoords.latitude,
-    addressCoords.longitude
-  );
+  // Skipped for link-only (no address asked) — and not cleared either, so a
+  // provider who switched to link-only keeps the address they had on file.
+  if (addressCoords) {
+    await setMyProviderFullAddress(
+      providerId,
+      data.fullAddress || null,
+      addressCoords.latitude,
+      addressCoords.longitude
+    );
+  }
 
   // 3. Update user role to 'provider'
   await promoteUserToProvider(userId);
@@ -800,28 +879,114 @@ export async function saveProviderToSupabase(
   await AsyncStorage.setItem(`@provider_reg_data_${userId}`, JSON.stringify(cached));
 }
 
+interface RegistrationCatalogue {
+  categories: Record<string, ServiceData[]>;
+  categoryDescriptions: Record<string, string>;
+  categoryServiceTypes: Record<string, string>;
+  fullAddress: string;
+}
+
+const NO_CATALOGUE: RegistrationCatalogue = {
+  categories: {},
+  categoryDescriptions: {},
+  categoryServiceTypes: {},
+  fullAddress: '',
+};
+
+/**
+ * The provider row as registration data. Without `catalogue` it has no
+ * services and no street address, which is what My Profile paints its hero
+ * and policy tiles from while the image-heavy services read is still on its
+ * way. Never save or cache that partial form: its empty `categories` would
+ * read as a provider with no services.
+ */
+export function providerRowToRegistrationData(
+  provider: DbProvider,
+  cached: ProviderRegistrationData | null = null,
+  catalogue: RegistrationCatalogue = NO_CATALOGUE,
+): ProviderRegistrationData {
+  return {
+    providerName: provider.display_name,
+    providerService: provider.service_category,
+    serviceCategories: provider.service_categories?.length
+      ? provider.service_categories
+      : [provider.service_category],
+    categoryServiceTypes: catalogue.categoryServiceTypes,
+    customServiceType: provider.custom_service_type || '',
+    location: provider.location_text || '',
+    aboutText: provider.about_text || '',
+    scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
+    // Unset colours fall back to the provider's own theme, never a
+    // placeholder: this object is saved back on the next profile save.
+    gradient: (provider.gradient || themeBrandingColours(provider.profile_theme).gradient) as [string, string, ...string[]],
+    hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
+    accentColor: provider.accent_color || themeBrandingColours(provider.profile_theme).accentColor,
+    profileTheme: provider.profile_theme || 'app',
+    logo: provider.logo_url || null,
+    logoFraming: provider.logo_framing ?? null,
+    categories: catalogue.categories,
+    categoryDescriptions: catalogue.categoryDescriptions,
+    phone: provider.phone || '',
+    email: provider.email || '',
+    instagram: provider.instagram || cached?.instagram || '',
+    website: provider.website || cached?.website || '',
+    tiktok: provider.tiktok || cached?.tiktok || '',
+    externalBookingUrl: provider.external_booking_url || '',
+    yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
+    businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
+    teamSize: (provider.team_size as ProviderRegistrationData['teamSize']) || '',
+    accessibilityNotes: provider.accessibility_notes || '',
+    termsAcceptedAt: provider.terms_accepted_at ?? null,
+    languagesSpoken: provider.languages_spoken || [],
+    priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
+    serviceLocations: provider.service_locations || [],
+    preferredPaymentMethods: provider.preferred_payment_methods || [],
+    fullAddress: catalogue.fullAddress,
+    // Existing profiles may predate the picker. A later save falls back to a
+    // one-time geocode, while every new picker selection supplies these.
+    fullAddressCoordinates: null,
+    // NULL round-trips as null — see the field's note on ProviderRegistrationData.
+    addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
+    backgroundImage: provider.background_image_url ?? null,
+    isVerified: provider.is_verified ?? false,
+    rating: Number(provider.rating) || 0,
+    whatsapp: provider.whatsapp_number ?? '',
+    preferredContactMethods: provider.preferred_contact_methods ?? ['in_app'],
+    bookingPolicies: (provider.booking_policies as ProviderRegistrationData['bookingPolicies']) ?? null,
+    cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
+  };
+}
+
 // ── loadProviderFromSupabase ─────────────────────────────────────────────────
 // Fetches provider + services + images + add-ons, reconstructs ProviderRegistrationData.
 // Falls back to AsyncStorage cache if Supabase returns nothing.
 
 export async function loadProviderFromSupabase(
-  userId: string
+  userId: string,
+  knownProvider?: DbProvider | null,
 ): Promise<ProviderRegistrationData | null> {
-  let provider: Awaited<ReturnType<typeof getProviderRegistrationRecord>>;
-  try {
-    provider = await getProviderRegistrationRecord(userId);
-  } catch (error) {
-    logger.warn('loadProviderFromSupabase error:', error);
-    const cached = await getCachedProviderData(userId);
-    if (cached) return cached;
-    // A transient failure here is NOT the same thing as "no provider row
-    // exists" — returning null in both cases is indistinguishable to every
-    // caller, which is exactly what let an existing, published provider's
-    // locked Business Name/Service Type fields render as editable (and, if
-    // touched, silently overwrite service_category on save) after a
-    // one-off network blip during load. Callers must treat this as a
-    // failure to retry, never as "confirmed new signup".
-    throw error;
+  let provider: DbProvider | null;
+  if (knownProvider !== undefined) {
+    // A caller that already resolved its own provider row can pass it in.
+    // My Profile does this so its registration reconstruction and dashboard
+    // share one `providers` request instead of issuing identical reads.
+    provider = knownProvider;
+  } else {
+    try {
+      provider = await getProviderRegistrationRecord(userId);
+    } catch (error) {
+      logger.warn('loadProviderFromSupabase error:', error);
+      const cached = await getCachedProviderData(userId);
+      if (cached) return cached;
+      // A transient failure here is NOT the same thing as "no provider row
+      // exists" — returning null in both cases is indistinguishable to every
+      // caller, which is exactly what let an existing, published provider's
+      // locked Business Name/Service Type fields render as editable (and, if
+      // touched, silently overwrite service_category on save) after a
+      // one-off network blip during load. Callers must treat this as a
+      // failure to retry, never as "confirmed new signup".
+      throw error;
+    }
   }
   // The query itself succeeded and genuinely found no row — this really is
   // either a brand-new signup or an offline draft that never reached the
@@ -906,55 +1071,12 @@ export async function loadProviderFromSupabase(
     });
   }
 
-  const loaded: ProviderRegistrationData = {
-    providerName: provider.display_name,
-    providerService: provider.service_category,
-    serviceCategories: provider.service_categories?.length
-      ? provider.service_categories
-      : [provider.service_category],
-    categoryServiceTypes,
-    customServiceType: provider.custom_service_type || '',
-    location: provider.location_text || '',
-    aboutText: provider.about_text || '',
-    scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
-    gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
-    hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
-    // Was '#7B1FA2' (a hardcoded purple) for any provider who'd never set
-    // one — falls back to the app's own accent instead.
-    accentColor: provider.accent_color || lightTheme.accent,
-    profileTheme: provider.profile_theme || 'app',
-    logo: provider.logo_url || null,
+  const loaded = providerRowToRegistrationData(provider, cached, {
     categories,
     categoryDescriptions,
-    phone: provider.phone || '',
-    email: provider.email || '',
-    instagram: provider.instagram || cached?.instagram || '',
-    website: provider.website || cached?.website || '',
-    tiktok: provider.tiktok || cached?.tiktok || '',
-    externalBookingUrl: provider.external_booking_url || '',
-    yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
-    businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
-    teamSize: (provider.team_size as ProviderRegistrationData['teamSize']) || '',
-    accessibilityNotes: provider.accessibility_notes || '',
-    termsAcceptedAt: provider.terms_accepted_at ?? null,
-    languagesSpoken: provider.languages_spoken || [],
-    priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
-    serviceLocations: provider.service_locations || [],
-    preferredPaymentMethods: provider.preferred_payment_methods || [],
+    categoryServiceTypes,
     fullAddress,
-    // Existing profiles may predate the picker. A later save falls back to a
-    // one-time geocode, while every new picker selection supplies these.
-    fullAddressCoordinates: null,
-    // NULL round-trips as null — see the field's note on ProviderRegistrationData.
-    addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
-    backgroundImage: provider.background_image_url ?? null,
-    isVerified: provider.is_verified ?? false,
-    rating: Number(provider.rating) || 0,
-    whatsapp: provider.whatsapp_number ?? '',
-    preferredContactMethods: provider.preferred_contact_methods ?? ['in_app'],
-    bookingPolicies: (provider.booking_policies as ProviderRegistrationData['bookingPolicies']) ?? null,
-    cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
-  };
+  });
   // A live read is also the best offline/startup snapshot. Persist it so the
   // profile editor opened from My Profile can paint its saved fields straight
   // away instead of showing a blank loading route and repeating this work.

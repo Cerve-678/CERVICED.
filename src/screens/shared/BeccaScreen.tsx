@@ -12,7 +12,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView } from "../../components/SafeArea";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
@@ -104,9 +104,12 @@ export default function BeccaScreen({
   // activeMode is 'client' and the provider (brown/rose) palette otherwise.
   const { isDarkMode, palette: P } = useTheme();
   const { bookings } = useBooking();
-  const { user, hatState } = useAuth();
+  const { user, hatState, myBookingMode } = useAuth();
   const activeMode = hatState.active;
   const isProviderMode = activeMode === "provider";
+  // Link-only pros take bookings on their own site; Becca keeps to what
+  // they have here (see `fitsLinkOnly` on the provider capabilities).
+  const isLinkOnly = isProviderMode && myBookingMode === "external";
   // The single source of truth for which Becca this is — drives the engine,
   // the persisted session's `hat`, and the screen's identity treatment.
   const beccaHat: BeccaHat = isProviderMode ? "provider" : "client";
@@ -284,6 +287,23 @@ export default function BeccaScreen({
     // answer in the conversation (pv.today / pv.clients / pv.inbox /
     // pv.analytics); each answer then offers its own "Open …" chip for the
     // full screen. See beccaProviderStarters.test.ts for the routing.
+    if (isLinkOnly) {
+      return {
+        ...base,
+        content:
+          "## Your business assistant\n" +
+          "- **Messages** — unread messages from clients\n" +
+          "- **Updates** — notifications you've missed\n" +
+          "- **Your profile** — opening hours and reach\n\n" +
+          "What would you like to check?",
+        suggestions: [
+          { id: "messages", text: "Messages", action: "message", data: { message: "Any unread messages?" } },
+          { id: "updates", text: "Anything I've missed?", action: "message", data: { message: "Any updates?" } },
+          { id: "hours", text: "My Hours", action: "message", data: { message: "What are my working hours?" } },
+          { id: "reach", text: "My Reach", action: "message", data: { message: "How many followers have I got?" } },
+        ],
+      };
+    }
     if (isProviderMode) {
       return {
         ...base,
@@ -359,7 +379,7 @@ export default function BeccaScreen({
         },
       ],
     };
-  }, [bookings, isProviderMode]);
+  }, [bookings, isProviderMode, isLinkOnly]);
 
   // Initialize. The engine is stateless — hat and bookings are passed per
   // call rather than held on a singleton, so there's no cross-mode state to
@@ -504,6 +524,7 @@ export default function BeccaScreen({
       const { message: response, context } = await beccaConverse({
         message: textToSend || "What can you tell me about this?",
         hat: isProviderMode ? "provider" : "client",
+        linkOnly: isLinkOnly,
         // `bookings` is BookingContext's cache — the CLIENT hat's own
         // appointments. Provider capabilities query their own data and never
         // read this, so passing it in provider mode is inert today, but it's

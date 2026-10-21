@@ -9,6 +9,8 @@
 // are dropped on purpose: PostgREST filters carry ids and values
 // (`?user_id=eq.…`) that have no business in a log.
 
+import { readRequestKey } from './readCache';
+
 export type RequestKind = 'auth-check' | 'auth' | 'table' | 'rpc' | 'storage' | 'function' | 'other';
 
 export interface RequestLabel {
@@ -50,6 +52,49 @@ export function formatTimingLine(
 }
 
 type Fetch = typeof fetch;
+
+/**
+ * Coalesce simultaneous, identical read requests.
+ *
+ * A tab focus, a screen mount and a context refresh can legitimately ask for
+ * the same PostgREST resource in the same event loop. Sending every copy is
+ * particularly harmful while the API is recovering: it multiplies queued work
+ * and makes an otherwise brief 503 look like an app-wide outage. This is only
+ * an in-flight coalescer, and only applies to GET/HEAD; writes and
+ * differently-authenticated requests always remain independent. Remembering
+ * replies after they land is readCache.ts's job, which sits in front of this.
+ */
+export function createCoalescingFetch(baseFetch: Fetch): Fetch {
+  const inFlight = new Map<string, Promise<Response>>();
+
+  return async (input, init) => {
+    const method = (init?.method ?? (typeof input === 'object' && 'method' in input ? input.method : 'GET')).toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD') return baseFetch(input, init);
+
+    // The response is only safe to share between consumers when their headers
+    // match too: authorization and PostgREST profile/preference headers can
+    // change the visible rows or representation for the same URL.
+    const key = readRequestKey(input, init);
+
+    let request = inFlight.get(key);
+    if (!request) {
+      request = baseFetch(input, init);
+      inFlight.set(key, request);
+      void request.finally(() => {
+        // Do not delete a newer request that happened to reuse this key.
+        if (inFlight.get(key) === request) inFlight.delete(key);
+      }).catch(() => {
+        // The callers receive the original rejection; this branch only avoids
+        // an unhandled rejection from the cleanup chain.
+      });
+    }
+
+    // Each supabase-js consumer parses the body itself. Give every consumer a
+    // clone and leave the source response untouched, so one parser cannot lock
+    // the stream for another.
+    return request.then(response => response.clone());
+  };
+}
 
 /** Wraps `baseFetch` so every request reports one timing line via `report`. */
 export function createTimedFetch(baseFetch: Fetch, report: (line: string) => void): Fetch {

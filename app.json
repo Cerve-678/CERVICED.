@@ -60,6 +60,12 @@
       ],
       "expo-secure-store",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "CERVICED uses your calendar to show your appointments in the app, and to add a booking to it when you ask. Nothing from your calendar is sent to CERVICED."
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow CERVICED to use Face ID for faster sign-in."

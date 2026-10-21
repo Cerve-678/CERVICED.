@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { useFont } from '../../contexts/FontContext';
 import { BellIcon } from '../../components/IconLibrary';
 import {
@@ -25,6 +25,7 @@ import {
   getBookingWithAddOnsById,
   getProviderBasicById,
   subscribeToNotificationChanges,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import type { DbNotification } from '../../types/database';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -55,6 +56,9 @@ interface Notification {
       | 'booking_cancelled'  | 'booking_reminder'    | 'booking_in_progress'
       | 'no_show'            | 'provider_no_show'    | 'no_show_disputed'
       | 'cancellation_settled'
+      | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
+      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed'
+      | 'refund_requested' | 'refund_request_updated'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
@@ -65,7 +69,9 @@ interface Notification {
       | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
       | 'info_pack_received' | 'intake_form_completed' | 'address_released'
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
-      | 'schedule_fully_booked' | 'points_earned';
+      | 'schedule_fully_booked' | 'points_earned'
+      | 'maintenance_due'    | 'aftercare_available'
+      | 'provider_saved';
   title: string;
   message: string;
   timestamp: string;
@@ -78,6 +84,8 @@ interface Notification {
   bookingId?: string | undefined;
   status?: string | undefined;
   providerId?: string | undefined; // For new_provider notifications
+  /** Beauty Maintenance: which item a maintenance_due row is about. */
+  maintenanceItemId?: string | undefined;
 }
 
 // ── Skeleton Notification Row ───────────────────────────────────
@@ -148,6 +156,13 @@ const PROVIDER_INLINE_BOOKING_ACTION_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 // Haptic tiers per DESIGN_SYSTEM.md — fire-and-forget, never block a tap.
+/** The maintenance item a maintenance_due row points at, if it carries one. */
+function maintenanceItemIdOf(metadata: unknown): string | undefined {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+  const id = (metadata as Record<string, unknown>)['maintenance_item_id'];
+  return typeof id === 'string' ? id : undefined;
+}
+
 const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
 const hapticMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
 const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
@@ -155,11 +170,13 @@ const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { textStyles } = useFont();
-  const { user, hatState } = useAuth();
+  const { user, hatState, myBookingMode } = useAuth();
   const activeMode = hatState.active;
   const isProvider = activeMode === 'provider';
   const isProviderRef = useRef(false);
   isProviderRef.current = isProvider;
+  const myBookingModeRef = useRef(myBookingMode);
+  myBookingModeRef.current = myBookingMode;
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -262,6 +279,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     provider: '',
     service: '',
     bookingId: db.booking_id ?? undefined,
+    maintenanceItemId: maintenanceItemIdOf(db.metadata),
     providerId: db.provider_id ?? undefined,
   });
 
@@ -334,7 +352,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'refund_requested', 'refund_request_updated', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -503,6 +521,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       'post_appt_check_in',
       'rebooking_nudge',
       'points_earned',
+      'maintenance_due',
+      'aftercare_available',
     ]);
     if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
       logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
@@ -518,6 +538,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'provider_no_show' ||
         notification.type === 'no_show_disputed' ||
         notification.type === 'cancellation_settled' ||
+        notification.type === 'fee_charged' ||
+        notification.type === 'fee_disputed' ||
+        notification.type === 'fee_dispute_resolved' ||
+        notification.type === 'fee_payment_requested' ||
+        notification.type === 'fee_paid_by_client' ||
+        notification.type === 'fee_payment_lapsed' ||
+        notification.type === 'refund_requested' ||
+        notification.type === 'refund_request_updated' ||
         notification.type === 'booking_reminder' ||
         notification.type === 'booking_cancelled' ||
         notification.type === 'payment_success' ||
@@ -704,6 +732,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         dismissThenNavigate(() => navigateNested('Profile', 'Points'));
       }, 300);
+    } else if (notification.type === 'maintenance_due' || notification.type === 'aftercare_available') {
+      // Beauty Maintenance. The notification is generic by design (nothing
+      // health-adjacent on a lock screen), so the detail is the destination:
+      // the Maintenance view, scrolled to the item when we know which one.
+      // Client-only, guarded above via CLIENT_ONLY_TYPES.
+      const focusItemId = notification.maintenanceItemId;
+      defer(() => {
+        dismissThenNavigate(() =>
+          navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
+        );
+      }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
@@ -711,13 +750,15 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
-    } else if (notification.type === 'points_earned') {
-      // Loyalty points earned — open the Rewards screen, which lives in the
-      // client Profile tab's stack. Client-only (already guarded above via
-      // CLIENT_ONLY_TYPES), so no provider branch is needed. Same dismiss-then-
-      // navigate-via-root-ref pattern as the other client deep-links.
+    } else if (notification.type === 'provider_saved') {
+      // The daily saves count. Both analytics screens show saves; a link-only
+      // pro's lives on Home, a full provider's on the Profile tab.
       defer(() => {
-        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+        if (myBookingModeRef.current === 'external') {
+          navigateProviderHome('LinkOnlyAnalytics');
+        } else {
+          dismissThenNavigate(() => navigateNested('Profile', 'Analytics'));
+        }
       }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
@@ -745,6 +786,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Refresh control
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     hapticLight();
     setRefreshing(true);
     await loadNotifications();
@@ -774,13 +817,21 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     if (type === 'no_show_disputed') return '#FF9500';
     // Money already settled by the provider's own policy — informational.
     if (type === 'cancellation_settled') return P.accentText;
+    // A fee charged or disputed is money that needs the reader's attention;
+    // an answered dispute is informational.
+    if (type === 'fee_charged' || type === 'fee_disputed' || type === 'fee_payment_requested') return '#FF9500';
+    if (type === 'fee_dispute_resolved' || type === 'fee_payment_lapsed') return P.accentText;
+    if (type === 'fee_paid_by_client') return '#4CAF50';
+    // Amber: a request someone still has to act on or decide.
+    if (type === 'refund_requested') return '#FF9500';
+    if (type === 'refund_request_updated') return P.accentText;
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in'].includes(type)) return P.accentText;
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved'].includes(type)) return P.accentText;
     return '#FF9800';
   };
 
@@ -806,6 +857,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'provider_no_show':
       case 'no_show_disputed':
       case 'cancellation_settled':
+      case 'fee_charged':
+      case 'fee_disputed':
+      case 'fee_dispute_resolved':
+      case 'fee_paid_by_client':
+      case 'fee_payment_lapsed':
+      case 'refund_requested':
+      case 'refund_request_updated':
         return 'View Booking';
       case 'reschedule_declined':
       // The request is closed and the booking is unchanged, so the only useful
@@ -821,6 +879,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Respond Now';
       case 'payment_success':
         return 'View Booking';
+      case 'fee_payment_requested':
+        return 'Pay Fee';
       case 'reschedule_request':
       case 'reschedule_provider_response':
         return 'Reschedule Now';
@@ -854,8 +914,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'provider_saved':
+        return 'View Analytics';
       case 'points_earned':
         return 'View Points';
+      case 'maintenance_due':
+        return 'View Maintenance';
+      case 'aftercare_available':
+        return 'Read Aftercare';
       default:
         return 'View';
     }
@@ -1046,7 +1112,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {/* ✅ Filter Tabs */}
         <View style={styles.filterContainer}>
           <SlidingTabs
-            tabs={(isProvider
+            tabs={(isProvider && myBookingMode === 'external'
+              // Link-only: no CERVICED bookings and no reviews, so those two
+              // tabs would always be empty.
+              ? [
+                  { key: 'all', label: 'All' },
+                  { key: 'unread', label: 'Unread', count: unreadCount },
+                ]
+              : isProvider
               ? [
                   { key: 'all', label: 'All' },
                   { key: 'unread', label: 'Unread', count: unreadCount },

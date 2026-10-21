@@ -1,8 +1,9 @@
 // src/screens/auth/WelcomeScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { signInWithAppleIdToken } from '../../services/databaseService';
@@ -18,6 +20,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useReducedMotion } from 'react-native-reanimated';
+import WelcomeIntro, { WELCOME_INTRO_TOP_MARGIN } from '../../components/WelcomeIntro';
+import { STORAGE_KEYS } from '../../utils/storageKeys';
 
 type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 
@@ -71,87 +77,158 @@ export default function WelcomeScreen({ navigation }: Props) {
     }
   };
 
+  const SERVICE_WORDS = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS'];
+
+  // The full intro plays once per device; afterwards the headline just fades
+  // in. 'checking' holds the headline back for the one AsyncStorage read so a
+  // first-time user doesn't see it flash before the intro starts.
+  const reduceMotion = useReducedMotion();
+  const [introState, setIntroState] = useState<'checking' | 'playing' | 'done'>('checking');
+  // Set once the intro has actually played, so the layout that follows it
+  // picks up where the glide left off: the wordmark is already in place and
+  // "sorted." gets the intro's flip. Returning users get a short plain fade.
+  const [cameFromIntro, setCameFromIntro] = useState(false);
+
+  // The headline animates with React Native's own Animated API, not
+  // Reanimated, and is mounted whenever the intro isn't on screen (including
+  // during the AsyncStorage check). On device, Reanimated-driven opacity left
+  // the wordmark and headline invisible; this path doesn't depend on it.
+  const rows = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
+  const sortedFlip = useRef(new Animated.Value(0)).current;
+  const sortedDot = useRef(new Animated.Value(0)).current;
+  const phase = introState === 'playing' ? 'intro' : cameFromIntro ? 'afterIntro' : 'plain';
+
+  useEffect(() => {
+    if (phase === 'intro') return;
+    const all = [...rows, sortedFlip, sortedDot];
+    if (reduceMotion) {
+      all.forEach(v => v.setValue(1));
+      return;
+    }
+    const rise = (v: Animated.Value, delay: number, duration: number) =>
+      Animated.timing(v, { toValue: 1, duration, delay, useNativeDriver: true });
+    let anim: Animated.CompositeAnimation;
+    if (phase === 'afterIntro') {
+      rows[2]?.setValue(1);
+      anim = Animated.parallel([
+        ...[0, 1, 3].map(i => rise(rows[i]!, i * 160, 550)),
+        rise(sortedFlip, 350, 600),
+        Animated.spring(sortedDot, { toValue: 1, delay: 850, damping: 9, stiffness: 180, useNativeDriver: true }),
+      ]);
+    } else {
+      sortedFlip.setValue(1);
+      sortedDot.setValue(1);
+      anim = Animated.parallel(rows.map((v, i) => rise(v, i * 70, 400)));
+    }
+    anim.start();
+    // If anything stops the animation part-way, still leave the text visible.
+    return () => { anim.stop(); all.forEach(v => v.setValue(1)); };
+  }, [phase, reduceMotion, rows, sortedFlip, sortedDot]);
+
+  const rowStyle = (i: number) => {
+    const v = rows[i]!;
+    return {
+      opacity: v,
+      transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+    };
+  };
+  const sortedStyle = {
+    opacity: sortedFlip.interpolate({ inputRange: [0, 0.05, 1], outputRange: [0, 1, 1] }),
+    transform: [{ perspective: 400 }, { rotateX: sortedFlip.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] }) }],
+  };
+  const sortedDotStyle = {
+    opacity: sortedDot.interpolate({ inputRange: [0, 0.05, 1], outputRange: [0, 1, 1] }),
+    transform: [{ translateY: sortedDot.interpolate({ inputRange: [0, 1], outputRange: [-26, 0] }) }],
+  };
+
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
-      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}>
-        {/* Branding */}
-        <View style={styles.brandSection}>
-          <Text style={[styles.brandName, { color: t.text }]}>CERVICED.</Text>
-          <Text style={[styles.tagline, { color: t.sub }]}>
-            Beauty maintenance at your fingertips
-          </Text>
-        </View>
+      <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 20 }]}>
+        {introState === 'playing' ? (
+          <View style={{ marginTop: WELCOME_INTRO_TOP_MARGIN }}>
+            <WelcomeIntro palette={t} onFinished={() => { setCameFromIntro(true); setIntroState('done'); }} />
+          </View>
+        ) : (
+          <View accessible accessibilityLabel="CERVICED. Beauty maintenance, sorted.">
+            <Animated.Text style={[styles.wordmark, { color: t.text }, phase === 'afterIntro' ? null : { opacity: rows[0]! }]}>CERVICED.</Animated.Text>
+            <View style={styles.headlineBlock}>
+              <Animated.Text style={[styles.headline, { color: t.text }, rowStyle(0)]}>Beauty</Animated.Text>
+              <Animated.Text style={[styles.headline, { color: t.text }, rowStyle(1)]}>maintenance,</Animated.Text>
+              <Animated.View style={[styles.sortedRow, rowStyle(2)]}>
+                <Animated.Text style={[styles.headline, { color: t.accent }, sortedStyle]}>sorted</Animated.Text>
+                <Animated.Text style={[styles.headline, { color: t.accent }, sortedDotStyle]}>.</Animated.Text>
+              </Animated.View>
+            </View>
+            <Animated.View style={[styles.wordsRow, rowStyle(3)]}>
+              {SERVICE_WORDS.map(w => (
+                <Text key={w} style={[styles.word, { color: t.sub }]}>{w}</Text>
+              ))}
+            </Animated.View>
+          </View>
+        )}
 
-        {/* Actions */}
-        <View style={styles.actionsSection}>
-          {/* Sign Up */}
+        <View style={{ flex: 1 }} />
+
+        <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: t.accent }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); navigation.navigate('SignUpStep1'); }}
             activeOpacity={0.75}
           >
-            <Text style={styles.primaryBtnText}>SIGN UP</Text>
+            <Text style={[styles.primaryBtnText, { color: t.onAccent }]}>GET STARTED</Text>
           </TouchableOpacity>
 
-          {/* Log In */}
           <TouchableOpacity
-            style={[styles.secondaryBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('Login'); }}
+            style={[styles.appleBtn, { backgroundColor: t.text }]}
+            onPress={handleAppleLogin}
             activeOpacity={0.75}
+            disabled={isAppleLoading}
+            accessibilityLabel="Continue with Apple"
           >
-            <Text style={[styles.secondaryBtnText, { color: t.text }]}>LOG IN</Text>
+            {isAppleLoading ? (
+              <ActivityIndicator color={t.bg} />
+            ) : (
+              <>
+                <Ionicons name="logo-apple" size={18} color={t.bg} />
+                <Text style={[styles.socialLabel, { color: t.bg }]}>Continue with Apple</Text>
+              </>
+            )}
           </TouchableOpacity>
 
-          {/* Claim an existing listing */}
           <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClaimProvider'); }}
+            style={[styles.outlineBtn, { borderColor: t.border }]}
+            onPress={() => handleSocialLogin('Google')}
             activeOpacity={0.7}
-            style={styles.claimLink}
           >
-            <Text style={[styles.claimLinkText, { color: t.accent }]}>Is your business already listed?</Text>
+            <Text style={[styles.socialLabel, { color: t.text }]}>Continue with Google</Text>
           </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
-            <Text style={[styles.dividerLabel, { color: t.sub }]}>OR</Text>
-            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
-          </View>
-
-          {/* Social Login */}
-          <View style={styles.socialRow}>
-            {(['Instagram', 'Google'] as const).map(p => (
-              <TouchableOpacity
-                key={p}
-                style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-                onPress={() => handleSocialLogin(p)}
-                activeOpacity={0.7}
+          <View style={styles.linksRow}>
+            <Text style={[styles.linkText, { color: t.sub }]}>
+              Have an account?{' '}
+              <Text
+                style={[styles.linkStrong, { color: t.accent }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('Login'); }}
               >
-                <Text style={[styles.socialLabel, { color: t.text }]}>{p}</Text>
-              </TouchableOpacity>
-            ))}
+                Log in
+              </Text>
+            </Text>
             <TouchableOpacity
-              style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-              onPress={handleAppleLogin}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClaimProvider'); }}
               activeOpacity={0.7}
-              disabled={isAppleLoading}
+              hitSlop={10}
             >
-              {isAppleLoading ? (
-                <ActivityIndicator color={t.text} />
-              ) : (
-                <Text style={[styles.socialLabel, { color: t.text }]}>Apple</Text>
-              )}
+              <Text style={[styles.linkStrong, { color: t.accent }]}>Claim your listing</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Terms */}
           <Text style={[styles.termsText, { color: t.sub }]}>
             By continuing, you agree to our{' '}
             <Text style={[styles.termsLink, { color: t.accent }]}>Terms of Service</Text>
             {' '}and{' '}
-            <Text style={[styles.termsLink, { color: t.accent }]}>Privacy Policy</Text>
+            <Text style={[styles.termsLink, { color: t.accent }]}>Privacy Policy</Text>.
           </Text>
         </View>
       </View>
@@ -160,99 +237,22 @@ export default function WelcomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
-  },
-  brandSection: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 175,
-  },
-  brandName: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 44,
-    letterSpacing: 2,
-  },
-  tagline: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    marginTop: 8,
-    letterSpacing: 0.5,
-    fontWeight: '600',
-  },
-  actionsSection: {
-    paddingBottom: 8,
-  },
-  primaryBtn: {
-    minHeight: 50,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  primaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    letterSpacing: 1,
-    color: '#FFFFFF',
-  },
-  secondaryBtn: {
-    minHeight: 50,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  secondaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    letterSpacing: 1,
-  },
-  claimLink: {
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  claimLinkText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  dividerLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-    letterSpacing: 2,
-    marginHorizontal: 16,
-  },
-  socialRow: { flexDirection: 'row', gap: 10 },
-  socialBtn: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  socialLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  termsText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 20,
-  },
+  content: { flex: 1, paddingHorizontal: 24 },
+  wordmark: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 2 },
+  headlineBlock: { marginTop: 64 },
+  headline: { fontFamily: 'BakbakOne-Regular', fontSize: 48, lineHeight: 50, letterSpacing: 0.5 },
+  sortedRow: { flexDirection: 'row' },
+  wordsRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 20 },
+  word: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1.5 },
+  actions: { gap: 10 },
+  primaryBtn: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center' },
+  primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
+  appleBtn: { minHeight: 56, borderRadius: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  outlineBtn: { minHeight: 56, borderRadius: 100, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  socialLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '700' },
+  linksRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  linkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
+  linkStrong: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700' },
+  termsText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18, marginTop: 6 },
   termsLink: { fontWeight: '700' },
 });

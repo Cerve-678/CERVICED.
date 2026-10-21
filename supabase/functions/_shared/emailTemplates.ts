@@ -72,6 +72,13 @@
 
 import { escapeHtml as esc } from './escapeHtml.ts';
 
+// Every email is light only, whatever the reader's mail app is set to (user,
+// 2026-10-19). The two meta tags in each <head> cover Apple Mail and iOS Mail;
+// this CSS form is what some other clients read instead. Gmail's and
+// Outlook's apps can still force-darken a message regardless — nothing an
+// email sends can switch that off.
+const LIGHT_ONLY_CSS = ':root { color-scheme: light only; supported-color-schemes: light only; }';
+
 interface EmailPalette {
   bg: string;
   surface: string;
@@ -117,7 +124,7 @@ const DISPLAY = "'Bakbak One', 'Arial Black', Impact, sans-serif";
 const BODY = "'Jura', 'Trebuchet MS', Verdana, sans-serif";
 
 const FONT_LINK =
-  'https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;600;700&display=swap';
+  'https://fonts.googleapis.com/css2?family=Bakbak+One&family=Prata&family=Jura:wght@400;600;700&display=swap';
 
 const SUPPORT_ADDRESS = 'support@cerviced.co';
 
@@ -175,7 +182,7 @@ function letter(
           <p style="font-family:${BODY};color:${P.sub};font-size:12px;line-height:1.7;padding-top:14px;">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a></p>
           <p style="font-family:${BODY};color:${P.sub};font-size:11px;line-height:1.7;padding-top:10px;">You're receiving this because you have a CERVICED account.<br />&copy; CERVICED &middot; cerviced.co</p>`;
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -185,6 +192,7 @@ function letter(
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${P.bg}; font-family: ${BODY}; }
     a { color: ${P.accent}; }
   </style>
@@ -297,32 +305,6 @@ function stepsPanel(P: EmailPalette, label: string, items: string[]) {
         <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${rows}
         </table>`,
     18,
-  );
-}
-
-/**
- * The appointment. Date and time are the largest things in the panel because
- * they are the reason the email exists — the previous version buried them as
- * rows three and four of a five-row table in 14px, right-aligned.
- */
-function appointmentPanel(
-  P: EmailPalette,
-  a: { date: string; time: string; service: string; location: string },
-) {
-  const detail = (label: string, value: string) => `
-          <tr><td style="padding:13px 0 0;border-top:1px solid ${P.border};">
-            <div style="font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:2px;text-transform:uppercase;line-height:1.4;">${label}</div>
-            <div style="font-family:${BODY};color:${P.text};font-size:15px;line-height:1.6;padding:5px 0 13px;">${value}</div>
-          </td></tr>`;
-  return panel(
-    P,
-    'Your appointment',
-    `
-        <p style="font-family:${DISPLAY};color:${P.text};font-size:20px;letter-spacing:0.3px;line-height:1.3;">${a.date}</p>
-        <p style="font-family:${DISPLAY};color:${P.accent};font-size:30px;letter-spacing:0.5px;line-height:1.2;padding:4px 0 20px;">${a.time}</p>
-        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${detail('Service', a.service)}${detail('Where', a.location)}
-        </table>`,
-    8,
   );
 }
 
@@ -516,6 +498,185 @@ export function providerHatAddedEmail(params: { name: string; businessName?: str
   };
 }
 
+// ---------------------------------------------------------------------------
+// Link-only providers — professionals who take bookings on their own page
+// (Fresha, Treatwell, Acuity…) and use CERVICED to be found. They have no
+// services, prices or availability here, so the provider emails above, which
+// tell them to add exactly those, are wrong for them. Their go-live steps are
+// the four in buildLinkOnlyGoLiveSteps (src/features/providers/goLiveStatus.ts);
+// keep the wording of LINK_ONLY_GO_LIVE_STEPS in step with it.
+// ---------------------------------------------------------------------------
+
+export const LINK_ONLY_GO_LIVE_STEPS = [
+  'Add your logo',
+  'Write your About',
+  'Set your opening hours',
+  'Add portfolio photos',
+] as const;
+
+/** A new account that signed up to be found and booked through its own link. */
+export function linkOnlyWelcomeEmail(params: { name: string; businessName?: string }) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  return {
+    subject: `Welcome to CERVICED${display ? `, ${display}` : ''} — four steps to go live`,
+    html: letter(P, {
+      preview: 'Clients find you here and book on your own page. Four quick steps and your profile goes live.',
+      content:
+        eyebrow(P, 'Welcome to CERVICED') +
+        headline(P, `Welcome${display ? `, ${esc(display)}` : ''}`) +
+        lede(
+          P,
+          "Your account is set up. Clients will find you on CERVICED and tap Book to go straight to your own booking page, so you keep taking bookings exactly where you do now. Finish these four steps and your profile goes live.",
+        ) +
+        stepsPanel(P, 'Go live in four steps', [...LINK_ONLY_GO_LIVE_STEPS]) +
+        note(
+          P,
+          'Your profile goes live by itself the moment all four are done. Portfolio photos are what clients look at first, so add your best work.',
+        ) +
+        button(P, 'cerviced://provider/profile', 'Finish my profile') +
+        appHint(P),
+    }),
+  };
+}
+
+/** An existing client account adding a link-only provider hat. Leads with
+ *  how the two hats work, then what's new on the professional side — not the
+ *  welcome's go-live steps again. */
+export function linkOnlyHatAddedEmail(params: { name: string; businessName?: string }) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  return {
+    subject: `You're a professional on CERVICED now too${display ? `, ${display}` : ''}`,
+    html: letter(P, {
+      preview: 'Same login, two hats. Here is how they work, and what clients will see.',
+      content:
+        eyebrow(P, 'Both hats, one account') +
+        headline(P, "You're a professional now too") +
+        lede(
+          P,
+          `${first ? `Hi ${esc(first)} — your` : 'Your'} CERVICED account now has two hats on one login: the client side you already use, and a professional profile clients can find.`,
+        ) +
+        checklistPanel(P, 'How your two hats work', [
+          'Switch between them any time from your account screen',
+          'Your client side stays private: your bookings and saved providers are never shown to your clients',
+          'Clients only ever see your professional profile',
+        ]) +
+        checklistPanel(P, "What's new for you", [
+          'Clients find you by name, category, speciality and area',
+          'Book on your profile takes them straight to your own booking page',
+          'Clients who save you hear about your announcements',
+          'Analytics shows your Book taps, profile views and saves',
+        ]) +
+        note(
+          P,
+          'Your profile goes live once it has your logo, an About, your opening hours and at least one portfolio photo.',
+        ) +
+        button(P, 'cerviced://provider/profile', 'Finish my profile') +
+        appHint(P),
+    }),
+  };
+}
+
+/** A link-only pro adding the client hat. The general clientHatAddedEmail
+ *  tells them their "services and bookings are untouched", and a link-only
+ *  pro has neither here. */
+export function linkOnlyClientHatAddedEmail(params: { name: string }) {
+  const first = firstNameOf(params.name);
+  const P = CLIENT;
+  return {
+    subject: `You're a client now too${first ? `, ${first}` : ''} ✨`,
+    html: letter(P, {
+      preview: 'Same login, two hats. Here is how they work, and what you can do as a client.',
+      content:
+        eyebrow(P, 'Both hats, one account') +
+        headline(P, "You're a client now too") +
+        lede(
+          P,
+          `${first ? `Hi ${esc(first)} — your` : 'Your'} CERVICED account now has two hats on one login: your professional profile, exactly as you left it, and a client side for booking beauty professionals for yourself.`,
+        ) +
+        checklistPanel(P, 'How your two hats work', [
+          'Switch between them any time from your account screen',
+          'Your client side stays private: nothing you do as a client is shown to your own clients',
+          'Your professional profile, portfolio and booking link carry on as before',
+        ]) +
+        checklistPanel(P, "What's new for you", [
+          'Discover beauty professionals near you',
+          'Browse portfolios of real work',
+          'Book and manage your own appointments',
+          'Save your favourite providers',
+          'Booked a pro on their own page? Add it to Upcoming so everything stays in one place',
+        ]) +
+        button(P, 'cerviced://home', 'Start browsing') +
+        appHint(P),
+    }),
+  };
+}
+
+/** Sent once, when a link-only profile first goes live. */
+export function linkOnlyLiveEmail(params: { name: string; businessName?: string }) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  return {
+    subject: `You're live on CERVICED${display ? `, ${display}` : ''} 🎉`,
+    html: letter(P, {
+      preview: 'Clients can now find you on CERVICED and tap Book to reach your booking page.',
+      content:
+        eyebrow(P, "You're live") +
+        headline(P, `${display ? `${esc(display)} is` : "You're"} live`) +
+        lede(
+          P,
+          'Your profile is now on CERVICED. Clients can find you by name, category, speciality and area, see your portfolio in Explore, and tap Book to go straight to your own booking page.',
+        ) +
+        checklistPanel(P, 'What happens now', [
+          'Clients who book through your link do it on your page, as they always have',
+          'Clients who save you hear about your announcements',
+          'Your Analytics shows Book taps, profile views and saves',
+        ]) +
+        note(
+          P,
+          'Keep your portfolio fresh — new photos also appear in Explore, which is where most clients discover someone new.',
+        ) +
+        button(P, 'cerviced://provider/profile', 'See my profile') +
+        appHint(P),
+    }),
+  };
+}
+
+/** A nudge for a link-only account that signed up but hasn't gone live yet.
+ *  `remaining` is the go-live steps still not done, in LINK_ONLY_GO_LIVE_STEPS
+ *  wording; the caller works them out from the account. */
+export function linkOnlyGoLiveReminderEmail(params: {
+  name: string;
+  businessName?: string;
+  remaining: string[];
+}) {
+  const first = firstNameOf(params.name);
+  const display = params.businessName || first;
+  const P = PROVIDER;
+  const count = params.remaining.length;
+  const left = count === 1 ? 'one step' : `${count} steps`;
+  return {
+    subject: `You're ${left} from going live on CERVICED`,
+    html: letter(P, {
+      preview: `Finish ${left} and clients can find you and book on your own page.`,
+      content:
+        eyebrow(P, 'Almost there') +
+        headline(P, `${display ? `${esc(display)}, you're` : "You're"} nearly live`) +
+        lede(
+          P,
+          `Your profile isn't showing to clients yet. Finish ${left} and it goes live by itself, so clients can find you and tap Book to go straight to your booking page.`,
+        ) +
+        stepsPanel(P, 'Still to do', params.remaining.map(esc)) +
+        button(P, 'cerviced://provider/profile', 'Finish my profile') +
+        appHint(P),
+    }),
+  };
+}
+
 // Account-level rather than hat-specific — it can reach either hat, so it uses
 // the app's base theme (the provider/shared palette) rather than picking one.
 export function passwordChangedEmail(params: { name: string }) {
@@ -572,46 +733,252 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
   };
 }
 
-export function bookingConfirmationEmail(params: {
-  clientName: string;
+// ---------------------------------------------------------------------------
+// Booking confirmation — the receipt letterhead
+// ---------------------------------------------------------------------------
+// Deliberately NOT the shared letter() shell. The booking confirmation mirrors
+// the shareable receipt PDF (src/features/bookings/receipt.ts) so the email and
+// the receipt read as the same document: a tinted masthead with the CVD mark,
+// the service in caps, the provider in Prata, then the reference and address,
+// the itemised services and total, and the payment box. Keep the two in step.
+//
+// Money wording follows the app's calculateBookingPaymentBreakdown: paid state
+// comes from payment_status, never payment_type (a hand-added booking is
+// payment_type 'full' with nothing paid), and a deposit is the provider's own
+// figure, never deposit + platform fee.
+
+/** The CVD mark alone, transparent, in client plum. */
+const BRAND_MARK_PLUM = `${BRAND_ASSETS}/cerviced-mark-plum.png`;
+
+const PRATA = "'Prata', Didot, Georgia, serif";
+
+const gbp = (amount: number) => `£${Math.max(0, amount).toFixed(2)}`;
+
+export interface BookingConfirmationParams {
   providerName: string;
   service: string;
   date: string;
   time: string;
   location: string;
-}) {
+  reference: string;
+  basePrice: number;
+  addOns: Array<{ name: string; price: number }>;
+  serviceCharge: number;
+  depositAmount: number;
+  amountPaid: number;
+  paymentType: string;
+  paymentStatus: string;
+}
+
+export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const P = CLIENT;
-  // Subject and preheader are plain text; everything below them is HTML.
+  const tint = P.bg;
+  const hair = '#EEE7EC'; // rgba(74,35,64,0.08) flattened onto white
+  const pillFill = '#EDE5EB'; // rgba(74,35,64,0.10) flattened onto the tint
+  const second = '#4A6B8F'; // clientLightTheme.secondaryText
+
+  const addOnsTotal = params.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+  const total = params.basePrice + addOnsTotal + params.serviceCharge;
+  const isDeposit = params.paymentType === 'deposit';
+  const isPaidInFull = params.paymentStatus === 'paid_in_full';
+  const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
+  const paidAmount = isUnpaid ? 0 : isDeposit ? params.depositAmount : params.amountPaid;
+  const remaining = Math.max(0, total - (isUnpaid ? 0 : params.amountPaid));
+
+  const state = isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
+  const paidLabel = isUnpaid ? 'Total paid' : isDeposit ? 'Deposit paid to provider' : 'Paid today';
+
+  const label = (text: string, colour = P.sub) =>
+    `<span style="font-family:${DISPLAY};font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:${colour};">${text}</span>`;
+
+  const line = (name: string, amount: number, muted: boolean) => `
+              <tr>
+                <td style="font-family:${BODY};font-size:15px;font-weight:${muted ? 600 : 700};color:${muted ? P.sub : P.text};padding:8px 0;">${esc(name)}</td>
+                <td align="right" style="font-family:${BODY};font-size:15px;font-weight:700;color:${muted ? P.sub : P.text};padding:8px 0;white-space:nowrap;">${gbp(amount)}</td>
+              </tr>`;
+
+  const payRow = (name: string, amount: number, strong: boolean) => `
+              <tr>
+                <td style="font-family:${BODY};font-size:14.5px;font-weight:${strong ? 700 : 600};color:${strong ? P.text : P.sub};padding-top:9px;">${name}</td>
+                <td align="right" style="font-family:${BODY};font-size:14.5px;font-weight:700;color:${strong ? P.accent : P.text};padding-top:9px;white-space:nowrap;">${gbp(amount)}</td>
+              </tr>`;
+
+  const lines =
+    line(params.service, params.basePrice, false) +
+    params.addOns.map(a => line(`+ ${a.name}`, Number(a.price) || 0, true)).join('') +
+    (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
+
+  const payRows =
+    payRow(paidLabel, paidAmount, remaining <= 0) +
+    (remaining > 0 ? payRow('Due to provider at appointment', remaining, true) : '');
+
   const e = {
-    clientName: esc(params.clientName),
     providerName: esc(params.providerName),
     service: esc(params.service),
     date: esc(params.date),
     time: esc(params.time),
     location: esc(params.location),
+    reference: esc(params.reference),
   };
+
+  const html = `<!DOCTYPE html>
+<html lang="en" style="color-scheme:light only;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <link href="${FONT_LINK}" rel="stylesheet" />
+  <style>
+    @import url('${FONT_LINK}');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
+    body { background-color: ${P.surface}; font-family: ${BODY}; }
+    a { color: ${P.accent}; }
+  </style>
+</head>
+<body style="background:${P.surface};margin:0;padding:0;font-family:${BODY};">${preheader(`${e.date} at ${e.time} · ${e.reference}`)}
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:${P.surface};">
+    <tr><td align="center" style="padding:28px 12px 40px;">
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:600px;background:${P.card};border-radius:16px;">
+
+        <!-- Masthead: the receipt's tinted panel -->
+        <tr><td align="center" bgcolor="${tint}" style="background:${tint};border-radius:16px 16px 0 0;padding:42px 26px 32px;border-bottom:4px solid ${P.accent};">
+          <img src="${BRAND_MARK_PLUM}" alt="CERVICED" width="96" height="48" style="display:block;width:96px;height:48px;margin:0 auto;border:0;" />
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:12px auto 0;">
+            <tr><td bgcolor="${pillFill}" style="background:${pillFill};border-radius:100px;padding:5px 14px;">${label('Booking confirmed', P.accent)}</td></tr>
+          </table>
+          <h1 style="font-family:${DISPLAY};font-weight:400;font-size:27px;line-height:1.15;letter-spacing:0.5px;text-transform:uppercase;color:${P.text};padding-top:26px;">${e.service}</h1>
+          <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.sub};padding-top:10px;">with <span style="font-family:${PRATA};font-weight:400;font-size:19px;color:${P.text};">${e.providerName}</span></p>
+          <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.sub};padding-top:2px;">${e.date} &middot; ${e.time}</p>
+        </td></tr>
+        <tr><td style="font-size:0;line-height:0;">
+          <table role="presentation" width="36%" align="right" border="0" cellpadding="0" cellspacing="0"><tr><td bgcolor="${second}" style="background:${second};height:4px;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+        </td></tr>
+
+        <tr><td align="center" style="padding:30px 24px 40px;">
+          <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:470px;">
+
+            <!-- Reference and address -->
+            <tr><td style="border-bottom:1px solid ${hair};padding-bottom:16px;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="38%" align="center" valign="top" style="padding:0 10px;">${label('Reference')}
+                    <p style="font-family:${BODY};font-size:14px;font-weight:700;color:${P.text};padding-top:4px;">${e.reference}</p></td>
+                  <td width="62%" align="center" valign="top" style="padding:0 10px;border-left:1px solid ${hair};">${label('Where')}
+                    <p style="font-family:${BODY};font-size:14px;font-weight:700;color:${P.text};padding-top:4px;">${e.location}</p></td>
+                </tr>
+              </table>
+            </td></tr>
+
+            <!-- Services and total -->
+            <tr><td style="padding-top:26px;">
+              ${label('Services', P.accent)}
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-top:4px;">${lines}
+                <tr><td colspan="2" style="border-top:1px solid ${hair};font-size:0;line-height:0;padding-top:6px;">&nbsp;</td></tr>
+                <tr>
+                  <td style="padding-top:6px;">${label('Total')}</td>
+                  <td align="right" style="font-family:${DISPLAY};font-size:28px;line-height:1;color:${P.accent};padding-top:6px;white-space:nowrap;">${gbp(total)}</td>
+                </tr>
+              </table>
+            </td></tr>
+
+            <!-- Payment -->
+            <tr><td style="padding-top:24px;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="${tint}" style="background:${tint};border-radius:14px;">
+                <tr><td style="padding:16px 20px 18px;">
+                  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="border-bottom:1px solid ${hair};padding-bottom:10px;">${label('Payment')}</td>
+                      <td align="right" style="border-bottom:1px solid ${hair};padding-bottom:10px;white-space:nowrap;">${label(`&#9679;&nbsp;${state}`, P.accent)}</td>
+                    </tr>${payRows}
+                  </table>
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <!-- One action -->
+            <tr><td align="center" style="padding-top:30px;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                <tr><td align="center" bgcolor="${P.accent}" style="background:${P.accent};border-radius:14px;">
+                  <a href="cerviced://home" style="display:inline-block;color:${P.onAccent};font-family:${DISPLAY};font-size:14px;letter-spacing:1.6px;text-transform:uppercase;text-decoration:none;padding:15px 64px;">View booking</a>
+                </td></tr>
+              </table>
+            </td></tr>
+
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td align="center" style="padding:0 24px 34px;">
+          <p style="font-family:${DISPLAY};font-size:16px;letter-spacing:6px;color:${P.accent};">CERVICED</p>
+          <p style="font-family:${BODY};font-size:11.5px;font-weight:600;color:${P.sub};line-height:1.7;padding-top:8px;">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};">${SUPPORT_ADDRESS}</a></p>
+          <p style="font-family:${BODY};font-size:11.5px;font-weight:600;color:${P.sub};line-height:1.7;">You're receiving this because you have a CERVICED account.</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
   return {
+    // Plain text — the template escapes only what lands in HTML.
     subject: `Booking confirmed — ${params.service} with ${params.providerName}`,
+    html,
+  };
+}
+
+/**
+ * A client asked for a refund — to the provider, who is the one who can
+ * issue it. Carries the client's picked reason but NOT their free-text note:
+ * that can hold anything (health details included), so it stays behind the
+ * app's sign-in rather than sitting in an inbox.
+ */
+export function refundRequestedProviderEmail(params: {
+  clientName: string;
+  service: string;
+  date: string;
+  time: string;
+  reason: string;
+}) {
+  const P = PROVIDER;
+  const e = {
+    clientName: esc(params.clientName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+    reason: esc(params.reason),
+  };
+  const detail = (label: string, value: string, first = false) => `
+          <tr><td style="padding:${first ? '0' : '13px'} 0 0;${first ? '' : `border-top:1px solid ${P.border};`}">
+            <div style="font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:2px;text-transform:uppercase;line-height:1.4;">${label}</div>
+            <div style="font-family:${BODY};color:${P.text};font-size:15px;line-height:1.6;padding:5px 0 13px;">${value}</div>
+          </td></tr>`;
+  return {
+    subject: `Refund requested — ${params.service} with ${params.clientName}`,
     html: letter(P, {
-      preview: `${e.service} with ${e.providerName} — ${e.date} at ${e.time}.`,
+      preview: `${e.clientName} has asked for a refund on ${e.service} (${e.date}).`,
       content:
-        eyebrow(P, 'Booking confirmed') +
-        headline(P, `You're booked in with ${e.providerName}`) +
+        eyebrow(P, 'Refund requested') +
+        headline(P, `${e.clientName} has asked for a refund`) +
         lede(
           P,
-          `Hi ${e.clientName} — that's all confirmed. Here's everything you need for your appointment.`,
+          'Open the booking in the CERVICED app to read their note, then either refund it or pass it to Cerviced to review.',
         ) +
-        appointmentPanel(P, {
-          date: e.date,
-          time: e.time,
-          service: e.service,
-          location: e.location,
-        }) +
+        panel(
+          P,
+          'The booking',
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${detail('Reason', e.reason, true)}${detail('Service', e.service)}${detail('When', `${e.date} &middot; ${e.time}`)}
+        </table>`,
+          8,
+        ) +
         note(
           P,
-          'Need to cancel or reschedule? Open the CERVICED app — your provider is notified either way.',
+          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy.",
         ) +
-        button(P, 'cerviced://home', 'View booking') +
+        button(P, 'cerviced://home', 'Open CERVICED') +
         appHint(P),
     }),
   };
@@ -819,7 +1186,7 @@ export function generalWelcomeEmail(params: {
   return {
     subject: 'Welcome to CERVICED — beauty at your fingertips',
     html: `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light only;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -829,6 +1196,7 @@ export function generalWelcomeEmail(params: {
   <style>
     @import url('${FONT_LINK}');
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
     body { background-color: ${BRAND.ink}; font-family: ${BODY}; }
   </style>
 </head>
@@ -899,5 +1267,50 @@ export function generalWelcomeEmail(params: {
   </table>
 </body>
 </html>`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fee payment request — the saved card couldn't be charged
+// ---------------------------------------------------------------------------
+// Sent when a provider's late-arrival or no-show fee was declined by the
+// client's bank, or the bank wants the client to approve it. The button goes
+// to Stripe's own page for the fee's invoice; the same fee can also be paid
+// from the booking in the app, and it can only be paid once.
+export function feePaymentRequestEmail(params: {
+  name?: string;
+  amount: string;
+  feeLabel: string;
+  providerName: string;
+  service: string;
+  payBy: string;
+  payUrl: string;
+  /** The saved card will be tried again automatically. */
+  willRetry?: boolean;
+}) {
+  const first = firstNameOf(params.name);
+  const P = CLIENT;
+  const e = {
+    amount: esc(params.amount),
+    feeLabel: esc(params.feeLabel),
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    payBy: esc(params.payBy),
+  };
+  return {
+    subject: `Please pay your ${params.amount} ${params.feeLabel} to ${params.providerName}`,
+    html: letter(P, {
+      preview: `${e.providerName} couldn't take the ${e.feeLabel} from your saved card. Pay it by ${e.payBy}.`,
+      content:
+        eyebrow(P, 'Fee to pay') +
+        headline(P, `${first ? `${esc(first)}, your` : 'Your'} ${e.amount} ${e.feeLabel}`) +
+        lede(
+          P,
+          `${e.providerName} tried to charge the ${e.feeLabel} you agreed to when you booked ${e.service}, but your bank declined it or needs you to approve it. Nothing has been taken.`,
+        ) +
+        note(P, `Please pay it by ${e.payBy}. You can pay below, or from the booking in the CERVICED app.${params.willRetry ? ' We may also try your saved card again up to three times before then; you will only ever pay the fee once.' : ''} If you think the fee is wrong, contact ${e.providerName} in the app.`) +
+        button(P, esc(params.payUrl), `Pay ${e.amount}`) +
+        appHint(P),
+    }),
   };
 }

@@ -28,7 +28,9 @@ export const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style,
 ProviderCard.displayName = 'ProviderCard';
 
 const styles = StyleSheet.create({
-  providerImage: { position: 'absolute', width: '100%', height: '100%', borderRadius: 16 },
+  // The parent card owns the clipping radius (12 for compact, 16 for large).
+  // Giving every image a 16px radius left uncovered corners on compact cards.
+  providerImage: { position: 'absolute', width: '100%', height: '100%' },
   placeholderCard: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   placeholderText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textAlign: 'center' },
   providerCardName: { fontSize: 12, fontWeight: '600', marginTop: 5, letterSpacing: 0.1 },

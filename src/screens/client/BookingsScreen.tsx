@@ -20,7 +20,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -33,23 +33,30 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
+import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
 import type { GroupedListItem } from '../../features/bookings/presentationTypes';
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
+import { ExternalBookingCard } from '../../features/bookings/ExternalBookingCard';
+import { externalBookingStart, splitExternalBookings } from '../../features/bookings/externalBookings';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { useAppDialog } from '../../components/AppDialog';
 import { getRescheduleBlock, getStaleRequestBlock, type OpenRequestStatus } from '../../utils/rescheduleBlockedReason';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+
+const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 // ==================== TYPES ====================
 
@@ -58,7 +65,9 @@ type BookingsListRow =
   | GroupedListItem
   | { kind: 'past-booking'; booking: ConfirmedBooking }
   | { kind: 'waitlist-header' }
-  | { kind: 'waitlist'; entry: WaitlistEntry };
+  | { kind: 'waitlist'; entry: WaitlistEntry }
+  | { kind: 'external-header' }
+  | { kind: 'external'; entry: ClientExternalBookingWithProvider };
 
 const IN_PROGRESS_PURPLE = '#7B2FBE';
 
@@ -233,6 +242,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   );
   const { user } = useAuth();
   const { addToCart } = useCart();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const {
     upcomingBookings,
@@ -326,6 +336,26 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // at one; see the route-params effect below.
   const [waitlistHold, setWaitlistHold] = useState<RawBooking | null>(null);
   const [waitlistHoldBusy, setWaitlistHoldBusy] = useState(false);
+
+  // "Booked elsewhere" entries — the client's own notes of bookings made on a
+  // link-only provider's page. Reloaded on focus, since they're added from a
+  // provider's profile in another stack.
+  // Stamped with the time they loaded, so upcoming/past is decided once per
+  // load rather than by reading the clock during render.
+  const [externalBookings, setExternalBookings] = useState<{ rows: ClientExternalBookingWithProvider[]; loadedAt: number }>({ rows: [], loadedAt: 0 });
+  useFocusEffect(useCallback(() => {
+    if (!user?.id) return;
+    let active = true;
+    getMyExternalBookings()
+      .then(rows => { if (active) setExternalBookings({ rows, loadedAt: Date.now() }); })
+      .catch((error: unknown) => logger.warn('[Bookings] booked-elsewhere entries failed to load', error));
+    return () => { active = false; };
+  }, [user?.id]));
+  const externalSplit = useMemo(() => {
+    const { upcoming, past } = splitExternalBookings(externalBookings.rows, new Date(externalBookings.loadedAt));
+    const cutoff = externalBookings.loadedAt - PAST_BOOKINGS_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
+    return { upcoming, past: past.filter(entry => externalBookingStart(entry).getTime() >= cutoff) };
+  }, [externalBookings]);
 
   // Load waitlist entries for this user
   useEffect(() => {
@@ -423,6 +453,27 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Track rated bookings and tips
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [tippedBookings, setTippedBookings] = useState<Set<string>>(new Set());
+
+  const bookingIdsForReviewState = useMemo(
+    () => [...new Set([...todayBookings, ...upcomingBookings, ...pastBookings].map(booking => booking.id))],
+    [todayBookings, upcomingBookings, pastBookings],
+  );
+
+  // Keep the list buttons truthful after remounting or coming back from a
+  // booking detail screen. This is one batched read, not a request per card.
+  useEffect(() => {
+    let active = true;
+    getBookingReviewStates(bookingIdsForReviewState)
+      .then(states => {
+        if (!active) return;
+        setRatedBookings(new Set(states.map(state => state.bookingId)));
+        setTippedBookings(new Set(
+          states.filter(state => (state.tipAmount ?? 0) > 0).map(state => state.bookingId),
+        ));
+      })
+      .catch(error => logger.warn('[Bookings] review state failed to load', error));
+    return () => { active = false; };
+  }, [bookingIdsForReviewState]);
 
   // ✅ Track highlighted booking (from notification navigation) and recently added bookings
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
@@ -678,19 +729,20 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       const providerId = selectedBooking.providerId
         ?? await getProviderIdByDisplayName(selectedBooking.providerName);
 
-      if (providerId) {
-        // Check not already reviewed
-        const alreadyReviewed = await hasReviewedBooking(selectedBooking.id);
-        if (!alreadyReviewed) {
-          await submitReview({
-            booking_id: selectedBooking.id,
-            provider_id: providerId,
-            service_id: null,
-            user_id: user.id,
-            rating,
-            ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
-          });
-        }
+      if (!providerId) {
+        throw new Error('Provider record is unavailable');
+      }
+      // Check not already reviewed
+      const alreadyReviewed = await hasReviewedBooking(selectedBooking.id);
+      if (!alreadyReviewed) {
+        await submitReview({
+          booking_id: selectedBooking.id,
+          provider_id: providerId,
+          service_id: null,
+          user_id: user.id,
+          rating,
+          ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
+        });
       }
 
       // Mark as rated in local state
@@ -713,11 +765,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [selectedBooking, rating, reviewText, user]);
 
-  // Tips are stored on the booking's review row (reviews.tip_amount), which
-  // requires a review to exist first — setBookingTip returns false rather
-  // than silently dropping the tip when there's nothing to attach it to.
-  // This previously only set local component state (tippedBookings), so the
-  // tip was discarded on unmount and the provider never saw it.
+  // A tip is a distinct Stripe payment, not a number attached to a review.
   const handleTipSubmit = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedBooking || tipAmount <= 0) {
@@ -727,16 +775,23 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     setIsLoading(true);
     try {
-      const attached = await setBookingTip(selectedBooking.id, tipAmount);
-      if (!attached) {
-        setIsLoading(false);
-        Alert.alert('Rate First', 'Tips are added to your review, so please rate this appointment before leaving a tip.');
-        return;
+      const sheet = await startBookingTipPayment(selectedBooking.id, Math.round(tipAmount * 100));
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Cerviced', returnURL: 'cerviced://stripe-redirect',
+        customerId: sheet.customerId, customerEphemeralKeySecret: sheet.ephemeralKeySecret,
+        paymentIntentClientSecret: sheet.clientSecret, appearance: buildPaymentSheetAppearance(P, P.text),
+      });
+      if (initError) throw new Error(initError.message || 'Could not open tip payment.');
+      const { error: paymentError } = await presentPaymentSheet();
+      if (paymentError) {
+        if (paymentError.code === 'Canceled') return;
+        throw new Error(paymentError.message || 'Your tip did not go through.');
       }
+      await confirmBookingTipPayment(sheet.tipId);
 
       setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
       setShowTipModal(false);
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been added to your review for ${selectedBooking.providerName}.`);
+      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been paid to ${selectedBooking.providerName}.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -746,7 +801,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBooking, tipAmount]);
+  }, [selectedBooking, tipAmount, initPaymentSheet, presentPaymentSheet, P]);
 
   const retryLoadBookings = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -791,6 +846,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [currentBooking]);
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     setBookingsError(null);
 
@@ -1189,17 +1246,27 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const virtualizedListRows = useMemo((): BookingsListRow[] => {
     let rows: BookingsListRow[] = [];
-    if (activeFilters.has('past')) {
+    const isPast = activeFilters.has('past');
+    if (isPast) {
       rows = pastBookingsFiltered.map(booking => ({ kind: 'past-booking' as const, booking }));
     } else if (isFilterView) {
       rows = [...listItems];
+    }
+    // Past keeps its category filter honest: booked-elsewhere entries carry
+    // free text, not a category, so they only join the unfiltered list.
+    const externalRows = isPast
+      ? (pastCategoryFilter ? [] : externalSplit.past)
+      : isFilterView ? externalSplit.upcoming : [];
+    if (externalRows.length > 0) {
+      rows.push({ kind: 'external-header' });
+      rows.push(...externalRows.map(entry => ({ kind: 'external' as const, entry })));
     }
     if (waitlistEntries.length > 0) {
       rows.push({ kind: 'waitlist-header' });
       rows.push(...waitlistEntries.map(entry => ({ kind: 'waitlist' as const, entry })));
     }
     return rows;
-  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries]);
+  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries, externalSplit, pastCategoryFilter]);
 
   // The notification-driven scroll above fires on a timer, after the filter
   // switch has re-rendered this list, so it needs the rows as they are at that
@@ -1267,10 +1334,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         onPress={handleBookingPress}
         isHighlighted={highlightedBookingId === booking.id}
         isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
-        actionCount={bookingActionItems[booking.id] ?? 0}
       />
     </View>
-  ), [handleBookingPress, highlightedBookingId, recentlyAddedBookings, bookingActionItems, styles.pastBookingRowWrap]);
+  ), [handleBookingPress, highlightedBookingId, recentlyAddedBookings, styles.pastBookingRowWrap]);
 
   const handleBookWaitlistEntry = useCallback((entry: WaitlistEntry) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1284,8 +1350,22 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }).catch(() => {});
   }, []);
 
+  const handleExternalBookingPress = useCallback((entry: ClientExternalBookingWithProvider) => {
+    navigation.navigate('ExternalBookingDetail', { externalBookingId: entry.id });
+  }, [navigation]);
+
   const renderBookingsListRow = useCallback(({ item }: { item: BookingsListRow }) => {
     if (item.kind === 'category') return renderServiceCategoryRow({ item });
+    if (item.kind === 'external-header') {
+      return (
+        <View style={{ paddingHorizontal: 16 }}>
+          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>BOOKED ELSEWHERE</Text>
+        </View>
+      );
+    }
+    if (item.kind === 'external') {
+      return <ExternalBookingCard entry={item.entry} onPress={handleExternalBookingPress} />;
+    }
     if (item.kind === 'past-booking') return renderPastBookingRow({ item: item.booking });
     if (item.kind === 'waitlist-header') {
       return (
@@ -1301,12 +1381,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         onLeave={handleLeaveWaitlistEntry}
       />
     );
-  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
+  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, handleExternalBookingPress, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
 
   const bookingListKeyExtractor = useCallback((item: BookingsListRow) => {
     if (item.kind === 'category') return `category-${item.serviceType}`;
     if (item.kind === 'past-booking') return `past-${item.booking.id}`;
     if (item.kind === 'waitlist-header') return 'waitlist-header';
+    if (item.kind === 'external-header') return 'external-header';
+    if (item.kind === 'external') return `external-${item.entry.id}`;
     return `waitlist-${item.entry.id}`;
   }, []);
 
@@ -1928,7 +2010,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     )}
                   </View>
                 )}
-                {(activeFilters.has('past') ? pastBookingsFiltered.length === 0 : listItems.length === 0) ? (
+                {(activeFilters.has('past')
+                  ? pastBookingsFiltered.length === 0 && (pastCategoryFilter || externalSplit.past.length === 0)
+                  : listItems.length === 0 && externalSplit.upcoming.length === 0) ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>
                       {activeFilters.has('past')

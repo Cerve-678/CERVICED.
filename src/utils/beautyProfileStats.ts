@@ -46,18 +46,8 @@ export interface BeautyProfileStats {
   categoriesStarted: number;
   /** Always 9 — surfaced so the view never hardcodes a denominator. */
   categoriesTotal: number;
-  /** Every individual value chosen across the whole profile. */
-  totalSelections: number;
   /** Per-category stats, keyed for direct lookup. */
   byCategory: Record<CategoryKey, CategoryStats>;
-  /** Per-category stats in display order. */
-  ordered: CategoryStats[];
-  /** Highest-percentage category that has been started; null when none have. */
-  mostComplete: CategoryStats | null;
-  /** Lowest-percentage category; null only when there are no categories. */
-  leastComplete: CategoryStats | null;
-  /** Categories with nothing set at all. */
-  untouchedCount: number;
   /** True when the profile holds no data whatsoever — drives the empty state. */
   isEmpty: boolean;
 }
@@ -182,26 +172,11 @@ export function computeBeautyProfileStats(data: BeautyData): BeautyProfileStats 
 
   const startedCategories = scored.filter(c => c.started);
 
-  // "Most complete" is only meaningful among categories with data; ranking
-  // untouched categories against each other would surface an arbitrary winner.
-  const mostComplete = startedCategories.length > 0
-    ? startedCategories.reduce((best, c) => (c.percent > best.percent ? c : best))
-    : null;
-
-  const leastComplete = scored.length > 0
-    ? scored.reduce((worst, c) => (c.percent < worst.percent ? c : worst))
-    : null;
-
   return {
     overallPercent,
     categoriesStarted: startedCategories.length,
     categoriesTotal: scored.length,
-    totalSelections: scored.reduce((sum, c) => sum + c.selections, 0),
     byCategory,
-    ordered,
-    mostComplete,
-    leastComplete,
-    untouchedCount: scored.filter(c => !c.started).length,
     isEmpty: startedCategories.length === 0,
   };
 }

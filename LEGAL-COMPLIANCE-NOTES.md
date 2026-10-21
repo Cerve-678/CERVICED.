@@ -341,8 +341,9 @@ support links point at it. The legal copy does not:
   `privacy@cerviced.app` twice: once as the address to request the list of
   third-party processors, once as the address for access/correction/erasure
   requests and data exports.
-- `src/screens/shared/TermsScreen.tsx:54` — the Terms name
-  `legal@cerviced.app` for questions about the terms.
+- ~~`src/screens/shared/TermsScreen.tsx:54` — the Terms name
+  `legal@cerviced.app` for questions about the terms.~~ Fixed 2026-10-19: the
+  Terms now say support@cerviced.co (§19). The Privacy Policy is still open.
 
 `cerviced.app` is not a domain this project controls; the real one is
 `cerviced.co`. So both addresses are unreachable. This was left as-is
@@ -448,3 +449,171 @@ they are re-enable blockers.
 
 **Not changed unilaterally** — consent design and Terms wording are product/legal
 calls. Flagging for the re-enable checklist, not resolving.
+
+## 16. Link-only providers: off-platform bookings and a planned subscription (2026-10-10)
+
+See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
+
+1. **Off-platform booking.** Tapping Book sends a client to the provider's own
+   booking site (opened inside the app). The booking, payment, cancellation and
+   data handling all happen under that site's terms, not ours. Covered in
+   `TermsScreen` clause 12 since 2026-10-19 (§19).
+2. **Client-entered "booked elsewhere" entries.** The client's Upcoming list
+   will hold appointments CERVICED never saw. The copy is deliberately framed as
+   the client's own note ("we just keep track of them") — keep it that way so
+   the app never appears to confirm or vouch for an external booking (same
+   boundary as item 4).
+3. **Planned £5.99/month subscription with a free trial** (calendar sync +
+   in-app messages). Free for now; before it is switched on it needs Terms
+   wording for price, trial length, auto-renewal, cancellation and refunds, and
+   the App Store / Play billing rules for in-app subscriptions.
+
+**Not changed unilaterally** — flagged for the product owner.
+
+## 17. Late arrival and no-show fees charged after the appointment (2026-10-18)
+
+Branch `feat/late-no-show-fees`. Providers can charge a client's saved card a
+fixed late or no-show fee within 24 hours of the appointment, capped at half
+the booking price; the client ticks a box at checkout. Drafted at the user's
+direction and **not lawyer-reviewed**:
+
+- Terms §6 "Late Arrival & No-Show Fees" and the checkout tick-box line, both
+  from `src/constants/feeTerms.ts`; a Privacy Policy paragraph on saved cards
+  being used for agreed fees (AboutScreen).
+- Things to raise: whether a 50% cap is proportionate under the Consumer Rights
+  Act 2015 unfair-terms test; whether the tick box is a sufficient mandate for
+  merchant-initiated (off-session) charges under SCA; provider terms must say a
+  bank chargeback is taken back from the provider's payout (the webhook now does
+  this for booking payments and fees); the client fee disputes go to the
+  provider, never to Cerviced, so the Terms say Cerviced doesn't decide them.
+- **Consent record (2026-10-19, branch `feat/saved-cards-fee-consent-record`,
+  not live):** at the user's direction each agreement is now a
+  `fee_consent_records` row: client, database time, checkout, wording version
+  (full text kept in `fee_terms_versions`, matched by sha256), frozen fee
+  amounts per provider, app platform/version. Each fee charge names its record.
+  User decision 2026-10-19: records are kept **six years, including after the
+  client deletes their account**, and the Privacy Policy now says so. Nothing
+  purges them after six years yet. There's still no flow asking the client to
+  approve a fee their bank sends back for authentication (SCA); such a fee
+  simply fails (the user is deciding how this should work).
+- **Wording brought in 2026-10-19 at the user's direction** (from
+  feat/combined-saved-cards-fees, not lawyer-reviewed): a longer checkout
+  tick-box line (fee terms version '2026-10-19'), Terms §4 "Cancellations &
+  Refunds", Terms §5 "Deposits & Remaining Balances", and the Privacy Policy
+  "Payments and saved cards" paragraph. **Raise:** the new §5 says a provider's
+  policy will say whether an unpaid balance is "payable in person or in the
+  app". That reads as if the app might collect remaining balances, which
+  contradicts the product's standing liability boundary (CERVICED never collects,
+  tracks or attests to off-app balances — CLAUDE.md, Security). No in-app
+  balance payment exists, so the clause promises something that isn't built.
+- **Automatic retries (2026-10-19, user-directed, branch `feat/fee-auto-retry`):**
+  a declined fee may be retried on the saved card up to three times within 7
+  days, and the client is asked to pay it in the app or by a Stripe email link.
+  The fee wording (version '2026-10-19-retries'), Terms §4, the Privacy
+  paragraph and the provider Policies text now say so. Only agreements made on
+  that wording are retried. Raise: whether repeated merchant-initiated retries
+  of a consumer's card fit card-scheme retry rules and the CMA's unfair-terms
+  guidance on default charges; the retry count and spacing are a product call.
+  Hard declines (lost/stolen/fraud/closed/stop-payment) are never retried, and
+  the client is notified after every retry, paid or not. Still open: a client
+  can't withdraw consent to retries other than by paying (the card can't be
+  removed while retries are pending); and deleting an account during a pending
+  request doesn't cancel it — decide whether deletion should void the
+  invoice and stop retries.
+- A client can't remove a saved card while a booking paid with it is still
+  inside its 24-hour fee window (user decision 2026-10-19); the app says when
+  they can.
+
+**Not changed unilaterally** — flagged for the product owner and a lawyer.
+
+---
+
+## 18. Beauty Maintenance learns each client's rebooking habit (2026-10-19)
+
+**What it is:** when a booking completes, the server works out how often that
+client's own completed bookings of the same kind were. It takes the median gap
+over their last 3–6 visits, ignoring gaps under a week, and stores it on the
+reminder (`maintenance_items.learned_days`, `learned_from`). If the client
+hasn't set an interval and the provider hasn't recommended one, the reminder
+repeats on that habit. The card says "Your last N bookings were about X weeks
+apart". It is owner-only, never readable by a provider, and deleted with the
+reminder and the account.
+
+**User decisions (2026-10-19):** the provider's recommendation outranks the
+learned habit. Aesthetics types (facials, waxing) learn too. Build now, and
+cover it in the Privacy Policy before launch.
+
+**Gaps to raise (not resolved):**
+- **Privacy Policy (§1).** This is a stored inference about the person
+  ("profiling" in UK GDPR terms, low-risk because it has no legal or similarly
+  significant effect). No policy text covers "we work out your usual cadence
+  from your bookings" yet.
+- **Retention.** The learned value stays on the reminder until the next
+  completed booking refreshes it, even if older bookings are later deleted.
+  There's no separate retention rule.
+- **"Completed" isn't attendance (§12).** Bookings auto-complete, so the basis
+  can include visits that didn't happen. The wording describes past bookings,
+  never the client.
+- **Aesthetics.** A learned cadence for facials or waxing is close to the
+  clinical judgement the app said it wouldn't make (the header of
+  `maintenanceServiceTypes.ts`). Injectables can't become reminders, because
+  Aesthetics has no catch-all type (pinned by
+  `src/tests/maintenanceLearnedIntervals.test.ts`).
+- **Push consent (§8).** Snooze moves the date a week. The reminder fires
+  again only for clients who opted in, through the same gate as before.
+
+
+---
+
+## 19. Terms & Conditions rewritten to match the live app (2026-10-19)
+
+`TermsScreen.tsx` went from 11 sections to 38, at the product owner's
+direction. It now covers the service fee (refunded only on a full refund),
+automatic cancellation refunds and the refund-request route, provider payouts
+and chargeback recovery, link-only (off-platform) bookings, health
+information, Becca, loyalty points, promo codes, reviews and content rules,
+account suspension, 30-day deletion, an in-app display licence for uploaded
+photos, and standard UK clauses (company details, governing law, changes,
+general). The topic list was checked against Fresha, Treatwell, Uber, Pinterest
+and Squarespace/Acuity terms; the wording is our own. Review page:
+https://claude.ai/artifact/TxdENX6Ftr7kxYybHXToXh. **Not lawyer-reviewed.**
+
+Decisions (product owner): contact = support@cerviced.co; payout timing stays
+general ("the payout period you choose"); Announcements removed for link-only
+pros instead of treating a save as consent; Terms say 30-day deletion grace.
+
+**Open before launch:**
+- `[company number]` and `[registered address]` placeholders in clause 1.
+- The app's deletion grace is still 1 day for testing. The Terms say 30.
+- Clause 4 describes Search order as featured-then-rating (main today). Update
+  it when ranked search ships, and say so if featuring is ever paid.
+- No in-app report button for reviews: clause 13 routes reports to the support
+  inbox (§7).
+- Things to put to a solicitor: 16 as the contracting age (§5); provider-set
+  cancellation terms under the CRA 2015 (§6); the foreseeable-loss liability
+  clause; holds up to 30 days and chargeback recovery from future payouts in
+  shared Terms rather than a signed provider agreement; the provider indemnity;
+  who is data controller for client health information passed to providers
+  (§2); PECR separation of marketing and booking notifications (§8).
+- No re-consent: existing users aren't asked to accept the new Terms (§10).
+- The Privacy Policy (AboutScreen) still names privacy@cerviced.app (§13).
+
+## 20. PayPal at checkout (2026-10-19)
+
+**What it is:** clients can pay by PayPal as well as card, Apple Pay and Google
+Pay, processed through Stripe (merged #118 and deployed 2026-10-19, test mode).
+A checkout where a provider has a late arrival or no-show fee stays card-only,
+because that fee is charged off-session to a saved card. PayPal accounts are
+never saved. CERVICED doesn't store the PayPal payer name, email or ID that
+come back on the charge. Terms (payments, refunds, third-party services), the Privacy text (About) and Payment
+Methods were updated in the same change.
+
+**Gaps to raise (not resolved):**
+- **Stripe's marketplace approval.** Stripe needs a PayPal onboarding request
+  before PayPal works live for a Connect marketplace. Not yet submitted.
+- **PayPal's Acceptable Use Policy** hasn't been checked against the kinds of
+  services providers sell. PayPal requires pre-approval for some categories.
+- **Processing fee.** CERVICED absorbs Stripe's fee out of its service fee.
+  PayPal's rate hasn't been compared with card. This is a margin question, not
+  a client-facing one.
+- **Not lawyer-reviewed**, like the rest of the Terms and Privacy text.

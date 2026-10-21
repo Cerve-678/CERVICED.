@@ -1,5 +1,20 @@
 import { getPaymentRequestError } from '../utils/paymentRequestError';
-import { supabase } from "../lib/supabase";
+import type {
+  MaintenanceBookingContext,
+  MaintenanceBookingNote,
+  MaintenanceIntervalSource,
+  MaintenanceItem,
+  MaintenanceItemKind,
+  MaintenanceItemOrigin,
+  MaintenanceSettings,
+  NewMaintenanceItem,
+  ProtectiveStyle,
+  RebookTarget,
+} from '../types/maintenance';
+import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
+import { dateToYMD } from '../utils/dateUtils';
+import type { SavedCard } from '../features/payments/savedCards';
+import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
@@ -19,6 +34,10 @@ import type {
   NotificationType,
   PublicReviewWithUser,
   PublicProviderSummary,
+  ProviderBookingMode,
+  ProviderStatKind,
+  DbProviderDailyStat,
+  DbClientExternalBooking,
   ReviewWithUser,
   DbReview,
   DbEventPlan,
@@ -42,6 +61,9 @@ import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
+import type { RefundRequest, RefundRequestStatus } from "../types/booking";
+import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
+import { overridesFromDate } from "../utils/dateUtils";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -117,7 +139,12 @@ export function subscribeToAuthStateChanges(
 }
 
 export async function signOutCurrentSession(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  // 'local' ends only this device's session. The default ('global') also
+  // kills the account's sessions on every other phone, which keep a token
+  // that still passes RLS until it expires — so the app looks signed in
+  // there, but anything that checks the session server-side (payments)
+  // fails with a 401 "session expired".
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw error;
   invalidateOwnProviderIds();
 }
@@ -135,6 +162,15 @@ export async function clearUserStorageFolder(
   if (error) throw error;
 }
 
+/**
+ * Forget every remembered read, so the next load of each screen goes to the
+ * server. For explicit refreshes (pull-to-refresh): the person asked for the
+ * latest, so a 30-second-old answer isn't good enough.
+ */
+export function forgetCachedReads(): void {
+  clearCachedReads();
+}
+
 export function subscribeToUserBookingChanges(
   userId: string,
   onChange: () => void,
@@ -149,7 +185,10 @@ export function subscribeToUserBookingChanges(
         table: "bookings",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -163,11 +202,14 @@ export function subscribeToRescheduleRequestChanges(
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "booking_reschedule_requests" },
-      (payload) => onChange(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        onChange(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -181,6 +223,7 @@ export interface NotificationInsertRow {
   booking_id: string | null;
   provider_id: string | null;
   recipient_role: "provider" | "client";
+  metadata: Record<string, unknown> | null;
 }
 
 export function subscribeToNotificationInserts(
@@ -197,7 +240,10 @@ export function subscribeToNotificationInserts(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      payload => onInsert(payload.new as NotificationInsertRow),
+      payload => {
+        clearCachedReads();
+        onInsert(payload.new as NotificationInsertRow);
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -522,7 +568,7 @@ async function ownProviderIdExclusion(): Promise<string> {
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at";
+  "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -613,6 +659,7 @@ const DEFAULT_LIFETIME_BOOKINGS_QUERY_LIMIT = 2000;
 export async function getProviders(
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  offset = 0,
 ): Promise<PublicProviderSummary[]> {
   let query = supabase
     .from("providers")
@@ -623,8 +670,7 @@ export async function getProviders(
     // this is a plain browse/list, not a recommendation — a provider's own
     // business is allowed to appear here (see ownProviderIdExclusion).
     .order("is_featured", { ascending: false })
-    .order("rating", { ascending: false })
-    .limit(limit);
+    .order("rating", { ascending: false });
 
   if (category && category !== "ALL") {
     // ANY of the provider's declared types, not just the headline one — a
@@ -632,6 +678,12 @@ export async function getProviders(
     // (providers_service_categories_gin), so this stays an index scan.
     query = query.overlaps("service_categories", [category]);
   }
+
+  // Preserve the normal first-page request shape; only Home's deferred
+  // catalogue extension needs a range after the first batch.
+  query = offset > 0
+    ? query.range(offset, offset + limit - 1)
+    : query.limit(limit);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -733,6 +785,11 @@ export interface ProviderServiceFacets {
    *  against this set, so casing/spacing/spelling need not agree across the
    *  three. Absent means nothing to match. */
   specialityText: Map<string, Set<string>>;
+  /** The same as specialityText minus service names: just the business
+   *  specialities and service tags. What the Speciality filter may OFFER as
+   *  extra options. A service name ("Knotless braids — medium") is fine to
+   *  match against but reads as noise as a filter option. */
+  specialityLabels: Map<string, Set<string>>;
 }
 
 /**
@@ -757,15 +814,26 @@ export async function getProviderServiceFacets(
   const audiences = new Map<string, Set<string>>();
   const skinTones = new Map<string, Set<string>>();
   const specialityText = new Map<string, Set<string>>();
+  const specialityLabels = new Map<string, Set<string>>();
   if (providerIds.length === 0) {
-    return { priceRanges, audiences, skinTones, specialityText };
+    return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
   }
 
+  const addTo = (map: Map<string, Set<string>>, providerId: string, value: string) => {
+    const set = map.get(providerId) ?? new Set<string>();
+    set.add(value);
+    map.set(providerId, set);
+  };
+  // Matchable only (service names).
   const addSpeciality = (providerId: string, value: string | null | undefined) => {
     if (!value) return;
-    const set = specialityText.get(providerId) ?? new Set<string>();
-    set.add(value);
-    specialityText.set(providerId, set);
+    addTo(specialityText, providerId, value);
+  };
+  // Matchable AND offerable as a filter option (specialities, tags).
+  const addSpecialityLabel = (providerId: string, value: string | null | undefined) => {
+    if (!value) return;
+    addTo(specialityText, providerId, value);
+    addTo(specialityLabels, providerId, value);
   };
 
   // The services scan and the provider_specialties scan are independent reads
@@ -833,15 +901,15 @@ export async function getProviderServiceFacets(
       ...(row.occasion_tags ?? []),
       ...(row.trend_names ?? []),
     ]) {
-      addSpeciality(providerId, tag as string);
+      addSpecialityLabel(providerId, tag as string);
     }
   }
 
   for (const row of specialtiesRes.data ?? []) {
-    addSpeciality(row.provider_id as string, row.specialty as string | null);
+    addSpecialityLabel(row.provider_id as string, row.specialty as string | null);
   }
 
-  return { priceRanges, audiences, skinTones, specialityText };
+  return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -1114,6 +1182,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   preferred_contact_methods,
   whatsapp_number,
   external_booking_url,
+  booking_mode,
   rating,
   years_experience,
   is_verified,
@@ -1133,7 +1202,8 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   group_bookings_available,
   vegan_cruelty_free,
   travel_radius,
-  products_used
+  products_used,
+  preferred_payment_methods
 `;
 
 const PROVIDER_PROFILE_CACHE_TTL_MS = 60_000;
@@ -1380,6 +1450,12 @@ export interface ProviderProfileViewerContext {
  */
 export async function getProviderProfileViewerContext(
   providerId: string,
+  /**
+   * AuthContext resolves this once per session. When it has a settled answer,
+   * reuse it instead of issuing another providers lookup for every profile a
+   * client opens. `undefined` deliberately means unknown, not "owns none".
+   */
+  knownOwnedProviderId?: string | null,
 ): Promise<ProviderProfileViewerContext | null> {
   const {
     data: { user },
@@ -1390,12 +1466,17 @@ export async function getProviderProfileViewerContext(
 
   const [userResult, ownerResult, followResult] = await Promise.all([
     supabase.from("users").select("name").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("providers")
-      .select("id")
-      .eq("id", providerId)
-      .eq("user_id", user.id)
-      .maybeSingle(),
+    knownOwnedProviderId === undefined
+      ? supabase
+          .from("providers")
+          .select("id")
+          .eq("id", providerId)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({
+          data: knownOwnedProviderId === providerId ? { id: providerId } : null,
+          error: null,
+        }),
     supabase
       .from("provider_follows")
       .select("notify_enabled")
@@ -1445,6 +1526,82 @@ export async function getMyProviderProfile(): Promise<DbProvider | null> {
   if (error) throw error;
   if (!user) return null;
   return getProviderProfileForUserId(user.id);
+}
+
+/**
+ * Provider Home's first-paint data. The profile and every schedule collection
+ * belong to the same provider row, so embed them in one PostgREST response
+ * instead of starting five independent mobile requests during app launch.
+ */
+export async function getMyProviderHomeBundle(): Promise<{
+  profile: DbProvider;
+  availability: DbProviderAvailability[];
+  blockedDates: DbProviderBlockedDate[];
+  availabilityWindows: DbProviderAvailabilityWindow[];
+  availabilityOverrides: DbProviderAvailabilityOverride[];
+} | null> {
+  const {
+    data: { user },
+    error: authError,
+  } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return null;
+
+  // No has_gone_live / is_active filter: the provider reading their own
+  // record, the same exception as getProviderProfileForUserId.
+  const { data, error } = await supabase
+    .from("providers")
+    .select(`
+      *,
+      provider_availability (*),
+      provider_blocked_dates (*),
+      provider_availability_windows (*),
+      provider_availability_overrides (*)
+    `)
+    .eq("user_id", user.id)
+    // Same bounds the standalone loaders apply: overrides only from a
+    // fortnight back, and at most 500 blocked dates.
+    .gte("provider_availability_overrides.availability_date", overridesFromDate())
+    .order("blocked_date", { referencedTable: "provider_blocked_dates" })
+    .limit(500, { referencedTable: "provider_blocked_dates" })
+    // Same identity rule as getProviderProfileForUserId: active profile
+    // first, then the oldest.
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as DbProvider & {
+    provider_availability: DbProviderAvailability[] | null;
+    provider_blocked_dates: DbProviderBlockedDate[] | null;
+    provider_availability_windows: DbProviderAvailabilityWindow[] | null;
+    provider_availability_overrides: DbProviderAvailabilityOverride[] | null;
+  };
+  const {
+    provider_availability,
+    provider_blocked_dates,
+    provider_availability_windows,
+    provider_availability_overrides,
+    ...profile
+  } = row;
+
+  return {
+    profile,
+    availability: [...(provider_availability ?? [])].sort((a, b) => a.day_of_week - b.day_of_week),
+    blockedDates: [...(provider_blocked_dates ?? [])].sort(
+      (a, b) => a.blocked_date.localeCompare(b.blocked_date),
+    ),
+    availabilityWindows: [...(provider_availability_windows ?? [])].sort(
+      (a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time),
+    ),
+    availabilityOverrides: [...(provider_availability_overrides ?? [])]
+      .sort(
+        (a, b) => a.availability_date.localeCompare(b.availability_date)
+          || (a.start_time ?? '').localeCompare(b.start_time ?? ''),
+      ),
+  };
 }
 
 /** Owner profile plus legacy auth metadata, resolved with one auth lookup. */
@@ -1595,11 +1752,47 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Explore's masonry cards do not need the full portfolio row (personalisation
+// fields and service linkage are used by other callers). Keep its network
+// response small without narrowing the shared getPortfolioItems() contract.
+const EXPLORE_PORTFOLIO_SELECT = `
+  id, provider_id, image_url, caption, category, tags, price, aspect_ratio,
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+`;
+
+/** Fetch the lean portfolio projection used by Explore's public masonry feed. */
+export async function getExplorePortfolioItems(
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  offset = 0,
+): Promise<PortfolioItemWithProvider[]> {
+  let query = supabase
+    .from("portfolio_items")
+    .select(EXPLORE_PORTFOLIO_SELECT)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
+    .order("created_at", { ascending: false });
+
+  if (category && category !== "All") {
+    query = query.eq("category", category.toUpperCase());
+  }
+
+  const { data, error } = await (offset > 0
+    ? query.range(offset, offset + limit - 1)
+    : query.limit(limit));
+  if (error) throw error;
+  // The public projection is intentionally narrower than DbPortfolioItem,
+  // while the Explore mapper only reads the selected card fields above.
+  return (data ?? []) as unknown as PortfolioItemWithProvider[];
+}
+
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
-  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  limit: number | null = DEFAULT_PROVIDER_QUERY_LIMIT,
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<PortfolioItemWithProvider[]> {
   // !inner + provider.has_gone_live excludes portfolio items belonging to a
   // provider who hasn't published a schedule yet — they shouldn't surface
@@ -1636,7 +1829,12 @@ export async function getPortfolioItems(
     query = query.eq("category", category.toUpperCase());
   }
 
-  const { data, error } = await query.limit(limit);
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
 }
@@ -1680,9 +1878,10 @@ export async function searchPortfolio(
  */
 export async function getDiscoverServices(
   category?: string,
-  limit = 40,
+  limit: number | null = 40,
   audience?: "women" | "men" | "kids" | "everyone",
   options?: { excludeOwnProvider?: boolean },
+  offset = 0,
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
@@ -1696,7 +1895,9 @@ export async function getDiscoverServices(
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
-    .limit(limit);
+    // Pagination must have a stable order. Without this, a next page can
+    // repeat or skip services as Postgres is free to return rows in any order.
+    .order("created_at", { ascending: false });
 
   if (options?.excludeOwnProvider !== false) {
     query = query.not("provider_id", "in", await ownProviderIdExclusion());
@@ -1715,10 +1916,49 @@ export async function getDiscoverServices(
   if (audience) {
     query = query.eq("audience", audience);
   }
+  if (limit != null) {
+    query = offset > 0
+      ? query.range(offset, offset + limit - 1)
+      : query.limit(limit);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as unknown as DiscoverServiceWithProvider[];
+}
+
+/**
+ * How many cards Explore's feed holds for a filter in total, not just the
+ * pages loaded so far: every portfolio item getPortfolioItems would return,
+ * plus one card per photo of every service getDiscoverServices would return
+ * (mapDbServiceToCards makes a card per photo). Head-only counts, so no rows
+ * come back. Same filters as those two queries, own work included, as Explore
+ * passes excludeOwnProvider: false.
+ */
+export async function getDiscoverFeedTotal(category?: string): Promise<number> {
+  let portfolioQuery = supabase
+    .from("portfolio_items")
+    .select("id, provider: providers!inner ( id )", { count: "exact", head: true })
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`);
+  let imageQuery = supabase
+    .from("service_images")
+    .select(
+      "service_id, service: services!inner ( id, provider: providers!inner ( id ) )",
+      { count: "exact", head: true },
+    )
+    .eq("service.is_active", true)
+    .eq("service.provider.is_active", true)
+    .eq("service.provider.has_gone_live", true);
+  if (category && category !== "All") {
+    portfolioQuery = portfolioQuery.eq("category", category.toUpperCase());
+    imageQuery = imageQuery.eq("service.service_category", category.toUpperCase());
+  }
+  const [portfolio, images] = await Promise.all([portfolioQuery, imageQuery]);
+  if (portfolio.error) throw portfolio.error;
+  if (images.error) throw images.error;
+  return (portfolio.count ?? 0) + (images.count ?? 0);
 }
 
 /**
@@ -3505,7 +3745,10 @@ export function subscribeToProviderBookingChanges(
         table: "bookings",
         filter: `provider_id=eq.${providerId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -3538,11 +3781,14 @@ export function subscribeToProviderBookingDetailChanges(
         table: "booking_reschedule_requests",
         filter: `booking_id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onReschedule(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onReschedule(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .on(
       "postgres_changes",
@@ -3552,9 +3798,12 @@ export function subscribeToProviderBookingDetailChanges(
         table: "bookings",
         filter: `id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onBookingUpdate(
-        payload.new as ProviderBookingLiveUpdate,
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onBookingUpdate(
+          payload.new as ProviderBookingLiveUpdate,
+        );
+      },
     )
     .subscribe();
   return () => {
@@ -3734,6 +3983,35 @@ export async function getProviderUnreadConversationCount(): Promise<number> {
   return count ?? 0;
 }
 
+export interface ProviderEnquirySummary {
+  /** Conversations with a message the provider hasn't read. */
+  unread: number;
+  /** The most recent of those, for a one-line preview. */
+  latest: { clientName: string | null; message: string | null } | null;
+}
+
+/** The unread count and the newest unread message for a provider's own
+ *  Dashboard — one row and one name, instead of the whole inbox. */
+export async function getProviderEnquirySummary(providerId: string): Promise<ProviderEnquirySummary> {
+  const { data, count, error } = await supabase
+    .from("provider_conversations")
+    .select("user_id, last_message", { count: "exact" })
+    .eq("provider_id", providerId)
+    .gt("unread_count_provider", 0)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+  if (error) throw error;
+  const row = (data ?? [])[0] as { user_id: string; last_message: string | null } | undefined;
+  if (!row) return { unread: count ?? 0, latest: null };
+  // Same batched RPC the inbox uses — see fix_users_table_pii_leak.sql.
+  const { data: profiles, error: profilesError } = await supabase.rpc("get_user_public_profiles", {
+    p_user_ids: [row.user_id],
+  });
+  if (profilesError) throw profilesError;
+  const name = ((profiles ?? []) as { id: string; name: string | null }[])[0]?.name ?? null;
+  return { unread: count ?? 0, latest: { clientName: name, message: row.last_message } };
+}
+
 /** A provider_conversations row joined with the provider's public info */
 export interface UserConversationWithProvider {
   id: string;
@@ -3790,7 +4068,10 @@ export function subscribeToUserConversationChanges(
         table: "provider_conversations",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -4037,7 +4318,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onInsert(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbNotification);
+      },
     )
     .on(
       "postgres_changes",
@@ -4047,7 +4331,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onUpdate(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onUpdate(payload.new as DbNotification);
+      },
     )
     .subscribe();
   return () => {
@@ -4108,17 +4395,28 @@ export async function insertProviderNotification(params: {
 }
 
 /** Count unread notifications for the given recipient role */
+const unreadNotificationCountCache = new Map<"provider" | "client", {
+  value: number;
+  fetchedAt: number;
+}>();
+const UNREAD_NOTIFICATION_COUNT_TTL_MS = 15_000;
+
 export async function getUnreadNotificationCount(
   role: "provider" | "client",
 ): Promise<number> {
+  const cached = unreadNotificationCountCache.get(role);
+  if (cached && Date.now() - cached.fetchedAt < UNREAD_NOTIFICATION_COUNT_TTL_MS) {
+    return cached.value;
+  }
   const { count, error } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("is_read", false)
     .eq("recipient_role", role);
-
   if (error) return 0;
-  return count ?? 0;
+  const value = count ?? 0;
+  unreadNotificationCountCache.set(role, { value, fetchedAt: Date.now() });
+  return value;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -4250,13 +4548,61 @@ export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
   return !!data;
 }
 
+export type BookingReviewState = {
+  bookingId: string;
+  tipAmount: number | null;
+};
+
+/**
+ * Review state for a set of bookings, fetched together for the Bookings list.
+ *
+ * The list used to initialise its rated/tipped buttons from empty component
+ * state on every mount. The database rows existed, but the next visit showed
+ * "Rate" and "Tip" again until a detail screen happened to be opened.
+ */
+export async function getBookingReviewStates(
+  bookingIds: readonly string[],
+): Promise<BookingReviewState[]> {
+  // `reviews.booking_id` is UUID. Never let a local optimistic `booking_*`
+  // id poison the whole PostgREST `.in()` cast.
+  const ids = [...new Set(bookingIds.filter(isUuid))];
+  if (ids.length === 0) return [];
+
+  const [{ data: reviews, error: reviewError }, { data: tips, error: tipError }] = await Promise.all([
+    supabase.from("reviews").select("booking_id, tip_amount").in("booking_id", ids),
+    supabase.from("booking_tips").select("booking_id, amount_pence").in("booking_id", ids).eq("status", "succeeded"),
+  ]);
+  if (reviewError) throw reviewError;
+  if (tipError) throw tipError;
+  const states = (reviews ?? []).map((row: { booking_id: string; tip_amount: number | null }) => ({
+    bookingId: row.booking_id,
+    tipAmount: row.tip_amount == null ? null : Number(row.tip_amount),
+  }));
+  for (const tip of tips ?? []) {
+    const row = tip as { booking_id: string; amount_pence: number };
+    const existing = states.find(state => state.bookingId === row.booking_id);
+    if (existing) existing.tipAmount = Number(row.amount_pence) / 100;
+    else states.push({ bookingId: row.booking_id, tipAmount: Number(row.amount_pence) / 100 });
+  }
+  return states;
+}
+
 /** The tip recorded against a booking, or null when there's no review/tip yet. */
 export async function getBookingTip(bookingId: string): Promise<number | null> {
-  const { data } = await supabase
+  const { data: paidTip, error: tipError } = await supabase
+    .from("booking_tips")
+    .select("amount_pence")
+    .eq("booking_id", bookingId)
+    .eq("status", "succeeded")
+    .maybeSingle();
+  if (tipError) throw tipError;
+  if (paidTip) return Number((paidTip as { amount_pence: number }).amount_pence) / 100;
+  const { data, error } = await supabase
     .from("reviews")
     .select("tip_amount")
     .eq("booking_id", bookingId)
     .maybeSingle();
+  if (error) throw error;
   const tip = (data as { tip_amount?: number | null } | null)?.tip_amount;
   return tip == null ? null : Number(tip);
 }
@@ -4285,6 +4631,37 @@ export async function setBookingTip(
 
   if (error) throw error;
   return (data?.length ?? 0) > 0;
+}
+
+export interface BookingTipPaymentSheet {
+  tipId: string;
+  clientSecret: string;
+  customerId: string;
+  ephemeralKeySecret: string;
+}
+
+/** Starts a voluntary post-appointment Stripe tip. The server owns both the
+ * amount validation and the booking/provider entitlement checks. */
+export async function startBookingTipPayment(bookingId: string, amountPence: number): Promise<BookingTipPaymentSheet> {
+  const { data, error } = await supabase.functions.invoke('booking-tip', {
+    body: { action: 'start', bookingId, amountPence },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not open tip payment. Please try again.');
+  if (typeof data?.tipId !== 'string' || typeof data?.clientSecret !== 'string' ||
+      typeof data?.customerId !== 'string' || typeof data?.ephemeralKeySecret !== 'string') {
+    throw new Error('Could not open tip payment. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return data as BookingTipPaymentSheet;
+}
+
+/** The webhook is authoritative; this closes the normal app path promptly. */
+export async function confirmBookingTipPayment(tipId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('booking-tip', { body: { action: 'confirm', tipId } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your tip is processing. Please check again shortly.');
 }
 
 // ─────────────────────────────────────────────────────────
@@ -6779,6 +7156,202 @@ export async function trackUserInteraction(interaction: {
 }
 
 // ─────────────────────────────────────────────────────────
+// PROVIDER PROFILE STATS — link-only Analytics counters
+// ─────────────────────────────────────────────────────────
+
+/** Count one event for each provider. Search passes its whole result page in
+ *  one call (≤200). The server skips providers that aren't live and the
+ *  caller's own profile, and does nothing for a signed-out caller. */
+export async function recordProviderStat(
+  providerIds: readonly string[],
+  kind: ProviderStatKind,
+): Promise<void> {
+  const ids = Array.from(new Set(providerIds.filter((id) => UUID_RE.test(id)))).slice(0, 200);
+  if (ids.length === 0) return;
+  const { error } = await supabase.rpc("record_provider_stat", {
+    p_provider_ids: ids,
+    p_kind: kind,
+  });
+  if (error) throw error;
+}
+
+/** The calling provider's own daily counters for the last `days` days. */
+export async function getMyProviderDailyStats(days: number): Promise<DbProviderDailyStat[]> {
+  const { data, error } = await supabase.rpc("get_my_provider_daily_stats", {
+    p_days: days,
+  });
+  if (error) throw error;
+  return (data ?? []) as DbProviderDailyStat[];
+}
+
+export interface LinkOnlyDashboardExtras {
+  /** Distinct clients who answered "Yes" to "Did you book?" in the last 7 UK days. */
+  saidBookedWeek: number;
+  /** The same for the 7 days before that, for the trend. */
+  saidBookedLastWeek: number;
+  /** Distinct clients who saved the provider in the last 7 UK days. */
+  newSaversWeek: number;
+  /** Their portfolio photo in the most clients' saved lists (all time). */
+  topPhoto: { id: string; imageUrl: string; label: string | null; saves: number } | null;
+}
+
+/** Counts across other people's rows for the link-only Dashboard, done
+ *  server-side — see 20261019234000_link_only_dashboard_extras.sql. Null when
+ *  the caller has no provider row. */
+export async function getMyLinkOnlyDashboardExtras(): Promise<LinkOnlyDashboardExtras | null> {
+  const { data, error } = await supabase.rpc("get_my_link_only_dashboard_extras");
+  if (error) throw error;
+  const row = ((data ?? []) as {
+    said_booked_week: number;
+    said_booked_last_week: number;
+    new_savers_week: number;
+    top_photo_id: string | null;
+    top_photo_url: string | null;
+    top_photo_label: string | null;
+    top_photo_saves: number | null;
+  }[])[0];
+  if (!row) return null;
+  return {
+    saidBookedWeek: row.said_booked_week,
+    saidBookedLastWeek: row.said_booked_last_week,
+    newSaversWeek: row.new_savers_week,
+    topPhoto:
+      row.top_photo_id && row.top_photo_url
+        ? { id: row.top_photo_id, imageUrl: row.top_photo_url, label: row.top_photo_label, saves: row.top_photo_saves ?? 0 }
+        : null,
+  };
+}
+
+/** How many clients saved (bookmarked) the calling provider. Server-side
+ *  because bookmarks RLS only shows a user their own rows. */
+export async function getMyProviderSaverCount(): Promise<number> {
+  const { data, error } = await supabase.rpc("get_my_provider_saver_count");
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
+}
+
+// ─────────────────────────────────────────────────────────
+// CLIENT EXTERNAL BOOKINGS — "Did you book?" entries
+// ─────────────────────────────────────────────────────────
+
+/** The public provider fields a booked-elsewhere card and its detail need. */
+const EXTERNAL_BOOKING_SELECT =
+  "id, client_id, provider_id, booking_date, start_time, service_label, created_at, " +
+  "provider:providers(id, slug, display_name, logo_url, location_text, business_type, external_booking_url, has_gone_live, is_active)";
+
+export type ClientExternalBookingWithProvider = DbClientExternalBooking & {
+  /** Null once the provider is no longer live — their row stops being
+   *  readable, but the client's own note of the booking stays theirs. */
+  provider: Pick<
+    DbProvider,
+    "id" | "slug" | "display_name" | "logo_url" | "location_text" | "business_type" | "external_booking_url"
+  > | null;
+};
+
+function mapExternalBookingRow(row: unknown): ClientExternalBookingWithProvider {
+  const r = row as DbClientExternalBooking & {
+    provider: (ClientExternalBookingWithProvider["provider"] & {
+      has_gone_live: boolean;
+      is_active: boolean;
+    }) | null;
+  };
+  // Client-facing: a provider that has gone offline is not shown, even
+  // though their row may still be readable.
+  const live = r.provider && r.provider.has_gone_live && r.provider.is_active;
+  const provider = live && r.provider
+    ? {
+        id: r.provider.id,
+        slug: r.provider.slug,
+        display_name: r.provider.display_name,
+        logo_url: r.provider.logo_url,
+        location_text: r.provider.location_text,
+        business_type: r.provider.business_type,
+        external_booking_url: r.provider.external_booking_url,
+      }
+    : null;
+  return {
+    id: r.id,
+    client_id: r.client_id,
+    provider_id: r.provider_id,
+    booking_date: r.booking_date,
+    start_time: r.start_time,
+    service_label: r.service_label,
+    created_at: r.created_at,
+    provider,
+  };
+}
+
+/** Every booked-elsewhere entry the signed-in client has added, soonest first.
+ *  Callers split upcoming from past. */
+export async function getMyExternalBookings(): Promise<ClientExternalBookingWithProvider[]> {
+  const { data: { user } } = await getSessionUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .select(EXTERNAL_BOOKING_SELECT)
+    .eq("client_id", user.id)
+    .order("booking_date", { ascending: true })
+    .order("start_time", { ascending: true })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []).map(mapExternalBookingRow);
+}
+
+export async function getMyExternalBooking(
+  id: string,
+): Promise<ClientExternalBookingWithProvider | null> {
+  if (!UUID_RE.test(id)) return null;
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .select(EXTERNAL_BOOKING_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapExternalBookingRow(data) : null;
+}
+
+/** Add a "Did you book?" entry. The DB only accepts it for a live link-only
+ *  provider, for the signed-in client. */
+export async function addMyExternalBooking(entry: {
+  providerId: string;
+  /** YYYY-MM-DD */
+  bookingDate: string;
+  /** HH:MM or HH:MM:SS */
+  startTime: string;
+  serviceLabel: string;
+}): Promise<ClientExternalBookingWithProvider> {
+  const { data: { user } } = await getSessionUser();
+  if (!user) throw new Error("Not authenticated");
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .insert({
+      client_id: user.id,
+      provider_id: entry.providerId,
+      booking_date: entry.bookingDate,
+      start_time: entry.startTime,
+      service_label: entry.serviceLabel.trim(),
+    })
+    .select(EXTERNAL_BOOKING_SELECT)
+    .single();
+  if (error) throw error;
+  return mapExternalBookingRow(data);
+}
+
+/** Remove one of the client's own entries. Throws if nothing was removed, so
+ *  an RLS miss can't look like success. */
+export async function removeMyExternalBooking(id: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("client_external_bookings")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("Booked-elsewhere entry not found or not yours to remove");
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // PROVIDER FOLLOWS
 // ─────────────────────────────────────────────────────────
 
@@ -6964,19 +7537,56 @@ export interface NotificationPreferences {
   promotions: boolean;
   newProviders: boolean;
   weeklySummary: boolean;
+  /** Beauty Maintenance pushes (due reminders, aftercare notices). OFF until
+   *  the client opts in — the server writes no maintenance notification at all
+   *  while this is false. Booking reminders stay under bookingReminder. */
+  maintenanceReminders: boolean;
 }
 
-const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
+export const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
   bookingConfirm: true,
   bookingReminder: true,
   bookingUpdates: true,
   promotions: false,
   newProviders: true,
   weeklySummary: false,
+  maintenanceReminders: false,
 };
 
-/** Load the user's notification preferences from Supabase */
-export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+/**
+ * The provider hat's push switches. Same users.notification_preferences column
+ * as the client's, under keys of their own, so a dual-hat account's two
+ * screens never switch each other's notifications off. The edge function only
+ * reads these for notifications addressed to the provider role.
+ */
+export interface ProviderNotificationPreferences {
+  providerNewBookings: boolean;
+  providerBookingChanges: boolean;
+  providerReminders: boolean;
+  providerForms: boolean;
+  providerMessages: boolean;
+  providerPayments: boolean;
+  providerReviews: boolean;
+  providerDailyRecap: boolean;
+  providerFullyBooked: boolean;
+  providerSaves: boolean;
+}
+
+export const DEFAULT_PROVIDER_NOTIF_PREFS: ProviderNotificationPreferences = {
+  providerNewBookings: true,
+  providerBookingChanges: true,
+  providerReminders: true,
+  providerForms: true,
+  providerMessages: true,
+  providerPayments: true,
+  providerReviews: true,
+  providerDailyRecap: true,
+  providerFullyBooked: true,
+  providerSaves: true,
+};
+
+/** The signed-in user's whole stored preferences object, both hats' keys. */
+async function readStoredNotificationPreferences(): Promise<{ userId: string; stored: Record<string, unknown> }> {
   const {
     data: { user },
   } = await getSessionUser();
@@ -6987,22 +7597,61 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
     .eq("id", user.id)
     .single();
   if (error) throw error;
-  return { ...DEFAULT_NOTIF_PREFS, ...(data?.notification_preferences ?? {}) };
+  const stored = data?.notification_preferences;
+  return { userId: user.id, stored: stored && typeof stored === "object" ? stored as Record<string, unknown> : {} };
+}
+
+/** Only the keys `defaults` names, each falling back to its default. */
+function pickPreferences<T extends { [K in keyof T]: boolean }>(defaults: T, stored: Record<string, unknown>): T {
+  const picked = { ...defaults };
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const value = stored[key as string];
+    if (typeof value === "boolean") picked[key] = value as T[keyof T];
+  }
+  return picked;
+}
+
+/** Write one hat's keys without touching the other hat's (read-merge-write). */
+async function mergeNotificationPreferences(patch: object): Promise<void> {
+  const { userId, stored } = await readStoredNotificationPreferences();
+  const { error } = await supabase
+    .from("users")
+    .update({ notification_preferences: { ...stored, ...patch } })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
+/** Load the user's notification preferences from Supabase */
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+  const { stored } = await readStoredNotificationPreferences();
+  return pickPreferences(DEFAULT_NOTIF_PREFS, stored);
 }
 
 /** Persist the user's notification preferences to Supabase */
 export async function saveNotificationPreferences(
   prefs: NotificationPreferences,
 ): Promise<void> {
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not signed in");
-  const { error } = await supabase
-    .from("users")
-    .update({ notification_preferences: prefs })
-    .eq("id", user.id);
-  if (error) throw error;
+  await mergeNotificationPreferences(pickPreferences(DEFAULT_NOTIF_PREFS, prefs as unknown as Record<string, unknown>));
+}
+
+/** Load the provider hat's notification switches. */
+export async function getProviderNotificationPreferences(): Promise<ProviderNotificationPreferences> {
+  const { stored } = await readStoredNotificationPreferences();
+  return pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, stored);
+}
+
+/** Persist the provider hat's notification switches, leaving the client's alone. */
+export async function saveProviderNotificationPreferences(
+  prefs: ProviderNotificationPreferences,
+): Promise<void> {
+  await mergeNotificationPreferences(pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, prefs as unknown as Record<string, unknown>));
+}
+
+/** Turn Beauty Maintenance pushes on or off without touching any other
+ *  notification setting (read-merge-write on the one JSON column). */
+export async function setMaintenanceRemindersOptIn(enabled: boolean): Promise<void> {
+  const current = await getNotificationPreferences();
+  await saveNotificationPreferences({ ...current, maintenanceReminders: enabled });
 }
 
 /** Count how many users have bookmarked the currently logged-in provider */
@@ -7199,27 +7848,65 @@ type ProviderCheckoutMetadata = {
   mobileProviderNames: Set<string>;
 };
 
-/** Cart-facing provider metadata in one query rather than one request per concern. */
+/** One cart-side provider to resolve: `key` is whatever the caller groups
+ *  cart items by (the display name at add-to-cart time) and is also what
+ *  the result maps are keyed by — `providerId`, when the item carries one,
+ *  is what actually gets looked up. */
+export interface ProviderCheckoutMetadataQuery {
+  key: string;
+  providerId?: string | undefined;
+}
+
+/**
+ * Cart-facing provider metadata in one query rather than one request per
+ * concern. Looks providers up by `providerId` when the caller has one —
+ * `display_name` is a mutable field a provider can legitimately rename
+ * (see providers_display_name_cooldown), so a cart item added before a
+ * rename would exact-match nothing under the new name and read as
+ * "no longer available" for a provider who never stopped taking bookings.
+ * Falls back to a `display_name` match only for legacy cart items that
+ * predate `providerId` being carried on the cart item at all. Either way,
+ * a resolved provider is written back under the caller's own `key`, not
+ * whatever name is currently live, so callers never need to know which
+ * path resolved it.
+ */
 export async function getProviderCheckoutMetadata(
-  displayNames: string[],
+  queries: ProviderCheckoutMetadataQuery[],
 ): Promise<ProviderCheckoutMetadata> {
-  if (displayNames.length === 0) {
+  if (queries.length === 0) {
     return { depositPolicies: {}, mobileProviderNames: new Set() };
   }
 
-  const { data, error } = await supabase
-    .from("providers")
-    .select("display_name, booking_policies, business_type")
-    .eq("has_gone_live", true)
-    .eq("is_active", true)
-    .in("display_name", [...new Set(displayNames)].slice(0, 50));
-  if (error) throw error;
+  const byId = queries.filter((q): q is ProviderCheckoutMetadataQuery & { providerId: string } => Boolean(q.providerId));
+  const byName = queries.filter(q => !q.providerId);
+
+  const idList = [...new Set(byId.map(q => q.providerId))].slice(0, 50);
+  const nameList = [...new Set(byName.map(q => q.key))].slice(0, 50);
+
+  const selectCols = "id, display_name, booking_policies, business_type";
+  const [idResult, nameResult] = await Promise.all([
+    idList.length > 0
+      ? supabase.from("providers").select(selectCols).eq("has_gone_live", true).eq("is_active", true).in("id", idList)
+      : Promise.resolve({ data: [], error: null }),
+    nameList.length > 0
+      ? supabase.from("providers").select(selectCols).eq("has_gone_live", true).eq("is_active", true).in("display_name", nameList)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (idResult.error) throw idResult.error;
+  if (nameResult.error) throw nameResult.error;
+
+  type ProviderRow = { id: string; display_name: string; booking_policies: unknown; business_type: string | null };
+  const rowsById = new Map<string, ProviderRow>((idResult.data ?? []).map((p: ProviderRow) => [p.id, p]));
+  const rowsByName = new Map<string, ProviderRow>((nameResult.data ?? []).map((p: ProviderRow) => [p.display_name, p]));
 
   const depositPolicies: Record<string, ProviderDepositPolicy> = {};
   const mobileProviderNames = new Set<string>();
-  for (const provider of data ?? []) {
+  for (const q of queries) {
+    const provider = q.providerId ? rowsById.get(q.providerId) : rowsByName.get(q.key);
+    if (!provider) continue;
+
     if (provider.business_type === "mobile") {
-      mobileProviderNames.add(provider.display_name);
+      mobileProviderNames.add(q.key);
     }
     const policies = provider.booking_policies as {
       depositMode?: string;
@@ -7230,7 +7917,7 @@ export async function getProviderCheckoutMetadata(
     } | null;
     const mode = resolveDepositMode(policies);
     if (mode === "full_only") {
-      depositPolicies[provider.display_name] = {
+      depositPolicies[q.key] = {
         depositType: "percentage",
         depositAmount: 0,
         depositAvailable: false,
@@ -7238,14 +7925,14 @@ export async function getProviderCheckoutMetadata(
       };
     } else if (mode && policies?.depositAmount) {
       const amount = Number(policies.depositAmount);
-      depositPolicies[provider.display_name] = {
+      depositPolicies[q.key] = {
         depositType: policies.depositType === "fixed" ? "fixed" : "percentage",
         depositAmount: amount > 0 ? amount : 20,
         depositAvailable: true,
         depositOnly: mode === "deposit_required",
       };
     } else {
-      depositPolicies[provider.display_name] = {
+      depositPolicies[q.key] = {
         depositType: "percentage",
         depositAmount: 0,
         depositAvailable: false,
@@ -7498,13 +8185,14 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   price_range: string | null;
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
+  external_booking_url: string | null;
 } | null> {
   const { data, error } = await supabase
     .from("users")
     .select(
       "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
         "service_interests, service_locations, location_text, years_experience, team_size, accessibility_notes, languages_spoken, specialties, " +
-        "price_range, preferred_contact_methods, preferred_payment_methods",
+        "price_range, preferred_contact_methods, preferred_payment_methods, external_booking_url",
     )
     .eq("id", userId)
     .single();
@@ -7533,6 +8221,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     price_range: string | null;
     preferred_contact_methods: string[] | null;
     preferred_payment_methods: string[] | null;
+    external_booking_url: string | null;
   };
 }
 
@@ -7570,7 +8259,7 @@ export async function upgradeUserToProvider(
     serviceLocations?: string[];
     yearsExperience?: string;
     priceRange?: string;
-    teamSize?: string;
+    externalBookingUrl?: string;
     preferredContactMethods?: string[];
     accessibilityNotes?: string;
     languagesSpoken?: string[];
@@ -7608,7 +8297,9 @@ export async function upgradeUserToProvider(
       ...(extras?.yearsExperience && !Number.isNaN(parseInt(extras.yearsExperience, 10))
         ? { years_experience: parseInt(extras.yearsExperience, 10) }
         : {}),
-      ...(extras?.teamSize ? { team_size: extras.teamSize } : {}),
+      ...(extras?.externalBookingUrl
+        ? { external_booking_url: extras.externalBookingUrl }
+        : {}),
       ...(extras?.accessibilityNotes
         ? { accessibility_notes: extras.accessibilityNotes }
         : {}),
@@ -7643,6 +8334,7 @@ export async function upgradeUserToProvider(
   // waiting on their next InfoRegScreen save.
   if (
     extras?.priceRange ||
+    extras?.externalBookingUrl ||
     extras?.preferredContactMethods?.length ||
     extras?.preferredPaymentMethods?.length
   ) {
@@ -7650,6 +8342,9 @@ export async function upgradeUserToProvider(
       .from("providers")
       .update({
         ...(extras?.priceRange ? { price_tier: extras.priceRange } : {}),
+        ...(extras?.externalBookingUrl
+          ? { external_booking_url: extras.externalBookingUrl }
+          : {}),
         ...(extras?.preferredContactMethods?.length
           ? { preferred_contact_methods: extras.preferredContactMethods }
           : {}),
@@ -7779,8 +8474,43 @@ export async function updateUserBusinessInfo(
   if (error) throw error;
 }
 
+/**
+ * Writes provider answers onto the sign-up staging columns of the signed-in
+ * user's own row. Used only while there is no providers row yet: Business Info
+ * has nowhere else to put an edit, and the profile editor's first save reads
+ * these same columns (getUserSignupPrefillInfo) to build that row — so the
+ * edit is carried into the profile instead of being dropped.
+ */
+export async function updateMyStagedProviderAnswers(
+  userId: string,
+  answers: {
+    years_experience: number | null;
+    external_booking_url?: string | null;
+    instagram: string | null;
+    website: string | null;
+    accessibility_notes?: string | null;
+    preferred_payment_methods?: string[] | null;
+    business_type?: string | null;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update(answers)
+    .eq("id", userId);
+  if (error) throw error;
+}
+
 /** Sync beauty profile fields to the users table so providers can read them */
-export async function upsertUserBeautyProfile(
+/**
+ * Saves the Beauty Profile onto the signed-in client's own users row.
+ *
+ * An UPDATE, not an upsert: users.email and users.name are NOT NULL, and
+ * Postgres checks those on the proposed insert row before ON CONFLICT ever
+ * finds the existing one, so a partial upsert fails with 23502 for every
+ * account. The row always exists by this point (signup creates it); zero rows
+ * updated means RLS refused or the row is gone, which is a real failure.
+ */
+export async function updateUserBeautyProfile(
   userId: string,
   data: {
     hair_type?: string | null;
@@ -7810,10 +8540,15 @@ export async function upsertUserBeautyProfile(
     has_kids?: boolean | null;
   },
 ): Promise<void> {
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from("users")
-    .upsert({ id: userId, ...data }, { onConflict: "id" });
+    .update(data)
+    .eq("id", userId)
+    .select("id");
   if (error) throw error;
+  if (!rows || rows.length === 0) {
+    throw new Error("Beauty profile not saved: no users row was updated for this account");
+  }
 }
 
 export interface UserBeautyProfileRow {
@@ -7857,6 +8592,410 @@ export async function getUserBeautyProfile(
     .maybeSingle();
   if (error) throw error;
   return data as UserBeautyProfileRow | null;
+}
+
+// ─────────────────────────────────────────────────────────
+// BEAUTY MAINTENANCE (client hat) — owner-only tables from
+// supabase/migrations/20261018180000_beauty_maintenance.sql.
+// None of this is readable by providers, and none of it feeds Becca,
+// analytics, search or any provider-facing path.
+// ─────────────────────────────────────────────────────────
+
+/** A client's maintenance list is short by nature; this is a safety cap. */
+const MAINTENANCE_ITEMS_LIMIT = 200;
+
+const MAINTENANCE_ITEM_COLUMNS =
+  "id, kind, origin, title, type_key, provider_id, service_id, provider_name, repeat_weeks, interval_edited, interval_source, learned_days, learned_from, last_done_on, due_on, event_on, paused, note, created_at";
+
+interface MaintenanceItemRow {
+  id: string;
+  kind: MaintenanceItemKind;
+  origin: MaintenanceItemOrigin;
+  title: string;
+  type_key: string | null;
+  provider_id: string | null;
+  service_id: string | null;
+  provider_name: string | null;
+  repeat_weeks: number | null;
+  interval_edited: boolean;
+  interval_source: MaintenanceIntervalSource;
+  learned_days: number | null;
+  learned_from: number | null;
+  last_done_on: string | null;
+  due_on: string | null;
+  event_on: string | null;
+  paused: boolean;
+  note: string | null;
+  created_at: string;
+}
+
+function mapMaintenanceItem(r: MaintenanceItemRow): MaintenanceItem {
+  return {
+    id: r.id,
+    kind: r.kind,
+    origin: r.origin,
+    title: r.title,
+    // A key this build doesn't know (written by a newer one) degrades to null.
+    typeKey: (getMaintenanceServiceType(r.type_key)?.key ?? null) as MaintenanceTypeKey | null,
+    providerId: r.provider_id,
+    serviceId: r.service_id,
+    providerName: r.provider_name,
+    repeatWeeks: r.repeat_weeks,
+    intervalEdited: r.interval_edited,
+    intervalSource: r.interval_source,
+    learnedDays: r.learned_days,
+    learnedFrom: r.learned_from,
+    lastDoneOn: r.last_done_on,
+    dueOn: r.due_on,
+    eventOn: r.event_on,
+    paused: r.paused,
+    note: r.note,
+    createdAt: r.created_at,
+  };
+}
+
+async function requireSessionUserId(): Promise<string> {
+  const {
+    data: { user },
+    error,
+  } = await getSessionUser();
+  if (error) throw error;
+  if (!user) throw new Error("Not signed in");
+  return user.id;
+}
+
+/** The signed-in client's maintenance items, soonest due first. */
+export async function getMaintenanceItems(): Promise<MaintenanceItem[]> {
+  const userId = await requireSessionUserId();
+  const { data, error } = await supabase
+    .from("maintenance_items")
+    .select(MAINTENANCE_ITEM_COLUMNS)
+    .eq("user_id", userId)
+    .order("due_on", { ascending: true })
+    .limit(MAINTENANCE_ITEMS_LIMIT);
+  if (error) throw error;
+  return ((data ?? []) as MaintenanceItemRow[]).map(mapMaintenanceItem);
+}
+
+/** Add client-made items (setup suggestions, "Add my own reminder"). */
+export async function addMaintenanceItems(items: NewMaintenanceItem[]): Promise<MaintenanceItem[]> {
+  if (items.length === 0) return [];
+  const userId = await requireSessionUserId();
+  const { data, error } = await supabase
+    .from("maintenance_items")
+    .insert(
+      items.map((i) => ({
+        user_id: userId,
+        kind: i.kind,
+        origin: "client" as const,
+        title: i.title.trim(),
+        type_key: i.typeKey,
+        provider_id: i.providerId,
+        service_id: i.serviceId,
+        provider_name: i.providerName,
+        repeat_weeks: i.repeatWeeks,
+        last_done_on: i.lastDoneOn,
+        due_on: i.dueOn,
+        event_on: i.eventOn,
+        note: i.note?.trim() || null,
+      })),
+    )
+    .select(MAINTENANCE_ITEM_COLUMNS);
+  if (error) throw error;
+  return ((data ?? []) as MaintenanceItemRow[]).map(mapMaintenanceItem);
+}
+
+/** What the item menu can change. Column grants on the table allow exactly
+ *  these; origin, provider, service and push bookkeeping are server-owned. */
+export interface MaintenanceItemPatch {
+  repeatWeeks?: number;
+  /** Set alongside repeatWeeks: a later completed booking keeps this interval. */
+  intervalEdited?: boolean;
+  dueOn?: string;
+  lastDoneOn?: string;
+  paused?: boolean;
+  /** Empty or whitespace clears it. */
+  note?: string;
+}
+
+export async function updateMaintenanceItem(
+  id: string,
+  patch: MaintenanceItemPatch,
+): Promise<MaintenanceItem> {
+  const userId = await requireSessionUserId();
+  const row: {
+    repeat_weeks?: number;
+    interval_edited?: boolean;
+    due_on?: string;
+    last_done_on?: string;
+    paused?: boolean;
+    note?: string | null;
+  } = {};
+  if (patch.repeatWeeks !== undefined) row.repeat_weeks = patch.repeatWeeks;
+  if (patch.intervalEdited !== undefined) row.interval_edited = patch.intervalEdited;
+  if (patch.dueOn !== undefined) row.due_on = patch.dueOn;
+  if (patch.lastDoneOn !== undefined) row.last_done_on = patch.lastDoneOn;
+  if (patch.paused !== undefined) row.paused = patch.paused;
+  if (patch.note !== undefined) row.note = patch.note.trim() || null;
+  const { data, error } = await supabase
+    .from("maintenance_items")
+    .update(row)
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select(MAINTENANCE_ITEM_COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapMaintenanceItem(data as MaintenanceItemRow);
+}
+
+/** Hard delete. Throws if nothing was removed, so a silent RLS no-op can't
+ *  read as success. */
+export async function deleteMaintenanceItem(id: string): Promise<void> {
+  const userId = await requireSessionUserId();
+  const { data, error } = await supabase
+    .from("maintenance_items")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Reminder was not deleted");
+}
+
+interface MaintenanceSettingsRow {
+  protective_style: ProtectiveStyle | null;
+  protective_wear_weeks: number | null;
+  last_patch_test_on: string | null;
+  setup_completed_at: string | null;
+}
+
+/** The client's setup answers, or null before they've set anything up. */
+export async function getMaintenanceSettings(): Promise<MaintenanceSettings | null> {
+  const userId = await requireSessionUserId();
+  const { data, error } = await supabase
+    .from("maintenance_settings")
+    .select("protective_style, protective_wear_weeks, last_patch_test_on, setup_completed_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const r = data as MaintenanceSettingsRow;
+  return {
+    protectiveStyle: r.protective_style,
+    protectiveWearWeeks: r.protective_wear_weeks,
+    lastPatchTestOn: r.last_patch_test_on,
+    setupCompletedAt: r.setup_completed_at,
+  };
+}
+
+export async function saveMaintenanceSettings(settings: MaintenanceSettings): Promise<void> {
+  const userId = await requireSessionUserId();
+  const { error } = await supabase.from("maintenance_settings").upsert(
+    {
+      user_id: userId,
+      protective_style: settings.protectiveStyle,
+      protective_wear_weeks: settings.protectiveWearWeeks,
+      last_patch_test_on: settings.lastPatchTestOn,
+      setup_completed_at: settings.setupCompletedAt,
+    },
+    { onConflict: "user_id" },
+  );
+  if (error) throw error;
+}
+
+interface MaintenanceBookingRow {
+  id: string;
+  provider_id: string;
+  service_id: string | null;
+  status: string;
+  booking_date: string;
+  booking_time: string;
+  service_name_snapshot: string;
+  provider_name_snapshot: string;
+}
+
+/** How far back a completed booking's aftercare stays in "Around your bookings". */
+const AFTERCARE_WINDOW_DAYS = 3;
+/** Prep shows for appointments today and tomorrow. */
+const PREP_WINDOW_DAYS = 1;
+/** Completed bookings scanned for past providers. */
+const PAST_BOOKINGS_LIMIT = 200;
+
+function addDaysYMD(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return dateToYMD(d);
+}
+
+/**
+ * Everything the Maintenance screen needs from the client's bookings: prep
+ * and aftercare notes (provider-written, quoted as-is), which upcoming
+ * bookings already cover an item, and providers to link a reminder to.
+ * Three reads in parallel, then one batched read each for the notes.
+ */
+export async function getMaintenanceBookingContext(): Promise<MaintenanceBookingContext> {
+  const userId = await requireSessionUserId();
+  const today = dateToYMD(new Date());
+  const columns =
+    "id, provider_id, service_id, status, booking_date, booking_time, service_name_snapshot, provider_name_snapshot";
+
+  // client_bookings: the address-gated view, filtered to the client side
+  // explicitly (see getMyBookings for why a dual-hat account needs that).
+  const [upcomingRes, completedRes] = await Promise.all([
+    supabase
+      .from("client_bookings")
+      .select(columns)
+      .eq("user_id", userId)
+      .in("status", ["pending", "confirmed", "in_progress"])
+      .gte("booking_date", today)
+      .order("booking_date", { ascending: true })
+      .limit(DEFAULT_PROVIDER_QUERY_LIMIT),
+    supabase
+      .from("client_bookings")
+      .select(columns)
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .order("booking_date", { ascending: false })
+      .limit(PAST_BOOKINGS_LIMIT),
+  ]);
+  if (upcomingRes.error) throw upcomingRes.error;
+  if (completedRes.error) throw completedRes.error;
+  const upcoming = (upcomingRes.data ?? []) as MaintenanceBookingRow[];
+  const completed = (completedRes.data ?? []) as MaintenanceBookingRow[];
+
+  const prepLimit = addDaysYMD(PREP_WINDOW_DAYS);
+  const prepBookings = upcoming.filter((b) => b.booking_date <= prepLimit && b.status !== "pending");
+  const aftercareFrom = addDaysYMD(-AFTERCARE_WINDOW_DAYS);
+  const aftercareBookings = completed.filter((b) => b.booking_date >= aftercareFrom && b.service_id);
+  const aftercareServiceIds = [...new Set(aftercareBookings.map((b) => b.service_id as string))];
+
+  const [packsRes, servicesRes] = await Promise.all([
+    prepBookings.length > 0
+      ? supabase
+          .from("booking_info_packs")
+          .select("booking_id, title, content, created_at")
+          .eq("client_user_id", userId)
+          .in("booking_id", prepBookings.map((b) => b.id))
+          .order("created_at", { ascending: true })
+          .limit(DEFAULT_PROVIDER_QUERY_LIMIT)
+      : Promise.resolve({ data: [], error: null }),
+    // services_public_read only exposes live providers' active services, so a
+    // provider who has gone offline shows no aftercare — never a fallback.
+    aftercareServiceIds.length > 0
+      ? supabase.from("services").select("id, aftercare_notes").in("id", aftercareServiceIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (packsRes.error) throw packsRes.error;
+  if (servicesRes.error) throw servicesRes.error;
+
+  const packsByBooking = new Map<string, MaintenanceBookingNote["notes"]>();
+  for (const p of (packsRes.data ?? []) as { booking_id: string; title: string | null; content: string | null; created_at: string }[]) {
+    const text = p.content?.trim();
+    if (!text) continue;
+    const list = packsByBooking.get(p.booking_id) ?? [];
+    list.push({ title: p.title, text, sentAt: p.created_at });
+    packsByBooking.set(p.booking_id, list);
+  }
+  const aftercareByService = new Map<string, string>();
+  for (const s of (servicesRes.data ?? []) as { id: string; aftercare_notes: string | null }[]) {
+    const text = s.aftercare_notes?.trim();
+    if (text) aftercareByService.set(s.id, text);
+  }
+
+  const toNote = (b: MaintenanceBookingRow, notes: MaintenanceBookingNote["notes"]): MaintenanceBookingNote => ({
+    bookingId: b.id,
+    providerId: b.provider_id,
+    providerName: b.provider_name_snapshot,
+    serviceName: b.service_name_snapshot,
+    bookingDate: b.booking_date,
+    bookingTime: b.booking_time,
+    notes,
+  });
+
+  // Group bookings complete one row per guest for the same service; show
+  // that service's aftercare once.
+  const seenAftercare = new Set<string>();
+  const aftercare: MaintenanceBookingNote[] = [];
+  for (const b of aftercareBookings) {
+    const text = aftercareByService.get(b.service_id as string);
+    const key = `${b.service_id}:${b.booking_date}`;
+    if (!text || seenAftercare.has(key)) continue;
+    seenAftercare.add(key);
+    // The provider's CURRENT note (services has no edit timestamp, so
+    // sentAt is null and the card dates it by the appointment instead).
+    aftercare.push(toNote(b, [{ title: null, text, sentAt: null }]));
+  }
+
+  const pastProviders = new Map<string, string>();
+  for (const b of completed) {
+    if (!pastProviders.has(b.provider_id)) pastProviders.set(b.provider_id, b.provider_name_snapshot);
+  }
+
+  return {
+    prep: prepBookings
+      .filter((b) => packsByBooking.has(b.id))
+      .map((b) => toNote(b, packsByBooking.get(b.id)!)),
+    aftercare,
+    upcomingServiceIds: [...new Set(upcoming.map((b) => b.service_id).filter((id): id is string => !!id))],
+    upcomingProviderIds: [...new Set(upcoming.map((b) => b.provider_id))],
+    pastProviders: [...pastProviders].map(([providerId, name]) => ({ providerId, name })),
+  };
+}
+
+/**
+ * Which services and providers the client already has an upcoming booking
+ * with — what makes a maintenance item "booked" rather than due. One light
+ * query for the Profile tab's "N due" badge.
+ */
+export async function getUpcomingMaintenanceCoverage(): Promise<{ serviceIds: string[]; providerIds: string[] }> {
+  const userId = await requireSessionUserId();
+  const { data, error } = await supabase
+    .from("client_bookings")
+    .select("service_id, provider_id")
+    .eq("user_id", userId)
+    .in("status", ["pending", "confirmed", "in_progress"])
+    .gte("booking_date", dateToYMD(new Date()))
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
+  const rows = (data ?? []) as { service_id: string | null; provider_id: string }[];
+  return {
+    serviceIds: [...new Set(rows.map((r) => r.service_id).filter((id): id is string => !!id))],
+    providerIds: [...new Set(rows.map((r) => r.provider_id))],
+  };
+}
+
+/**
+ * Where "Rebook" can go for an item: the provider's public slug when they're
+ * live and active (client-facing — has_gone_live gated), plus the service when
+ * it's still offered. Null sends the client to Search instead.
+ */
+export async function getMaintenanceRebookTarget(
+  providerId: string,
+  serviceId: string | null,
+): Promise<RebookTarget | null> {
+  const [providerRes, serviceRes] = await Promise.all([
+    supabase
+      .from("providers")
+      .select("slug")
+      .eq("id", providerId)
+      .eq("has_gone_live", true)
+      .eq("is_active", true)
+      .maybeSingle(),
+    serviceId
+      ? supabase
+          .from("services")
+          .select("id")
+          .eq("id", serviceId)
+          .eq("provider_id", providerId)
+          .eq("is_active", true)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (providerRes.error) throw providerRes.error;
+  if (serviceRes.error) throw serviceRes.error;
+  const slug = (providerRes.data as { slug: string | null } | null)?.slug;
+  if (!slug) return null;
+  return { providerSlug: slug, serviceId: (serviceRes.data as { id: string } | null)?.id ?? null };
 }
 
 /** Upsert the full user profile row immediately after email OTP verification */
@@ -7928,6 +9067,44 @@ export async function getProviderIdForUserId(
 
   if (error) throw error;
   return data?.id ?? null;
+}
+
+/** The provider profile this user owns, plus who takes its bookings.
+ *
+ *  Before a link-only professional's providers row exists (it's created on
+ *  their first profile save) the mode comes from their sign-up answer:
+ *  users.external_booking_url is only ever written by sign-up Step 1's
+ *  "I use my own booking link" switch. Once the row exists, its
+ *  booking_mode column is the only answer. No has_gone_live filter — the
+ *  user reading their own records. */
+export async function getProviderOwnershipForUserId(userId: string): Promise<{
+  providerId: string | null;
+  bookingMode: ProviderBookingMode | null;
+}> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id, booking_mode")
+    .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as { id: string; booking_mode: ProviderBookingMode } | null;
+  if (row) return { providerId: row.id, bookingMode: row.booking_mode };
+
+  const { data: userRow, error: userError } = await supabase
+    .from("users")
+    .select("role, external_booking_url")
+    .eq("id", userId)
+    .maybeSingle();
+  if (userError) throw userError;
+  const signup = userRow as { role: string | null; external_booking_url: string | null } | null;
+  if (signup?.role !== "provider") return { providerId: null, bookingMode: null };
+  return {
+    providerId: null,
+    bookingMode: signup.external_booking_url?.trim() ? "external" : "cerviced",
+  };
 }
 
 /** Fetch branding fields for the provider owned by the given user (Branding screen).
@@ -8555,6 +9732,19 @@ export async function countProviderServices(
   return count ?? 0;
 }
 
+/** Every portfolio photo, venue photos included — exactly what a link-only
+ *  provider's server go-live check counts. Owner reading their own rows. */
+export async function countProviderPortfolioItems(
+  providerId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("portfolio_items")
+    .select("id", { count: "exact", head: true })
+    .eq("provider_id", providerId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 // ─────────────────────────────────────────────────────────
 // NOTIFICATIONS — delete
 // ─────────────────────────────────────────────────────────
@@ -8713,7 +9903,10 @@ export function subscribeToConversationMessages(
         table: "provider_messages",
         filter: `conversation_id=eq.${conversationId}`,
       },
-      (payload) => onInsert(payload.new as DbProviderMessage),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbProviderMessage);
+      },
     )
     .subscribe();
   return () => {
@@ -9074,6 +10267,9 @@ export interface SupportRequestInput {
   platform: string;
   appVersion: string;
   activeMode: string;
+  /** Set for a refund request: the ticket is linked to it and the provider
+   *  is emailed (see send-support-request). */
+  refundRequestId?: string;
 }
 
 export interface SupportRequestResult {
@@ -9159,7 +10355,17 @@ export async function lookupPostcodeAddress(addressId: string): Promise<Postcode
 export async function createCheckoutPaymentIntent(
   checkoutBatchId: string,
   currency: string,
-): Promise<{ clientSecret: string; paymentIntentId: string }> {
+): Promise<{
+  clientSecret: string;
+  paymentIntentId: string;
+  // The client's Stripe Customer + a short-lived ephemeral key, so the Payment
+  // Sheet can list their saved cards and offer to save a new one. Undefined
+  // only from an older deployed function; the sheet then works without them.
+  customerId?: string;
+  ephemeralKeySecret?: string;
+  /** The server allows PayPal on this intent (never with late/no-show fees). */
+  paypalAvailable: boolean;
+}> {
   const { data, error } = await supabase.functions.invoke('create-payment-intent', {
     body: { checkoutBatchId, currency },
   });
@@ -9171,7 +10377,290 @@ export async function createCheckoutPaymentIntent(
   if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
     throw new Error('Payment configuration does not match this app. Please contact support.');
   }
-  return { clientSecret: data.clientSecret, paymentIntentId: data.paymentIntentId };
+  // The server decides (never for a checkout with late/no-show fees); an older
+  // deployment that doesn't send the list means no PayPal.
+  const paypalAvailable = Array.isArray(data.paymentMethodTypes) && data.paymentMethodTypes.includes('paypal');
+  return {
+    clientSecret: data.clientSecret,
+    paymentIntentId: data.paymentIntentId,
+    paypalAvailable,
+    customerId: typeof data.customerId === 'string' ? data.customerId : undefined,
+    ephemeralKeySecret: typeof data.ephemeralKeySecret === 'string' ? data.ephemeralKeySecret : undefined,
+  };
+}
+
+/** The signed-in client's saved cards, read live from Stripe (CERVICED stores
+ *  no card details). Empty until they save one. */
+export async function listSavedCards(): Promise<SavedCard[]> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'list' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not load your saved cards. Please try again.');
+  if (!Array.isArray(data?.cards)) throw new Error('Could not load your saved cards. Please try again.');
+  return (data.cards as unknown[]).flatMap((raw): SavedCard[] => {
+    const c = raw as Partial<SavedCard>;
+    if (typeof c.id !== 'string' || typeof c.last4 !== 'string' ||
+        typeof c.expMonth !== 'number' || typeof c.expYear !== 'number') return [];
+    return [{
+      id: c.id,
+      brand: typeof c.brand === 'string' ? c.brand : 'unknown',
+      last4: c.last4,
+      expMonth: c.expMonth,
+      expYear: c.expYear,
+      wallet: typeof c.wallet === 'string' ? c.wallet : null,
+    }];
+  });
+}
+
+/** What the Payment Sheet needs to save a new card: the Customer (got or
+ *  created server-side), an ephemeral key over it, and a SetupIntent secret. */
+export async function createSavedCardSetup(): Promise<{
+  customerId: string;
+  ephemeralKeySecret: string;
+  setupIntentClientSecret: string;
+}> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'setup' },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not open card setup. Please try again.');
+  if (typeof data?.customerId !== 'string' || typeof data?.ephemeralKeySecret !== 'string' ||
+      typeof data?.setupIntentClientSecret !== 'string') {
+    throw new Error('Could not open card setup. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return {
+    customerId: data.customerId,
+    ephemeralKeySecret: data.ephemeralKeySecret,
+    setupIntentClientSecret: data.setupIntentClientSecret,
+  };
+}
+
+/** Removes one of the signed-in client's own saved cards from Stripe. */
+export async function removeSavedCard(paymentMethodId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('client-saved-cards', {
+    body: { action: 'remove', paymentMethodId },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not remove that card. Please try again.');
+}
+
+/** A provider's late-arrival and no-show fees for one checkout, frozen on the
+ *  held bookings by the database — what the client is agreeing to. */
+export interface CheckoutFee {
+  providerId: string;
+  providerName: string;
+  lateFeePence: number | null;
+  noShowFeePence: number | null;
+  graceMinutes: number;
+}
+
+interface CheckoutFeeRow {
+  provider_id: string;
+  provider_name: string | null;
+  late_fee_pence: number | null;
+  no_show_fee_pence: number | null;
+  grace_minutes: number | null;
+}
+
+export async function getCheckoutFees(checkoutBatchId: string): Promise<CheckoutFee[]> {
+  const { data, error } = await supabase.rpc('get_checkout_fees', { p_checkout_batch_id: checkoutBatchId });
+  if (error) throw error;
+  return ((data ?? []) as CheckoutFeeRow[]).map(row => ({
+    providerId: row.provider_id,
+    providerName: row.provider_name?.trim() || 'This provider',
+    lateFeePence: row.late_fee_pence,
+    noShowFeePence: row.no_show_fee_pence,
+    graceMinutes: row.grace_minutes ?? 0,
+  }));
+}
+
+/** What the client agreed to, so the database can keep a full record of it. */
+export interface FeeConsentAgreement {
+  termsVersion: string;
+  termsSha256: string;
+  appPlatform: string | null;
+  appVersion: string | null;
+}
+
+/** Records the client's agreement to those fees: a fee_consent_records row
+ *  with the database clock, the wording version and the frozen amounts. The
+ *  payment functions refuse to save a card for fees, or charge one, without
+ *  it. Returns the record's id. */
+export async function acceptCheckoutFees(
+  checkoutBatchId: string,
+  agreement: FeeConsentAgreement,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('accept_checkout_fees', {
+    p_checkout_batch_id: checkoutBatchId,
+    p_terms_version: agreement.termsVersion,
+    p_terms_sha256: agreement.termsSha256,
+    p_app_platform: agreement.appPlatform,
+    p_app_version: agreement.appVersion,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export type BookingFeeKind = 'late' | 'no_show';
+
+/** One late/no-show fee attempt on a booking, as either party may read it (RLS). */
+export interface BookingFeeCharge {
+  id: string;
+  kind: BookingFeeKind;
+  amountPence: number;
+  status: 'processing' | 'awaiting_client' | 'succeeded' | 'failed' | 'refunded';
+  chargedAt: string | null;
+  /** While awaiting_client: when the client's request to pay lapses. */
+  payBy: string | null;
+  /** While awaiting_client: when the saved card is next tried again, if it will be. */
+  nextRetryAt: string | null;
+  createdAt: string;
+  disputedAt: string | null;
+  disputeReason: string | null;
+  disputeOutcome: 'refunded' | 'kept' | null;
+  disputeResponse: string | null;
+  disputeResolvedAt: string | null;
+}
+
+interface BookingFeeChargeRow {
+  id: string;
+  kind: BookingFeeKind;
+  amount_pence: number;
+  status: BookingFeeCharge['status'];
+  charged_at: string | null;
+  pay_by: string | null;
+  next_retry_at: string | null;
+  created_at: string;
+  disputed_at: string | null;
+  dispute_reason: string | null;
+  dispute_outcome: BookingFeeCharge['disputeOutcome'];
+  dispute_response: string | null;
+  dispute_resolved_at: string | null;
+}
+
+/** Newest first. A booking has at most one live fee plus any failed attempts. */
+export async function getBookingFeeCharges(bookingId: string): Promise<BookingFeeCharge[]> {
+  const { data, error } = await supabase.from('booking_fee_charges')
+    .select('id, kind, amount_pence, status, charged_at, pay_by, next_retry_at, created_at, disputed_at, dispute_reason, dispute_outcome, dispute_response, dispute_resolved_at')
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  return ((data ?? []) as BookingFeeChargeRow[]).map(row => ({
+    id: row.id,
+    kind: row.kind,
+    amountPence: row.amount_pence,
+    status: row.status,
+    chargedAt: row.charged_at,
+    payBy: row.pay_by,
+    nextRetryAt: row.next_retry_at,
+    createdAt: row.created_at,
+    disputedAt: row.disputed_at,
+    disputeReason: row.dispute_reason,
+    disputeOutcome: row.dispute_outcome,
+    disputeResponse: row.dispute_response,
+    disputeResolvedAt: row.dispute_resolved_at,
+  }));
+}
+
+/** The fees a client agreed to on a booking, and its timing — the provider's
+ *  own booking only (bookings RLS). */
+export interface BookingFeeTerms {
+  status: string;
+  bookingDate: string;
+  bookingTime: string;
+  endTime: string | null;
+  lateFeePence: number | null;
+  noShowFeePence: number | null;
+}
+
+export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
+  const { data, error } = await supabase.from('bookings')
+    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence')
+    .eq('id', bookingId)
+    .single();
+  if (error) throw error;
+  return {
+    status: data.status,
+    bookingDate: data.booking_date,
+    bookingTime: data.booking_time,
+    endTime: data.end_time,
+    lateFeePence: data.late_fee_pence,
+    noShowFeePence: data.no_show_fee_pence,
+  };
+}
+
+/** Every field booking-fee may answer with; each action reads its own. */
+interface BookingFeeResponse {
+  status?: unknown;
+  payBy?: unknown;
+  clientSecret?: unknown;
+  customerId?: unknown;
+  ephemeralKeySecret?: unknown;
+  livemode?: unknown;
+}
+
+async function bookingFeeAction(body: Record<string, string>, fallback: string): Promise<BookingFeeResponse> {
+  const { data, error } = await supabase.functions.invoke('booking-fee', { body });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, fallback);
+  return (data ?? {}) as BookingFeeResponse;
+}
+
+/** 'charged' when the saved card paid; 'awaiting_client' when it couldn't and
+ *  the client has been asked to pay instead (by `payBy`). */
+export type ChargeBookingFeeResult = { status: 'charged' } | { status: 'awaiting_client'; payBy: string };
+
+export async function chargeBookingFee(bookingId: string, kind: BookingFeeKind): Promise<ChargeBookingFeeResult> {
+  const data = await bookingFeeAction({ action: 'charge', bookingId, kind }, 'Could not charge this fee. Please try again.');
+  return data.status === 'awaiting_client' && typeof data.payBy === 'string'
+    ? { status: 'awaiting_client', payBy: data.payBy }
+    : { status: 'charged' };
+}
+
+/** The provider withdraws an open request for the client to pay. */
+export async function cancelBookingFeeRequest(chargeId: string): Promise<void> {
+  await bookingFeeAction({ action: 'cancel_request', chargeId }, 'Could not cancel this request. Please try again.');
+}
+
+/** What the payment sheet needs to pay a fee the client was asked to pay. */
+export interface FeePaymentSheet {
+  clientSecret: string;
+  customerId: string;
+  ephemeralKeySecret: string;
+}
+
+export async function startBookingFeePayment(chargeId: string): Promise<FeePaymentSheet> {
+  const data = await bookingFeeAction({ action: 'pay', chargeId }, 'Could not open payment. Please try again.');
+  if (typeof data.clientSecret !== 'string' || typeof data.customerId !== 'string' ||
+      typeof data.ephemeralKeySecret !== 'string') {
+    throw new Error('Could not open payment. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return { clientSecret: data.clientSecret, customerId: data.customerId, ephemeralKeySecret: data.ephemeralKeySecret };
+}
+
+/** After the sheet succeeds: records the fee as paid (the webhook does too). */
+export async function confirmBookingFeePayment(chargeId: string): Promise<void> {
+  await bookingFeeAction({ action: 'paid', chargeId }, "Your payment went through but we couldn't confirm it yet. Pull to refresh in a moment.");
+}
+
+export async function refundBookingFee(chargeId: string): Promise<void> {
+  await bookingFeeAction({ action: 'refund', chargeId }, 'Could not refund this fee. Please try again.');
+}
+
+export async function disputeBookingFee(chargeId: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc('dispute_booking_fee', { p_charge_id: chargeId, p_reason: reason });
+  if (error) throw error;
+}
+
+export async function keepDisputedBookingFee(chargeId: string, response: string): Promise<void> {
+  const { error } = await supabase.rpc('keep_disputed_booking_fee', { p_charge_id: chargeId, p_response: response });
+  if (error) throw error;
 }
 
 export async function finalizeCheckoutPaymentIntent(
@@ -9451,6 +10940,8 @@ export interface ConnectStatus {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   requirementsDue?: number;
+  /** Where payouts land — bank name and last four only, never the full number. */
+  bankAccount?: { bankName: string | null; last4: string } | null;
 }
 export interface ProviderFinance {
   connected: boolean;
@@ -9521,6 +11012,87 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
 }
 
+/**
+ * The provider's own payout timing (provider reading their own record). null
+ * when the account has no professional profile yet, so there's nothing to set.
+ */
+export async function getPayoutHoldDays(): Promise<PayoutHoldDays | null> {
+  const { data: { user }, error: authError } = await getSessionUser();
+  if (authError || !user) throw new Error('Please sign in again.');
+  const { data, error } = await supabase.from('providers')
+    .select('payout_hold_days').eq('user_id', user.id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return isPayoutHoldDays(data.payout_hold_days) ? data.payout_hold_days : DEFAULT_PAYOUT_HOLD_DAYS;
+}
+
+/**
+ * Changes how long after an appointment the provider's share is held. A longer
+ * choice also pushes back payouts still held; a shorter one applies to new
+ * bookings only.
+ */
+export async function setPayoutHoldDays(days: PayoutHoldDays): Promise<PayoutHoldDays> {
+  const { data, error } = await supabase.rpc('set_payout_hold_days', { p_days: days });
+  if (error) throw error;
+  if (!isPayoutHoldDays(data)) throw new Error('Payout timing could not be confirmed. Refresh to check it.');
+  return data;
+}
+
+/** A late/no-show fee this provider charged, with their share after Stripe's card fee. */
+export interface ProviderFeeEarning {
+  id: string;
+  bookingId: string;
+  kind: BookingFeeKind;
+  amountPence: number;
+  payoutPence: number | null;
+  status: BookingFeeCharge['status'];
+  payoutStatus: 'pending' | 'held' | 'transferred' | 'cancelled' | 'reversed' | 'failed';
+  releaseAfter: string | null;
+  chargedAt: string | null;
+  openDispute: boolean;
+  serviceName: string | null;
+  customerName: string | null;
+}
+
+interface ProviderFeeEarningRow {
+  id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; payout_pence: number | null;
+  status: BookingFeeCharge['status']; payout_status: ProviderFeeEarning['payoutStatus'];
+  release_after: string | null; charged_at: string | null; disputed_at: string | null; dispute_resolved_at: string | null;
+}
+
+/** Latest 50 charged fees (RLS scopes booking_fee_charges to the caller's own). */
+export async function getProviderFeeEarnings(): Promise<ProviderFeeEarning[]> {
+  const { data, error } = await supabase.from('booking_fee_charges')
+    .select('id, booking_id, kind, amount_pence, payout_pence, status, payout_status, release_after, charged_at, disputed_at, dispute_resolved_at')
+    .in('status', ['succeeded', 'refunded'])
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = (data ?? []) as ProviderFeeEarningRow[];
+  if (rows.length === 0) return [];
+  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
+    .select('id, service_name_snapshot, customer_name')
+    .in('id', rows.map(row => row.booking_id));
+  if (bookingsError) throw bookingsError;
+  return rows.map(row => {
+    const booking = bookings?.find(b => b.id === row.booking_id);
+    return {
+      id: row.id,
+      bookingId: row.booking_id,
+      kind: row.kind,
+      amountPence: row.amount_pence,
+      payoutPence: row.payout_pence,
+      status: row.status,
+      payoutStatus: row.payout_status,
+      releaseAfter: row.release_after,
+      chargedAt: row.charged_at,
+      openDispute: !!row.disputed_at && !row.dispute_resolved_at,
+      serviceName: booking?.service_name_snapshot ?? null,
+      customerName: booking?.customer_name ?? null,
+    };
+  });
+}
+
 export interface RefundRequestInput {
   bookingId: string;
   reason: string;
@@ -9561,6 +11133,11 @@ export interface ProviderRefundState {
   heldPence: number;
   /** True once anything has been refunded; a full refund is then no longer offered. */
   anyRefunded: boolean;
+  /** Whether the client paid the full price in app or only a deposit. */
+  paidAs: 'full' | 'deposit';
+  /** The booking's full price (service + add-ons), in pence. With a deposit,
+   *  the rest was settled off-app and can't be refunded from here. */
+  bookingPricePence: number;
   /**
    * Set once the client's own cancellation was settled by the provider's
    * policy. `hoursBefore` is cancel-to-start, `noticeHours` the policy window,
@@ -9587,7 +11164,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     // for the notice window the settlement summary quotes.
     supabase
       .from('bookings')
-      .select('amount_paid, service_charge, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
+      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
       .eq('id', bookingId)
       .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
@@ -9622,6 +11199,8 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     sharePence: share,
     heldPence: Math.max(0, Math.min(held, paid - refunded)),
     anyRefunded: refunded > 0,
+    paidAs: b.payment_type === 'deposit' ? 'deposit' : 'full',
+    bookingPricePence: Math.round((Number(b.base_price ?? 0) + Number(b.add_ons_total ?? 0)) * 100),
     policySettlement: settled
       ? {
           refundedToClientPence: settlementRow ? Number(settlementRow.amount_pence) : 0,
@@ -9632,6 +11211,81 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
         }
       : null,
   };
+}
+
+interface RefundRequestRow {
+  id: string;
+  booking_id: string;
+  status: RefundRequestStatus;
+  reason: string;
+  message: string | null;
+  outcome_note: string | null;
+  refunded_amount: number | string | null;
+  created_at: string;
+  passed_to_cerviced_at: string | null;
+  resolved_at: string | null;
+}
+
+// provider_note is deliberately absent: its column isn't granted to app users
+// (the provider's reason for passing a request on is for Cerviced only).
+const REFUND_REQUEST_COLUMNS =
+  'id, booking_id, status, reason, message, outcome_note, refunded_amount, created_at, passed_to_cerviced_at, resolved_at';
+
+function mapRefundRequest(r: RefundRequestRow): RefundRequest {
+  return {
+    id: r.id,
+    bookingId: r.booking_id,
+    status: r.status,
+    reason: r.reason,
+    message: r.message,
+    outcomeNote: r.outcome_note,
+    refundedAmount: r.refunded_amount == null ? null : Number(r.refunded_amount),
+    createdAt: r.created_at,
+    passedToCervicedAt: r.passed_to_cerviced_at,
+    resolvedAt: r.resolved_at,
+  };
+}
+
+/**
+ * A client asks for a refund on their own booking. The row is the record and
+ * request_booking_refund() notifies the provider; it refuses anything not
+ * paid through the app, or a second open request. Returns the request id.
+ */
+export async function requestBookingRefund(
+  bookingId: string,
+  reason: string,
+  message: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('request_booking_refund', {
+    p_booking_id: bookingId,
+    p_reason: reason,
+    p_message: message,
+  });
+  if (error) throw error;
+  if (typeof data !== 'string') throw new Error('Refund request returned no id.');
+  return data;
+}
+
+/** The provider isn't refunding: hand the request to Cerviced, with why. */
+export async function passRefundRequestToCerviced(requestId: string, note: string): Promise<void> {
+  const { error } = await supabase.rpc('pass_refund_request_to_cerviced', {
+    p_request_id: requestId,
+    p_note: note,
+  });
+  if (error) throw error;
+}
+
+/** A booking's refund requests, newest first. RLS lets the booking's client
+ *  and its provider read them. */
+export async function getRefundRequestsForBooking(bookingId: string): Promise<RefundRequest[]> {
+  const { data, error } = await supabase
+    .from('refund_requests')
+    .select(REFUND_REQUEST_COLUMNS)
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return (data as RefundRequestRow[] | null ?? []).map(mapRefundRequest);
 }
 
 /** The money half of a CLIENT cancellation: applies the provider's cancellation

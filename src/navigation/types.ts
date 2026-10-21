@@ -48,6 +48,7 @@ export type HomeStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   BookmarkedProviders: undefined;
   Notifications: undefined;
@@ -94,6 +95,7 @@ export type BeccaStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   CartMain: undefined;
@@ -156,6 +158,7 @@ export type CartStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   Notifications: undefined;
@@ -170,7 +173,9 @@ export type ProfileStackParamList = {
    *  Confirm Your Details state, is still mounted) instead of falling back to
    *  ProfileMain. */
   ProfileInfo: { returnToTab?: string } | undefined;
-  BeautyProfile: undefined;
+  /** `openMaintenance` lands on the Maintenance view (a maintenance push or
+   *  in-app notification); `focusItemId` scrolls to that item. */
+  BeautyProfile: { openMaintenance?: boolean; focusItemId?: string } | undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;
   PaymentMethods: undefined;
@@ -200,6 +205,7 @@ export type ProfileStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  ExternalBookingDetail: { externalBookingId: string };
   Reschedule: { bookingId: string };
   BookmarkedProviders: undefined;
   Notifications: undefined;
@@ -217,6 +223,13 @@ export type ProviderHomeStackParamList = {
   // viewMode: lets a caller (the daily-recap notification) open the calendar
   // straight into the list view rather than whichever mode was last used.
   ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
+  // Link-only providers (booking_mode 'external') start this stack here
+  // instead of the booking calendar — see ProviderTabNavigator.
+  LinkOnlyHomeMain: undefined;
+  LinkOnlyAnalytics: undefined;
+  // The provider Becca stack, pushed from the link-only Home (link-only
+  // providers have no Becca tab).
+  BeccaStack: NavigatorScreenParams<ProviderBeccaStackParamList> | undefined;
   ProviderSchedule: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   AddBooking: undefined;
@@ -228,6 +241,9 @@ export type ProviderHomeStackParamList = {
   Branding: undefined;
   Policies: undefined;
   Payments: undefined;
+  // Pushed from the link-only Dashboard's Profile strength rows (Instagram,
+  // accessibility, payment methods), same reasoning as EditProfile above.
+  BusinessInfo: undefined;
   // fromRescheduleRequest: set when opened from a reschedule-request notification,
   // so the screen can say so if that request is no longer open, instead of
   // quietly offering a fresh "propose new times" sheet for a request that's gone.
@@ -303,8 +319,11 @@ export type ProviderServicesStackParamList = {
 // Provider Account Stack (settings for provider users)
 export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
+  // Link-only providers' Profile tab root: their public profile + edit rows.
+  // Their own public profile, exactly as clients see it.
+  MyPublicProfile: { providerId: string };
   EditProfile: { transferProviderId?: string } | undefined;
-  Notifications: undefined;
+  NotificationSettings: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Analytics: undefined;
   Promotions: undefined;
@@ -365,6 +384,26 @@ export type ProviderTabParamList = {
   ProviderHome: NavigatorScreenParams<ProviderHomeStackParamList>;
   MyServices: NavigatorScreenParams<ProviderServicesStackParamList>;
   Profile: NavigatorScreenParams<ProviderAccountStackParamList>;
+  // Link-only providers only (see ProviderTabNavigator).
+  LinkOnlyPortfolio: NavigatorScreenParams<LinkOnlyPortfolioStackParamList>;
+  LinkOnlyMessages: NavigatorScreenParams<LinkOnlyMessagesStackParamList>;
+};
+
+export type LinkOnlyPortfolioStackParamList = {
+  LinkOnlyPortfolioMain: undefined;
+  /** Their own profile, as clients see it (ProviderProfileScreen). */
+  MyPublicProfile: { providerId: string };
+};
+
+export type LinkOnlyMessagesStackParamList = {
+  ProviderInbox:
+    | { initialFilter?: "enquiries" | "messages" | "unread" }
+    | undefined;
+  ProviderConversation: {
+    conversationId: string;
+    clientUserId: string;
+    clientName: string;
+  };
 };
 
 // Tab Navigator

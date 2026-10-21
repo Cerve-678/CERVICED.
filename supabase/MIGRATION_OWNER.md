@@ -25,6 +25,110 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-21 (daily "people saved you" count)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020150000 | `provider_saved_digest` | **APPLIED 2026-10-21** by Claude (Supabase CLI `db query -f`) on the user's OK, version recorded by the file. Verified live: `provider_saved` in the CHECK (49 → 50 types), table RLS on with 0 policies and no `authenticated` select, 13/13 existing saves backfilled, cron `provider-saved-digest` `0 18 * * *`, `authenticated` cannot execute the function, and a rolled-back dry run returned 0. Frontier at authoring: `20261020140000` (re-verified the morning of the apply). Adds notification type `provider_saved` (CHECK rebuilt from the live constraint), private table `provider_saver_digest_counted` (RLS on, no policies, backfilled with every existing save), index `bookmarks_created_at_idx`, `process_provider_saved_digest()` and cron `provider-saved-digest` at 18:00 UTC. Redefines nothing else. The file records its own version. `send-push-notification` DEPLOYED 2026-10-21 as v20 from feat/provider-saved-digest (verify_jwt true). Live v19 was byte-identical to PR #137's file first; v20 adds only the `providerSaves` mapping and default. |
+
+### Applied 2026-10-20 (per-card logo framing)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020140000 | `providers_logo_framing` | **APPLIED 2026-10-20** by the user (SQL editor; the file's own INSERT records the version). Verified: `providers?select=logo_framing` returns 200 through the public API. Frontier at authoring: `20261020120000`. Adds nullable `providers.logo_framing jsonb` + a CHECK that it's an object. Additive, no backfill, no policy change. Must be applied **before** the app change merges: Home's provider select names the column. The file records its own version. |
+
+### Applied 2026-10-20 (no more +30 for booking the same provider again)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020120000 | `remove_returning_client_points` | **APPLIED 2026-10-20** by Claude (MCP execute_sql) on the user's OK, version recorded; verified live: no `returning_client` in the function, new md5 `0c88c927c13abf46663c7953f9bf3a04`, trigger still attached. Frontier at authoring: `20261019233000` (`20261019235500` written, unapplied, numbered below this). Redefines `award_points_on_booking_completed()` from the live definition (md5 `fc6b7188cddaff0fed1fe710440bd00c`) minus the `returning_client` (+30) block. Existing `returning_client` ledger rows (20 at authoring) are kept. The file records its own version. No app or function deploy needed. |
+
+**Knock-on:** `20261019235500_listing_claims_checked_by_instagram` (written, unapplied) is now below the frontier. Renumber it above `20261020120000` before applying it, or `supabase migration up` skips it.
+
+### Applied 2026-10-20 (link-only Dashboard counts)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019234000 | `link_only_dashboard_extras` | **APPLIED 2026-10-20** by Claude (execute_sql, so the version is the authored one, not a wall-clock stamp), version recorded. Frontier at authoring: `20261019233000`; numbered below the then-unapplied `20261019235500` (listing claims) and `20261020120000` (returning-client points) so it couldn't push them below the frontier. `20261020120000` was applied by the time this landed, so `20261019235500` (listing claims, unapplied) is now below the frontier — record it by hand when it's applied. Adds read-only `get_my_link_only_dashboard_extras()` + indexes `client_external_bookings_provider_created_idx`, `bookmarks_provider_created_idx`, `users_saved_portfolio_gin`. Redefines nothing. Verified live as the one link-only provider. |
+
+### Applied 2026-10-19 (expired holds cleared before a booking is saved)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019233000 | `clear_expired_holds_before_booking` | **APPLIED 2026-10-19** by the user (SQL editor), version recorded; verified live: trigger present and ordered first, claim skip present, `enforce_booking_bookability` md5 unchanged. Frontier at authoring: `20261019230000`. Adds `clear_expired_holds_before_booking()` + trigger `before_booking_clear_expired_holds` (fires before `before_booking_enforce_bookability`, same events). Deletes the provider's lapsed `on_hold` cart holds (guards as `expire_cart_holds()`, plus: not NEW's own row/batch, not a batch with a payment intent) so the overlap check and `bookings_no_overlap` stop rejecting a time the picker already shows as free in the up-to-5-minute gap before the cron sweep. Redefines nothing; `enforce_booking_bookability` md5 `d38065c2c030dbf211263cee389259e6` stays. The file records its own version. |
+
+### Applied 2026-10-19 (checkout clears the client's own stale holds)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019230000 | `prepare_checkout_clears_own_stale_holds` | **APPLIED 2026-10-19** by the user (SQL editor), version recorded; verified live: fix block present, and the definition minus that block md5-matches the pre-change live one. Frontier at authoring: `20261019210000`; live `prepare_checkout` md5 before: `c1ef1dfa54bf2786849ddfb421ffc97a`. Redefines `prepare_checkout()` from the live definition plus one block: before holding, `cancel_checkout()` each of the caller's other `prepared` batches with no `payment_intent_id` that holds an `on_hold` slot with a provider on a date this checkout books. Fixes a client being blocked by their own abandoned checkout ("That time is no longer available"). No app or function deploy needed. Apply the file, then `INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('20261019230000', 'prepare_checkout_clears_own_stale_holds');` |
+
+### Applied 2026-10-19 (automatic fee retries)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019210000 | `fee_auto_retries` | **APPLIED 2026-10-19** by the user, version recorded; verified live (three columns, terms version '2026-10-19-retries', `process_due_payouts` retry check). `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed from `feat/fee-auto-retry` (ea156501). Frontier at authoring: `20261019170000`; numbered above the unapplied `20261019150000` / `20261019190000` on other branches. Adds `booking_fee_charges.retry_payment_method_id` / `retry_count` / `next_retry_at`, redefines `process_due_payouts()` (from 20261019170000's, verified live) to wake on due retries, seeds fee terms version '2026-10-19-retries' (sha256 checked against Postgres before commit). Apply, record the version, then deploy `booking-fee`, `client-saved-cards`, `release-payouts` from the branch. |
+
+### Applied 2026-10-19 (fee payment requests)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019170000 | `fee_payment_requests` | **APPLIED 2026-10-19** by the user (SQL editor), version recorded; verified live: status constraint, both columns, notification types, `process_due_payouts` lapse check. `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed from `feat/fee-pay-request` (b291bf40, includes the review fixes). Frontier at authoring: `20261019140000`. `booking_fee_charges` status gains `awaiting_client` (+ `stripe_invoice_id`, `pay_by`); `notifications_type_check` rebuilt from live (verified 2026-10-19) + `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed`; `process_due_payouts()` reproduced from live + a lapse check. Apply, record the version, then deploy `booking-fee`, `stripe-webhook`, `release-payouts` from the branch. Deploying the functions first would fail every request on the old status constraint. |
+
+### Applied 2026-10-19 (fee terms wording version '2026-10-19')
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019140000 | `fee_terms_version_2026_10_19` | **APPLIED 2026-10-19** by the user in the SQL editor; row verified live. Version NOT yet recorded in schema_migrations (insert it by hand). `client-saved-cards` v2 (card lock) deployed from `feat/saved-card-fee-followups`. Data only: one `fee_terms_versions` row; sha256 checked against Postgres before commit (44b1d39d…). Apply BEFORE the app build with the new tick-box line ships, or its fee checkouts are refused. Frontier at authoring: `20261019120000`. No lock needed (insert-only, `ON CONFLICT DO NOTHING`). |
+
+### Applied 2026-10-19 (saved cards + fee consent records)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019120000 | `saved_cards_and_fee_consent_records` | **APPLIED 2026-10-19** by the user pasting it into the SQL editor; version recorded by hand. Verified live: three tables, `fee_terms_versions` sha256 = app's, 5-arg `accept_checkout_fees` with the changed-fees guard, `booking_fee_charges.fee_consent_record_id`. `client-saved-cards` v1, `create-payment-intent` v16, `booking-fee` v3 deployed from the branch. Frontier at authoring: `20261019011825` (`client_stripe_customer_id`, applied 2026-10-19 by another session; file added as `20261019011825_client_stripe_customer_id.sql`). New `client_stripe_customers` (service role only), `fee_terms_versions` (seeded '2026-10-18', sha256 by trigger), `fee_consent_records` (own-row read), `booking_fee_charges.fee_consent_record_id`; replaces `accept_checkout_fees(uuid)` with the five-argument version. Paste into the SQL editor, record the version, then deploy `client-saved-cards`, `create-payment-intent`, `booking-fee` from the same branch. |
+
+### Applied 2026-10-19 (link-only lifecycle emails)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019190000 → **20261019104123** | `link_only_lifecycle_emails` | **Applied 2026-10-19** via `apply_migration`, which recorded the wall-clock version; file renamed to match. Below the frontier (`20261019170000`) but harmless: that one only adds fee tables. Verified live: `users.link_only_live_email_sent_at` / `link_only_reminder_sent_at`, `request_link_only_email` + `send_link_only_go_live_reminders` (SECURITY DEFINER, search_path pinned, not anon-executable), `handle_provider_gone_live` with the link-only branch, cron `link-only-go-live-reminders` at 11:10. `send-link-only-email` deployed first. File is on `feat/link-only-emails` (PR #106). |
+
+### Applied 2026-10-18 (link-only providers)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018200000 | `link_only_providers` | **Applied 2026-10-18** by the user pasting it into the SQL editor; the paste recorded the version. Renumbered from 20261017120000 as five other migrations landed ahead of it; cleared with cerviced-56, -c3, -a9, -d6 first. Verified live: `providers.booking_mode` + both constraints, `client_external_bookings` / `provider_daily_stats` / `provider_stat_viewers` with RLS, four triggers, four RPCs executable by authenticated only, external branch in `check_and_set_provider_live`, `delete_client_profile` keeping beauty_maintenance's deletes. Frontier before apply: `20261018190000`. File is on `feat/link-only-provider`. |
+
+### Applied 2026-10-18 (Beauty Maintenance)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018180000 | `beauty_maintenance` | **Applied 2026-10-18** by the user pasting it into the SQL editor; version recorded in `schema_migrations` by hand afterwards. Renumbered from 20261010120000, which sat below the frontier. Post-apply verified: maintenance_items / maintenance_settings / maintenance_service_types (15 rows), RLS on, both triggers, the `client-maintenance-reminders` cron job, notifications_type_check keeping the fee, refund-request and maintenance types, and process_rebooking_nudges reading maintenance_items. Frontier before apply: `20261018165847`. Next in queue: cerviced-c3's `20261018190000` (refund payout protection). |
+
+### Applied 2026-10-18 (provider payout shortfalls)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018190000 | `provider_payout_shortfalls` | **APPLIED 2026-10-18** (SQL editor paste, verified live, recorded by hand). File is on feat/refund-payout-protection. Deploy release-payouts, stripe-webhook, apply-cancellation-refund, booking-fee and refund-payment from that branch. |
+
+### Applied 2026-10-18 (late and no-show fees)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261018100000 | `late_and_no_show_fees` | **Applied 2026-10-18** by the user pasting the file into the SQL editor (branch `feat/late-no-show-fees`); version recorded in `schema_migrations` by hand afterwards. Post-apply verified: `bookings.late_fee_pence/no_show_fee_pence`, `checkout_batches.fee_consent_at`, `users.stripe_customer_id` + both guard triggers, `booking_fee_charges` (RLS on, client/provider read policies only, no client writes), the six functions (anon EXECUTE = false), `notifications_type_check` with the three fee types, `process_due_payouts` checking fee payouts. Includes the saved-cards branch's `20261018120000` column + guard verbatim (idempotent), so that file is now a no-op when applied. Frontier before apply: `20261011102423`. |
+
+### Applied 2026-10-11 (sign-up booking link staged on users)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261011102423 | `users_external_booking_url` | **Applied 2026-10-11** via `apply_migration` (authored as 20261010120000, renamed to the version the tool recorded). Adds nullable `users.external_booking_url text` — the "I use my own booking link" answer from SignUpStep1, staged like the other sign-up answers and copied to `providers.external_booking_url` on the first InfoReg save. Additive only; table-level grants cover the new column. Frontier at authoring: `20261003120000`. Note: `wt-service-chips`' committed lock (session 4fe95792, since 2026-09-08, unrelated service-type cooldown migration) was found stale — main showed `(none)` and later migrations had already been applied over it. |
+
+### PENDING APPLY 2026-10-10 (Beauty Maintenance)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261010120000 | `beauty_maintenance` | **Written, NOT yet applied** (branch `feat/beauty-maintenance`). Frontier at authoring: `20261003120000`, re-checked 2026-10-11. New owner-only tables `maintenance_service_types` / `maintenance_settings` / `maintenance_items`; widens `notifications_type_check` (+`maintenance_due`, `aftercare_available`); new trigger `on_booking_completed_maintenance`; new cron `client-maintenance-reminders` (09:30 daily). Redefines three live functions, each reproduced from verified-live `pg_get_functiondef` with commented deltas: `process_client_appointment_reminders` (prep line), `process_rebooking_nudges` (maintenance skip; **gains** `SET search_path`), `delete_client_profile` (deletes the two new tables). Re-diff those three against live immediately before applying — another session may have redefined them since. Apply via the SQL editor (the MCP `apply_migration` stamps its own version; rename the file to match if used). |
+
 ### Applied 2026-10-03 (no info pack on a cancelled booking)
 
 | Authored version | Name | Status |

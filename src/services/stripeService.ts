@@ -6,6 +6,10 @@ import {
 interface CreatePaymentIntentResult {
   clientSecret: string;
   paymentIntentId: string;
+  customerId?: string;
+  ephemeralKeySecret?: string;
+  /** The server allows PayPal on this intent (never with late/no-show fees). */
+  paypalAvailable: boolean;
 }
 
 /** Creates a Stripe PaymentIntent from a prepared server-owned checkout.

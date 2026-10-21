@@ -1,5 +1,5 @@
 // src/screens/auth/EmailVerificationScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
@@ -25,6 +25,7 @@ import { isBiometricAvailable, getBiometricLabel, enableBiometric } from '../../
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { Ionicons } from '@expo/vector-icons';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
@@ -42,6 +43,15 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  // A short wait before the code can be resent, so a second tap doesn't
+  // send a second email while the first is still arriving.
+  const RESEND_WAIT_S = 30;
+  const [resendIn, setResendIn] = useState(RESEND_WAIT_S);
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn(n => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   const handleOtpChange = (value: string, index: number) => {
     if (value.length === 6) {
@@ -127,7 +137,6 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         referral_source:       meta['referral_source']       ?? null,
         gender:                meta['gender']                ?? null,
         has_kids:              meta['has_kids']               ?? false,
-        team_size:             meta['team_size']               ?? null,
         // Staged on users (INT), copied to providers.years_experience by
         // InfoRegScreen's first-save prefill. Signup sends it as a numeric
         // string; coerce and drop anything non-numeric rather than upserting a
@@ -141,6 +150,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         price_range:               meta['price_range']               ?? null,
         preferred_contact_methods: meta['preferred_contact_methods'] ?? [],
         preferred_payment_methods: meta['preferred_payment_methods'] ?? [],
+        external_booking_url:      meta['external_booking_url']      ?? null,
       };
 
       try {
@@ -215,6 +225,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       await resendSignupOtp(email);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
+      setResendIn(RESEND_WAIT_S);
       Alert.alert('Sent!', 'A new code has been sent to your email.');
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -229,15 +240,17 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
+          <View style={[styles.content, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 32 }]}>
+            <Text style={[styles.step, { color: t.sub }]}>LAST STEP</Text>
 
-            <View style={[styles.iconCircle, { backgroundColor: t.surface }]}>
-              <Text style={[styles.iconGlyph, { color: t.accent }]}>✉️</Text>
+            <View style={[styles.iconTile, { backgroundColor: t.accentDim }]}>
+              <Ionicons name="mail-outline" size={30} color={t.accentText} />
             </View>
 
             <Text style={[styles.title, { color: t.text }]}>Check your email</Text>
-            <Text style={[styles.subtitle, { color: t.sub }]}>We sent a 6-digit code to</Text>
-            <Text style={[styles.emailText, { color: t.text }]}>{email}</Text>
+            <Text style={[styles.subtitle, { color: t.sub }]}>
+              We sent a 6-digit code to <Text style={{ color: t.text, fontWeight: '700' }}>{email}</Text>
+            </Text>
 
             <View style={styles.otpRow}>
               {otp.map((digit, index) => (
@@ -246,11 +259,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
                   ref={ref => { inputRefs.current[index] = ref; }}
                   style={[
                     styles.otpBox,
-                    {
-                      color: t.text,
-                      backgroundColor: t.surface,
-                      borderColor: digit ? t.accent : t.border,
-                    },
+                    { color: t.text, backgroundColor: t.card, borderColor: digit ? t.accent : t.border, borderWidth: digit ? 2 : 1 },
                   ]}
                   value={digit}
                   onChangeText={val => handleOtpChange(val, index)}
@@ -260,9 +269,28 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
                   textAlign="center"
                   selectionColor={t.accent}
                   autoFocus={index === 0}
+                  textContentType="oneTimeCode"
+                  accessibilityLabel={`Digit ${index + 1}`}
                 />
               ))}
             </View>
+
+            <TouchableOpacity
+              style={[styles.secondaryBtn, { borderColor: t.border }]}
+              onPress={handleResend}
+              activeOpacity={0.6}
+              disabled={resending || resendIn > 0}
+            >
+              {resending ? (
+                <ActivityIndicator color={t.text} />
+              ) : (
+                <Text style={[styles.secondaryBtnText, { color: resendIn > 0 ? t.sub : t.accentText }]}>
+                  {resendIn > 0 ? `Resend code in 0:${String(resendIn).padStart(2, '0')}` : 'Resend code'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ flex: 1 }} />
 
             <TouchableOpacity
               style={[styles.primaryBtn, { backgroundColor: t.accent }]}
@@ -271,22 +299,9 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
               disabled={isVerifying}
             >
               {isVerifying ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={t.onAccent} />
               ) : (
-                <Text style={styles.primaryBtnText}>VERIFY EMAIL</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.secondaryBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-              onPress={handleResend}
-              activeOpacity={0.6}
-              disabled={resending}
-            >
-              {resending ? (
-                <ActivityIndicator color={t.text} />
-              ) : (
-                <Text style={[styles.secondaryBtnText, { color: t.text }]}>Resend code</Text>
+                <Text style={[styles.primaryBtnText, { color: t.onAccent }]}>VERIFY & FINISH</Text>
               )}
             </TouchableOpacity>
 
@@ -308,85 +323,17 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  iconGlyph: { fontSize: 36 },
-  title: {
-    fontSize: 28,
-    fontFamily: 'BakbakOne-Regular',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  emailText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  otpRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 36,
-  },
-  otpBox: {
-    width: 48,
-    height: 56,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    fontSize: 22,
-    fontFamily: 'BakbakOne-Regular',
-  },
-  primaryBtn: {
-    width: '100%',
-    minHeight: 52,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  primaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    letterSpacing: 1,
-    color: '#FFFFFF',
-  },
-  secondaryBtn: {
-    width: '100%',
-    minHeight: 52,
-    borderRadius: 100,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  secondaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    letterSpacing: 0.5,
-  },
-  backLink: { paddingVertical: 8 },
-  backLinkText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 14,
-  },
+  content: { flex: 1, paddingHorizontal: 20 },
+  step: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: 28 },
+  iconTile: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 36, letterSpacing: 0.5, marginBottom: 8 },
+  subtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, lineHeight: 22, marginBottom: 28 },
+  otpRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
+  otpBox: { flex: 1, height: 58, borderRadius: 14, fontSize: 24, fontFamily: 'BakbakOne-Regular' },
+  secondaryBtn: { alignSelf: 'flex-start', minHeight: 44, borderRadius: 100, borderWidth: 1, paddingHorizontal: 16, justifyContent: 'center' },
+  secondaryBtnText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700' },
+  primaryBtn: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
+  primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
+  backLink: { alignSelf: 'center', paddingVertical: 14 },
+  backLinkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
 });

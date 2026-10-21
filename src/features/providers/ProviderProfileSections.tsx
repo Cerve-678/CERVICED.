@@ -36,26 +36,30 @@ interface SectionPalette {
   highlightColors: [string, string];
 }
 
-export const ProviderSpecialtiesSection = React.memo(function ProviderSpecialtiesSection({
-  specialties,
+/** A link-only profile's own Specialities section. Link-only profiles carry
+ *  no price list, so specialities are the main signal of what they do and get
+ *  a section of their own; full providers show them as the first group in
+ *  Additional Information instead. */
+export const ProviderSpecialitiesSection = React.memo(function ProviderSpecialitiesSection({
+  specialities,
   textColor,
   accent,
 }: {
-  specialties: string[];
+  specialities: readonly string[];
   textColor: string;
   accent: string;
 }) {
-  if (specialties.length === 0) return null;
+  if (specialities.length === 0) return null;
   return (
     <View style={styles.plainSection}>
-      <Text style={[styles.plainTitle, { color: textColor }]}>Specialties</Text>
+      <Text style={[styles.plainTitle, { color: textColor }]}>Specialities</Text>
       <View style={styles.chipRow}>
-        {specialties.map(specialty => (
+        {specialities.map(speciality => (
           <View
-            key={specialty}
+            key={speciality}
             style={[styles.chip, { borderColor: `${accent}55`, backgroundColor: `${accent}18` }]}
           >
-            <Text style={[styles.chipText, { color: textColor }]}>{specialty}</Text>
+            <Text style={[styles.chipText, { color: textColor }]}>{speciality}</Text>
           </View>
         ))}
       </View>
@@ -118,11 +122,22 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
 
 export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHoursSection({
   openingHours,
+  loading = false,
   palette,
 }: {
   openingHours: WeeklyOpeningHoursDay[] | null;
+  loading?: boolean;
   palette: SectionPalette;
 }) {
+  if (loading) {
+    return (
+      <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }]}>
+        <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
+        <View style={[styles.loadingLine, { backgroundColor: palette.separator }]} />
+        <View style={[styles.loadingLine, styles.loadingLineShort, { backgroundColor: palette.separator }]} />
+      </View>
+    );
+  }
   if (!openingHours || openingHours.length === 0) return null;
   const today = new Date().getDay();
   return (
@@ -315,11 +330,13 @@ function tileHeight(item: DbPortfolioItem, width: number): number {
 
 export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSection({
   items,
+  loading = false,
   palette,
   onOpenImage,
   interactiveImages = true,
 }: {
   items: DbPortfolioItem[];
+  loading?: boolean;
   palette: SectionPalette;
   onOpenImage: (images: { uri: string }[], index: number) => void;
   interactiveImages?: boolean;
@@ -342,6 +359,19 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
     });
     return result;
   }, [items, inlineColumnWidth]);
+
+  if (loading) {
+    return (
+      <View style={styles.portfolioSection}>
+        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        <View style={styles.columns}>
+          {[0, 1].map(column => (
+            <View key={column} style={[styles.loadingPortfolioTile, { backgroundColor: palette.separator }]} />
+          ))}
+        </View>
+      </View>
+    );
+  }
 
   if (items.length === 0) return null;
 
@@ -495,11 +525,15 @@ const styles = StyleSheet.create({
   venueTile: { width: 150, height: 105, borderRadius: 14, overflow: "hidden" },
   venueImage: { width: "100%", height: "100%" },
   portfolioSection: { marginTop: 20, marginBottom: 20 },
+  loadingSection: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, padding: 18, gap: 10, minHeight: 118 },
+  loadingLine: { height: 12, borderRadius: 6, width: "100%" },
+  loadingLineShort: { width: "68%" },
   portfolioHeading: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   portfolioSeeAll: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12 },
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
     position: "absolute", left: 0, right: 0, bottom: 0,
     paddingHorizontal: 10, paddingTop: 14, paddingBottom: 8,

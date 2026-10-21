@@ -11,8 +11,10 @@ import {
   Modal,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { SlideUpOnMount } from '../../components/SlideUpOnMount';
@@ -23,8 +25,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
-import { canDisputeNoShow, PaymentStatus } from '../../types/booking';
+import { canDisputeNoShow, PaymentStatus, type RefundRequest } from '../../types/booking';
+import { passRefundRequestOn } from '../../features/bookings/bookingSupportRequest';
+import { isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
@@ -58,6 +63,7 @@ import {
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
   getServiceDurationsByIds,
+  getRefundRequestsForBooking,
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
@@ -67,7 +73,7 @@ import {
 } from '../../services/databaseService';
 import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
-import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes } from '../../utils/dateUtils';
+import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
@@ -130,7 +136,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
-  const { showAlert, DialogHost } = useAppDialog();
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   // Deliberately NOT wired to BookingContext: that cache is the client hat's
   // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
   // come from the client_bookings view where the address is masked until
@@ -214,6 +220,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [disputeBusy, setDisputeBusy] = useState(false);
   // Refund: the sheet owns its own form state and is mounted only while open.
   const [refundOpen, setRefundOpen] = useState(false);
+  // The client's own refund request, if they made one (refund_requests) —
+  // distinct from the idempotency key IssueRefundSheet uses for a refund this
+  // provider issues. Issuing any refund closes it server-side.
+  const [clientRefundRequest, setClientRefundRequest] = useState<RefundRequest | null>(null);
+  const [clientRefundNonce, setClientRefundNonce] = useState(0);
+  const [showPassOnModal, setShowPassOnModal] = useState(false);
+  const [passOnNote, setPassOnNote] = useState('');
+  const [passOnBusy, setPassOnBusy] = useState(false);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
   const [groupDateOptions, setGroupDateOptions] = useState<
@@ -975,6 +989,48 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     });
   }, [booking, cancelBooking, navigation, groupSuffix]);
 
+  useEffect(() => {
+    void clientRefundNonce;
+    if (!bookingId) return undefined;
+    let active = true;
+    getRefundRequestsForBooking(bookingId)
+      .then(rows => {
+        if (!active) return;
+        const open = rows.find(isRefundRequestOpen) ?? null;
+        setClientRefundRequest(open);
+      })
+      // The request is safe server-side and the notification has it; without
+      // the card the provider can still refund from the ⋯ sheet.
+      .catch(err => logger.error('[ProviderBookingDetail] refund requests failed to load:', err));
+    return () => { active = false; };
+  }, [bookingId, clientRefundNonce]);
+
+  const submitPassOn = useCallback(async () => {
+    if (!booking || !clientRefundRequest || !passOnNote.trim() || passOnBusy) return;
+    setPassOnBusy(true);
+    try {
+      const { ticketNumber } = await passRefundRequestOn(booking, clientRefundRequest, passOnNote, activeMode);
+      setShowPassOnModal(false);
+      setPassOnNote('');
+      setClientRefundNonce(n => n + 1);
+      showAlert(
+        'Passed to Cerviced',
+        ticketNumber
+          ? `Cerviced will review it against your policy and let you both know. Your reference is #${ticketNumber}.`
+          : `Cerviced will review it against your policy. We couldn't reach support just now, so email ${SUPPORT_EMAIL} if you don't hear back.`,
+      );
+    } catch (err) {
+      logger.error('[ProviderBookingDetail] pass refund request on failed:', err);
+      showAlert(
+        "Couldn't Pass It On",
+        // pass_refund_request_to_cerviced()'s guards are written for people.
+        toUserMessageAllowingDbGuard(err, 'Please try again in a moment.', 'ProviderBookingDetail.passRefundRequestOn'),
+      );
+    } finally {
+      setPassOnBusy(false);
+    }
+  }, [booking, clientRefundRequest, passOnNote, passOnBusy, activeMode, showAlert]);
+
   // Issue a refund through the same Stripe-backed path the Payments screen
   // uses (IssueRefundSheet -> refund-payment edge function). This returns the
   // client's money; it deliberately does NOT cancel the appointment —
@@ -989,6 +1045,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         : isFull ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
     }));
     setRefundOpen(false);
+    // The bookings trigger has closed the client's request, if there was one.
+    setClientRefundNonce(n => n + 1);
     showAlert(title, message);
   }, [showAlert]);
 
@@ -1115,7 +1173,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const totalPrice = (booking.price ?? 0) + (booking.addOns?.reduce((s: number, a: { price: number }) => s + (a.price ?? 0), 0) ?? 0);
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
   const perf = isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
-  const cardBorder = isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.90)';
+  // One outline for the card edge AND the tear-line notches, so it reads as a
+  // single line that dips in at each notch. A separate notch rim showed up as a
+  // ring stuck on the card, and the old near-white edge was invisible on the
+  // light background, so the cut-outs didn't read at all.
+  const cardBorder = isDarkMode ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.10)';
   const rowDiv = isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
   const timeRange = booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime
     ? `${booking.bookingTime} – ${booking.endTime}`
@@ -1228,6 +1290,55 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
                 </View>
               )}
+
+              {/* ── The client's refund request ── Asked for, not owed: the
+                  provider refunds it, or passes it to Cerviced with a reason. */}
+              {clientRefundRequest && (() => {
+                const withCerviced = clientRefundRequest.status === 'under_review';
+                const canRefund = booking.paymentStatus === PaymentStatus.DEPOSIT_PAID
+                  || booking.paymentStatus === PaymentStatus.PAID_IN_FULL
+                  || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
+                const asked = formatShortDayDate(new Date(clientRefundRequest.createdAt));
+                return (
+                  <View style={[styles.refundAskCard, { backgroundColor: P.iconBg, borderColor: P.border }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name={withCerviced ? 'shield-checkmark-outline' : 'arrow-undo-outline'} size={16} color={P.accent} />
+                      <Text style={{ color: P.text, fontWeight: '700', fontSize: 14, flex: 1 }}>
+                        {withCerviced ? 'Refund request with Cerviced' : 'Refund requested'}
+                      </Text>
+                      <Text style={{ color: P.sub, fontSize: 12 }}>{asked}</Text>
+                    </View>
+                    <Text style={{ color: P.text, fontSize: 13, fontWeight: '600' }}>{clientRefundRequest.reason}</Text>
+                    {!!clientRefundRequest.message && (
+                      <Text style={{ color: P.sub, fontSize: 13, lineHeight: 18 }}>“{clientRefundRequest.message}”</Text>
+                    )}
+                    {withCerviced ? (
+                      <Text style={{ color: P.sub, fontSize: 12, lineHeight: 17 }}>
+                        You passed this to Cerviced. We'll review it against your policy and let you both know.
+                      </Text>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                        {canRefund && (
+                          <TouchableOpacity
+                            style={[styles.refundAskBtn, { backgroundColor: P.accent, borderColor: P.accent }]}
+                            onPress={handleRefund}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.refundAskBtnText, { color: '#FFFFFF' }]}>Issue a refund</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[styles.refundAskBtn, { backgroundColor: P.card, borderColor: P.border }]}
+                          onPress={() => { setPassOnNote(''); setShowPassOnModal(true); }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.refundAskBtnText, { color: P.text }]}>Pass to Cerviced</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* ── Perforated divider ── */}
               <Perf color={perf} notch={P.bg} edge={cardBorder} />
@@ -1996,6 +2107,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           </View>
         )}
 
+        {!!(booking.id || bookingId) && (
+          <BookingFeeCard
+            bookingId={booking.id || bookingId}
+            role="provider"
+            otherName={booking.customerName?.split(' ')[0]}
+            refreshKey={String(booking.status)}
+            colors={{ card: P.card, text: P.text, sub: P.sub, border: P.border, accent: P.accent, onAccent: P.ice }}
+            showConfirm={showConfirm}
+            showAlert={showAlert}
+          />
+        )}
+
         {/* A no-show the CLIENT recorded against this provider. Terminal, so
             it sits outside the isActive action block above — disputing does
             not undo it, it records the disagreement, tells the client, and
@@ -2685,6 +2808,74 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </View>
       </Modal>
 
+      {/* ── Pass a client's refund request to Cerviced ──────────────────
+          Never a final "no" from the provider: Cerviced decides, so the
+          reason is required and goes to support (not to the client). */}
+      <Modal
+        visible={showPassOnModal}
+        transparent statusBarTranslucent navigationBarTranslucent
+        animationType="fade"
+        onRequestClose={() => { if (!passOnBusy) setShowPassOnModal(false); }}
+      >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <TouchableOpacity
+            style={[styles.refundOverlay, StyleSheet.absoluteFill]}
+            activeOpacity={1}
+            onPress={() => { if (!passOnBusy) setShowPassOnModal(false); }}
+          />
+          <View style={[styles.refundSheet, { backgroundColor: P.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
+              <View style={styles.refundHead}>
+                <View style={[styles.refundHeadIcon, { backgroundColor: P.iconBg }]}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={P.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.refundTitle, { color: P.text }]}>Pass to Cerviced</Text>
+                  <Text style={{ color: P.sub, fontSize: 13 }} numberOfLines={1}>
+                    {booking?.customerName || 'Client'} · {clientRefundRequest?.reason ?? 'Refund request'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ color: P.text, fontSize: 13, lineHeight: 18 }}>
+                Not refunding this? Tell Cerviced why. We'll review it against your policy and let you and the client know. Your reason goes to Cerviced, not to the client.
+              </Text>
+              <TextInput
+                style={[styles.respondInput, {
+                  color: P.text,
+                  backgroundColor: P.card,
+                  borderColor: P.border,
+                  minHeight: 80,
+                  textAlignVertical: 'top',
+                  marginTop: 12,
+                }]}
+                placeholder="Why you're not refunding (required)"
+                placeholderTextColor={P.text + '44'}
+                value={passOnNote}
+                onChangeText={setPassOnNote}
+                multiline
+                maxLength={1000}
+                editable={!passOnBusy}
+              />
+            </ScrollView>
+            <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
+              <TouchableOpacity
+                style={[styles.refundCta, { backgroundColor: P.accent }, !passOnNote.trim() && { opacity: 0.5 }]}
+                activeOpacity={0.8}
+                disabled={!passOnNote.trim() || passOnBusy}
+                onPress={submitPassOn}
+              >
+                {passOnBusy
+                  ? <ActivityIndicator size="small" color="#FFFFFF" />
+                  : <Text style={styles.refundCtaText}>Pass to Cerviced</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {refundOpen && booking && (
         <IssueRefundSheet
           booking={{ id: booking.id, customerName: booking.customerName, serviceName: booking.serviceName }}
@@ -2863,8 +3054,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
 /** Tear line between receipt sections: a dashed rule with a half-circle
  *  notch at each edge. The notches are filled with the screen background,
- *  clipped by the card's rounded overflow, and rimmed in the card's edge
- *  colour, so they read as cut-outs. */
+ *  clipped by the card's rounded overflow, and rimmed in the card's own edge
+ *  colour and width, so the outline runs unbroken into each cut-out. */
 function Perf({ color, notch, edge }: { color: string; notch: string; edge: string }) {
   return (
     <View style={styles.perfRow}>
@@ -3504,6 +3695,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 10,
   },
+  refundOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  // Full-width bottom modal; its backdrop sits behind it so the top rounding
+  // is not obscured by a separate overlay edge.
+  refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 8 },
+  refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
+  refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },
+  refundFoot: { paddingHorizontal: 18, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 2 },
+  refundCta: { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
+  refundCtaText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
+  refundAskCard: { marginHorizontal: 18, marginTop: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6 },
+  refundAskBtn: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 10, alignItems: 'center' },
+  refundAskBtnText: { fontWeight: '700', fontSize: 13 },
   datePickBtn: {
     flexDirection: 'row',
     alignItems: 'center',

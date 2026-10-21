@@ -1,6 +1,7 @@
 import type Stripe from 'npm:stripe@17.4.0';
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
 import { adjustPayout } from './refundPlan.ts';
+import { takeBackFromProvider } from './takeBack.ts';
 
 // Records one Stripe refund against its booking and, exactly once, takes the
 // matching amount back from the provider's payout. Runs from refund-payment,
@@ -119,7 +120,7 @@ async function takeBackFromPayout(
   adjustPence: number,
 ) {
   const { data: payout, error } = await admin.from('provider_payouts')
-    .select('id, status, stripe_transfer_id, payout_amount').eq('booking_id', bookingId).maybeSingle();
+    .select('id, provider_id, status, stripe_transfer_id, payout_amount, deducted_pence').eq('booking_id', bookingId).maybeSingle();
   if (error) throw error;
   if (!payout || payout.status === 'reversed' || payout.status === 'cancelled') return;
 
@@ -128,16 +129,23 @@ async function takeBackFromPayout(
   if (take <= 0) return;
   const { newAmountPence, emptied } = adjustPayout(current, take);
 
-  if (payout.status === 'transferred' && payout.stripe_transfer_id) {
-    const reversal = await stripe.transfers.createReversal(
-      payout.stripe_transfer_id,
-      { amount: take, metadata: { booking_id: bookingId, refund_id: refundId } },
-      { idempotencyKey: `reversal_${refundId}` },
-    );
+  if (payout.status === 'transferred') {
+    // The transfer carried payout_amount less anything deducted for earlier
+    // shortfalls; what it can't return becomes a new shortfall.
+    const { reversalId } = await takeBackFromProvider(admin, stripe, {
+      providerId: payout.provider_id,
+      bookingId,
+      source: 'refund',
+      transferId: payout.stripe_transfer_id,
+      wantPence: take,
+      reversiblePence: current - Number(payout.deducted_pence ?? 0),
+      key: `reversal_${refundId}`,
+      metadata: { booking_id: bookingId, refund_id: refundId },
+    });
     const { data: rows, error } = await admin.from('provider_payouts')
       .update(emptied
-        ? { status: 'reversed', payout_amount: 0, stripe_reversal_id: reversal.id }
-        : { payout_amount: newAmountPence, stripe_reversal_id: reversal.id })
+        ? { status: 'reversed', payout_amount: 0, ...(reversalId ? { stripe_reversal_id: reversalId } : {}) }
+        : { payout_amount: newAmountPence, ...(reversalId ? { stripe_reversal_id: reversalId } : {}) })
       .eq('id', payout.id).eq('status', payout.status).eq('payout_amount', current)
       .select('id');
     if (error) throw error;
@@ -149,12 +157,14 @@ async function takeBackFromPayout(
 
   // Not transferred yet (held / failed): just lower what will be released.
   // Filtered on status too, so a payout release-payouts sent in the meantime
-  // isn't "lowered" after the full amount already went out.
+  // isn't "lowered" after the full amount already went out, and on
+  // release_claimed_at, so it isn't lowered while a release is part-way
+  // through sending it (the retry then reverses from the transfer).
   const { data: rows, error: upErr } = await admin.from('provider_payouts')
     .update(emptied
       ? { status: 'cancelled', payout_amount: 0, failure_reason: 'refunded before release' }
       : { payout_amount: newAmountPence })
-    .eq('id', payout.id).eq('status', payout.status).eq('payout_amount', current)
+    .eq('id', payout.id).eq('status', payout.status).eq('payout_amount', current).is('release_claimed_at', null)
     .select('id');
   if (upErr) throw upErr;
   if (!rows?.length) throw new Error('Payout changed during refund; retry');

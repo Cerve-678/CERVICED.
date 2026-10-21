@@ -96,18 +96,18 @@ const clientLightTheme = {
   surface:       '#F3EEF0',
   surfaceRaised: '#FFFFFF',
   card:          '#FFFFFF',
-  accent:        '#4A2340',                    // plum — primary accent, light mode
-  accentText:    '#4A2340',                    // plum reads fine as TEXT on light bg
-  accentDim:     'rgba(74,35,64,0.12)',         // translucent accent — badge/pill fills, disabled states
+  accent:        '#3F1E36',                    // plum — primary accent, light mode
+  accentText:    '#3F1E36',                    // plum reads fine as TEXT on light bg
+  accentDim:     'rgba(63,30,54,0.12)',         // translucent accent — badge/pill fills, disabled states
   onAccent:      '#FFFFFF',                     // text/icon drawn ON TOP of a solid accent fill
   secondary:     '#E5ECF4',                     // blue-grey — secondary fill (heart button, category tags)
   secondaryText: '#4A6B8F',                     // readable blue for TEXT/ICON — #E5ECF4 itself is too pale to read as text
   ice:           '#FFFFFF',
   text:          '#000000',
-  sub:           'rgba(74,35,64,0.62)',
-  border:        'rgba(74,35,64,0.14)',
-  sep:           'rgba(74,35,64,0.08)',
-  iconBg:        'rgba(74,35,64,0.12)',
+  sub:           'rgba(63,30,54,0.62)',
+  border:        'rgba(63,30,54,0.14)',
+  sep:           'rgba(63,30,54,0.08)',
+  iconBg:        'rgba(63,30,54,0.12)',
 };
 
 const clientDarkTheme = {
@@ -879,9 +879,9 @@ Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}
 | Surfaces / inputs | `#F3EEF0` | `#1E1B21` |
 | Cards | `#FFFFFF` | `#26222A` |
 | Primary text | `#000000` | `#F0ECE7` |
-| Secondary text | `rgba(74,35,64,0.62)` | `rgba(240,236,231,0.65)` |
-| Accent | `#4A2340` (plum) | `#E5ECF4` (blue-grey) |
+| Secondary text | `rgba(63,30,54,0.62)` | `rgba(240,236,231,0.65)` |
+| Accent | `#3F1E36` (plum) | `#E5ECF4` (blue-grey) |
 | Text/icon on a solid accent fill (`onAccent`) | `#FFFFFF` | `#1B2740` — **not white, accent is pale here** |
 | Secondary as icon/text (`secondaryText`) | `#4A6B8F` | `#E5ECF4` |
-| Borders | `rgba(74,35,64,0.14)` | `rgba(240,236,231,0.16)` |
+| Borders | `rgba(63,30,54,0.14)` | `rgba(240,236,231,0.16)` |
 | Status bar | dark-content | light-content |

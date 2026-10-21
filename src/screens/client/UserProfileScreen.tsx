@@ -10,7 +10,7 @@ import {
   Switch,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
@@ -32,6 +32,7 @@ import {
 import { getCurrentRefreshToken, getUnreadNotificationCount } from '../../services/databaseService';
 import { useFocusEffect } from '@react-navigation/native';
 import { dobToParts } from '../../utils/dateUtils';
+import { useMaintenanceDueCount } from '../../features/maintenance/useMaintenanceDueCount';
 
 // ── Settings row ────────────────────────────────────────────────────────────
 
@@ -42,13 +43,17 @@ interface SettingsOptionProps {
   onPress: () => void;
   palette: AppTheme;
   danger?: boolean;
+  /** Small count pill before the chevron, e.g. "2 due". */
+  badge?: string | undefined;
 }
 
-const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P, danger }: SettingsOptionProps) => (
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P, danger, badge }: SettingsOptionProps) => (
   <TouchableOpacity
     style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
+    accessibilityRole="button"
+    accessibilityLabel={badge ? `${title}, ${badge}` : title}
   >
     <View style={styles.optionLeft}>
       <Icon name={icon} size={20} color={danger ? P.accentText : P.sub} style={{ marginRight: 12 }} />
@@ -57,6 +62,11 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P,
         <Text style={[styles.optionSubText, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
+    {badge ? (
+      <View style={[styles.rowBadge, { backgroundColor: P.accent }]}>
+        <Text style={[styles.rowBadgeText, { color: P.onAccent }]}>{badge}</Text>
+      </View>
+    ) : null}
     <Icon name="chevron-right" size={18} color={P.sub} style={{ opacity: 0.4 }} />
   </TouchableOpacity>
 ));
@@ -77,6 +87,7 @@ export default function UserProfileScreen({ navigation }: any) {
   // Unread notifications waiting in the *other* (provider) hat, so a dual-role
   // user sees a signal on the switch control instead of missing them silently.
   const [providerUnread, setProviderUnread] = useState(0);
+  const maintenanceDue = useMaintenanceDueCount(isLoggedIn);
 
   useFocusEffect(useCallback(() => {
     if (!hatState.owned.provider) { setProviderUnread(0); return; }
@@ -170,12 +181,24 @@ export default function UserProfileScreen({ navigation }: any) {
             ))}
           </View>
 
+          {/* For You */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.forYou')}</Text>
+            <SettingsOption
+              icon="heart"
+              title={t('profile.forYou.beauty.title')}
+              subtitle={t('profile.forYou.beauty.sub')}
+              onPress={() => navigation.navigate('BeautyProfile')}
+              palette={P}
+              badge={maintenanceDue > 0 ? t('profile.forYou.beauty.due', { count: maintenanceDue > 99 ? '99+' : maintenanceDue }) : undefined}
+            />
+            <SettingsOption icon="chat-dots" title={t('profile.forYou.messages.title')} subtitle={t('profile.forYou.messages.sub')} onPress={() => navigation.navigate('Messages')} palette={P} />
+          </View>
+
           {/* Account Management */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.account')}</Text>
-            <SettingsOption icon="chat-dots" title={t('profile.account.messages.title')} subtitle={t('profile.account.messages.sub')} onPress={() => navigation.navigate('Messages')} palette={P} />
             <SettingsOption icon="user" title={t('profile.account.account.title')} subtitle={t('profile.account.account.sub')} onPress={() => navigation.navigate('ProfileInfo')} palette={P} />
-            <SettingsOption icon="heart" title={t('profile.account.beauty.title')} subtitle={t('profile.account.beauty.sub')} onPress={() => navigation.navigate('BeautyProfile')} palette={P} />
             <SettingsOption icon="lock" title={t('profile.account.password.title')} subtitle={t('profile.account.password.sub')} onPress={() => navigation.navigate('ChangePassword')} palette={P} />
             <SettingsOption icon="payment" title={t('profile.account.payment.title')} subtitle={t('profile.account.payment.sub')} onPress={() => navigation.navigate('PaymentMethods')} palette={P} />
             <SettingsOption icon="receipt" title={t('profile.account.subscription.title')} subtitle={t('profile.account.subscription.sub')} onPress={() => navigation.navigate('Subscription')} palette={P} />
@@ -419,9 +442,12 @@ const styles = StyleSheet.create({
 
   // Section
   section: {
-    marginBottom: 18,
+    // Keep the groups distinct, but don't leave a large dead band between
+    // consecutive settings sections.
+    marginBottom: 8,
     borderRadius: 16,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   sectionTitle: {
     fontSize: 11,
@@ -457,6 +483,8 @@ const styles = StyleSheet.create({
   },
   providerBtnTitle: { fontSize: 15, fontWeight: '700' },
   providerBtnSub: { fontSize: 12, fontWeight: '400' },
+  rowBadge: { borderRadius: 100, paddingHorizontal: 9, paddingVertical: 3, marginRight: 8 },
+  rowBadgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1 },
   switchBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#FF1744', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, marginLeft: 8 },
   switchBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
 

@@ -7,7 +7,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -17,13 +16,17 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
-import StepProgressIndicator from '../../components/StepProgressIndicator';
+import SignUpHeader from '../../components/SignUpHeader';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import AreaPicker from '../../components/AreaPicker';
 import { HAIR_TYPES } from '../../constants/hairTypes';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  Chip, ChipWrap, FieldRow, FormCard, PrimaryButton, QuestionCard, ScreenTitle, SectionLabel, SwitchRow, useFieldInputStyle,
+} from '../../components/signup/FormKit';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep4'>;
 
@@ -49,11 +52,6 @@ const PRICE_RANGES: { v: 'budget' | 'mid' | 'premium' | 'luxury'; l: string }[] 
   { v: 'mid',     l: '£35–£65' },
   { v: 'premium', l: '£65–£100' },
   { v: 'luxury',  l: '£100+' },
-];
-const TEAM_SIZES: { v: 'solo' | 'small_team' | 'large_team'; l: string }[] = [
-  { v: 'solo',        l: 'Just me' },
-  { v: 'small_team',  l: '2–5 people' },
-  { v: 'large_team',  l: '6+ people' },
 ];
 const CONTACT_METHODS: { v: string; l: string }[] = [
   { v: 'in_app',   l: 'In-app messages' },
@@ -86,7 +84,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const servicesY         = React.useRef(0);
   const locationY        = React.useRef(0);
   const priceRangeY      = React.useRef(0);
-  const teamSizeY        = React.useRef(0);
   const contactMethodsY  = React.useRef(0);
   const paymentMethodsY   = React.useRef(0);
 
@@ -106,7 +103,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const [selectedLocation, setSelectedLocation] = useState<string>(data.location);
   const [selectedPriceRange, setSelectedPriceRange] = useState<typeof data.priceRange>(data.priceRange);
   const [yearsExperience, setYearsExperience] = useState<string>(data.yearsExperience);
-  const [selectedTeamSize, setSelectedTeamSize] = useState<typeof data.teamSize>(data.teamSize);
   const [selectedContactMethods, setSelectedContactMethods] = useState<string[]>(
     data.preferredContactMethods.length ? data.preferredContactMethods : ['in_app']
   );
@@ -114,42 +110,35 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
   const isUser = data.accountType === 'user';
   const isProvider = data.accountType === 'provider';
+  const usesOwnLink = data.externalBookingUrl !== '';
 
   const scrollTo = (yRef: React.MutableRefObject<number>) =>
     scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current - 24), animated: true });
 
-  const chipStyle = (isSelected: boolean) => ({
-    borderRadius: 100,
-    borderWidth: 1,
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-    backgroundColor: isSelected ? t.accent : t.surface,
-    borderColor: isSelected ? t.accent : t.border,
-  });
+  const onLayoutFor = (yRef: React.MutableRefObject<number>) =>
+    (e: LayoutChangeEvent) => { yRef.current = e.nativeEvent.layout.y; };
 
-  const chipTextStyle = (isSelected: boolean) => ({
-    fontFamily: 'BakbakOne-Regular' as const,
-    fontSize: 13,
-    letterSpacing: 0.8,
-    color: isSelected ? '#FFFFFF' : t.sub,
-  });
+  // Chip already gives the selection haptic, so the handlers below don't.
+  const chips = <T extends string>(items: { v: T; l: string }[], isOn: (v: T) => boolean, onPress: (v: T) => void) => (
+    <ChipWrap style={styles.chipsInCard}>
+      {items.map(({ v, l }) => <Chip key={v} label={l} selected={isOn(v)} onPress={() => onPress(v)} />)}
+    </ChipWrap>
+  );
+  const plain = (items: string[]) => items.map(i => ({ v: i, l: i }));
 
   const pickHair = (type: string) => {
-    Haptics.selectionAsync().catch(() => {});
     const next = selectedHairType === type ? '' : type;
     setSelectedHairType(next);
     if (next) setTimeout(() => scrollTo(skinY), 150);
   };
 
   const pickSkin = (type: string) => {
-    Haptics.selectionAsync().catch(() => {});
     const next = selectedSkinType === type ? '' : type;
     setSelectedSkinType(next);
     if (next) setTimeout(() => scrollTo(skinConcernsY), 150);
   };
 
   const toggleConcern = (item: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedConcerns(prev => {
       if (item === 'None') return prev.includes('None') ? [] : ['None'];
       const without = prev.filter(c => c !== 'None');
@@ -160,14 +149,12 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   };
 
   const pickStyleVibe = (vibe: string) => {
-    Haptics.selectionAsync().catch(() => {});
     const next = selectedStyleVibe === vibe ? '' : vibe;
     setSelectedStyleVibe(next);
     if (next) setTimeout(() => scrollTo(allergyY), 150);
   };
 
   const toggleAllergen = (item: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedAllergens(prev => {
       if (item === 'None known') return prev.includes('None known') ? [] : ['None known'];
       const without = prev.filter(a => a !== 'None known');
@@ -178,7 +165,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   };
 
   const toggleTreatment = (item: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedTreatments(prev => {
       if (item === 'None') return prev.includes('None') ? [] : ['None'];
       const without = prev.filter(tr => tr !== 'None');
@@ -189,32 +175,22 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   };
 
   const pickBusinessType = (type: NonNullable<typeof data.businessType> | '') => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedBusinessType(type);
   };
 
   const toggleService = (category: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedServices(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
   };
 
   const pickPriceRange = (range: NonNullable<typeof data.priceRange> | '') => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedPriceRange(prev => prev === range ? '' : range);
   };
 
-  const pickTeamSize = (size: NonNullable<typeof data.teamSize> | '') => {
-    Haptics.selectionAsync().catch(() => {});
-    setSelectedTeamSize(prev => prev === size ? '' : size);
-  };
-
   const toggleContactMethod = (method: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedContactMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
   };
 
   const togglePaymentMethod = (method: string) => {
-    Haptics.selectionAsync().catch(() => {});
     setSelectedPaymentMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
   };
 
@@ -226,9 +202,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
         location: selectedLocation,
         yearsExperience: yearsExperience.trim(),
         priceRange: selectedPriceRange,
-        teamSize: selectedTeamSize,
         preferredContactMethods: selectedContactMethods,
-        preferredPaymentMethods: selectedPaymentMethods,
+        preferredPaymentMethods: usesOwnLink ? [] : selectedPaymentMethods,
       });
     } else {
       updateData({
@@ -253,9 +228,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
         !selectedBusinessType          ? businessTypeY :
         !selectedLocation.trim()      ? locationY :
         !selectedPriceRange           ? priceRangeY :
-        !selectedTeamSize             ? teamSizeY :
         !selectedContactMethods.length ? contactMethodsY :
-        !selectedPaymentMethods.length ? paymentMethodsY :
+        !usesOwnLink && !selectedPaymentMethods.length ? paymentMethodsY :
         null;
       if (firstEmptyY) {
         setShowErrors(true);
@@ -285,6 +259,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     saveAndProceed();
   };
 
+  const inputStyle = useFieldInputStyle();
+
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
@@ -297,240 +273,99 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
-        {/* Back */}
-        <TouchableOpacity
-          style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
-        </TouchableOpacity>
+        <SignUpHeader onBack={() => navigation.goBack()} currentStep={4} totalSteps={totalSteps} />
 
-        <StepProgressIndicator currentStep={4} totalSteps={totalSteps} stepLabel={isProvider ? 'About Your Business' : 'Beauty Profile'} />
-
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: t.text }]}>{isProvider ? 'About Your Business' : 'Beauty Profile'}</Text>
-          <Text style={[styles.headerSubtitle, { color: t.sub }]}>
-            {isProvider
-              ? "The essentials clients and bookings need — you can refine the rest later in the app"
-              : 'Help us match you with the right professionals'}
-          </Text>
-        </View>
+        <ScreenTitle
+          title={isProvider ? 'About your business' : 'Beauty profile'}
+          subtitle={isProvider
+            ? 'The essentials clients and bookings need. You can refine the rest later.'
+            : 'Help us match you with the right professionals.'}
+        />
 
         {isUser ? (
           <>
-            {/* Hair Type */}
-            <View onLayout={(e: LayoutChangeEvent) => { hairY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedHairType ? '#DC2626' : t.text }]}>
-                HAIR TYPE{showErrors && !selectedHairType ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>What's your hair texture?</Text>
-              <View style={styles.chipsContainer}>
-                {HAIR_TYPES.map(type => (
-                  <TouchableOpacity key={type} style={chipStyle(selectedHairType === type)} onPress={() => pickHair(type)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedHairType === type)}>{type}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="HAIR TYPE" prompt="What's your hair texture?" error={showErrors && !selectedHairType} onLayout={onLayoutFor(hairY)}>
+              {chips(plain(HAIR_TYPES), v => selectedHairType === v, pickHair)}
+            </QuestionCard>
 
-            {/* Skin Type */}
-            <View onLayout={(e: LayoutChangeEvent) => { skinY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedSkinType ? '#DC2626' : t.text }]}>
-                SKIN TYPE{showErrors && !selectedSkinType ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>How would you describe your skin?</Text>
-              <View style={styles.chipsContainer}>
-                {SKIN_TYPES.map(type => (
-                  <TouchableOpacity key={type} style={chipStyle(selectedSkinType === type)} onPress={() => pickSkin(type)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedSkinType === type)}>{type}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="SKIN TYPE" prompt="How would you describe your skin?" error={showErrors && !selectedSkinType} onLayout={onLayoutFor(skinY)}>
+              {chips(plain(SKIN_TYPES), v => selectedSkinType === v, pickSkin)}
+            </QuestionCard>
 
-            {/* Skin Concerns */}
-            <View onLayout={(e: LayoutChangeEvent) => { skinConcernsY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedConcerns.length ? '#DC2626' : t.text }]}>
-                SKIN CONCERNS{showErrors && !selectedConcerns.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Any specific concerns you'd like addressed?</Text>
-              <View style={styles.chipsContainer}>
-                {SKIN_CONCERNS.map(item => (
-                  <TouchableOpacity key={item} style={chipStyle(selectedConcerns.includes(item))} onPress={() => toggleConcern(item)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedConcerns.includes(item))}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="SKIN CONCERNS" prompt="Any specific concerns you'd like addressed?" error={showErrors && !selectedConcerns.length} onLayout={onLayoutFor(skinConcernsY)}>
+              {chips(plain(SKIN_CONCERNS), v => selectedConcerns.includes(v), toggleConcern)}
+            </QuestionCard>
 
-            {/* Style Vibe */}
-            <View onLayout={(e: LayoutChangeEvent) => { styleVibeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedStyleVibe ? '#DC2626' : t.text }]}>
-                STYLE VIBE{showErrors && !selectedStyleVibe ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>What best describes your aesthetic?</Text>
-              <View style={styles.chipsContainer}>
-                {STYLE_VIBES.map(vibe => (
-                  <TouchableOpacity key={vibe} style={chipStyle(selectedStyleVibe === vibe)} onPress={() => pickStyleVibe(vibe)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedStyleVibe === vibe)}>{vibe}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="STYLE VIBE" prompt="What best describes your aesthetic?" error={showErrors && !selectedStyleVibe} onLayout={onLayoutFor(styleVibeY)}>
+              {chips(plain(STYLE_VIBES), v => selectedStyleVibe === v, pickStyleVibe)}
+            </QuestionCard>
 
-            {/* Allergies */}
-            <View onLayout={(e: LayoutChangeEvent) => { allergyY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedAllergens.length ? '#DC2626' : t.text }]}>
-                ALLERGIES{showErrors && !selectedAllergens.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>
-                Select any known allergies or sensitivities
-              </Text>
+            <QuestionCard title="ALLERGIES" prompt="Select any known allergies or sensitivities." error={showErrors && !selectedAllergens.length} onLayout={onLayoutFor(allergyY)}>
               <View style={[styles.allergyNote, { backgroundColor: isDarkMode ? 'rgba(255,204,0,0.08)' : 'rgba(255,204,0,0.10)', borderColor: 'rgba(255,204,0,0.2)' }]}>
+                <Ionicons name="shield-checkmark-outline" size={16} color={isDarkMode ? '#FFD60A' : '#996600'} />
                 <Text style={[styles.allergyNoteText, { color: isDarkMode ? '#FFD60A' : '#996600' }]}>
-                  ⚠ This is shared with your providers before each appointment for your safety
+                  Shared with your providers before each appointment, for your safety.
                 </Text>
               </View>
-              <View style={styles.chipsContainer}>
-                {ALLERGENS.map(item => (
-                  <TouchableOpacity
-                    key={item}
-                    style={chipStyle(selectedAllergens.includes(item))}
-                    onPress={() => toggleAllergen(item)}
-                    activeOpacity={0.6}
-                  >
-                    <Text style={chipTextStyle(selectedAllergens.includes(item))}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+              {chips(plain(ALLERGENS), v => selectedAllergens.includes(v), toggleAllergen)}
+            </QuestionCard>
 
-            {/* Treatment History */}
-            <View onLayout={(e: LayoutChangeEvent) => { treatmentY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedTreatments.length ? '#DC2626' : t.text }]}>
-                TREATMENT HISTORY{showErrors && !selectedTreatments.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>What treatments have you had before?</Text>
-              <View style={styles.chipsContainer}>
-                {TREATMENT_HISTORY.map(item => (
-                  <TouchableOpacity key={item} style={chipStyle(selectedTreatments.includes(item))} onPress={() => toggleTreatment(item)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedTreatments.includes(item))}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="TREATMENT HISTORY" prompt="What treatments have you had before?" error={showErrors && !selectedTreatments.length} onLayout={onLayoutFor(treatmentY)}>
+              {chips(plain(TREATMENT_HISTORY), v => selectedTreatments.includes(v), toggleTreatment)}
+            </QuestionCard>
 
-            {/* Medical Notes */}
-            <View onLayout={(e: LayoutChangeEvent) => { medicalY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: t.text }]}>MEDICAL NOTES</Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>
-                Any conditions your provider should know about (optional)
-              </Text>
-              <View style={[styles.textAreaWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
-                <TextInput
-                  style={[styles.textArea, { color: t.text }]}
-                  value={medicalNotes}
-                  onChangeText={setMedicalNotes}
-                  placeholder="e.g. Rosacea, eczema, pregnancy..."
-                  placeholderTextColor={t.sub}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-              </View>
-            </View>
-
-            {/* Photography Consent */}
-            <View
-              onLayout={(e: LayoutChangeEvent) => { consentY.current = e.nativeEvent.layout.y; }}
-              style={[styles.consentRow, { backgroundColor: t.card, borderColor: t.border }]}
-            >
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={[styles.consentTitle, { color: t.text }]}>Photography Consent</Text>
-                <Text style={[styles.consentSub, { color: t.sub }]}>
-                  Allow your provider to photograph your results for their portfolio
-                </Text>
-              </View>
-              <Switch
-                value={photoConsent}
-                onValueChange={v => { Haptics.selectionAsync().catch(() => {}); setPhotoConsent(v); }}
-                trackColor={{ false: '#D1D1D6', true: t.accent }}
-                thumbColor={photoConsent ? '#fff' : '#f4f3f4'}
+            <QuestionCard title="MEDICAL NOTES" hint="Optional" prompt="Any conditions your provider should know about?" onLayout={onLayoutFor(medicalY)}>
+              <TextInput
+                style={[inputStyle, styles.textArea]}
+                value={medicalNotes}
+                onChangeText={setMedicalNotes}
+                placeholder="e.g. Rosacea, eczema, pregnancy..."
+                placeholderTextColor={t.sub}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
               />
+            </QuestionCard>
+
+            <View onLayout={onLayoutFor(consentY)} style={styles.question}>
+              <SectionLabel title="PHOTOS" />
+              <FormCard>
+                <SwitchRow
+                  title="Photography consent"
+                  subtitle="Allow your provider to photograph your results for their portfolio."
+                  value={photoConsent}
+                  onValueChange={setPhotoConsent}
+                />
+              </FormCard>
             </View>
           </>
         ) : (
           <>
-            {/* Services you offer */}
-            <View onLayout={(e: LayoutChangeEvent) => { servicesY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedServices.length ? '#DC2626' : t.text }]}>
-                SERVICES YOU OFFER{showErrors && !selectedServices.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Select all categories that apply to your business</Text>
-              <View style={styles.chipsContainer}>
-                {SERVICE_CATEGORIES.map(category => (
-                  <TouchableOpacity key={category} style={chipStyle(selectedServices.includes(category))} onPress={() => toggleService(category)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedServices.includes(category))}>{category}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="SERVICES YOU OFFER" prompt="Select all categories that apply to your business." error={showErrors && !selectedServices.length} onLayout={onLayoutFor(servicesY)}>
+              {chips(plain(SERVICE_CATEGORIES), v => selectedServices.includes(v), toggleService)}
+            </QuestionCard>
 
-            {/* Business type */}
-            <View onLayout={(e: LayoutChangeEvent) => { businessTypeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedBusinessType ? '#DC2626' : t.text }]}>
-                BUSINESS TYPE{showErrors && !selectedBusinessType ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>How do you run your business?</Text>
-              <View style={styles.chipsContainer}>
-                {BUSINESS_TYPES.map(({ v, l }) => (
-                  <TouchableOpacity key={v} style={chipStyle(selectedBusinessType === v)} onPress={() => pickBusinessType(v)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedBusinessType === v)}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="BUSINESS TYPE" prompt="How do you run your business?" error={showErrors && !selectedBusinessType} onLayout={onLayoutFor(businessTypeY)}>
+              {chips(BUSINESS_TYPES, v => selectedBusinessType === v, pickBusinessType)}
+            </QuestionCard>
 
-            {/* Where you work */}
-            <View
-              onLayout={(e: LayoutChangeEvent) => { locationY.current = e.nativeEvent.layout.y; }}
-              style={{ marginBottom: 32 }}
-            >
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLocation.trim() ? '#DC2626' : t.text }]}>
-                WHERE YOU WORK{showErrors && !selectedLocation.trim() ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Where's your business based?</Text>
+            <QuestionCard title="WHERE YOU WORK" prompt="Where's your business based?" error={showErrors && !selectedLocation.trim()} onLayout={onLayoutFor(locationY)}>
               <AreaPicker
                 value={selectedLocation}
                 onChange={setSelectedLocation}
                 accentColor={t.accent}
                 subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
               />
-            </View>
+            </QuestionCard>
 
-            {/* Price range */}
-            <View onLayout={(e: LayoutChangeEvent) => { priceRangeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPriceRange ? '#DC2626' : t.text }]}>
-                PRICE RANGE{showErrors && !selectedPriceRange ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Where do most of your services sit?</Text>
-              <View style={styles.chipsContainer}>
-                {PRICE_RANGES.map(({ v, l }) => (
-                  <TouchableOpacity key={v} style={chipStyle(selectedPriceRange === v)} onPress={() => pickPriceRange(v)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedPriceRange === v)}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="PRICE RANGE" prompt="Where do most of your services sit?" error={showErrors && !selectedPriceRange} onLayout={onLayoutFor(priceRangeY)}>
+              {chips(PRICE_RANGES, v => selectedPriceRange === v, pickPriceRange)}
+            </QuestionCard>
 
-            {/* Years of experience (optional) */}
-            <View>
-              <Text style={[styles.sectionLabel, { color: t.text }]}>YEARS OF EXPERIENCE</Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>How long have you been working in your field? (optional)</Text>
-              <View style={[styles.textAreaWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+            <FormCard style={styles.question}>
+              <FieldRow label="YEARS OF EXPERIENCE">
                 <TextInput
-                  style={[styles.yearsInput, { color: t.text }]}
+                  style={inputStyle}
                   value={yearsExperience}
                   onChangeText={v => {
                     const digits = v.replace(/[^0-9]/g, '');
@@ -539,78 +374,35 @@ export default function SignUpStep4Screen({ navigation }: Props) {
                     // profile upsert at verification.
                     setYearsExperience(digits && Number(digits) > 80 ? '80' : digits);
                   }}
-                  placeholder="e.g. 5"
+                  placeholder="e.g. 5 (optional)"
                   placeholderTextColor={t.sub}
                   keyboardType="number-pad"
                   maxLength={2}
                   returnKeyType="done"
                 />
-              </View>
-            </View>
+              </FieldRow>
+            </FormCard>
 
-            {/* Who you work with */}
-            <View onLayout={(e: LayoutChangeEvent) => { teamSizeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedTeamSize ? '#DC2626' : t.text }]}>
-                WHO YOU WORK WITH{showErrors && !selectedTeamSize ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>Are you solo or part of a team?</Text>
-              <View style={styles.chipsContainer}>
-                {TEAM_SIZES.map(({ v, l }) => (
-                  <TouchableOpacity key={v} style={chipStyle(selectedTeamSize === v)} onPress={() => pickTeamSize(v)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedTeamSize === v)}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <QuestionCard title="CONTACT PREFERENCES" prompt="How should clients reach you?" error={showErrors && !selectedContactMethods.length} onLayout={onLayoutFor(contactMethodsY)}>
+              {chips(CONTACT_METHODS, v => selectedContactMethods.includes(v), toggleContactMethod)}
+            </QuestionCard>
 
-            {/* Contact preferences */}
-            <View onLayout={(e: LayoutChangeEvent) => { contactMethodsY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedContactMethods.length ? '#DC2626' : t.text }]}>
-                CONTACT PREFERENCES{showErrors && !selectedContactMethods.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>How should clients reach you?</Text>
-              <View style={styles.chipsContainer}>
-                {CONTACT_METHODS.map(({ v, l }) => (
-                  <TouchableOpacity key={v} style={chipStyle(selectedContactMethods.includes(v))} onPress={() => toggleContactMethod(v)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedContactMethods.includes(v))}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Preferred payment type */}
-            <View onLayout={(e: LayoutChangeEvent) => { paymentMethodsY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPaymentMethods.length ? '#DC2626' : t.text }]}>
-                PREFERRED PAYMENT TYPE{showErrors && !selectedPaymentMethods.length ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>How do you take payment for off-app services?</Text>
-              <View style={styles.chipsContainer}>
-                {PAYMENT_METHODS.map(({ v, l }) => (
-                  <TouchableOpacity key={v} style={chipStyle(selectedPaymentMethods.includes(v))} onPress={() => togglePaymentMethod(v)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedPaymentMethods.includes(v))}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
+            {/* Preferred payment type — not asked when bookings happen on the
+                professional's own booking page; that page owns payment. */}
+            {!usesOwnLink && (
+              <QuestionCard title="PREFERRED PAYMENT TYPE" prompt="How do you take payment for off-app services?" error={showErrors && !selectedPaymentMethods.length} onLayout={onLayoutFor(paymentMethodsY)}>
+                {chips(PAYMENT_METHODS, v => selectedPaymentMethods.includes(v), togglePaymentMethod)}
+              </QuestionCard>
+            )}
           </>
         )}
 
-        {/* Continue */}
-        <View style={styles.actionsSection}>
-          <TouchableOpacity
-            style={[styles.continueBtn, { backgroundColor: t.accent }]}
-            onPress={handleContinue}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.continueBtnText}>CONTINUE</Text>
+        <PrimaryButton label="CONTINUE" onPress={handleContinue} style={styles.continueBtn} />
+        {isUser && (
+          <TouchableOpacity style={styles.skipBtn} onPress={saveAndProceed} activeOpacity={0.6}>
+            <Text style={[styles.skipText, { color: t.sub }]}>Skip for now</Text>
           </TouchableOpacity>
-          {isUser && (
-            <TouchableOpacity style={styles.skipBtn} onPress={saveAndProceed} activeOpacity={0.6}>
-              <Text style={[styles.skipText, { color: t.sub }]}>Skip for now</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        )}
         </ScrollView>
       </KeyboardDismissView>
     </ThemedBackground>
@@ -618,57 +410,13 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
   scroll: { paddingHorizontal: 16 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  backIcon: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
-  header: { marginBottom: 28 },
-  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 32, letterSpacing: 1 },
-  headerSubtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, marginTop: 8, lineHeight: 20 },
-  sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 2, marginBottom: 4 },
-  sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 12, lineHeight: 18 },
-  allergyNote: {
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 14,
-  },
-  allergyNoteText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18 },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 32 },
-  textAreaWrap: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 32,
-  },
-  textArea: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    letterSpacing: 0.3,
-    minHeight: 72,
-    padding: 0,
-  },
-  yearsInput: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 15,
-    letterSpacing: 0.3,
-    padding: 0,
-  },
-  consentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 32,
-  },
-  consentTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3, marginBottom: 4 },
-  consentSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
-  actionsSection: { alignItems: 'center' },
-  continueBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center', width: '100%' },
-  continueBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' },
-  skipBtn: { marginTop: 16, paddingVertical: 8 },
+  question: { marginBottom: 22 },
+  chipsInCard: { marginBottom: 0 },
+  allergyNote: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  allergyNoteText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
+  textArea: { minHeight: 72, fontWeight: '500' },
+  continueBtn: { marginTop: 8 },
+  skipBtn: { alignSelf: 'center', marginTop: 16, paddingVertical: 8 },
   skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
 });

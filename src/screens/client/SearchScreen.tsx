@@ -1,6 +1,6 @@
 import { SKIN_TONES, matchesSkinTone } from '../../constants/skinTones';
 // SearchScreen.tsx
-import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,7 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug } from '../../services/databaseService';
+import { forgetCachedReads, getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
@@ -43,6 +43,7 @@ import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
+import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
@@ -67,6 +68,9 @@ interface ProviderCardData {
   longitude: number | null;
   rating: number;
   reviewCount: number;
+  /** Books on their own page (booking_mode 'external') — no rating, prices or
+   *  availability here, and only some filters can match them. */
+  isLinkOnly: boolean;
   estimatedWait: string;
   // Real £min–£max from this provider's active services, resolved via a
   // batched fetch (see providersWithPriceRange below) — null until resolved
@@ -340,11 +344,17 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
             </Text>
           </View>
 
+          {provider.isLinkOnly ? (
+            <View style={styles.metaRow}>
+              <Text style={[styles.reviewCount, { color: P.sub }]}>Books on their own page</Text>
+            </View>
+          ) : (
           <View style={styles.metaRow}>
             <Text style={styles.star}>★</Text>
             <Text style={[styles.ratingNum, { color: P.text }]}>{provider.rating.toFixed(1)}</Text>
             <Text style={[styles.reviewCount, { color: P.sub }]}> ({provider.reviewCount})</Text>
           </View>
+          )}
           <View style={styles.metaRow}>
             <Text style={[styles.priceText, { color: P.sub }]} numberOfLines={1} ellipsizeMode="tail">
               {[
@@ -533,6 +543,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       longitude: p.longitude ?? null,
       distanceMiles: null,
       rating: p.rating, reviewCount: p.review_count,
+      isLinkOnly: p.booking_mode === 'external',
       estimatedWait: '10–15 min',
       // Resolved separately once the batched price-range fetch returns —
       // see providersWithPriceRange below. price_tier is kept purely for
@@ -742,6 +753,8 @@ export default function SearchScreen({ navigation, route }: Props) {
   // this, fuzzily. Comes off the same getProviderServiceFacets call as the maps
   // above, so it costs no extra round trip.
   const [specialityTextByProviderId, setSpecialityTextByProviderId] = useState<Map<string, Set<string>>>(new Map());
+  // specialityText minus service names — what the filter may offer as options.
+  const [specialityLabelsByProviderId, setSpecialityLabelsByProviderId] = useState<Map<string, Set<string>>>(new Map());
   // Whether the facets query has answered for the CURRENT result set. Keeps
   // the audience filter's "don't claim a match until the lookup has answered"
   // rule meaningful now that the match set is derived rather than fetched —
@@ -761,6 +774,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       setAudiencesByProviderId(new Map());
       setSkinTonesByProviderId(new Map());
       setSpecialityTextByProviderId(new Map());
+      setSpecialityLabelsByProviderId(new Map());
       setFacetsLoaded(true);
       setPriceRangeLoading(false);
       return;
@@ -775,6 +789,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setAudiencesByProviderId(facets.audiences);
         setSkinTonesByProviderId(facets.skinTones ?? new Map());
         setSpecialityTextByProviderId(facets.specialityText ?? new Map());
+        setSpecialityLabelsByProviderId(facets.specialityLabels ?? new Map());
       })
       .catch(() => {
         if (cancelled) return;
@@ -782,6 +797,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setAudiencesByProviderId(new Map());
       setSkinTonesByProviderId(new Map());
       setSpecialityTextByProviderId(new Map());
+      setSpecialityLabelsByProviderId(new Map());
       })
       .finally(() => {
         if (cancelled) return;
@@ -835,10 +851,10 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   // The chips shown in the Speciality section. Starts from the curated list
   // for the active category tab (the whole cross-category set on "All"), then
-  // widens with any SHORT real values the current result set actually has —
-  // so a provider's own tag/speciality that isn't in the curated list still
-  // becomes filterable — while excluding long strings (whole service names)
-  // that would read as noise rather than a speciality. A value already
+  // widens with any SHORT real specialities/tags the current result set
+  // actually has — so a provider's own tag/speciality that isn't in the
+  // curated list still becomes filterable. Service names never become
+  // options; they're only matched against. A value already
   // selected is always kept present so it stays toggle-off-able even after the
   // category tab changes. Dedupe is by normalized form (see fuzzyMatch), so
   // "nail-art" and "Nail art" collapse to one chip.
@@ -857,16 +873,18 @@ export default function SearchScreen({ navigation, route }: Props) {
 
     curated.forEach(add);
 
-    // Widen with real short values from the result set (tags / specialities,
-    // not whole service names), capped so the sheet stays scannable.
+    // Widen with real short values from the result set — providers' own
+    // specialities and service tags only. Service names are left out
+    // entirely: they still count when matching, but aren't specialities.
+    // Capped so the sheet stays scannable.
     let extras = 0;
     const EXTRA_CAP = 24;
-    for (const haystack of specialityTextByProviderId.values()) {
+    for (const haystack of specialityLabelsByProviderId.values()) {
       if (extras >= EXTRA_CAP) break;
       for (const raw of haystack) {
         if (extras >= EXTRA_CAP) break;
         const tokenCount = normalizeTerm(raw).split(' ').filter(Boolean).length;
-        if (tokenCount === 0 || tokenCount > 3) continue; // skip empty + full names
+        if (tokenCount === 0 || tokenCount > 3) continue; // skip empty + long free text
         const label = titleCaseSpeciality(raw);
         if (seen.has(normalizeTerm(label))) continue;
         add(label);
@@ -878,7 +896,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     (activeFilters.specialty ?? []).forEach(add);
 
     return out;
-  }, [selectedFilter, specialityTextByProviderId, activeFilters.specialty]);
+  }, [selectedFilter, specialityLabelsByProviderId, activeFilters.specialty]);
 
   // ── Client-side filter/sort on top of the server-searched set — category
   // and text query are already applied server-side (see the debounced effect
@@ -886,6 +904,9 @@ export default function SearchScreen({ navigation, route }: Props) {
   // result set further, the same way HomeScreen's filter dropdown does. ─────
   const filteredProviders = useMemo(() => {
     let list = [...providersWithPriceRange];
+    if (!filtersAllowLinkOnly(activeFilters)) {
+      list = list.filter(p => !p.isLinkOnly);
+    }
 
     if (activeFilters.rating && activeFilters.rating > 0) {
       list = list.filter(p => p.rating >= activeFilters.rating!);
@@ -975,6 +996,30 @@ export default function SearchScreen({ navigation, route }: Props) {
     return list;
   }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
 
+  // "In search" on a link-only provider's Analytics. Counted once per provider
+  // per search (query + category), and only once the result set has settled —
+  // re-sorts and progressive loading reshuffle the same providers, which must
+  // not count again. The server also counts each viewer once a day.
+  const countedAppearancesRef = useRef<{ searchKey: string; ids: Set<string> }>({ searchKey: '', ids: new Set() });
+  const resultsSettled = !availabilityLoading && !priceRangeLoading && !providersLoading;
+  useEffect(() => {
+    if (!resultsSettled) return;
+    const searchKey = `${searchQuery.trim().toLowerCase()}|${selectedFilter}`;
+    const counted = countedAppearancesRef.current;
+    if (counted.searchKey !== searchKey) {
+      countedAppearancesRef.current = { searchKey, ids: new Set() };
+    }
+    const seen = countedAppearancesRef.current.ids;
+    const fresh = filteredProviders
+      .filter(p => p.isLinkOnly && !seen.has(p.providerId))
+      .map(p => p.providerId);
+    if (fresh.length === 0) return;
+    fresh.forEach(id => seen.add(id));
+    recordProviderStat(fresh, 'search_appearance').catch((error: unknown) => {
+      logger.warn('[Search] could not record search appearances', error);
+    });
+  }, [filteredProviders, resultsSettled, searchQuery, selectedFilter]);
+
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
   // "cleared" state to fall back to (they're never left undefined), the rest
@@ -1043,6 +1088,8 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleRefresh = useCallback(() => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     setProvidersLoading(true);
     setProvidersError(null);

@@ -1,0 +1,1201 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Remove noindex once the placeholders are filled in and a solicitor has reviewed the text. -->
+<meta name="robots" content="noindex">
+<title>Cerviced Terms &amp; Policies</title>
+<meta name="description" content="The Terms & Conditions, Privacy Policy and other policies that apply when you use Cerviced.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@500;600;700&display=swap">
+<style>
+body{ margin:0 }
+/* Layout: brand masthead band, then a sticky policy index beside one reading column; the index stacks above the text on phones. */
+:root{
+  --bg:#F5F1EC;
+  --band:#EDE8E2;
+  --card:#FFFFFF;
+  --ink:#1E1613;
+  --muted:#6A5657;
+  --accent:#5C4033;
+  --accent-soft:rgba(92,64,51,0.09);
+  --line:rgba(126,102,103,0.22);
+  --ph-bg:#EFD9B4;
+  --ph-ink:#4A3226;
+  --display:"Bakbak One","Arial Black",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --label:"Jura",ui-sans-serif,system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1A1815; --band:#201D1A; --card:#252220; --ink:#F0ECE7; --muted:#B4A5A6;
+    --accent:#AF9197; --accent-soft:rgba(175,145,151,0.12); --line:rgba(175,145,151,0.22);
+    --ph-bg:rgba(175,145,151,0.26); --ph-ink:#F6EEEA; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1A1815; --band:#201D1A; --card:#252220; --ink:#F0ECE7; --muted:#B4A5A6;
+  --accent:#AF9197; --accent-soft:rgba(175,145,151,0.12); --line:rgba(175,145,151,0.22);
+  --ph-bg:rgba(175,145,151,0.26); --ph-ink:#F6EEEA; color-scheme:dark;
+}
+@media (prefers-reduced-motion: no-preference){ html{ scroll-behavior:smooth } }
+body{ background:var(--bg); color:var(--ink); font-family:var(--body); font-size:16px; line-height:1.65; -webkit-text-size-adjust:100% }
+a{ color:var(--accent); text-underline-offset:2px }
+a:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:3px }
+strong{ font-weight:650 }
+
+.wrap{ max-width:1180px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)) }
+.band{ background:var(--band); border-bottom:1px solid var(--line) }
+.masthead{ padding-block:40px 36px }
+.brandline{ display:flex; align-items:center; gap:12px; font-family:var(--label); font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:600 }
+.wordmark{ font-family:var(--display); font-size:21px; letter-spacing:.08em; color:var(--accent); font-weight:400 }
+.brandline .sep{ width:1px; height:18px; background:var(--line) }
+h1{ font-family:var(--display); font-weight:400; font-size:clamp(34px, 6vw, 54px); line-height:1.05; margin:20px 0 12px; text-wrap:balance; letter-spacing:.01em }
+.lede{ max-width:60ch; font-size:17px; color:var(--muted); margin:0 }
+.facts{ display:flex; flex-wrap:wrap; gap:12px 36px; margin:26px 0 0 }
+.facts div{ display:flex; flex-direction:column; gap:2px; min-width:0 }
+.facts dt{ font-family:var(--label); font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700 }
+.facts dd{ margin:0; font-size:15px }
+
+.layout{ display:grid; grid-template-columns:250px minmax(0,1fr); gap:56px; padding-block:40px 80px }
+.index{ position:sticky; top:calc(env(safe-area-inset-top, 0px) + 24px); align-self:start; max-height:calc(100vh - 48px); overflow:auto }
+.index h2{ font-family:var(--label); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 10px; font-weight:700 }
+.index ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px }
+.index a{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:8px 10px; border-radius:8px; text-decoration:none; color:var(--ink); font-size:15px; line-height:1.35 }
+.index a:hover{ background:var(--accent-soft) }
+.index a[aria-current="true"]{ background:var(--accent-soft); color:var(--accent); font-weight:650 }
+.index .who{ font-family:var(--label); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); white-space:nowrap; font-weight:700 }
+
+.content{ min-width:0; display:flex; flex-direction:column; gap:80px }
+.policy{ max-width:70ch; min-width:0; scroll-margin-top:24px }
+.policy-head{ display:flex; flex-direction:column; gap:10px; padding-bottom:20px; border-bottom:2px solid var(--accent) }
+.eyebrow{ font-family:var(--label); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0; display:flex; gap:6px 14px; flex-wrap:wrap; align-items:center; font-weight:600 }
+.tag{ color:var(--accent); font-weight:700 }
+.policy h2{ font-family:var(--display); font-weight:400; font-size:clamp(28px, 4.4vw, 38px); line-height:1.1; margin:0; text-wrap:balance }
+.policy-intro{ margin:0; color:var(--muted) }
+.short{ margin-top:24px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 22px }
+.short h3{ font-family:var(--label); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin:0 0 8px; font-weight:700 }
+.short ul{ margin:0; padding-left:1.1em; display:flex; flex-direction:column; gap:6px }
+.clause{ margin-top:34px; scroll-margin-top:24px }
+.clause h3{ font-family:var(--display); font-weight:400; font-size:19px; line-height:1.3; margin:0 0 10px; display:flex; gap:12px; align-items:baseline; text-wrap:balance }
+.clause h3 .n{ font-family:var(--label); font-weight:700; font-size:14px; color:var(--accent); min-width:1.7em; flex:none; font-variant-numeric:tabular-nums }
+.clause p{ margin:0 0 12px }
+.clause h4{ font-family:var(--label); font-size:12.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:22px 0 8px; font-weight:700 }
+.clause ul{ margin:0 0 12px; padding-left:1.2em; display:flex; flex-direction:column; gap:7px }
+.table-wrap{ overflow-x:auto; margin:8px 0 16px; border:1px solid var(--line); border-radius:12px; background:var(--card) }
+table{ border-collapse:collapse; width:100%; font-size:14.5px; line-height:1.5 }
+th, td{ text-align:left; vertical-align:top; padding:10px 14px; border-bottom:1px solid var(--line) }
+tbody tr:last-child td{ border-bottom:0 }
+th{ font-family:var(--label); font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700; background:var(--accent-soft) }
+td:first-child{ font-weight:650; min-width:8.5em }
+.ph{ background:var(--ph-bg); color:var(--ph-ink); padding:.05em .35em; border-radius:4px; font-family:var(--label); font-weight:700; font-size:.92em }
+.verbatim{ border-left:3px solid var(--accent); padding:2px 0 2px 16px; margin:0 0 12px }
+.verbatim p{ margin:0 }
+.note{ font-size:14.5px; color:var(--muted) }
+.policy-foot{ margin-top:30px }
+.policy-foot a{ font-family:var(--label); letter-spacing:.08em; text-transform:uppercase; font-size:12.5px; font-weight:700; text-decoration:none }
+
+.site-foot .wrap{ padding-block:32px 40px; font-size:14px; color:var(--muted); display:flex; flex-direction:column; gap:6px }
+.site-foot .wordmark{ font-size:17px }
+.site-foot{ background:var(--band); border-top:1px solid var(--line) }
+
+@media (max-width: 900px){
+  .layout{ grid-template-columns:minmax(0,1fr); gap:36px; padding-block:28px 64px }
+  .index{ position:static; max-height:none; overflow:visible; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 12px 10px }
+  .index h2{ padding-left:10px }
+  .index ol{ display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap:2px 8px }
+  .content{ gap:64px }
+}
+</style>
+</head>
+<body>
+<header class="band" id="top">
+  <div class="wrap masthead">
+    <div class="brandline"><span class="wordmark">CERVICED</span><span class="sep" aria-hidden="true"></span><span>Legal</span></div>
+    <h1>Terms &amp; policies</h1>
+    <p class="lede">The rules and promises that apply when you use Cerviced, whether you book treatments or offer them. Each policy opens with a short summary, followed by the full text.</p>
+    <dl class="facts">
+      <div><dt>Last updated</dt><dd>19 October 2026</dd></div>
+      <div><dt>Questions</dt><dd><a href="mailto:support@cerviced.co">support@cerviced.co</a></dd></div>
+      <div><dt>Operated by</dt><dd>Cerviced Ltd, registered in England and Wales</dd></div>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap layout">
+  <nav class="index" aria-label="Policies">
+    <h2>Policies</h2>
+    <ol>
+      <li><a href="#terms">Client Terms &amp; Conditions <span class="who">Clients</span></a></li>
+      <li><a href="#provider-terms">Provider Terms of Business <span class="who">Providers</span></a></li>
+      <li><a href="#privacy">Privacy Policy <span class="who">Everyone</span></a></li>
+      <li><a href="#cookies">Cookies &amp; Device Storage <span class="who">Everyone</span></a></li>
+      <li><a href="#fees">Fees, Cancellations &amp; Refunds <span class="who">Clients</span></a></li>
+      <li><a href="#providers">Provider Standards <span class="who">Providers</span></a></li>
+      <li><a href="#community">Community Guidelines <span class="who">Everyone</span></a></li>
+      <li><a href="#reviews">Reviews Policy <span class="who">Everyone</span></a></li>
+      <li><a href="#safety">Health &amp; Safety <span class="who">Clients</span></a></li>
+      <li><a href="#complaints">Complaints &amp; Reporting <span class="who">Everyone</span></a></li>
+    </ol>
+  </nav>
+
+  <main class="content">
+
+    <!-- ===================== TERMS ===================== -->
+    <section class="policy" id="terms" aria-labelledby="terms-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Clients</span><span>And the general rules for everyone using the app</span></p>
+        <h2 id="terms-title">Client Terms &amp; Conditions</h2>
+        <p class="policy-intro">The agreement between you and Cerviced when you use the app to find and book treatments. If you offer treatments, our <a href="#provider-terms">Provider Terms of Business</a> also apply to you.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>Cerviced is a marketplace. Each booking is an agreement between you and the provider, who is responsible for the treatment.</li>
+          <li>You must be 16 or over to have an account. Some treatments have a higher legal minimum age.</li>
+          <li>Clients pay a Cerviced service fee on top of the provider's price. It's shown before you pay and never comes out of the provider's earnings.</li>
+          <li>Each provider sets their own cancellation policy, which is applied automatically if you cancel.</li>
+          <li>Bookings made through Cerviced stay in the app. Don't move them off the app to avoid the service fee.</li>
+        </ul>
+      </aside>
+      <article class="clause" id="terms-1">
+        <h3><span class="n">1</span>About Cerviced and These Terms</h3>
+        <p>Cerviced is run by Cerviced Ltd, a company registered in England and Wales (company number <mark class="ph">[company number]</mark>), whose registered office is at <mark class="ph">[registered address]</mark>. In these Terms, "Cerviced", "we", "us" and "our" mean Cerviced Ltd. You can contact us at <a href="mailto:support@cerviced.co">support@cerviced.co</a>.</p>
+        <p>These Terms apply to everyone who uses the Cerviced app, and set out the rules for finding and booking treatments (as a "client"). If you offer treatments on Cerviced (a "provider"), our <a href="#provider-terms">Provider Terms of Business</a> also apply to you, and take priority over these Terms where they differ. They work alongside our <a href="#privacy">Privacy Policy</a>, which explains how we use your personal information, and alongside the policies each provider shows on their profile, such as their cancellation policy. Some providers also have their own terms and conditions, which you'll be asked to accept before you book with them.</p>
+        <p>By creating an account or using the app, you agree to these Terms. If you don't agree, please don't use the app. Please read them carefully, and keep a copy for your records.</p>
+        <p>The other policies on this page, such as our Community Guidelines and Reviews Policy, explain how parts of these Terms work and form part of these Terms.</p>
+      </article>
+      <article class="clause" id="terms-2">
+        <h3><span class="n">2</span>Key Words Used in These Terms</h3>
+        <p>"Booking" means an appointment you request or make with a provider through the app. "Service fee" means the fee Cerviced charges clients for bookings paid in the app. "Own booking page" means a provider's booking website outside Cerviced, such as Fresha or Treatwell. "Content" means anything posted in the app, including photos, reviews, profile text and messages.</p>
+      </article>
+      <article class="clause" id="terms-3">
+        <h3><span class="n">3</span>Who Can Use Cerviced</h3>
+        <p>You must be at least 16 to create a Cerviced account. Some treatments have a legal minimum age. For example, Botox and dermal fillers can't be given to anyone under 18 in England, and other treatments may need a parent's consent. Providers must follow these rules and can refuse a booking that breaks them.</p>
+        <p>You may have one account, which is for your own use. The details you give us, including your name, date of birth and contact details, must be true and kept up to date. We may check the details you give us and may refuse or close an account if they aren't accurate.</p>
+        <p>If you use Cerviced as a business, you must do so through a provider account and follow our <a href="#provider-terms">Provider Terms of Business</a>.</p>
+      </article>
+      <article class="clause" id="terms-4">
+        <h3><span class="n">4</span>Your Licence to Use the App</h3>
+        <p>We give you a personal, non-transferable right to use the Cerviced app on your own devices, for as long as you keep to these Terms. The app is licensed to you, not sold. The terms of the app store you downloaded it from (Apple App Store or Google Play) also apply.</p>
+        <p>You must not copy, change, reverse-engineer or resell the app, collect information from it by automated means (for example, scraping), or use it to build a competing service.</p>
+      </article>
+      <article class="clause" id="terms-5">
+        <h3><span class="n">5</span>What Cerviced Does</h3>
+        <p>Cerviced is a marketplace that connects clients with independent beauty and wellness professionals. We do not employ providers and we don't provide the treatments. Every booking is an agreement between you and the provider, and the provider is responsible for the service they give you, for their premises, and for meeting the standards and laws that apply to their work.</p>
+        <p>Providers write their own profiles, prices, photos, opening hours and policies. We ask them to keep these accurate, but we can't check every detail. Photos show examples of a provider's work, not a guarantee of your result. Unless we say otherwise, we don't check providers' qualifications, licences or insurance, so please ask a provider directly if these matter to you.</p>
+      </article>
+      <article class="clause" id="terms-6">
+        <h3><span class="n">6</span>How Search and Explore Work</h3>
+        <p>In Search, providers that match your search and filters are shown with providers Cerviced has chosen to feature first, then by rating. You can change the order, for example to nearest or price. Providers can't pay to be featured or to appear higher.</p>
+        <p>Explore, Becca and some reminders are personalised. We use your activity in the app, such as the looks and providers you save, view and book, and the beauty profile you fill in, to suggest things you're likely to want. Our Privacy Policy explains this in more detail.</p>
+        <p>Providers only appear to clients once they've completed their profile and gone live.</p>
+      </article>
+      <article class="clause" id="terms-7">
+        <h3><span class="n">7</span>Your Account and Security</h3>
+        <p>You are responsible for maintaining the security of your account and all activity under it. Keep your password private and don't share your account. Please notify us immediately at <a href="mailto:support@cerviced.co">support@cerviced.co</a> if you think someone else has used it. We'll never ask for your password.</p>
+      </article>
+      <article class="clause" id="terms-8">
+        <h3><span class="n">8</span>Making a Booking</h3>
+        <p>When you book through Cerviced, you send the provider a request. Your booking is confirmed when the provider accepts it, and we'll let you know. If they decline it, or don't respond before it expires, any payment you made is refunded in full automatically.</p>
+        <p>Before you book, check the provider's profile, prices, cancellation policy and any terms they ask you to accept. Arrive on time and tell the provider anything they need to know, such as allergies or health conditions.</p>
+        <p>If a provider comes to you, your address is only shared with them once they've accepted your booking.</p>
+        <p>If you book for someone else, you're responsible for that booking, and you must have their permission to share their details with the provider.</p>
+      </article>
+      <article class="clause" id="terms-9">
+        <h3><span class="n">9</span>Prices and Payment</h3>
+        <p>Prices are in pounds sterling and are set by each provider. The total you pay in the app, including any deposit and Cerviced's service fee, is shown before you pay.</p>
+        <p>Payments are processed securely by Stripe, and Cerviced never sees or stores your full card number. Stripe's own terms also apply. If a provider asks you to save your card for an agreed fee, Stripe stores it, not us.</p>
+        <p>If a price is clearly wrong because of a mistake, for example a treatment listed at a fraction of its usual price, we or the provider may cancel the booking and refund you in full.</p>
+        <p>Anything you agree with the provider at the appointment, such as adding a treatment or a tip paid in person, is between you and the provider and isn't paid through the app.</p>
+        <p>Cerviced accepts payments for bookings as the provider's commercial agent. When you pay for a booking in the app, your payment to Cerviced counts as payment to the provider for that amount.</p>
+      </article>
+      <article class="clause" id="terms-10">
+        <h3><span class="n">10</span>Cerviced Service Fee</h3>
+        <p>Cerviced adds a service fee to each booking you pay for in the app. The fee is shown before you pay. It is charged to you and is never taken from the provider's price.</p>
+        <p>If your booking is refunded in full, for example because the provider declined or cancelled it, or you cancelled early enough under their policy, the service fee is refunded too. If you get a partial refund, the service fee is not refunded.</p>
+      </article>
+      <article class="clause" id="terms-11">
+        <h3><span class="n">11</span>Deposits &amp; Remaining Balances</h3>
+        <p>Some providers accept a deposit through the app instead of full payment. Any remaining balance is owed directly to the provider and is settled between you and the provider in person — Cerviced does not collect, hold, verify, or guarantee payment of that balance, and is not responsible for resolving disputes about whether or how much was paid at the appointment.</p>
+      </article>
+      <article class="clause" id="terms-12">
+        <h3><span class="n">12</span>Rescheduling</h3>
+        <p>You can ask to move a booking from the booking itself. The provider can accept your new time or suggest another, and providers can also suggest a new time to you. A request that isn't answered in time expires, and your original booking stays as it was. Providers may limit how close to the appointment you can reschedule; this is shown in their policy.</p>
+      </article>
+      <article class="clause" id="terms-13">
+        <h3><span class="n">13</span>Cancellations by You</h3>
+        <p>Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider's policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you're refunded the rest.</p>
+        <p>Cancelling late or missing appointments is recorded, and the provider you booked with can see how often this has happened with them.</p>
+      </article>
+      <article class="clause" id="terms-14">
+        <h3><span class="n">14</span>Cancellations by the Provider</h3>
+        <p>If a provider declines or cancels a booking you've paid for, you're refunded in full, including the service fee. We'll let you know, and you're free to book with someone else.</p>
+      </article>
+      <article class="clause" id="terms-15">
+        <h3><span class="n">15</span>Refunds and Refund Requests</h3>
+        <p>A provider can refund you in full or in part at any time. If you'd like a refund, you can request one from the booking. Your request goes to the provider first. They can refund you or pass it to Cerviced, and if it's passed to us, we'll review it and let you know the outcome.</p>
+        <p>Refunds go back to the card you paid with and usually take 5 to 10 working days to appear, depending on your bank.</p>
+      </article>
+      <article class="clause" id="terms-16">
+        <h3><span class="n">16</span>Late Arrival &amp; No-Show Fees</h3>
+        <p>Some providers set a late arrival fee, a no-show fee, or both. Any fee is shown to you before you pay, and you must agree to it at checkout to book. If you agree, your card is saved securely by Stripe, and the provider may charge the agreed fee to it within 24 hours of your appointment: the late arrival fee if you arrive after the provider's stated grace period, or the no-show fee if you do not attend. If the charge is declined, we will ask you to pay the fee in the app or by email within 7 days, and we may try your saved card again up to three more times in those 7 days. If your bank asks you to approve the charge, we won't try the card again; you can pay it yourself within the 7 days. Each fee is fixed at the amount shown when you book, can be collected only once per booking, and can never be more than half the price of the booking. You will be notified whenever a fee is charged or retried. If you believe a fee is wrong, you can dispute it with the provider in the app within 7 days of the charge, and the provider decides whether to refund it. Fees are paid to the provider, not to Cerviced, and Cerviced does not decide fee disputes. This does not affect your statutory rights, including your right to contact your bank.</p>
+      </article>
+      <article class="clause" id="terms-17">
+        <h3><span class="n">17</span>Waitlists</h3>
+        <p>If a time you want is taken, you may be able to join the provider's waitlist. If a slot opens, we'll let you know and hold it for you for a limited time. If you don't book it in time, it may be offered to the next person. Joining a waitlist doesn't guarantee you a slot.</p>
+      </article>
+      <article class="clause" id="terms-18">
+        <h3><span class="n">18</span>Problems With a Treatment</h3>
+        <p>If something goes wrong with a treatment, please tell the provider first, as they're best placed to put it right, for example by redoing the treatment. If you can't resolve it with them, contact us at <a href="mailto:support@cerviced.co">support@cerviced.co</a> with your booking reference and we'll try to help. We may, at our discretion, offer a refund or credit, but the provider remains responsible for the service they gave you.</p>
+        <p>Nothing in these Terms affects your statutory rights, including your right to a service carried out with reasonable care and skill.</p>
+      </article>
+      <article class="clause" id="terms-19">
+        <h3><span class="n">19</span>Your Health and Your Treatment</h3>
+        <p>If you share health information when you book, for example allergies, pregnancy or a skin condition, it's passed to your provider for that appointment. Answer any questions honestly and tell your provider about anything that could affect your treatment, even if you weren't asked. If you don't, the provider may not be able to treat you safely and may not be responsible for harm that disclosure would have avoided.</p>
+        <p>Follow your provider's patch-test and aftercare instructions. A provider may refuse or stop a treatment if they believe it isn't safe for you.</p>
+        <p>Cerviced doesn't give medical advice or decide whether a treatment is safe for you. If you're unsure, speak to a doctor or pharmacist before booking.</p>
+      </article>
+      <article class="clause" id="terms-20">
+        <h3><span class="n">20</span>Provider Websites Shown in the App</h3>
+        <p>Some providers take bookings on their own booking page, such as Fresha, Treatwell or Acuity, instead of through Cerviced. When you tap Book on their profile, their page opens inside the Cerviced app, in your phone's secure browser view. It's still their website: it's run by them or their booking company, not by Cerviced.</p>
+        <p>We don't control, check or endorse those pages. Anything you book, pay or share on them, including your card details and personal information, goes to the provider and their booking company, under their terms and privacy policy, not ours. Cerviced can't see what you enter there. We can't change, cancel or refund a booking made there, so please contact the provider directly about it.</p>
+        <p>We count how many times clients tap Book on each profile, and show providers the totals. We don't record what you do on their website.</p>
+        <p>When you close their page, we may ask whether you booked. If you add the appointment to your Upcoming list, it's your own note to help you keep track. Cerviced doesn't confirm that it was booked, or that the date, time or details are correct.</p>
+        <p>Links to providers' websites can change or stop working. If a page doesn't load or looks wrong, contact the provider.</p>
+      </article>
+      <article class="clause" id="terms-21">
+        <h3><span class="n">21</span>Other Services We Work With</h3>
+        <p>Cerviced works with other companies' services, for example Stripe for payments, Apple and Google for sign-in and notifications, and Instagram when you open a provider's Instagram profile. When you use them, their own terms and privacy policies apply, and we aren't responsible for them.</p>
+      </article>
+      <article class="clause" id="terms-22">
+        <h3><span class="n">22</span>Reviews</h3>
+        <p>Reviews help everyone choose well, so they must be honest and about an appointment you actually had through Cerviced. Don't review a business you own, work for or compete with, and don't offer, ask for or accept anything in return for a review.</p>
+        <p>Providers must not pressure clients to change or remove a review, or only ask happy clients to leave one.</p>
+        <p>We may refuse, hide or remove a review that breaks these Terms, and we may temporarily hide a review while we look into a report.</p>
+      </article>
+      <article class="clause" id="terms-23">
+        <h3><span class="n">23</span>Content You Post</h3>
+        <p>You keep ownership of the photos, text and other content you post. You give Cerviced a free licence to store, show and adapt it (for example, resizing photos) so we can run the app, including showing it on your profile, in Explore and in Search, for as long as it's on your account.</p>
+        <p>You must have the right to post your content, and it must not be abusive, threatening, discriminatory, sexually explicit, misleading or unlawful, include anyone else's personal details without their permission, or break anyone's copyright. Photos of clients need those clients' permission.</p>
+        <p>When you delete content, it may stay in our backups for a short time, and copies others have already saved may remain.</p>
+        <p>To report content that breaks these rules, or that you believe infringes your rights, contact <a href="mailto:support@cerviced.co">support@cerviced.co</a> and tell us what it is, where it is, why you're reporting it, and how to contact you. We may remove content, and close accounts that repeatedly break these rules.</p>
+        <p>If you send us ideas or feedback, we may use them without owing you anything.</p>
+      </article>
+      <article class="clause" id="terms-24">
+        <h3><span class="n">24</span>Messages and Notifications</h3>
+        <p>We send you messages about your bookings and your account, such as confirmations, reminders, changes and receipts, by push notification and email. You can manage which notifications you receive in Settings and in your phone's settings, but turning off booking messages may mean you miss important updates.</p>
+        <p>Messages between clients and providers in the app must be about bookings and services. Don't use them to send spam or advertising, or to ask for payment outside the app for bookings made through it.</p>
+      </article>
+      <article class="clause" id="terms-25">
+        <h3><span class="n">25</span>Becca and Personalised Suggestions</h3>
+        <p>Becca, our in-app assistant, and features like Beauty Maintenance reminders give automatic suggestions based on what you tell us and your past bookings. They're general help and can be wrong or out of date. They aren't professional, medical or financial advice. Check anything important with your provider.</p>
+      </article>
+      <article class="clause" id="terms-26">
+        <h3><span class="n">26</span>Loyalty Points</h3>
+        <p>You earn points for eligible bookings. Points have no cash value, can't be transferred or sold, and never expire while your account is active. Ways to use points will be shown in the app when they're available. We may change how points are earned or used, or end the scheme, with reasonable notice, and we may remove points earned through misuse or bookings that are refunded.</p>
+      </article>
+      <article class="clause" id="terms-27">
+        <h3><span class="n">27</span>Offers and Promo Codes</h3>
+        <p>Offers and promo codes are set by providers or by Cerviced, and any conditions are shown with them. A code can only be used as described, can't be exchanged for cash, and may be withdrawn at any time before you use it. Personal codes mustn't be shared.</p>
+      </article>
+      <article class="clause" id="terms-28">
+        <h3><span class="n">28</span>Prohibited Conduct</h3>
+        <p>You agree not to misuse the platform. In particular, you must not post false reviews; harass, abuse or threaten anyone; send spam; pretend to be someone else or misrepresent your qualifications; book appointments you don't intend to keep; use someone else's payment card; engage in fraud or money laundering; copy or scrape content; upload viruses or try to access parts of the app you're not allowed into; move a booking made through Cerviced off the app, or pay or ask for payment for it outside the app, to avoid the service fee (this doesn't include a deposit's remaining balance, extras agreed at the appointment, or tips); or use the app in any way that breaks the law. Violations may result in account suspension.</p>
+      </article>
+      <article class="clause" id="terms-29">
+        <h3><span class="n">29</span>Suspending or Closing Accounts</h3>
+        <p>We may limit, suspend or close an account if we reasonably believe it has broken these Terms, been used for fraud, put someone at risk, received payment chargebacks, or repeatedly missed or cancelled appointments at short notice. Where we can, we'll tell you why and give you a chance to respond, unless that would put others at risk or break the law. If you think we've made a mistake, contact <a href="mailto:support@cerviced.co">support@cerviced.co</a>.</p>
+        <p>Providers may also choose not to accept bookings from you.</p>
+      </article>
+      <article class="clause" id="terms-30">
+        <h3><span class="n">30</span>Deleting Your Account</h3>
+        <p>You can delete your account at any time in Settings. If you sign back in within 30 days, your account is restored. After that, your profile and personal details are removed. Before you delete your account, please cancel any upcoming bookings or let your providers know.</p>
+        <p>We keep some records after deletion where the law requires or allows us to, for example payment and booking records for tax and accounting, with your name removed where we can.</p>
+      </article>
+      <article class="clause" id="terms-31">
+        <h3><span class="n">31</span>Intellectual Property</h3>
+        <p>All content, logos and branding on Cerviced, and the app itself, are owned by or licensed to Cerviced Ltd. You may not reproduce or distribute them, or use the Cerviced name or logo, without our written permission.</p>
+      </article>
+      <article class="clause" id="terms-32">
+        <h3><span class="n">32</span>Availability of the App</h3>
+        <p>We work to keep Cerviced running smoothly, but we can't promise it will always be available, uninterrupted or free from errors, for example during maintenance or problems with our suppliers. We may change, add or remove features. If a change significantly affects something you've paid for, we'll tell you first. Information in the app is for general guidance, so please check anything important with the provider.</p>
+      </article>
+      <article class="clause" id="terms-33">
+        <h3><span class="n">33</span>Limitation of Liability</h3>
+        <p>If we break these Terms or fail to use reasonable care and skill, we're responsible for losses you suffer that were a foreseeable result. Loss is foreseeable if it's obvious it would happen, or if both of us knew it might happen when you started using the service. We're not responsible for losses that weren't foreseeable.</p>
+        <p>If you use Cerviced as a client, we only provide the app for your personal use, so we're not responsible for business losses. We're not responsible for the services a provider gives you, which are the provider's responsibility, or for events outside our reasonable control.</p>
+        <p>Nothing in these Terms limits liability for death or personal injury caused by negligence, for fraud, or for anything else that can't be limited under UK law.</p>
+      </article>
+      <article class="clause" id="terms-34">
+        <h3><span class="n">34</span>Changes to These Terms</h3>
+        <p>We may update these Terms, for example to reflect changes to the app, the law or how we work. We'll tell you in the app or by email before a significant change takes effect. Changes don't affect bookings you've already made. If you keep using the app after a change, you accept the updated Terms. If you don't agree, you can delete your account.</p>
+      </article>
+      <article class="clause" id="terms-35">
+        <h3><span class="n">35</span>How We Contact Each Other</h3>
+        <p>We'll contact you in the app, by push notification, or by email to the address on your account, so please keep it up to date. You can contact us at <a href="mailto:support@cerviced.co">support@cerviced.co</a>.</p>
+      </article>
+      <article class="clause" id="terms-36">
+        <h3><span class="n">36</span>Law and Disputes</h3>
+        <p>If you have a complaint, please contact us first at <a href="mailto:support@cerviced.co">support@cerviced.co</a> and we'll try to resolve it. These Terms are governed by the law of England and Wales. If you live in Scotland or Northern Ireland, you can also bring a claim in your local courts.</p>
+      </article>
+      <article class="clause" id="terms-37">
+        <h3><span class="n">37</span>General</h3>
+        <p>These Terms, together with the documents they mention, are the whole agreement between you and us about using Cerviced. If a court finds part of them can't be enforced, the rest still applies. If we don't enforce a right straight away, we can still enforce it later. We may transfer our rights under these Terms to another business, and we'll tell you if that affects you. You may not transfer your account or your rights. No one else has rights under these Terms.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== PROVIDER TERMS ===================== -->
+    <section class="policy" id="provider-terms" aria-labelledby="provider-terms-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Providers</span><span>An agreement between businesses</span></p>
+        <h2 id="provider-terms-title">Provider Terms of Business</h2>
+        <p class="policy-intro">The agreement between your business and Cerviced when you offer treatments on Cerviced. It works alongside our <a href="#providers">Provider Standards</a>, which set out the services you can offer and how.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>You run an independent business. Cerviced is a marketplace, and collects payments from clients as your commercial agent.</li>
+          <li>Cerviced takes no commission. Clients pay a service fee on top of your price.</li>
+          <li>You set your own prices and policies, and you must honour bookings you accept.</li>
+          <li>Your earnings are paid out after the appointment, on the payout period you choose in the app.</li>
+          <li>You're responsible for your treatments, your tax and your clients' information.</li>
+          <li>We'll give you at least 15 days' notice before these terms change.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="provider-terms-1">
+        <h3><span class="n">1</span>About these terms</h3>
+        <p>These Provider Terms of Business ("Provider Terms") are an agreement between Cerviced Ltd (company number <mark class="ph">[company number]</mark>, registered office <mark class="ph">[registered address]</mark>) and you, the business offering treatments on Cerviced. If you accept them on behalf of a business, you confirm you're allowed to.</p>
+        <p>They apply alongside our Provider Standards and Community Guidelines, which form part of them, and our <a href="#privacy">Privacy Policy</a>. These sections of our <a href="#terms">Client Terms &amp; Conditions</a> also apply to you, because they cover everyone who uses the app: <a href="#terms-4">Your Licence to Use the App</a>, <a href="#terms-7">Your Account and Security</a>, <a href="#terms-21">Other Services We Work With</a>, <a href="#terms-23">Content You Post</a>, <a href="#terms-24">Messages and Notifications</a>, <a href="#terms-28">Prohibited Conduct</a>, <a href="#terms-31">Intellectual Property</a> and <a href="#terms-32">Availability of the App</a>. If anything in them differs from these Provider Terms, these Provider Terms apply.</p>
+        <p>You use Cerviced as a business, so the consumer rights described in our Client Terms don't apply to you as a provider.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-2">
+        <h3><span class="n">2</span>Key words</h3>
+        <ul>
+          <li><strong>Client:</strong> someone who books, or may book, your services through Cerviced.</li>
+          <li><strong>Booking:</strong> an appointment a client makes with you through the Cerviced app.</li>
+          <li><strong>Bookable profile:</strong> a profile clients can book and pay for through Cerviced.</li>
+          <li><strong>Booking-link profile:</strong> a profile that sends clients to your own booking page to book.</li>
+          <li><strong>Service fee:</strong> the fee Cerviced charges clients for bookings paid in the app.</li>
+          <li><strong>Payout period:</strong> how long after an appointment we hold your share before sending it to your Stripe account, as you choose in Payment settings.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="provider-terms-3">
+        <h3><span class="n">3</span>Our relationship</h3>
+        <p>You run your own independent business. You're not Cerviced's employee, worker, partner or agent. You decide whether to accept bookings, when you work and how you carry out your services.</p>
+        <p>Cerviced runs a marketplace that helps clients find and book you. We don't provide treatments. Each booking is a contract between you and the client, and you're responsible for the services you give.</p>
+        <p>For bookings paid in the app, you appoint Cerviced as your commercial agent to accept payment from clients on your behalf. When a client pays Cerviced for a booking, that counts as the client paying you for that amount.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-4">
+        <h3><span class="n">4</span>Joining and going live</h3>
+        <p>To offer services you need a provider account. You must give us accurate information about you and your business, keep it up to date, and only list services you're trained, qualified, insured and legally allowed to provide (see our <a href="#providers">Provider Standards</a>).</p>
+        <p>Your profile appears to clients once you've completed the steps shown in the app and gone live. Cerviced doesn't verify your identity, qualifications, licences, insurance or DBS checks, and you mustn't suggest that it has.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-5">
+        <h3><span class="n">5</span>Booking-link profiles</h3>
+        <p>If you have a booking-link profile, clients book with you on your own booking page, not through Cerviced. To go live you need a logo, an About section and a policy. Bookings, payments, cancellations, refunds and client information on your booking page are your responsibility, under your own terms and privacy policy, so sections 7 to 11 of these Provider Terms don't apply to them.</p>
+        <p>Your booking link must lead to your own genuine booking page, and you must keep it up to date. We count how many times clients tap Book on your profile and show you the totals. We don't see what clients do on your booking page.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-6">
+        <h3><span class="n">6</span>Your profile, prices and policies</h3>
+        <p>You set your own services, prices, opening hours and policies, and you're responsible for keeping them accurate. A price must include everything the client has to pay you for that service, apart from extras agreed at the appointment.</p>
+        <p>Your cancellation, deposit, rescheduling, late arrival and no-show policies must be fair and clear, and must be shown on your profile before clients book. If you ask clients to accept your own terms and conditions, they mustn't conflict with these Provider Terms or our Client Terms.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-7">
+        <h3><span class="n">7</span>Bookings</h3>
+        <ul>
+          <li>Respond to booking requests before they expire. If a request expires, the client is refunded in full.</li>
+          <li>Honour every booking you accept, at the price and on the terms shown when the client booked.</li>
+          <li>If you have to cancel, do it as early as you can. The client is refunded in full automatically, including the service fee.</li>
+          <li>Clients can ask to reschedule. You can accept, suggest another time, or let the request expire, in which case the original booking stands.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="provider-terms-8">
+        <h3><span class="n">8</span>Late arrival and no-show fees</h3>
+        <p>If you set a late arrival or no-show fee, clients see it before they book and must agree to it at checkout. Each fee is fixed when the client books, can't be more than half the booking price, and can be charged once per booking, within 24 hours of the appointment. If a client disputes a fee in the app within 7 days of the charge, you decide whether to refund it. Cerviced doesn't decide fee disputes.</p>
+        <p>Fees are paid to you. Cerviced takes no cut, but Stripe's card fee comes out of your share.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-9">
+        <h3><span class="n">9</span>Payments, fees and payouts</h3>
+        <ul>
+          <li><strong>Stripe.</strong> To take payments in the app you need a Stripe account. Stripe's terms apply to it, and Stripe checks your identity and bank details.</li>
+          <li><strong>No commission.</strong> Cerviced doesn't charge you commission or any other fee. You receive the full price, or deposit, that clients pay for your services. Cerviced earns its money from the service fee clients pay on top, which you never pay.</li>
+          <li><strong>Payouts.</strong> After each appointment we hold your share for your payout period, then send it to your Stripe account. Stripe pays it into your bank on its own schedule.</li>
+          <li><strong>When payouts wait.</strong> We hold a payout while a client's refund request about that booking is open, and we don't pay out bookings that have been cancelled, fully refunded or disputed through the client's bank.</li>
+          <li><strong>Money taken back.</strong> If a payment is refunded or reversed after you've been paid, for example through a refund or a chargeback, we take it back from your Stripe balance or from your next payouts. If something you owe can't be recovered that way within a reasonable time, you must pay it when we ask.</li>
+          <li><strong>Deposits.</strong> If a client pays a deposit, they pay you the rest at the appointment. Cerviced doesn't collect, track or guarantee that balance.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="provider-terms-10">
+        <h3><span class="n">10</span>Cancellations and refunds</h3>
+        <p>When a client cancels a booking paid in the app, your cancellation policy is applied automatically: you keep the share your policy allows, and the rest is refunded to the client.</p>
+        <p>You can refund a client in full or in part at any time from the booking. When a client asks for a refund, the request comes to you first. You can refund them, or pass the request to Cerviced. If you pass it to us, we'll review what happened, including your policy, and tell you and the client the outcome.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-11">
+        <h3><span class="n">11</span>Keep Cerviced bookings on Cerviced</h3>
+        <p>When a client books you through Cerviced, that booking stays in the app. Don't ask or encourage the client to cancel and rebook with you directly, or to pay you outside the app, to avoid the service fee. This doesn't include a deposit's remaining balance, extras agreed at the appointment, or tips.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-12">
+        <h3><span class="n">12</span>New charges and changes to these terms</h3>
+        <p>If we introduce a commission or any other charge for providers, or change these Provider Terms, we'll tell you at least 15 days before the change takes effect, or longer if it means you have to make significant changes to how you work. A new charge won't apply to bookings made before it starts. If you don't agree with a change, you can close your provider account before it takes effect.</p>
+        <p>We may make a change sooner if the law requires it, or to deal with a risk to someone's safety or to the security of the app.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-13">
+        <h3><span class="n">13</span>Your clients' information</h3>
+        <p>Cerviced and you are each an independent controller of the client information you receive through Cerviced. That means each of us is separately responsible under data protection law for our own use of it. You must:</p>
+        <ul>
+          <li>use client information only to provide and manage that client's bookings;</li>
+          <li>keep it secure and confidential, especially health information and answers to your forms;</li>
+          <li>not add clients to marketing lists unless they've agreed;</li>
+          <li>delete it when you no longer need it, keeping only the records the law requires;</li>
+          <li>tell us without delay if you become aware of a security breach involving client information you received through Cerviced;</li>
+          <li>only post photos of a client's treatment if they've agreed.</li>
+        </ul>
+        <p>Where you use Cerviced to keep your own records, such as bookings you add yourself, we process that information on your behalf as your processor. When we do, we'll use it only to provide Cerviced to you and as you instruct through the app; make sure the people who access it keep it confidential; keep it secure; only use the suppliers listed in our Privacy Policy, and tell you before we add a new one; help you respond to requests from people using their data protection rights and to any data breach; delete it when you close your account, unless the law requires us to keep it; and give you the information you reasonably need to show we've met these duties.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-14">
+        <h3><span class="n">14</span>Tax</h3>
+        <p>You're responsible for your own tax, including any VAT, on what you earn. Under UK law, digital platforms like Cerviced must collect information about providers, such as your name, address, date of birth and National Insurance number or Unique Taxpayer Reference, and report your earnings from Cerviced to HMRC each year. You must give us that information when we ask for it. If you don't, the law may require us to hold your payouts or pause your profile until you do.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-15">
+        <h3><span class="n">15</span>Content, reviews and ratings</h3>
+        <p>You keep ownership of your photos and profile content, and give Cerviced the licence described in <a href="#terms-23">Content You Post</a> in our Client Terms. Your photos must show your own work.</p>
+        <p>Clients who book you through Cerviced can leave reviews, which appear on your profile and count towards your rating. You can't opt out of reviews, and you mustn't try to influence them unfairly (see our <a href="#reviews">Reviews Policy</a>). If you think a review breaks that policy, report it to us.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-16">
+        <h3><span class="n">16</span>Suspending and ending</h3>
+        <p>You can close your provider account at any time. Before you do, complete or cancel any upcoming bookings.</p>
+        <p>We may hide a service, pause your profile or restrict your account if we reasonably believe you've broken these Provider Terms, our Provider Standards or the law, put someone at risk, or received repeated complaints or chargebacks. When we do, we'll tell you why, and you can respond or appeal by emailing <a href="mailto:support@cerviced.co">support@cerviced.co</a>.</p>
+        <p>We may end these Provider Terms and close your provider account by giving you at least 30 days' notice and our reasons. We can do it without notice if the law requires it, if someone's safety is at risk, or if you've seriously or repeatedly broken these Provider Terms.</p>
+        <p>When your account closes, we'll still pay out what you're owed for completed appointments once their payout periods and any open refund requests have ended, and you must still repay anything you owe, including refunds and chargebacks that arrive later. Sections 9, 13, 14, 17 and 18 continue to apply after your account closes.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-17">
+        <h3><span class="n">17</span>Liability</h3>
+        <p>Nothing in these Provider Terms limits liability for death or personal injury caused by negligence, for fraud, or for anything else the law doesn't allow to be limited.</p>
+        <p>Apart from that, Cerviced isn't liable to you for loss of profit, revenue, business, goodwill or data, or for any indirect or consequential loss, and our total liability to you under these Provider Terms in any 12-month period is limited to <mark class="ph">[liability cap]</mark>. We don't promise you any number of bookings or clients.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-18">
+        <h3><span class="n">18</span>Indemnity</h3>
+        <p>You agree to cover Cerviced's reasonable losses and costs if a claim is brought against us because of your services, your content, your handling of client information, or your breach of these Provider Terms.</p>
+      </article>
+
+      <article class="clause" id="provider-terms-19">
+        <h3><span class="n">19</span>Complaints, law and general terms</h3>
+        <p>If you have a complaint about Cerviced, email <a href="mailto:support@cerviced.co">support@cerviced.co</a> and we'll try to resolve it (see <a href="#complaints">Complaints &amp; Reporting</a>).</p>
+        <p>These Provider Terms are governed by the law of England and Wales, and the courts of England and Wales have exclusive jurisdiction over any dispute about them.</p>
+        <p>These Provider Terms, with the documents they mention, are the whole agreement between you and us about offering services on Cerviced. If a court finds part of them can't be enforced, the rest still applies. If we don't enforce a right straight away, we can still enforce it later. You may not transfer these Provider Terms or your account to someone else without our agreement. We may transfer them to a business that takes over Cerviced, and we'll tell you if we do. No one else has rights under these Provider Terms.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== PRIVACY ===================== -->
+    <section class="policy" id="privacy" aria-labelledby="privacy-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Everyone</span><span>UK GDPR and the Data Protection Act 2018</span></p>
+        <h2 id="privacy-title">Privacy Policy</h2>
+        <p class="policy-intro">What personal information Cerviced collects when you use the app or cerviced.co, why we use it, who we share it with, how long we keep it, and your rights.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>We use your information to run Cerviced: your account, your bookings and your payments.</li>
+          <li>Providers you book with can see your booking details and your Beauty Profile, including any health information you've added.</li>
+          <li>Card details are handled by Stripe. We never see your full card number.</li>
+          <li>What you type to Becca, our assistant, is processed by an AI service run by NVIDIA in the United States.</li>
+          <li>We don't sell your information and we don't use advertising trackers.</li>
+          <li>You can see, correct, download or delete your information by emailing support@cerviced.co.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="privacy-1">
+        <h3><span class="n">1</span>Who we are</h3>
+        <p>Cerviced Ltd is the controller of your personal information. That means we decide how it's used and we're responsible for it. We're a company registered in England and Wales (company number <mark class="ph">[company number]</mark>), with our registered office at <mark class="ph">[registered address]</mark>. We're registered with the Information Commissioner's Office (ICO) under registration number <mark class="ph">[ICO registration number]</mark>.</p>
+        <p>For anything about your personal information, contact our data protection lead at <a href="mailto:support@cerviced.co">support@cerviced.co</a>. Put "Privacy" in the subject line so your message reaches them quickly.</p>
+        <p>Providers on Cerviced run their own businesses. When a provider receives your details for a booking, they become a separate controller of them, responsible under data protection law for how they use them. Where a provider uses Cerviced to keep their own records, such as bookings they add themselves, we process that information on the provider's behalf.</p>
+      </article>
+
+      <article class="clause" id="privacy-2">
+        <h3><span class="n">2</span>Information we collect</h3>
+        <h4>Information you give us</h4>
+        <ul>
+          <li><strong>Account details:</strong> your name, email address, phone number, date of birth and password. If you use Sign in with Apple, we receive the name and email address Apple shares with us. Your password is stored in scrambled (hashed) form, so no one at Cerviced can read it.</li>
+          <li><strong>Profile details you choose to add:</strong> for clients, your Beauty Profile, for example your hair type, skin type and tone, skin concerns, nail, lash, brow and makeup preferences, treatment history, the treatments and areas you're interested in, whether you're happy to be photographed, and how you heard about us. You can also add details such as your gender and whether you have children.</li>
+          <li><strong>Health information:</strong> allergies and medical notes in your Beauty Profile, health details you add to a booking, and your answers to consultation or medical history forms a provider asks you to complete, including your signature. See <a href="#privacy-4">section 4</a>.</li>
+          <li><strong>Bookings:</strong> the treatments, provider, date and time, notes you add, your address if a provider is coming to you, and any reschedule, cancellation or refund request. If you book for someone else, the details you give us about them.</li>
+          <li><strong>Payments:</strong> payments are made through Stripe. We keep the amounts, payment status, payment method type (for example card, Apple Pay, Google Pay or PayPal) and a reference to your Stripe customer record. If you save a card, Stripe stores it, and the app reads the card type, last four digits and expiry date from Stripe so it can show the card to you. If you agree to a provider's late arrival or no-show fee, we keep a record of the exact wording you agreed to and when.</li>
+          <li><strong>Messages, reviews and content:</strong> messages you send in the app, reviews you leave, and photos and text you post.</li>
+          <li><strong>Becca:</strong> what you type to Becca, our in-app assistant.</li>
+          <li><strong>Support:</strong> what you tell us when you contact us, make a complaint or report something.</li>
+          <li><strong>Waitlist:</strong> if you join our waitlist on cerviced.co, your email address.</li>
+        </ul>
+        <h4>If you're a provider</h4>
+        <ul>
+          <li>Your business name, business type, contact details, business address, services, prices, opening hours, policies, photos, specialities, years of experience, social media handles, website and booking link, and anything you tell us about your qualifications, licences and insurance.</li>
+          <li>Your full business address is kept private and is only shared with a client when their booking allows it.</li>
+          <li>To pay you, Stripe collects and checks your identity and bank details directly. We receive the status of your Stripe account, not your identity documents or full bank details.</li>
+          <li>Your payout settings, your payouts, refunds you give and fees you charge.</li>
+          <li>Records you make about bookings, for example that a client arrived late or didn't attend.</li>
+          <li>Information about your earnings and tax details that UK law requires digital platforms to collect and report to HMRC (see <a href="#provider-terms-14">Provider Terms of Business, section 14</a>).</li>
+        </ul>
+        <h4>Information we collect automatically</h4>
+        <ul>
+          <li><strong>How you use the app:</strong> the providers, looks and treatments you view, save and book, your searches and filters, and how many times clients tap Book on a provider's profile.</li>
+          <li><strong>Device information:</strong> your device type, operating system, app version, and a push notification token so we can send you notifications.</li>
+          <li><strong>Crash reports:</strong> when the app crashes or hits an error, it sends us a report with technical details about the error and your device. We've set this up not to attach your IP address or account details.</li>
+          <li><strong>Location:</strong> if you allow it, the app uses your phone's location on your phone to sort providers by distance and show maps. We don't store your precise location. We do store the town or area you choose to add to your profile.</li>
+        </ul>
+        <h4>Information from other sources</h4>
+        <ul>
+          <li><strong>Apple</strong>, if you use Sign in with Apple.</li>
+          <li><strong>Stripe</strong>, about your payments and, for providers, your payout account.</li>
+          <li><strong>Public business information:</strong> we may create a listing for a beauty or wellness business from information the business has published itself, for example on its website, its booking page or a public directory. This can include the business name, services, prices, area, public contact details and photos. These listings are marked as unclaimed and can't be booked. The business owner can find the listing, claim it and take it over. If it's your business and you'd like the listing corrected or removed, contact us.</li>
+          <li><strong>Profile import:</strong> if you're a provider and ask us to import your details from your existing booking page, we read that page to fill in your profile.</li>
+          <li><strong>Other people</strong>, for example a client who books a treatment for you, or a provider who records the outcome of your booking.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="privacy-3">
+        <h3><span class="n">3</span>How we use it, and our legal reasons</h3>
+        <p>Data protection law says we must have a lawful basis for each way we use your information. These are ours:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>What we use it for</th><th>Lawful basis</th></tr></thead>
+            <tbody>
+              <tr><td>Running your account and the app; letting you book, pay, reschedule, cancel and get refunds; sending booking messages, reminders and receipts</td><td>Performing our contract with you</td></tr>
+              <tr><td>Sharing booking details with the providers you book</td><td>Performing our contract with you</td></tr>
+              <tr><td>Sharing health information you choose to give with providers you book</td><td>Your explicit consent (see section 4)</td></tr>
+              <tr><td>Paying providers; handling refunds, chargebacks and late arrival and no-show fees</td><td>Performing our contract; our legal obligations</td></tr>
+              <tr><td>Personalising Explore, Search, Becca and Beauty Maintenance reminders</td><td>Our legitimate interest in showing you relevant providers, looks and reminders</td></tr>
+              <tr><td>Keeping Cerviced safe: preventing fraud, enforcing our Terms, handling reports, complaints and disputes, and keeping records of what you agreed to</td><td>Our legitimate interests; our legal obligations</td></tr>
+              <tr><td>Fixing crashes and improving the app</td><td>Our legitimate interest in a working, reliable app</td></tr>
+              <tr><td>Listing businesses from information they've published</td><td>Our legitimate interest in helping clients find local professionals and helping businesses be found</td></tr>
+              <tr><td>Sending marketing, such as news and offers</td><td>Your consent, which you can withdraw at any time</td></tr>
+              <tr><td>Keeping financial records and reporting provider earnings to HMRC</td><td>Our legal obligations</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Where we rely on legitimate interests, we've weighed them against your rights, and you can object at any time (see <a href="#privacy-9">section 9</a>).</p>
+      </article>
+
+      <article class="clause" id="privacy-4">
+        <h3><span class="n">4</span>Health information</h3>
+        <p>Health information is a special category of personal information under UK data protection law, and we treat it with extra care.</p>
+        <ul>
+          <li><strong>It's your choice.</strong> We only have health information if you choose to give it to us. We rely on your explicit consent, which you give when you add it.</li>
+          <li><strong>Who can see it.</strong> Any provider you've made a booking with can see your current Beauty Profile, including your allergies and medical notes. This includes a provider whose booking was later cancelled or declined. Health details you add to a booking, and your answers to a provider's forms, are shared with that provider.</li>
+          <li><strong>What it's for.</strong> We use it only so providers can prepare for your treatment and carry it out safely. We never use it for marketing or advertising, and we never sell it.</li>
+          <li><strong>Changing your mind.</strong> You can change or delete it at any time in your Beauty Profile. Deleting it withdraws your consent for us to keep using it. A provider who already received it for a booking may need to keep their own record of it.</li>
+          <li><strong>Becca.</strong> Please don't type health information into Becca (see section 5).</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="privacy-5">
+        <h3><span class="n">5</span>Becca and AI services</h3>
+        <p>Becca, our in-app assistant, uses an AI service run by NVIDIA to understand what you ask. When you send Becca a message, the text is sent to NVIDIA's servers in the United States.</p>
+        <p>Becca's answers are put together by Cerviced from your account. A draft answer can also be sent to NVIDIA to be reworded, and that draft can include details from your account, such as provider names, booking dates, times and prices. The app checks the reworded answer against the facts and uses its own version if anything doesn't match.</p>
+        <p>When a provider imports their profile, or when we create a listing from public business information, we use an AI service run by Anthropic, in the United States, to read the web page and pick out the business details.</p>
+        <p>We don't use AI or any other automated process to make decisions that have legal or similarly significant effects on you.</p>
+      </article>
+
+      <article class="clause" id="privacy-6">
+        <h3><span class="n">6</span>Who we share it with</h3>
+        <h4>Providers and clients</h4>
+        <ul>
+          <li><strong>Providers you book with</strong> receive your name and the contact details they need for the booking, the booking details and your notes, your Beauty Profile (including health information, see section 4), your answers to their forms, your address for a home visit once they've accepted it, and how often you've cancelled late or missed appointments with them.</li>
+          <li><strong>Clients</strong> can see providers' public profiles. A provider's full business address is only shared with a client when their booking allows it.</li>
+        </ul>
+        <h4>Companies that provide services to us</h4>
+        <p>These companies process information on our behalf, under contracts that only let them use it to provide their service to us.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Company</th><th>What they do for us</th><th>Where data may be processed</th></tr></thead>
+            <tbody>
+              <tr><td>Supabase</td><td>Hosts our database, sign-in and stored photos</td><td>London, UK</td></tr>
+              <tr><td>Stripe</td><td>Payments, refunds and saved cards; paying providers, including the identity checks Stripe needs to do that</td><td>UK, EU and United States</td></tr>
+              <tr><td>Resend</td><td>Sends our emails, such as confirmations and receipts</td><td>United States</td></tr>
+              <tr><td>Expo</td><td>Delivers push notifications</td><td>United States</td></tr>
+              <tr><td>Apple and Google</td><td>Deliver push notifications to your phone; Sign in with Apple</td><td>United States and worldwide</td></tr>
+              <tr><td>Sentry</td><td>Crash and error reports</td><td>Germany, EU</td></tr>
+              <tr><td>NVIDIA</td><td>The AI service behind Becca</td><td>United States</td></tr>
+              <tr><td>Anthropic</td><td>The AI service that reads public business web pages for profile imports and listings</td><td>United States</td></tr>
+              <tr><td>getAddress.io</td><td>Finds addresses from the postcode you enter</td><td>UK</td></tr>
+              <tr><td>Vercel</td><td>Hosts cerviced.co</td><td>United States and worldwide</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>Others</h4>
+        <ul>
+          <li>The police, courts, regulators or HMRC, when the law requires it or to protect someone's safety.</li>
+          <li>Our professional advisers, such as lawyers and accountants.</li>
+          <li>A buyer or investor if Cerviced is sold or restructured, who must protect your information in the same way.</li>
+          <li>Anyone else, with your permission.</li>
+        </ul>
+        <p>We don't sell your personal information, and we don't share it with advertisers.</p>
+      </article>
+
+      <article class="clause" id="privacy-7">
+        <h3><span class="n">7</span>Information sent outside the UK</h3>
+        <p>Some of the companies in section 6 process information outside the UK, mainly in the United States. When they do, we protect it with a safeguard recognised by UK law, such as the UK–US data bridge for companies certified under it, or the ICO's International Data Transfer Agreement or Addendum. Contact us if you'd like details of the safeguard for a particular company.</p>
+      </article>
+
+      <article class="clause" id="privacy-8">
+        <h3><span class="n">8</span>How long we keep it</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Information</th><th>How long we keep it</th></tr></thead>
+            <tbody>
+              <tr><td>Your account and profile</td><td>While your account is open. When you delete your account, you can restore it by signing back in within 30 days. After that, your profile and personal details are removed.</td></tr>
+              <tr><td>Health information</td><td>Until you delete it, or your account is removed.</td></tr>
+              <tr><td>Booking and payment records</td><td>6 years after the end of the financial year they relate to, for tax and accounting. Where we can, we remove your name from them.</td></tr>
+              <tr><td>Messages, reviews and content</td><td>While your account is open, then deleted or made anonymous, unless we need them for a dispute, complaint or legal claim.</td></tr>
+              <tr><td>Support requests and complaints</td><td>Up to 6 years after the matter is closed, in case of a legal claim.</td></tr>
+              <tr><td>Crash reports</td><td>Up to 90 days.</td></tr>
+              <tr><td>Waitlist sign-ups</td><td>Until we've told you about our launch, or until you ask us to remove you.</td></tr>
+              <tr><td>Unclaimed business listings</td><td>Until the business claims the listing or asks us to remove it, or the information is out of date.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="clause" id="privacy-9">
+        <h3><span class="n">9</span>Your rights</h3>
+        <p>You have the right to:</p>
+        <ul>
+          <li>get a copy of the personal information we hold about you;</li>
+          <li>have information corrected if it's wrong or incomplete;</li>
+          <li>have your information deleted;</li>
+          <li>ask us to limit how we use your information;</li>
+          <li>object to how we use it where we rely on legitimate interests, including personalisation and business listings, and object to marketing at any time;</li>
+          <li>get the information you gave us in a format you can take elsewhere;</li>
+          <li>withdraw your consent where we rely on it, such as for health information and marketing. This doesn't affect what we did before you withdrew it.</li>
+        </ul>
+        <p>You can do a lot of this yourself in the app: edit your profile, remove health information from your Beauty Profile, change your notification settings, or delete your account in Settings. For anything else, email <a href="mailto:support@cerviced.co">support@cerviced.co</a>. It's free. We'll reply within one month, or tell you within that month if we need longer for a complicated request. We may ask you to confirm your identity first.</p>
+        <p>If you're unhappy with how we've handled your information, you can complain to the Information Commissioner's Office at ico.org.uk or on 0303 123 1113. We'd appreciate the chance to put things right first, so please contact us before you do.</p>
+      </article>
+
+      <article class="clause" id="privacy-10">
+        <h3><span class="n">10</span>Keeping it secure</h3>
+        <p>Information is encrypted when it travels between the app and our servers, and is stored encrypted by our hosting provider in London. Access rules in our database mean people can only see the information they're allowed to see, and only a small number of people at Cerviced can access personal information, when they need it for their work. Card details are handled by Stripe, which is certified to the highest level of the payment card industry's security standard (PCI DSS Level 1).</p>
+        <p>If a data breach is likely to put you at risk, we'll tell you, and we'll report it to the ICO as the law requires.</p>
+      </article>
+
+      <article class="clause" id="privacy-11">
+        <h3><span class="n">11</span>Children</h3>
+        <p>Cerviced is for people aged 16 and over, and we don't knowingly collect information about children under 16 for their own accounts. If you think a child under 16 has an account, contact us and we'll delete it. If you book a treatment for a child, only give us and the provider the details the booking needs.</p>
+      </article>
+
+      <article class="clause" id="privacy-12">
+        <h3><span class="n">12</span>Messages and marketing</h3>
+        <p>We send booking and account messages, such as confirmations, reminders, receipts and security alerts, because they're part of the service. We only send marketing, such as news and offers from Cerviced, if you've agreed to receive it, and you can stop it at any time with the unsubscribe link or in Settings. You control push notifications in Settings and in your phone's settings.</p>
+      </article>
+
+      <article class="clause" id="privacy-13">
+        <h3><span class="n">13</span>Changes to this policy</h3>
+        <p>We'll update this policy when the way we use information changes. If a change is significant, we'll tell you in the app or by email before it takes effect. The date at the top of this page shows when it last changed.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== COOKIES ===================== -->
+    <section class="policy" id="cookies" aria-labelledby="cookies-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Everyone</span><span>The app and cerviced.co</span></p>
+        <h2 id="cookies-title">Cookies &amp; Device Storage</h2>
+        <p class="policy-intro">Cookies are small files a website saves in your browser. Apps use similar storage on your phone. This policy explains what Cerviced stores on your device and why.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>The Cerviced app and website only store what they need to work.</li>
+          <li>We don't use advertising or analytics cookies or trackers. That includes Meta, TikTok and Google Ads pixels and Google Analytics.</li>
+          <li>If we ever want to use them, we'll ask for your permission first.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="cookies-1">
+        <h3><span class="n">1</span>In the app</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>What's stored</th><th>Why</th><th>Type</th><th>How long</th></tr></thead>
+            <tbody>
+              <tr><td>Your sign-in session</td><td>Keeps you signed in securely</td><td>Strictly necessary</td><td>Until you sign out</td></tr>
+              <tr><td>Your cart</td><td>Keeps the treatments you've added until you check out</td><td>Strictly necessary</td><td>Until you check out or remove them</td></tr>
+              <tr><td>Your settings</td><td>Remembers choices such as dark mode, text size, language and notification preferences</td><td>Functional</td><td>Until you change them or delete the app</td></tr>
+              <tr><td>Walkthroughs</td><td>Remembers which tips and tours you've already seen</td><td>Functional</td><td>Until you delete the app</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Crash reports are described in our <a href="#privacy-2">Privacy Policy</a>. They don't use cookies.</p>
+      </article>
+
+      <article class="clause" id="cookies-2">
+        <h3><span class="n">2</span>On cerviced.co</h3>
+        <p>Our website doesn't set any cookies. It loads its fonts from Google Fonts, so your browser connects to Google's servers, which receive your IP address and browser details. Google's own privacy policy applies to that.</p>
+      </article>
+
+      <article class="clause" id="cookies-3">
+        <h3><span class="n">3</span>Payments and other websites</h3>
+        <p>When you pay, Stripe may store information on your device to prevent fraud and to run security checks such as 3D Secure. These are strictly necessary for your payment to go through.</p>
+        <p>When you open a provider's own booking page or their Instagram profile from the app, that website may set its own cookies under its own policy.</p>
+      </article>
+
+      <article class="clause" id="cookies-4">
+        <h3><span class="n">4</span>Your choices</h3>
+        <p>Because we only store what the app and website need to work, there's nothing to switch off. You can clear what's stored by signing out, deleting the app, or clearing your browser's cookies and site data. If we ever add optional cookies or trackers, we'll ask you first and you'll be able to change your mind at any time.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== FEES ===================== -->
+    <section class="policy" id="fees" aria-labelledby="fees-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Clients</span><span>Bookings paid for in the app</span></p>
+        <h2 id="fees-title">Fees, Cancellations &amp; Refunds</h2>
+        <p class="policy-intro">How paying, cancelling, rescheduling and refunds work for bookings you pay for in the Cerviced app. The legal wording is in sections 9 to 16 of our <a href="#terms">Terms &amp; Conditions</a>. This policy explains it in more detail.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>Providers set their prices. You also pay a Cerviced service fee, shown with your total before you pay.</li>
+          <li>Each provider has their own cancellation policy. It's shown before you book and applied automatically if you cancel.</li>
+          <li>If the provider declines or cancels, you get everything back, including the service fee.</li>
+          <li>If you only get part of your money back, the service fee isn't refunded.</li>
+          <li>The remaining balance after a deposit is paid to the provider in person. Cerviced isn't involved in it.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="fees-1">
+        <h3><span class="n">1</span>What you pay</h3>
+        <p>Providers set their own prices, in pounds sterling. When you book in the app, a provider may ask you to pay the full price or a deposit, or let you choose. A deposit can be a percentage of the price or a fixed amount. Your total, including any deposit and Cerviced's service fee, is shown before you pay.</p>
+        <p>Payments are processed by Stripe. Depending on your device, you can pay by card, Apple Pay, Google Pay or PayPal.</p>
+      </article>
+
+      <article class="clause" id="fees-2">
+        <h3><span class="n">2</span>Cerviced's service fee</h3>
+        <p>Cerviced charges clients one service fee per checkout. It's added on top of the provider's prices and never comes out of what the provider receives. The fee depends on the value of the treatments you're booking. If you're only paying deposits, it's based on the full price of the treatments, not the deposit amount. You'll always see the exact fee, and your total, before you pay.</p>
+        <p>The service fee is refunded if your booking is refunded in full, for example because the provider declined or cancelled it, or because you cancelled before their notice period. It isn't refunded if you get a partial refund.</p>
+      </article>
+
+      <article class="clause" id="fees-3">
+        <h3><span class="n">3</span>Deposits and remaining balances</h3>
+        <p>If you pay a deposit, you pay the rest of the price to the provider at your appointment, in whatever way they accept. Cerviced doesn't collect, hold, check or guarantee that payment, and can't settle disagreements about whether or how much was paid.</p>
+      </article>
+
+      <article class="clause" id="fees-4">
+        <h3><span class="n">4</span>Cancelling a booking</h3>
+        <p>You can cancel from the booking in the app. Each provider sets a notice period and what they keep if you cancel inside it. Both are shown on their profile and before you book.</p>
+        <ul>
+          <li><strong>You cancel before the notice period:</strong> you get a full refund, including the service fee.</li>
+          <li><strong>You cancel inside the notice period:</strong> the provider keeps the share their policy states, and the rest is refunded to you. The service fee isn't refunded.</li>
+        </ul>
+        <p>Late cancellations and missed appointments are recorded, and the provider you booked with can see how often this has happened with them.</p>
+      </article>
+
+      <article class="clause" id="fees-5">
+        <h3><span class="n">5</span>If the provider declines or cancels</h3>
+        <p>You're refunded in full automatically, including the service fee. The same happens if a provider doesn't respond to your booking request before it expires.</p>
+      </article>
+
+      <article class="clause" id="fees-6">
+        <h3><span class="n">6</span>Rescheduling</h3>
+        <p>You can ask to move a booking from the booking itself. The provider can accept your new time or suggest another, and providers can also suggest a new time to you. A request that isn't answered in time expires, and your original booking stays as it was. Providers may limit how close to the appointment you can reschedule. This is shown in their policy.</p>
+      </article>
+
+      <article class="clause" id="fees-7">
+        <h3><span class="n">7</span>Missed appointments</h3>
+        <p>If you don't attend an appointment, you won't get a refund for what you paid unless the provider chooses to give one. If you agreed to a no-show fee when you booked, the provider may also charge it (see section 8).</p>
+      </article>
+
+      <article class="clause" id="fees-8">
+        <h3><span class="n">8</span>Late arrival and no-show fees</h3>
+        <p class="note">This is the wording you agree to at checkout when a provider sets one of these fees.</p>
+        <div class="verbatim"><p>Some providers set a late arrival fee, a no-show fee, or both. Any fee is shown to you before you pay, and you must agree to it at checkout to book. If you agree, your card is saved securely by Stripe, and the provider may charge the agreed fee to it within 24 hours of your appointment: the late arrival fee if you arrive after the provider's stated grace period, or the no-show fee if you do not attend. If the charge is declined, we will ask you to pay the fee in the app or by email within 7 days, and we may try your saved card again up to three more times in those 7 days. If your bank asks you to approve the charge, we won't try the card again; you can pay it yourself within the 7 days. Each fee is fixed at the amount shown when you book, can be collected only once per booking, and can never be more than half the price of the booking. You will be notified whenever a fee is charged or retried. If you believe a fee is wrong, you can dispute it with the provider in the app within 7 days of the charge, and the provider decides whether to refund it. Fees are paid to the provider, not to Cerviced, and Cerviced does not decide fee disputes. This does not affect your statutory rights, including your right to contact your bank.</p></div>
+      </article>
+
+      <article class="clause" id="fees-9">
+        <h3><span class="n">9</span>Asking for a refund</h3>
+        <p>If something went wrong, you can request a refund from the booking in the app and tell us why. Your request goes to the provider first. They can refund you in full or in part, or pass the request to Cerviced. If it's passed to us, we'll look at what happened, including the provider's policy, and tell you the outcome.</p>
+        <p>Cerviced only reviews money paid through the app. Payments you made to the provider in person, or on their own booking page, are between you and them.</p>
+        <p>Refunds go back to the card or account you paid with and usually take 5 to 10 working days to appear, depending on your bank.</p>
+      </article>
+
+      <article class="clause" id="fees-10">
+        <h3><span class="n">10</span>Bookings made on a provider's own booking page</h3>
+        <p>Some providers take bookings on their own booking page instead of through Cerviced. Payments, cancellations and refunds for those bookings are handled by the provider under their own terms. Cerviced can't change, cancel or refund them.</p>
+      </article>
+
+      <article class="clause" id="fees-11">
+        <h3><span class="n">11</span>Keep Cerviced bookings in the app</h3>
+        <p>For a booking made through Cerviced, pay in the app. Don't arrange with the provider to cancel and rebook outside the app, or to pay them directly instead, to avoid the service fee. This doesn't include a deposit's remaining balance, extras you agree at the appointment, or tips.</p>
+      </article>
+
+      <article class="clause" id="fees-12">
+        <h3><span class="n">12</span>Your legal rights</h3>
+        <p>Nothing in this policy affects your statutory rights. Under UK consumer law, a treatment must be carried out with reasonable care and skill. If it isn't, you may be entitled to have it put right, or to a price reduction, from the provider. You can also contact your card provider about a payment. If you raise a chargeback, please let us know too, so we can help sort it out.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== PROVIDER STANDARDS ===================== -->
+    <section class="policy" id="providers" aria-labelledby="providers-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Providers</span><span>Part of the Provider Terms of Business</span></p>
+        <h2 id="providers-title">Provider Standards</h2>
+        <p class="policy-intro">The services you can offer on Cerviced and the standards you agree to meet. They form part of our <a href="#provider-terms">Provider Terms of Business</a>, which cover bookings, payments, payouts and client information.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>Only list services you're trained, qualified, insured and legally allowed to provide.</li>
+          <li>Cerviced doesn't verify identity, qualifications, licences, insurance or DBS checks. What you tell us is self-declared, and we never show it to clients as checked.</li>
+          <li>Some treatments have extra legal rules, including injectables, which need a prescriber, and age limits.</li>
+          <li>Home visits are allowed. You only get the client's address once you've accepted the booking.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="providers-1">
+        <h3><span class="n">1</span>Offering services</h3>
+        <p>You must give accurate information about yourself and your business, keep it up to date, and only list services you're trained, qualified, insured and legally allowed to provide. These standards apply to bookable and booking-link profiles alike.</p>
+      </article>
+
+      <article class="clause" id="providers-2">
+        <h3><span class="n">2</span>What Cerviced checks</h3>
+        <p>Cerviced doesn't verify providers' identity, qualifications, licences, insurance or DBS checks. Anything you tell us about them is self-declared. We never describe you to clients as verified, checked or approved, and you mustn't suggest that Cerviced has checked you.</p>
+        <p>Stripe checks the identity and bank details of providers who take payments, because the law requires it before Stripe can pay you. That's Stripe's check for payments, not a Cerviced check of your credentials.</p>
+        <p>We may ask you for evidence of a qualification, licence or insurance at any time, and remove a service or profile if what you told us turns out to be untrue.</p>
+      </article>
+
+      <article class="clause" id="providers-3">
+        <h3><span class="n">3</span>Services you can offer</h3>
+        <p>You can offer services in any of the app's categories: Hair, Nails, Lashes, Brows, Makeup and Aesthetics. For every service you list, you must have the training and qualifications it needs, carry suitable insurance, and hold any licence or registration your local council or national regulator requires.</p>
+        <p>Some services have extra legal rules:</p>
+        <ul>
+          <li><strong>Anti-wrinkle injections (botulinum toxin)</strong> are a prescription-only medicine. Only offer them if a qualified prescriber prescribes the treatment for the client after a face-to-face consultation, and follow the law on who may give them.</li>
+          <li><strong>Botulinum toxin and dermal fillers</strong> must never be given for cosmetic reasons to anyone under 18. In England, it's a criminal offence to give or arrange them for under-18s.</li>
+          <li><strong>Other advanced aesthetics,</strong> including laser and IPL, chemical peels, microneedling, skin boosters and body sculpting: complete proper training, follow the manufacturer's instructions, carry out consultations and patch tests where appropriate, and hold any licence your area requires. This includes any national licensing scheme for non-surgical cosmetic procedures as it comes into force.</li>
+          <li><strong>Semi-permanent makeup and microblading</strong> are a form of tattooing. Register with your local council where required, and don't treat anyone under 18.</li>
+          <li><strong>Intimate services,</strong> such as intimate waxing, are allowed when carried out professionally, with the client's clear consent and with their privacy respected. Don't post photos that show intimate areas.</li>
+        </ul>
+        <p>Sexual services of any kind are not allowed on Cerviced, and neither is any service that's illegal or that you aren't legally allowed to provide.</p>
+      </article>
+
+      <article class="clause" id="providers-4">
+        <h3><span class="n">4</span>Home visits</h3>
+        <p>You can offer treatments at clients' homes. When you do:</p>
+        <ul>
+          <li>The client's address is only shared with you once you've accepted the booking. Use it only for that appointment.</li>
+          <li>You can refuse a booking, or leave an appointment, if you feel unsafe. Tell us about anything that worries you.</li>
+          <li>Tell someone you trust where you're going and when you expect to finish.</li>
+          <li>We recommend a DBS check and insurance that covers mobile work. Neither is required, and Cerviced never shows them to clients as checked.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="providers-5">
+        <h3><span class="n">5</span>Your profile and content</h3>
+        <p>Your profile must be accurate. Photos must show your own work, prices must be the prices you charge, and your opening hours and policies must be current. Don't copy other businesses' photos or descriptions, and only post photos of a client's treatment if they've agreed. Their Beauty Profile shows whether they're happy to be photographed.</p>
+      </article>
+
+      <article class="clause" id="providers-6">
+        <h3><span class="n">6</span>When we take action</h3>
+        <p>If you don't meet these standards, we may hide a service, pause your profile or close your account, as section 16 of our <a href="#provider-terms-16">Provider Terms of Business</a> explains. Where we can, we'll tell you why first and give you a chance to respond.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== COMMUNITY ===================== -->
+    <section class="policy" id="community" aria-labelledby="community-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Everyone</span><span>Profiles, photos, reviews, messages and appointments</span></p>
+        <h2 id="community-title">Community Guidelines</h2>
+        <p class="policy-intro">How we expect everyone on Cerviced to treat each other. These guidelines expand on sections 22 to 29 of our <a href="#terms">Terms &amp; Conditions</a>.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>Be respectful, honest and safe.</li>
+          <li>No harassment, hate, discrimination or sexual content.</li>
+          <li>Only post photos you have the right to share, with your clients' permission.</li>
+          <li>Keep messages about bookings, and keep Cerviced bookings in the app.</li>
+          <li>Report anything that breaks these rules to support@cerviced.co.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="community-1">
+        <h3><span class="n">1</span>Be respectful</h3>
+        <p>Don't harass, bully, threaten or abuse anyone. Don't treat anyone less favourably because of their age, disability, gender reassignment, marriage or civil partnership, pregnancy or maternity, race, religion or belief, sex or sexual orientation. Providers may offer services to one sex, or specialise in particular hair or skin types, where the law allows.</p>
+      </article>
+
+      <article class="clause" id="community-2">
+        <h3><span class="n">2</span>Be honest</h3>
+        <p>Keep profiles accurate. Use real photos of your own work, show the prices you actually charge, and don't pretend to be someone else or claim qualifications you don't have. Reviews must be genuine (see our <a href="#reviews">Reviews Policy</a>).</p>
+      </article>
+
+      <article class="clause" id="community-3">
+        <h3><span class="n">3</span>Keep it safe and appropriate</h3>
+        <ul>
+          <li>No sexual content, sexual services, or requests for them.</li>
+          <li>No nudity. Treatment photos must not show intimate areas.</li>
+          <li>Nothing that encourages violence, self-harm or illegal activity.</li>
+          <li>Don't sell or advertise prescription medicines.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="community-4">
+        <h3><span class="n">4</span>Respect privacy</h3>
+        <p>Don't share anyone else's personal information without their permission. Don't photograph or record anyone without their permission, and only post photos of clients who've agreed.</p>
+      </article>
+
+      <article class="clause" id="community-5">
+        <h3><span class="n">5</span>Messages</h3>
+        <p>Messages between clients and providers must be about bookings and services. Don't send spam, advertising or chain messages, and don't ask for payment outside the app for a booking made through Cerviced.</p>
+      </article>
+
+      <article class="clause" id="community-6">
+        <h3><span class="n">6</span>Appointments</h3>
+        <p>Turn up on time, and cancel as early as you can if your plans change. Providers should honour the bookings they accept and treat every client with the same care.</p>
+      </article>
+
+      <article class="clause" id="community-7">
+        <h3><span class="n">7</span>Illegal content</h3>
+        <p>We remove illegal content as soon as we become aware of it. This includes fraud, threats, harassment, hate crime, intimate image abuse and child sexual abuse material. We report serious illegal content to the relevant authorities.</p>
+      </article>
+
+      <article class="clause" id="community-8">
+        <h3><span class="n">8</span>Reporting, and what we do</h3>
+        <p>To report something, email <a href="mailto:support@cerviced.co">support@cerviced.co</a> and tell us what it is, where it is (for example a profile name or booking reference), and why you're reporting it. We review every report, prioritising safety and illegal content, and tell you what we've done where we can.</p>
+        <p>Depending on what happened, we may remove content, give a warning, limit what an account can do, or suspend or close the account. If we take action against your content or account and you think we got it wrong, reply to our message or email us, and we'll look at it again.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== REVIEWS ===================== -->
+    <section class="policy" id="reviews" aria-labelledby="reviews-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Everyone</span><span>Expands on section 22 of the Terms</span></p>
+        <h2 id="reviews-title">Reviews Policy</h2>
+        <p class="policy-intro">How reviews work on Cerviced, and what we do to keep them genuine.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>Only clients who booked a treatment through Cerviced can review it.</li>
+          <li>Reviews must be honest and about your own experience.</li>
+          <li>No one may pay or reward anyone for a review, and providers can't pressure clients to change one.</li>
+          <li>We don't remove reviews because they're negative.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="reviews-1">
+        <h3><span class="n">1</span>Who can leave a review</h3>
+        <p>Every review on Cerviced is linked to a booking made through the app, so only clients who booked a treatment can review it.</p>
+      </article>
+
+      <article class="clause" id="reviews-2">
+        <h3><span class="n">2</span>What a review must be</h3>
+        <p>A review must be honest, about your own experience of the treatment and the service, and written by you. Don't include anyone's personal information, and don't post anything abusive, discriminatory or unlawful.</p>
+      </article>
+
+      <article class="clause" id="reviews-3">
+        <h3><span class="n">3</span>What's not allowed</h3>
+        <ul>
+          <li>Reviewing a business you own, work for, are related to or compete with.</li>
+          <li>Offering, asking for or accepting anything in return for a review, such as a discount or a free treatment.</li>
+          <li>Writing, buying or selling fake reviews, or asking someone else to.</li>
+          <li>Providers only asking happy clients to leave a review.</li>
+          <li>Providers pressuring a client to change or remove a review.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="reviews-4">
+        <h3><span class="n">4</span>How reviews are shown</h3>
+        <p>Reviews appear on the provider's profile. A provider's rating is the average of their reviews' star ratings, and rating is one of the things Search uses to order results, as section 6 of our <a href="#terms-6">Terms</a> explains.</p>
+      </article>
+
+      <article class="clause" id="reviews-5">
+        <h3><span class="n">5</span>How we moderate reviews</h3>
+        <p>We don't check every review before it appears. We remove or hide reviews that break this policy, and we may hide a review for a short time while we look into a report. We don't remove a review just because it's negative or because a provider disagrees with it. If a review reveals someone's personal or health information, we'll remove that information.</p>
+      </article>
+
+      <article class="clause" id="reviews-6">
+        <h3><span class="n">6</span>Reporting a review</h3>
+        <p>If you think a review breaks this policy, email <a href="mailto:support@cerviced.co">support@cerviced.co</a> with the provider's name, the review, and why you're reporting it.</p>
+      </article>
+
+      <article class="clause" id="reviews-7">
+        <h3><span class="n">7</span>If someone breaks this policy</h3>
+        <p>We may remove the reviews involved, warn the people responsible, and suspend or close accounts that break this policy more than once or seriously.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== SAFETY ===================== -->
+    <section class="policy" id="safety" aria-labelledby="safety-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Clients</span><span>Expands on sections 5, 8 and 19 of the Terms</span></p>
+        <h2 id="safety-title">Health &amp; Safety</h2>
+        <p class="policy-intro">What Cerviced does and doesn't do to keep treatments safe, and what you can do to look after yourself.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>Providers are independent. Cerviced doesn't check their qualifications, licences, insurance or DBS checks.</li>
+          <li>Tell your provider about allergies, pregnancy and health conditions before your treatment.</li>
+          <li>Some treatments have legal age limits, including Botox, fillers and semi-permanent makeup.</li>
+          <li>In an emergency, call 999. For urgent medical advice, call NHS 111.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="safety-1">
+        <h3><span class="n">1</span>What Cerviced checks</h3>
+        <p>Providers run their own businesses and are responsible for the treatments they give. Cerviced doesn't check providers' identity, qualifications, licences, insurance or DBS checks. Anything a provider tells us about them is self-declared, and we never present it as checked.</p>
+        <p>Before you book, ask the provider about their training, qualifications and insurance, and about any licence the treatment needs. A good provider will be happy to tell you.</p>
+      </article>
+
+      <article class="clause" id="safety-2">
+        <h3><span class="n">2</span>Your health</h3>
+        <ul>
+          <li>Tell your provider about allergies, pregnancy, medication, skin conditions and anything else that could affect your treatment, even if they don't ask.</li>
+          <li>Some services show whether the provider considers them suitable during pregnancy, whether a patch test is needed, and reasons a treatment may not be suitable for you. This information comes from the provider, not from Cerviced.</li>
+          <li>Follow your provider's patch-test and aftercare instructions. A provider may refuse or stop a treatment if they think it isn't safe for you.</li>
+          <li>Cerviced doesn't give medical advice. If you're unsure whether a treatment is right for you, speak to a doctor or pharmacist before booking.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="safety-3">
+        <h3><span class="n">3</span>Injectables and advanced treatments</h3>
+        <p>Anti-wrinkle injections (Botox) are a prescription-only medicine. Before treatment, you should have a face-to-face consultation with a qualified prescriber. Ask who the prescriber is, what's being used, and who to contact if you have a problem afterwards.</p>
+        <p>If you have a reaction after any treatment, contact the provider and get medical advice: call NHS 111, or 999 in an emergency. You can report side effects of medicines and problems with cosmetic products through the MHRA Yellow Card scheme at yellowcard.mhra.gov.uk.</p>
+      </article>
+
+      <article class="clause" id="safety-4">
+        <h3><span class="n">4</span>Age limits</h3>
+        <p>You must be 16 or over to have a Cerviced account. Some treatments have higher legal minimum ages. In England, Botox and dermal fillers can't be given to anyone under 18 for cosmetic reasons, and tattooing, including semi-permanent makeup and microblading, is illegal for under-18s. Other treatments may need a parent's consent, and providers can refuse a booking that breaks these rules.</p>
+      </article>
+
+      <article class="clause" id="safety-5">
+        <h3><span class="n">5</span>Home visits</h3>
+        <ul>
+          <li>Your address is only shared with the provider once they've accepted your booking.</li>
+          <li>You're welcome to have someone else at home during your appointment.</li>
+          <li>Either of you can stop the appointment if you feel unsafe.</li>
+          <li>For a booking made through Cerviced, pay in the app. Be wary of any request to pay into a personal bank account instead.</li>
+        </ul>
+      </article>
+
+      <article class="clause" id="safety-6">
+        <h3><span class="n">6</span>Providers' own booking pages</h3>
+        <p>When you book on a provider's own booking page, it's their website, not ours. Cerviced can't see what you enter there or help with bookings made there. See section 20 of our <a href="#terms-20">Terms</a>.</p>
+      </article>
+
+      <article class="clause" id="safety-7">
+        <h3><span class="n">7</span>Reporting a safety concern</h3>
+        <p>If you're in danger, call 999. If a provider or client has made you feel unsafe, or you think a treatment caused you harm, email <a href="mailto:support@cerviced.co">support@cerviced.co</a> with your booking reference. We take safety reports seriously and may pause a profile while we look into it. If you think a crime has been committed, report it to the police on 101, or 999 in an emergency.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+    <!-- ===================== COMPLAINTS ===================== -->
+    <section class="policy" id="complaints" aria-labelledby="complaints-title">
+      <header class="policy-head">
+        <p class="eyebrow"><span class="tag">Everyone</span><span>Complaints, reports and appeals</span></p>
+        <h2 id="complaints-title">Complaints &amp; Reporting</h2>
+        <p class="policy-intro">How to raise a problem with a treatment, with Cerviced, or with something you've seen on Cerviced, and what happens next.</p>
+      </header>
+      <aside class="short">
+        <h3>In short</h3>
+        <ul>
+          <li>Problem with a treatment: speak to the provider first, then to us.</li>
+          <li>Problem with Cerviced, or something to report: email support@cerviced.co.</li>
+          <li>We'll acknowledge your complaint within 5 working days and aim to reply in full within 4 weeks.</li>
+        </ul>
+      </aside>
+
+      <article class="clause" id="complaints-1">
+        <h3><span class="n">1</span>A problem with a treatment</h3>
+        <p>Tell the provider first, as they're best placed to put it right, for example by redoing the treatment. If you can't sort it out with them, open the booking in the app to request a refund or make a complaint, or email <a href="mailto:support@cerviced.co">support@cerviced.co</a> with your booking reference. We'll try to help, but the provider remains responsible for the service they gave you.</p>
+      </article>
+
+      <article class="clause" id="complaints-2">
+        <h3><span class="n">2</span>A complaint about Cerviced</h3>
+        <p>Email <a href="mailto:support@cerviced.co">support@cerviced.co</a> with what happened, any booking reference, and what you'd like us to do. We'll acknowledge your complaint within 5 working days and aim to give you a full response within 4 weeks. If we need longer, we'll tell you why and when to expect it. Providers can use the same address for complaints about how Cerviced treats their business.</p>
+      </article>
+
+      <article class="clause" id="complaints-3">
+        <h3><span class="n">3</span>Reporting content or an account</h3>
+        <p>To report content, a profile, a review, a message or illegal content, email <a href="mailto:support@cerviced.co">support@cerviced.co</a> and tell us what it is, where it is, and why you're reporting it. We review reports promptly, prioritising safety and illegal content, and we'll tell you what we've done where we can. See our <a href="#community-8">Community Guidelines</a>.</p>
+      </article>
+
+      <article class="clause" id="complaints-4">
+        <h3><span class="n">4</span>Appealing a decision</h3>
+        <p>If we remove your content, or limit, suspend or close your account, and you think we got it wrong, reply to our message or email us with why. We'll look at the decision again and tell you the outcome. If we were wrong, we'll put things back.</p>
+      </article>
+
+      <article class="clause" id="complaints-5">
+        <h3><span class="n">5</span>If we can't resolve it</h3>
+        <p>We'll explain our final position in writing. If you're still unhappy, you can get free advice from the Citizens Advice consumer helpline on 0808 223 1133 (or Advice Direct Scotland on 0808 164 6000 in Scotland), or take your claim to court. Where an approved alternative dispute resolution provider could help, we'll give you its details and tell you whether we agree to use it.</p>
+      </article>
+
+      <article class="clause" id="complaints-6">
+        <h3><span class="n">6</span>Privacy complaints</h3>
+        <p>If your complaint is about how we've handled your personal information, you can also complain to the Information Commissioner's Office at ico.org.uk or on 0303 123 1113.</p>
+      </article>
+
+      <article class="clause" id="complaints-7">
+        <h3><span class="n">7</span>Payment disputes</h3>
+        <p>You can contact your card provider about a payment at any time. If you raise a chargeback, please let us know too, so we can help resolve it.</p>
+      </article>
+      <p class="policy-foot"><a href="#top">Back to all policies</a></p>
+    </section>
+
+  </main>
+</div>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="wordmark">CERVICED</span>
+    <span>Cerviced Ltd, registered in England and Wales. Company number <mark class="ph">[company number]</mark>. Registered office: <mark class="ph">[registered address]</mark>.</span>
+    <span>ICO registration number <mark class="ph">[ICO registration number]</mark>. Contact: <a href="mailto:support@cerviced.co">support@cerviced.co</a></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  if (!('IntersectionObserver' in window)) return;
+  var links = Array.prototype.slice.call(document.querySelectorAll('.index a[href^="#"]'));
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      var link = byId[entry.target.id];
+      if (!link) return;
+      links.forEach(function (l) { l.removeAttribute('aria-current'); });
+      link.setAttribute('aria-current', 'true');
+    });
+  }, { rootMargin: '-15% 0px -75% 0px' });
+  document.querySelectorAll('section.policy').forEach(function (s) { observer.observe(s); });
+})();
+</script>
+</body>
+</html>

@@ -101,10 +101,10 @@ describe('client support screen performance contracts', () => {
   });
 
   it('flushes a pending notification preference when leaving the screen', () => {
-    const source = read('screens', 'client', 'NotificationsSettingsScreen.tsx');
+    const source = read('components', 'NotificationPreferencesView.tsx');
 
-    expect(source).toContain('const pendingPrefs = useRef<NotificationPreferences | null>(null)');
+    expect(source).toContain('const pendingPrefs = useRef<T | null>(null)');
     expect(source).toContain('if (saveTimer.current) clearTimeout(saveTimer.current)');
-    expect(source).toContain('saveNotificationPreferences(pendingPrefs.current)');
+    expect(source).toContain('save(pendingPrefs.current)');
   });
 });

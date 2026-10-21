@@ -34,6 +34,14 @@ const BOOKING_TYPES = new Set([
   'provider_no_show',
   'no_show_disputed',
   'cancellation_settled',
+  'fee_charged',
+  'fee_disputed',
+  'fee_dispute_resolved',
+  'fee_payment_requested',
+  'fee_paid_by_client',
+  'fee_payment_lapsed',
+  'refund_requested',
+  'refund_request_updated',
   'booking_reminder',
   'booking_cancelled',
   'payment_success',
@@ -217,6 +225,22 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     } else {
       openNotifications();
     }
+    return;
+  }
+
+  // ── Beauty Maintenance (client-only) ─────────────────────────────────────────
+  // The push is generic on purpose — no service, provider or health detail on
+  // a lock screen — so the tap is where the detail lives: the Maintenance view
+  // inside Beauty Profile (Profile tab), focused on the item when the payload
+  // carries its id. Not a booking deep-link even when booking_id is present.
+  if (type === 'maintenance_due' || type === 'aftercare_available') {
+    if (isProvider) {
+      openNotifications();
+      return;
+    }
+    const focusItemId =
+      typeof data['maintenance_item_id'] === 'string' ? data['maintenance_item_id'] : undefined;
+    navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId });
     return;
   }
 

@@ -7,20 +7,37 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import Svg, { Path, Line as SvgLine, Circle as SvgCircle } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '../../services/databaseService';
+import { forgetCachedReads, getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import {
+  AnalyticsHeader,
+  BarChart,
+  CHART,
+  DeckCard,
+  HeroGradient,
+  InsightStrip,
+  LivePulse,
+  PressScale,
+  RangeSelector,
+  Reveal,
+  SectionLabel,
+  StatTile,
+  AnimatedNumber,
+  accentColor,
+  heroText,
+  tileWidth,
+  type IoniconName,
+} from '../../components/analytics/AnalyticsKit';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import {
   chartBuckets,
@@ -33,30 +50,6 @@ import {
 
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
-
-// ── Palette ───────────────────────────────────────────────────────────────────
-//
-// Chrome (backgrounds, headers, the completion ring, "your accent" moments)
-// follows the real provider theme (theme.accent: #5C4033 light / #AF9197
-// dark) via accentColor(dark) below, not a hardcoded brand color — this
-// screen had drifted onto a standalone violet/purple identity that no other
-// provider screen uses. Multi-series chart data (bars, per-service lines,
-// status dots) still needs a distinct qualitative palette — a single accent
-// can't visually separate 5+ simultaneous series — so CHART keeps its own
-// fixed set, used alongside the accent rather than instead of it.
-
-function accentColor(dark: boolean) {
-  return dark ? '#AF9197' : '#5C4033';
-}
-
-const CHART = {
-  pink:  '#FF375F',
-  teal:  '#5AC8FA',
-  green: '#30D158',
-  amber: '#FF9F0A',
-  blue:  '#0A84FF',
-  plum:  '#9B59D0',
-};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -141,356 +134,6 @@ function buildInsight(
       : clauses.slice(0, -1).join(', ') + ', and ' + clauses[clauses.length - 1];
   return joined.charAt(0).toUpperCase() + joined.slice(1) + '.';
 }
-
-// ── Entrance reveal (fade + rise, staggered by index) ────────────────────────
-
-function Reveal({
-  children,
-  index = 0,
-  style,
-}: {
-  children: React.ReactNode;
-  index?: number;
-  style?: any;
-}) {
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 480,
-      // Capped so later sections (Rating Analytics, Recent Activity) don't
-      // keep pushing further out as more cards are added above them — the
-      // stagger should read as a quick ripple, not a growing wait.
-      delay: Math.min(index, 5) * 70,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [anim, index]);
-
-  return (
-    <Animated.View
-      style={[
-        style,
-        {
-          opacity: anim,
-          transform: [
-            { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
-            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
-          ],
-        },
-      ]}
-    >
-      {children}
-    </Animated.View>
-  );
-}
-
-// ── Press scale wrapper (spring feedback + optional haptic) ─────────────────
-
-function PressScale({
-  children,
-  onPress,
-  style,
-  haptic = 'selection',
-  disabled,
-}: {
-  children: React.ReactNode;
-  onPress?: () => void;
-  style?: any;
-  haptic?: 'selection' | 'light' | 'medium' | 'none';
-  disabled?: boolean;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const pressIn = () => {
-    Animated.spring(scale, { toValue: 0.94, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
-  };
-  const pressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
-  };
-  const handlePress = () => {
-    if (haptic === 'selection') Haptics.selectionAsync().catch(() => {});
-    else if (haptic === 'light') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    else if (haptic === 'medium') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    onPress?.();
-  };
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      disabled={disabled}
-      onPress={handlePress}
-      onPressIn={pressIn}
-      onPressOut={pressOut}
-    >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
-    </TouchableOpacity>
-  );
-}
-
-// ── Animated number ───────────────────────────────────────────────────────────
-
-function AnimatedNumber({ value, prefix = '', suffix = '', style }: {
-  value: number; prefix?: string; suffix?: string; style?: any;
-}) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const [display, setDisplay] = useState('0');
-
-  useEffect(() => {
-    anim.setValue(0);
-    Animated.spring(anim, { toValue: value, useNativeDriver: false, speed: 8, bounciness: 4 }).start();
-    const id = anim.addListener(({ value: v }) =>
-      setDisplay(prefix + (Number.isInteger(value) ? Math.round(v).toString() : v.toFixed(2)) + suffix)
-    );
-    return () => anim.removeListener(id);
-  }, [anim, prefix, suffix, value]);
-
-  return <Text style={style}>{display}</Text>;
-}
-
-// ── Deck card (flat, tinted-shadow — Command Deck) ────────────────────────────
-
-function DeckCard({
-  children,
-  style,
-  dark,
-  tint,
-}: {
-  children: React.ReactNode;
-  style?: any;
-  dark: boolean;
-  tint?: string;
-}) {
-  const c = tint ?? accentColor(dark);
-  return (
-    <View
-      style={[
-        deck.outer,
-        {
-          backgroundColor: dark ? '#221E1D' : '#FFFFFF',
-          borderColor: dark ? 'rgba(175,145,151,0.14)' : 'rgba(92,64,51,0.08)',
-          shadowColor: c,
-        },
-        style,
-      ]}
-    >
-      <View style={deck.content}>{children}</View>
-    </View>
-  );
-}
-
-const deck = StyleSheet.create({
-  outer: {
-    borderRadius: 22,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    elevation: 3,
-  },
-  content: { position: 'relative' },
-});
-
-// ── Live pulse badge ──────────────────────────────────────────────────────────
-
-function LivePulse({ color }: { color: string }) {
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 1100, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [anim]);
-
-  return (
-    <View style={pulse.wrap}>
-      <Animated.View
-        style={[
-          pulse.ring,
-          {
-            borderColor: color,
-            opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
-            transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }],
-          },
-        ]}
-      />
-      <View style={[pulse.dot, { backgroundColor: color }]} />
-    </View>
-  );
-}
-
-const pulse = StyleSheet.create({
-  wrap: { width: 8, height: 8, alignItems: 'center', justifyContent: 'center' },
-  dot:  { width: 8, height: 8, borderRadius: 4 },
-  ring: { position: 'absolute', width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
-});
-
-// ── Bar chart ─────────────────────────────────────────────────────────────────
-
-function RevenueChart({
-  data,
-  dark,
-  theme,
-  accent,
-  selectedIndex,
-  onSelect,
-}: {
-  data: { label: string; revenue: number; bookings: number }[];
-  dark: boolean;
-  theme: any;
-  accent: string;
-  selectedIndex: number;
-  onSelect: (i: number) => void;
-}) {
-  const maxRev = Math.max(...data.map(d => d.revenue), 1);
-  const anims  = useRef(data.map(() => new Animated.Value(0))).current;
-
-  useEffect(() => {
-    // Denser charts (30 daily bars) stagger faster so the last bar doesn't
-    // sit waiting a second and a half after the first one starts.
-    Animated.stagger(
-      Math.min(60, Math.floor(900 / data.length)),
-      anims.map((a, i) =>
-        Animated.spring(a, {
-          toValue: data[i]!.revenue / maxRev,
-          tension: 60,
-          friction: 10,
-          useNativeDriver: false,
-        })
-      )
-    ).start();
-  }, [anims, data, maxRev]);
-
-  const BAR_TOTAL_H = 100;
-  // A 7- or 3-bar chart labels every bar; a 30-bar daily chart would collide
-  // labels into an unreadable smear, so it shows only a handful, evenly
-  // spaced, always including the last (today).
-  const labelEvery = data.length > 10 ? Math.ceil(data.length / 5) : 1;
-  const barGap = data.length > 15 ? 2 : data.length > 8 ? 4 : 6;
-
-  return (
-    <View style={chart.wrap}>
-      <View style={[chart.bars, { gap: barGap }]}>
-        {data.map((d, i) => {
-          const isSel = i === selectedIndex;
-          return (
-            <TouchableOpacity
-              key={i}
-              style={chart.barCol}
-              activeOpacity={0.7}
-              onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
-                onSelect(i);
-              }}
-            >
-              <View style={[chart.barBg, { height: BAR_TOTAL_H, backgroundColor: dark ? 'rgba(175,145,151,0.14)' : 'rgba(92,64,51,0.08)' }]}>
-                <Animated.View
-                  style={[
-                    chart.bar,
-                    {
-                      // The selected bar reads at full strength; the rest dim
-                      // back so the one being read is unmistakable.
-                      opacity: isSel ? 1 : 0.32,
-                      height: anims[i]!.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, BAR_TOTAL_H],
-                      }),
-                    },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={[accent, accent + 'AA']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                </Animated.View>
-              </View>
-              <Text
-                style={[chart.label, { color: isSel ? accent : theme.secondaryText, fontWeight: isSel ? '700' : '500' }]}
-                numberOfLines={1}
-              >
-                {(i % labelEvery === 0 || i === data.length - 1 || isSel) ? d.label : ''}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-const chart = StyleSheet.create({
-  wrap:   { paddingTop: 8 },
-  bars:   { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  barCol: { flex: 1, alignItems: 'center', gap: 6 },
-  barBg:  { width: '100%', justifyContent: 'flex-end', borderRadius: 6, overflow: 'hidden' },
-  bar:    { width: '100%', borderRadius: 6, overflow: 'hidden' },
-  label:  { fontSize: 10, fontWeight: '500' },
-});
-
-// ── Stat tile ─────────────────────────────────────────────────────────────────
-
-function StatTile({
-  label,
-  value,
-  sub,
-  icon,
-  color,
-  dark,
-  theme,
-  animate,
-}: {
-  label: string;
-  value: number;
-  sub?: string;
-  icon: string;
-  color: string;
-  dark: boolean;
-  theme: any;
-  animate?: boolean;
-}) {
-  const { width: screenWidth } = useWindowDimensions();
-  return (
-    <DeckCard dark={dark} tint={color} style={[tile.panel, { width: tileWidth(screenWidth) }]}>
-      <View style={tile.inner}>
-        <View style={[tile.icon, { backgroundColor: color + '22' }]}>
-          <Ionicons name={icon as any} size={14} color={color} />
-        </View>
-        {animate ? (
-          <AnimatedNumber
-            value={value}
-            prefix="£"
-            style={[tile.value, { color: theme.text }]}
-          />
-        ) : (
-          <Text style={[tile.value, { color: theme.text }]}>{value}</Text>
-        )}
-        <Text style={[tile.label, { color: theme.secondaryText }]}>{label}</Text>
-        {sub ? <Text style={[tile.sub, { color: color }]}>{sub}</Text> : null}
-      </View>
-    </DeckCard>
-  );
-}
-
-/** Widths are derived from the live window width rather than a value frozen at
- *  module load, so they stay right after a rotation or in split-screen. */
-const tileWidth = (screenWidth: number) => (screenWidth - 40 - 20) / 3; // body pad 20×2, two gaps of 10
-
-const tile = StyleSheet.create({
-  panel: {},
-  inner: { padding: 12, gap: 3 },
-  icon:  { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
-  value: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
-  label: { fontSize: 10, fontWeight: '500' },
-  sub:   { fontSize: 10, fontWeight: '600' },
-});
 
 // ── Top services ──────────────────────────────────────────────────────────────
 
@@ -1235,110 +878,6 @@ const RANGES: { key: Range; label: string }[] = [
   { key: 'all', label: 'All' },
 ];
 
-function RangeSelector({
-  range,
-  onChange,
-  dark,
-  theme,
-}: {
-  range: Range;
-  onChange: (r: Range) => void;
-  dark: boolean;
-  theme: any;
-}) {
-  const accent = accentColor(dark);
-  const [rowW, setRowW] = useState(0);
-  const indicatorX = useRef(new Animated.Value(0)).current;
-  const activeIdx = RANGES.findIndex(r => r.key === range);
-
-  useEffect(() => {
-    if (rowW === 0) return;
-    const segW = rowW / RANGES.length;
-    Animated.spring(indicatorX, {
-      toValue: activeIdx * segW,
-      useNativeDriver: true,
-      speed: 24,
-      bounciness: 7,
-    }).start();
-  }, [activeIdx, rowW, indicatorX]);
-
-  const segW = rowW / RANGES.length;
-
-  return (
-    <View
-      style={[rangeSel.row, { backgroundColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.045)' }]}
-      onLayout={e => setRowW(e.nativeEvent.layout.width)}
-    >
-      {rowW > 0 && (
-        <Animated.View
-          style={[
-            rangeSel.indicator,
-            {
-              width: segW,
-              backgroundColor: accent,
-              transform: [{ translateX: indicatorX }],
-            },
-          ]}
-        />
-      )}
-      {RANGES.map(r => {
-        const active = range === r.key;
-        return (
-          <TouchableOpacity
-            key={r.key}
-            activeOpacity={0.5}
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              onChange(r.key);
-            }}
-            style={rangeSel.btn}
-          >
-            <Text style={[rangeSel.txt, { color: active ? '#FFFFFF' : theme.secondaryText, fontWeight: active ? '700' : '600' }]}>
-              {r.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-const rangeSel = StyleSheet.create({
-  row:       { flex: 1, flexDirection: 'row', borderRadius: 20, position: 'relative', overflow: 'hidden' },
-  indicator: { position: 'absolute', top: 3, bottom: 3, left: 0, borderRadius: 17 },
-  btn:       { flex: 1, paddingVertical: 8, alignItems: 'center', zIndex: 1 },
-  txt:       { fontSize: 13 },
-});
-
-// ── Section label ─────────────────────────────────────────────────────────────
-
-function SectionLabel({ children, theme }: { children: React.ReactNode; theme: any }) {
-  return <Text style={[sect.label, { color: theme.secondaryText }]}>{children}</Text>;
-}
-
-const sect = StyleSheet.create({
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginTop: 8, marginBottom: 2, marginLeft: 2 },
-});
-
-// ── Insight strip (plain-English read of the period) ──────────────────────────
-
-function InsightStrip({ text, dark, theme, accent }: { text: string; dark: boolean; theme: any; accent: string }) {
-  return (
-    <View style={[insight.wrap, { backgroundColor: accent + (dark ? '1F' : '14'), borderColor: accent + (dark ? '2E' : '1F') }]}>
-      <View style={[insight.icon, { backgroundColor: accent }]}>
-        <Ionicons name="sparkles" size={13} color={dark ? '#201817' : '#FFFFFF'} />
-      </View>
-      <Text style={[insight.text, { color: theme.text }]}>{text}</Text>
-    </View>
-  );
-}
-
-const insight = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, borderWidth: 1, borderRadius: 18, padding: 14, marginBottom: 16 },
-  icon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  text: { flex: 1, fontSize: 13.5, lineHeight: 20, fontWeight: '500' },
-});
-
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ProviderAnalyticsScreen({ navigation }: any) {
@@ -1384,6 +923,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   }, [fetchSupportingMetrics]));
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRefreshing(true);
     await Promise.all([fetchBookingsForRange(), fetchSupportingMetrics()]);
@@ -1438,6 +979,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     });
   }, [bookings, range, today]);
 
+  const chartBars = useMemo(() => chartData.map(d => ({ label: d.label, value: d.revenue })), [chartData]);
+
   // The reviews tile follows the range too, like every other figure up here.
   const reviewsInRange = useMemo(
     () => (period ? reviews.filter(r => inWindow(dateToYMD(new Date(r.created_at)), period)) : reviews),
@@ -1480,26 +1023,11 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
           }
         >
 
-          {/* ── Header ── */}
-          <View style={main.header}>
-            <PressScale
-              onPress={() => navigation.goBack()}
-              haptic="light"
-              style={[main.backBtn, { backgroundColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
-            >
-              <Ionicons name="chevron-back" size={18} color={theme.text} />
-            </PressScale>
-            <View style={main.titleRow}>
-              <Ionicons name="stats-chart" size={18} color={accent} />
-              <Text style={[main.title, { color: theme.text }]}>Provider Analytics</Text>
-              <LivePulse color={CHART.green} />
-            </View>
-            <View style={{ width: 36 }} />
-          </View>
+          <AnalyticsHeader title="Provider Analytics" onBack={() => navigation.goBack()} dark={dark} theme={theme} />
 
           {/* ── Range selector + payouts shortcut ── */}
           <View style={main.rangeArea}>
-            <RangeSelector range={range} onChange={setRange} dark={dark} theme={theme} />
+            <RangeSelector options={RANGES} range={range} onChange={setRange} dark={dark} theme={theme} />
             <PressScale
               onPress={() => navigation.navigate('Payments')}
               haptic="light"
@@ -1513,23 +1041,18 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
 
             {/* ── Hero revenue card ── */}
             <Reveal index={0}>
-              <DeckCard dark={dark} style={main.heroPanel}>
-                <LinearGradient
-                  colors={dark ? [accent + '35', accent + '12', 'transparent'] : [accent + '22', accent + '0C', 'transparent']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1.5 }}
-                  style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
-                />
-                <View style={main.heroInner}>
+              <DeckCard dark={dark} style={heroText.panel}>
+                <HeroGradient dark={dark} accent={accent} />
+                <View style={heroText.inner}>
                   <View style={main.heroTop}>
                     <View>
-                      <Text style={[main.heroLabel, { color: theme.secondaryText }]}>
+                      <Text style={[heroText.label, { color: theme.secondaryText }]}>
                         Total Revenue
                       </Text>
                       <AnimatedNumber
                         value={kpi.revenue}
                         prefix="£"
-                        style={[main.heroValue, { color: theme.text }]}
+                        style={[heroText.value, { color: theme.text }]}
                       />
                     </View>
                     {kpi.delta !== null && (
@@ -1546,37 +1069,37 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                     )}
                   </View>
                   {compareLabel && (
-                    <Text style={[main.heroSub, { color: theme.secondaryText }]}>
+                    <Text style={[heroText.sub, { color: theme.secondaryText }]}>
                       vs £{kpi.prevRevenue.toFixed(0)} {compareLabel}
                     </Text>
                   )}
 
                   {/* Labeled bar chart with a tap-to-read value */}
                   <View style={{ marginTop: 20 }}>
-                    <View style={main.chartHead}>
-                      <Text style={[main.chartHeadK, { color: theme.secondaryText }]}>
+                    <View style={heroText.chartHead}>
+                      <Text style={[heroText.chartHeadK, { color: theme.secondaryText }]}>
                         Revenue by {bucketNoun(range)}
                       </Text>
                       {selectedBucket && (
                         <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={[main.roMonth, { color: theme.secondaryText }]}>{selectedBucket.label}</Text>
-                          <Text style={[main.roVal, { color: accent }]}>{fmtGBP(selectedBucket.revenue)}</Text>
-                          <Text style={[main.roBk, { color: theme.secondaryText }]}>
+                          <Text style={[heroText.roLabel, { color: theme.secondaryText }]}>{selectedBucket.label}</Text>
+                          <Text style={[heroText.roVal, { color: accent }]}>{fmtGBP(selectedBucket.revenue)}</Text>
+                          <Text style={[heroText.roSub, { color: theme.secondaryText }]}>
                             {selectedBucket.bookings} booking{selectedBucket.bookings !== 1 ? 's' : ''}
                           </Text>
                         </View>
                       )}
                     </View>
-                    <RevenueChart
+                    <BarChart
                       key={`${range}-${chartData.length}`}
-                      data={chartData}
+                      data={chartBars}
                       dark={dark}
                       theme={theme}
                       accent={accent}
                       selectedIndex={selectedIndex}
                       onSelect={setSelectedBar}
                     />
-                    <Text style={[main.chartHint, { color: theme.secondaryText }]}>
+                    <Text style={[heroText.chartHint, { color: theme.secondaryText }]}>
                       Tap a bar to see what it earned
                     </Text>
                   </View>
@@ -1594,7 +1117,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             {/* ── At a glance ── */}
             <SectionLabel theme={theme}>At a glance</SectionLabel>
             <View style={main.tileGrid}>
-              {[
+              {([
                 { label: 'Bookings',   value: kpi.total,                                                                                              icon: 'calendar',       color: CHART.blue },
                 { label: 'Completed',  value: inRange.filter(b => b.status === 'completed').length,                                                   icon: 'checkmark-done', color: CHART.green },
                 { label: 'Saved',      value: followerCount,                                                                                           icon: 'bookmark',       color: accent },
@@ -1606,12 +1129,12 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                   icon: 'star', color: CHART.amber,
                 },
                 { label: 'Cancelled',  value: kpi.cancelled,                                                                                           icon: 'close-circle',   color: CHART.plum },
-              ].map((t, i) => (
+              ] as { label: string; value: number; sub?: string; icon: IoniconName; color: string }[]).map((t, i) => (
                 <Reveal key={t.label} index={i + 1} style={{ width: tileWidth(screenWidth) }}>
                   <StatTile
                     label={t.label}
                     value={t.value}
-                    sub={(t as any).sub}
+                    sub={t.sub}
                     icon={t.icon}
                     color={t.color}
                     dark={dark}
@@ -1679,31 +1202,14 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const main = StyleSheet.create({
-  header:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12 },
-  backBtn:    { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  titleRow:   { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  title:      { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
-
   rangeArea:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 8, marginBottom: 20 },
   historyBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 
   body:       { paddingHorizontal: 20, gap: 12 },
 
-  heroPanel:  { marginBottom: 4 },
-  heroInner:  { padding: 24 },
   heroTop:    { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  heroLabel:  { fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
-  heroValue:  { fontSize: 40, fontWeight: '900', letterSpacing: -1.5 },
-  heroSub:    { fontSize: 12, marginTop: 2 },
   momBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
   momTxt:     { fontSize: 12, fontWeight: '700' },
-
-  chartHead:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 },
-  chartHeadK: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  roMonth:    { fontSize: 11, fontWeight: '600' },
-  roVal:      { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  roBk:       { fontSize: 11 },
-  chartHint:  { fontSize: 11, textAlign: 'center', marginTop: 10, opacity: 0.8 },
 
   tileGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });
