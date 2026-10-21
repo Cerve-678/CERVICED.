@@ -33,6 +33,11 @@ verify_jwt = false
 [functions.release-payouts]
 verify_jwt = true
 
+# A client starts or confirms only their own completed-booking tip. The
+# function verifies the JWT again and owns every Stripe/database write.
+[functions.booking-tip]
+verify_jwt = true
+
 # Called by the owning provider (their JWT) or by admin tooling with the
 # service-role bearer. The function authorises the caller against the booking's
 # provider before moving any money.

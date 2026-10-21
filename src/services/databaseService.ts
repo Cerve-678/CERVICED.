@@ -4548,13 +4548,61 @@ export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
   return !!data;
 }
 
+export type BookingReviewState = {
+  bookingId: string;
+  tipAmount: number | null;
+};
+
+/**
+ * Review state for a set of bookings, fetched together for the Bookings list.
+ *
+ * The list used to initialise its rated/tipped buttons from empty component
+ * state on every mount. The database rows existed, but the next visit showed
+ * "Rate" and "Tip" again until a detail screen happened to be opened.
+ */
+export async function getBookingReviewStates(
+  bookingIds: readonly string[],
+): Promise<BookingReviewState[]> {
+  // `reviews.booking_id` is UUID. Never let a local optimistic `booking_*`
+  // id poison the whole PostgREST `.in()` cast.
+  const ids = [...new Set(bookingIds.filter(isUuid))];
+  if (ids.length === 0) return [];
+
+  const [{ data: reviews, error: reviewError }, { data: tips, error: tipError }] = await Promise.all([
+    supabase.from("reviews").select("booking_id, tip_amount").in("booking_id", ids),
+    supabase.from("booking_tips").select("booking_id, amount_pence").in("booking_id", ids).eq("status", "succeeded"),
+  ]);
+  if (reviewError) throw reviewError;
+  if (tipError) throw tipError;
+  const states = (reviews ?? []).map((row: { booking_id: string; tip_amount: number | null }) => ({
+    bookingId: row.booking_id,
+    tipAmount: row.tip_amount == null ? null : Number(row.tip_amount),
+  }));
+  for (const tip of tips ?? []) {
+    const row = tip as { booking_id: string; amount_pence: number };
+    const existing = states.find(state => state.bookingId === row.booking_id);
+    if (existing) existing.tipAmount = Number(row.amount_pence) / 100;
+    else states.push({ bookingId: row.booking_id, tipAmount: Number(row.amount_pence) / 100 });
+  }
+  return states;
+}
+
 /** The tip recorded against a booking, or null when there's no review/tip yet. */
 export async function getBookingTip(bookingId: string): Promise<number | null> {
-  const { data } = await supabase
+  const { data: paidTip, error: tipError } = await supabase
+    .from("booking_tips")
+    .select("amount_pence")
+    .eq("booking_id", bookingId)
+    .eq("status", "succeeded")
+    .maybeSingle();
+  if (tipError) throw tipError;
+  if (paidTip) return Number((paidTip as { amount_pence: number }).amount_pence) / 100;
+  const { data, error } = await supabase
     .from("reviews")
     .select("tip_amount")
     .eq("booking_id", bookingId)
     .maybeSingle();
+  if (error) throw error;
   const tip = (data as { tip_amount?: number | null } | null)?.tip_amount;
   return tip == null ? null : Number(tip);
 }
@@ -4583,6 +4631,37 @@ export async function setBookingTip(
 
   if (error) throw error;
   return (data?.length ?? 0) > 0;
+}
+
+export interface BookingTipPaymentSheet {
+  tipId: string;
+  clientSecret: string;
+  customerId: string;
+  ephemeralKeySecret: string;
+}
+
+/** Starts a voluntary post-appointment Stripe tip. The server owns both the
+ * amount validation and the booking/provider entitlement checks. */
+export async function startBookingTipPayment(bookingId: string, amountPence: number): Promise<BookingTipPaymentSheet> {
+  const { data, error } = await supabase.functions.invoke('booking-tip', {
+    body: { action: 'start', bookingId, amountPence },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not open tip payment. Please try again.');
+  if (typeof data?.tipId !== 'string' || typeof data?.clientSecret !== 'string' ||
+      typeof data?.customerId !== 'string' || typeof data?.ephemeralKeySecret !== 'string') {
+    throw new Error('Could not open tip payment. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return data as BookingTipPaymentSheet;
+}
+
+/** The webhook is authoritative; this closes the normal app path promptly. */
+export async function confirmBookingTipPayment(tipId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('booking-tip', { body: { action: 'confirm', tipId } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your tip is processing. Please check again shortly.');
 }
 
 // ─────────────────────────────────────────────────────────
