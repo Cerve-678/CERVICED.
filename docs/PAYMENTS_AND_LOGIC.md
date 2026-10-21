@@ -9,7 +9,7 @@ a script that isn't in the repo). Update this file in the same change as any
 change to money logic: fees, holds, payouts, refunds, disputes, deposits.
 Not legal advice; items marked **Legal flag** need review before launch.
 
-Last updated: 18 October 2026.
+Last updated: 21 October 2026.
 
 ---
 
@@ -29,6 +29,7 @@ Last updated: 18 October 2026.
 | Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
 | Fee consent record (`fee_consent_records`) | Yes | Same; replaces the bare `fee_consent_at` stamp |
 | PayPal at checkout (no-fee checkouts) | Yes (test mode) | Merged #118 (6ae28727); `create-payment-intent` v17, `finalize-payment-intent` v15, `stripe-webhook` v9 deployed 19 Oct. The button needs a new app build. Live money also needs Stripe's marketplace PayPal approval and settlement to the Stripe balance |
+| Tips after a completed appointment | Yes (test mode) | Merged #154; migration 20261021112728 applied; `booking-tip` v1, `stripe-webhook` v10, `release-payouts` v11 deployed 21 Oct. Follow-up fixes on `fix/tip-followups` (see §6a) need `booking-tip` + `release-payouts` redeployed. Needs a new app build |
 
 ---
 
@@ -143,6 +144,42 @@ their Stripe transfer is reversed. If their Stripe balance can't cover it
 not lawyer-reviewed (LEGAL-COMPLIANCE-NOTES §17). A fee must read as a genuine
 estimate of loss, not a penalty.
 
+## 6a. Tips (live, test mode)
+
+A tip is an optional, separate card payment a client makes after a
+**completed** appointment. It is not part of checkout and not attached to the
+review: a client can tip without rating and rate without tipping.
+
+| Who | Pays / receives |
+|---|---|
+| Client | The tip they chose, £1–£500, by card (PaymentSheet) |
+| Provider | The tip less Stripe's actual card fee |
+| CERVICED | Nothing (no platform fee on tips) — decided by the user 21 Oct |
+
+- `booking-tip` (`start`) checks the booking is the caller's and `completed`,
+  and that the provider's Stripe account can receive payouts; link-only pros
+  and pros without payouts can't be tipped online. One tip per booking
+  (`booking_tips.booking_id` UNIQUE). The server owns every amount and write;
+  clients can only read their own rows, providers theirs.
+- Changing the amount before paying updates the open PaymentIntent (or cancels
+  it and makes a new one), so a stale intent is never left payable.
+- `stripe-webhook` (`payment_intent.succeeded`) or `booking-tip` (`confirm`)
+  runs `recordTipPaid`: reads Stripe's real fee from the balance transaction
+  and holds the payout for **24h** (not the provider's chosen payout hold).
+  If Stripe hasn't reported the fee yet, the payout waits and
+  `settlePendingTipFees` fills it in on the next `release-payouts` run.
+- `release-payouts` transfers held tips after 24h, skipping any charge that is
+  disputed or refunded.
+- `reviews.tip_amount` is the old recorded-only amount (no money moved). Nothing
+  writes or reads it any more; 2 rows hold a value. Drop the column later.
+
+**Gaps:** no refund path for a tip (neither `refund-payment` nor
+`reconcileRefund` knows about `booking_tips`), so a refund or chargeback after
+the transfer lands on CERVICED's balance and isn't taken back from the
+provider. Whether tips are refundable at all is a product/legal call, not yet
+made. Tip payouts aren't netted against shortfalls. Providers can't see their
+tips anywhere in the app yet.
+
 ## 7. Security & the data boundary
 
 - Saved cards: the client's Stripe Customer id sits in
@@ -173,6 +210,7 @@ estimate of loss, not a penalty.
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |
 | CERVICED's fee on a partial refund | Kept; returned on a full refund |
 | Off-app payments | Never tracked by the app |
+| Tips | In-app card payment after a completed appointment; provider pays Stripe's card fee, CERVICED takes nothing; £1–£500; 24h payout hold (21 Oct) |
 
 ## 9. Known gaps and launch blockers
 

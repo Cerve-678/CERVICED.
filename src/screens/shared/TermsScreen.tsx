@@ -83,6 +83,7 @@ const SECTIONS = [
       'Prices are in pounds sterling and are set by each provider. The total you pay in the app, including any deposit and Cerviced\'s service fee, is shown before you pay.',
       'You can pay in the app by card, Apple Pay, Google Pay or PayPal. Payments are processed securely by Stripe, and Cerviced never sees or stores your full card number or your PayPal login. Stripe\'s own terms also apply, and PayPal\'s terms apply when you pay with PayPal. If a provider has a late arrival or no-show fee, that booking is paid by card, because the fee may be charged to it after the appointment. If a provider asks you to save your card for an agreed fee, Stripe stores it, not us.',
       'If a price is clearly wrong because of a mistake, for example a treatment listed at a fraction of its usual price, we or the provider may cancel the booking and refund you in full.',
+      'After a completed appointment you can choose to tip the provider in the app. A tip is optional and is a separate card payment. It goes to the provider, less the card processing fee, and Cerviced keeps none of it.',
       'Anything you agree with the provider at the appointment, such as adding a treatment or a tip paid in person, is between you and the provider and isn\'t paid through the app.',
     ].join('\n\n'),
   },
@@ -216,7 +217,7 @@ const SECTIONS = [
     body: [
       'Your business. You run your own independent business and aren\'t employed by Cerviced. You\'re responsible for your services and any licences, qualifications and insurance they need, for following the law (including health and safety, consumer law and minimum-age rules), and for keeping your profile, prices, opening hours and policies accurate.',
       'Bookings and policies. You must honour bookings you accept, at the price and on the terms shown when the client booked. If you can\'t, cancel as early as you can; the client will be refunded in full. Your cancellation, deposit, late arrival and no-show policies must be fair, and must be shown on your profile before clients book.',
-      'Payments and payouts. To take payments in the app you need a Stripe account, and Stripe\'s terms apply to it. Clients pay Cerviced\'s service fee on top of your price, so it\'s never taken from what you earn. After each appointment, your share is held for the payout period you choose in Payment settings, then sent to your Stripe account. Stripe then pays your bank on its own schedule. A payout is held while a client\'s refund request is open. If money is refunded or reversed after you\'ve been paid, for example a refund or a bank chargeback, it\'s taken back from your Stripe balance or from your next payout. For late arrival and no-show fees, Cerviced takes no cut, but Stripe\'s card fee comes out of your share.',
+      'Payments and payouts. To take payments in the app you need a Stripe account, and Stripe\'s terms apply to it. Clients pay Cerviced\'s service fee on top of your price, so it\'s never taken from what you earn. After each appointment, your share is held for the payout period you choose in Payment settings, then sent to your Stripe account. Stripe then pays your bank on its own schedule. A payout is held while a client\'s refund request is open. If money is refunded or reversed after you\'ve been paid, for example a refund or a bank chargeback, it\'s taken back from your Stripe balance or from your next payout. For late arrival and no-show fees, and for tips clients leave in the app, Cerviced takes no cut, but Stripe\'s card fee comes out of your share.',
       'Taxes. You\'re responsible for your own tax, including any VAT, on the money you earn.',
       'Your clients\' information. Use the details clients share with you, including any health information, only for their bookings. Keep them secure and confidential, and follow data protection law. Don\'t add clients to marketing lists unless they\'ve agreed.',
       'Your own booking link. If you take bookings on your own booking page, you\'re responsible for that page, its terms and the bookings, payments and data handled there. Your booking link must lead to your own genuine booking page, and you must keep it up to date.',
@@ -277,7 +278,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 19 October 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 21 October 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>

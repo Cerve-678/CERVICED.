@@ -466,10 +466,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     getBookingReviewStates(bookingIdsForReviewState)
       .then(states => {
         if (!active) return;
-        setRatedBookings(new Set(states.map(state => state.bookingId)));
-        setTippedBookings(new Set(
-          states.filter(state => (state.tipAmount ?? 0) > 0).map(state => state.bookingId),
-        ));
+        setRatedBookings(new Set(states.filter(state => state.reviewed).map(state => state.bookingId)));
+        setTippedBookings(new Set(states.filter(state => state.tipped).map(state => state.bookingId)));
       })
       .catch(error => logger.warn('[Bookings] review state failed to load', error));
     return () => { active = false; };
@@ -2244,15 +2242,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </KeyboardDismissView>
         </Modal>
 
-        {/* ─── Tip Modal — same dead-state issue as Rating above. handleTipSubmit
-            now actually persists via setBookingTip() instead of only flipping
-            local state. ─── */}
+        {/* ─── Tip Modal — handleTipSubmit takes a real card payment
+            (booking-tip function + Stripe PaymentSheet). ─── */}
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a Tip</Text>
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  Show your appreciation for {selectedBooking?.providerName}
+                  Show your appreciation for {selectedBooking?.providerName}. It's paid by card and goes to them, less the card processing fee. CERVICED keeps none of it.
                 </Text>
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>

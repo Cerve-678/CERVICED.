@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 import { lapseFeePayRequests, retryDueFees } from '../_shared/feePayRequest.ts';
+import { settlePendingTipFees } from '../_shared/recordTipPaid.ts';
 
 // Step 3 of the Connect build (handoff: stripe-connect-payouts-build-handoff):
 // the release job. It finds 'held' payout rows whose hold has elapsed
@@ -335,7 +336,9 @@ async function releaseFeePayouts() {
 // Tips follow the same 24-hour hold as fee payouts. The provider receives the
 // client-paid amount less Stripe's actual fee (never a guessed percentage).
 async function releaseTipPayouts() {
-  const counts = { transferred: 0, cancelled: 0, failed: 0, skipped: 0, considered: 0 };
+  const counts = { transferred: 0, cancelled: 0, failed: 0, skipped: 0, considered: 0, feesSettled: 0 };
+  counts.feesSettled = await settlePendingTipFees(admin, stripe, BATCH_LIMIT)
+    .catch((err) => { console.error(`[release-payouts] tip fee settle failed: ${String(err)}`); return 0; });
   const { data: due, error } = await admin.from('booking_tips')
     .select('id, booking_id, provider_id, payment_intent_id, payout_pence, currency')
     .eq('status', 'succeeded').eq('payout_status', 'held')
