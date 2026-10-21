@@ -64,6 +64,7 @@ import {
   attachInfoPackToBooking,
   getServiceDurationsByIds,
   getRefundRequestsForBooking,
+  getHeldPayoutPence,
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
@@ -224,6 +225,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // distinct from the idempotency key IssueRefundSheet uses for a refund this
   // provider issues. Issuing any refund closes it server-side.
   const [clientRefundRequest, setClientRefundRequest] = useState<RefundRequest | null>(null);
+  // The provider's payout for this booking while the request holds it back.
+  const [refundHoldPence, setRefundHoldPence] = useState<number | null>(null);
   const [clientRefundNonce, setClientRefundNonce] = useState(0);
   const [showPassOnModal, setShowPassOnModal] = useState(false);
   const [passOnNote, setPassOnNote] = useState('');
@@ -993,11 +996,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     void clientRefundNonce;
     if (!bookingId) return undefined;
     let active = true;
-    getRefundRequestsForBooking(bookingId)
-      .then(rows => {
+    // The held payout only matters alongside an open request, but both are
+    // one-row reads, so they go together.
+    Promise.all([getRefundRequestsForBooking(bookingId), getHeldPayoutPence(bookingId)])
+      .then(([rows, heldPence]) => {
         if (!active) return;
         const open = rows.find(isRefundRequestOpen) ?? null;
         setClientRefundRequest(open);
+        setRefundHoldPence(open ? heldPence : null);
       })
       // The request is safe server-side and the notification has it; without
       // the card the provider can still refund from the ⋯ sheet.
@@ -1311,6 +1317,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <Text style={{ color: P.text, fontSize: 13, fontWeight: '600' }}>{clientRefundRequest.reason}</Text>
                     {!!clientRefundRequest.message && (
                       <Text style={{ color: P.sub, fontSize: 13, lineHeight: 18 }}>“{clientRefundRequest.message}”</Text>
+                    )}
+                    {refundHoldPence != null && refundHoldPence > 0 && (
+                      <Text style={{ color: P.text, fontSize: 12, lineHeight: 17 }}>
+                        Your £{(refundHoldPence / 100).toFixed(2)} for this booking is on hold until this is settled.
+                      </Text>
                     )}
                     {withCerviced ? (
                       <Text style={{ color: P.sub, fontSize: 12, lineHeight: 17 }}>
