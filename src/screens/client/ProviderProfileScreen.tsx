@@ -5309,6 +5309,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       const rows = buildPolicyDisplayRows(
                         provider.bookingPolicies,
                         provider.cancellationNoticeHours,
+                        { linkOnly: isLinkOnly },
                       );
                       return (
                         <View style={{ paddingTop: 8 }}>
@@ -5358,6 +5359,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               </View>
                             </View>
                           ))}
+                          {/* Link-only: the booking happens on their own
+                              site, so CERVICED applies none of this. */}
+                          {isLinkOnly && rows.length > 0 && (
+                            <Text style={[styles.policyHandledNote, { color: OP.sub }]}>
+                              These policies are handled on their booking site.
+                            </Text>
+                          )}
                         </View>
                       );
                     })()
@@ -6395,6 +6403,11 @@ const styles = StyleSheet.create({
   },
   policyRowText: {
     flex: 1,
+  },
+  policyHandledNote: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    marginTop: 10,
   },
   policyLabelRow: {
     flexDirection: "row",
