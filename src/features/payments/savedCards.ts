@@ -1,3 +1,6 @@
+import { tr } from '../../i18n';
+
+
 /**
  * A client's saved card as the Payment Methods screen shows it. Read live from
  * Stripe by the client-saved-cards function — CERVICED stores none of it.
@@ -62,10 +65,10 @@ export function savedCardExpiryLabel(
   now: Date = new Date(),
 ): string {
   const state = savedCardExpiryState(card, now);
-  if (state === 'expired') return `Expired ${formatSavedCardExpiry(card)}`;
+  if (state === 'expired') return tr('cart.card.expired', { date: formatSavedCardExpiry(card) });
   if (state === 'soon') {
     const thisMonth = card.expYear === now.getFullYear() && card.expMonth === now.getMonth() + 1;
-    return thisMonth ? 'Expires this month' : 'Expires next month';
+    return thisMonth ? tr('cart.card.expiresThisMonth') : tr('cart.card.expiresNextMonth');
   }
-  return `Expires ${formatSavedCardExpiry(card)}`;
+  return tr('cart.card.expires', { date: formatSavedCardExpiry(card) });
 }

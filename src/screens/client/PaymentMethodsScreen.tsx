@@ -30,6 +30,7 @@ import { buildPaymentSheetAppearance } from '../../features/payments/paymentShee
 import { PaymentRequestError } from '../../utils/paymentRequestError';
 import { env } from '../../utils/env';
 import { logger } from '../../utils/logger';
+import { useTranslation } from '../../i18n';
 
 // StripeProvider is mounted app-wide in App.tsx. Required (not imported) the
 // same way CartScreen does it.
@@ -71,6 +72,7 @@ const FAN_CARD_HEIGHT = Math.round(FAN_CARD_WIDTH * 0.6);
 
 export default function PaymentMethodsScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   return (
@@ -84,12 +86,12 @@ export default function PaymentMethodsScreen({ navigation }: any) {
           style={styles.backBtn}
           onPress={() => { haptic(); navigation.goBack(); }}
           activeOpacity={0.7}
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back')}
         >
           <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: P.text }]}>Payment Methods</Text>
+        <Text style={[styles.title, { color: P.text }]}>{t('cart.methods.title')}</Text>
 
         {/* Saved cards only exist on the real Stripe checkout path; while
             it's switched off, checkout can't use them, so don't offer them. */}
@@ -101,14 +103,15 @@ export default function PaymentMethodsScreen({ navigation }: any) {
 
 function CheckoutExplainer() {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   return (
     <>
-      <Text style={[styles.subtitle, { color: P.sub }]}>Pay securely when you book</Text>
+      <Text style={[styles.subtitle, { color: P.sub }]}>{t('cart.methods.paySecurely')}</Text>
       <View style={[styles.explainer, { backgroundColor: P.accentDim }]}>
         <Icon name="payment" size={40} color={P.accentText} />
-        <Text style={[styles.explainerTitle, { color: P.text }]}>Secure checkout</Text>
+        <Text style={[styles.explainerTitle, { color: P.text }]}>{t('cart.methods.secureCheckout')}</Text>
         <Text style={[styles.explainerSub, { color: P.sub }]}>
-          Choose your services and appointment time, then pay at checkout by card, Apple Pay or Google Pay where your device supports it, or PayPal. Bookings with a late arrival or no-show fee are paid by card, since the fee may be charged to it after the appointment.
+          {t('cart.methods.explainer')}
         </Text>
       </View>
       <StripeNote />
@@ -118,11 +121,12 @@ function CheckoutExplainer() {
 
 function StripeNote() {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   return (
     <View style={[styles.infoRow, { backgroundColor: P.card, borderColor: P.border }]}>
       <Icon name="lock" size={18} color={P.accentText} />
       <Text style={[styles.infoText, { color: P.sub }]}>
-        Stripe holds your card details. Cerviced only sees the card type, last four digits and expiry date, and never stores your PayPal details.
+        {t('cart.methods.stripeNote')}
       </Text>
     </View>
   );
@@ -130,6 +134,7 @@ function StripeNote() {
 
 function SavedCardsSection() {
   const { theme, palette: P } = useTheme();
+  const { t } = useTranslation();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { showToast, showConfirm, DialogHost } = useAppDialog();
   const [cards, setCards] = useState<SavedCard[] | null>(null);
@@ -164,40 +169,40 @@ function SavedCardsSection() {
         setupIntentClientSecret: setup.setupIntentClientSecret,
         appearance: buildPaymentSheetAppearance(P, theme.text),
       });
-      if (initError) throw new Error(initError.message || 'Could not open card setup.');
+      if (initError) throw new Error(initError.message || t('cart.methods.setupFailed'));
       const { error: presentError } = await presentPaymentSheet();
       if (presentError) {
         if (presentError.code === 'Canceled') return;
-        throw new Error(presentError.message || 'Could not save that card.');
+        throw new Error(presentError.message || t('cart.methods.saveFailedShort'));
       }
-      showToast('Card saved', 'success');
+      showToast(t('cart.methods.saved'), 'success');
       await load();
     } catch (error) {
       logger.error('[PaymentMethods] could not add a card', error);
       showToast(
-        error instanceof PaymentRequestError ? error.message : 'Could not save that card. Please try again.',
+        error instanceof PaymentRequestError ? error.message : t('cart.methods.saveFailed'),
         'error',
       );
     } finally {
       addingRef.current = false;
       setAdding(false);
     }
-  }, [initPaymentSheet, presentPaymentSheet, P, theme.text, showToast, load]);
+  }, [initPaymentSheet, presentPaymentSheet, P, theme.text, showToast, load, t]);
 
   const remove = useCallback(async (card: SavedCard) => {
     try {
       await removeSavedCard(card.id);
       setCards(prev => prev?.filter(c => c.id !== card.id) ?? prev);
-      showToast('Card removed', 'success');
+      showToast(t('cart.methods.removed'), 'success');
     } catch (error) {
       logger.error('[PaymentMethods] could not remove a card', error);
       showToast(
-        error instanceof PaymentRequestError ? error.message : 'Could not remove that card. Please try again.',
+        error instanceof PaymentRequestError ? error.message : t('cart.methods.removeFailed'),
         'error',
       );
       load();
     }
-  }, [showToast, load]);
+  }, [showToast, load, t]);
 
   const openCard = useCallback((card: SavedCard) => {
     haptic();
@@ -205,28 +210,28 @@ function SavedCardsSection() {
     showConfirm(
       `${savedCardBrandName(card.brand)} •••• ${card.last4}`,
       needsReplacing
-        ? `${savedCardExpiryLabel(card)}. Got a new card from your bank? Add it, then remove this one. Bookings you've already paid for won't change.`
-        : `${savedCardExpiryLabel(card)}. Removing it doesn't change any bookings you've already paid for.`,
+        ? t('cart.methods.replaceBody', { expiry: savedCardExpiryLabel(card) })
+        : t('cart.methods.removeBody', { expiry: savedCardExpiryLabel(card) }),
       [
-        ...(needsReplacing ? [{ text: 'Add a new card', onPress: () => { addCard(); } }] : []),
-        { text: 'Remove card', style: 'destructive' as const, onPress: () => { remove(card); } },
-        { text: 'Cancel', style: 'cancel' as const },
+        ...(needsReplacing ? [{ text: t('cart.methods.addNew'), onPress: () => { addCard(); } }] : []),
+        { text: t('cart.methods.remove'), style: 'destructive' as const, onPress: () => { remove(card); } },
+        { text: t('common.cancel'), style: 'cancel' as const },
       ],
     );
-  }, [showConfirm, addCard, remove]);
+  }, [showConfirm, addCard, remove, t]);
 
   return (
     <>
       <Text style={[styles.subtitle, { color: P.sub }]}>
         {cards?.length
-          ? 'Your saved cards appear in the payment sheet at checkout.'
-          : 'Save a card once and checkout becomes one tap.'}
+          ? t('cart.methods.subtitleSaved')
+          : t('cart.methods.subtitleEmpty')}
       </Text>
 
       {!!cards?.length && <CardFan cards={cards.slice(0, FAN_MAX)} />}
 
       <Text style={[styles.sectionLabel, { color: P.sub }]}>
-        {cards?.length ? 'SAVED CARDS' : 'CARDS'}
+        {cards?.length ? t('cart.methods.savedCards') : t('cart.methods.cards')}
       </Text>
       <View style={[styles.group, { backgroundColor: P.card, borderColor: P.border }]}>
         {cards === null && !loadFailed && (
@@ -237,9 +242,9 @@ function SavedCardsSection() {
 
         {loadFailed && (
           <View style={styles.stateRow}>
-            <Text style={[styles.rowSub, { color: P.sub, flex: 1 }]}>Couldn't load your saved cards.</Text>
+            <Text style={[styles.rowSub, { color: P.sub, flex: 1 }]}>{t('cart.methods.loadFailed')}</Text>
             <TouchableOpacity onPress={() => { haptic(); load(); }} activeOpacity={0.7} style={styles.retryBtn}>
-              <Text style={[styles.retryText, { color: P.accentText }]}>Try again</Text>
+              <Text style={[styles.retryText, { color: P.accentText }]}>{t('common.tryAgain')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -247,7 +252,7 @@ function SavedCardsSection() {
         {cards?.length === 0 && (
           <View style={styles.stateRow}>
             <Text style={[styles.rowSub, { color: P.sub, flex: 1 }]}>
-              No saved cards yet. You can also tick "Save this card" when you pay at checkout.
+              {t('cart.methods.none')}
             </Text>
           </View>
         )}
@@ -260,7 +265,7 @@ function SavedCardsSection() {
               style={[styles.row, { borderBottomColor: P.sep }]}
               onPress={() => openCard(card)}
               activeOpacity={0.7}
-              accessibilityLabel={`${savedCardBrandName(card.brand)} ending ${card.last4}, ${savedCardExpiryLabel(card)}`}
+              accessibilityLabel={t('cart.methods.cardA11y', { brand: savedCardBrandName(card.brand), last4: card.last4, expiry: savedCardExpiryLabel(card) })}
             >
               <View style={[styles.badge, { backgroundColor: P.iconBg }]}>
                 <Text style={[styles.badgeText, { color: P.accentText }]}>{savedCardBadge(card.brand)}</Text>
@@ -270,7 +275,7 @@ function SavedCardsSection() {
                   {savedCardBrandName(card.brand)} •••• {card.last4}
                 </Text>
                 <Text style={[styles.rowSub, { color: expiry === 'ok' ? P.sub : P.text, fontWeight: expiry === 'ok' ? '500' : '700' }]}>
-                  {savedCardExpiryLabel(card)}{expiry === 'ok' ? '' : ' — update it'}
+                  {expiry === 'ok' ? savedCardExpiryLabel(card) : t('cart.methods.updateIt', { expiry: savedCardExpiryLabel(card) })}
                 </Text>
               </View>
               <Icon name="chevron-right" size={18} color={P.sub} />
@@ -283,20 +288,20 @@ function SavedCardsSection() {
           onPress={addCard}
           disabled={adding}
           activeOpacity={0.7}
-          accessibilityLabel="Add a card"
+          accessibilityLabel={t('cart.methods.add')}
         >
           <View style={[styles.badge, styles.addBadge, { borderColor: P.border }]}>
             {adding
               ? <ActivityIndicator size="small" color={P.accentText} />
               : <Text style={[styles.plus, { color: P.accentText }]}>+</Text>}
           </View>
-          <Text style={[styles.rowTitle, { color: P.accentText }]}>Add a card</Text>
+          <Text style={[styles.rowTitle, { color: P.accentText }]}>{t('cart.methods.add')}</Text>
         </TouchableOpacity>
       </View>
 
       {!env.isExpoGo && (
         <>
-          <Text style={[styles.sectionLabel, { color: P.sub }]}>ALSO AT CHECKOUT</Text>
+          <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('cart.methods.alsoAtCheckout')}</Text>
           <View style={[styles.group, { backgroundColor: P.card, borderColor: P.border }]}>
             <View style={styles.row}>
               <View style={[styles.badge, { backgroundColor: P.iconBg }]}>
@@ -304,7 +309,7 @@ function SavedCardsSection() {
               </View>
               <View style={styles.rowBody}>
                 <Text style={[styles.rowTitle, { color: P.text }]}>{WALLET_NAME}</Text>
-                <Text style={[styles.rowSub, { color: P.sub }]}>Offered when your phone is set up for it</Text>
+                <Text style={[styles.rowSub, { color: P.sub }]}>{t('cart.methods.walletSub')}</Text>
               </View>
             </View>
             <View style={[styles.row, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border }]}>
@@ -313,7 +318,7 @@ function SavedCardsSection() {
               </View>
               <View style={styles.rowBody}>
                 <Text style={[styles.rowTitle, { color: P.text }]}>PayPal</Text>
-                <Text style={[styles.rowSub, { color: P.sub }]}>Pay on PayPal's own page. Bookings with a late or no-show fee are card only</Text>
+                <Text style={[styles.rowSub, { color: P.sub }]}>{t('cart.methods.paypalSub')}</Text>
               </View>
             </View>
           </View>
@@ -328,6 +333,7 @@ function SavedCardsSection() {
 
 function CardFan({ cards }: { cards: SavedCard[] }) {
   const { isDarkMode, palette: P } = useTheme();
+  const { t } = useTranslation();
   const [front, setFront] = useState(0);
   const faces = isDarkMode ? FAN_FACES.dark : FAN_FACES.light;
   const n = cards.length;
@@ -355,7 +361,7 @@ function CardFan({ cards }: { cards: SavedCard[] }) {
         ))}
       </View>
       {n > 1 && (
-        <Text style={[styles.fanHint, { color: P.sub }]}>Tap the front card to see the next</Text>
+        <Text style={[styles.fanHint, { color: P.sub }]}>{t('cart.methods.fanHint')}</Text>
       )}
     </View>
   );
@@ -367,6 +373,7 @@ function FanCard({ card, face, slot, onPress }: {
   slot: { x: number; rotate: number; z: number };
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const x = useRef(new Animated.Value(slot.x)).current;
   const rotate = useRef(new Animated.Value(slot.rotate)).current;
 
@@ -399,8 +406,8 @@ function FanCard({ card, face, slot, onPress }: {
         onPress={onPress}
         activeOpacity={0.9}
         disabled={!isFront}
-        accessibilityLabel={`${savedCardBrandName(card.brand)} ending ${card.last4}, ${savedCardExpiryLabel(card)}`}
-        accessibilityHint={isFront ? 'Shows the next saved card' : undefined}
+        accessibilityLabel={t('cart.methods.cardA11y', { brand: savedCardBrandName(card.brand), last4: card.last4, expiry: savedCardExpiryLabel(card) })}
+        accessibilityHint={isFront ? t('cart.methods.fanHintA11y') : undefined}
       >
         <Text style={[styles.fanBrand, { color: face.fg }]}>{savedCardBrandName(card.brand)}</Text>
         <View>

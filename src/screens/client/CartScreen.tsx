@@ -65,12 +65,13 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
 import { toArgbHex } from '../../utils/color';
-import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
+import { formatDurationMinutes, formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
 import { newestAddedItem } from '../../utils/newestAddedItem';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { useTranslation, tr, localeForLanguage } from '../../i18n';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
 // includes the SDK-compatible Stripe module, so it can show the card form;
@@ -148,7 +149,7 @@ type CartScrollTarget = { providerName: string; itemId: string };
 function formatNameList(names: string[]): string {
   if (names.length === 0) return '';
   if (names.length === 1) return names[0]!;
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
+  return tr('cart.nameList', { rest: names.slice(0, -1).join(', '), last: names[names.length - 1]! });
 }
 
 // The checkout summary goes full screen once it stops being a glance: at or
@@ -184,14 +185,15 @@ function SummaryShell({
   actions: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   if (!fullScreen) {
     return (
       <View style={styles.modalOverlayNoBlur}>
         <View style={[styles.reviewModalContainer, styles.summaryModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
           <ScrollView style={styles.summaryCardScroll} showsVerticalScrollIndicator={true}>
             <View style={styles.reviewModalContent}>
-              <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
-              <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>Review your appointments before payment</Text>
+              <Text style={[styles.reviewModalTitle, { color: P.text }]}>{t('cart.summary.title')}</Text>
+              <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>{t('cart.summary.subtitle')}</Text>
               {children}
             </View>
           </ScrollView>
@@ -224,8 +226,8 @@ function SummaryShell({
             <Ionicons name="chevron-back" size={24} color={P.text} />
           </TouchableOpacity>
           <View style={styles.summaryHeaderTitles}>
-            <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
-            <Text style={[styles.reviewModalSubtitle, { color: P.sub, marginBottom: 0 }]}>Review your appointments before payment</Text>
+            <Text style={[styles.reviewModalTitle, { color: P.text }]}>{t('cart.summary.title')}</Text>
+            <Text style={[styles.reviewModalSubtitle, { color: P.sub, marginBottom: 0 }]}>{t('cart.summary.subtitle')}</Text>
           </View>
         </View>
         <ScrollView
@@ -332,6 +334,7 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, palette: P } = useTheme();
+    const { t } = useTranslation();
     // Live inset, not the module-load snapshot: this sheet is inside a
     // <Modal>, where the snapshot can be 0 and <SafeAreaView> is inert. See
     // useSystemBottomInset's comment.
@@ -347,7 +350,7 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
       name: '',
     });
     const paymentMethods = [
-      { id: 'card', name: 'Credit/Debit Card', icon: '💳' },
+      { id: 'card', name: t('cart.mockPay.creditDebitCard'), icon: '💳' },
       { id: 'paypal', name: 'PayPal', icon: '🅿️' },
       { id: 'apple', name: 'Apple Pay', icon: '🍎' },
       { id: 'google', name: 'Google Pay', icon: '🔵' },
@@ -429,7 +432,7 @@ const handlePayment = useCallback(async () => {
     onBookingFailed(
       error instanceof BookingError
         ? error.message
-        : "We couldn't complete this booking. Please try again."
+        : tr('cart.error.bookingNotCompleted')
     );
   } finally {
     if (__DEV__) {
@@ -464,7 +467,7 @@ const handlePayment = useCallback(async () => {
             <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
               {/* Payment Header */}
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
-                <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
+                <Text style={[styles.paymentTitle, { color: theme.text }]}>{t('cart.mockPay.title')}</Text>
                 <TouchableOpacity
                   style={styles.paymentCloseButton}
                   onPress={() => {
@@ -479,19 +482,19 @@ const handlePayment = useCallback(async () => {
               <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false}>
                 {/* Order Summary - UPDATED WITH BREAKDOWN */}
                 <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Order Summary</Text>
+                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.mockPay.orderSummary')}</Text>
                   {effectiveCartItems.map(({ item, effectivePrice, isDeposit }, index) => (
                     <View key={item.id} style={styles.orderItem}>
                       <Text style={[styles.orderItemName, { color: theme.text }]}>
                         {item.serviceName} #{item.serviceInstanceIndex || 1}
-                        {isDeposit && ' (Deposit)'}
+                        {isDeposit && t('cart.mockPay.depositSuffix')}
                       </Text>
                       <Text style={[styles.orderItemPrice, { color: theme.text }]}>£{effectivePrice.toFixed(2)}</Text>
                     </View>
                   ))}
                   <View style={styles.orderTotal}>
                     <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
-                      Total
+                      {t('cart.total')}
                     </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
@@ -499,7 +502,7 @@ const handlePayment = useCallback(async () => {
 
                 {/* Payment Methods - CLEAR TEXT COLORS */}
                 <View style={styles.paymentMethods}>
-                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Payment Method</Text>
+                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>{t('cart.mockPay.paymentMethod')}</Text>
                   {paymentMethods.map(method => (
                     <TouchableOpacity
                       key={method.id}
@@ -532,11 +535,11 @@ const handlePayment = useCallback(async () => {
                 {/* Card Details (only show for card payment) */}
                 {selectedPaymentMethod === 'card' && (
                   <View style={styles.cardDetails}>
-                    <Text style={[styles.cardDetailsTitle, { color: theme.text }]}>Card Details</Text>
+                    <Text style={[styles.cardDetailsTitle, { color: theme.text }]}>{t('cart.mockPay.cardDetails')}</Text>
 
                     <TextInput
                       style={[styles.cardInput, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                      placeholder="Card Number"
+                      placeholder={t('cart.mockPay.cardNumber')}
                       placeholderTextColor={P.sub}
                       value={cardDetails.number}
                       onChangeText={text =>
@@ -552,7 +555,7 @@ const handlePayment = useCallback(async () => {
                     <View style={styles.cardRow}>
                       <TextInput
                         style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                        placeholder="MM/YY"
+                        placeholder={t('cart.mockPay.expiry')}
                         placeholderTextColor={P.sub}
                         value={cardDetails.expiry}
                         onChangeText={text =>
@@ -566,7 +569,7 @@ const handlePayment = useCallback(async () => {
                       />
                       <TextInput
                         style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                        placeholder="CVC"
+                        placeholder={t('cart.mockPay.cvc')}
                         placeholderTextColor={P.sub}
                         value={cardDetails.cvc}
                         onChangeText={text =>
@@ -582,7 +585,7 @@ const handlePayment = useCallback(async () => {
 
                     <TextInput
                       style={[styles.cardInput, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                      placeholder="Cardholder Name"
+                      placeholder={t('cart.mockPay.cardholderName')}
                       placeholderTextColor={P.sub}
                       value={cardDetails.name}
                       onChangeText={text =>
@@ -608,7 +611,7 @@ const handlePayment = useCallback(async () => {
                 {isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
                 ) : (
-                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
+                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>{t('cart.pay.amount', { amount: `£${totalAmount.toFixed(2)}` })}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -640,6 +643,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
+    const { t } = useTranslation();
     // See the mock PaymentModal above — same reason, same fix.
     const bottomInset = useSystemBottomInset();
     const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
@@ -726,7 +730,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       let createdIntentId: string | undefined;
       try {
         if (!checkoutBatchId) {
-          throw new Error('Checkout has expired. Please review your booking and try again.');
+          throw new Error(tr('cart.pay.expired'));
         }
         if (hasFees) {
           await acceptCheckoutFees(checkoutBatchId, {
@@ -742,7 +746,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         openIntentRef.current = paymentIntentId;
         if (method === 'paypal' && !paypalAvailable) {
           // The server decides; nothing is authorised, so card still works.
-          setPayError('PayPal isn\'t available for this booking. Please pay by card.');
+          setPayError(tr('cart.pay.paypalUnavailable'));
           return;
         }
 
@@ -755,7 +759,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             // Nothing has been authorised yet — keep the checkout and let
             // them try again rather than releasing the hold over a blip.
             logger.error(`[${timestamp()}] could not read the payment amount`, retrieveError);
-            setPayError('We couldn\'t start Apple Pay or Google Pay. Please try again.');
+            setPayError(tr('cart.pay.walletFailed'));
             return;
           }
           const amount = (paymentIntent.amount / 100).toFixed(2);
@@ -796,8 +800,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             setPayError(isCardError
               ? (confirmError.localizedMessage || confirmError.message)
               : method === 'paypal'
-                ? 'That PayPal payment didn\'t go through. Please try again, or pay by card.'
-                : 'That payment didn\'t go through. Please check your details and try again.');
+                ? tr('cart.pay.paypalFailed')
+                : tr('cart.pay.failed'));
           }
           return;
         }
@@ -822,7 +826,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           catch { onPaymentPending?.(); return; }
         }
         onClose();
-        onBookingFailed(error instanceof PaymentRequestError ? error.message : 'Payment could not be completed. Please review your booking and try again.');
+        onBookingFailed(error instanceof PaymentRequestError ? error.message : tr('cart.pay.notCompleted'));
       } finally {
         setIsProcessing(false);
         processingRef.current = false;
@@ -867,11 +871,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
             <View style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}>
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
-                <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
+                <Text style={[styles.paymentTitle, { color: theme.text }]}>{t('cart.mockPay.title')}</Text>
                 <TouchableOpacity
                   style={styles.paymentCloseButton}
                   disabled={isProcessing}
-                  accessibilityLabel="Close payment"
+                  accessibilityLabel={t('cart.pay.closeA11y')}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     handleClose();
@@ -883,19 +887,19 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
               <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Order Summary</Text>
+                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.mockPay.orderSummary')}</Text>
                   {effectiveCartItems.map(({ item, effectivePrice, isDeposit }) => (
                     <View key={item.id} style={styles.orderItem}>
                       <Text style={[styles.orderItemName, { color: theme.text }]}>
                         {item.serviceName} #{item.serviceInstanceIndex || 1}
-                        {isDeposit && ' (Deposit)'}
+                        {isDeposit && t('cart.mockPay.depositSuffix')}
                       </Text>
                       <Text style={[styles.orderItemPrice, { color: theme.text }]}>£{effectivePrice.toFixed(2)}</Text>
                     </View>
                   ))}
                   <View style={styles.orderTotal}>
                     <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
-                      Total
+                      {t('cart.total')}
                     </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
@@ -905,25 +909,25 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   <TouchableOpacity accessibilityRole="button" onPress={() => setFeesAttempt(n => n + 1)}
                     style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                     <Text style={[styles.paymentMethodName, { color: theme.text }]}>
-                      We couldn't load this booking's fees. Tap to try again.
+                      {t('cart.pay.feesLoadFailed')}
                     </Text>
                   </TouchableOpacity>
                 )}
                 {hasFees && (
                   <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                    <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Late & no-show fees</Text>
+                    <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.pay.feesHeading')}</Text>
                     {fees!.map(fee => (
                       <View key={fee.providerId} style={styles.orderItem}>
                         <Text style={[styles.orderItemName, { color: theme.text }]}>
                           {fee.providerName}
-                          {fee.lateFeePence != null && `\n£${(fee.lateFeePence / 100).toFixed(2)} if you arrive more than ${fee.graceMinutes} minutes late`}
-                          {fee.noShowFeePence != null && `\n£${(fee.noShowFeePence / 100).toFixed(2)} if you don't turn up`}
+                          {fee.lateFeePence != null && `\n${t('cart.pay.lateFeeLine', { amount: `£${(fee.lateFeePence / 100).toFixed(2)}`, minutes: fee.graceMinutes })}`}
+                          {fee.noShowFeePence != null && `\n${t('cart.pay.noShowFeeLine', { amount: `£${(fee.noShowFeePence / 100).toFixed(2)}` })}`}
                         </Text>
                       </View>
                     ))}
                     <TouchableOpacity accessibilityRole="button" onPress={() => setShowFeeTerms(v => !v)} activeOpacity={0.7}>
                       <Text style={[styles.paymentMethodName, { color: P.accent, marginTop: 6 }]}>
-                        {showFeeTerms ? 'Hide the terms' : `Read the ${FEE_TERMS_HEADING} terms`}
+                        {showFeeTerms ? t('cart.pay.hideTerms') : t('cart.pay.readTerms', { heading: FEE_TERMS_HEADING })}
                       </Text>
                     </TouchableOpacity>
                     {showFeeTerms && (
@@ -966,7 +970,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                       {paypalShown && (
                         <TouchableOpacity
                           accessibilityRole="button"
-                          accessibilityLabel="Pay with PayPal"
+                          accessibilityLabel={t('cart.pay.paypal')}
                           disabled={isProcessing || !canPay}
                           activeOpacity={0.7}
                           onPress={() => {
@@ -977,18 +981,18 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                             (isProcessing || !canPay) && styles.paypalButtonDisabled]}
                         >
                           <Ionicons name="logo-paypal" size={18} color={PAYPAL_NAVY} />
-                          <Text style={styles.paypalButtonText}>Pay with PayPal</Text>
+                          <Text style={styles.paypalButtonText}>{t('cart.pay.paypal')}</Text>
                         </TouchableOpacity>
                       )}
                       <View style={styles.payDivider}>
                         <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
-                        <Text style={[styles.payDividerText, { color: P.sub }]}>or pay by card</Text>
+                        <Text style={[styles.payDividerText, { color: P.sub }]}>{t('cart.pay.orCard')}</Text>
                         <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
                       </View>
                     </>
                   )}
                   {!walletSupported && (
-                    <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Pay by card</Text>
+                    <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>{t('cart.pay.byCard')}</Text>
                   )}
                   {/* Separate number / expiry / CVC / postcode boxes. On iOS,
                       backgroundColor paints the whole form behind Stripe's own
@@ -1019,7 +1023,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   )}
                   <View style={styles.paySecureRow}>
                     <Ionicons name="lock-closed" size={12} color={P.sub} />
-                    <Text style={[styles.paySecureText, { color: P.sub }]}>Card details go straight to Stripe</Text>
+                    <Text style={[styles.paySecureText, { color: P.sub }]}>{t('cart.pay.secure')}</Text>
                   </View>
                 </View>
               </ScrollView>
@@ -1035,7 +1039,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 {isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
                 ) : (
-                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
+                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>{t('cart.pay.amount', { amount: `£${totalAmount.toFixed(2)}` })}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1080,6 +1084,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     // necessarily the client palette. See DESIGN_SYSTEM.md's AppDialog note
     // for the same class of bug.
     const { palette: P } = useTheme();
+    const { t, tp } = useTranslation();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
     const swipeRef = useRef<Swipeable>(null);
@@ -1107,10 +1112,10 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
       try {
         setIsLoading(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        showConfirm('Remove Service', `Remove ${item.serviceName} from cart?`, [
-          { text: 'Cancel', style: 'cancel' },
+        showConfirm(t('cart.remove.title'), t('cart.remove.body', { service: item.serviceName }), [
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Remove',
+            text: t('common.remove'),
             style: 'destructive',
             onPress: () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -1123,14 +1128,14 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
       } finally {
         setIsLoading(false);
       }
-    }, [item.id, item.serviceName, onRemove, showConfirm]);
+    }, [item.id, item.serviceName, onRemove, showConfirm, t]);
 
     const isScheduled = Boolean(bookingInfo?.selectedDate && bookingInfo?.selectedTime);
     const whenColor = !isScheduled ? '#D32F2F' : bookingInfo?.emergencyRequest ? '#FF9500' : P.accentText;
 
-    const serviceName = item?.serviceName || 'Unknown Service';
+    const serviceName = item?.serviceName || t('cart.card.unknownService');
     const serviceInstanceIndex = item?.serviceInstanceIndex || 1;
-    const duration = item?.duration || 'Unknown duration';
+    const duration = item?.duration || t('cart.card.unknownDuration');
     const showInstanceNumber =
       allCartItems.filter((i: CartItem) => i.serviceName === item.serviceName).length > 1;
 
@@ -1138,7 +1143,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
       <ErrorBoundary
         fallback={(error, retry) => (
           <View style={styles.errorCard}>
-            <Text style={styles.errorText}>Error loading service card</Text>
+            <Text style={styles.errorText}>{t('cart.card.loadError')}</Text>
             <TouchableOpacity
               style={styles.retryButton}
               onPress={() => {
@@ -1146,7 +1151,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 retry();
               }}
             >
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={styles.retryText}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1208,14 +1213,14 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={isScheduled
-                    ? `Change time, currently ${formatShortDayDate(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
-                    : 'Pick a date and time'}
+                    ? t('cart.card.changeTimeA11y', { date: formatShortDayDate(bookingInfo.selectedDate), time: formatTime12(bookingInfo.selectedTime) })
+                    : t('cart.card.pickTime')}
                 >
                   <Ionicons name="calendar-outline" size={13} color={whenColor} />
                   <Text style={[styles.nodeWhenText, { color: whenColor }]} numberOfLines={1}>
                     {isScheduled
                       ? `${formatShortDayDate(bookingInfo.selectedDate)} · ${formatTime12(bookingInfo.selectedTime)}`
-                      : 'No time picked'}
+                      : t('cart.card.noTime')}
                   </Text>
                   <Ionicons name="chevron-forward" size={12} color={whenColor} />
                 </TouchableOpacity>
@@ -1225,7 +1230,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                   disabled={isLoading}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${serviceName}`}
+                  accessibilityLabel={t('cart.card.removeA11y', { service: serviceName })}
                 >
                   <Ionicons name="close" size={16} color={P.sub} />
                 </TouchableOpacity>
@@ -1243,7 +1248,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 <Text style={[styles.nodeMeta, { color: P.sub }]} numberOfLines={1}>{duration}</Text>
                 {bookingInfo.isDepositOnly && (
                   <View style={[styles.nodeTag, { backgroundColor: P.accentDim }]}>
-                    <Text style={[styles.nodeTagText, { color: P.accentText }]}>Deposit</Text>
+                    <Text style={[styles.nodeTagText, { color: P.accentText }]}>{t('cart.card.deposit')}</Text>
                   </View>
                 )}
               </View>
@@ -1256,7 +1261,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     onEdit(item);
                   }}>
-                    <Text style={styles.nodeBannerFix}>Fix</Text>
+                    <Text style={styles.nodeBannerFix}>{t('cart.card.fix')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1269,25 +1274,24 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 <View style={[styles.nodeBanner, styles.nodeBannerWarn]}>
                   <Ionicons name="time-outline" size={12} color="#FF9500" />
                   <Text style={[styles.nodeBannerText, { color: '#FF9500' }]}>
-                    Outside their usual hours — they have to accept this before it's booked.
+                    {t('cart.card.requestNote')}
                   </Text>
                 </View>
               )}
 
               {addOnsSummary && (
                 <Text style={[styles.nodeNote, { color: P.sub }]} numberOfLines={2}>
-                  + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
-                  {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
+                  {tp('cart.card.addOns', addOnsSummary.count, { total: `£${addOnsSummary.total.toFixed(2)}`, names: addOnsSummary.names })}
                 </Text>
               )}
               {bookingInfo.isDepositOnly && (
                 <Text style={[styles.nodeNote, { color: P.sub }]}>
-                  Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
+                  {t('cart.card.dueAtAppointment', { amount: `£${BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}` })}
                 </Text>
               )}
               {!!bookingInfo.notes && (
                 <Text style={[styles.nodeNote, { color: P.sub }]} numberOfLines={2}>
-                  Note: {bookingInfo.notes}
+                  {t('cart.card.note', { note: bookingInfo.notes })}
                 </Text>
               )}
             </View>
@@ -1322,6 +1326,7 @@ interface GroupedServiceCardProps {
 const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
   ({ items, getBooking, onRemove, onEditGroup, depositPolicy, issuesByItemId }) => {
     const { theme, palette: P } = useTheme();
+    const { t, tp } = useTranslation();
     const { showConfirm, DialogHost } = useAppDialog();
 
     const depositPolicyArg = useMemo((): DepositPolicy | number => {
@@ -1389,12 +1394,12 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     const handleRemoveOne = useCallback((item: CartItem) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       showConfirm(
-        'Remove Service',
-        `Remove ${item.serviceName} from this appointment?`,
+        t('cart.remove.title'),
+        t('cart.remove.fromAppointment', { service: item.serviceName }),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Remove',
+            text: t('common.remove'),
             style: 'destructive',
             onPress: () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -1403,7 +1408,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           },
         ]
       );
-    }, [onRemove, showConfirm]);
+    }, [onRemove, showConfirm, t]);
 
     return (
       <View style={[styles.groupNodeCard, { backgroundColor: P.accentDim }]}>
@@ -1413,7 +1418,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
             <Text style={styles.nodeBannerText}>
               {flagged.length === 1
                 ? `${flagged[0]!.item.serviceName}: ${flagged[0]!.issue}`
-                : `${flagged.length} services in this appointment need attention`}
+                : t('cart.group.needAttention', { count: flagged.length })}
             </Text>
           </View>
         )}
@@ -1423,8 +1428,8 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
             provider identity here is also already owned by the wrapping
             CartProviderSection header. */}
         <View style={styles.groupHead}>
-          <Text style={[styles.groupTag, { color: P.accentText }]}>GROUP BOOKING</Text>
-          <Text style={[styles.groupTagSpan, { color: P.sub }]}>{items.length} services</Text>
+          <Text style={[styles.groupTag, { color: P.accentText }]}>{t('cart.group.tag')}</Text>
+          <Text style={[styles.groupTagSpan, { color: P.sub }]}>{tp('cart.servicesCount', items.length)}</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
             style={[styles.nodePencil, { borderColor: P.border, backgroundColor: P.card }]}
@@ -1441,7 +1446,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           style={[styles.groupHeaderDate, { color: theme.text }, !isScheduled && styles.dateTextWarning]}
           numberOfLines={2}
         >
-          {isScheduled ? formatLongDateNoYear(firstBooking.selectedDate) : 'Unscheduled'}
+          {isScheduled ? formatLongDateNoYear(firstBooking.selectedDate) : t('cart.group.unscheduled')}
         </Text>
         {spanKnown && (
           <Text style={[styles.groupHeaderSpan, { color: theme.secondaryText }]}>
@@ -1458,7 +1463,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                 <View style={styles.gchipInfo}>
                   <Text style={[styles.gchipName, { color: theme.text }]} numberOfLines={1}>
                     {item.serviceName}
-                    {b.isDepositOnly ? ' (Deposit)' : ''}
+                    {b.isDepositOnly ? t('cart.mockPay.depositSuffix') : ''}
                   </Text>
                   <Text style={[styles.gchipMeta, { color: theme.secondaryText }]} numberOfLines={1}>
                     {item.duration}
@@ -1474,8 +1479,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                     const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
                     return (
                       <Text style={[styles.groupRowAddOns, { color: theme.text }]} numberOfLines={2}>
-                        + {list.length} add-on{list.length === 1 ? '' : 's'} (£{total.toFixed(2)}):{' '}
-                        {list.map((a: any) => a.name).join(', ')}
+                        {tp('cart.card.addOns', list.length, { total: `£${total.toFixed(2)}`, names: list.map((a: any) => a.name).join(', ') })}
                       </Text>
                     );
                   })()}
@@ -1484,8 +1488,11 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                     // row's own deposit and remainder against its own full
                     // price — the price on the right is only the deposit.
                     <Text style={[styles.groupRowDeposit, { color: theme.secondaryText }]}>
-                      £{fullPriceOf(item).toFixed(2)} service · £{priceOf(item).toFixed(2)} deposit · £
-                      {BookingService.calculateRemainingBalance(fullPriceOf(item), depositPolicyArg).toFixed(2)} at appointment
+                      {t('cart.group.depositRow', {
+                        service: `£${fullPriceOf(item).toFixed(2)}`,
+                        deposit: `£${priceOf(item).toFixed(2)}`,
+                        remaining: `£${BookingService.calculateRemainingBalance(fullPriceOf(item), depositPolicyArg).toFixed(2)}`,
+                      })}
                     </Text>
                   )}
                 </View>
@@ -1512,16 +1519,16 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
           {hasDeposit ? (
             <>
               <View>
-                <Text style={[styles.gfootLabel, { color: theme.text }]}>Deposit due now</Text>
+                <Text style={[styles.gfootLabel, { color: theme.text }]}>{t('cart.depositDueNow')}</Text>
                 <Text style={[styles.gfootSubnote, { color: theme.secondaryText }]}>
-                  £{groupServiceTotal.toFixed(2)} service total · £{groupRemaining.toFixed(2)} at appointment
+                  {t('cart.group.footNote', { total: `£${groupServiceTotal.toFixed(2)}`, remaining: `£${groupRemaining.toFixed(2)}` })}
                 </Text>
               </View>
               <Text style={[styles.gfootAmt, { color: P.accentText }]}>£{groupTotal.toFixed(2)}</Text>
             </>
           ) : (
             <>
-              <Text style={[styles.gfootLabel, { color: theme.text }]}>{items.length} services</Text>
+              <Text style={[styles.gfootLabel, { color: theme.text }]}>{tp('cart.servicesCount', items.length)}</Text>
               <Text style={[styles.gfootAmt, { color: P.accentText }]}>£{groupTotal.toFixed(2)}</Text>
             </>
           )}
@@ -1721,6 +1728,7 @@ const CartCheckoutFooter = memo(function CartCheckoutFooter({
   onCheckout: () => void;
 }) {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   return (
     <>
       {Object.keys(appliedPromos).length > 0 ? (
@@ -1744,23 +1752,23 @@ const CartCheckoutFooter = memo(function CartCheckoutFooter({
 
       <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
         <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: P.text }]}>Subtotal</Text>
+          <Text style={[styles.summaryLabel, { color: P.text }]}>{t('cart.subtotal')}</Text>
           <Text style={[styles.summaryValue, { color: P.text }]}>£{subtotal.toFixed(2)}</Text>
         </View>
         {promoSavings > 0 ? (
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: '#30D158' }]}>Promo Discount</Text>
+            <Text style={[styles.summaryLabel, { color: '#30D158' }]}>{t('cart.promoDiscount')}</Text>
             <Text style={[styles.summaryValue, { color: '#30D158' }]}>−£{promoSavings.toFixed(2)}</Text>
           </View>
         ) : null}
         {platformFee > 0 ? (
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: P.text }]}>Platform Fee</Text>
+            <Text style={[styles.summaryLabel, { color: P.text }]}>{t('cart.platformFee')}</Text>
             <Text style={[styles.summaryValue, { color: P.text }]}>£{platformFee.toFixed(2)}</Text>
           </View>
         ) : null}
         <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: P.border }]}>
-          <Text style={[styles.totalLabel, { color: P.text }]}>Total</Text>
+          <Text style={[styles.totalLabel, { color: P.text }]}>{t('cart.total')}</Text>
           <Text style={[styles.totalValue, { color: P.text }]}>£{finalTotal.toFixed(2)}</Text>
         </View>
       </View>
@@ -1778,18 +1786,18 @@ const CartCheckoutFooter = memo(function CartCheckoutFooter({
         disabled={isLoading}
       >
         {isLoading ? <ActivityIndicator color={P.onAccent} size="small" /> : (
-          <Text style={[styles.checkoutText, { color: P.onAccent }]}>Book All • £{finalTotal.toFixed(2)}</Text>
+          <Text style={[styles.checkoutText, { color: P.onAccent }]}>{t('cart.bookAll', { amount: `£${finalTotal.toFixed(2)}` })}</Text>
         )}
       </TouchableOpacity>
 
       {showGuide ? (
         <View style={styles.multiBookingGuide}>
-          <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>Booking more than one service?</Text>
+          <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>{t('cart.guide.title')}</Text>
           <View style={styles.multiBookingGuideList}>
             {[
-              'Each service above gets its own appointment time',
-              'Mix services from different providers in one cart',
-              'Set a date and time for every service, then check out once',
+              t('cart.guide.ownTime'),
+              t('cart.guide.mixProviders'),
+              t('cart.guide.checkOutOnce'),
             ].map(tip => (
               <View key={tip} style={styles.multiBookingGuideRow}>
                 <Text style={[styles.multiBookingGuideTick, { color: P.accentText }]}>✓</Text>
@@ -1807,6 +1815,7 @@ const CartCheckoutFooter = memo(function CartCheckoutFooter({
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const groupSheetBottomInset = useSystemBottomInset();
   const { theme, isDarkMode, palette: P } = useTheme();
+  const { t, tp } = useTranslation();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   // A SECOND host, rendered inside the "Confirm Your Details" <Modal> rather
   // than beside it. The screen-level DialogHost above is a sibling of that
@@ -1835,9 +1844,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // then clear it so it doesn't reappear on the next unrelated render.
   useEffect(() => {
     if (!cartError) return;
-    showAlert('Cart Error', cartError);
+    showAlert(t('cart.errorTitle'), cartError);
     clearCartError();
-  }, [cartError, clearCartError, showAlert]);
+  }, [cartError, clearCartError, showAlert, t]);
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
   const { user, updateUser } = useAuth();
@@ -2021,8 +2030,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
       return (
         <Text style={[styles.summaryItemAddOns, { color: P.text }]} numberOfLines={2}>
-          + {list.length} add-on{list.length === 1 ? '' : 's'} (£{total.toFixed(2)}):{' '}
-          {list.map((a: any) => a.name).join(', ')}
+          {tp('cart.card.addOns', list.length, { total: `£${total.toFixed(2)}`, names: list.map((a: any) => a.name).join(', ') })}
         </Text>
       );
     };
@@ -2084,7 +2092,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
                 <View key={groupItem.id} style={styles.summaryGroupRow}>
                   <View style={styles.summaryItemRow}>
                     <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
-                      {groupItem.serviceName}{gb.isDepositOnly ? ' (Dep.)' : ''}
+                      {groupItem.serviceName}{gb.isDepositOnly ? t('cart.summary.depShort') : ''}
                     </Text>
                     <Text style={[styles.summaryItemPrice, { color: P.accentText }]}>
                       £{priceOf(groupItem).toFixed(2)}
@@ -2097,7 +2105,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
                   )}
                   {gb.emergencyRequest && (
                     <Text style={styles.summaryItemRequestNote}>
-                      Request · outside their hours, can be declined
+                      {t('cart.summary.requestNote')}
                     </Text>
                   )}
                   {renderAddOns(groupItem)}
@@ -2126,7 +2134,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         <View style={styles.summaryBookingItem}>
           <View style={styles.summaryItemRow}>
             <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
-              {item.serviceName}{b.isDepositOnly ? ' (Dep.)' : ''}
+              {item.serviceName}{b.isDepositOnly ? t('cart.summary.depShort') : ''}
             </Text>
             <Text style={[styles.summaryItemPrice, { color: P.accentText }]}>
               £{priceOf(item).toFixed(2)}
@@ -2142,7 +2150,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
               provider can still turn down. */}
           {b.emergencyRequest && (
             <Text style={styles.summaryItemRequestNote}>
-              Request · outside their hours, can be declined
+              {t('cart.summary.requestNote')}
             </Text>
           )}
         </View>
@@ -2591,17 +2599,17 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
   const handleApplyPromoToProvider = useCallback(async (providerKey: string, code: string): Promise<string | null> => {
     const providerItems = itemsByProvider[providerKey];
-    if (!providerItems || providerItems.length === 0) return 'Could not find that provider in your cart.';
+    if (!providerItems || providerItems.length === 0) return tr('cart.promo.providerMissing');
     const trimmed = code.trim();
-    if (!trimmed) return 'Enter a code first.';
+    if (!trimmed) return tr('cart.promo.enterCode');
     try {
       const providerDisplayName = providerItems[0]?.providerDisplayName ?? providerKey;
       const promo = await validatePromoCode(providerDisplayName, trimmed);
-      if (!promo) return 'This code isn’t valid for this provider.';
+      if (!promo) return tr('cart.promo.invalid');
       setAppliedPromos(prev => ({ ...prev, [providerKey]: promo }));
       return null;
     } catch {
-      return 'Could not check that code — please try again.';
+      return tr('cart.promo.checkFailed');
     }
   }, [itemsByProvider]);
 
@@ -2970,12 +2978,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
       setPickerItems(null);
       showConfirm(
-        'Split this out?',
-        `${item.serviceName} will become its own appointment and may no longer run back-to-back with your other service${siblings.length > 1 ? 's' : ''}.`,
+        tr('cart.split.title'),
+        tr(siblings.length === 1 ? 'cart.split.body.single' : 'cart.split.body.several', { service: item.serviceName }),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: tr('common.cancel'), style: 'cancel' },
           {
-            text: 'Continue',
+            text: tr('common.continue'),
             onPress: () => {
               updateCartItem(item.id, { bookingBatchId: undefined });
               // A group of one isn't a group (same rule MultiBookingSheet
@@ -3056,11 +3064,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const startMinutes = to24hMinutes(groupRescheduleChain[0]!.time);
     const endMinutes = to24hMinutes(groupRescheduleChain[groupRescheduleChain.length - 1]!.endTime);
     if (startMinutes === Number.MAX_SAFE_INTEGER || endMinutes <= startMinutes) return '';
-    const total = endMinutes - startMinutes;
-    const h = Math.floor(total / 60);
-    const m = total % 60;
-    return `${h > 0 ? `${h}h` : ''}${h > 0 && m > 0 ? ' ' : ''}${m > 0 ? `${m}m` : ''} total`;
-  }, [groupRescheduleChain]);
+    return t('cart.groupSheet.spanTotal', { duration: formatDurationMinutes(endMinutes - startMinutes) });
+  }, [groupRescheduleChain, t]);
 
   // Commit the picked chain — every service moves to the new day at its own
   // slot, and the group stays one group (same batch id reused, or minted if
@@ -3114,7 +3119,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         });
       } catch (error) {
         logger.error('Error saving booking edit:', error);
-        showAlert("Couldn't save your changes", 'Please try again.');
+        showAlert(tr('cart.edit.saveFailed'), tr('common.pleaseTryAgain'));
       }
     },
     [editingItem, updateCartItem, showAlert]
@@ -3131,10 +3136,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [navigation]);
 
   const handleClearCart = useCallback(() => {
-    showConfirm('Clear Cart', 'Remove all items from cart?', [
-      { text: 'Cancel', style: 'cancel' },
+    showConfirm(tr('cart.clear.title'), tr('cart.clear.body'), [
+      { text: tr('common.cancel'), style: 'cancel' },
       {
-        text: 'Clear',
+        text: tr('common.clear'),
         style: 'destructive',
         onPress: () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -3143,7 +3148,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
             setError(null);
           } catch (error) {
             logger.error('Error clearing cart:', error);
-            setError('Failed to clear cart');
+            setError(tr('cart.clear.failed'));
           }
         },
       },
@@ -3181,8 +3186,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // client retry.
     if (checkoutMetadataError) {
       showAlert(
-        'Could not verify checkout details',
-        'We couldn’t confirm this provider’s current price and address requirements. Please try again.',
+        tr('cart.checkout.verifyFailedTitle'),
+        tr('cart.checkout.verifyFailed'),
       );
       return;
     }
@@ -3217,9 +3222,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
             .filter(item => unbookableSet.has(item.providerDisplayName ?? item.providerName))
             .map(item => [item.id, CART_ISSUE.providerUnbookable] as const),
         ));
-        showAlert('Provider no longer available', 'One or more providers in your cart are no longer taking bookings — remove them to continue.');
+        showAlert(tr('cart.checkout.providerGoneTitle'), tr('cart.checkout.providerGone'));
       } else {
-        showAlert('Still confirming your cart', 'Still checking current pricing for a provider in your cart — try again in a few seconds.');
+        showAlert(tr('cart.checkout.stillConfirmingTitle'), tr('cart.checkout.stillConfirming'));
       }
       return;
     }
@@ -3229,7 +3234,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // finding, not a second one, so it reuses it rather than re-deriving it
     // with wording that could drift out of step.
     if (localItemIssues.size > 0) {
-      showAlert('Schedule Required', 'Some services in your cart need attention before checkout.');
+      showAlert(tr('cart.checkout.scheduleRequiredTitle'), tr('cart.checkout.scheduleRequired'));
       return;
     }
 
@@ -3282,7 +3287,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
             .filter(item => expiredSet.has(item.providerName))
             .map(item => [item.id, CART_ISSUE.promoExpired] as const),
         ));
-        showAlert('Promo code no longer valid', 'The price has been updated. Check your cart before paying.');
+        showAlert(tr('cart.checkout.promoExpiredTitle'), tr('cart.checkout.promoExpired'));
         return;
       }
     }
@@ -3309,7 +3314,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
             item.isDepositOnly ? CART_ISSUE.depositNoLongerOffered : CART_ISSUE.depositNowRequired,
           ] as const),
       ));
-      showAlert('Payment option changed', 'One or more providers changed their deposit policy — review the updated price before paying.');
+      showAlert(tr('cart.checkout.paymentOptionChangedTitle'), tr('cart.checkout.paymentOptionChanged'));
       return;
     }
 
@@ -3319,7 +3324,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const issues = await identifyCartConflicts(items, getServiceBooking);
     if (issues.flags.size > 0) {
       setItemIssues(issues.flags);
-      showAlert('Scheduling Conflict', issues.messages.join('\n'));
+      showAlert(tr('cart.checkout.conflictTitle'), issues.messages.join('\n'));
       return;
     }
 
@@ -3398,7 +3403,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // check) — everything else between here and the top is synchronous local
     // state. Name that instead of a generic "something went wrong," since
     // it's almost always what actually happened.
-    showAlert('Could not check availability', "We couldn't check your appointment times. Please check your connection and try again.");
+    showAlert(tr('cart.checkout.availabilityFailedTitle'), tr('cart.checkout.availabilityFailed'));
   } finally {
     setIsLoading(false);
   }
@@ -3411,19 +3416,19 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // in analytics, clientele, etc.), so an empty value here isn't just a
     // blank field, it's a silent "Client"/'—' fallback everywhere downstream.
     if (!reviewName.trim()) {
-      showReviewAlert('Name Required', 'Please enter your name to continue.');
+      showReviewAlert(tr('cart.review.nameRequiredTitle'), tr('cart.review.nameRequired'));
       setIsEditingDetails(true);
       return;
     }
     // Validate phone is provided
     if (!reviewPhone.trim()) {
-      showReviewAlert('Phone Required', 'Please enter your phone number to continue.');
+      showReviewAlert(tr('cart.review.phoneRequiredTitle'), tr('cart.review.phoneRequired'));
       setIsEditingDetails(true);
       return;
     }
     const digitsOnly = reviewPhone.replace(/[\s\-()+ ]/g, '');
     if (digitsOnly.length < 10) {
-      showReviewAlert('Check your phone number', 'Please enter a valid phone number.');
+      showReviewAlert(tr('cart.review.phoneInvalidTitle'), tr('cart.review.phoneInvalid'));
       setIsEditingDetails(true);
       return;
     }
@@ -3436,8 +3441,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const reviewMobileProviderNames = checkoutSnapshot.mobileProviderNames;
     if (reviewMobileProviderNames.length > 0 && !clientAddress.trim()) {
       showReviewAlert(
-        'Address Required',
-        `${formatNameList(reviewMobileProviderNames)} ${reviewMobileProviderNames.length === 1 ? 'is a mobile provider' : 'are mobile providers'} and will come to you. Tap "Add your address" to set it on your account first.`,
+        tr('cart.review.addressRequiredTitle'),
+        tr(reviewMobileProviderNames.length === 1 ? 'cart.review.addressRequired.single' : 'cart.review.addressRequired.several', {
+          names: formatNameList(reviewMobileProviderNames),
+          action: tr('cart.review.addAddress'),
+        }),
       );
       return;
     }
@@ -3712,7 +3720,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     (providerItems: CartItem[]) => {
       const slug = providerItems[0]?.providerSlug;
       if (!slug) {
-        showAlert('Something went wrong', "We couldn't open that provider's profile.");
+        showAlert(tr('common.somethingWentWrong'), tr('cart.providerProfileFailed'));
         return;
       }
       navigation.navigate('ProviderProfile', { providerId: slug, source: 'cart' });
@@ -3911,11 +3919,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     navigation.navigate('Bookings'); // NAVIGATES TO BOOKINGS SCREEN
                   } catch (error) {
                     logger.error('Bookings navigation error:', error);
-                    showAlert('Navigation Error', 'Unable to open bookings');
+                    showAlert(tr('common.error'), tr('cart.bookingsNavFailed'));
                   }
                 }}
               >
-                <Text style={[styles.bookingsText, { color: P.accentText }]}>View Bookings</Text>
+                <Text style={[styles.bookingsText, { color: P.accentText }]}>{t('cart.viewBookings')}</Text>
               </TouchableOpacity>
               {/* Clear Button */}
               {items.length > 0 && (
@@ -3926,7 +3934,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     handleClearCart();
                   }}
                 >
-                  <Text style={styles.clearText}>Clear</Text>
+                  <Text style={styles.clearText}>{t('common.clear')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -3969,9 +3977,9 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       {/* Title row with Edit button */}
                       <View style={styles.reviewTitleRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.reviewModalTitle, { color: P.text }]}>Confirm Your Details</Text>
+                          <Text style={[styles.reviewModalTitle, { color: P.text }]}>{t('cart.review.title')}</Text>
                           <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>
-                            This info will be shared with your provider
+                            {t('cart.review.subtitle')}
                           </Text>
                         </View>
                         {!isEditingDetails && (
@@ -3983,20 +3991,20 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                             }}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.reviewEditText, { color: P.accentText }]}>Edit</Text>
+                            <Text style={[styles.reviewEditText, { color: P.accentText }]}>{t('common.edit')}</Text>
                           </TouchableOpacity>
                         )}
                       </View>
 
                       {/* Name */}
                       <View style={styles.reviewFieldGroup}>
-                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>NAME</Text>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>{t('cart.review.name')}</Text>
                         {isEditingDetails ? (
                           <TextInput
                             style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
                             value={reviewName}
                             onChangeText={setReviewName}
-                            placeholder="Your name"
+                            placeholder={t('cart.review.namePlaceholder')}
                             placeholderTextColor={P.sub}
                           />
                         ) : (
@@ -4006,7 +4014,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
                       {/* Email */}
                       <View style={styles.reviewFieldGroup}>
-                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>EMAIL</Text>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>{t('cart.review.email')}</Text>
                         {isEditingDetails ? (
                           <TextInput
                             style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
@@ -4024,7 +4032,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
                       {/* Phone */}
                       <View style={styles.reviewFieldGroup}>
-                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>PHONE NUMBER</Text>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>{t('cart.review.phone')}</Text>
                         {isEditingDetails ? (
                           <TextInput
                             style={[styles.reviewInput, {
@@ -4042,7 +4050,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewPhone || '—'}</Text>
                         )}
                         {isEditingDetails && !reviewPhone.trim() && (
-                          <Text style={styles.reviewPhoneWarning}>Phone number is required to book</Text>
+                          <Text style={styles.reviewPhoneWarning}>{t('cart.review.phoneWarning')}</Text>
                         )}
                       </View>
 
@@ -4055,7 +4063,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           field a provider actually has to navigate to. */}
                       {checkoutSnapshot.mobileProviderNames.length > 0 && (
                         <View style={styles.reviewFieldGroup}>
-                          <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
+                          <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>{t('cart.review.address')}</Text>
                           <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
                             {formatNameList(checkoutSnapshot.mobileProviderNames)}{' '}
                             {checkoutSnapshot.mobileProviderNames.length === 1
@@ -4082,7 +4090,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               style={[styles.reviewAddressBtnText, { color: clientAddress.trim() ? P.text : '#FF3B30' }]}
                               numberOfLines={2}
                             >
-                              {clientAddress.trim() || 'Add your address'}
+                              {clientAddress.trim() || t('cart.review.addAddress')}
                             </Text>
                             <Ionicons name="chevron-forward" size={16} color={P.sub} />
                           </TouchableOpacity>
@@ -4106,7 +4114,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                             {saveAsDefault && <Text style={[styles.reviewCheckmark, { color: P.onAccent }]}>✓</Text>}
                           </View>
                           <Text style={[styles.reviewCheckboxLabel, { color: P.text }]}>
-                            Set as default for future bookings
+                            {t('cart.review.saveDefault')}
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -4137,7 +4145,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           }}
                           activeOpacity={0.8}
                         >
-                          <Text style={[styles.reviewConfirmText, { color: P.onAccent }]}>Continue</Text>
+                          <Text style={[styles.reviewConfirmText, { color: P.onAccent }]}>{t('common.continue')}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -4181,7 +4189,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.reviewCancelText, { color: P.text }]}>Back</Text>
+                    <Text style={[styles.reviewCancelText, { color: P.text }]}>{t('common.back')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.reviewConfirmBtn, { backgroundColor: (!agreedToPolicy || isReservingSlots) ? P.accentDim : P.accent }]}
@@ -4217,7 +4225,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           const intent = checkoutSnapshot.items.map(item => {
                             const booking = checkoutSnapshot.bookings[item.id];
                             if (!item.providerId || !booking?.selectedDate || !booking.selectedTime) {
-                              throw new Error('Every service needs a provider, date and time before payment.');
+                              throw new Error(tr('cart.checkout.incomplete'));
                             }
                             // Reads the FROZEN snapshot, like the claim path — a
                             // metadata refetch between "Confirm & Pay" and here
@@ -4298,8 +4306,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           ? err.message
                           : err instanceof Error && !isTechnical
                             ? err.message.replace(/^Error:\s*/, '')
-                            : "We couldn't reserve that time. Please try again.";
-                        const title = err instanceof BookingError ? 'Scheduling Conflict' : 'Booking Not Completed';
+                            : tr('cart.checkout.reserveFailed');
+                        const title = err instanceof BookingError ? tr('cart.checkout.conflictTitle') : tr('cart.checkout.notCompletedTitle');
                         // Close the summary sheet FIRST. CartScreen's
                         // DialogHost is a sibling of this <Modal>, not a
                         // child, so an alert raised while the sheet is
@@ -4339,7 +4347,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   >
                     {isReservingSlots
                       ? <ActivityIndicator color={P.onAccent} />
-                      : <Text style={[styles.reviewConfirmText, { color: agreedToPolicy ? P.onAccent : P.sub }]}>Confirm & Pay</Text>}
+                      : <Text style={[styles.reviewConfirmText, { color: agreedToPolicy ? P.onAccent : P.sub }]}>{t('cart.summary.confirmPay')}</Text>}
                   </TouchableOpacity>
               </>}
             >
@@ -4347,7 +4355,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
               {/* Customer info */}
               {confirmedCustomerInfo && (
                 <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
-                  <Text style={[styles.summarySectionTitle, { color: P.sub }]}>CUSTOMER</Text>
+                  <Text style={[styles.summarySectionTitle, { color: P.sub }]}>{t('cart.summary.customer')}</Text>
                   <Text style={[styles.summaryCustomerName, { color: P.text }]}>{confirmedCustomerInfo.name}</Text>
                   {!!confirmedCustomerInfo.email && (
                     <Text style={[styles.summaryCustomerDetail, { color: P.sub }]}>{confirmedCustomerInfo.email}</Text>
@@ -4371,7 +4379,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   stays its own badged block INSIDE whichever provider card
                   owns it. This grouping is simply "everything you're booking
                   with this provider", however far apart the dates are. */}
-              <Text style={[styles.summarySectionTitle, { color: P.sub, marginTop: 4 }]}>APPOINTMENTS</Text>
+              <Text style={[styles.summarySectionTitle, { color: P.sub, marginTop: 4 }]}>{t('cart.summary.appointments')}</Text>
               {checkoutProviderSections.map(section => (
                 <View
                   key={section.providerKey}
@@ -4415,15 +4423,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
               {/* Totals */}
               <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
                 <View style={styles.summaryTotalRow}>
-                  <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Subtotal</Text>
+                  <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>{t('cart.subtotal')}</Text>
                   <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{frozenCheckoutTotals.subtotal.toFixed(2)}</Text>
                 </View>
                 {frozenCheckoutTotals.fee > 0 && <View style={styles.summaryTotalRow}>
-                  <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Platform Fee</Text>
+                  <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>{t('cart.platformFee')}</Text>
                   <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{frozenCheckoutTotals.fee.toFixed(2)}</Text>
                 </View>}
                 <View style={[styles.summaryTotalRow, styles.summaryGrandTotalRow, { borderTopColor: P.sep }]}>
-                  <Text style={[styles.summaryGrandLabel, { color: P.text }]}>Total</Text>
+                  <Text style={[styles.summaryGrandLabel, { color: P.text }]}>{t('cart.total')}</Text>
                   <Text style={[styles.summaryGrandValue, { color: P.accentText }]}>£{frozenCheckoutTotals.total.toFixed(2)}</Text>
                 </View>
               </View>
@@ -4505,7 +4513,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 onPaymentPending={() => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);
-                  showAlert('Checking your payment', 'Your payment may have completed. Check your bookings before paying again. If the reservation expired, the payment will be refunded.');
+                  showAlert(t('cart.pay.checkingTitle'), t('cart.pay.checkingBody'));
                 }}
                 onPaymentComplete={() => {
                   clearCart(); // Clear cart immediately after payment simulation
@@ -4527,7 +4535,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     cancelCheckout(serverCheckoutBatchId).catch(error => logger.error('Could not release secure checkout:', error));
                     setServerCheckoutBatchId(null);
                   }
-                  showAlert('Booking Failed', message);
+                  showAlert(t('cart.pay.bookingFailedTitle'), message);
                 }}
               />
             );
@@ -4546,12 +4554,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       </View>
                     </View>
 
-                    <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>Success!</Text>
+                    <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>{t('cart.success.title')}</Text>
 
                     <Text style={[styles.liquidGlassSuccessMessage, { color: P.sub }]}>
-                      Payment of £{paymentTotal.toFixed(2)} has been processed successfully.
-                      Appointments have been booked and will show up in Bookings when confirmed by
-                      providers.
+                      {t('cart.success.body', { amount: `£${paymentTotal.toFixed(2)}` })}
                     </Text>
 
                     <View style={styles.successButtonsContainer}>
@@ -4568,7 +4574,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         }}
                         activeOpacity={0.85}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.onAccent }]}>View Bookings</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.onAccent }]}>{t('cart.viewBookings')}</Text>
                       </TouchableOpacity>
 
                       {/* Secondary — outlined ghost, quieter than the primary */}
@@ -4581,7 +4587,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         }}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accentText }]}>Continue Shopping</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accentText }]}>{t('cart.success.continueShopping')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -4615,7 +4621,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     title can name the group directly instead of asking a
                     generic "which one" question. */}
                 <Text style={[styles.pickerTitle, { color: theme.text }]}>
-                  Edit group booking
+                  {t('cart.picker.title')}
                 </Text>
                 <Text style={[styles.pickerSubtitle, { color: P.sub }]}>
                   {(pickerItems ?? [])[0]?.providerDisplayName
@@ -4637,17 +4643,17 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   <Ionicons name="link" size={16} color={P.accentText} />
                   <View style={styles.pickerRowInfo}>
                     <Text style={[styles.pickerRowName, { color: theme.text }]} numberOfLines={1}>
-                      Reschedule all {(pickerItems ?? []).length} to a new day
+                      {t('cart.picker.rescheduleAll', { count: (pickerItems ?? []).length })}
                     </Text>
                     <Text style={[styles.pickerRowMeta, { color: theme.secondaryText }]} numberOfLines={2}>
-                      Pick a date & time — they stay one group, back-to-back
+                      {t('cart.picker.rescheduleAllSub')}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={P.accentText} />
                 </TouchableOpacity>
 
                 <Text style={[styles.pickerSectionLabel, { color: P.sub }]}>
-                  Or edit one service — it leaves the group
+                  {t('cart.picker.editOne')}
                 </Text>
 
                 {(pickerItems ?? []).map((pItem) => {
@@ -4672,7 +4678,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         <Text style={[styles.pickerRowName, { color: theme.text }]} numberOfLines={1}>
                           {pItem.serviceName}
                           {isDuplicate ? ` #${pItem.serviceInstanceIndex ?? 1}` : ''}
-                          {b.isDepositOnly ? ' (Deposit)' : ''}
+                          {b.isDepositOnly ? t('cart.mockPay.depositSuffix') : ''}
                         </Text>
                         <Text
                           style={[
@@ -4683,11 +4689,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           numberOfLines={2}
                         >
                           {scheduled
-                            ? `${formatLongDateNoYear(b.selectedDate)} at ${formatTime12(b.selectedTime)}`
-                            : 'Unscheduled'}
+                            ? t('cart.dateAtTime', { date: formatLongDateNoYear(b.selectedDate), time: formatTime12(b.selectedTime) })
+                            : t('cart.group.unscheduled')}
                         </Text>
                         <Text style={[styles.pickerRowHint, { color: P.sub }]} numberOfLines={1}>
-                          Leaves the group
+                          {t('cart.picker.leavesGroup')}
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={P.accentText} />
@@ -4702,7 +4708,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.pickerCancelText, { color: P.sub }]}>Cancel</Text>
+                  <Text style={[styles.pickerCancelText, { color: P.sub }]}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
               </TouchableOpacity>
             </TouchableOpacity>
@@ -4723,7 +4729,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 <View style={styles.groupSheetHeader}>
                   <View style={styles.groupSheetHeaderText}>
                     <Text style={[styles.pickerTitle, { color: theme.text }]}>
-                      Reschedule {(groupRescheduleItems ?? []).length} services
+                      {tp('cart.groupSheet.title', (groupRescheduleItems ?? []).length)}
                     </Text>
                     <Text style={[styles.pickerSubtitle, { color: P.sub }]}>
                       {(groupRescheduleItems ?? [])[0]?.providerDisplayName
@@ -4749,7 +4755,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       day pills and time row already reflect the group's real
                       availability. No second time list. */}
                   <Text style={[styles.pickerSectionLabel, { color: P.sub }]}>
-                    Times shown fit all {(groupRescheduleItems ?? []).length} back-to-back
+                    {t('cart.groupSheet.timesFit', { count: (groupRescheduleItems ?? []).length })}
                   </Text>
                   <ModernBeautyCalendar
                     selectedDate={groupRescheduleDate}
@@ -4813,8 +4819,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 >
                   <Text style={[styles.groupSheetConfirmText, { color: groupRescheduleChain ? P.onAccent : P.sub }]}>
                     {groupRescheduleChain
-                      ? `Move all to ${formatLongDateNoYear(groupRescheduleDate)}`
-                      : 'Pick a date & time'}
+                      ? t('cart.groupSheet.moveAll', { date: formatLongDateNoYear(groupRescheduleDate) })
+                      : t('cart.groupSheet.pick')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -4893,8 +4899,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             ) : null}
             ListEmptyComponent={(
               <View style={styles.emptyCart}>
-                <Text style={dynamicStyles.emptyTitle}>Cart is Empty</Text>
-                <Text style={dynamicStyles.emptyText}>Add services to get started</Text>
+                <Text style={dynamicStyles.emptyTitle}>{t('cart.empty.title')}</Text>
+                <Text style={dynamicStyles.emptyText}>{t('cart.empty.body')}</Text>
                 <TouchableOpacity
                   style={[styles.browseButton, { backgroundColor: P.accent }]}
                   onPress={() => {
@@ -4902,7 +4908,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     handleContinueShopping();
                   }}
                 >
-                  <Text style={[styles.browseText, { color: P.onAccent }]}>Browse Services</Text>
+                  <Text style={[styles.browseText, { color: P.onAccent }]}>{t('cart.empty.browse')}</Text>
                 </TouchableOpacity>
               </View>
             )}

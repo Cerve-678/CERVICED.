@@ -7,6 +7,7 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
 import type { EmergencyReason } from '../services/AvailabilityService';
 import { calculatePlatformFee } from '../features/cart/platformFee';
+import { tr } from '../i18n';
 
 /**
  * Resolve a cart item to a real provider UUID: carried providerId → slug lookup
@@ -490,7 +491,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
     // surface the failure through state instead. CartScreen watches
     // `cartError` and shows it via its own showAlert/DialogHost, then calls
     // clearCartError() to reset this.
-    return { ...state, lastError: 'Something went wrong updating your cart. Please try again.' };
+    return { ...state, lastError: tr('cart.context.updateFailed') };
   }
 };
 
@@ -533,10 +534,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }
             }
             if (removedNames.length > 0) {
-              const names = [...new Set(removedNames)].join(', ');
+              const uniqueNames = [...new Set(removedNames)];
               Alert.alert(
-                'Some items removed',
-                `${names} ${removedNames.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removedNames.length > 1 ? 'them' : 'it'} from your cart.`
+                tr('cart.context.itemsRemovedTitle'),
+                tr(
+                  uniqueNames.length === 1 ? 'cart.context.itemsRemoved.single' : 'cart.context.itemsRemoved.several',
+                  { names: uniqueNames.join(', ') },
+                ),
               );
             }
           }
@@ -595,8 +599,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         dispatch({ type: CartActionType.ADD_ITEM, payload: { ...item, providerId: resolvedId } });
       } else {
         Alert.alert(
-          'Provider unavailable',
-          `${item.providerDisplayName ?? item.providerName} isn't available to book right now. Please try again from their profile a little later.`
+          tr('cart.context.providerUnavailableTitle'),
+          tr('cart.context.providerUnavailable', { provider: item.providerDisplayName ?? item.providerName }),
         );
       }
     })();

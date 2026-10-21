@@ -1,4 +1,6 @@
 import { parseDurationToMinutes } from '../../services/AvailabilityService';
+import { tr, type TranslationKey } from '../../i18n';
+import { formatDurationMinutes } from '../../utils/dateUtils';
 
 /** Sort key for 12- or 24-hour booking times. Invalid values deliberately sort last. */
 export function to24hMinutes(time: string | undefined): number {
@@ -34,9 +36,8 @@ export function formatTimeSpan(startMinutes: number, endMinutes: number): string
   };
 
   const total = Math.max(0, endMinutes - startMinutes);
-  const hours = Math.floor(total / 60);
-  const minutes = total % 60;
-  const lengthLabel = hours > 0 ? `${hours}h${minutes ? ` ${minutes}m` : ''}` : `${minutes}m`;
+  // "1h 30m", in the app language (dateUtils owns the format).
+  const lengthLabel = formatDurationMinutes(total) || tr('common.duration.minutes', { count: 0 });
   return `${toLabel(startMinutes)} – ${toLabel(endMinutes)} · ${lengthLabel}`;
 }
 
@@ -70,36 +71,38 @@ export interface CartIssueEntry {
  *  already said. Keeping them here rather than inlining them is what lets the
  *  two passes stay identical: change one of these and both move together.
  *  CartScreen maps the service's phrasings onto these via toCartIssue(). */
-export const CART_ISSUE = {
-  noSchedule: 'Pick a date and time for this service',
-  overlap: 'This time slot conflicts with another service in your cart',
-  // The card says only THAT it clashes; the dialog names the service and
-  // provider it clashes with. A card is a label, not a sentence — and the
-  // appointment being clashed with usually isn't even in the cart to look at.
-  clientClash: 'Clashes with one of your upcoming bookings',
-  // Same split as clientClash above: the card says only THAT it clashes with
-  // another cart item; the dialog names which provider. That message names a
-  // provider whose section may be collapsed on screen, so it belongs in the
-  // dialog, not printed whole on the card.
-  crossProviderClash: 'Clashes with another service in your cart',
-  slotTaken: 'This time slot is no longer available.',
-  // The clock moved, nothing about the provider changed. Kept distinct from
-  // every "provider" reason below on purpose: a cart item sat on overnight
-  // used to be reported as the provider not taking bookings or not working
-  // that day, which is a claim about them and usually false — they may well
-  // still have the same slot free next week. Say what actually happened and
-  // what fixes it.
-  timePassed: 'This time has already passed — pick a new one',
-  outsideHours: "This time is outside the provider's working hours.",
-  dayUnavailable: 'Provider is not available on this date.',
-  providerUnbookable: "This provider isn't taking bookings right now",
-  serviceUnavailable: 'This service is no longer available from this provider. Please remove it to continue.',
-  promoExpired: 'The promo code on this booking has expired — remove it or pick another',
-  depositNoLongerOffered: 'This provider now requires payment in full — deposit is no longer available',
-  depositNowRequired: 'This provider now requires a deposit — pay in full is no longer available',
-  takenWhilePaying: 'This time was taken while you were paying — pick a new time',
-  bookingFailed: "This service couldn't be booked — try again",
-} as const;
+const CART_ISSUE_KEYS = {
+  noSchedule: 'cart.issue.noSchedule',
+  overlap: 'cart.issue.overlap',
+  clientClash: 'cart.issue.clientClash',
+  crossProviderClash: 'cart.issue.crossProviderClash',
+  slotTaken: 'cart.issue.slotTaken',
+  timePassed: 'cart.issue.timePassed',
+  outsideHours: 'cart.issue.outsideHours',
+  dayUnavailable: 'cart.issue.dayUnavailable',
+  providerUnbookable: 'cart.issue.providerUnbookable',
+  serviceUnavailable: 'cart.issue.serviceUnavailable',
+  promoExpired: 'cart.issue.promoExpired',
+  depositNoLongerOffered: 'cart.issue.depositNoLongerOffered',
+  depositNowRequired: 'cart.issue.depositNowRequired',
+  takenWhilePaying: 'cart.issue.takenWhilePaying',
+  bookingFailed: 'cart.issue.bookingFailed',
+} as const satisfies Record<string, TranslationKey>;
+
+export type CartIssueCode = keyof typeof CART_ISSUE_KEYS;
+
+// Getters, so each read is in the current language. The English wording is
+// in src/i18n/catalogs/en/cart.ts (cart.issue.*); toCartIssue() still matches
+// the service's English messages and maps them onto these.
+export const CART_ISSUE: Readonly<Record<CartIssueCode, string>> = Object.defineProperties(
+  {} as Record<CartIssueCode, string>,
+  Object.fromEntries(
+    (Object.keys(CART_ISSUE_KEYS) as CartIssueCode[]).map(code => [
+      code,
+      { get: () => tr(CART_ISSUE_KEYS[code]), enumerable: true },
+    ]),
+  ),
+);
 
 /** Everything wrong with a cart that can be found WITHOUT a network call, as
  *  itemId → reason. Runs on every render, so a cart that cannot possibly check
