@@ -2,7 +2,7 @@ import { formatShortDayDate } from '../../utils/dateUtils';
 
 export type ProviderBookingTip = {
   amountPence: number;
-  /** What the provider gets after the card fee; null until the fee is known. */
+  /** What the provider is paid: the whole tip. */
   payoutPence: number | null;
   payoutStatus: 'pending' | 'held' | 'transferred' | 'failed' | 'cancelled' | 'reversed';
   releaseAfter: string | null;
@@ -10,19 +10,20 @@ export type ProviderBookingTip = {
 
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
 
-/** The line under the provider's "Tip" row: what reaches them and when. */
+/** The line under the provider's "Tip" row: when it reaches them. The whole tip
+ *  is theirs: CERVICED covers the card fee (user, 2026-10-21). */
 export function providerTipNote(tip: ProviderBookingTip, now: Date = new Date()): string {
-  const net = tip.payoutPence == null ? null : `${pounds(tip.payoutPence)} to you after the card fee`;
   switch (tip.payoutStatus) {
     case 'pending':
-      return 'Processing. Your amount shows once the card fee is known.';
+      return 'Processing';
     case 'held': {
       const release = tip.releaseAfter ? new Date(tip.releaseAfter) : null;
-      const when = release && release > now ? `paid out ${formatShortDayDate(release)}` : 'paying out soon';
-      return net ? `${net}, ${when}` : when;
+      return release && release > now
+        ? `All yours, paid out ${formatShortDayDate(release)}`
+        : 'All yours, paying out soon';
     }
     case 'transferred':
-      return net ? `${net}, paid out` : 'Paid out';
+      return 'All yours, paid out';
     case 'reversed':
       return 'Reversed by the client\'s bank';
     case 'failed':

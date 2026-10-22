@@ -161,16 +161,16 @@ test('lists late and no-show fees with the provider\'s share and where the money
   expect(ui.getByText('Released to Stripe')).toBeTruthy();
 });
 
-test('lists tips with the provider\'s share after the card fee', async () => {
+test('lists tips the provider received, all theirs', async () => {
   (getProviderTipEarnings as jest.Mock).mockResolvedValue([{
-    id: 'tip', bookingId: 'booking', amountPence: 1000, payoutPence: 945, payoutStatus: 'transferred',
+    id: 'tip', bookingId: 'booking', amountPence: 1000, payoutPence: 1000, payoutStatus: 'transferred',
     releaseAfter: null, paidAt: '2026-10-21T10:00:00Z', serviceName: 'Hair appointment', customerName: 'Test client',
   }]);
   const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
   await waitFor(() => expect(ui.getByText('Tip · Hair appointment')).toBeTruthy());
-  expect(ui.getByText('£9.45')).toBeTruthy();
+  expect(ui.getByText('£10.00')).toBeTruthy();
   expect(ui.getByText('Paid out')).toBeTruthy();
 });
 

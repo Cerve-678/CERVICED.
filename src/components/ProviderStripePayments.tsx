@@ -308,13 +308,13 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </>}
       {tipEarnings.length > 0 && <>
         <Text style={[styles.sectionTitle, { color: C.text }]}>Tips</Text>
-        <Text style={[styles.sectionNote, { color: C.sub }]}>What clients tipped you after their appointment. Your share after the card fee. Tips can't be refunded.</Text>
+        <Text style={[styles.sectionNote, { color: C.sub }]}>What clients tipped you after their appointment. It's all yours: CERVICED covers the card fee. Tips can't be refunded.</Text>
         {tipEarnings.map(tip => <View key={tip.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
           <View style={styles.bookingHead}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: C.text }]}>Tip{tip.serviceName ? ` · ${tip.serviceName}` : ''}</Text>
               <Text style={[styles.description, { color: C.text }]}>{tip.customerName || 'Client'}</Text>
-              {!!tip.paidAt && <Text style={[styles.caption, { color: C.sub }]}>Tipped {date(new Date(tip.paidAt).getTime())} · {money(tip.amountPence, 'gbp')}</Text>}
+              {!!tip.paidAt && <Text style={[styles.caption, { color: C.sub }]}>Tipped {date(new Date(tip.paidAt).getTime())}</Text>}
             </View>
             <Text style={[styles.amountSmall, { color: C.text }]}>{tip.payoutPence != null ? money(tip.payoutPence, 'gbp') : money(tip.amountPence, 'gbp')}</Text>
           </View>
