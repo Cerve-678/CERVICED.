@@ -23,7 +23,17 @@ Neither was a git problem. Both sessions wrote correct SQL.
 
 ```
 OWNER:  (none)
+SINCE:  2026-10-24 (released once 20261024100000_listing_claims_checked_by_instagram
+        was applied)
+NEXT:   cerviced-c2's tip_received_notification, then cerviced-74's
+        20261021200000/201000/202000. All must renumber above 20261024100000.
 ```
+
+### Applied 2026-10-24 (listing claims checked through Instagram)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261024100000 | `listing_claims_checked_by_instagram` | **APPLIED 2026-10-24** by Codex (Supabase MCP execute_sql) on the user's OK, version recorded. Re-verified live by cerviced-ae: the `claim_token*`/`claim_attempts` columns and `claim_provider_profile()` are gone; `provider_claim_requests` has RLS on with one policy (`provider_claim_requests_own_read`, SELECT, authenticated, `user_id = auth.uid()`); anon has no table or column privilege; authenticated can SELECT `bio_code` but not `review_note` and cannot write; `request_provider_claim` is EXECUTE for authenticated only (md5 `6eeb6e4758f83fa5eb36d4aa718b659b`) and `review_provider_claim` for postgres/service_role only (md5 `6554a980bf87c9b7547097cc9bf35566`), both identical to the file. Under `SET LOCAL ROLE anon` the table and both functions give 42501. Authored as `20261019235500` (frontier `20261019233000`), renumbered above the live frontier `20261021112728`. Does not touch `notifications_type_check`. Still to do: delete the old `request-claim-verification` Edge Function in the dashboard. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 

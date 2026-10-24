@@ -55,7 +55,7 @@ import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
-import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
+import { loadListingClaim, isClaimGuardError, displayHandle, type ProviderClaim } from '../../services/providerClaimService';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
@@ -2988,10 +2988,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // palette token the sheet above is built from.
   const chromeText = chromeTheme.text;
 
-  // Set when a pending "claim your business" code (from ClaimProviderScreen)
-  // fails to confirm here — expired, already used, or wrong by the time the
-  // signup wizard finished. Surfaced as a banner below so the provider isn't
-  // left with a silently-blank, unclaimed profile and no explanation.
+  // The account's claim on an imported listing (from ClaimProviderScreen):
+  // while open, the banner below carries the code to put in the listing's
+  // Instagram bio; once decided, it says how it went for a week. claimError
+  // is set when the claim couldn't be opened at all.
+  const [claim, setClaim] = useState<ProviderClaim | null>(null);
+  const [claimDismissed, setClaimDismissed] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
 
   // Render an existing provider's last saved profile as soon as AsyncStorage
@@ -3017,149 +3019,144 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       setIsLoadingProvider(false);
     });
 
-    // If this account just came through the "claim your business" flow
-    // (ClaimProviderScreen), attach it to the unclaimed row *before* loading
-    // provider data below — once claimed, that same loadProviderFromSupabase
-    // call picks up every scraped field (services included) for free, no
-    // separate prefill path needed. Best-effort: an expired/already-used
-    // code just means the provider sets up their profile from scratch.
-    getPendingClaim()
-      .then(pending => {
-        if (!pending) return;
-        return claimProviderProfile(pending.providerId, pending.code)
-          .catch(err => {
-            logger.warn('claimProviderProfile failed:', err?.message ?? err);
-            setClaimError(
-              "We couldn't confirm your business claim — the code may have expired or been entered wrong. " +
-              'You can retry from Settings, or just continue setting up your profile below.'
-            );
-          })
-          .finally(() => clearPendingClaim());
-      })
-      .catch(() => {})
-      .finally(() => {
-        loadProviderFromSupabase(userId)
-          .then(data => {
-            if (cancelled) return;
-            if (data) {
-              setProviderData(data);
-              setIsEditMode(true);
-              // Being in edit mode means this profile was published, which
-              // required agreeing. Seed the real state rather than faking a
-              // tick in the render — a box that draws checked but holds false
-              // does nothing on the first tap and looks broken.
-              setTermsAccepted(true);
-              const firstCat = Object.keys(data.categories)[0];
-              if (firstCat) setSelectedCategory(firstCat);
-              // A contact field that exists elsewhere should already be in the
-              // box, not blank with a note telling you where to go and type it.
-              // The signup prefill below only runs on the very first save, so
-              // an existing provider who never set an enquiry address saw an
-              // empty field even though their business email was on file.
-              if (!data.email) {
-                getUserBusinessInfo(userId)
-                  .then(info => {
-                    const businessEmail = info?.business_email;
-                    if (!businessEmail) return;
-                    setProviderData(prev => (prev.email ? prev : { ...prev, email: businessEmail }));
-                  })
-                  .catch(() => {});
-              }
-              return;
-            }
-            // No providers row yet — this is the first save. Prefill from
-            // what the 5-step signup already collected (users table) instead
-            // of starting blank, so the provider isn't retyping their own
-            // business name/contact details from scratch.
-            return getUserSignupPrefillInfo(userId)
-              .then(prefill => {
-                if (!prefill) return;
-                const validBusinessTypes: ProviderRegistrationData['businessType'][] = BUSINESS_TYPE_OPTS.map(o => o.value);
-                const prefilledBusinessType = validBusinessTypes.find(v => v === prefill.business_type);
-                const validTeamSizes: ProviderRegistrationData['teamSize'][] = ['solo', 'small_team', 'large_team'];
-                const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
-                const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
-                const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
-                // "Services you offer" on SignUpStep4 is already a
-                // multi-select, and its answer already lands in
-                // users.service_interests — it just never reached the
-                // provider profile, so every provider was made to narrow it
-                // back down to one type here. Carry it through instead.
-                // Filtered to the real vocabulary: service_interests is also
-                // written by the CLIENT signup path, where it holds interests
-                // rather than a business's own service types.
-                const prefilledServiceTypes = (prefill.service_interests ?? []).filter(
-                  (interest): interest is string =>
-                    typeof interest === 'string' && SERVICE_CATEGORIES.includes(interest),
-                );
-                setSignupSpecialties(
-                  (prefill.specialties ?? []).filter(
-                    (specialty): specialty is string => typeof specialty === 'string' && specialty.trim() !== '',
-                  ),
-                );
-                setProviderData(prev => ({
-                  ...prev,
-                  ...(prefilledServiceTypes.length
-                    ? {
-                        serviceCategories: prefilledServiceTypes,
-                        // The headline is the first of the set — the same
-                        // relationship the DB trigger enforces server-side.
-                        providerService: prefilledServiceTypes[0] as string,
-                      }
-                    : {}),
-                  providerName: prev.providerName || prefill.business_name || prefill.name || '',
-                  phone: prev.phone || prefill.business_phone || prefill.phone || '',
-                  email: prev.email || prefill.business_email || '',
-                  instagram: prev.instagram || prefill.instagram || '',
-                  website: prev.website || prefill.website || '',
-                  // Asked on SignUpStep1 ("I use my own booking link").
-                  externalBookingUrl: prev.externalBookingUrl || prefill.external_booking_url || '',
-                  tiktok: prev.tiktok || prefill.tiktok || '',
-                  businessType: prev.businessType || prefilledBusinessType || '',
-                  teamSize: prev.teamSize || prefilledTeamSize || '',
-                  // Optional at signup, staged on users.years_experience. Carried
-                  // through so the first save writes it to providers; edited
-                  // afterwards in Business Info. String form because the field
-                  // (and the hero preview) are string-typed.
-                  yearsExperience: prev.yearsExperience || (prefill.years_experience != null ? String(prefill.years_experience) : ''),
-                  location: prev.location || prefill.location_text || '',
-                  accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
-                  languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
-                  priceRange: prev.priceRange || prefilledPriceRange || '',
-                  // Round-trip only — this screen neither shows nor owns contact
-                  // channels (Communications does). It's carried purely because
-                  // saveProviderToSupabase writes preferred_contact_methods on
-                  // every save, so dropping it here would reset the provider's
-                  // Communications toggles to ['in_app'] whenever they edit
-                  // anything in InfoReg.
-                  preferredContactMethods: (prev.preferredContactMethods.length && prev.preferredContactMethods[0] !== 'in_app')
-                    ? prev.preferredContactMethods
-                    : (prefill.preferred_contact_methods?.length ? prefill.preferred_contact_methods : prev.preferredContactMethods),
-                  serviceLocations: prev.serviceLocations.length ? prev.serviceLocations : (prefill.service_locations ?? []),
-                  preferredPaymentMethods: prev.preferredPaymentMethods.length ? prev.preferredPaymentMethods : (prefill.preferred_payment_methods ?? []),
-                }));
+    // "Claim your business" (ClaimProviderScreen): open the claim now the
+    // account exists, or show the one already open. Runs alongside the
+    // profile load rather than before it: the listing is only linked once
+    // someone at CERVICED has seen the code in its Instagram bio, so there
+    // is nothing to wait for here.
+    loadListingClaim(userId)
+      .then(found => { if (!cancelled) setClaim(found); })
+      .catch(err => {
+        logger.warn('Opening the listing claim failed:', err?.message ?? err);
+        if (cancelled) return;
+        setClaimError(
+          isClaimGuardError(err)
+            ? err.message
+            : "We couldn't open your claim on that listing just now. We'll try again next time you open this screen.",
+        );
+      });
+
+    loadProviderFromSupabase(userId)
+      .then(data => {
+        if (cancelled) return;
+        if (data) {
+          setProviderData(data);
+          setIsEditMode(true);
+          // Being in edit mode means this profile was published, which
+          // required agreeing. Seed the real state rather than faking a
+          // tick in the render — a box that draws checked but holds false
+          // does nothing on the first tap and looks broken.
+          setTermsAccepted(true);
+          const firstCat = Object.keys(data.categories)[0];
+          if (firstCat) setSelectedCategory(firstCat);
+          // A contact field that exists elsewhere should already be in the
+          // box, not blank with a note telling you where to go and type it.
+          // The signup prefill below only runs on the very first save, so
+          // an existing provider who never set an enquiry address saw an
+          // empty field even though their business email was on file.
+          if (!data.email) {
+            getUserBusinessInfo(userId)
+              .then(info => {
+                const businessEmail = info?.business_email;
+                if (!businessEmail) return;
+                setProviderData(prev => (prev.email ? prev : { ...prev, email: businessEmail }));
               })
               .catch(() => {});
+          }
+          return;
+        }
+        // No providers row yet — this is the first save. Prefill from
+        // what the 5-step signup already collected (users table) instead
+        // of starting blank, so the provider isn't retyping their own
+        // business name/contact details from scratch.
+        return getUserSignupPrefillInfo(userId)
+          .then(prefill => {
+            if (!prefill) return;
+            const validBusinessTypes: ProviderRegistrationData['businessType'][] = BUSINESS_TYPE_OPTS.map(o => o.value);
+            const prefilledBusinessType = validBusinessTypes.find(v => v === prefill.business_type);
+            const validTeamSizes: ProviderRegistrationData['teamSize'][] = ['solo', 'small_team', 'large_team'];
+            const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
+            const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
+            const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
+            // "Services you offer" on SignUpStep4 is already a
+            // multi-select, and its answer already lands in
+            // users.service_interests — it just never reached the
+            // provider profile, so every provider was made to narrow it
+            // back down to one type here. Carry it through instead.
+            // Filtered to the real vocabulary: service_interests is also
+            // written by the CLIENT signup path, where it holds interests
+            // rather than a business's own service types.
+            const prefilledServiceTypes = (prefill.service_interests ?? []).filter(
+              (interest): interest is string =>
+                typeof interest === 'string' && SERVICE_CATEGORIES.includes(interest),
+            );
+            setSignupSpecialties(
+              (prefill.specialties ?? []).filter(
+                (specialty): specialty is string => typeof specialty === 'string' && specialty.trim() !== '',
+              ),
+            );
+            setProviderData(prev => ({
+              ...prev,
+              ...(prefilledServiceTypes.length
+                ? {
+                    serviceCategories: prefilledServiceTypes,
+                    // The headline is the first of the set — the same
+                    // relationship the DB trigger enforces server-side.
+                    providerService: prefilledServiceTypes[0] as string,
+                  }
+                : {}),
+              providerName: prev.providerName || prefill.business_name || prefill.name || '',
+              phone: prev.phone || prefill.business_phone || prefill.phone || '',
+              email: prev.email || prefill.business_email || '',
+              instagram: prev.instagram || prefill.instagram || '',
+              website: prev.website || prefill.website || '',
+              // Asked on SignUpStep1 ("I use my own booking link").
+              externalBookingUrl: prev.externalBookingUrl || prefill.external_booking_url || '',
+              tiktok: prev.tiktok || prefill.tiktok || '',
+              businessType: prev.businessType || prefilledBusinessType || '',
+              teamSize: prev.teamSize || prefilledTeamSize || '',
+              // Optional at signup, staged on users.years_experience. Carried
+              // through so the first save writes it to providers; edited
+              // afterwards in Business Info. String form because the field
+              // (and the hero preview) are string-typed.
+              yearsExperience: prev.yearsExperience || (prefill.years_experience != null ? String(prefill.years_experience) : ''),
+              location: prev.location || prefill.location_text || '',
+              accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
+              languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
+              priceRange: prev.priceRange || prefilledPriceRange || '',
+              // Round-trip only — this screen neither shows nor owns contact
+              // channels (Communications does). It's carried purely because
+              // saveProviderToSupabase writes preferred_contact_methods on
+              // every save, so dropping it here would reset the provider's
+              // Communications toggles to ['in_app'] whenever they edit
+              // anything in InfoReg.
+              preferredContactMethods: (prev.preferredContactMethods.length && prev.preferredContactMethods[0] !== 'in_app')
+                ? prev.preferredContactMethods
+                : (prefill.preferred_contact_methods?.length ? prefill.preferred_contact_methods : prev.preferredContactMethods),
+              serviceLocations: prev.serviceLocations.length ? prev.serviceLocations : (prefill.service_locations ?? []),
+              preferredPaymentMethods: prev.preferredPaymentMethods.length ? prev.preferredPaymentMethods : (prefill.preferred_payment_methods ?? []),
+            }));
           })
-          // A genuine load failure (loadProviderFromSupabase now throws
-          // rather than resolving null when it can't tell "no provider yet"
-          // from "couldn't check") must NOT fall through to the .then()
-          // above's "no providers row yet" prefill path — treating an
-          // unknown state as "confirmed new" is exactly what let an
-          // existing provider's locked Business Name/Service Type render
-          // as editable after a transient network blip. Show a retry state
-          // instead of silently guessing.
-          .catch(async (error) => {
-            // A cache read can finish a little after a failed network call.
-            // Wait for it before deciding the editor has no usable profile.
-            if (await cachedProfile) return;
-            if (cancelled) return;
-            logger.error('InfoReg: failed to load existing provider data', error);
-            setLoadError(true);
-          })
-          .finally(() => {
-            if (!cancelled) setIsLoadingProvider(false);
-          });
+          .catch(() => {});
+      })
+      // A genuine load failure (loadProviderFromSupabase now throws
+      // rather than resolving null when it can't tell "no provider yet"
+      // from "couldn't check") must NOT fall through to the .then()
+      // above's "no providers row yet" prefill path — treating an
+      // unknown state as "confirmed new" is exactly what let an
+      // existing provider's locked Business Name/Service Type render
+      // as editable after a transient network blip. Show a retry state
+      // instead of silently guessing.
+      .catch(async (error) => {
+        // A cache read can finish a little after a failed network call.
+        // Wait for it before deciding the editor has no usable profile.
+        if (await cachedProfile) return;
+        if (cancelled) return;
+        logger.error('InfoReg: failed to load existing provider data', error);
+        setLoadError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingProvider(false);
       });
     // Load saved policies from Supabase, the only source of truth — the
     // device-local cache this used to fall back to was removed, because a
@@ -4324,9 +4321,43 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           </View>
 
           {claimError && (
-            <View style={styles.claimErrorBanner}>
-              <Text style={styles.claimErrorText}>{claimError}</Text>
+            <View style={styles.claimBanner}>
+              <Text style={[styles.claimBannerText, { flex: 1 }]}>{claimError}</Text>
               <TouchableOpacity onPress={() => { tapSelect(); setClaimError(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color="#7A4B00" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {claim && !claimDismissed && (
+            <View style={styles.claimBanner}>
+              <View style={{ flex: 1 }}>
+                {claim.status === 'pending' ? (
+                  <>
+                    <Text style={styles.claimBannerTitle}>Confirm @{displayHandle(claim.instagramHandle)} is yours</Text>
+                    <Text style={styles.claimBannerText}>Add this code to your Instagram bio:</Text>
+                    <Text style={styles.claimBannerCode} selectable>{claim.bioCode}</Text>
+                    <Text style={styles.claimBannerText}>
+                      We'll check it and link the listing to your account, usually within a day. You can take the code out once it's confirmed.
+                    </Text>
+                  </>
+                ) : claim.status === 'approved' ? (
+                  <>
+                    <Text style={styles.claimBannerTitle}>@{displayHandle(claim.instagramHandle)} is confirmed as yours</Text>
+                    <Text style={styles.claimBannerText}>
+                      We saw your code, so the listing is now part of your account. You can take {claim.bioCode} out of your bio.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.claimBannerTitle}>We couldn't confirm @{displayHandle(claim.instagramHandle)}</Text>
+                    <Text style={styles.claimBannerText}>
+                      So the listing hasn't been linked to your account. If it is your business, email support@cerviced.co and we'll look again.
+                    </Text>
+                  </>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => { tapSelect(); setClaimDismissed(true); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={16} color="#7A4B00" />
               </TouchableOpacity>
             </View>
@@ -5990,9 +6021,9 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 20,
     color: P.text,
   },
-  claimErrorBanner: {
+  claimBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginHorizontal: 20,
     marginBottom: 12,
@@ -6003,14 +6034,27 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderWidth: 1,
     borderColor: 'rgba(255, 193, 7, 0.4)',
   },
-  claimErrorText: {
-    flex: 1,
+  claimBannerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    color: '#7A4B00',
+    marginBottom: 4,
+    marginRight: 8,
+  },
+  claimBannerText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
     color: '#7A4B00',
     marginRight: 8,
+  },
+  claimBannerCode: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+    letterSpacing: 1,
+    color: '#7A4B00',
+    marginVertical: 6,
   },
   scrollContent: {
     padding: 20,
