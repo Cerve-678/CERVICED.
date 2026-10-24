@@ -15,20 +15,20 @@
 --
 -- 1. provider_payouts.attempt_count / last_failed_at / failure_cause.
 -- 2. notifications_type_check gains 'payout_failed'. Restated from the list in
---    20261021195500_tip_received_notification (live 50 + 'tip_received',
---    checked against the live constraint 2026-10-21), so this MUST be applied
---    AFTER 20261021195500: applied before it, 195500 would re-narrow the CHECK
---    and drop 'payout_failed'. Not in send-push-notification's provider map,
+--    20261024110000_tip_received_notification (live 50 + 'tip_received',
+--    checked against the live constraint 2026-10-21; 20261024100000 didn't
+--    change it), so this MUST be applied AFTER 20261024110000: applied before
+--    it, that file would re-narrow the CHECK and drop 'payout_failed'. Not in send-push-notification's provider map,
 --    so it always pushes (the provider has to act on it).
 -- 3. money_needing_attention(): the one read of those three lists, for the
 --    daily email now and the admin screen next. Service role only.
 -- 4. process_money_daily_summary() + cron 'money-daily-summary', same
 --    vault-key + net.http_post shape as process_due_payouts().
 --
--- Frontier at authoring: 20261021112728. Written while cerviced-c2 holds the
--- migration lock for 20261021195500 (unapplied); 20261021114000 and
--- 20261021200000 are also written and unapplied. Apply order:
--- 195500 → 200000 → this.
+-- Renumbered 2026-10-24 from 20261021201000, which fell below the frontier
+-- when 20261024100000 (listing claims) was applied. Apply order:
+-- 20261024110000 (cerviced-c2, tip_received) → 20261024120000 (refund hold
+-- notice) → this.
 
 -- ── 1. retry bookkeeping ────────────────────────────────────────────────────
 ALTER TABLE public.provider_payouts
@@ -163,5 +163,5 @@ SELECT cron.unschedule('money-daily-summary')
 SELECT cron.schedule('money-daily-summary', '0 8 * * *', 'SELECT public.process_money_daily_summary();');
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261021201000', 'payout_retries_and_alerts')
+VALUES ('20261024121000', 'payout_retries_and_alerts')
 ON CONFLICT (version) DO NOTHING;

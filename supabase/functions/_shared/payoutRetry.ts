@@ -60,7 +60,7 @@ export function describeTransferFailure(cause: TransferFailureCause): string {
 
 // ── The daily summary ───────────────────────────────────────────────────────
 // The shape money_needing_attention() returns (see
-// 20261021201000_payout_retries_and_alerts.sql).
+// 20261024121000_payout_retries_and_alerts.sql).
 export interface MoneyAttention {
   failed: Array<{
     payout_id: string;
