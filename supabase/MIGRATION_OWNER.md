@@ -22,15 +22,16 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-99 [58ffe3], branch feat/claim-instagram-review
-SINCE:  2026-10-24 (taken over from cerviced-d0, which has exited; cerviced-c2
-        released its tip_received_notification lock for this)
-WHAT:   listing_claims_checked_by_instagram (authored as 20261019235500, to be
-        renumbered above the live frontier before applying): retires the
+OWNER:  (none)
+SINCE:  2026-10-24 (taken over from cerviced-99, whose chat has finished; that
+        lock came from cerviced-d0, which has exited; cerviced-c2 released its
+        tip_received_notification lock for this)
+WHAT:   listing_claims_checked_by_instagram, renumbered 20261019235500 ->
+        20261024100000 (live frontier 20261021112728): retires the
         email-code listing claim (drops claim_provider_profile and the
         claim_token columns on providers) and adds provider_claim_requests
         + request_provider_claim() + review_provider_claim().
-STATUS: written, NOT applied. Does not touch notifications_type_check.
+STATUS: **APPLIED 2026-10-24** by Codex (Supabase MCP execute_sql) on the user's OK; version 20261024100000 recorded. Verified live: retired claim columns and claim_provider_profile() are gone; provider_claim_requests has RLS plus its own-read policy; request_provider_claim() is authenticated-only; review_provider_claim() is not executable by anon or authenticated; anon cannot SELECT a bio code. Does not touch notifications_type_check.
         Queued after it: cerviced-c2's tip_received_notification, then
         cerviced-74's 20261021200000/201000/202000; both renumber above this.
 ```

@@ -6,7 +6,7 @@
 -- is_claimed = FALSE), created by a batch import pipeline.
 --
 -- SUPERSEDED IN PART 2026-10-19 by
--- supabase/migrations/20261019235500_listing_claims_checked_by_instagram.sql.
+-- supabase/migrations/20261024100000_listing_claims_checked_by_instagram.sql.
 -- The email-code claim this file used to define (the claim_token columns
 -- and claim_provider_profile()) was retired: providers_unclaimed_read made
 -- the code readable by anon. Those pieces are removed here so re-running

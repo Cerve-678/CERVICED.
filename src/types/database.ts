@@ -448,7 +448,7 @@ export interface DbProvider {
   // is_claimed=false rows are imported placeholders with no owner yet —
   // see searchUnclaimedProviders/getUnclaimedProviderDetail in
   // databaseService.ts, the claim flow in ClaimProviderScreen.tsx, and
-  // provider_claim_requests (20261019235500) for how a claim is approved.
+  // provider_claim_requests (20261024100000) for how a claim is approved.
   is_claimed: boolean;
   source: "self_signup" | "scraped" | null;
   created_at: string;

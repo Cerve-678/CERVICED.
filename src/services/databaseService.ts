@@ -9973,7 +9973,7 @@ export async function sendConversationQuickReply(params: {
 //   Search/preview for the pre-signup "claim your business" flow, and the
 //   claim request a signed-in account makes afterwards — see
 //   providerClaimService.ts, src/screens/auth/ClaimProviderScreen.tsx and
-//   supabase/migrations/20261019235500_listing_claims_checked_by_instagram.sql.
+//   supabase/migrations/20261024100000_listing_claims_checked_by_instagram.sql.
 //   Claims are proven by a code in the listing's Instagram bio and approved
 //   by hand; nothing in the app can approve one.
 // ─────────────────────────────────────────────────────────
