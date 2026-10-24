@@ -66,7 +66,7 @@ CREATE OR REPLACE FUNCTION public.money_needing_attention()
  LANGUAGE sql
  STABLE
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   SELECT jsonb_build_object(
     'failed_count', (SELECT count(*) FROM provider_payouts
@@ -122,7 +122,7 @@ CREATE OR REPLACE FUNCTION public.process_money_daily_summary()
  RETURNS boolean
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_key text;
