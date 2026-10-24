@@ -11,9 +11,10 @@
 -- variable, one SELECT and the sentence appended to the message. Nothing else
 -- changes.
 --
--- Frontier at authoring: 20261021112728 (20261021114000 tip reviews and
--- 20261021195500 tip_received, both written by other sessions, unapplied).
--- Numbered above both. Doesn't touch notifications_type_check.
+-- Renumbered 2026-10-24 from 20261021200000, which fell below the frontier
+-- when 20261024100000 (listing claims) was applied. Apply AFTER cerviced-c2's
+-- 20261024110000_tip_received_notification. Doesn't touch
+-- notifications_type_check.
 
 CREATE OR REPLACE FUNCTION public.request_booking_refund(p_booking_id uuid, p_reason text, p_message text)
  RETURNS uuid
@@ -103,5 +104,5 @@ END;
 $function$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261021200000', 'refund_request_hold_notice')
+VALUES ('20261024120000', 'refund_request_hold_notice')
 ON CONFLICT (version) DO NOTHING;
