@@ -15,8 +15,6 @@ interface ServiceImageCarouselProps {
   images: ServiceImageDraft[];
   onAddImage: () => void;
   onRemoveImage: (index: number) => void;
-  /** Flip one photo between filling its box (cropping) and fitting whole. */
-  onToggleFit: (index: number) => void;
   /** Commit a drag: move the photo at `from` to sit at `to`. The first photo
    *  is the one that leads the service everywhere it's shown, so this is the
    *  only way to choose a cover shot without deleting and re-adding. */
@@ -42,7 +40,6 @@ export function ServiceImageCarousel({
   images,
   onAddImage,
   onRemoveImage,
-  onToggleFit,
   onReorder,
   size = 80,
   styles,
@@ -114,9 +111,8 @@ export function ServiceImageCarousel({
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
-          // The remove and Fill/Fit buttons sit deeper in the tree, so they
-          // claim the touch before this ever sees it — arming here can't
-          // swallow their taps.
+          // The remove button sits deeper in the tree, so it claims the touch
+          // before this ever sees it — arming here can't swallow its taps.
           beginHold(index);
         },
         // Handing the gesture to the ScrollView is what keeps the strip
@@ -236,9 +232,8 @@ export function ServiceImageCarousel({
               <Image
                 source={{ uri: image.uri }}
                 style={[styles.carouselImage, { width: size, height: size }]}
-                // The thumbnail previews the provider's own choice, so the
-                // toggle shows its effect here rather than only on the client
-                // side where they can't see it.
+                // New photos are cropped on pick and fill; older ones saved
+                // as "show whole" still preview the way clients see them.
                 contentFit={image.fit}
               />
               <TouchableOpacity
@@ -256,20 +251,6 @@ export function ServiceImageCarousel({
                 <View style={styles.coverBadge}>
                   <Text style={styles.coverBadgeText}>Cover</Text>
                 </View>
-              )}
-              {dragIndex == null && (
-                <TouchableOpacity
-                  style={styles.fitToggle}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    onToggleFit(index);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.fitToggleText}>
-                    {image.fit === 'cover' ? 'Fill' : 'Fit'}
-                  </Text>
-                </TouchableOpacity>
               )}
             </Animated.View>
           );
@@ -290,8 +271,7 @@ export function ServiceImageCarousel({
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Hold a photo to drag it — the first one leads your service. Tap
-          Fill/Fit to choose whether it crops.
+          Hold a photo to drag it — the first one leads your service.
         </Text>
       )}
       {images.length > 0 && (

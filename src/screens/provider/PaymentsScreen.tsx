@@ -421,6 +421,23 @@ export default function PaymentsScreen({ navigation, route }: any) {
           </View>
 
           {!loadFailed && <SaveButton saving={saving} onPress={handleSave} />}
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Your policies. Cancellation, rescheduling, late and no-show fees and refunds"
+            style={[st.rowCard, { backgroundColor: C.card, borderColor: C.border, marginTop: 16 }]}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Policies'); }}
+            activeOpacity={0.7}
+          >
+            <View style={[st.iconChip, { backgroundColor: C.surface }]}>
+              <Ionicons name="reader-outline" size={18} color={C.accentText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[st.rowTitle, { color: C.text }]}>Your policies</Text>
+              <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>Cancellation, rescheduling, late and no-show fees</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.accentText} />
+          </TouchableOpacity>
           </>}
           </ProviderStripePayments>
         </ScrollView>

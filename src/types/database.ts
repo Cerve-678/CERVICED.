@@ -115,7 +115,9 @@ export type NotificationType =
   | "maintenance_due"
   /** Beauty Maintenance: the completed booking's provider wrote aftercare
    *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
-  | "aftercare_available";
+  | "aftercare_available"
+  /** Provider: a daily count of the people who saved them. Never names. */
+  | "provider_saved";
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -136,6 +138,30 @@ export type TransactionType =
   | "remaining"
   | "tip"
   | "refund";
+
+// ── Logo framing ─────────────────────────────────────────
+
+/** How the logo sits in one Home card: `zoom` multiplies the size at which
+ *  the logo just fills the card (1 = fills it, as with no framing; below 1
+ *  shows more of it, down to the whole logo); `x`/`y` move the logo's centre
+ *  from the card's centre, as a fraction of the card's width/height. */
+export interface LogoCardFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+/** The provider's per-card logo framing (`providers.logo_framing`).
+ *  `imageRatio` is the logo image's width ÷ height, which the frames are
+ *  relative to. A missing card means "fill and centre", the default. */
+export interface LogoFraming {
+  imageRatio: number;
+  small?: LogoCardFrame;
+  large?: LogoCardFrame;
+}
+
+/** The two Home card shapes a logo is framed for. */
+export type LogoCardSlot = 'small' | 'large';
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -218,6 +244,9 @@ export interface DbProvider {
   about_text: string | null;
   slots_text: string | null;
   logo_url: string | null;
+  /** Per-card framing for the small and large Home cards. Null = every card
+   *  fills and centres the logo. */
+  logo_framing: LogoFraming | null;
   gradient: string[] | null;
   accent_color: string | null;
   background_image_url: string | null;
@@ -955,6 +984,7 @@ export type PublicProviderSummary = Pick<
   | 'display_name'
   | 'service_category'
   | 'logo_url'
+  | 'logo_framing'
   | 'location_text'
   | 'service_locations'
   | 'latitude'

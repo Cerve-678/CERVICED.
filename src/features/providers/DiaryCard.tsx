@@ -4,9 +4,10 @@
 // is sent to CERVICED's servers — see deviceCalendarService. Free for now;
 // planned to sit behind a subscription once the product owner switches it on.
 //
-// Always the whole week, never behind a tap (owner's call, 2026-10-19): a day
-// strip counting each day's appointments, then every day listed — free and
-// closed days included, so a gap is visible at a glance.
+// Always the whole week, never behind a tap (owner's call, 2026-10-19), one
+// line per day so it stays short: the first two appointments as chips and a
+// "+N" for the rest, with free and closed days included so a gap is visible at
+// a glance. Design B: https://claude.ai/artifact/MJfLyQ2BLudDpneHpqbVMx
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,9 +24,10 @@ import {
   type DeviceCalendar,
   type DiaryEvent,
 } from '../../services/deviceCalendarService';
-import { DAY_NAMES_ABBREV, DAY_NAMES_FULL, MONTH_NAMES_ABBREV, formatDurationMinutes, formatTime12Safe, relativeDayLabel } from '../../utils/dateUtils';
+import { DAY_NAMES_ABBREV, DAY_NAMES_FULL, MONTH_NAMES_ABBREV, formatDurationMinutes } from '../../utils/dateUtils';
 import type { DbProviderAvailability } from '../../types/database';
 import { DASHBOARD_WEEK_DAYS, buildDashboardWeek, diaryEventMinutes, type DashboardWeekDay } from './diaryDays';
+import { compactTime } from './linkOnlyDashboard';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
 
@@ -37,8 +39,12 @@ export interface DiaryPalette {
   border: string;
   accent: string;
   onAccent: string;
+  accentDim: string;
   bg: string;
 }
+
+/** Appointments shown as chips on a day's line; the rest become "+N". */
+const CHIPS_PER_DAY = 2;
 
 type Phase = 'loading' | 'disconnected' | 'denied' | 'connected' | 'failed';
 
@@ -121,23 +127,6 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
   const week = useMemo(() => buildDashboardWeek(events, hours, new Date()), [events, hours]);
   const connected = phase === 'connected';
 
-  const renderEvent = (event: (typeof events)[number]) => {
-    const minutes = diaryEventMinutes(event);
-    const detail = [minutes ? formatDurationMinutes(minutes) : null, event.location].filter(Boolean).join(' · ');
-    return (
-      <View key={`${event.calendarId}-${event.id}-${event.start.getTime()}`} style={styles.eventRow}>
-        <Text style={styles.eventTime}>{event.allDay ? 'All day' : formatTime12Safe(event.start) ?? ''}</Text>
-        <View style={styles.eventBlock}>
-          <View style={[styles.eventBar, { backgroundColor: event.calendarColor }]} />
-          <View style={styles.eventText}>
-            <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
-            {!!detail && <Text style={styles.eventWhen} numberOfLines={1}>{detail}</Text>}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   return (
     <View style={styles.card}>
       {connected ? (
@@ -146,14 +135,19 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
             <Text style={styles.title}>Your week</Text>
             <Text style={styles.headerSub}>{weekRangeLabel(week)} · from your phone calendar</Text>
           </View>
+          {/* A bordered pill with an icon, not bare text, so it reads as a
+              button at a glance (owner's call, 2026-10-19). */}
           <TouchableOpacity
+            style={styles.calendarsButton}
             onPress={openChooser}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Choose calendars"
           >
+            <Ionicons name="calendar-outline" size={14} color={P.accent} />
             <Text style={styles.link}>Calendars</Text>
+            <Ionicons name="chevron-down" size={12} color={P.accent} />
           </TouchableOpacity>
         </View>
       ) : (
@@ -198,55 +192,51 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
       )}
 
       {connected && (
-        <>
-          <View style={styles.strip}>
-            {week.map((day, index) => {
-              const isToday = index === 0;
-              return (
-                <View
-                  key={day.ymd}
-                  style={[styles.stripDay, isToday && styles.stripToday]}
-                  accessibilityLabel={`${DAY_NAMES_FULL[day.date.getDay()]} ${day.date.getDate()}: ${daySummary(day) || 'free'}`}
-                >
-                  <Text style={[styles.stripName, isToday && styles.onAccent]}>{DAY_NAMES_ABBREV[day.date.getDay()]}</Text>
-                  <Text style={[styles.stripNum, isToday && styles.onAccent, day.closed && !isToday && styles.closedNum]}>
-                    {day.date.getDate()}
-                  </Text>
-                  <View style={styles.stripDots}>
-                    {day.events.slice(0, 3).map(event => (
-                      <View
-                        key={`${event.calendarId}-${event.id}-${event.start.getTime()}`}
-                        style={[styles.stripDot, { backgroundColor: isToday ? P.onAccent : P.accent }]}
-                      />
-                    ))}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          {week.map(day => {
-            const summary = daySummary(day);
-            const label = relativeDayLabel(day.date) ?? `${DAY_NAMES_FULL[day.date.getDay()]} ${day.date.getDate()}`;
+        <View>
+          {week.map((day, index) => {
+            const isToday = index === 0;
+            const more = day.events.length - CHIPS_PER_DAY;
             return (
-              <View key={day.ymd} style={styles.list}>
-                <View style={styles.dayRow}>
-                  <Text style={styles.dayLabel}>{label}</Text>
-                  {!!summary && <Text style={styles.daySummary}>{summary}</Text>}
+              <View
+                key={day.ymd}
+                style={[styles.dayLine, isToday ? styles.todayLine : index > 1 ? styles.lineDivider : null]}
+                accessible
+                accessibilityLabel={`${DAY_NAMES_FULL[day.date.getDay()]} ${day.date.getDate()}: ${daySummary(day) || 'free all day'}`}
+              >
+                <View style={styles.dayCol}>
+                  <Text style={[styles.dayName, isToday && styles.todayName]}>
+                    {isToday ? 'TODAY' : DAY_NAMES_ABBREV[day.date.getDay()]?.toUpperCase()}
+                  </Text>
+                  <Text style={[styles.dayNum, day.closed && day.events.length === 0 && styles.closedNum]}>{day.date.getDate()}</Text>
                 </View>
-                {day.events.map(renderEvent)}
-                {day.events.length === 0 && !day.closed && (
-                  <View style={styles.eventRow}>
-                    <View style={styles.eventTimeSpacer} />
-                    <View style={styles.freeBlock}>
+                <View style={styles.chips}>
+                  {day.events.slice(0, CHIPS_PER_DAY).map(event => (
+                    <View
+                      key={`${event.calendarId}-${event.id}-${event.start.getTime()}`}
+                      style={[styles.chip, { backgroundColor: isToday ? P.card : P.surface }]}
+                    >
+                      <Text style={styles.chipText} numberOfLines={1}>
+                        {event.allDay ? 'All day' : compactTime(event.start) ?? ''} {event.title}
+                      </Text>
+                    </View>
+                  ))}
+                  {more > 0 && (
+                    <View style={[styles.chip, styles.moreChip]}>
+                      <Text style={[styles.chipText, styles.onAccent]}>+{more}</Text>
+                    </View>
+                  )}
+                  {day.events.length === 0 && (day.closed ? (
+                    <Text style={styles.closedText}>Closed</Text>
+                  ) : (
+                    <View style={styles.freeChip}>
                       <Text style={styles.freeText}>Free all day</Text>
                     </View>
-                  </View>
-                )}
+                  ))}
+                </View>
               </View>
             );
           })}
-        </>
+        </View>
       )}
 
       <Modal visible={chooserOpen} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setChooserOpen(false)}>
@@ -298,33 +288,30 @@ const createStyles = (P: DiaryPalette) =>
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     title: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },
     headerSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub, marginTop: 1 },
-    dayRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
-    dayLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: P.sub, textTransform: 'uppercase' },
-    daySummary: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', color: P.sub },
-    strip: { flexDirection: 'row', gap: 4 },
-    stripDay: { flex: 1, alignItems: 'center', borderRadius: 14, paddingTop: 7, paddingBottom: 8, backgroundColor: P.surface },
-    stripToday: { backgroundColor: P.accent },
-    stripName: { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: P.sub },
-    stripNum: { fontFamily: 'BakbakOne-Regular', fontSize: 17, lineHeight: 22, color: P.text },
-    closedNum: { opacity: 0.45 },
+    dayLine: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 46, paddingHorizontal: 8, paddingVertical: 6 },
+    todayLine: { borderRadius: 12, backgroundColor: P.accentDim },
+    lineDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border },
+    dayCol: { width: 42 },
+    dayName: { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, fontWeight: '700', letterSpacing: 0.6, color: P.sub },
+    todayName: { color: P.accent },
+    dayNum: { fontFamily: 'BakbakOne-Regular', fontSize: 16, lineHeight: 19, color: P.text },
+    closedNum: { color: P.sub },
+    chips: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, overflow: 'hidden' },
+    chip: { flexShrink: 1, maxWidth: 132, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 10 },
+    chipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.text },
+    moreChip: { flexShrink: 0, backgroundColor: P.accent },
     onAccent: { color: P.onAccent },
-    stripDots: { flexDirection: 'row', gap: 2, height: 5, marginTop: 3 },
-    stripDot: { width: 5, height: 5, borderRadius: 3 },
-    eventTimeSpacer: { width: 64 },
-    freeBlock: { flex: 1, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: P.border, paddingVertical: 10, paddingHorizontal: 12 },
-    freeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', color: P.sub },
+    freeChip: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', borderColor: P.border },
+    freeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.sub },
+    closedText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.sub },
     free: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.sub },
     link: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.accent },
+    calendarsButton: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 17, borderWidth: 1.5, borderColor: P.accent, backgroundColor: P.surface },
     body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, color: P.sub },
     spacer: { marginVertical: 8 },
     button: { height: 44, borderRadius: 22, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.6, color: P.onAccent },
     disabled: { opacity: 0.45 },
-    list: { gap: 10 },
-    eventRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
-    eventTime: { width: 64, paddingTop: 10, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.text },
-    eventBlock: { flex: 1, flexDirection: 'row', gap: 10, backgroundColor: P.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
-    eventBar: { width: 3, borderRadius: 2 },
     dot: { width: 10, height: 10, borderRadius: 5 },
     eventText: { flex: 1 },
     eventTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.text },

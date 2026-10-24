@@ -33,10 +33,26 @@ describe('provider screen performance contracts', () => {
     // One focus effect keyed on the user, not on any piece of view state.
     expect(source).toContain('}, [user?.id])');
 
-    // The provider row is read ONCE and then passed around. Re-resolving it
-    // per consumer is what made this screen read the same row several times:
-    // an id lookup, a reviews lookup, a catalogue lookup, a go-live lookup.
-    expect(source).toContain('getMyProviderProfile()');
+    // The provider row is read ONCE, then shared with the registration
+    // reconstruction and every downstream consumer. Re-resolving it per
+    // consumer is what made this screen read the same row several times.
+    expect(source.match(/getMyProviderProfile\(\)/g)).toHaveLength(1);
+    expect(source).toContain('loadProviderFromSupabase(user.id, profile)');
+
+    // The top of the page paints from that row alone, not after the
+    // image-heavy services read the registration record also makes.
+    expect(source).toContain('setProviderData(providerRowToRegistrationData(profile))');
+    expect(source.indexOf('setProviderData(providerRowToRegistrationData(profile))')).toBeLessThan(
+      source.indexOf('loadProviderFromSupabase(user.id, profile)'),
+    );
+
+    // Below-the-fold reads wait for the first wave (or a cap), so they don't
+    // compete with what's on screen when the page opens.
+    expect(source).toContain('Promise.allSettled(firstWave).then(startLowerSections)');
+    expect(source).toContain('setTimeout(startLowerSections, LOWER_SECTIONS_MAX_WAIT_MS)');
+    const lowerSections = source.slice(source.indexOf('const startLowerSections = () =>'));
+    expect(lowerSections).toContain('getMyServiceCatalogue(profile.id)');
+    expect(lowerSections).toContain('AvailabilityService.getAvailabilitySummary(profile.id');
     expect(source).not.toContain('getProviderIdForUserId');
     expect(source).toContain('getMyServiceCatalogue(profile.id)');
     expect(source).toContain('getProviderReviews(profile.id, { limit: 20 })');

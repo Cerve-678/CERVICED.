@@ -65,6 +65,24 @@ export const en = {
   'helpCentre.faq.payment.a':
     'All payment data is encrypted end-to-end. We never store full card numbers — payments are processed via PCI-DSS compliant providers.',
 
+  // Provider hat. One set for every pro; each answer says what changes for a
+  // pro who takes bookings through their own link.
+  'helpCentre.providerFaq.live.q': 'How do I go live?',
+  'helpCentre.providerFaq.live.a':
+    "Your Home screen shows what's left to do. Once every step is done, clients can find you in Search. If you use your own booking link, the steps are your logo, your About, your opening hours and at least one portfolio photo.",
+  'helpCentre.providerFaq.book.q': 'How do clients book with me?',
+  'helpCentre.providerFaq.book.a':
+    "Clients pick a service and a time on your profile and check out in the app. New bookings show on your Home screen and in your notifications. If you don't accept bookings automatically, accept or decline each request there. If you use your own booking link, the Book button on your profile opens your booking site instead. Clients book there, and CERVICED doesn't see or handle those bookings.",
+  'helpCentre.providerFaq.saves.q': 'What happens when someone saves me?',
+  'helpCentre.providerFaq.saves.a':
+    "Once a day you get a notification saying how many people saved you, never who. You can turn it off in your notification settings. Your analytics show your saves over time.",
+  'helpCentre.providerFaq.messages.q': 'How do messages work?',
+  'helpCentre.providerFaq.messages.a':
+    "Clients can message you from your profile. You get a notification for new messages, and a reminder if a message is still waiting for a reply after a couple of hours.",
+  'helpCentre.providerFaq.becca.q': 'How can Becca help my business?',
+  'helpCentre.providerFaq.becca.a':
+    "Ask Becca about your messages, your hours or your notifications, and she'll answer or take you to the right screen. With CERVICED bookings she can also tell you about your day, your week, your clients and your reviews.",
+
   'helpCentre.action.contact': 'Contact Support',
   'helpCentre.action.report': 'Report a Problem',
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
@@ -169,6 +187,7 @@ export const en = {
   'providerAccount.linkOnly.hours.sub': 'Shown on your About tab',
   'providerAccount.linkOnly.policies.title': 'Policies',
   'providerAccount.linkOnly.policies.sub': 'Optional — shown on your profile if added',
+  'providerAccount.linkOnly.notifications.sub': 'Messages and saves',
 
   'providerAccount.businessProfile.title': 'Business Profile',
   'providerAccount.businessProfile.sub': 'Profile, details & communications',

@@ -229,6 +229,17 @@ what the app actually processed.
   `RescheduleScreen` with that booking already loaded, not a bare screen.
 - **Same brain, two hats** — one capability registry, `hat` field gates it.
   Provider Becca can never reach a client capability.
+- **Link-only pros get a narrower provider hat** (2026-10-20). A provider
+  with `booking_mode = 'external'` takes bookings on their own site, so only
+  capabilities marked `fitsLinkOnly` run for them: `pv.inbox`,
+  `pv.notifications`, `pv.hours`, `pv.reach`, `pv.availability`, `pv.help`.
+  `pv.timeoff` is left out because their Opening Hours screen has no blocked
+  dates. Understanding still sees the whole hat, so the matcher, or a model
+  reading `toToolSchema`, recognises "what's on today?" as a bookings
+  question. The engine then answers "That isn't part of your setup" through
+  `fitsSetup()` and never runs it. Every chip they're offered (starters,
+  follow-ups, fallback alternatives, and a final filter in `message_`) leads
+  to a fitting capability. See `src/tests/beccaLinkOnly.test.ts`.
 
 ---
 

@@ -1354,6 +1354,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const providerId = route.params?.providerId ?? "";
+  // A resolved `null` is meaningful (this viewer owns no provider); an
+  // unresolved or failed lookup stays `undefined` so the hook retains its
+  // authenticated fallback check.
+  const { myProviderId, myProviderIdStatus } = useAuth();
+  const viewerOwnershipHint =
+    myProviderIdStatus === "resolved" ? myProviderId : undefined;
   const {
     provider,
     providerDbId,
@@ -1377,11 +1383,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isNotificationsEnabled,
     setIsNotificationsEnabled,
     loadAllReviews,
-  } = useProviderProfileData(providerId);
+  } = useProviderProfileData(providerId, viewerOwnershipHint);
   // AuthContext normally knows ownership before this screen mounts, allowing
   // Book to paint with the service card. The slower per-profile result stays
   // authoritative and can withdraw it if session state is stale.
-  const { myProviderId, myProviderIdStatus } = useAuth();
   const canBookProvider = shouldShowBookingCta({
     providerDbId,
     myProviderId,
@@ -5304,6 +5309,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       const rows = buildPolicyDisplayRows(
                         provider.bookingPolicies,
                         provider.cancellationNoticeHours,
+                        { linkOnly: isLinkOnly },
                       );
                       return (
                         <View style={{ paddingTop: 8 }}>
@@ -5353,6 +5359,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               </View>
                             </View>
                           ))}
+                          {/* Link-only: the booking happens on their own
+                              site, so CERVICED applies none of this. */}
+                          {isLinkOnly && rows.length > 0 && (
+                            <Text style={[styles.policyHandledNote, { color: OP.sub }]}>
+                              These policies are handled on their booking site.
+                            </Text>
+                          )}
                         </View>
                       );
                     })()
@@ -6390,6 +6403,11 @@ const styles = StyleSheet.create({
   },
   policyRowText: {
     flex: 1,
+  },
+  policyHandledNote: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    marginTop: 10,
   },
   policyLabelRow: {
     flexDirection: "row",

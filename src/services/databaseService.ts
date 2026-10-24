@@ -14,7 +14,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
-import { supabase } from "../lib/supabase";
+import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
@@ -63,6 +63,7 @@ import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
+import { overridesFromDate } from "../utils/dateUtils";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -138,7 +139,12 @@ export function subscribeToAuthStateChanges(
 }
 
 export async function signOutCurrentSession(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  // 'local' ends only this device's session. The default ('global') also
+  // kills the account's sessions on every other phone, which keep a token
+  // that still passes RLS until it expires — so the app looks signed in
+  // there, but anything that checks the session server-side (payments)
+  // fails with a 401 "session expired".
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw error;
   invalidateOwnProviderIds();
 }
@@ -156,6 +162,15 @@ export async function clearUserStorageFolder(
   if (error) throw error;
 }
 
+/**
+ * Forget every remembered read, so the next load of each screen goes to the
+ * server. For explicit refreshes (pull-to-refresh): the person asked for the
+ * latest, so a 30-second-old answer isn't good enough.
+ */
+export function forgetCachedReads(): void {
+  clearCachedReads();
+}
+
 export function subscribeToUserBookingChanges(
   userId: string,
   onChange: () => void,
@@ -170,7 +185,10 @@ export function subscribeToUserBookingChanges(
         table: "bookings",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -184,11 +202,14 @@ export function subscribeToRescheduleRequestChanges(
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "booking_reschedule_requests" },
-      (payload) => onChange(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        onChange(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -219,7 +240,10 @@ export function subscribeToNotificationInserts(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      payload => onInsert(payload.new as NotificationInsertRow),
+      payload => {
+        clearCachedReads();
+        onInsert(payload.new as NotificationInsertRow);
+      },
     )
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
@@ -544,7 +568,7 @@ async function ownProviderIdExclusion(): Promise<string> {
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, service_categories, logo_url, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
+  "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -1426,6 +1450,12 @@ export interface ProviderProfileViewerContext {
  */
 export async function getProviderProfileViewerContext(
   providerId: string,
+  /**
+   * AuthContext resolves this once per session. When it has a settled answer,
+   * reuse it instead of issuing another providers lookup for every profile a
+   * client opens. `undefined` deliberately means unknown, not "owns none".
+   */
+  knownOwnedProviderId?: string | null,
 ): Promise<ProviderProfileViewerContext | null> {
   const {
     data: { user },
@@ -1436,12 +1466,17 @@ export async function getProviderProfileViewerContext(
 
   const [userResult, ownerResult, followResult] = await Promise.all([
     supabase.from("users").select("name").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("providers")
-      .select("id")
-      .eq("id", providerId)
-      .eq("user_id", user.id)
-      .maybeSingle(),
+    knownOwnedProviderId === undefined
+      ? supabase
+          .from("providers")
+          .select("id")
+          .eq("id", providerId)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({
+          data: knownOwnedProviderId === providerId ? { id: providerId } : null,
+          error: null,
+        }),
     supabase
       .from("provider_follows")
       .select("notify_enabled")
@@ -1491,6 +1526,82 @@ export async function getMyProviderProfile(): Promise<DbProvider | null> {
   if (error) throw error;
   if (!user) return null;
   return getProviderProfileForUserId(user.id);
+}
+
+/**
+ * Provider Home's first-paint data. The profile and every schedule collection
+ * belong to the same provider row, so embed them in one PostgREST response
+ * instead of starting five independent mobile requests during app launch.
+ */
+export async function getMyProviderHomeBundle(): Promise<{
+  profile: DbProvider;
+  availability: DbProviderAvailability[];
+  blockedDates: DbProviderBlockedDate[];
+  availabilityWindows: DbProviderAvailabilityWindow[];
+  availabilityOverrides: DbProviderAvailabilityOverride[];
+} | null> {
+  const {
+    data: { user },
+    error: authError,
+  } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return null;
+
+  // No has_gone_live / is_active filter: the provider reading their own
+  // record, the same exception as getProviderProfileForUserId.
+  const { data, error } = await supabase
+    .from("providers")
+    .select(`
+      *,
+      provider_availability (*),
+      provider_blocked_dates (*),
+      provider_availability_windows (*),
+      provider_availability_overrides (*)
+    `)
+    .eq("user_id", user.id)
+    // Same bounds the standalone loaders apply: overrides only from a
+    // fortnight back, and at most 500 blocked dates.
+    .gte("provider_availability_overrides.availability_date", overridesFromDate())
+    .order("blocked_date", { referencedTable: "provider_blocked_dates" })
+    .limit(500, { referencedTable: "provider_blocked_dates" })
+    // Same identity rule as getProviderProfileForUserId: active profile
+    // first, then the oldest.
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as DbProvider & {
+    provider_availability: DbProviderAvailability[] | null;
+    provider_blocked_dates: DbProviderBlockedDate[] | null;
+    provider_availability_windows: DbProviderAvailabilityWindow[] | null;
+    provider_availability_overrides: DbProviderAvailabilityOverride[] | null;
+  };
+  const {
+    provider_availability,
+    provider_blocked_dates,
+    provider_availability_windows,
+    provider_availability_overrides,
+    ...profile
+  } = row;
+
+  return {
+    profile,
+    availability: [...(provider_availability ?? [])].sort((a, b) => a.day_of_week - b.day_of_week),
+    blockedDates: [...(provider_blocked_dates ?? [])].sort(
+      (a, b) => a.blocked_date.localeCompare(b.blocked_date),
+    ),
+    availabilityWindows: [...(provider_availability_windows ?? [])].sort(
+      (a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time),
+    ),
+    availabilityOverrides: [...(provider_availability_overrides ?? [])]
+      .sort(
+        (a, b) => a.availability_date.localeCompare(b.availability_date)
+          || (a.start_time ?? '').localeCompare(b.start_time ?? ''),
+      ),
+  };
 }
 
 /** Owner profile plus legacy auth metadata, resolved with one auth lookup. */
@@ -1639,6 +1750,41 @@ export async function deletePortfolioItem(id: string): Promise<void> {
     .delete()
     .eq("id", id);
   if (error) throw error;
+}
+
+// Explore's masonry cards do not need the full portfolio row (personalisation
+// fields and service linkage are used by other callers). Keep its network
+// response small without narrowing the shared getPortfolioItems() contract.
+const EXPLORE_PORTFOLIO_SELECT = `
+  id, provider_id, image_url, caption, category, tags, price, aspect_ratio,
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+`;
+
+/** Fetch the lean portfolio projection used by Explore's public masonry feed. */
+export async function getExplorePortfolioItems(
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+  offset = 0,
+): Promise<PortfolioItemWithProvider[]> {
+  let query = supabase
+    .from("portfolio_items")
+    .select(EXPLORE_PORTFOLIO_SELECT)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
+    .order("created_at", { ascending: false });
+
+  if (category && category !== "All") {
+    query = query.eq("category", category.toUpperCase());
+  }
+
+  const { data, error } = await (offset > 0
+    ? query.range(offset, offset + limit - 1)
+    : query.limit(limit));
+  if (error) throw error;
+  // The public projection is intentionally narrower than DbPortfolioItem,
+  // while the Explore mapper only reads the selected card fields above.
+  return (data ?? []) as unknown as PortfolioItemWithProvider[];
 }
 
 /** Fetch portfolio items, optionally filtered by category */
@@ -3599,7 +3745,10 @@ export function subscribeToProviderBookingChanges(
         table: "bookings",
         filter: `provider_id=eq.${providerId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -3632,11 +3781,14 @@ export function subscribeToProviderBookingDetailChanges(
         table: "booking_reschedule_requests",
         filter: `booking_id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onReschedule(
-        payload.eventType === "DELETE"
-          ? null
-          : (payload.new as DbBookingRescheduleRequest),
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onReschedule(
+          payload.eventType === "DELETE"
+            ? null
+            : (payload.new as DbBookingRescheduleRequest),
+        );
+      },
     )
     .on(
       "postgres_changes",
@@ -3646,9 +3798,12 @@ export function subscribeToProviderBookingDetailChanges(
         table: "bookings",
         filter: `id=eq.${bookingId}`,
       },
-      (payload) => callbacks.onBookingUpdate(
-        payload.new as ProviderBookingLiveUpdate,
-      ),
+      (payload) => {
+        clearCachedReads();
+        callbacks.onBookingUpdate(
+          payload.new as ProviderBookingLiveUpdate,
+        );
+      },
     )
     .subscribe();
   return () => {
@@ -3828,6 +3983,35 @@ export async function getProviderUnreadConversationCount(): Promise<number> {
   return count ?? 0;
 }
 
+export interface ProviderEnquirySummary {
+  /** Conversations with a message the provider hasn't read. */
+  unread: number;
+  /** The most recent of those, for a one-line preview. */
+  latest: { clientName: string | null; message: string | null } | null;
+}
+
+/** The unread count and the newest unread message for a provider's own
+ *  Dashboard — one row and one name, instead of the whole inbox. */
+export async function getProviderEnquirySummary(providerId: string): Promise<ProviderEnquirySummary> {
+  const { data, count, error } = await supabase
+    .from("provider_conversations")
+    .select("user_id, last_message", { count: "exact" })
+    .eq("provider_id", providerId)
+    .gt("unread_count_provider", 0)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+  if (error) throw error;
+  const row = (data ?? [])[0] as { user_id: string; last_message: string | null } | undefined;
+  if (!row) return { unread: count ?? 0, latest: null };
+  // Same batched RPC the inbox uses — see fix_users_table_pii_leak.sql.
+  const { data: profiles, error: profilesError } = await supabase.rpc("get_user_public_profiles", {
+    p_user_ids: [row.user_id],
+  });
+  if (profilesError) throw profilesError;
+  const name = ((profiles ?? []) as { id: string; name: string | null }[])[0]?.name ?? null;
+  return { unread: count ?? 0, latest: { clientName: name, message: row.last_message } };
+}
+
 /** A provider_conversations row joined with the provider's public info */
 export interface UserConversationWithProvider {
   id: string;
@@ -3884,7 +4068,10 @@ export function subscribeToUserConversationChanges(
         table: "provider_conversations",
         filter: `user_id=eq.${userId}`,
       },
-      onChange,
+      () => {
+        clearCachedReads();
+        onChange();
+      },
     )
     .subscribe();
   return () => {
@@ -4131,7 +4318,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onInsert(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbNotification);
+      },
     )
     .on(
       "postgres_changes",
@@ -4141,7 +4331,10 @@ export function subscribeToNotificationChanges(
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onUpdate(payload.new as DbNotification),
+      (payload) => {
+        clearCachedReads();
+        onUpdate(payload.new as DbNotification);
+      },
     )
     .subscribe();
   return () => {
@@ -4355,13 +4548,61 @@ export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
   return !!data;
 }
 
+export type BookingReviewState = {
+  bookingId: string;
+  tipAmount: number | null;
+};
+
+/**
+ * Review state for a set of bookings, fetched together for the Bookings list.
+ *
+ * The list used to initialise its rated/tipped buttons from empty component
+ * state on every mount. The database rows existed, but the next visit showed
+ * "Rate" and "Tip" again until a detail screen happened to be opened.
+ */
+export async function getBookingReviewStates(
+  bookingIds: readonly string[],
+): Promise<BookingReviewState[]> {
+  // `reviews.booking_id` is UUID. Never let a local optimistic `booking_*`
+  // id poison the whole PostgREST `.in()` cast.
+  const ids = [...new Set(bookingIds.filter(isUuid))];
+  if (ids.length === 0) return [];
+
+  const [{ data: reviews, error: reviewError }, { data: tips, error: tipError }] = await Promise.all([
+    supabase.from("reviews").select("booking_id, tip_amount").in("booking_id", ids),
+    supabase.from("booking_tips").select("booking_id, amount_pence").in("booking_id", ids).eq("status", "succeeded"),
+  ]);
+  if (reviewError) throw reviewError;
+  if (tipError) throw tipError;
+  const states = (reviews ?? []).map((row: { booking_id: string; tip_amount: number | null }) => ({
+    bookingId: row.booking_id,
+    tipAmount: row.tip_amount == null ? null : Number(row.tip_amount),
+  }));
+  for (const tip of tips ?? []) {
+    const row = tip as { booking_id: string; amount_pence: number };
+    const existing = states.find(state => state.bookingId === row.booking_id);
+    if (existing) existing.tipAmount = Number(row.amount_pence) / 100;
+    else states.push({ bookingId: row.booking_id, tipAmount: Number(row.amount_pence) / 100 });
+  }
+  return states;
+}
+
 /** The tip recorded against a booking, or null when there's no review/tip yet. */
 export async function getBookingTip(bookingId: string): Promise<number | null> {
-  const { data } = await supabase
+  const { data: paidTip, error: tipError } = await supabase
+    .from("booking_tips")
+    .select("amount_pence")
+    .eq("booking_id", bookingId)
+    .eq("status", "succeeded")
+    .maybeSingle();
+  if (tipError) throw tipError;
+  if (paidTip) return Number((paidTip as { amount_pence: number }).amount_pence) / 100;
+  const { data, error } = await supabase
     .from("reviews")
     .select("tip_amount")
     .eq("booking_id", bookingId)
     .maybeSingle();
+  if (error) throw error;
   const tip = (data as { tip_amount?: number | null } | null)?.tip_amount;
   return tip == null ? null : Number(tip);
 }
@@ -4390,6 +4631,37 @@ export async function setBookingTip(
 
   if (error) throw error;
   return (data?.length ?? 0) > 0;
+}
+
+export interface BookingTipPaymentSheet {
+  tipId: string;
+  clientSecret: string;
+  customerId: string;
+  ephemeralKeySecret: string;
+}
+
+/** Starts a voluntary post-appointment Stripe tip. The server owns both the
+ * amount validation and the booking/provider entitlement checks. */
+export async function startBookingTipPayment(bookingId: string, amountPence: number): Promise<BookingTipPaymentSheet> {
+  const { data, error } = await supabase.functions.invoke('booking-tip', {
+    body: { action: 'start', bookingId, amountPence },
+  });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not open tip payment. Please try again.');
+  if (typeof data?.tipId !== 'string' || typeof data?.clientSecret !== 'string' ||
+      typeof data?.customerId !== 'string' || typeof data?.ephemeralKeySecret !== 'string') {
+    throw new Error('Could not open tip payment. Please try again.');
+  }
+  const expectsLive = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY']?.startsWith('pk_live_') === true;
+  if (typeof data.livemode !== 'boolean' || data.livemode !== expectsLive) {
+    throw new Error('Payment configuration does not match this app. Please contact support.');
+  }
+  return data as BookingTipPaymentSheet;
+}
+
+/** The webhook is authoritative; this closes the normal app path promptly. */
+export async function confirmBookingTipPayment(tipId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('booking-tip', { body: { action: 'confirm', tipId } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your tip is processing. Please check again shortly.');
 }
 
 // ─────────────────────────────────────────────────────────
@@ -6912,6 +7184,44 @@ export async function getMyProviderDailyStats(days: number): Promise<DbProviderD
   return (data ?? []) as DbProviderDailyStat[];
 }
 
+export interface LinkOnlyDashboardExtras {
+  /** Distinct clients who answered "Yes" to "Did you book?" in the last 7 UK days. */
+  saidBookedWeek: number;
+  /** The same for the 7 days before that, for the trend. */
+  saidBookedLastWeek: number;
+  /** Distinct clients who saved the provider in the last 7 UK days. */
+  newSaversWeek: number;
+  /** Their portfolio photo in the most clients' saved lists (all time). */
+  topPhoto: { id: string; imageUrl: string; label: string | null; saves: number } | null;
+}
+
+/** Counts across other people's rows for the link-only Dashboard, done
+ *  server-side — see 20261019234000_link_only_dashboard_extras.sql. Null when
+ *  the caller has no provider row. */
+export async function getMyLinkOnlyDashboardExtras(): Promise<LinkOnlyDashboardExtras | null> {
+  const { data, error } = await supabase.rpc("get_my_link_only_dashboard_extras");
+  if (error) throw error;
+  const row = ((data ?? []) as {
+    said_booked_week: number;
+    said_booked_last_week: number;
+    new_savers_week: number;
+    top_photo_id: string | null;
+    top_photo_url: string | null;
+    top_photo_label: string | null;
+    top_photo_saves: number | null;
+  }[])[0];
+  if (!row) return null;
+  return {
+    saidBookedWeek: row.said_booked_week,
+    saidBookedLastWeek: row.said_booked_last_week,
+    newSaversWeek: row.new_savers_week,
+    topPhoto:
+      row.top_photo_id && row.top_photo_url
+        ? { id: row.top_photo_id, imageUrl: row.top_photo_url, label: row.top_photo_label, saves: row.top_photo_saves ?? 0 }
+        : null,
+  };
+}
+
 /** How many clients saved (bookmarked) the calling provider. Server-side
  *  because bookmarks RLS only shows a user their own rows. */
 export async function getMyProviderSaverCount(): Promise<number> {
@@ -7233,7 +7543,7 @@ export interface NotificationPreferences {
   maintenanceReminders: boolean;
 }
 
-const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
+export const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
   bookingConfirm: true,
   bookingReminder: true,
   bookingUpdates: true,
@@ -7243,8 +7553,40 @@ const DEFAULT_NOTIF_PREFS: NotificationPreferences = {
   maintenanceReminders: false,
 };
 
-/** Load the user's notification preferences from Supabase */
-export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+/**
+ * The provider hat's push switches. Same users.notification_preferences column
+ * as the client's, under keys of their own, so a dual-hat account's two
+ * screens never switch each other's notifications off. The edge function only
+ * reads these for notifications addressed to the provider role.
+ */
+export interface ProviderNotificationPreferences {
+  providerNewBookings: boolean;
+  providerBookingChanges: boolean;
+  providerReminders: boolean;
+  providerForms: boolean;
+  providerMessages: boolean;
+  providerPayments: boolean;
+  providerReviews: boolean;
+  providerDailyRecap: boolean;
+  providerFullyBooked: boolean;
+  providerSaves: boolean;
+}
+
+export const DEFAULT_PROVIDER_NOTIF_PREFS: ProviderNotificationPreferences = {
+  providerNewBookings: true,
+  providerBookingChanges: true,
+  providerReminders: true,
+  providerForms: true,
+  providerMessages: true,
+  providerPayments: true,
+  providerReviews: true,
+  providerDailyRecap: true,
+  providerFullyBooked: true,
+  providerSaves: true,
+};
+
+/** The signed-in user's whole stored preferences object, both hats' keys. */
+async function readStoredNotificationPreferences(): Promise<{ userId: string; stored: Record<string, unknown> }> {
   const {
     data: { user },
   } = await getSessionUser();
@@ -7255,22 +7597,54 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
     .eq("id", user.id)
     .single();
   if (error) throw error;
-  return { ...DEFAULT_NOTIF_PREFS, ...(data?.notification_preferences ?? {}) };
+  const stored = data?.notification_preferences;
+  return { userId: user.id, stored: stored && typeof stored === "object" ? stored as Record<string, unknown> : {} };
+}
+
+/** Only the keys `defaults` names, each falling back to its default. */
+function pickPreferences<T extends { [K in keyof T]: boolean }>(defaults: T, stored: Record<string, unknown>): T {
+  const picked = { ...defaults };
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const value = stored[key as string];
+    if (typeof value === "boolean") picked[key] = value as T[keyof T];
+  }
+  return picked;
+}
+
+/** Write one hat's keys without touching the other hat's (read-merge-write). */
+async function mergeNotificationPreferences(patch: object): Promise<void> {
+  const { userId, stored } = await readStoredNotificationPreferences();
+  const { error } = await supabase
+    .from("users")
+    .update({ notification_preferences: { ...stored, ...patch } })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
+/** Load the user's notification preferences from Supabase */
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+  const { stored } = await readStoredNotificationPreferences();
+  return pickPreferences(DEFAULT_NOTIF_PREFS, stored);
 }
 
 /** Persist the user's notification preferences to Supabase */
 export async function saveNotificationPreferences(
   prefs: NotificationPreferences,
 ): Promise<void> {
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not signed in");
-  const { error } = await supabase
-    .from("users")
-    .update({ notification_preferences: prefs })
-    .eq("id", user.id);
-  if (error) throw error;
+  await mergeNotificationPreferences(pickPreferences(DEFAULT_NOTIF_PREFS, prefs as unknown as Record<string, unknown>));
+}
+
+/** Load the provider hat's notification switches. */
+export async function getProviderNotificationPreferences(): Promise<ProviderNotificationPreferences> {
+  const { stored } = await readStoredNotificationPreferences();
+  return pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, stored);
+}
+
+/** Persist the provider hat's notification switches, leaving the client's alone. */
+export async function saveProviderNotificationPreferences(
+  prefs: ProviderNotificationPreferences,
+): Promise<void> {
+  await mergeNotificationPreferences(pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, prefs as unknown as Record<string, unknown>));
 }
 
 /** Turn Beauty Maintenance pushes on or off without touching any other
@@ -9529,7 +9903,10 @@ export function subscribeToConversationMessages(
         table: "provider_messages",
         filter: `conversation_id=eq.${conversationId}`,
       },
-      (payload) => onInsert(payload.new as DbProviderMessage),
+      (payload) => {
+        clearCachedReads();
+        onInsert(payload.new as DbProviderMessage);
+      },
     )
     .subscribe();
   return () => {

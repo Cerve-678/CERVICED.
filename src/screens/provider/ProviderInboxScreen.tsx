@@ -30,6 +30,7 @@ import {
   getMyProviderMessageTemplates,
   replaceMyProviderMessageTemplates,
   ProviderMessageTemplate,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
@@ -240,7 +241,10 @@ const DARK_P = {
 export default function ProviderInboxScreen({ navigation, route }: any) {
   const { showToast, DialogHost } = useAppDialog();
   const { isDarkMode: dark } = useTheme();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
+  // A link-only pro takes no CERVICED bookings, so their inbox is one list of
+  // general enquiries — no Messages tab (owner's call, 2026-10-19).
+  const isLinkOnly = myBookingMode === 'external';
   const P = dark ? DARK_P : LIGHT_P;
   const bottomInset = useSystemBottomInset();
 
@@ -298,6 +302,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   }, [loadInbox]));
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     await loadInbox();
     setRefreshing(false);
@@ -383,10 +389,15 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     messages: conversations.filter(c => c.has_booking && c.unread_count_provider > 0).length,
   }), [conversations]);
   const outstandingCount = unreadCounts.enquiries + unreadCounts.messages;
+  // Link-only: every conversation, so one from before they switched to their
+  // own booking link can't disappear behind a tab they no longer have.
   const flatItems = useMemo(
-    () => conversations.filter(c => filter === 'messages' ? c.has_booking : !c.has_booking),
-    [conversations, filter],
+    () => isLinkOnly
+      ? conversations
+      : conversations.filter(c => filter === 'messages' ? c.has_booking : !c.has_booking),
+    [conversations, filter, isLinkOnly],
   );
+  const showEnquiries = isLinkOnly || filter === 'enquiries';
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -419,7 +430,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           )}
 
           <View style={s.headerCenter}>
-            <Text style={[s.title, { color: P.text }]}>Inbox</Text>
+            <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? 'General enquiries' : 'Inbox'}</Text>
             {outstandingCount > 0 && (
               <View style={[s.badge, { backgroundColor: '#FF3B30' }]}>
                 <Text style={s.badgeText}>{outstandingCount}</Text>
@@ -438,6 +449,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
         </Animated.View>
 
         {/* ── Filter tabs ─────────────────────────────────────────── */}
+        {!isLinkOnly && (
         <View style={[s.filterRow, { backgroundColor: P.card, borderBottomColor: P.border }]}>
           {FILTERS.map(f => {
             const active = filter === f.key;
@@ -465,6 +477,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             );
           })}
         </View>
+        )}
 
         {/* ── List ────────────────────────────────────────────────── */}
         {loading ? (
@@ -530,11 +543,15 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               ) : (
                 <View style={s.empty}>
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
-                    <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'mail-open-outline'} size={36} color={P.sub} />
+                    <Ionicons name={showEnquiries ? 'mail-open-outline' : 'chatbubble-outline'} size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>{filter === 'enquiries' ? 'No general enquiries yet' : 'No client messages yet'}</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{showEnquiries ? 'No general enquiries yet' : 'No client messages yet'}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
-                    {filter === 'messages' ? 'Conversations with clients who have booked with you appear here.' : 'Questions sent through Get In Touch appear here until the person books with you.'}
+                    {isLinkOnly
+                      ? 'Questions clients send you through Get In Touch on your profile appear here.'
+                      : filter === 'messages'
+                        ? 'Conversations with clients who have booked with you appear here.'
+                        : 'Questions sent through Get In Touch appear here until the person books with you.'}
                   </Text>
                 </View>
               )

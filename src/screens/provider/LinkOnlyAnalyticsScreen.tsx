@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getMyProviderDailyStats, getMyProviderSaverCount } from '../../services/databaseService';
+import { forgetCachedReads, getMyProviderDailyStats, getMyProviderSaverCount } from '../../services/databaseService';
 import type { DbProviderDailyStat } from '../../types/database';
 import {
   LINK_ONLY_PERIOD_DAYS,
@@ -88,6 +88,8 @@ export default function LinkOnlyAnalyticsScreen() {
   useEffect(() => { setSelectedBar(null); }, [period]);
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRefreshing(true);
     await load();

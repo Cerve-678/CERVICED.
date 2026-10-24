@@ -22,18 +22,44 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-d0 [325d14], branch feat/claim-instagram-review
-SINCE:  2026-10-19 19:05 BST
-WHAT:   20261019235500_listing_claims_checked_by_instagram: retires the
+OWNER:  cerviced-99 [58ffe3], branch feat/claim-instagram-review
+SINCE:  2026-10-24 (taken over from cerviced-d0, which has exited; cerviced-c2
+        released its tip_received_notification lock for this)
+WHAT:   listing_claims_checked_by_instagram (authored as 20261019235500, to be
+        renumbered above the live frontier before applying): retires the
         email-code listing claim (drops claim_provider_profile and the
         claim_token columns on providers) and adds provider_claim_requests
         + request_provider_claim() + review_provider_claim().
-STATUS: written, NOT applied, not yet dry-run against live (Supabase MCP
-        was disconnected). Apply before importing Gina's directory
-        listings. Old email claim stops working once it runs (only the
-        test listing uses it). After applying: record the version and
-        delete the dead request-claim-verification Edge Function.
+STATUS: written, NOT applied. Does not touch notifications_type_check.
+        Queued after it: cerviced-c2's tip_received_notification, then
+        cerviced-74's 20261021200000/201000/202000; both renumber above this.
 ```
+
+### Applied 2026-10-21 (daily "people saved you" count)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020150000 | `provider_saved_digest` | **APPLIED 2026-10-21** by Claude (Supabase CLI `db query -f`) on the user's OK, version recorded by the file. Verified live: `provider_saved` in the CHECK (49 → 50 types), table RLS on with 0 policies and no `authenticated` select, 13/13 existing saves backfilled, cron `provider-saved-digest` `0 18 * * *`, `authenticated` cannot execute the function, and a rolled-back dry run returned 0. Frontier at authoring: `20261020140000` (re-verified the morning of the apply). Adds notification type `provider_saved` (CHECK rebuilt from the live constraint), private table `provider_saver_digest_counted` (RLS on, no policies, backfilled with every existing save), index `bookmarks_created_at_idx`, `process_provider_saved_digest()` and cron `provider-saved-digest` at 18:00 UTC. Redefines nothing else. The file records its own version. `send-push-notification` DEPLOYED 2026-10-21 as v20 from feat/provider-saved-digest (verify_jwt true). Live v19 was byte-identical to PR #137's file first; v20 adds only the `providerSaves` mapping and default. |
+
+### Applied 2026-10-20 (per-card logo framing)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020140000 | `providers_logo_framing` | **APPLIED 2026-10-20** by the user (SQL editor; the file's own INSERT records the version). Verified: `providers?select=logo_framing` returns 200 through the public API. Frontier at authoring: `20261020120000`. Adds nullable `providers.logo_framing jsonb` + a CHECK that it's an object. Additive, no backfill, no policy change. Must be applied **before** the app change merges: Home's provider select names the column. The file records its own version. |
+
+### Applied 2026-10-20 (no more +30 for booking the same provider again)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261020120000 | `remove_returning_client_points` | **APPLIED 2026-10-20** by Claude (MCP execute_sql) on the user's OK, version recorded; verified live: no `returning_client` in the function, new md5 `0c88c927c13abf46663c7953f9bf3a04`, trigger still attached. Frontier at authoring: `20261019233000` (`20261019235500` written, unapplied, numbered below this). Redefines `award_points_on_booking_completed()` from the live definition (md5 `fc6b7188cddaff0fed1fe710440bd00c`) minus the `returning_client` (+30) block. Existing `returning_client` ledger rows (20 at authoring) are kept. The file records its own version. No app or function deploy needed. |
+
+**Knock-on:** `20261019235500_listing_claims_checked_by_instagram` (written, unapplied) is now below the frontier. Renumber it above `20261020120000` before applying it, or `supabase migration up` skips it.
+
+### Applied 2026-10-20 (link-only Dashboard counts)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261019234000 | `link_only_dashboard_extras` | **APPLIED 2026-10-20** by Claude (execute_sql, so the version is the authored one, not a wall-clock stamp), version recorded. Frontier at authoring: `20261019233000`; numbered below the then-unapplied `20261019235500` (listing claims) and `20261020120000` (returning-client points) so it couldn't push them below the frontier. `20261020120000` was applied by the time this landed, so `20261019235500` (listing claims, unapplied) is now below the frontier — record it by hand when it's applied. Adds read-only `get_my_link_only_dashboard_extras()` + indexes `client_external_bookings_provider_created_idx`, `bookmarks_provider_created_idx`, `users_saved_portfolio_gin`. Redefines nothing. Verified live as the one link-only provider. |
 
 ### Applied 2026-10-19 (expired holds cleared before a booking is saved)
 

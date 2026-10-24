@@ -1,6 +1,7 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
 import { settleCheckout } from '../_shared/settleCheckout.ts';
 import { recordFeePaid } from '../_shared/feePayRequest.ts';
+import { recordTipPaid } from '../_shared/recordTipPaid.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { takeBackFromProvider } from '../_shared/takeBack.ts';
@@ -72,6 +73,9 @@ Deno.serve(async (req: Request) => {
         // a request (in the app or on Stripe's emailed page). Idempotent.
         if (intent.metadata.fee_charge_id && event.type === 'payment_intent.succeeded') {
           await recordFeePaid(admin, stripe, intent.metadata.fee_charge_id, intent.id);
+        }
+        if (intent.metadata.booking_tip_id && event.type === 'payment_intent.succeeded') {
+          await recordTipPaid(admin, stripe, intent.metadata.booking_tip_id, intent.id);
         }
         break;
       }

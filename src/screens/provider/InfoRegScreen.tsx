@@ -56,9 +56,12 @@ import type { ProviderRegistrationData, ServiceImageDraft } from '../../services
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { loadListingClaim, isClaimGuardError, displayHandle, type ProviderClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
-import type { DbPortfolioItem } from '../../types/database';
+import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
+import { FramedLogo } from '../../components/FramedLogo';
+import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
+import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
   DEFAULT_PROVIDER_THEME,
@@ -76,8 +79,8 @@ import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
-import { ServiceImageCropper } from '../../features/provider-registration/ServiceImageCropper';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
+import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
 import { SERVICE_BUFFER_BEFORE_OPTS, SERVICE_BUFFER_AFTER_OPTS } from '../../features/business-details/options';
@@ -1165,10 +1168,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
   const [images, setImages] = useState<ServiceImageDraft[]>(service?.images || []);
-  // Freshly-picked URIs waiting to be framed. They are deliberately NOT added
-  // to `images` yet — a provider who backs out of the cropper should end up
-  // with the set they started with, not a half-added batch.
-  const [pendingCropUris, setPendingCropUris] = useState<string[]>([]);
   const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
@@ -1263,29 +1262,24 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
 
+  // Pick one photo, crop and adjust it in the iOS crop, done. One at a time
+  // because iOS offers no crop during a multi-select. The crop IS the framing,
+  // so the photo fills its frame wherever it's shown.
   const handleAddImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
+    try {
+      // No permission request first: picking from the library needs none on
+      // iOS or Android, and asking added a round trip before every picker.
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      const asset = result.assets?.[0];
+      if (result.canceled || !asset) return;
+      setImages(prev => [...prev, { uri: asset.uri, fit: 'cover' }]);
+    } catch (e) {
+      Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,   // pick several photos at once
-      selectionLimit: 10,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.length) {
-      // Straight into the cropper rather than into the set: every photo is
-      // re-rendered to JPEG on the way through, which is also what stops an
-      // iOS HEIC being uploaded under a .jpg name (see ServiceImageCropper).
-      setPendingCropUris(result.assets.map(a => a.uri));
-    }
-  };
-
-  const handleCropperDone = (framed: ServiceImageDraft[]) => {
-    setPendingCropUris([]);
-    if (framed.length > 0) setImages(prev => [...prev, ...framed]);
   };
 
   const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
@@ -1294,17 +1288,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   // save, and index 0 is the photo that leads the service everywhere it's
   // shown. Splice-then-insert rather than a swap, so dragging across several
   // slots moves one photo through them instead of exchanging the two ends.
-  // Framing is per photo, not per service — a provider may want a wide shot
-  // shown whole and a close-up filling the frame in the same set.
-  const handleToggleImageFit = (index: number) => {
-    setImages(prev =>
-      prev.map((img, i) =>
-        i === index
-          ? { ...img, fit: img.fit === 'cover' ? 'contain' : 'cover' }
-          : img,
-      ),
-    );
-  };
 
   const handleReorderImages = (from: number, to: number) => {
     setImages(prev => {
@@ -1476,21 +1459,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
-                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onReorder={handleReorderImages} size={100} styles={styles} />
-                <ServiceImageCropper
-                  visible={pendingCropUris.length > 0}
-                  uris={pendingCropUris}
-                  onDone={handleCropperDone}
-                  onCancel={() => setPendingCropUris([])}
-                  palette={{
-                    bg: chrome.surf(0.98),
-                    card: chrome.surf(0.35),
-                    text: chrome.fg(0.92),
-                    sub: chrome.fg(0.55),
-                    accent: accentColor,
-                  }}
-                />
-                <Text style={styles.serviceSheetHint}>Add multiple images to showcase your service</Text>
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onReorder={handleReorderImages} size={100} styles={styles} />
               </View>
 
               {/* Service Name */}
@@ -2204,6 +2173,11 @@ interface PreviewModalProps {
   accentColor: string;
   portfolio: DbPortfolioItem[];
   venuePhotos: DbPortfolioItem[];
+  /** A link-only provider's clients see a different profile — Book on their
+   *  own page, specialities instead of a price list, no ratings or reviews —
+   *  so the preview shows that one. */
+  isLinkOnly: boolean;
+  specialities: readonly string[];
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -2213,6 +2187,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   accentColor,
   portfolio,
   venuePhotos,
+  isLinkOnly,
+  specialities,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -2367,7 +2343,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 {providerData.location ? ` · ${providerData.location.toUpperCase()}` : ''}
               </Text>
 
-              {/* Rating */}
+              {/* Rating — not for link-only: clients book them elsewhere, so
+                  there are no CERVICED reviews to rate them from. */}
+              {!isLinkOnly && (
               <View style={styles.previewRatingContainer}>
                 <View style={styles.previewStars}>
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -2376,12 +2354,41 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </View>
                 <Text style={[styles.previewRatingText, { color: heroText }, heroIsDark && styles.previewHeroTextShadow]}>{mockRating}</Text>
               </View>
+              )}
 
               {providerData.yearsExperience ? (
                 <Text style={[styles.previewYearsText, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>{providerData.yearsExperience} years experience</Text>
               ) : null}
 
-              {/* Slots with Bell */}
+              {/* Link-only: Book (their own page) with socials and messaging
+                  beside it, exactly as clients see it in place of the
+                  availability pill. Decorative here. */}
+              {isLinkOnly ? (
+                <View style={styles.previewLinkOnlyBookBlock}>
+                  <View style={styles.previewLinkOnlyBookRow}>
+                    <View style={[styles.previewLinkOnlyBookButton, { backgroundColor: PP.card, borderColor: PP.border }]}>
+                      <Text style={[styles.previewLinkOnlyBookText, { color: PP.text }]}>BOOK</Text>
+                      <Ionicons name="open-outline" size={15} color={PP.text} />
+                    </View>
+                    {providerData.instagram ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-instagram" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    {providerData.tiktok ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-tiktok" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                      <Ionicons name="chatbubble-outline" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                    </View>
+                  </View>
+                  <Text style={[styles.previewLinkOnlyCaption, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>
+                    Books on their own page — opens inside CERVICED
+                  </Text>
+                </View>
+              ) : (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2405,6 +2412,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   <BellIcon size={16} color={PP.sub} />
                 </View>
               </BlurView>
+              )}
             </View>
 
             {/* The content sheet rises over the hero photo with its own large
@@ -2442,8 +2450,14 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </TouchableOpacity>
               </BlurView>
 
+              {/* Link-only clients see specialities where the price list
+                  would be; their prices live on their own booking page. */}
+              {isLinkOnly && (
+                <ProviderSpecialitiesSection specialities={specialities} textColor={PP.text} accent={accentColor} />
+              )}
+
               {/* Services Section */}
-              {categoryNames.length > 0 && (
+              {!isLinkOnly && categoryNames.length > 0 && (
                 <View style={styles.previewServicesSection}>
                   <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>Services</Text>
 
@@ -2551,7 +2565,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
               {/* Reviews — this is a template/showcase view, not a live reflection
                   of real reviews, so the card always shows (matching
-                  ProviderProfileScreen) but deliberately stays empty. */}
+                  ProviderProfileScreen) but deliberately stays empty. Never
+                  for link-only, whose clients see no reviews section. */}
+              {!isLinkOnly && (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2565,6 +2581,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 />
                 <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Reviews</Text>
               </BlurView>
+              )}
 
               {/* Contact Section */}
               <BlurView
@@ -2866,6 +2883,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     hasCustomGradient: false,
     profileTheme: 'app',
     logo: null,
+    logoFraming: null,
     categories: {},
     categoryDescriptions: {},
     phone: '',
@@ -3228,11 +3246,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Explore, and inside Additional Information on the client's profile.
   const handleAddPortfolioImages = useCallback(async (category?: string) => {
     if (!user?.id || !providerDbId) return;
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
+    // No permission request first: picking from the library needs none on
+    // iOS or Android, and asking added a round trip before every picker.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
@@ -3346,6 +3361,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  // A link-only preview shows specialities, which this screen doesn't hold
+  // once the provider exists, so they're read when the preview opens. Before
+  // the first save they're still the ones picked at sign-up.
+  const [previewSpecialities, setPreviewSpecialities] = useState<string[]>([]);
+  useEffect(() => {
+    if (!showPreviewModal || !isLinkOnly) return;
+    if (!providerDbId) {
+      setPreviewSpecialities(signupSpecialties);
+      return;
+    }
+    let cancelled = false;
+    getProviderSpecialties(providerDbId)
+      .then(list => { if (!cancelled) setPreviewSpecialities(list); })
+      .catch(error => logger.error('InfoReg: loading specialities for the preview failed', error));
+    return () => { cancelled = true; };
+  }, [showPreviewModal, isLinkOnly, providerDbId, signupSpecialties]);
   const [currentCategory, setCurrentCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<string>('');
   const [editingService, setEditingService] = useState<ServiceData | null>(null);
@@ -3374,13 +3405,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const dragTargetRef = useRef(0);
   const dragLatestDxRef = useRef(0);
 
-  // Handle logo selection
+  // The logo picker swipes from the profile circle to the two Home card
+  // sizes. Pages are as wide as the picker's own row, measured on layout.
+  const [logoPagerWidth, setLogoPagerWidth] = useState(0);
+  const [logoPage, setLogoPage] = useState(0);
+  // The swipe unmounts without a logo and comes back on page one, so the
+  // dots and caption have to come back to page one with it.
+  useEffect(() => {
+    if (!providerData.logo) setLogoPage(0);
+  }, [providerData.logo]);
+
+  // Picking and adjusting are the same thing: iOS only offers its crop (with
+  // pinch-to-zoom) while a photo is being picked, so every tap on the logo
+  // opens the library with the square crop on.
   const handleSelectLogo = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
+    // No permission request first: picking from the library needs none on
+    // iOS or Android, and asking added a round trip before every picker.
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -3391,8 +3431,41 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      setProviderData(prev => ({ ...prev, logo: asset.uri }));
+      // A new image makes the old card framing meaningless, so it resets.
+      setProviderData(prev => ({ ...prev, logo: asset.uri, logoFraming: null }));
     }
+  };
+
+  // The two Home cards are framed separately, in their own shape, by pinch
+  // and drag (iOS's crop only does squares). Only a zoom and an offset are
+  // stored per card; the logo image itself stays as picked.
+  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
+  const [logoImageRatio, setLogoImageRatio] = useState(1);
+
+  const handleFrameLogo = (slot: LogoCardSlot) => {
+    const logo = providerData.logo;
+    if (!logo) return;
+    Image.getSize(
+      logo,
+      (width, height) => {
+        setLogoImageRatio(width > 0 && height > 0 ? width / height : 1);
+        setFramingSlot(slot);
+      },
+      () => {
+        // Unmeasurable: frame it as square, which every logo is after the
+        // iOS crop anyway.
+        setLogoImageRatio(1);
+        setFramingSlot(slot);
+      },
+    );
+  };
+
+  const handleLogoFramed = (slot: LogoCardSlot, frame: LogoCardFrame) => {
+    setFramingSlot(null);
+    setProviderData(prev => ({
+      ...prev,
+      logoFraming: { ...(prev.logoFraming ?? {}), imageRatio: logoImageRatio, [slot]: frame },
+    }));
   };
 
   // Handle data transfer from Acuity Scheduling URL
@@ -4208,6 +4281,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           accentColor={adaptiveAccentColor}
           portfolio={workPhotos}
           venuePhotos={venuePhotos}
+          isLinkOnly={isLinkOnly}
+          specialities={previewSpecialities}
         />
 
         {/* No `edges` prop: under fullScreenModal the nested provider this sits
@@ -4331,43 +4406,121 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.docSub}>Business identity · how clients first find you</Text>
 
             {/* Plain circular avatar picker — no card chrome around it. The
-                surrounding panel was doing nothing the circle doesn't already
-                communicate, and the standard avatar treatment (circle + corner
-                camera badge) reads as tappable on its own. Business name and
-                the rest of Step 1 continue below, unchanged. */}
+                standard avatar treatment (circle + corner camera badge) reads
+                as tappable on its own. Once there's a logo, the circle is the
+                first page of a swipe: the next two pages are the same logo in
+                the small and large Home cards, at their real sizes, so the
+                provider sees each crop in place rather than in a list below.
+                Tapping any page reopens the crop. */}
               <View style={styles.logoSection}>
-                <TouchableOpacity
-                  style={styles.logoContainer}
-                  onPress={() => { tapSelect(); handleSelectLogo(); }}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={providerData.logo ? 'Change logo' : 'Add logo'}
-                >
-                  {providerData.logo ? (
-                    <Image
-                      source={{ uri: providerData.logo }}
-                      style={styles.providerLogo}
-                      resizeMode="cover"
-                      // Per the Scalability rules: without this any unrelated
-                      // re-render can retrigger the default fade-in as a flicker.
-                      fadeDuration={0}
-                    />
-                  ) : (
-                    <View style={styles.logoPlaceholder}>
-                      <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+                {providerData.logo ? (
+                  <>
+                    <View
+                      style={styles.logoPager}
+                      onLayout={e => setLogoPagerWidth(e.nativeEvent.layout.width)}
+                    >
+                      {logoPagerWidth > 0 && (
+                        <ScrollView
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          onMomentumScrollEnd={e =>
+                            setLogoPage(Math.round(e.nativeEvent.contentOffset.x / logoPagerWidth))
+                          }
+                        >
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoContainer}
+                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Adjust logo"
+                              accessibilityHint="Swipe left to see it on Home"
+                            >
+                              <Image
+                                source={{ uri: providerData.logo }}
+                                style={styles.providerLogo}
+                                resizeMode="cover"
+                                // Per the Scalability rules: without this any unrelated
+                                // re-render can retrigger the default fade-in as a flicker.
+                                fadeDuration={0}
+                              />
+                              {/* Badge sits on the 45° diagonal of the circle rather than a
+                                  square's corner, so it hugs the edge instead of floating
+                                  off it — offset = r - (r/√2) - badgeR, rounded. */}
+                              <View style={styles.logoEditBadge}>
+                                <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                              </View>
+                            </TouchableOpacity>
+                          </View>
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoHomeSmallCard}
+                              onPress={() => { tapSelect(); handleFrameLogo('small'); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Your logo on a small Home card. Adjust how it sits"
+                            >
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="small" style={{ borderRadius: LOGO_CARD_SIZES.small.radius }} />
+                            </TouchableOpacity>
+                          </View>
+                          <View style={[styles.logoPage, { width: logoPagerWidth }]}>
+                            <TouchableOpacity
+                              style={styles.logoHomeLargeCard}
+                              onPress={() => { tapSelect(); handleFrameLogo('large'); }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Your logo on a large Home card. Adjust how it sits"
+                            >
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="large" style={{ borderRadius: LOGO_CARD_SIZES.large.radius }} />
+                            </TouchableOpacity>
+                          </View>
+                        </ScrollView>
+                      )}
                     </View>
-                  )}
-                  {/* Badge sits on the 45° diagonal of the circle rather than a
-                      square's corner, so it hugs the edge instead of floating
-                      off it — offset = r - (r/√2) - badgeR, rounded. */}
-                  <View style={styles.logoEditBadge}>
-                    <Ionicons name="camera" size={14} color={chrome.onAccent} />
-                  </View>
-                </TouchableOpacity>
-                <Text style={styles.logoCaption}>
-                  {providerData.logo ? 'Change Logo' : 'Add Logo'}
-                </Text>
+                    <View style={styles.logoDots} importantForAccessibility="no-hide-descendants">
+                      {LOGO_PAGE_CAPTIONS.map((caption, i) => (
+                        <View key={caption} style={[styles.logoDot, i === logoPage && styles.logoDotActive]} />
+                      ))}
+                    </View>
+                    <Text style={styles.logoCaption}>{LOGO_PAGE_CAPTIONS[logoPage]}</Text>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.logoContainer}
+                      onPress={() => { tapSelect(); handleSelectLogo(); }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add logo"
+                    >
+                      <View style={styles.logoPlaceholder}>
+                        <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+                      </View>
+                      <View style={styles.logoEditBadge}>
+                        <Ionicons name="camera" size={14} color={chrome.onAccent} />
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.logoCaption}>Add Logo</Text>
+                  </>
+                )}
               </View>
+              <LogoCardFramer
+                slot={framingSlot}
+                uri={providerData.logo}
+                imageRatio={logoImageRatio}
+                initial={framingSlot ? providerData.logoFraming?.[framingSlot] : undefined}
+                onDone={handleLogoFramed}
+                onCancel={() => setFramingSlot(null)}
+                palette={{
+                  bg: chrome.surf(0.98),
+                  card: chrome.surf(0.35),
+                  text: chrome.fg(0.92),
+                  sub: chrome.fg(0.55),
+                  accent: adaptiveAccentColor,
+                  onAccent: chrome.onAccent,
+                }}
+              />
 
             {/* Business Name */}
               <View
@@ -4450,6 +4603,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </View>
                 )}
               </View>
+
+              {/* Business Type, for link-only pros only. Everyone else sees it
+                  on 05 · Address Confirmation, a page link-only pros don't
+                  get. Locked here like Business Name and Service Type above:
+                  Business Info is its one editor. */}
+              {isLinkOnly && (
+                <View style={styles.inputGroup}>
+                  <RequiredLabel styles={styles}>Business Type</RequiredLabel>
+                  <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                    <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                    <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                      {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                    </Text>
+                  </View>
+                  <Text style={styles.inputHint}>
+                    Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.
+                  </Text>
+                </View>
+              )}
 
               {/* Location */}
               <View
@@ -5771,6 +5943,12 @@ const LOGO_BADGE_SIZE = 32;
 const LOGO_BADGE_OFFSET = Math.round(
   LOGO_SIZE / 2 - LOGO_SIZE / 2 / Math.SQRT2 - LOGO_BADGE_SIZE / 2,
 );
+/** One caption per page of the logo swipe, in page order. */
+const LOGO_PAGE_CAPTIONS = [
+  'Profile logo · tap to adjust',
+  'Small Home card · tap to adjust',
+  'Large Home card · tap to adjust',
+] as const;
 
 const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: number) => {
   const isDark = P.isDark;
@@ -5938,6 +6116,49 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 13,
     color: fg(0.6),
     marginTop: 10,
+  },
+  // Full width of the section so each page can be exactly one swipe wide.
+  logoPager: {
+    alignSelf: 'stretch',
+  },
+  // Every page is as tall as the tallest thing on any page (the large card),
+  // so the dots and caption below don't jump as the provider swipes.
+  logoPage: {
+    height: Math.max(LOGO_SIZE, LOGO_CARD_SIZES.large.height),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoHomeSmallCard: {
+    width: LOGO_CARD_SIZES.small.width,
+    height: LOGO_CARD_SIZES.small.height,
+    borderRadius: LOGO_CARD_SIZES.small.radius,
+    overflow: 'hidden',
+    backgroundColor: P.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: fg(0.12),
+  },
+  logoHomeLargeCard: {
+    width: LOGO_CARD_SIZES.large.width,
+    height: LOGO_CARD_SIZES.large.height,
+    borderRadius: LOGO_CARD_SIZES.large.radius,
+    overflow: 'hidden',
+    backgroundColor: P.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: fg(0.12),
+  },
+  logoDots: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 12,
+  },
+  logoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: fg(0.2),
+  },
+  logoDotActive: {
+    backgroundColor: P.accent,
   },
 
   // Full-bleed section: a hairline rule and generous space do the separating.
@@ -7398,21 +7619,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   // Bottom-right so it never sits under the remove button (top-right) or the
   // Cover badge (bottom-left).
-  fitToggle: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  fitToggleText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
   carouselHint: {
     marginTop: 8,
     fontSize: 11,
@@ -7664,6 +7870,45 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     letterSpacing: 0.4,
   },
   // Slots with Bell
+  // Mirrors ProviderProfileScreen's linkOnlyBook* styles.
+  previewLinkOnlyBookBlock: {
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  previewLinkOnlyBookRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookButton: {
+    height: 46,
+    flex: 1,
+    borderRadius: 23,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 1,
+  },
+  previewLinkOnlySocialButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewLinkOnlyCaption: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   previewSlotsPill: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,11 +4,13 @@ import * as WebBrowser from 'expo-web-browser';
 import type { StripeConnectReturn } from '../utils/stripeConnectReturn';
 import { PaymentRequestError } from '../utils/paymentRequestError';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
-import { newRequestId } from '../utils/requestId';
+import { useAppDialog } from './AppDialog';
+import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
+import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
@@ -23,6 +25,7 @@ export interface PaymentSetupSummary { deposit: string; inPerson: string }
 
 export default function ProviderStripePayments({ stripeReturn, setup, children }: { stripeReturn?: StripeConnectReturn; setup?: PaymentSetupSummary | undefined; children?: React.ReactNode }) {
   const C = useBusinessPalette();
+  const { isDarkMode } = useTheme();
   const [section, setSection] = useState<'overview' | 'bookings' | 'payouts' | 'settings'>('overview');
   const [finance, setFinance] = useState<ProviderFinance | null>(null);
   const [financeError, setFinanceError] = useState('');
@@ -147,32 +150,28 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     }
   };
 
-  const requestRefund = (row: ProviderPayout) => {
-    const share = new Intl.NumberFormat('en-GB', { style: 'currency', currency: row.currency }).format(row.payout_amount / 100);
-    Alert.alert('Refund this payment?', `This refunds ${row.booking?.customer_name || 'the client'} in full for ${row.booking?.service_name_snapshot || 'this booking'} and reverses your ${share} share. It does not cancel their appointment.`, [
-      { text: 'Keep payment', style: 'cancel' },
-      { text: 'Refund payment', style: 'destructive', onPress: async () => {
-        if (opening.current) return;
-        opening.current = true;
-        setBusy(true);
-        try {
-          const completed = await refundProviderBooking({ bookingId: row.booking_id, reason: 'Refunded from Payments', requestId: newRequestId() });
-          await load();
-          Alert.alert(completed ? 'Refund issued' : 'Refund processing', completed
-            ? 'The refund has been issued. Their bank may take a few days to show it.'
-            : 'Stripe is processing the refund. Please check again later.');
-        } catch {
-          setError('We could not confirm the refund. Refresh payment status before trying again.');
-        } finally { opening.current = false; setBusy(false); }
-      } },
-    ]);
-  };
+  // Same full-or-partial refund sheet as the booking detail screen; the
+  // confirmation goes through the in-app dialog, never a native alert.
+  const [refundRow, setRefundRow] = useState<ProviderPayout | null>(null);
+  const { showAlert, DialogHost } = useAppDialog();
+  const handleRefunded = useCallback(({ title, message }: RefundIssued) => {
+    setRefundRow(null);
+    void load();
+    showAlert(title, message);
+  }, [load, showAlert]);
   const tabs = [
     { key: 'overview', label: 'Overview', icon: 'grid-outline' },
     { key: 'bookings', label: 'Booking payments', icon: 'receipt-outline' },
     { key: 'payouts', label: 'Payouts', icon: 'wallet-outline' },
     { key: 'settings', label: 'Payment settings', icon: 'options-outline' },
   ] as const;
+  // Until Stripe setup is finished there is nothing to show: no balance, no
+  // booking payments, no payouts. The provider sees only the connect card,
+  // plus Payment settings, which doesn't depend on Stripe.
+  const needsConnect = !!account && !account.detailsSubmitted;
+  const dashboardReady = !!account && !needsConnect;
+  const visibleTabs = dashboardReady ? tabs : tabs.filter(tab => tab.key === 'overview' || tab.key === 'settings');
+  const shownSection = dashboardReady || section === 'settings' ? section : 'overview';
   const setupReady = account?.payoutsEnabled;
   const manageAccount = !!account && (!!setupReady || (account.detailsSubmitted && !account.requirementsDue));
   const accountTitle = !account ? 'Checking your payout account' : setupReady ? 'Your payout account is connected'
@@ -186,8 +185,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>Test mode · no real money moves</Text>}
     </View>
     <View style={styles.tabs}>
-      {tabs.map(tab => {
-        const selected = section === tab.key;
+      {visibleTabs.map(tab => {
+        const selected = shownSection === tab.key;
         return <TouchableOpacity key={tab.key} accessibilityRole="tab" accessibilityState={{ selected }}
           onPress={() => { void Haptics.selectionAsync().catch(() => {}); setSection(tab.key); }} activeOpacity={0.75}
           style={[styles.tab, { backgroundColor: selected ? C.accent : C.card, borderColor: selected ? C.accent : C.border }]}>
@@ -198,16 +197,28 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         </TouchableOpacity>;
       })}
     </View>
-    <View style={styles.refreshRow}>
+    {!needsConnect && <View style={styles.refreshRow}>
       <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: C.sub }]}>{loading ? 'Updating your payments…' : 'Your payment information'}</Text>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh all payment information" disabled={loading || busy}
         onPress={() => { setLoading(true); void load(); }} style={styles.refresh}>
         {loading ? <ActivityIndicator size="small" color={C.accentText} /> : <Ionicons name="refresh-outline" size={20} color={C.accentText} />}
       </TouchableOpacity>
-    </View>
+    </View>}
     {!!error && <Notice text={error} />}
 
-    {section === 'overview' && <>
+    {shownSection === 'overview' && !account && !error && <ActivityIndicator color={C.accentText} style={{ marginVertical: 40 }} />}
+
+    {shownSection === 'overview' && needsConnect && <View style={[styles.connect, { backgroundColor: C.card, borderColor: C.border }]}>
+      <View style={[styles.connectIcon, { backgroundColor: C.surface }]}><Ionicons name="card-outline" size={26} color={C.accentText} /></View>
+      <Text style={[styles.connectTitle, { color: C.text }]}>Get paid for online bookings</Text>
+      <Text style={[styles.description, { color: C.sub, textAlign: 'center' }]}>Connect your payout account with Stripe. Your balance, booking payments and payouts will appear here once it's set up.</Text>
+      <View style={{ alignSelf: 'stretch' }}>
+        {busy ? <ActivityIndicator color={C.accentText} style={{ marginTop: 16 }} />
+          : <PaymentAction disabled={busy} label={account.connected ? 'Continue with Stripe' : 'Connect with Stripe'} onPress={() => void openStripe('onboard')} />}
+      </View>
+    </View>}
+
+    {shownSection === 'overview' && dashboardReady && <>
       {!!financeError && <Notice text={financeError} />}
       <View style={[styles.hero, { backgroundColor: C.accent }]}>
         <Text style={[styles.heroLabel, { color: C.bg }]}>AVAILABLE IN STRIPE</Text>
@@ -269,12 +280,12 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </>}
     </>}
 
-    {section === 'bookings' && <>
+    {shownSection === 'bookings' && <>
       <Text style={[styles.sectionTitle, { color: C.text }]}>Booking payments</Text>
       <Text style={[styles.sectionNote, { color: C.sub }]}>Latest 50 online payments. Open a booking payment to see your share and release status.</Text>
       {!!payoutError && <Notice text={payoutError} />}
       {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
-      {payouts.map(row => <BookingPayment key={row.id} row={row} busy={busy} onRefund={() => requestRefund(row)} />)}
+      {payouts.map(row => <BookingPayment key={row.id} row={row} busy={busy} onRefund={() => setRefundRow(row)} />)}
       {feeEarnings.length > 0 && <>
         <Text style={[styles.sectionTitle, { color: C.text }]}>Late & no-show fees</Text>
         <Text style={[styles.sectionNote, { color: C.sub }]}>Your share after Stripe's card fee. Refund or answer a dispute from the booking itself.</Text>
@@ -292,7 +303,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </>}
     </>}
 
-    {section === 'payouts' && <>
+    {shownSection === 'payouts' && <>
       <Text style={[styles.sectionTitle, { color: C.text }]}>From booking to bank</Text>
       <View style={[styles.journey, { backgroundColor: C.surface }]}>
         {[
@@ -318,8 +329,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         {account?.connected && <PaymentAction disabled={busy} label="Manage payout account" onPress={() => void openStripe('dashboard')} />}
       </Card>
     </>}
-    {section === 'settings' && <>
-      <Card title="When you get paid" sub="How long after an appointment your share is released to Stripe. Stripe then pays it into your bank, which usually takes a few more working days.">
+    {shownSection === 'settings' && <>
+      <Card title="When you get paid" sub="How long after an appointment your share is released to our payment partners. They then pay it into your bank, which usually takes a few more working days.">
         {!!holdError && <Notice text={holdError} />}
         {holdUnavailable
           ? <Notice text="Finish setting up your professional profile to choose when you get paid." />
@@ -339,6 +350,14 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </Card>
       {children}
     </>}
+    {refundRow && <IssueRefundSheet
+      booking={{ id: refundRow.booking_id, customerName: refundRow.booking?.customer_name, serviceName: refundRow.booking?.service_name_snapshot }}
+      palette={{ ...C, iconBg: `${C.accent}1F` }}
+      isDarkMode={isDarkMode}
+      onClose={() => setRefundRow(null)}
+      onRefunded={handleRefunded}
+    />}
+    <DialogHost />
   </>;
 }
 
@@ -418,6 +437,9 @@ function PaymentAction({ label, onPress, disabled, secondary = false }: { label:
 }
 const styles = StyleSheet.create({
   intro: { paddingTop: 8, paddingBottom: 22, gap: 8 },
+  connect: { borderWidth: 1, borderRadius: 24, padding: 24, alignItems: 'center', gap: 10, marginTop: 8 },
+  connectIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  connectTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, textAlign: 'center' },
   eyebrow: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.6 },
   description: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, lineHeight: 22 },
   caption: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18 },

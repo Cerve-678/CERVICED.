@@ -1,8 +1,10 @@
 import {
   buildProfileStrength,
   busiestBookTapLine,
+  compactTime,
   compareWeeks,
   greetingFor,
+  remainingStepsLine,
   todayHoursLabel,
   trendLabel,
 } from '../features/providers/linkOnlyDashboard';
@@ -21,7 +23,7 @@ const hour = (day: number, open: string, close: string, closed = false): DbProvi
 
 describe('todayHoursLabel', () => {
   it('shows today\'s hours compactly', () => {
-    expect(todayHoursLabel([hour(1, '09:00:00', '17:30:00')], monday)).toBe('Open today · 9am–5:30pm');
+    expect(todayHoursLabel([hour(1, '09:00:00', '17:30:00')], monday)).toBe('Open today 9am–5:30pm');
   });
 
   it('says closed, or nothing when today has no hours', () => {
@@ -107,6 +109,12 @@ describe('buildProfileStrength', () => {
     expect(items.find(i => i.key === 'photos')!.label).toBe('Add 3 more photos');
   });
 
+  it('asks for a preferred payment method when none is stated', () => {
+    const item = buildProfileStrength({ ...base, paymentMethods: [] }).items.find(i => i.key === 'payments')!;
+    expect(item.done).toBe(false);
+    expect(item.label).toBe('State preferred payment method');
+  });
+
   it('is 100% when everything is filled in', () => {
     const full = { ...base, portfolioCount: 12, specialityCount: 2, instagram: '@ellie', policiesSet: true };
     expect(buildProfileStrength(full).percent).toBe(100);
@@ -116,5 +124,40 @@ describe('buildProfileStrength', () => {
     const { items } = buildProfileStrength({ ...base, instagram: '  ', accessibilityNotes: '' });
     expect(items.find(i => i.key === 'instagram')!.done).toBe(false);
     expect(items.find(i => i.key === 'accessibility')!.done).toBe(false);
+  });
+});
+
+describe('compactTime', () => {
+  it('shortens DB times and Dates the same way', () => {
+    expect(compactTime('09:00:00')).toBe('9am');
+    expect(compactTime('17:30:00')).toBe('5:30pm');
+    expect(compactTime(new Date(2026, 9, 19, 13, 30))).toBe('1:30pm');
+  });
+});
+
+describe('remainingStepsLine', () => {
+  const items = (count: number) =>
+    buildProfileStrength({
+      logoSet: true,
+      aboutSet: true,
+      hoursSet: true,
+      portfolioCount: 6,
+      specialityCount: 0,
+      instagram: null,
+      policiesSet: false,
+      accessibilityNotes: null,
+      paymentMethods: [],
+    }).items.filter(i => !i.done).slice(0, count);
+
+  it('names what is left after the next step', () => {
+    expect(remainingStepsLine(items(2))).toBe('2 more: specialities, Instagram');
+  });
+
+  it('names three at most', () => {
+    expect(remainingStepsLine(items(5))).toBe('5 more: specialities, Instagram, policies…');
+  });
+
+  it('is null when nothing is left', () => {
+    expect(remainingStepsLine([])).toBeNull();
   });
 });

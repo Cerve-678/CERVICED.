@@ -111,21 +111,23 @@ async function handlePushError(
 }
 
 /**
- * Which client-facing notification-settings toggle governs which notification
- * type. Mirrors NotificationPreferences in databaseService.ts and the rows in
- * NotificationsSettingsScreen.
+ * Which notification-settings toggle governs which notification type, per
+ * recipient hat. Mirrors NotificationPreferences / ProviderNotificationPreferences
+ * in databaseService.ts and the rows on each hat's settings screen.
  *
  * Scope is deliberately narrow, and the narrowness is the safety property:
  *  - Only the PUSH is gated. The notifications row is always written, so the
  *    in-app list stays a complete record and a toggle can never destroy
  *    information the user may need later.
- *  - Only recipient_role 'client' is gated. These toggles live on a client
- *    screen; a provider's operational alerts are not theirs to switch off.
- *  - Any type absent from this map always sends. Fail-open is the correct
+ *  - Each hat is gated only by its own map and its own keys, so a dual-hat
+ *    account switching something off as a client never mutes it as a provider.
+ *  - Any type absent from a map always sends. Fail-open is the correct
  *    default for a delivery gate: a missing mapping should mean "not covered
- *    by a toggle", never "silently suppressed".
+ *    by a toggle", never "silently suppressed". The provider's "Needs your
+ *    answer" types (booking requests, reschedule requests, refund requests,
+ *    disputes) are left out on purpose so they can't be muted.
  */
-const PREF_KEY_BY_TYPE: Record<string, string> = {
+const CLIENT_PREF_KEY_BY_TYPE: Record<string, string> = {
   // "Booking Confirmed — Instant confirmation alerts"
   booking_pending: 'bookingConfirm',
   booking_confirmed: 'bookingConfirm',
@@ -159,7 +161,41 @@ const PREF_KEY_BY_TYPE: Record<string, string> = {
   aftercare_available: 'maintenanceReminders',
 };
 
-// Must match DEFAULT_NOTIF_PREFS in databaseService.ts.
+// Provider hat. Rows on ProviderNotificationSettingsScreen.
+const PROVIDER_PREF_KEY_BY_TYPE: Record<string, string> = {
+  // "New Bookings"
+  booking_confirmed: 'providerNewBookings',
+  // "Changes & Cancellations"
+  booking_cancelled: 'providerBookingChanges',
+  reschedule_confirmed: 'providerBookingChanges',
+  reschedule_declined: 'providerBookingChanges',
+  reschedule_expired: 'providerBookingChanges',
+  reschedule_provider_response: 'providerBookingChanges',
+  // "Appointment Reminders — the day before, and forms not sent yet"
+  booking_reminder: 'providerReminders',
+  intake_form_reminder: 'providerReminders',
+  // "Client Forms"
+  intake_form_completed: 'providerForms',
+  intake_form_received: 'providerForms',
+  // "Messages"
+  new_message: 'providerMessages',
+  provider_message: 'providerMessages',
+  // "Payment Updates"
+  payment_success: 'providerPayments',
+  cancellation_settled: 'providerPayments',
+  refund_request_updated: 'providerPayments',
+  fee_charged: 'providerPayments',
+  fee_paid_by_client: 'providerPayments',
+  fee_payment_lapsed: 'providerPayments',
+  fee_dispute_resolved: 'providerPayments',
+  // "Your Business"
+  review_received: 'providerReviews',
+  daily_recap: 'providerDailyRecap',
+  schedule_fully_booked: 'providerFullyBooked',
+  provider_saved: 'providerSaves',
+};
+
+// Must match DEFAULT_NOTIF_PREFS and DEFAULT_PROVIDER_NOTIF_PREFS in databaseService.ts.
 const DEFAULT_PREFS: Record<string, boolean> = {
   bookingConfirm: true,
   bookingReminder: true,
@@ -168,6 +204,16 @@ const DEFAULT_PREFS: Record<string, boolean> = {
   newProviders: true,
   weeklySummary: false,
   maintenanceReminders: false,
+  providerNewBookings: true,
+  providerBookingChanges: true,
+  providerReminders: true,
+  providerForms: true,
+  providerMessages: true,
+  providerPayments: true,
+  providerReviews: true,
+  providerDailyRecap: true,
+  providerFullyBooked: true,
+  providerSaves: true,
 };
 
 /**
@@ -187,8 +233,11 @@ function pushAllowedByPrefs(
   recipientRole: string | undefined,
   prefs: Record<string, boolean> | null,
 ): boolean {
-  if (recipientRole !== 'client') return true;
-  const key = type ? PREF_KEY_BY_TYPE[type] : undefined;
+  const map = recipientRole === 'client' ? CLIENT_PREF_KEY_BY_TYPE
+    : recipientRole === 'provider' ? PROVIDER_PREF_KEY_BY_TYPE
+    : null;
+  if (!map) return true;
+  const key = type ? map[type] : undefined;
   if (!key) return true;
   const effective = { ...DEFAULT_PREFS, ...(prefs ?? {}) };
   return effective[key] !== false;

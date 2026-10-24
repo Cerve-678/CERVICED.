@@ -92,12 +92,15 @@ describe('provider management performance contracts', () => {
   });
 
   it('keeps provider refund controls usable while typing a reason', () => {
-    const source = read('screens/provider/ProviderBookingDetailScreen.tsx');
+    // One sheet serves the booking detail screen and Payments → Booking payments.
+    const source = read('components/IssueRefundSheet.tsx');
+    expect(read('screens/provider/ProviderBookingDetailScreen.tsx')).toContain('<IssueRefundSheet');
+    expect(read('components/ProviderStripePayments.tsx')).toContain('<IssueRefundSheet');
 
     // The sheet rides above the keyboard, and focusing the amount or note
     // scrolls the form so the field stays in view while typing.
     expect(source).toContain('<KeyboardAvoidingView');
-    expect(source).toContain('refundFormScrollRef.current?.scrollToEnd');
+    expect(source).toContain('scrollRef.current?.scrollToEnd');
     expect(source).toContain('keyboardShouldPersistTaps="handled"');
     expect(source).toContain('Issue a refund');
     expect(source).toContain('>Cancel</Text>');

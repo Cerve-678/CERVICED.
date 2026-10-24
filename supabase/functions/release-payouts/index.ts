@@ -245,6 +245,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const fees = await releaseFeePayouts();
+    const tips = await releaseTipPayouts();
     // Declined fees whose next automatic retry on the saved card is due.
     const feeRetries = await retryDueFees(admin, stripe, BATCH_LIMIT)
       .catch((err) => { console.error(`[release-payouts] fee retries failed: ${String(err)}`); return null; });
@@ -252,9 +253,9 @@ Deno.serve(async (req: Request) => {
     const lapsedFeeRequests = await lapseFeePayRequests(admin, stripe, BATCH_LIMIT)
       .catch((err) => { console.error(`[release-payouts] fee request lapse failed: ${String(err)}`); return -1; });
 
-    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)} lapsedFeeRequests=${lapsedFeeRequests} feeRetries=${JSON.stringify(feeRetries)}`);
+    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)} tips=${JSON.stringify(tips)} lapsedFeeRequests=${lapsedFeeRequests} feeRetries=${JSON.stringify(feeRetries)}`);
     return new Response(
-      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees, lapsedFeeRequests, feeRetries }),
+      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees, tips, lapsedFeeRequests, feeRetries }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   } catch (err) {
@@ -325,6 +326,48 @@ async function releaseFeePayouts() {
         .update({ payout_status: 'failed', payout_failure_reason: String(err).slice(0, 500) })
         .eq('id', fee.id).eq('payout_status', 'held');
       console.error(`[release-payouts] fee transfer failed for ${fee.id}: ${String(err)}`);
+      counts.failed++;
+    }
+  }
+  return counts;
+}
+
+// Tips follow the same 24-hour hold as fee payouts. The provider receives the
+// client-paid amount less Stripe's actual fee (never a guessed percentage).
+async function releaseTipPayouts() {
+  const counts = { transferred: 0, cancelled: 0, failed: 0, skipped: 0, considered: 0 };
+  const { data: due, error } = await admin.from('booking_tips')
+    .select('id, booking_id, provider_id, payment_intent_id, payout_pence, currency')
+    .eq('status', 'succeeded').eq('payout_status', 'held')
+    .lte('release_after', new Date().toISOString()).order('release_after', { ascending: true }).limit(BATCH_LIMIT);
+  if (error) throw error;
+  counts.considered = due?.length ?? 0;
+  for (const tip of due ?? []) {
+    try {
+      if (!tip.payment_intent_id || !tip.payout_pence || tip.payout_pence <= 0) {
+        await admin.from('booking_tips').update({ payout_status: 'cancelled', failure_reason: 'missing payment or zero payout' }).eq('id', tip.id).eq('payout_status', 'held');
+        counts.cancelled++; continue;
+      }
+      const { data: provider } = await admin.from('providers').select('stripe_account_id, stripe_payouts_enabled').eq('id', tip.provider_id).maybeSingle();
+      if (!provider?.stripe_account_id || !provider.stripe_payouts_enabled) { counts.skipped++; continue; }
+      const intent = await stripe.paymentIntents.retrieve(tip.payment_intent_id);
+      const chargeId = typeof intent.latest_charge === 'string' ? intent.latest_charge : intent.latest_charge?.id;
+      if (intent.status !== 'succeeded' || !chargeId) { counts.skipped++; continue; }
+      const charge = await stripe.charges.retrieve(chargeId);
+      if (charge.disputed || charge.amount_refunded > 0) { counts.skipped++; continue; }
+      const previous = await stripe.transfers.list({ transfer_group: `tip_payout_${tip.id}`, limit: 1 });
+      const transfer = previous.data[0] ?? await stripe.transfers.create({
+        amount: tip.payout_pence, currency: tip.currency ?? 'gbp', destination: provider.stripe_account_id,
+        source_transaction: chargeId, transfer_group: `tip_payout_${tip.id}`,
+        metadata: { booking_tip_id: tip.id, booking_id: tip.booking_id, provider_id: tip.provider_id },
+      }, { idempotencyKey: `tip_payout_${tip.id}` });
+      const { error: writeError } = await admin.from('booking_tips').update({ payout_status: 'transferred', stripe_transfer_id: transfer.id, failure_reason: null })
+        .eq('id', tip.id).eq('payout_status', 'held');
+      if (writeError) throw writeError;
+      counts.transferred++;
+    } catch (err) {
+      await admin.from('booking_tips').update({ payout_status: 'failed', failure_reason: String(err).slice(0, 500) }).eq('id', tip.id).eq('payout_status', 'held');
+      console.error(`[release-payouts] tip transfer failed for ${tip.id}: ${String(err)}`);
       counts.failed++;
     }
   }

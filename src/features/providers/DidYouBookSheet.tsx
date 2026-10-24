@@ -203,7 +203,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                   </Text>
                 </View>
                 <Text style={[styles.askSub, { color: tokens.sub }]}>
-                  Tell us and we'll add it to your Upcoming bookings, so everything stays in one place.
+                  Tell us and we'll add it to your Upcoming bookings, so everything stays in one place. {providerName} only sees how many clients said yes, never who.
                 </Text>
                 <TouchableOpacity
                   style={[styles.primaryButton, { backgroundColor: accentColor }]}
