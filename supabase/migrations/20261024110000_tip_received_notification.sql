@@ -10,7 +10,8 @@
 -- (send-push-notification: tip_received → providerPayments); the in-app row is
 -- always written, like every other type.
 --
--- Frontier at authoring: 20261021112728 (booking_tips_real_money). Verify
+-- Renumbered 2026-10-24 above 20261024100000 (listing_claims_checked_by_instagram,
+-- which doesn't touch notifications_type_check). First written as 20261021195500. Verify
 -- max(version) and the live notifications_type_check before applying: this
 -- restates the list from 20261020150000 plus 'tip_received'.
 
@@ -93,5 +94,5 @@ CREATE TRIGGER on_booking_tip_succeeded
   EXECUTE FUNCTION public.notify_provider_tip_received();
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261021195500', 'tip_received_notification')
+VALUES ('20261024110000', 'tip_received_notification')
 ON CONFLICT (version) DO NOTHING;
