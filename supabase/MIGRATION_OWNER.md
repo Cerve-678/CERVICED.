@@ -22,16 +22,16 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-c2 (2026-10-21) — 20261021195500_tip_received_notification
-        written on feat/tip-received-notification, NOT applied (waiting on the
-        user's OK). Release when applied.
+OWNER:  (none) — released by cerviced-c2 on 2026-10-24 to cerviced-99 (listing
+        claims). 20261021195500_tip_received_notification is still written and
+        NOT applied: renumber it above the live frontier before applying.
 ```
 
 ### Written 2026-10-21 (tell the provider when a client tips)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261021195500 | `tip_received_notification` | **WRITTEN, NOT APPLIED.** Frontier at authoring: `20261021112728`. Widens `notifications_type_check` (restates `20261020150000`'s list + `tip_received`) and adds `notify_provider_tip_received()` + trigger `on_booking_tip_succeeded` on `booking_tips` (fires once when a tip is recorded as paid; the whole tip is the provider's, so the message gives the client's amount). The insert catches its own errors so a failed notification can't roll back recording a paid tip. Verify the live CHECK list matches before applying. Deploy `send-push-notification` (adds `tip_received: 'providerPayments'`) with it. The file records its own version. |
+| 20261021195500 | `tip_received_notification` | **WRITTEN, NOT APPLIED — must be renumbered above the live frontier before applying** (other migrations are due to land first). Frontier at authoring: `20261021112728`. Widens `notifications_type_check` (restates `20261020150000`'s list + `tip_received`) and adds `notify_provider_tip_received()` + trigger `on_booking_tip_succeeded` on `booking_tips` (fires once when a tip is recorded as paid; the whole tip is the provider's, so the message gives the client's amount). The insert catches its own errors so a failed notification can't roll back recording a paid tip. Verify the live CHECK list matches before applying. Deploy `send-push-notification` (adds `tip_received: 'providerPayments'`) with it. The file records its own version. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 
