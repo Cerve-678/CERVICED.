@@ -62,6 +62,7 @@ import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
+import type { AdminMoneyOverview } from "../types/adminMoney";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
 
@@ -11123,6 +11124,40 @@ export async function refundProviderBooking(input: RefundRequestInput): Promise<
     throw new Error('The refund could not be confirmed. Refresh before trying again.');
   }
   return data?.status === 'refunded' || data?.status === 'already_refunded';
+}
+
+// ── Admin Money screen (admin_users accounts only) ─────────────────────────
+// The server enforces who is an admin; these just call it. An admin approves
+// a refund with refundProviderBooking above: refund-payment accepts admins.
+
+/** Whether the signed-in account is a CERVICED admin. Only ever about the caller. */
+export async function isCervicedAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_cerviced_admin');
+  if (error) throw error;
+  return data === true;
+}
+
+/** Failed payouts, money providers owe and open refund requests. Throws for a non-admin. */
+export async function getAdminMoneyOverview(): Promise<AdminMoneyOverview> {
+  const { data, error } = await supabase.rpc('admin_money_overview');
+  if (error) throw error;
+  const overview = data as Partial<AdminMoneyOverview> | null;
+  if (!overview || !Array.isArray(overview.failed) || !Array.isArray(overview.owed) || !Array.isArray(overview.refunds)) {
+    throw new Error('The money lists came back in an unexpected shape.');
+  }
+  return overview as AdminMoneyOverview;
+}
+
+/** Puts a failed or waiting payout back as due now; the next release run sends it. */
+export async function adminRetryPayout(payoutId: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_retry_payout', { p_payout_id: payoutId });
+  if (error) throw error;
+}
+
+/** Cerviced's "no" to a passed-on refund request. The note is what the client is told. */
+export async function adminDeclineRefundRequest(requestId: string, note: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_decline_refund_request', { p_request_id: requestId, p_note: note });
+  if (error) throw error;
 }
 
 /** What the Issue Refund sheet needs to know about one of the provider's own bookings. */
