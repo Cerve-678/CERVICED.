@@ -4839,12 +4839,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Same providers.whatsapp_number the Communications screen edits —
-                  one value, two editors, by design. The contact *details* are a
-                  shared pool (signup fills what it collects, either screen can
-                  fill the rest); what differs is who each screen publishes them
-                  to. Filling it here makes it public; ticking WhatsApp in
-                  Communications offers it to booked clients. */}
+              {/* providers.whatsapp_number — the PUBLIC number. Communications
+                  has its own booked-client values (provider_booked_contact);
+                  a blank one there falls back to this, so filling it here
+                  also reaches booked clients until they're given a separate
+                  number. */}
               <View
                 style={styles.inputGroup}
                 ref={registerField('whatsapp')}
