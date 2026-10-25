@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-25 (service search)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261025120000 | `service_search` | **APPLIED 2026-10-25** by Claude (cerviced-16), Supabase CLI `db query --linked -f`, on the user's OK. The file records its own version. Frontier at apply: `20261024100000`; cerviced-3f confirmed it would renumber its unapplied `provider_booked_contact` above whatever is live when it applies. Adds `search_edit_distance`, `search_category_words`, `search_synonym_map`, `search_rewrite_query` and `search_services_ranked` (all SECURITY INVOKER, has_gone_live-gated). Redefines nothing. Verified live: the version is recorded, anon can execute, `supabase/tests/service_search_eval.sql` 91/92, and an anon REST call returns results. PR #171's app code needs this, and can merge now. **Still unapplied and now below the frontier, so renumber above `20261025120000` before applying:** `20261024110000` (#163), `20261024120000` (#165), `20261024121000` (#166), `20261024122000` (#169), `20261022100000` (#168), `20261021192826` (#161). |
+
 ### Applied 2026-10-21 (daily "people saved you" count)
 
 | Authored version | Name | Status |

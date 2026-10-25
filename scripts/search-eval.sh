@@ -18,13 +18,23 @@ tmp="$(mktemp -t search-eval).sql"
 trap 'rm -f "$tmp"' EXIT
 
 {
-  # public.search_* -> pg_temp.search_*; drop grants and comment-only lines.
-  sed -e 's/CREATE OR REPLACE FUNCTION public\./CREATE FUNCTION pg_temp./' \
+  # public.search_* -> pg_temp.search_*. Drop grants, comment-only lines, the
+  # transaction, and the file's own schema_migrations record: an eval must
+  # never mark the migration as applied.
+  sed -e '/^INSERT INTO supabase_migrations/,/;$/d' \
+      -e 's/CREATE OR REPLACE FUNCTION public\./CREATE FUNCTION pg_temp./' \
       -e 's/public\.search_/pg_temp.search_/g' \
-      -e '/^GRANT/d' -e '/^ *--/d' -e '/^CREATE EXTENSION/d' "$migration"
+      -e '/^GRANT/d' -e '/^ *--/d' -e '/^CREATE EXTENSION/d' \
+      -e '/^BEGIN;$/d' -e '/^COMMIT;$/d' "$migration"
   sed -e 's/search_services_ranked(/pg_temp.search_services_ranked(/' \
       "$repo/supabase/tests/service_search_eval.sql"
 } > "$tmp"
+
+# Refuse to run if anything could still write outside pg_temp.
+if grep -qiE 'schema_migrations|create or replace function public\.|^(begin|commit);' "$tmp"; then
+  echo "search-eval: generated SQL still touches the real schema; aborting" >&2
+  exit 1
+fi
 
 # The CLI looks for the linked project in the main checkout's supabase/.temp.
 cd "${SUPABASE_WORKDIR:-$repo}"

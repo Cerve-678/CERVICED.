@@ -73,6 +73,8 @@
 -- tsvector columns, maintained by triggers; signatures and the app stay the
 -- same.
 
+BEGIN;
+
 CREATE OR REPLACE FUNCTION public.search_edit_distance(a text, b text)
 RETURNS integer
 LANGUAGE plpgsql
@@ -522,3 +524,11 @@ GRANT EXECUTE ON FUNCTION public.search_category_words(text) TO anon, authentica
 GRANT EXECUTE ON FUNCTION public.search_synonym_map() TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.search_rewrite_query(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.search_services_ranked(text, text, text[], integer) TO anon, authenticated;
+
+-- Record this file's own version, so a CLI `db query -f` apply matches the
+-- file name instead of being stamped with the wall clock.
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261025120000', 'service_search')
+ON CONFLICT (version) DO NOTHING;
+
+COMMIT;
