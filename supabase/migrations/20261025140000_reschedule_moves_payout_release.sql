@@ -1,10 +1,9 @@
 -- A moved booking moves its payout.
 --
--- Frontier at authoring: 20261021112728 (verified live 2026-10-22). Two
--- unapplied files on other branches sit above it (20261021195500 tip
--- notification, which holds the migration lock, and 20261021200000 refund
--- hold notice), so this is numbered above both. Apply only once the lock in
--- MIGRATION_OWNER.md is free, and re-check max(version) first.
+-- Frontier: 20261025120000 (verified live 2026-10-25). First written as
+-- 20261022100000; renumbered when 20261024100000 and 20261025120000 were
+-- applied above it. Check the lock in MIGRATION_OWNER.md and re-check
+-- max(version) before applying.
 --
 -- The gap (PAYMENTS_AND_LOGIC.md §9, spotted 3 Oct, confirmed live 22 Oct):
 -- create_held_payout_on_finalize sets release_after once, from the date the
@@ -74,7 +73,7 @@ CREATE TRIGGER after_booking_move_held_payout
   EXECUTE FUNCTION public.move_held_payout_with_booking();
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261022100000', 'reschedule_moves_payout_release')
+VALUES ('20261025140000', 'reschedule_moves_payout_release')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
