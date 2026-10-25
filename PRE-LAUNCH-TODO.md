@@ -1219,3 +1219,48 @@ Confirm Your Details if the client goes back to the cart tab themselves.
 Closing this needs the address page to intercept back when it was opened
 from checkout (`usePreventRemove`, or a `BackHandler` plus
 `gestureEnabled: false`).
+
+---
+
+## 26. Payouts after a reschedule or refund: four gaps, ranked (2026-10-25)
+
+Found while checking `PAYMENTS_AND_LOGIC.md` §9. Ranked most important first.
+Items 1 and 2 stop money going wrong; items 3 and 4 deal with it once it has.
+
+1. **Apply PR #168: a moved booking moves its payout.** *Built, needs the
+   user's OK to apply.* Today the payout date is fixed when the client pays,
+   so a booking moved from 5 Nov to 20 Nov pays the provider around 6 Nov,
+   before the work. If the client then cancels, the money has to be taken
+   back, and that's what creates most debts in item 4. The fix moves the
+   payout by the same amount, earlier or later (user's choice). Migration
+   `20261025140000`: do a rolled-back dry run on live, then apply, then merge.
+2. **Rescheduling must not dodge a late-cancel charge.** *Decided, not
+   built.* A client already too late to cancel for free can reschedule
+   (reschedule notice is a separate, often looser setting), then cancel the
+   new date for a full refund, because `apply-cancellation-refund` only looks
+   at the current date. Decided: if they rescheduled while already inside the
+   cancellation window, the provider's late-cancel rule still applies, as if
+   they'd cancelled on the original date. Anyone who reschedules in good time
+   is unaffected. Needs a record of "rescheduled while late" on the booking,
+   the refund function to read it, and the client told before they confirm
+   the reschedule. Run `cerviced-legal-flagger` because this is refund policy.
+3. **Tell providers when they owe money.** *Needed whatever is chosen in
+   item 4.* When a refund can't be fully taken back from a provider's Stripe
+   balance, the rest is recorded in `provider_shortfalls` and taken out of
+   their next payout. Providers are told nothing about this: there's no
+   notification and no app screen. Two messages: one when the debt appears
+   ("£30 left will come out of your next payments"), one each time money is
+   taken ("£15 taken, £15 left"). New notification type, so check it with
+   `cerviced-feature-coherence` first.
+4. **Late/no-show fee payouts should pay off that debt.** *Agreed in
+   principle; A or B still open.* Today fee payouts are paid in full and only
+   booking payouts are used. If the fee is less than the debt, all of it
+   goes towards the debt and the rest stays owed. If it's more, only the
+   debt is taken.
+   - **A (recommended):** tell them (item 3), then take it automatically.
+   - **B:** a "pay what you owe" button with 3 reminders, then fall back to A.
+     Bigger build: charges the provider's card, Stripe fees, and a decision
+     on whether their payouts keep going out while reminders run.
+
+   Either way, a provider who never earns again on the app is never
+   recovered from automatically.
