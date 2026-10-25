@@ -15,9 +15,9 @@
 --
 -- 1. provider_payouts.attempt_count / last_failed_at / failure_cause.
 -- 2. notifications_type_check gains 'payout_failed'. Restated from the list in
---    20261024110000_tip_received_notification (live 50 + 'tip_received',
+--    20261025130000_tip_received_notification (live 50 + 'tip_received',
 --    checked against the live constraint 2026-10-21; 20261024100000 didn't
---    change it), so this MUST be applied AFTER 20261024110000: applied before
+--    change it), so this MUST be applied AFTER 20261025130000: applied before
 --    it, that file would re-narrow the CHECK and drop 'payout_failed'. Not in send-push-notification's provider map,
 --    so it always pushes (the provider has to act on it).
 -- 3. money_needing_attention(): the one read of those three lists, for the
@@ -25,9 +25,10 @@
 -- 4. process_money_daily_summary() + cron 'money-daily-summary', same
 --    vault-key + net.http_post shape as process_due_payouts().
 --
--- Renumbered 2026-10-24 from 20261021201000, which fell below the frontier
+-- Renumbered 2026-10-25 above 20261025120000 (service_search); before that
+-- renumbered 2026-10-24 from 20261021201000, which fell below the frontier
 -- when 20261024100000 (listing claims) was applied. Apply order:
--- 20261024110000 (cerviced-c2, tip_received) → 20261024120000 (refund hold
+-- 20261025130000 (cerviced-c2, tip_received) → 20261025140000 (refund hold
 -- notice) → this.
 
 -- ── 1. retry bookkeeping ────────────────────────────────────────────────────
@@ -163,5 +164,5 @@ SELECT cron.unschedule('money-daily-summary')
 SELECT cron.schedule('money-daily-summary', '0 8 * * *', 'SELECT public.process_money_daily_summary();');
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261024121000', 'payout_retries_and_alerts')
+VALUES ('20261025141000', 'payout_retries_and_alerts')
 ON CONFLICT (version) DO NOTHING;
