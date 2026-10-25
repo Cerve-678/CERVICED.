@@ -26,10 +26,11 @@
 -- changes until a provider types a separate value. The on/off switches stay
 -- in providers.preferred_contact_methods.
 --
--- Frontier at authoring: 20261024100000 (listing claims), with
--- 20261025120000 (service search) about to be applied by another session, so
--- numbered above that. Re-check max(version) before applying. Redefines
--- nothing. The file records its own version.
+-- Frontier at authoring: 20261024100000. First written as 20261024105000,
+-- then 20261025130000, and renumbered both times because another session
+-- applied service search above it (the second time at exactly 20261025130000).
+-- Frontier now 20261025130000. Re-check max(version) before applying.
+-- Redefines nothing. The file records its own version.
 -- ============================================================
 
 BEGIN;
@@ -96,7 +97,7 @@ REVOKE ALL ON FUNCTION public.get_booked_client_contact(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_booked_client_contact(uuid) TO authenticated;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261025130000', 'provider_booked_contact')
+VALUES ('20261025140000', 'provider_booked_contact')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
