@@ -128,6 +128,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Browse/search/filter providers | ✅ | `HomeScreen`, `SearchScreen`, `ExploreScreen` → `databaseService.getProviders()`, capped at `DEFAULT_PROVIDER_QUERY_LIMIT` (200) |
+| Search services, typo-tolerant | 🟡 needs migration `20261025120000` applied | `SearchScreen` → `searchProvidersAndServices()` → RPC `search_services_ranked`: matching services in a row above the provider grid (max 3 per provider, tap opens that service's booking sheet), typos fixed against words live services use ("frsnch" → french), descriptions matched, synonyms from `src/constants/searchSynonyms.ts`. Becca's `searchProviders` gets the same matching |
 | Provider profile view | ✅ | `ProviderProfileScreen` |
 | Add to cart (multi-provider) | ✅ | `CartContext` — reducer pattern, groups items by provider |
 | Cart pricing | ✅ | `CartContext.ts:554` — service fee = `max(subtotal * 0.05, £2)`. Confirmed still exactly this formula. |

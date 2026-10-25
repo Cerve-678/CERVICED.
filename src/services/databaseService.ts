@@ -58,6 +58,7 @@ import {
   PHONE_PENDING_PLACEHOLDER,
 } from "../types/booking";
 import { parseSearchQuery } from "../utils/searchQuery";
+import { expandSearchSynonyms } from "../constants/searchSynonyms";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
@@ -974,24 +975,83 @@ export async function getProvidersAvailability(
   return result;
 }
 
+/** One matching service from search_services_ranked — only fields the
+ *  public provider profile already shows (no address, nothing private). */
+export interface ServiceSearchResult {
+  serviceId: string;
+  providerId: string;
+  providerSlug: string;
+  providerName: string;
+  providerLogoUrl: string | null;
+  providerLocation: string | null;
+  /** Books on their own page (booking_mode 'external') — no price shown. */
+  isLinkOnly: boolean;
+  name: string;
+  description: string | null;
+  menuHeading: string | null;
+  category: string | null;
+  price: number | null;
+  priceMax: number | null;
+  durationMinutes: number | null;
+  rank: number;
+}
+
+export interface MarketplaceSearchResult {
+  providers: PublicProviderSummary[];
+  services: ServiceSearchResult[];
+  /** The query as the server read it after fixing typos ("frsnch tip" →
+   *  "french tip"); null when nothing needed correcting. */
+  correctedQuery: string | null;
+}
+
+interface RankedServiceRow {
+  service_id: string;
+  provider_id: string;
+  provider_slug: string;
+  provider_name: string;
+  provider_logo_url: string | null;
+  provider_location: string | null;
+  booking_mode: string | null;
+  service_name: string;
+  service_description: string | null;
+  menu_heading: string | null;
+  service_category: string | null;
+  price: number | null;
+  price_max: number | null;
+  duration_minutes: number | null;
+  rank: number;
+  corrected_query: string | null;
+}
+
+/** Services listed for a typed search. The RPC also caps each provider at 3. */
+const SERVICE_SEARCH_LIMIT = 60;
+
 /**
- * Search providers from a plain-English query — e.g. "hairstylist in south
- * london" or "almond nails, nail art in east manchester". Parses out a
- * trailing "in/near/around <place>" as a location filter and the remainder
- * as one or more service terms (split on commas/"and"), matched against
- * service names/descriptions and provider display name/about text/location.
- * A detected category keyword (e.g. "hairstylist" → HAIR) additionally
- * broadens the result to the whole category, since generic words like that
- * rarely appear verbatim in a service name. Optionally further filtered by
- * an explicit service category chip.
+ * Search providers AND individual services from a plain-English query — e.g.
+ * "hairstylist in south london", "almond nails, nail art in east manchester"
+ * or a misspelt "frsnch tip". Parses out a trailing "in/near/around <place>"
+ * as a location filter and the remainder as one or more service terms (split
+ * on commas/"and").
+ *
+ * Providers come from four lookups run together: service name/description
+ * substring, provider name/about/location substring, a detected category
+ * keyword (e.g. "hairstylist" → HAIR, since generic words like that rarely
+ * appear verbatim in a service name), and search_services_ranked — which
+ * corrects typos against the words live services actually use, matches
+ * service names, menu headings, tags AND descriptions, and widens with
+ * domain synonyms ("gel nails" → BIAB). Its services are returned as well, in
+ * rank order. Optionally filtered by an explicit service category chip.
  */
-export async function searchProviders(
+export async function searchProvidersAndServices(
   query: string,
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
-): Promise<PublicProviderSummary[]> {
+): Promise<MarketplaceSearchResult> {
   const q = query.trim();
-  if (!q) return getProviders(category, limit);
+  if (!q) {
+    return { providers: await getProviders(category, limit), services: [], correctedQuery: null };
+  }
+  const empty: MarketplaceSearchResult = { providers: [], services: [], correctedQuery: null };
 
   const parsed = parseSearchQuery(q);
   // Falls back to the whole query when no location preposition was found,
@@ -1000,7 +1060,7 @@ export async function searchProviders(
     parsed.serviceTerms.length ? parsed.serviceTerms : (parsed.locationTerms.length ? parsed.locationTerms : [q])
   ).map(sanitizeIlikeTerm).filter(Boolean);
   const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm).filter(Boolean);
-  if (!textTerms.length) return [];
+  if (!textTerms.length) return empty;
 
   const serviceOr = textTerms
     .map((t) => `name.ilike.%${t}%,description.ilike.%${t}%`)
@@ -1021,12 +1081,16 @@ export async function searchProviders(
       ? parsed.categoryHint
       : null;
 
-  // None of these three lookups depend on each other's result, so run them
+  // A location-only query ("near Manchester") has no service words to rank.
+  const serviceText = parsed.serviceTerms.length ? parsed.serviceText : "";
+
+  // None of these lookups depend on each other's result, so run them
   // together instead of waiting on one before starting the next.
   const [
     { data: serviceMatches, error: serviceError },
     { data: nameMatches, error: nameError },
     { data: categoryMatches, error: categoryError },
+    { data: rankedServices, error: rankedError },
   ] = await Promise.all([
     // 1. Provider IDs where a service name or description matches
     supabase
@@ -1051,22 +1115,57 @@ export async function searchProviders(
           .overlaps("service_categories", [categoryHint])
           .limit(limit)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
+    // 4. Ranked, typo-tolerant service matches (has_gone_live-gated in SQL)
+    serviceText
+      ? supabase.rpc("search_services_ranked", {
+          p_query: serviceText,
+          p_category: category && category !== "ALL" ? category : null,
+          p_locations: locationTerms,
+          p_synonyms: expandSearchSynonyms(serviceText),
+          p_limit: SERVICE_SEARCH_LIMIT,
+        })
+      : Promise.resolve({ data: [] as RankedServiceRow[], error: null }),
   ]);
 
-  if (serviceError || nameError || categoryError) {
-    throw serviceError || nameError || categoryError;
+  if (serviceError || nameError || categoryError || rankedError) {
+    throw serviceError || nameError || categoryError || rankedError;
   }
+
+  const rankedRows = (rankedServices ?? []) as RankedServiceRow[];
+  const services: ServiceSearchResult[] = rankedRows.map((r) => ({
+    serviceId: r.service_id,
+    providerId: r.provider_id,
+    providerSlug: r.provider_slug,
+    providerName: r.provider_name,
+    providerLogoUrl: r.provider_logo_url,
+    providerLocation: r.provider_location,
+    isLinkOnly: r.booking_mode === "external",
+    name: r.service_name,
+    description: r.service_description,
+    menuHeading: r.menu_heading,
+    category: r.service_category,
+    price: r.price,
+    priceMax: r.price_max,
+    durationMinutes: r.duration_minutes,
+    rank: r.rank,
+  }));
+  const correctedQuery = rankedRows[0]?.corrected_query ?? null;
 
   const serviceIds = (serviceMatches ?? []).map(
     (r: { provider_id: string }) => r.provider_id,
   );
   const nameIds = (nameMatches ?? []).map((r: { id: string }) => r.id);
   const categoryIds = (categoryMatches ?? []).map((r: { id: string }) => r.id);
-  const allIds = [...new Set([...serviceIds, ...nameIds, ...categoryIds])];
+  // Rows arrive best-first, so the first rank seen per provider is its best.
+  const bestServiceRank = new Map<string, number>();
+  for (const s of services) {
+    if (!bestServiceRank.has(s.providerId)) bestServiceRank.set(s.providerId, s.rank);
+  }
+  const allIds = [...new Set([...serviceIds, ...bestServiceRank.keys(), ...nameIds, ...categoryIds])];
 
-  if (allIds.length === 0) return [];
+  if (allIds.length === 0) return { ...empty, correctedQuery };
 
-  // 4. Fetch those providers, applying the explicit location + category filters
+  // 5. Fetch those providers, applying the explicit location + category filters
   let providerQuery = supabase
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
@@ -1093,7 +1192,8 @@ export async function searchProviders(
   const { data, error } = await providerQuery;
   if (error) throw error;
   // Exact business names and matching services precede broad category recall.
-  // Keep the server's featured/rating order as the tie-breaker.
+  // Among service matches, the better-matching service ranks first; the
+  // server's featured/rating order is the final tie-breaker.
   const serviceIdSet = new Set(serviceIds);
   const nameIdSet = new Set(nameIds);
   const normalizedQuery = parsed.serviceText.toLowerCase();
@@ -1101,13 +1201,25 @@ export async function searchProviders(
     const name = provider.display_name.toLowerCase();
     if (normalizedQuery && name === normalizedQuery) return 4;
     if (normalizedQuery && name.includes(normalizedQuery)) return 3;
+    const ranked = bestServiceRank.get(provider.id);
+    if (ranked !== undefined) return 2 + Math.min(ranked, 1) * 0.5;
     if (serviceIdSet.has(provider.id)) return 2;
     if (nameIdSet.has(provider.id)) return 1;
     return 0;
   };
-  return ((data ?? []) as PublicProviderSummary[])
+  const providers = ((data ?? []) as PublicProviderSummary[])
     .sort((a, b) => relevance(b) - relevance(a))
     .slice(0, limit);
+  return { providers, services, correctedQuery };
+}
+
+/** Providers only — see searchProvidersAndServices. */
+export async function searchProviders(
+  query: string,
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+): Promise<PublicProviderSummary[]> {
+  return (await searchProvidersAndServices(query, category, limit)).providers;
 }
 
 /**
