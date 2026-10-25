@@ -5,7 +5,7 @@
 
 #generated
 
-**2686 functions** across **368 files**.
+**2690 functions** across **369 files**.
 
 ### `src/components/` (50)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -340,12 +340,13 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (49)
+### `src/utils/` (50)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `bottomSafeGap.ts` — **useSystemBottomInset**
+- `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `cartUtils.ts` — **getCartSummary**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **toArgbHex**
