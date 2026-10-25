@@ -58,7 +58,6 @@ import {
   PHONE_PENDING_PLACEHOLDER,
 } from "../types/booking";
 import { parseSearchQuery } from "../utils/searchQuery";
-import { expandSearchSynonyms } from "../constants/searchSynonyms";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
@@ -1037,10 +1036,11 @@ const SERVICE_SEARCH_LIMIT = 60;
  * substring, provider name/about/location substring, a detected category
  * keyword (e.g. "hairstylist" → HAIR, since generic words like that rarely
  * appear verbatim in a service name), and search_services_ranked — which
- * corrects typos against the words live services actually use, matches
- * service names, menu headings, tags AND descriptions, and widens with
- * domain synonyms ("gel nails" → BIAB). Its services are returned as well, in
- * rank order. Optionally filtered by an explicit service category chip.
+ * rewrites the query into words live services actually use (typos, words
+ * joined or split differently, half-typed words), matches service names,
+ * menu headings, tags, category words AND descriptions, and widens with its
+ * own synonym map ("gel nails" → BIAB). Its services are returned as well, in
+ * rank order. Relevance is graded by supabase/tests/service_search_eval.sql. Optionally filtered by an explicit service category chip.
  */
 export async function searchProvidersAndServices(
   query: string,
@@ -1121,7 +1121,6 @@ export async function searchProvidersAndServices(
           p_query: serviceText,
           p_category: category && category !== "ALL" ? category : null,
           p_locations: locationTerms,
-          p_synonyms: expandSearchSynonyms(serviceText),
           p_limit: SERVICE_SEARCH_LIMIT,
         })
       : Promise.resolve({ data: [] as RankedServiceRow[], error: null }),

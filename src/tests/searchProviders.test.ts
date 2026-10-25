@@ -77,7 +77,7 @@ it('finds a provider only the typo-tolerant service search matched, and returns 
   expect(result.services[0]).toMatchObject({ providerSlug: 'studio', description: 'Short white French tips', isLinkOnly: false });
   expect(result.correctedQuery).toBe('french');
 });
-it('sends the service words, category chip, place and synonyms to the service search', async () => {
+it('sends the service words, category chip and place to the service search', async () => {
   await searchProvidersAndServices('gel nails in Manchester', 'NAILS');
   const rpc = mockCalls.find(c => c.method === 'rpc');
   expect(rpc?.args[0]).toBe('search_services_ranked');
@@ -85,7 +85,6 @@ it('sends the service words, category chip, place and synonyms to the service se
     p_query: 'gel nails',
     p_category: 'NAILS',
     p_locations: ['Manchester'],
-    p_synonyms: expect.arrayContaining(['biab']),
   });
 });
 it('orders service matches by how well their best service matched', async () => {

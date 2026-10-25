@@ -1,47 +1,77 @@
 -- 20261025120000_service_search.sql
 --
 -- Search for SERVICES, not just providers, and understand what the client
--- meant when they misspelled it ("frsnch" -> French tips, "lahses" -> lashes).
+-- meant: misspellings ("frsnch" -> french, "lahses" -> lashes), words joined or
+-- split differently from how the provider wrote them ("blowdry", "pony tail"),
+-- a word inside a word ("facial" -> HydraFacial), half-typed words ("acry"),
+-- and category words a service never repeats ("eyelashes" -> a lash service
+-- called "Volume spikes").
 --
--- Three functions, all additive (nothing existing is redefined):
+-- Graded by supabase/tests/service_search_eval.sql (run scripts/search-eval.sh
+-- before changing anything here — it tests an unapplied version without
+-- touching production).
+--
+-- Functions, all additive (nothing existing is redefined):
 --
 -- 1. search_edit_distance(a, b) — Damerau (optimal string alignment) edit
 --    distance: insert, delete, substitute, and swapping two neighbouring
---    letters each count as one edit. Trigram similarity alone was tried first
---    and is too weak on short words ("lahses" vs "lashes" scores 0.27), which
---    is why search_providers_ranked's fuzzy branch misses most typos.
+--    letters each count as one edit. Trigram similarity alone is too weak on
+--    short words ("lahses" vs "lashes" scores 0.27).
 --
--- 2. search_query_corrections(p_query) — for each query word that is not a
---    word (or the start of a word) anywhere in live services, the nearest real
---    word within 1 edit (4–5 letters) or 2 edits (6+ letters). Words under 4
---    letters are never corrected: too many real words are one edit apart.
---    Vocabulary = live services' names, menu headings, descriptions, tags and
---    the business's name, so a correction can only ever point at something a
---    bookable provider actually offers.
+-- 2. search_category_words(category) — the words a client uses for a whole
+--    category ("makeup" for MUA, "eyelashes" for LASHES), so a service matches
+--    them without having to contain them.
 --
--- 3. search_services_ranked(...) — individual services, ranked. Per query word
---    (after correction), the best field it matches scores: service name 1.0,
---    menu heading / tags / category 0.75, description 0.5, business name 0.35.
---    Rank = average over the query's words, so a service matching more of what
---    was typed ranks higher; at least half the words must match something.
---    p_synonyms ("gel nails" -> biab) are whole-phrase alternatives scored the
---    same way. At most 3 services per provider, so one business with ten
---    French variations can't fill the whole list, and nothing scoring under
---    40% of the best result (a weak side-match). Also returns the corrected
---    query (null when nothing was corrected) so the app can say
+-- 3. search_synonym_map() — beauty vocabulary for the same thing ("LVL" and
+--    "lash lift", "mani pedi" and "hands & feet"). Lives here, not in the app,
+--    so every caller (Search, Becca) and the eval get the same answers. Grow it
+--    from zero-result searches (search_events), and add an eval row with it.
+--
+-- 4. search_rewrite_query(p_query) — the query as words the catalogue actually
+--    uses, in order. Vocabulary = live services' names, menu headings,
+--    descriptions, tags, business names and category words, so a rewrite can
+--    only ever point at something a bookable provider offers. Per word:
+--      a. two words that join into a real one -> joined ("pony tail")
+--      b. a real word, or the start of one -> kept ("fren" while typing)
+--      c. one that splits into two real words -> split ("blowdry")
+--      d. the nearest real word: 1 edit for 4–5 letters, 2 for 6+, or 2 for a
+--         5-letter word sharing its first three letters ("filla" -> filler).
+--         Targets are 4+ letters ("perm" must not become "per"), and under 6
+--         letters the first letter must match ("brows" must not be "grows").
+--      e. the LAST word only, 5+ letters: a misspelt start of a real word
+--         ("frsnc" -> french) — the client is still typing it
+--    Words under 4 letters, and numbers, are never changed.
+--
+-- 5. search_services_ranked(...) — individual services, ranked. Per query
+--    word, the best field it matches scores: service name 1.0, menu heading /
+--    tags 0.75, category words 0.6, description 0.5, business name 0.35. A word
+--    matches by stem ("layers" ~ Layered), by start of word ("acry" ~ acrylic),
+--    or for 5+ letters anywhere inside a word ("facial" ~ HydraFacial).
+--    Rank = average over the query's words, +0.1 when the whole query appears
+--    as a phrase. When the query names a category ("eyelash extensions"),
+--    services outside it score half, so hair extensions don't outrank lashes.
+--    Synonyms from search_synonym_map ("gel nails" -> biab, "pedicure" -> feet)
+--    are whole-phrase alternatives. At least
+--    half the words must match; at most 3 services per provider; nothing under
+--    40% of the best result. If nothing matches at all, a trigram fallback
+--    returns close-looking service names (trigram similarity 0.6+, queries of 5+
+--    letters) instead of an empty list. Also
+--    returns the rewritten query (null when unchanged) so the app can say
 --    "Showing results for french".
 --
 -- Gating: has_gone_live = true AND is_active = true on the provider, is_active
 -- on the service — same as every client-facing provider query. SECURITY
 -- INVOKER, so table RLS still applies. Returns only columns the public
--- provider profile already shows (no address, nothing private).
+-- provider profile already shows (no address, nothing private). Functions are
+-- PUBLIC-executable, so every input is bounded: 200 characters, 8 words, 40
+-- letters a word, 5 places.
 --
--- Scale follow-up (not needed at launch volume, ~60 live services): the
--- vocabulary and per-service tsvectors are computed inline per call — one scan
--- of live services. When that stops being cheap, materialise a
--- search_vocabulary(word, freq) table with a trigram GIN index (maintained by
--- trigger on services/providers) and per-field tsvector columns; the function
--- signatures and the app stay the same.
+-- Scale follow-up (not needed at launch volume, ~60 live services, ~30 ms a
+-- search): the vocabulary and per-service tsvectors are computed per call —
+-- one scan of live services each. When that stops being cheap, materialise a
+-- search_vocabulary(word, freq) table with a trigram GIN index and per-field
+-- tsvector columns, maintained by triggers; signatures and the app stay the
+-- same.
 
 CREATE OR REPLACE FUNCTION public.search_edit_distance(a text, b text)
 RETURNS integer
@@ -63,8 +93,7 @@ BEGIN
   IF a = b THEN RETURN 0; END IF;
   IF la = 0 THEN RETURN lb; END IF;
   IF lb = 0 THEN RETURN la; END IF;
-  -- Callable by anyone (functions are PUBLIC-executable), and the loop is
-  -- length(a) × length(b): refuse to spend CPU on anything longer than a word.
+  -- The loop is length(a) × length(b): refuse anything longer than a word.
   IF la > 40 OR lb > 40 THEN RETURN greatest(la, lb); END IF;
   -- Row k of the DP table lives at array index k+1 (column j at index j+1).
   prev := ARRAY(SELECT generate_series(0, lb));
@@ -88,28 +117,128 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.search_query_corrections(p_query text)
-RETURNS TABLE(original text, corrected text)
+CREATE OR REPLACE FUNCTION public.search_category_words(p_category text)
+RETURNS text
 LANGUAGE sql
+IMMUTABLE PARALLEL SAFE
+SET search_path = public, pg_temp
+AS $$
+  SELECT CASE upper(coalesce(p_category, ''))
+    WHEN 'NAILS'      THEN 'nails nail'
+    WHEN 'HAIR'       THEN 'hair hairstyle hairstylist hairdresser'
+    WHEN 'LASHES'     THEN 'lashes lash eyelashes eyelash'
+    WHEN 'BROWS'      THEN 'brows brow eyebrows eyebrow'
+    WHEN 'MUA'        THEN 'makeup mua'
+    WHEN 'AESTHETICS' THEN 'aesthetics aesthetic skin'
+    ELSE ''
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.search_synonym_map()
+RETURNS TABLE(trigger text, expansions text[])
+LANGUAGE sql
+IMMUTABLE PARALLEL SAFE
+SET search_path = public, pg_temp
+AS $$
+  -- trigger: whole word or phrase, lowercase, as search_rewrite_query outputs
+  -- it. Only aliases a client would be happy to be shown, not "related" ideas.
+  VALUES
+    ('gel nails',          ARRAY['biab', 'builder gel', 'gel manicure']),
+    ('biab',               ARRAY['builder gel', 'gel overlay']),
+    ('builder gel',        ARRAY['biab', 'gel overlay']),
+    ('nail extensions',    ARRAY['acrylic', 'full set']),
+    ('dip powder',         ARRAY['sns', 'dip nails']),
+    ('sns',                ARRAY['dip powder']),
+    ('mani',               ARRAY['manicure']),
+    ('pedi',               ARRAY['pedicure', 'feet']),
+    ('pedicure',           ARRAY['feet', 'toe']),
+    ('mani pedi',          ARRAY['hands feet', 'manicure', 'pedicure']),
+    ('lvl',                ARRAY['lash lift']),
+    ('lash lift',          ARRAY['lvl']),
+    ('russian lashes',     ARRAY['russian volume', 'volume lashes']),
+    ('eyelash extensions', ARRAY['lashes', 'lash extensions']),
+    ('silk press',         ARRAY['dominican blowout', 'blow out']),
+    ('dominican blowout',  ARRAY['silk press']),
+    ('knotless',           ARRAY['knotless braids', 'box braids']),
+    ('box braids',         ARRAY['braids', 'knotless']),
+    ('cornrows',           ARRAY['braids', 'canerows']),
+    ('wig install',        ARRAY['frontal', 'closure', 'wig fitting']),
+    ('frontal',            ARRAY['wig install', 'closure']),
+    ('weave',              ARRAY['sew in', 'hair extensions']),
+    ('sew in',             ARRAY['weave']),
+    ('hair extensions',    ARRAY['tape ins', 'tap ins', 'micro rings', 'nano rings', 'weave']),
+    ('tape in',            ARRAY['tap ins', 'tape ins']),
+    ('tape ins',           ARRAY['tap ins']),
+    ('balayage',           ARRAY['highlights']),
+    ('ombre',              ARRAY['balayage', 'colour melt']),
+    ('highlights',         ARRAY['balayage', 'foils']),
+    ('hair colour',        ARRAY['colour', 'highlights', 'balayage']),
+    ('hair color',         ARRAY['colour', 'highlights', 'balayage']),
+    ('dye',                ARRAY['colour']),
+    ('haircut',            ARRAY['cut']),
+    ('trim',               ARRAY['cut']),
+    ('blowout',            ARRAY['blow dry']),
+    ('blow out',           ARRAY['blow dry', 'blowout']),
+    ('blow dry',           ARRAY['blowout']),
+    ('microblading',       ARRAY['eyebrow tattoo', 'semi permanent brows']),
+    ('hd brows',           ARRAY['brow lamination']),
+    ('brow lamination',    ARRAY['hd brows', 'laminated brows']),
+    ('botox',              ARRAY['anti wrinkle', 'injectables']),
+    ('anti wrinkle',       ARRAY['botox']),
+    ('filler',             ARRAY['dermal filler', 'lip filler']),
+    ('hydrafacial',        ARRAY['facial']),
+    ('spray tan',          ARRAY['tanning']),
+    ('mua',                ARRAY['makeup', 'makeup artist']),
+    ('makeup artist',      ARRAY['makeup']),
+    ('wedding',            ARRAY['bridal', 'bride']),
+    ('bride',              ARRAY['bridal', 'wedding']),
+    ('bridal',             ARRAY['wedding']),
+    ('prom',               ARRAY['special occasion', 'glam']),
+    ('photoshoot',         ARRAY['editorial']),
+    ('photo shoot',        ARRAY['editorial', 'photoshoot'])
+$$;
+
+CREATE OR REPLACE FUNCTION public.search_rewrite_query(p_query text)
+RETURNS text[]
+LANGUAGE plpgsql
 STABLE
 SET search_path = public, extensions, pg_temp
 AS $$
-  WITH toks AS (
-    -- Bounded work per call: the first 200 characters, at most 8 words, each
-    -- word at most 40 letters (a search box, not a document).
-    SELECT DISTINCT tok
-    FROM (
-      SELECT t AS tok
-      FROM regexp_split_to_table(lower(unaccent(left(coalesce(p_query, ''), 200))), '[^a-z0-9]+') AS t
-      WHERE length(t) BETWEEN 4 AND 40 AND t !~ '^[0-9]+$'
-      LIMIT 8
-    ) first_words
-  ),
-  vocab AS (
-    SELECT w, count(*) AS freq
+DECLARE
+  toks text[];
+  n integer;
+  freq jsonb;
+  words text[];
+  out_words text[] := '{}';
+  i integer := 1;
+  t text;
+  joined text;
+  best text;
+  k integer;
+  split_score integer;
+  best_split_score integer;
+  split_a text;
+  split_b text;
+BEGIN
+  SELECT coalesce(array_agg(t0), '{}') INTO toks
+  FROM (
+    SELECT t0
+    FROM regexp_split_to_table(lower(unaccent(left(coalesce(p_query, ''), 200))), '[^a-z0-9]+') AS t0
+    WHERE t0 <> '' AND length(t0) <= 40
+    LIMIT 8
+  ) first_words;
+  n := coalesce(array_length(toks, 1), 0);
+  IF n = 0 THEN RETURN toks; END IF;
+
+  -- word -> how many live services use it
+  SELECT coalesce(jsonb_object_agg(w, c), '{}'::jsonb), coalesce(array_agg(w), '{}')
+  INTO freq, words
+  FROM (
+    SELECT w, count(*) AS c
     FROM (
       SELECT regexp_split_to_table(lower(unaccent(concat_ws(' ',
-               s.name, s.category_name, s.description, s.service_category, p.display_name,
+               s.name, s.category_name, s.description, s.category_description, p.display_name,
+               public.search_category_words(coalesce(s.service_category, p.service_category)),
                array_to_string(
                  coalesce(s.tags, '{}') || coalesce(s.technique_tags, '{}') || coalesce(s.outcome_tags, '{}')
                  || coalesce(s.occasion_tags, '{}') || coalesce(s.trend_names, '{}'), ' ')
@@ -117,35 +246,94 @@ AS $$
       FROM public.services s
       JOIN public.providers p ON p.id = s.provider_id
       WHERE p.has_gone_live = true AND p.is_active = true AND s.is_active = true
-    ) words
-    WHERE length(w) >= 3
+    ) all_words
+    WHERE length(w) BETWEEN 3 AND 40
     GROUP BY w
-  ),
-  unknown AS (
-    -- A word that starts a real word ("fren" while still typing "french") is
-    -- not a typo; leave it for the prefix match.
-    SELECT tok FROM toks
-    WHERE NOT EXISTS (SELECT 1 FROM vocab WHERE vocab.w LIKE toks.tok || '%')
-  )
-  -- One best candidate per word: fewest edits, then same first letter (people
-  -- rarely mistype the first letter), then the word more services use, then
-  -- alphabetical so the answer is stable.
-  SELECT DISTINCT ON (u.tok) u.tok, c.w
-  FROM unknown u
-  CROSS JOIN LATERAL (
-    SELECT v.w, v.freq, public.search_edit_distance(u.tok, v.w) AS d
-    FROM vocab v
-    WHERE abs(length(v.w) - length(u.tok)) <= CASE WHEN length(u.tok) >= 6 THEN 2 ELSE 1 END
-  ) AS c
-  WHERE c.d <= CASE WHEN length(u.tok) >= 6 THEN 2 ELSE 1 END
-  ORDER BY u.tok, c.d, (left(c.w, 1) <> left(u.tok, 1)), c.freq DESC, c.w;
+  ) vocab;
+
+  WHILE i <= n LOOP
+    t := toks[i];
+
+    -- a. two words that are one word in the catalogue ("pony tail")
+    IF i < n THEN
+      joined := t || toks[i + 1];
+      IF length(joined) >= 5 AND freq ? joined THEN
+        out_words := out_words || joined;
+        i := i + 2;
+        CONTINUE;
+      END IF;
+    END IF;
+
+    -- b. short, numeric, a real word, or the start of one: leave it alone
+    IF length(t) < 4 OR t ~ '^[0-9]+$' OR freq ? t
+       OR EXISTS (SELECT 1 FROM unnest(words) w WHERE w LIKE t || '%') THEN
+      out_words := out_words || t;
+      i := i + 1;
+      CONTINUE;
+    END IF;
+
+    -- c. two real words run together ("blowdry", "nailart")
+    best_split_score := 0;
+    FOR k IN 3..(length(t) - 3) LOOP
+      IF freq ? left(t, k) AND freq ? substr(t, k + 1) THEN
+        split_score := (freq ->> left(t, k))::integer + (freq ->> substr(t, k + 1))::integer;
+        IF split_score > best_split_score THEN
+          best_split_score := split_score;
+          split_a := left(t, k);
+          split_b := substr(t, k + 1);
+        END IF;
+      END IF;
+    END LOOP;
+    IF best_split_score > 0 THEN
+      out_words := out_words || split_a || split_b;
+      i := i + 1;
+      CONTINUE;
+    END IF;
+
+    -- d. the nearest real word. Fewest edits, then same first letter (people
+    -- rarely mistype the first letter), then the commoner word, then
+    -- alphabetical so the answer is stable.
+    SELECT w INTO best
+    FROM (
+      SELECT w, public.search_edit_distance(t, w) AS d
+      FROM unnest(words) w
+      WHERE length(w) >= 4 AND abs(length(w) - length(t)) <= 2
+    ) c
+    WHERE d <= CASE
+                 WHEN length(t) >= 6 THEN 2
+                 WHEN length(t) = 5 AND left(w, 3) = left(t, 3) THEN 2
+                 ELSE 1
+               END
+      -- Short words are too close to each other to also allow a wrong first
+      -- letter: "brows" must not become "grows".
+      AND (length(t) >= 6 OR left(w, 1) = left(t, 1))
+    ORDER BY d, (left(w, 1) <> left(t, 1)), (freq ->> w)::integer DESC, w
+    LIMIT 1;
+
+    -- e. the word still being typed: a misspelt start of a real word
+    IF best IS NULL AND i = n AND length(t) >= 5 THEN
+      SELECT w INTO best
+      FROM unnest(words) w
+      WHERE length(w) > length(t)
+        AND left(w, 1) = left(t, 1)
+        AND public.search_edit_distance(t, left(w, length(t))) <= 1
+      ORDER BY public.search_edit_distance(t, left(w, length(t))), (freq ->> w)::integer DESC, w
+      LIMIT 1;
+    END IF;
+
+    out_words := out_words || coalesce(best, t);
+    best := NULL;
+    i := i + 1;
+  END LOOP;
+
+  RETURN out_words;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.search_services_ranked(
   p_query text,
   p_category text DEFAULT NULL,
   p_locations text[] DEFAULT '{}'::text[],
-  p_synonyms text[] DEFAULT '{}'::text[],
   p_limit integer DEFAULT 60
 )
 RETURNS TABLE(
@@ -170,62 +358,67 @@ LANGUAGE sql
 STABLE
 SET search_path = public, extensions, pg_temp
 AS $$
-  WITH fixes AS (
-    SELECT original, corrected FROM public.search_query_corrections(p_query)
+  WITH rewritten AS (
+    SELECT public.search_rewrite_query(p_query) AS w
   ),
-  words AS (
-    -- Same bounds as search_query_corrections: 200 characters, 8 words.
-    SELECT DISTINCT coalesce(f.corrected, w.t) AS word
+  original AS (
+    SELECT coalesce(array_agg(t), '{}') AS w
     FROM (
       SELECT t
       FROM regexp_split_to_table(lower(unaccent(left(coalesce(p_query, ''), 200))), '[^a-z0-9]+') AS t
-      WHERE length(t) BETWEEN 2 AND 40
+      WHERE t <> '' AND length(t) <= 40
       LIMIT 8
-    ) w
-    LEFT JOIN fixes f ON f.original = w.t
+    ) x
   ),
   qwords AS (
-    -- Prefix-match words of 3+ letters so results appear while still typing.
     -- Stopwords ("the", "for") come back as an empty query and are dropped, so
     -- they don't count against how much of the query a service matched.
-    SELECT word, q
+    SELECT word, q_stem,
+           -- 'simple' keeps the typed letters: "acry" stems to "acri", which
+           -- starts nothing; unstemmed "acry" starts "acryl".
+           CASE WHEN length(word) >= 3 THEN to_tsquery('simple', word || ':*') END AS q_prefix,
+           CASE WHEN length(word) >= 5 THEN word END AS inner_word
     FROM (
-      SELECT word,
-             to_tsquery('english', CASE WHEN length(word) >= 3 THEN word || ':*' ELSE word END) AS q
-      FROM words
+      SELECT DISTINCT word, to_tsquery('english', word) AS q_stem
+      FROM unnest((SELECT w FROM rewritten)) AS word
+      WHERE length(word) >= 2
     ) x
-    WHERE numnode(q) > 0
+    WHERE numnode(q_stem) > 0
   ),
   nwords AS (SELECT count(*)::real AS n FROM qwords),
-  syn AS (
-    SELECT phraseto_tsquery('english', unaccent(s)) AS q
-    FROM unnest(coalesce(p_synonyms[1:20], '{}'::text[])) AS s
-    WHERE length(s) <= 60 AND numnode(phraseto_tsquery('english', unaccent(s))) > 0
+  phrase AS (
+    SELECT CASE WHEN (SELECT n FROM nwords) >= 2
+                THEN phraseto_tsquery('english', array_to_string((SELECT w FROM rewritten), ' '))
+           END AS q
   ),
-  corrected AS (
-    SELECT CASE WHEN EXISTS (SELECT 1 FROM fixes)
-      THEN (
-        SELECT string_agg(coalesce(f.corrected, t), ' ' ORDER BY ord)
-        FROM regexp_split_to_table(lower(unaccent(left(coalesce(p_query, ''), 200))), '[^a-z0-9]+') WITH ORDINALITY AS r(t, ord)
-        LEFT JOIN fixes f ON f.original = r.t
-        WHERE r.t <> ''
-      )
-    END AS text
+  syn AS (
+    SELECT DISTINCT phraseto_tsquery('english', e) AS q
+    FROM public.search_synonym_map() m
+    CROSS JOIN LATERAL unnest(m.expansions) AS e
+    WHERE ' ' || array_to_string((SELECT w FROM rewritten), ' ') || ' ' LIKE '% ' || m.trigger || ' %'
+  ),
+  named AS (
+    -- Categories the query names outright ("eyelash", "makeup", "nails").
+    SELECT c AS category
+    FROM unnest(ARRAY['NAILS', 'HAIR', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS']) AS c
+    WHERE EXISTS (
+      SELECT 1 FROM qwords qw
+      WHERE to_tsvector('english', public.search_category_words(c)) @@ qw.q_stem
+    )
   ),
   live AS (
     SELECT
-      s.id, s.provider_id, s.name, s.description, s.category_name, s.service_category,
+      s.id, s.provider_id, s.name, s.description, s.category_name,
+      coalesce(s.service_category, p.service_category) AS category,
       s.price, s.price_max, s.duration_minutes, s.sort_order,
       p.slug, p.display_name, p.logo_url, p.location_text, p.booking_mode, p.is_featured, p.rating,
-      to_tsvector('english', unaccent(coalesce(s.name, ''))) AS name_v,
-      to_tsvector('english', unaccent(concat_ws(' ',
-        s.category_name, s.service_category,
-        array_to_string(
-          coalesce(s.tags, '{}') || coalesce(s.technique_tags, '{}') || coalesce(s.outcome_tags, '{}')
-          || coalesce(s.occasion_tags, '{}') || coalesce(s.trend_names, '{}'), ' ')
-      ))) AS tag_v,
-      to_tsvector('english', unaccent(concat_ws(' ', s.description, s.category_description))) AS desc_v,
-      to_tsvector('english', unaccent(coalesce(p.display_name, ''))) AS prov_v
+      lower(unaccent(coalesce(s.name, ''))) AS name_t,
+      lower(unaccent(concat_ws(' ', s.category_name, array_to_string(
+        coalesce(s.tags, '{}') || coalesce(s.technique_tags, '{}') || coalesce(s.outcome_tags, '{}')
+        || coalesce(s.occasion_tags, '{}') || coalesce(s.trend_names, '{}'), ' ')))) AS tag_t,
+      lower(unaccent(concat_ws(' ', s.description, s.category_description))) AS desc_t,
+      public.search_category_words(coalesce(s.service_category, p.service_category)) AS cat_t,
+      lower(unaccent(coalesce(p.display_name, ''))) AS prov_t
     FROM public.services s
     JOIN public.providers p ON p.id = s.provider_id
     WHERE p.has_gone_live = true
@@ -238,59 +431,94 @@ AS $$
              SELECT '%' || l || '%' FROM unnest(p_locations[1:5]) AS l WHERE l <> ''
            ))
   ),
-  scored AS (
-    SELECT
-      live.*,
-      (SELECT coalesce(sum(
-                CASE WHEN live.name_v @@ qw.q THEN 1.0
-                     WHEN live.tag_v  @@ qw.q THEN 0.75
-                     WHEN live.desc_v @@ qw.q THEN 0.5
-                     WHEN live.prov_v @@ qw.q THEN 0.35
-                     ELSE 0 END), 0)
-       FROM qwords qw) AS word_score,
-      (SELECT count(*) FROM qwords qw
-       WHERE live.name_v @@ qw.q OR live.tag_v @@ qw.q
-          OR live.desc_v @@ qw.q OR live.prov_v @@ qw.q) AS matched,
-      (SELECT coalesce(max(
-                CASE WHEN live.name_v @@ sy.q THEN 0.9
-                     WHEN live.tag_v  @@ sy.q THEN 0.7
-                     WHEN live.desc_v @@ sy.q THEN 0.45
-                     ELSE 0 END), 0)
-       FROM syn sy) AS syn_score
+  vec AS (
+    SELECT live.*,
+           to_tsvector('english', name_t) AS name_v,
+           to_tsvector('english', tag_t)  AS tag_v,
+           to_tsvector('english', cat_t)  AS cat_v,
+           to_tsvector('english', desc_t) AS desc_v,
+           to_tsvector('english', prov_t) AS prov_v
     FROM live
   ),
-  ranked AS (
+  per_word AS (
+    -- Each query word's best field in each service.
+    SELECT v.id,
+           max(CASE
+             WHEN v.name_v @@ qw.q_stem OR v.name_v @@ qw.q_prefix
+                  OR position(qw.inner_word IN v.name_t) > 0 THEN 1.0
+             WHEN v.tag_v @@ qw.q_stem OR v.tag_v @@ qw.q_prefix
+                  OR position(qw.inner_word IN v.tag_t) > 0 THEN 0.75
+             WHEN v.cat_v @@ qw.q_stem OR v.cat_v @@ qw.q_prefix THEN 0.6
+             WHEN v.desc_v @@ qw.q_stem OR v.desc_v @@ qw.q_prefix
+                  OR position(qw.inner_word IN v.desc_t) > 0 THEN 0.5
+             WHEN v.prov_v @@ qw.q_stem OR v.prov_v @@ qw.q_prefix THEN 0.35
+             ELSE 0 END) AS level,
+           qw.word
+    FROM vec v CROSS JOIN qwords qw
+    GROUP BY v.id, qw.word
+  ),
+  scored AS (
     SELECT
-      scored.*,
-      greatest(
-        CASE WHEN nw.n > 0 THEN scored.word_score / nw.n ELSE 0 END,
-        scored.syn_score
-      ) AS score,
-      row_number() OVER (
-        PARTITION BY scored.provider_id
-        ORDER BY greatest(CASE WHEN nw.n > 0 THEN scored.word_score / nw.n ELSE 0 END, scored.syn_score) DESC,
-                 scored.sort_order NULLS LAST
-      ) AS per_provider
-    FROM scored, nwords nw
-    WHERE (nw.n > 0 AND scored.matched * 2 >= nw.n AND scored.word_score > 0)
-       OR scored.syn_score > 0
+      v.*,
+      coalesce((SELECT sum(pw.level) FROM per_word pw WHERE pw.id = v.id), 0) AS word_score,
+      coalesce((SELECT count(*) FROM per_word pw WHERE pw.id = v.id AND pw.level > 0), 0) AS matched,
+      (SELECT coalesce(max(
+                CASE WHEN v.name_v @@ sy.q THEN 0.9
+                     WHEN v.tag_v  @@ sy.q THEN 0.7
+                     WHEN v.desc_v @@ sy.q THEN 0.45
+                     ELSE 0 END), 0)
+       FROM syn sy) AS syn_score,
+      CASE WHEN (SELECT q FROM phrase) IS NOT NULL
+                AND (v.name_v @@ (SELECT q FROM phrase) OR v.tag_v @@ (SELECT q FROM phrase)
+                     OR v.desc_v @@ (SELECT q FROM phrase))
+           THEN 0.1 ELSE 0 END AS phrase_bonus,
+      CASE WHEN EXISTS (SELECT 1 FROM named) AND v.category NOT IN (SELECT category FROM named)
+           THEN 0.5 ELSE 1 END AS category_factor,
+      word_similarity(array_to_string((SELECT w FROM rewritten), ' '), v.name_t || ' ' || v.tag_t) AS looks_like
+    FROM vec v
+  ),
+  candidates AS (
+    SELECT
+      sc.*,
+      CASE WHEN (nw.n > 0 AND sc.matched * 2 >= nw.n AND sc.word_score > 0) OR sc.syn_score > 0
+           THEN (greatest(CASE WHEN nw.n > 0 THEN sc.word_score / nw.n ELSE 0 END, sc.syn_score)
+                 + sc.phrase_bonus) * sc.category_factor
+           -- Nothing matched properly: fall back to names that LOOK like the
+           -- query, scored low so they never outrank a real match.
+           WHEN sc.looks_like >= 0.6 AND length(array_to_string((SELECT w FROM rewritten), ' ')) >= 5
+           THEN 0.3 * sc.looks_like
+      END AS score,
+      (nw.n > 0 AND sc.matched * 2 >= nw.n AND sc.word_score > 0) OR sc.syn_score > 0 AS strict
+    FROM scored sc, nwords nw
+  ),
+  ranked AS (
+    SELECT c.*,
+           row_number() OVER (PARTITION BY c.provider_id ORDER BY c.score DESC, c.sort_order NULLS LAST) AS per_provider,
+           bool_or(c.strict) OVER () AS any_strict,
+           max(c.score) OVER () AS best
+    FROM candidates c
+    WHERE c.score IS NOT NULL
   )
   SELECT
     r.id, r.provider_id, r.slug, r.display_name, r.logo_url, r.location_text, r.booking_mode,
-    r.name, r.description, r.category_name, r.service_category,
+    r.name, r.description, r.category_name, r.category,
     r.price, r.price_max, r.duration_minutes,
     r.score::real,
-    (SELECT text FROM corrected)
+    CASE WHEN (SELECT w FROM rewritten) IS DISTINCT FROM (SELECT w FROM original)
+         THEN array_to_string((SELECT w FROM rewritten), ' ') END
   FROM ranked r
   WHERE r.per_provider <= 3
+    -- the fallback only when nothing matched properly
+    AND (r.strict OR NOT r.any_strict)
     -- A weak side-match ("volume" in a lip filler's description, for
-    -- "volume lashes") shouldn't sit in the list beside real answers: keep
-    -- only results within reach of the best one.
-    AND r.score >= 0.4 * (SELECT max(score) FROM ranked)
+    -- "volume lashes") shouldn't sit in the list beside real answers.
+    AND r.score >= 0.4 * r.best
   ORDER BY r.score DESC, r.is_featured DESC NULLS LAST, r.rating DESC NULLS LAST, r.sort_order NULLS LAST
   LIMIT least(greatest(p_limit, 1), 200);
 $$;
 
 GRANT EXECUTE ON FUNCTION public.search_edit_distance(text, text) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.search_query_corrections(text) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.search_services_ranked(text, text, text[], text[], integer) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.search_category_words(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.search_synonym_map() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.search_rewrite_query(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.search_services_ranked(text, text, text[], integer) TO anon, authenticated;
