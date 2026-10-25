@@ -102,6 +102,18 @@ WITH cases(q, expect, k) AS (VALUES
   ('knotl', 'Knotless Braids', 3),
   ('stil', 'Freestyle Stilettos', 3),
   ('hydra', 'HydraFacial', 3),
+  -- the way people actually type (from search_events, 2026-10-25)
+  ('male services', 'Barrel twist', 5),
+  ('mens haircut', 'Barrel twist', 3),
+  ('male facial', 'HydraFacial', 5),
+  ('i am looking for install', 'Lace Frontal 13x6', 3),
+  ('looking for lashes', 'Volume spikes', 1),
+  ('i need a lip filler appointment', 'Lip Filler (1ml)', 3),
+  ('makeup artists', 'Full Glam', 5),
+  ('makeup artist for £70', 'Full Glam', 5),
+  ('nail tech', 'Full set acrylic', 10),
+  ('toago', 'Freestyle Braids', 5),
+  ('nairl', '3D Nail Art (per nail)', 5),
   -- nobody live offers these: expect NOTHING (k = 0), not a near-miss
   -- "correction" into something else
   ('brows', NULL, 0),

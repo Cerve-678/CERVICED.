@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/search-eval.sh
 #
-# Grades the service search in supabase/migrations/*_service_search.sql
+# Grades the service search in the newest supabase/migrations/*_service_search*.sql
 # against the live catalogue WITHOUT applying it: the functions are loaded as
 # session-only pg_temp copies, then supabase/tests/service_search_eval.sql runs
 # against them. Nothing is written to the database.
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-migration="$(ls "$repo"/supabase/migrations/*_service_search.sql | tail -1)"
+migration="$(ls "$repo"/supabase/migrations/*_service_search*.sql | tail -1)"
 tmp="$(mktemp -t search-eval).sql"
 trap 'rm -f "$tmp"' EXIT
 
@@ -25,13 +25,13 @@ trap 'rm -f "$tmp"' EXIT
       -e 's/CREATE OR REPLACE FUNCTION public\./CREATE FUNCTION pg_temp./' \
       -e 's/public\.search_/pg_temp.search_/g' \
       -e '/^GRANT/d' -e '/^ *--/d' -e '/^CREATE EXTENSION/d' \
-      -e '/^BEGIN;$/d' -e '/^COMMIT;$/d' "$migration"
+      -e '/^BEGIN;$/d' -e '/^COMMIT;$/d' -e '/^DROP FUNCTION/d' "$migration"
   sed -e 's/search_services_ranked(/pg_temp.search_services_ranked(/' \
       "$repo/supabase/tests/service_search_eval.sql"
 } > "$tmp"
 
 # Refuse to run if anything could still write outside pg_temp.
-if grep -qiE 'schema_migrations|create or replace function public\.|^(begin|commit);' "$tmp"; then
+if grep -qiE 'schema_migrations|create or replace function public\.|drop function|^(begin|commit);' "$tmp"; then
   echo "search-eval: generated SQL still touches the real schema; aborting" >&2
   exit 1
 fi

@@ -5,7 +5,7 @@
 
 #generated
 
-**2689 functions** across **368 files**.
+**2690 functions** across **368 files**.
 
 ### `src/components/` (50)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -379,7 +379,7 @@
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
-- `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery**
+- `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery** · takePrice
 - `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
 - `slotsRowText.ts` — **resolveSlotsRow**

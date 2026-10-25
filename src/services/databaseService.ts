@@ -1122,6 +1122,8 @@ export async function searchProvidersAndServices(
           p_category: category && category !== "ALL" ? category : null,
           p_locations: locationTerms,
           p_limit: SERVICE_SEARCH_LIMIT,
+          // "for £70" → only services at or under £70.
+          p_max_price: parsed.maxPrice,
         })
       : Promise.resolve({ data: [] as RankedServiceRow[], error: null }),
   ]);

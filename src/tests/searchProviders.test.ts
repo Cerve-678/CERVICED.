@@ -85,7 +85,13 @@ it('sends the service words, category chip and place to the service search', asy
     p_query: 'gel nails',
     p_category: 'NAILS',
     p_locations: ['Manchester'],
+    p_max_price: null,
   });
+});
+it('sends a typed budget as a price ceiling, not as search words', async () => {
+  await searchProvidersAndServices('makeup artists for £70');
+  const rpc = mockCalls.find(c => c.method === 'rpc');
+  expect(rpc?.args[1]).toMatchObject({ p_query: 'makeup artists', p_max_price: 70 });
 });
 it('orders service matches by how well their best service matched', async () => {
   mockResponses.push(
