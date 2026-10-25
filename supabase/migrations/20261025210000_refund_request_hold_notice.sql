@@ -11,10 +11,12 @@
 -- variable, one SELECT and the sentence appended to the message. Nothing else
 -- changes.
 --
--- Renumbered 2026-10-25 above 20261025120000 (service_search); before that
+-- Renumbered 2026-10-25 above 20261025120000 (service_search), into the
+-- 2026102520xxxx range because other sessions' unapplied files already use
+-- 20261025130000 and 20261025140000; before that
 -- renumbered 2026-10-24 from 20261021200000, which fell below the frontier
 -- when 20261024100000 (listing claims) was applied. Apply AFTER cerviced-c2's
--- 20261025130000_tip_received_notification. Doesn't touch
+-- 20261025200000_tip_received_notification. Doesn't touch
 -- notifications_type_check.
 
 CREATE OR REPLACE FUNCTION public.request_booking_refund(p_booking_id uuid, p_reason text, p_message text)
@@ -105,5 +107,5 @@ END;
 $function$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261025140000', 'refund_request_hold_notice')
+VALUES ('20261025210000', 'refund_request_hold_notice')
 ON CONFLICT (version) DO NOTHING;
