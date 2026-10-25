@@ -22,7 +22,7 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none). Next in queue: 20261024110000_tip_received_notification
+OWNER:  (none). Next in queue: 20261025130000_tip_received_notification
         (cerviced-c2, PR #163, written, NOT applied, waiting on the user's OK),
         then cerviced-74's three (#165/#166/#169).
 ```
@@ -31,7 +31,7 @@ OWNER:  (none). Next in queue: 20261024110000_tip_received_notification
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261024110000 | `tip_received_notification` | **WRITTEN, NOT APPLIED.** Renumbered from 20261021195500 above `20261024100000` (listing claims, applied live 2026-10-24, no CHECK change). Re-check `max(version)` before applying. Widens `notifications_type_check` (restates `20261020150000`'s list + `tip_received`) and adds `notify_provider_tip_received()` + trigger `on_booking_tip_succeeded` on `booking_tips` (fires once when a tip is recorded as paid; the whole tip is the provider's, so the message gives the client's amount). The insert catches its own errors so a failed notification can't roll back recording a paid tip. Verify the live CHECK list matches before applying. Deploy `send-push-notification` (adds `tip_received: 'providerPayments'`) with it. The file records its own version. |
+| 20261025130000 | `tip_received_notification` | **WRITTEN, NOT APPLIED.** Renumbered 2026-10-25 from 20261024110000 above `20261025120000` (service_search, applied live, no CHECK change); first written as 20261021195500, then above `20261024100000` (listing claims). Re-check `max(version)` before applying. Widens `notifications_type_check` (restates `20261020150000`'s list + `tip_received`) and adds `notify_provider_tip_received()` + trigger `on_booking_tip_succeeded` on `booking_tips` (fires once when a tip is recorded as paid; the whole tip is the provider's, so the message gives the client's amount). The insert catches its own errors so a failed notification can't roll back recording a paid tip. Verify the live CHECK list matches before applying. Deploy `send-push-notification` (adds `tip_received: 'providerPayments'`) with it. The file records its own version. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 

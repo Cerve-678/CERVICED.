@@ -347,7 +347,7 @@ describe('notification routing — daily saves count', () => {
 });
 
 describe('notification routing — tip received', () => {
-  const migration = () => read('supabase', 'migrations', '20261024110000_tip_received_notification.sql');
+  const migration = () => read('supabase', 'migrations', '20261025130000_tip_received_notification.sql');
 
   it('declares tip_received in the DB check, both type unions, the tap handler and the push map', () => {
     expect(migration()).toMatch(/notifications_type_check[\s\S]*'tip_received'/);
