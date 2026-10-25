@@ -23,7 +23,7 @@ Last updated: 18 October 2026.
 | Late and no-show fees | Yes | Merged to `main` (b6c0255), functions deployed |
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
-| Provider told their payout is on hold (notification, email, booking, Payments) | No | Branch `feat/refund-payout-hold-notice`; migration `20261024120000` unapplied (apply after `20261024110000`), `send-support-request` not deployed |
+| Provider told their payout is on hold (notification, email, booking, Payments) | No | Branch `feat/refund-payout-hold-notice`; migration `20261025140000` unapplied (apply after `20261025130000`), `send-support-request` not deployed |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
