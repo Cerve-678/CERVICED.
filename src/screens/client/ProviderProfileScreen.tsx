@@ -1881,6 +1881,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     };
   }, [provider, providerDbId]);
 
+  // Every checked service has nothing bookable in the provider's whole window
+  // — the same state process_follow_openings_alerts treats as fully booked.
+  // False while still checking, so the bell never claims "fully booked" early.
+  const providerFullyBookedNow = useMemo(() => {
+    const answers = Object.values(serviceFullyBooked);
+    return answers.length > 0 && answers.every(Boolean);
+  }, [serviceFullyBooked]);
+
   const openOffersPanel = useCallback(() => {
     setShowOffersModal(true);
     Animated.spring(offersPanelSlide, {
@@ -3363,9 +3371,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       if (!isNotificationsEnabled) {
         return `You'll no longer be notified about ${fullName}`;
       }
-      return releaseDay != null
-        ? `We'll tell you when ${fullName} releases new slots on the ${ordinalSuffix(releaseDay)}`
-        : `We'll tell you when ${fullName} releases new slots`;
+      if (releaseDay != null) {
+        return `We'll tell you when ${fullName} releases new slots on the ${ordinalSuffix(releaseDay)}`;
+      }
+      // No release day: the only thing that ever arrives is
+      // process_follow_openings_alerts' "has space again", which fires only
+      // after the provider has been fully booked. Say exactly that, rather
+      // than promising a release that never happens.
+      return providerFullyBookedNow
+        ? `We'll tell you when ${fullName} has space again`
+        : `Following ${fullName}. If they get fully booked, we'll tell you when space opens up`;
     } else {
       return providerIsBookmarked
         ? `Added to Your Providers`
@@ -3377,6 +3392,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     providerIsBookmarked,
     provider?.providerName,
     provider?.scheduleReleaseDay,
+    providerFullyBookedNow,
   ]);
 
   if (loading || !provider) {

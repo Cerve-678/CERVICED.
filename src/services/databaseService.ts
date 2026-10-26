@@ -7355,81 +7355,12 @@ export async function removeMyExternalBooking(id: string): Promise<void> {
 // PROVIDER FOLLOWS
 // ─────────────────────────────────────────────────────────
 
-/** Follow a provider */
-export async function followProvider(providerId: string): Promise<void> {
-  if (!UUID_RE.test(providerId)) return;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
-  const { error } = await supabase
-    .from("provider_follows")
-    .insert({ user_id: user.id, provider_id: providerId });
-  if (error && error.code !== "23505") throw error;
-}
-
-/** Unfollow a provider */
-export async function unfollowProvider(providerId: string): Promise<void> {
-  if (!UUID_RE.test(providerId)) return;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
-  const { error } = await supabase
-    .from("provider_follows")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId);
-  if (error) throw error;
-}
-
-/** Check if the current user follows a provider */
-export async function checkIsFollowing(providerId: string): Promise<boolean> {
-  if (!UUID_RE.test(providerId)) return false;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) return false;
-  const { data } = await supabase
-    .from("provider_follows")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId)
-    .maybeSingle();
-  return !!data;
-}
-
 /**
- * Whether the current user has the "notify me" bell on for this provider —
- * distinct from checkIsFollowing: a client can follow without notifications
- * on. False (not just "not following") when there's no row at all, so
- * ProviderProfileScreen's bell can seed its initial state from one query
- * instead of two.
- */
-export async function checkFollowNotifyEnabled(
-  providerId: string,
-): Promise<boolean> {
-  if (!UUID_RE.test(providerId)) return false;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) return false;
-  const { data } = await supabase
-    .from("provider_follows")
-    .select("notify_enabled")
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId)
-    .maybeSingle();
-  return (data as { notify_enabled: boolean } | null)?.notify_enabled ?? false;
-}
-
-/**
- * Turns the "notify me about this provider's availability" bell on/off.
- * Turning on implicitly follows (upsert) if the client wasn't already —
- * the bell is a single tap, not a two-step follow-then-enable flow.
- * Turning off leaves the follow row in place (only clears the flag) so a
- * client who was following before tapping the bell doesn't get silently
- * unfollowed by turning notifications back off.
+ * Turns the provider-profile bell on/off. The bell IS the follow: on creates
+ * the provider_follows row, off deletes it. Clearing a flag instead used to
+ * leave the row behind, and every other reader of provider_follows
+ * (promotion/announcement audiences, follower counts) kept counting a client
+ * who had switched the bell off.
  */
 export async function setProviderFollowNotify(
   providerId: string,
@@ -7441,12 +7372,18 @@ export async function setProviderFollowNotify(
   } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
   await assertNotOwnProvider(providerId, user.id);
-  const { error } = await supabase
-    .from("provider_follows")
-    .upsert(
-      { user_id: user.id, provider_id: providerId, notify_enabled: enabled },
-      { onConflict: "user_id,provider_id" },
-    );
+  const { error } = enabled
+    ? await supabase
+        .from("provider_follows")
+        .upsert(
+          { user_id: user.id, provider_id: providerId, notify_enabled: true },
+          { onConflict: "user_id,provider_id" },
+        )
+    : await supabase
+        .from("provider_follows")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("provider_id", providerId);
   if (error) throw error;
 }
 
