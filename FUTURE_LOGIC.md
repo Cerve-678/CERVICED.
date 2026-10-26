@@ -966,7 +966,41 @@ questions — several of which (availability, services) are only meaningful in
 
 ---
 
-## "Slots out every Nth" — a release day that doesn't release anything
+## "Slots out every Nth" — monthly release — BUILT 2026-10-26, migration unapplied
+
+### Status
+
+Built on `feat/monthly-release` (stacked on `fix/follow-bell-tells-the-truth`),
+migration `20261026110000_monthly_release` **written, not applied**. What
+shipped, and where it differs from the design below:
+
+- **Monthly ⇔ a release day is set.** No separate mode column:
+  `automation_settings.scheduleReleaseDay` set means monthly, and it replaces
+  `booking_window_days` (which is kept, so switching back restores it).
+- **The horizon is computed from the clock, not stored** (deviation from
+  point 2 below). Before the Nth at 09:00 UTC: bookable to the end of this
+  month. From then: to the end of next month. A day past the month's end means
+  its last day. Computing it means it can't fail to advance, which is the
+  failure point 2 was guarding against. Server: `provider_last_bookable_date()`
+  (used by `enforce_booking_bookability` and `get_services_availability`).
+  App: `src/utils/bookingHorizon.ts` (used by every AvailabilityService horizon
+  and Becca). Keep the two in step.
+- **The push is true when it's sent.** The cron still runs at 09:00 UTC, the
+  release minute, and `process_follow_schedule_release_nudges()` now only
+  sends once `provider_last_bookable_date()` reaches next month. It names the
+  month ("… just opened December") and skips providers who aren't live.
+- **One control** (point 3): Scheduling → "How far ahead clients can book" →
+  "Monthly release", with the day picker and a line saying what's open now and
+  when the next month opens. Automations lost its toggle (it still writes the
+  stored value back unchanged, because its save replaces the whole blob).
+  InfoReg's release-day row stays, with the same explanation.
+- **The wall** (point 4): the client date picker says "Dates after … open on
+  … at …" when the week runs past it. The provider-side line is in Scheduling,
+  not Working Hours.
+- Providers without a release day get the bell's "has space again" alert
+  instead (`fix/follow-bell-tells-the-truth`).
+
+The original write-up follows.
 
 ### What it means
 

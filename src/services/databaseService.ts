@@ -64,6 +64,7 @@ import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
+import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -4846,8 +4847,16 @@ export async function getAvailabilityEmergencyPolicyRow(providerId: string): Pro
   return selectProviderColumns(providerId, EMERGENCY_POLICY_COLUMNS);
 }
 
+/** The two columns that decide how far ahead a provider can be booked —
+ *  read together everywhere, since a release day overrides the window. */
+const BOOKING_HORIZON_COLUMNS =
+  "booking_window_days, schedule_release_day:automation_settings->scheduleReleaseDay";
+
 export interface AvailabilityProviderSettingsRow {
   booking_window_days: number;
+  /** automation_settings.scheduleReleaseDay — set = monthly release, which
+   *  replaces booking_window_days. See utils/bookingHorizon. */
+  schedule_release_day: number | null;
   slot_interval_mins: number;
   buffer_mins: number;
   min_booking_notice_hrs: number;
@@ -4915,13 +4924,17 @@ async function fetchAvailabilityProviderCore(providerId: string): Promise<{
   windowRows: { day_of_week: number; start_time: string; end_time: string }[];
   legacyRows: { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
 }> {
-  const baseColumns = "booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs";
+  const baseColumns = `${BOOKING_HORIZON_COLUMNS}, slot_interval_mins, buffer_mins, min_booking_notice_hrs`;
   const [settingsRow, weeklyRows] = await Promise.all([
     selectProviderColumns(providerId, `${baseColumns}, ${EMERGENCY_POLICY_COLUMNS}`),
     getAvailabilityWeeklyScheduleRows(providerId),
   ]);
   return {
-    settings: settingsRow as AvailabilityProviderSettingsRow | null,
+    // The release day is a JSON value inside automation_settings — normalise it
+    // to the number-or-null the row type promises.
+    settings: settingsRow
+      ? { ...(settingsRow as unknown as AvailabilityProviderSettingsRow), schedule_release_day: toReleaseDay(settingsRow['schedule_release_day']) }
+      : null,
     ...weeklyRows,
   };
 }
@@ -4944,8 +4957,9 @@ async function fetchAvailabilityProviderCore(providerId: string): Promise<{
  */
 const AVAILABILITY_RANGE_CACHE_TTL_MS = 15_000;
 const AVAILABILITY_RANGE_CACHE_MAX_ENTRIES = 40;
-// Booking windows cap at 60 days (getProviderBookingWindowDays' default); the
-// slack covers resolveNextAvailableSlot's "+1..+3 day" rescue scan past that.
+// Booking windows cap at 60 days (the default window), and a monthly release
+// reaches at most the end of next month (62 days); the slack covers
+// resolveNextAvailableSlot's "+1..+3 day" rescue scan past that.
 const AVAILABILITY_RANGE_HORIZON_DAYS = 66;
 
 const toIsoDate = (d: Date): string =>
@@ -5104,14 +5118,18 @@ export async function getAvailabilityDateBundle(
   };
 }
 
-export async function getProviderBookingWindowDays(providerId: string): Promise<number> {
+export async function getProviderBookingHorizon(providerId: string): Promise<BookingHorizonSettings> {
   const { data, error } = await supabase
     .from("providers")
-    .select("booking_window_days")
+    .select(BOOKING_HORIZON_COLUMNS)
     .eq("id", providerId)
     .maybeSingle();
   if (error) throw error;
-  return data?.booking_window_days ?? 60;
+  const row = data as { booking_window_days: number | null; schedule_release_day: unknown } | null;
+  return {
+    booking_window_days: row?.booking_window_days ?? 60,
+    schedule_release_day: toReleaseDay(row?.schedule_release_day),
+  };
 }
 
 export interface ProviderBusySpan {
@@ -5678,6 +5696,32 @@ export async function updateProviderAutomationSettings(
   const { error } = await supabase
     .from("providers")
     .update({ automation_settings: settings })
+    .eq("id", providerId);
+  if (error) throw error;
+}
+
+/**
+ * Sets (or, with null, clears) the monthly release day without touching the
+ * rest of automation_settings. updateProviderAutomationSettings replaces the
+ * whole blob, which is right for the Automations screen (it owns most of it)
+ * and wrong for SchedulingScreen, which only owns this one key.
+ */
+export async function updateProviderReleaseDay(
+  providerId: string,
+  releaseDay: number | null,
+): Promise<void> {
+  const { data, error: readError } = await supabase
+    .from("providers")
+    .select("automation_settings")
+    .eq("id", providerId)
+    .maybeSingle();
+  if (readError) throw readError;
+  const current = { ...((data?.automation_settings as Record<string, unknown> | null) ?? {}) };
+  if (releaseDay == null) delete current['scheduleReleaseDay'];
+  else current['scheduleReleaseDay'] = releaseDay;
+  const { error } = await supabase
+    .from("providers")
+    .update({ automation_settings: current })
     .eq("id", providerId);
   if (error) throw error;
 }
@@ -7961,6 +8005,8 @@ export async function getProviderSchedulingConstraints(
   providerIdOrDisplayName: string,
 ): Promise<{
   bookingWindowDays: number;
+  /** Set = monthly release, which replaces bookingWindowDays. */
+  scheduleReleaseDay: number | null;
   minBookingNoticeHrs: number;
 }> {
   // Prefer the real UUID when the caller has one — exact display_name
@@ -7969,12 +8015,13 @@ export async function getProviderSchedulingConstraints(
   // provider with no constraints set instead of a failed lookup.
   const query = supabase
     .from("providers")
-    .select("booking_window_days, min_booking_notice_hrs");
+    .select(`${BOOKING_HORIZON_COLUMNS}, min_booking_notice_hrs`);
   const { data } = UUID_RE.test(providerIdOrDisplayName)
     ? await query.eq("id", providerIdOrDisplayName).maybeSingle()
     : await query.eq("display_name", providerIdOrDisplayName).maybeSingle();
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
+    scheduleReleaseDay: toReleaseDay((data as any)?.schedule_release_day),
     minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,
   };
 }

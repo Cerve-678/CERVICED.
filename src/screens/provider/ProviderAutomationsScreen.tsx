@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
-  Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
@@ -57,7 +54,11 @@ interface ProviderAutomations {
   // What CERVICED sends on your behalf — you choose when/if
   clientReminderTiming:   string[];   // ['24h', '48h', '72h'] — push to clients
   rebookingNudgeWeeks:    string;     // 'never' | '2' | '4' | '6' | '8' | '12'
-  scheduleReleaseDay:     number | null; // 1-31, day of month clients with the profile bell on get notified; null = off
+  // Monthly release day — a BOOKING RULE now (it decides how far ahead
+  // clients can book), owned and edited by SchedulingScreen. Carried here only
+  // because saving automation_settings REPLACES the whole blob; same rule as
+  // depositRequiredNew below. Never render an editor for it here.
+  scheduleReleaseDay:     number | null;
   autoReviewRequest:      boolean;    // 2hrs after completion
   postApptCheckIn:        boolean;    // check-in message day after
   birthdayGreeting:       boolean;    // greeting on client birthday
@@ -178,7 +179,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   const [toast, setToast]       = useState<{ msg: string; ok: boolean } | null>(null);
   const [d, setD]               = useState<ProviderAutomations>(DEFAULTS);
   const [providerId, setProviderId] = useState<string | null>(null);
-  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -402,30 +402,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         />
         <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you. Your setting here is also their starting interval in Beauty Maintenance, and clients who already get Maintenance reminders for that service don't get this nudge as well.</Text>
 
-        {/* Schedule release day — the day of the month clients who've
-            turned on the notification bell on your profile get notified,
-            so they know to check back for new availability. Independent of
-            rebooking nudges: this goes to anyone following you, not just
-            clients with a completed booking. */}
-        <AutoCard
-          title="Notify followers on schedule release day"
-          description="Clients who turned on notifications for your profile get a reminder to check your availability on this day each month."
-          value={d.scheduleReleaseDay != null}
-          onToggle={(v) => set('scheduleReleaseDay', v ? new Date().getDate() : null)}
-          C={C}
-        >
-          {d.scheduleReleaseDay != null && (
-            <TouchableOpacity
-              style={[st.dateBtn, { backgroundColor: C.surface, borderColor: C.border }]}
-              onPress={() => setReleaseDayPickerVisible(true)}
-            >
-              <Ionicons name="calendar-outline" size={15} color={C.accent} />
-              <Text style={[st.dateBtnText, { color: C.text }]}>
-                Day {d.scheduleReleaseDay} of every month
-              </Text>
-            </TouchableOpacity>
-          )}
-        </AutoCard>
+        <Text style={[st.chipHint, { color: C.sub }]}>Looking for your monthly release day? It's a booking rule now: Scheduling → How far ahead clients can book → Monthly release.</Text>
 
         <AutoCard
           title="Review request"
@@ -531,52 +508,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* Schedule release day picker — date-of-month only, same
-          Modal-on-iOS/inline-on-Android pattern as ProviderScheduleScreen's
-          pickers. onChange writes straight through; there's no separate
-          "confirm" step since the day is the only thing being chosen. */}
-      {releaseDayPickerVisible && (
-        Platform.OS === 'ios' ? (
-          <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={releaseDayPickerVisible}>
-            <View style={st.pickerModalWrap}>
-              <TouchableOpacity
-                style={st.pickerDismiss}
-                activeOpacity={1}
-                onPress={() => setReleaseDayPickerVisible(false)}
-              />
-              <View style={[st.pickerSheet, { backgroundColor: C.surface }]}>
-                <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
-                  <Text style={[st.pickerLabel, { color: C.text }]}>Release Day</Text>
-                  <TouchableOpacity onPress={() => setReleaseDayPickerVisible(false)}>
-                    <Text style={[st.pickerDone, { color: C.accentText }]}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  mode="date"
-                  value={new Date(2020, 0, d.scheduleReleaseDay ?? 1)}
-                  onChange={(_: DateTimePickerEvent, date?: Date) => {
-                    if (date) set('scheduleReleaseDay', date.getDate());
-                  }}
-                  display="spinner"
-                  themeVariant={isDarkMode ? 'dark' : 'light'}
-                  textColor={C.text}
-                  style={{ width: '100%' }}
-                />
-              </View>
-            </View>
-          </Modal>
-        ) : (
-          <DateTimePicker
-            mode="date"
-            value={new Date(2020, 0, d.scheduleReleaseDay ?? 1)}
-            onChange={(_: DateTimePickerEvent, date?: Date) => {
-              setReleaseDayPickerVisible(false);
-              if (date) set('scheduleReleaseDay', date.getDate());
-            }}
-            display="default"
-          />
-        )
-      )}
     </SafeAreaView>
     </ThemedBackground>
   );
@@ -638,24 +569,4 @@ const st = StyleSheet.create({
     marginBottom: 12,
   },
   toastText: { fontSize: 13, fontWeight: '500', flex: 1 },
-
-  dateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 12,
-    alignSelf: 'flex-start',
-  },
-  dateBtnText: { fontSize: 13, fontWeight: '600' },
-
-  pickerModalWrap: { flex: 1, flexDirection: 'column' },
-  pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
-  pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  pickerLabel:     { fontSize: 15, fontWeight: '600' },
-  pickerDone:      { fontSize: 15, fontWeight: '700' },
 });

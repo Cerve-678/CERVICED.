@@ -77,7 +77,7 @@ import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
-import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
@@ -4690,16 +4690,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('scheduleReleaseDay')}
               >
-                {/* Same setting as ProviderAutomationsScreen's "Notify
-                    followers on schedule release day" card — both read/write
-                    providers.automation_settings.scheduleReleaseDay, so
-                    changing it here or there updates the same value and each
-                    screen shows the current one on its own next load. The
-                    client-facing profile's "Slots out every Nth of the
-                    month" pill is computed live from this same value —
-                    there's no separate free-text field to keep in sync
-                    anymore, so this is the only place this ever needs
-                    setting. */}
+                {/* Same setting as SchedulingScreen's "Monthly release"
+                    booking-window choice — both read/write
+                    providers.automation_settings.scheduleReleaseDay. A day
+                    set here REPLACES the rolling booking window (see
+                    utils/bookingHorizon and provider_last_bookable_date), and
+                    the client-facing profile's "New slots drop on the Nth"
+                    pill is computed live from the same value. */}
                 {/* One control, not a switch plus a hidden picker. The switch
                     only ever meant "is a day set", and flipping it on guessed
                     today's date — a real value the provider never chose, which
@@ -4708,8 +4705,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     when nothing is set yet), and choosing "Don't notify" in
                     there is what clears it. */}
                 <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Notify Followers on Release Day</Text>
-                  <Text style={styles.toggleHint}>Clients who turned on notifications for your profile get a reminder on this day each month</Text>
+                  <Text style={styles.toggleLabel}>Monthly Release Day</Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.releaseDayBtn}
@@ -5767,7 +5764,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             textColor={editTheme.text}
             subColor={editTheme.sub}
             borderColor={editTheme.border}
-            styles={styles}
             allowClear
             onClear={() => setProviderData(prev => ({ ...prev, scheduleReleaseDay: null }))}
             onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
@@ -8368,83 +8364,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     color: fg(0.75),
   },
 
-  releasePickerOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(20,14,18,0.46)',
-  },
-  releasePickerSheet: {
-    backgroundColor: P.surfaceRaised,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 34,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  releasePickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  releasePickerEyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 1.1,
-    color: fg(0.46),
-    marginBottom: 4,
-  },
-  releasePickerTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 21,
-    color: '#20191C',
-  },
-  releasePickerClose: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: surf(0.06),
-  },
-  releasePickerSubtext: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 12,
-    lineHeight: 18,
-    color: fg(0.57),
-    marginTop: 10,
-    marginBottom: 18,
-  },
-  releasePickerClearButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginTop: 14,
-  },
-  releasePickerClearText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 13,
-    textDecorationLine: 'underline',
-  },
-  releasePickerDoneButton: {
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    marginTop: 20,
-  },
-  releasePickerDoneText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
 
   // ── Tab switcher ──
   // ── Policies step ──

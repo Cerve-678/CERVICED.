@@ -23,8 +23,8 @@
  *      silently does nothing.
  * Both must be written. See the load path below for the same precedence order.
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,7 +38,11 @@ import {
   updateProviderScheduleSettings,
   updateProviderMaxBookingsPerDay,
   updateProviderRequestSettings,
+  updateProviderReleaseDay,
 } from '../../services/databaseService';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
+import { lastBookableDate, nextReleaseMoment, toReleaseDay } from '../../utils/bookingHorizon';
+import { formatShortDayDate, formatTime12, ordinalSuffix } from '../../utils/dateUtils';
 import {
   Card, ChipGroup, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
@@ -66,6 +70,11 @@ export default function SchedulingScreen({ navigation }: any) {
   // Booking rules (moved from ProviderAutomationsScreen)
   const [bufferMins, setBufferMins]             = useState('0');
   const [bookingWindowDays, setBookingWindowDays] = useState('60');
+  // Set = monthly release, which replaces the rolling window above (the
+  // window is still saved, so switching back restores it). Stored in
+  // automation_settings.scheduleReleaseDay — see utils/bookingHorizon.
+  const [releaseDay, setReleaseDay] = useState<number | null>(null);
+  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const [minBookingNoticeHrs, setMinNotice]     = useState('0');
   const [slotIntervalMins, setSlotInterval]     = useState('60');
   const [maxBookingsPerDay, setMaxPerDay]       = useState('unlimited');
@@ -112,6 +121,7 @@ export default function SchedulingScreen({ navigation }: any) {
           setAllowBeyondWindow(profile.allow_beyond_window_requests ?? false);
           setRequestBefore(profile.request_window_before_mins == null ? 'any' : String(profile.request_window_before_mins));
           setRequestAfter(profile.request_window_after_mins == null ? 'any' : String(profile.request_window_after_mins));
+          setReleaseDay(toReleaseDay(profile.automation_settings?.scheduleReleaseDay));
         }
         // Same precedence as ProviderAutomationsScreen: the providers row is
         // the real answer (it's what gets enforced), user_metadata is only a
@@ -177,6 +187,8 @@ export default function SchedulingScreen({ navigation }: any) {
 
         updateProviderMaxBookingsPerDay(providerId, capInt),
 
+        updateProviderReleaseDay(providerId, releaseDay),
+
         updateProviderRequestSettings(providerId, {
           allow_out_of_hours_requests:  allowOutOfHours,
           allow_blocked_date_requests:  allowBlockedDates,
@@ -200,10 +212,35 @@ export default function SchedulingScreen({ navigation }: any) {
     }
   }, [
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
-    bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
+    bufferMins, bookingWindowDays, releaseDay, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
     allowBeyondWindow, requestBefore, requestAfter, navigation,
   ]);
+
+  // What a monthly release means right now, in dates — the wall clients hit.
+  const releaseStatus = useMemo(() => {
+    if (releaseDay == null) return null;
+    const now = new Date();
+    const openUntil = lastBookableDate({ schedule_release_day: releaseDay }, now);
+    const next = nextReleaseMoment(releaseDay, now);
+    if (!openUntil) return null;
+    return `Clients can book up to ${formatShortDayDate(openUntil)}. The next month opens ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
+  }, [releaseDay]);
+
+  const horizonOptions = useMemo(() => [
+    ...BOOKING_WINDOW_OPTS,
+    { value: 'monthly', label: 'Monthly release', sub: 'Open next month on one day each month' },
+  ], []);
+
+  const onHorizonChange = useCallback((value: string) => {
+    if (value === 'monthly') {
+      setReleaseDay(prev => prev ?? new Date().getDate());
+      setReleaseDayPickerVisible(true);
+      return;
+    }
+    setReleaseDay(null);
+    setBookingWindowDays(value);
+  }, []);
 
   if (loading) {
     return (
@@ -300,7 +337,27 @@ export default function SchedulingScreen({ navigation }: any) {
 
             <View style={{ height: 18 }} />
             <SectionLabel text="How far ahead clients can book" />
-            <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
+            <RadioGroup
+              options={horizonOptions}
+              value={releaseDay != null ? 'monthly' : bookingWindowDays}
+              onChange={onHorizonChange}
+            />
+            {releaseDay != null && (
+              <View style={{ marginTop: 10, gap: 8 }}>
+                <TouchableOpacity
+                  style={[st.releaseDayRow, { backgroundColor: C.surface, borderColor: C.border }]}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setReleaseDayPickerVisible(true); }}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="calendar-outline" size={15} color={C.accent} />
+                  <Text style={[st.releaseDayText, { color: C.text }]}>Opens on the {ordinalSuffix(releaseDay)} of every month</Text>
+                  <Ionicons name="chevron-forward" size={14} color={C.sub} />
+                </TouchableOpacity>
+                <Text style={[st.releaseDayHint, { color: C.sub }]}>{RELEASE_DAY_EXPLAINER}</Text>
+                {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
+              </View>
+            )}
 
             <View style={{ height: 18 }} />
             <SectionLabel text="Maximum bookings per day" />
@@ -338,7 +395,11 @@ export default function SchedulingScreen({ navigation }: any) {
             />
             <ToggleRow
               label="Further ahead than you take bookings"
-              sub={`Clients can ask for a date beyond your ${bookingWindowDays}-day booking window`}
+              sub={releaseDay != null
+                ? "Clients can ask for a date in a month you haven't opened yet"
+                : bookingWindowDays === '0'
+                  ? "You take bookings any time ahead, so there's nothing for this to relax"
+                  : `Clients can ask for a date beyond your ${bookingWindowDays}-day booking window`}
               value={allowBeyondWindow}
               onChange={setAllowBeyondWindow}
             />
@@ -367,7 +428,31 @@ export default function SchedulingScreen({ navigation }: any) {
 
           <SaveButton saving={saving} onPress={handleSave} />
         </ScrollView>
+        <ReleaseDayPicker
+          visible={releaseDayPickerVisible}
+          value={releaseDay ?? new Date().getDate()}
+          accentColor={C.accent}
+          cardColor={C.card}
+          textColor={C.text}
+          subColor={C.sub}
+          borderColor={C.border}
+          onSelect={setReleaseDay}
+          onClose={() => setReleaseDayPickerVisible(false)}
+        />
       </SafeAreaView>
     </View>
   );
 }
+
+const st = StyleSheet.create({
+  releaseDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  releaseDayText: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  releaseDayHint: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17 },
+});
