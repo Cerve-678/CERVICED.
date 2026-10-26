@@ -23,7 +23,7 @@
 -- which fell below the frontier when 20261024100000 was applied, and again
 -- 2026-10-25 above 20261025120000 (service_search), into a range no other
 -- session's file uses. Apply order:
--- 20261025200000 → 20261025210000 → 20261025211000 → this.
+-- 20261025135000 → 20261025210000 → 20261025211000 → this.
 
 -- ── 1. who is an admin ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.admin_users (
