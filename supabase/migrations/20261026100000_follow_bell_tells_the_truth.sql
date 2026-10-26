@@ -39,9 +39,9 @@ DELETE FROM public.provider_follows WHERE notify_enabled = FALSE;
 DROP FUNCTION IF EXISTS public.process_follow_availability_nudges();
 
 -- ── 2a. the last date a client may book this provider ───────────────────────
--- Matches enforce_booking_bookability: rolling window, booking_date >
--- CURRENT_DATE + booking_window_days is rejected, 0/NULL window = no limit
--- (capped at 180 days here, like the profile's own "Fully Booked" check).
+-- Exactly enforce_booking_bookability's rule: booking_date > CURRENT_DATE +
+-- booking_window_days is rejected (NULL window = 60). A 0 window means no
+-- limit, returned as NULL — callers that scan day by day cap it themselves.
 -- One place to change when a provider's horizon gets another shape.
 CREATE OR REPLACE FUNCTION public.provider_last_bookable_date(p_provider_id uuid)
 RETURNS date
@@ -50,9 +50,9 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT CURRENT_DATE + CASE
-           WHEN COALESCE(p.booking_window_days, 60) > 0 THEN LEAST(COALESCE(p.booking_window_days, 60), 180)
-           ELSE 180
+  SELECT CASE
+           WHEN COALESCE(p.booking_window_days, 60) > 0 THEN CURRENT_DATE + COALESCE(p.booking_window_days, 60)
+           ELSE NULL
          END
     FROM public.providers p
    WHERE p.id = p_provider_id;
@@ -213,7 +213,11 @@ BEGIN
          OR EXISTS (SELECT 1 FROM public.provider_availability a WHERE a.provider_id = p.id AND a.is_closed = FALSE)
        )
   LOOP
-    v_open := public.provider_has_bookable_opening(r.provider_id, public.provider_last_bookable_date(r.provider_id));
+    -- No limit = look 180 days ahead, like the profile's own "Fully Booked" check.
+    v_open := public.provider_has_bookable_opening(
+      r.provider_id,
+      LEAST(COALESCE(public.provider_last_bookable_date(r.provider_id), CURRENT_DATE + 180), CURRENT_DATE + 180)
+    );
 
     SELECT s.is_fully_booked, s.last_alert_at
       INTO v_was_full, v_last_alert
