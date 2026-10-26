@@ -227,12 +227,23 @@ const PUSH_TITLE_OVERRIDES: Record<string, string> = {
   'Booking Request — Outside Your Hours': 'Outside Hours Request',
 };
 
+/**
+ * Announcements a client asked for one provider at a time, by tapping that
+ * provider's bell ("has space again", "December is open"). The bell is the
+ * opt-in, so "Offers & Promotions" — which is about deals, and is off by
+ * default — doesn't gate them; turning the bell off is how to stop them
+ * (it deletes the follow, so none are written).
+ */
+const BELL_ANNOUNCEMENT_KINDS = new Set(['follow_openings_again', 'follow_schedule_release_nudge']);
+
 /** True when this notification may be pushed to this user. */
 function pushAllowedByPrefs(
   type: string | undefined,
   recipientRole: string | undefined,
   prefs: Record<string, boolean> | null,
+  kind?: unknown,
 ): boolean {
+  if (type === 'announcement' && typeof kind === 'string' && BELL_ANNOUNCEMENT_KINDS.has(kind)) return true;
   const map = recipientRole === 'client' ? CLIENT_PREF_KEY_BY_TYPE
     : recipientRole === 'provider' ? PROVIDER_PREF_KEY_BY_TYPE
     : null;
@@ -324,6 +335,7 @@ serve(async (req) => {
         payload.record.type,
         payload.record.recipient_role,
         userRow.notification_preferences as Record<string, boolean> | null,
+        payload.record.metadata?.['kind'],
       )
     ) {
       console.log(
