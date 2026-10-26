@@ -25,6 +25,7 @@ import {
   getOlderBookings,
   getProviderConsultationService,
   getProviderContactByDisplayName,
+  getBookedClientContact,
   getProviderReschedulePolicyByDisplayName,
   getSavedPortfolioIds,
   validatePromoCode,
@@ -2518,15 +2519,31 @@ const providerContact: Capability = {
     "their email", "get in touch", "how do i reach", "whatsapp",
   ],
   needs: [{ kind: "provider", required: true }],
-  async run({ entities }): Promise<CapabilityResult> {
+  async run({ entities, bookings }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
-    const [contact, providerDbId] = await Promise.all([
+    const [publicContact, providerDbId] = await Promise.all([
       getProviderContactByDisplayName(provider.displayName),
       // An ordinal/pronoun reference contains slug + name but not always the
       // UUID required by ProviderChat. Resolve it before offering a message
       // action rather than navigating with an empty id that cannot load.
       resolveProviderDbId(provider),
     ]);
+
+    // A client with a live booking gets what that booking's Contact sheet
+    // shows: the provider's booked-client details from Communications, which
+    // can differ from the public ones. Soonest booking first; matched by id
+    // where the booking carries one, by name for older rows.
+    const liveBooking = bookings
+      .filter((b) =>
+        (b.status === BookingStatus.UPCOMING || b.status === BookingStatus.PENDING || b.status === BookingStatus.IN_PROGRESS)
+        && (b.providerId && providerDbId ? b.providerId === providerDbId : b.providerName === provider.displayName))
+      .sort((a, b) =>
+        a.bookingDate === b.bookingDate
+          ? a.bookingTime.localeCompare(b.bookingTime)
+          : a.bookingDate.localeCompare(b.bookingDate))[0];
+    const contact = liveBooking
+      ? await getBookedClientContact(liveBooking.id)
+      : publicContact;
 
     // Messaging in-app is always available and keeps the thread attached to
     // the booking, so it's offered whenever we can resolve its real id. If
