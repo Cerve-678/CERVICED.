@@ -189,6 +189,26 @@ DECLARE
   v_local_hour int := EXTRACT(HOUR FROM (now() AT TIME ZONE 'Europe/London'))::int;
   v_daytime boolean := v_local_hour BETWEEN 8 AND 20;
 BEGIN
+  -- Forget any provider who has left the audience (gained a release day,
+  -- went offline, lost every bell follower, or has nothing set up). Their
+  -- state stops updating while they're out, so a stale "fully booked" would
+  -- otherwise send a false "has space again" the moment they come back.
+  -- They re-enter with a fresh first observation instead.
+  DELETE FROM public.provider_follow_openings_state s
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public.providers p
+      WHERE p.id = s.provider_id
+        AND p.has_gone_live = TRUE
+        AND p.is_active = TRUE
+        AND NOT COALESCE((p.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]+$', FALSE)
+        AND EXISTS (SELECT 1 FROM public.provider_follows f WHERE f.provider_id = p.id AND f.notify_enabled = TRUE)
+        AND EXISTS (SELECT 1 FROM public.services sv WHERE sv.provider_id = p.id AND sv.is_active = TRUE AND sv.duration_minutes > 0)
+        AND (
+          EXISTS (SELECT 1 FROM public.provider_availability_windows w WHERE w.provider_id = p.id)
+          OR EXISTS (SELECT 1 FROM public.provider_availability a WHERE a.provider_id = p.id AND a.is_closed = FALSE)
+        )
+   );
+
   FOR r IN
     SELECT p.id AS provider_id, p.display_name
       FROM public.providers p
