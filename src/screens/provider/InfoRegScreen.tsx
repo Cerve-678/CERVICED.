@@ -2597,7 +2597,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 />
                 <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
                 {/* Mirrors get_public_provider_address: a salon/studio on
-                    "Always visible" shows its full address to clients, so the
+                    "Always visible" shows its full address to anyone signed in, so the
                     preview does too. Everyone else shows the area. */}
                 {(() => {
                   const publicAddress =
