@@ -76,7 +76,7 @@ type ModernBeautyCalendarProps = {
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
   serviceId?: string | undefined; // Real services.id UUID — resolves this service's own buffer override
   style?: ViewStyle;
-  /** Last date clients can book (today + bookingWindowDays). Undefined = no limit. */
+  /** Last date clients can book (utils/bookingHorizon's lastBookableDate). Undefined = no limit. */
   maxDate?: Date;
   /** Selected day/time highlight colour — the caller derives this from its
    *  own backdrop (not the OS/app dark-mode setting, not a fixed brand

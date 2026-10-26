@@ -1834,7 +1834,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   //
   // Fired alongside a second, much wider check (the provider's whole
   // booking window, clamped internally by hasNearTermAvailabilityForServices
-  // to whatever booking_window_days actually is) — that's the only one
+  // to what the provider has opened — rolling window or monthly release, see
+  // utils/bookingHorizon) — that's the only one
   // strict enough to disable Book itself, since "nothing in 14 days" is not
   // the same claim as "nothing ever."
   useEffect(() => {

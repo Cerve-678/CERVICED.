@@ -89,13 +89,13 @@ export interface ProviderRegistrationData {
   customServiceType: string;
   location: string;
   aboutText: string;
-  /** Day of month (1-31) new slots go out AND clients who've turned on the
-   *  profile bell get notified. Drives the client-facing profile's "Slots
-   *  out every Nth of the month" pill directly (computed live, no separate
-   *  text field to keep in sync). Stored in
+  /** Monthly release day (1-31): next month opens for booking on this day
+   *  (utils/bookingHorizon) and bell followers are told. Drives the
+   *  client-facing profile's "New slots drop on the Nth" pill. Stored in
    *  providers.automation_settings.scheduleReleaseDay (merged in, not
    *  overwritten — that JSONB blob also holds unrelated settings owned by
-   *  ProviderAutomationsScreen). null = no release day set / notifications off. */
+   *  ProviderAutomationsScreen). null = no release day: a rolling
+   *  booking_window_days horizon instead. */
   scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
@@ -577,10 +577,9 @@ export async function saveProviderToSupabase(
 
   // Merged in, never overwritten whole — automation_settings also holds
   // unrelated keys (rebookingNudgeWeeks, clientReminderTiming, etc.) owned
-  // by ProviderAutomationsScreen, which reads/writes the exact same
-  // scheduleReleaseDay key so the two screens stay in sync automatically
-  // (both fetch fresh from this one column on their own mount — no separate
-  // sync step needed, just don't let either screen clobber the other's keys).
+  // by ProviderAutomationsScreen. scheduleReleaseDay is also edited by
+  // SchedulingScreen ("Monthly release"); each screen loads it fresh on mount,
+  // so just don't let either clobber the other's keys.
   const mergedAutomationSettings: NonNullable<DbProvider['automation_settings']> = {
     ...(existingProvider?.automation_settings ?? {}),
   };

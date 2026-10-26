@@ -2405,7 +2405,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     never shows text the live screen wouldn't. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
                   {providerData.scheduleReleaseDay != null
-                    ? `Slots out every ${ordinalSuffix(providerData.scheduleReleaseDay)} of the month`
+                    ? `New slots drop on the ${ordinalSuffix(providerData.scheduleReleaseDay)}`
                     : "Set a release day below"}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
@@ -4702,7 +4702,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     today's date — a real value the provider never chose, which
                     then had to be corrected in the picker underneath. Now the
                     row IS the picker: tap it, choose a day (it opens on today
-                    when nothing is set yet), and choosing "Don't notify" in
+                    when nothing is set yet), and choosing "No release day" in
                     there is what clears it. */}
                 <View style={styles.toggleInfo}>
                   <Text style={styles.toggleLabel}>Monthly Release Day</Text>

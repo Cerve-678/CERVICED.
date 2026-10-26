@@ -988,7 +988,7 @@ shipped, and where it differs from the design below:
 - **The push is true when it's sent.** The cron still runs at 09:00 UTC, the
   release minute, and `process_follow_schedule_release_nudges()` now only
   sends once `provider_last_bookable_date()` reaches next month. It names the
-  month ("… just opened December") and skips providers who aren't live.
+  month ("… has opened bookings for December") and skips providers who aren't live. A time-only change to an existing booking past the horizon is no longer re-checked.
 - **One control** (point 3): Scheduling → "How far ahead clients can book" →
   "Monthly release", with the day picker and a line saying what's open now and
   when the next month opens. Automations lost its toggle (it still writes the

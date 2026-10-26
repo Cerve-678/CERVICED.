@@ -24,8 +24,14 @@
 -- Redefines, each from its live definition (2026-10-26) with only the
 -- horizon logic changed:
 --   provider_last_bookable_date        (added by 20261026100000)
---   enforce_booking_bookability        (window check → the helper above)
---   get_services_availability          (7-day horizon clamped by the helper)
+--   enforce_booking_bookability        (window check → the helper above, and
+--                                       no longer re-checked on an UPDATE that
+--                                       keeps the booking's date and provider)
+--   get_services_availability          (7-day horizon clamped by the helper.
+--                                       Side effect: a rolling window under 7
+--                                       days now includes its last day, e.g. 4
+--                                       days for a 3-day window, matching what
+--                                       the trigger has always accepted)
 --   process_follow_schedule_release_nudges (live providers only; sends only
 --                                       once next month is open; names it)
 --
@@ -48,7 +54,9 @@ AS $$
   WITH p AS (
     SELECT
       pr.booking_window_days,
-      CASE WHEN (pr.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]+$'
+      -- {1,2}: Postgres doesn't promise the regex runs before the cast, so a
+      -- long digit string could overflow ::int and fail every booking.
+      CASE WHEN (pr.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]{1,2}$'
             AND (pr.automation_settings->>'scheduleReleaseDay')::int BETWEEN 1 AND 31
            THEN (pr.automation_settings->>'scheduleReleaseDay')::int
       END AS release_day,
@@ -131,8 +139,17 @@ BEGIN
   IF NOT v_bypass_policy THEN
     -- The rolling window, or what a monthly release has opened so far — see
     -- provider_last_bookable_date. NULL = no limit.
+    --
+    -- Not re-checked when an existing booking keeps its date and provider:
+    -- a time-only change (or an end_time fix) to a booking that was valid
+    -- when made must not fail just because the horizon has since moved — a
+    -- provider switching from a 60-day window to a monthly release would
+    -- otherwise freeze every booking they hold past the end of the month.
     v_last_bookable := public.provider_last_bookable_date(NEW.provider_id);
     IF v_last_bookable IS NOT NULL
+       AND NOT (TG_OP = 'UPDATE'
+                AND NEW.booking_date = OLD.booking_date
+                AND NEW.provider_id = OLD.provider_id)
        AND NEW.booking_date > v_last_bookable
        AND NOT (v_emergency AND v_allow_window) THEN
       RAISE EXCEPTION 'Booking is outside this provider''s booking window';
@@ -386,7 +403,7 @@ BEGIN
     WHERE f.notify_enabled = TRUE
       AND p.has_gone_live = TRUE
       AND p.is_active = TRUE
-      AND (p.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]+$'
+      AND (p.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]{1,2}$'
       AND LEAST((p.automation_settings->>'scheduleReleaseDay')::INT, v_last_day_of_month) = v_today
       AND (f.last_notified_at IS NULL OR f.last_notified_at < date_trunc('month', NOW()))
       -- Say "released" only once next month really is bookable. The horizon
@@ -405,7 +422,9 @@ BEGIN
       r.user_id,
       'announcement',
       COALESCE(r.display_name, 'Your provider') || ' — ' || v_next_month_name || ' is open',
-      COALESCE(r.display_name, 'Your provider') || ' just opened ' || v_next_month_name || '. Book before it fills up.',
+      -- Only what was checked: the month is bookable. Whether any time in it
+      -- is still free isn't, so no "before it fills up".
+      COALESCE(r.display_name, 'Your provider') || ' has opened bookings for ' || v_next_month_name || '.',
       'low',
       TRUE,
       r.provider_id,
