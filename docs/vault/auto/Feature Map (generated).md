@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **95 files**
+Curated: [[Address Release]] · **96 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(174)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **95 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
 - `src/utils/addressRelease.ts` _(15)_
-- … +65 more
+- … +66 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **176 files**
@@ -109,14 +109,14 @@ Curated: [[Payments]] · **141 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **283 files**
-- `src/services/databaseService.ts` _(883)_
+- `src/services/databaseService.ts` _(892)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(645)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(544)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/client/BookingDetailScreen.tsx` _(419)_
-- `src/screens/client/BookingsScreen.tsx` _(356)_
+- `src/screens/client/BookingDetailScreen.tsx` _(421)_
+- `src/screens/client/BookingsScreen.tsx` _(355)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(193)_
@@ -265,7 +265,7 @@ Curated: [[Booking Flow]] · **174 files**
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/services/bookingService.ts` _(54)_
 - `src/screens/client/BookingsScreen.tsx` _(53)_
-- `src/screens/provider/PoliciesScreen.tsx` _(48)_
+- `src/screens/provider/PoliciesScreen.tsx` _(49)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
@@ -369,9 +369,9 @@ Curated: [[Payments]] · **73 files**
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/features/bookings/paymentPresentation.ts` _(5)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(5)_
+- `src/screens/provider/PoliciesScreen.tsx` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/constants/feeTerms.ts` _(4)_
-- `src/screens/provider/PoliciesScreen.tsx` _(4)_
 - `src/utils/policyDisplay.ts` _(4)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_

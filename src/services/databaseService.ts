@@ -6614,16 +6614,81 @@ export async function getProviderContactByDisplayName(
   return mapContactRow(data);
 }
 
-/** Provider contact info by provider id (stable) — prefer over the display-name variant. */
-export async function getProviderContactById(
+/**
+ * How the client on `bookingId` can reach that booking's provider — the
+ * Contact sheet in Booking Details / Bookings.
+ *
+ * Server-side (get_booked_client_contact): returns a row only to the client on
+ * that booking while it's pending / confirmed / in progress, only for the
+ * channels the provider switched on, and with the provider's booked-client
+ * details (provider_booked_contact) in place of their public ones wherever
+ * they set one. No row → in-app only, never an error.
+ */
+export async function getBookedClientContact(
+  bookingId: string,
+): Promise<ProviderContactInfo> {
+  const { data, error } = await supabase.rpc("get_booked_client_contact", {
+    p_booking_id: bookingId,
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | ProviderContactInfo
+    | null
+    | undefined;
+  return (
+    mapContactRow(row) ?? {
+      preferred_contact_methods: ["in_app"],
+      whatsapp_number: null,
+      email: null,
+      phone: null,
+    }
+  );
+}
+
+/**
+ * The calling provider's booked-client contact details — what clients with a
+ * booking see instead of the public ones. A null field means "use my public
+ * detail" (providers.email / phone / whatsapp_number). Owner-only by RLS.
+ */
+export interface BookedClientContactDetails {
+  email: string | null;
+  phone: string | null;
+  whatsapp_number: string | null;
+}
+
+export async function getMyBookedClientContact(
   providerId: string,
-): Promise<ProviderContactInfo | null> {
-  const { data } = await supabase
-    .from("providers")
-    .select("preferred_contact_methods, whatsapp_number, email, phone")
-    .eq("id", providerId)
+): Promise<BookedClientContactDetails> {
+  const { data, error } = await supabase
+    .from("provider_booked_contact")
+    .select("email, phone, whatsapp_number")
+    .eq("provider_id", providerId)
     .maybeSingle();
-  return mapContactRow(data);
+  if (error) throw error;
+  const row = data as BookedClientContactDetails | null;
+  return {
+    email: row?.email ?? null,
+    phone: row?.phone ?? null,
+    whatsapp_number: row?.whatsapp_number ?? null,
+  };
+}
+
+/** Save all three at once; pass null to fall back to the public detail. */
+export async function setMyBookedClientContact(
+  providerId: string,
+  details: BookedClientContactDetails,
+): Promise<void> {
+  const { error } = await supabase.from("provider_booked_contact").upsert(
+    {
+      provider_id: providerId,
+      email: details.email,
+      phone: details.phone,
+      whatsapp_number: details.whatsapp_number,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "provider_id" },
+  );
+  if (error) throw error;
 }
 
 function mapIntakeForm(d: any): IntakeForm {
