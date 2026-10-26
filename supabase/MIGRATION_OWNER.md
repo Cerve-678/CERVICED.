@@ -22,14 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-3f — applying 20261025150000 provider_booked_contact (claimed 2026-10-26; cerviced-a8 and cerviced-16 told)
+OWNER:  (none)
 ```
 
 ### Written 2026-10-25, NOT applied (booked-client contact details)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261025150000 | `provider_booked_contact` | **APPLYING (user OK'd 2026-10-26).** Renumbered from `20261025130000` (taken by service search) and then `20261025140000` (held by #168's reschedule payout migration; moved by cerviced-a8). Frontier: `20261025130000`. Re-check `max(version)` and renumber above it if anything has landed since. Adds owner-only table `provider_booked_contact` (RLS on, owner ALL policy, anon revoked) + `get_booked_client_contact(uuid)` SECURITY DEFINER (client on that booking only, pending/confirmed/in_progress, switched-on channels only, blank → public value). Redefines nothing. The file records its own version. **Must be applied before `feat/communications-contact-edit-policy-explainers` merges**: Communications and both client Contact sheets call it. |
+| 20261025150000 | `provider_booked_contact` | **UNAPPLIED.** The apply on 2026-10-26 was declined at the permission prompt; nothing was written. Renumbered from `20261025130000` (taken by service search) and then `20261025140000` (held by #168's reschedule payout migration; moved by cerviced-a8). Frontier: `20261025130000`. Re-check `max(version)` and renumber above it if anything has landed since. Adds owner-only table `provider_booked_contact` (RLS on, owner ALL policy, anon revoked) + `get_booked_client_contact(uuid)` SECURITY DEFINER (client on that booking only, pending/confirmed/in_progress, switched-on channels only, blank → public value). Redefines nothing. The file records its own version. **Must be applied before `feat/communications-contact-edit-policy-explainers` merges**: Communications and both client Contact sheets call it. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 
