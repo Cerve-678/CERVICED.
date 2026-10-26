@@ -102,6 +102,7 @@ import ServiceEditorSheet, {
   type ServiceEditorPalette,
   type ServiceEditorValue,
 } from '../../features/providers/ServiceEditorSheet';
+import { descriptionProblem, hasNoTags, type DescriptionProblem } from '../../features/providers/serviceTags';
 import {
   fetchGoLiveStatus,
   buildGoLiveSteps,
@@ -584,6 +585,124 @@ const ServiceCategoryCard = React.memo(function ServiceCategoryCard({
             Add to {name}
           </Text>
         </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+/** Shown before this many rows of the findability card fold away. */
+const FINDABILITY_ROWS_SHOWN = 4;
+
+const DESCRIPTION_PROBLEM_LABEL: Record<Exclude<DescriptionProblem, null>, string> = {
+  'missing': 'No description',
+  'too-short': 'Short description',
+  'repeats-name': 'Description repeats the name',
+  'looks-like-typing': 'Description looks like stray typing',
+};
+
+/** What stops clients finding a live service, as the short phrases the card
+ *  lists under its name. Empty = nothing to fix. */
+function findabilityGaps(service: DbService): string[] {
+  const gaps: string[] = [];
+  if (hasNoTags({
+    styleTags: service.tags,
+    techniqueTags: service.technique_tags,
+    outcomeTags: service.outcome_tags,
+    occasionTags: service.occasion_tags,
+    trendNames: service.trend_names,
+  })) gaps.push('No tags');
+  const problem = descriptionProblem(service.description, service.name);
+  if (problem) gaps.push(DESCRIPTION_PROBLEM_LABEL[problem]);
+  if (!service.audience) gaps.push('Who it’s for');
+  return gaps;
+}
+
+/** "Help clients find your services": the live services Search can barely
+ *  see, each one tap from the editor, which suggests the fix (tags read from
+ *  the name, pre-ticked; a template description to use). Nothing is changed
+ *  for the provider — they accept each one by saving. Gone once every live
+ *  service has tags, a real description and a who's-it-for. */
+const FindabilityCard = React.memo(function FindabilityCard({
+  services,
+  palette,
+  onEdit,
+}: {
+  services: DbService[];
+  palette: DashPalette;
+  onEdit: (service: DbService) => void;
+}) {
+  const needing = useMemo(
+    () => services
+      .filter(service => service.is_active)
+      .map(service => ({ service, gaps: findabilityGaps(service) }))
+      .filter(row => row.gaps.length > 0),
+    [services],
+  );
+  const [showAll, setShowAll] = useState(false);
+  if (needing.length === 0) return null;
+  const shown = showAll ? needing : needing.slice(0, FINDABILITY_ROWS_SHOWN);
+  const folded = needing.length - shown.length;
+
+  return (
+    <View style={styles.dashCardShadow}>
+      <View style={[styles.menuCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        <LinearGradient
+          colors={palette.highlight}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.cardHighlight}
+        />
+        <View style={styles.menuCardHeader}>
+          <Text style={[styles.menuCardTitle, { color: palette.text }]}>Help clients find your services</Text>
+          <Text style={[styles.menuCardCount, { color: palette.sub }]}>
+            {needing.length === 1
+              ? '1 service is hard to find in Search. Tap it to see what we suggest.'
+              : `${needing.length} services are hard to find in Search. Tap one to see what we suggest.`}
+          </Text>
+        </View>
+
+        {shown.map(({ service, gaps }) => (
+          <TouchableOpacity
+            key={service.id}
+            style={styles.serviceRow}
+            activeOpacity={0.5}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onEdit(service);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${service.name}: ${gaps.join(', ')}`}
+            accessibilityHint="Opens the editor with suggestions"
+          >
+            <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+            <View style={styles.serviceRowLine}>
+              <Text style={[styles.serviceRowName, { color: palette.text }]}>{service.name}</Text>
+              <Ionicons name="chevron-forward" size={15} color={palette.sub} />
+            </View>
+            <View style={styles.serviceRowMeta}>
+              <Text style={[styles.serviceRowMetaText, { color: palette.sub }]}>{gaps.join(' · ')}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {folded > 0 || showAll ? (
+          <TouchableOpacity
+            style={styles.menuCardFold}
+            activeOpacity={0.5}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setShowAll(open => !open);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showAll }}
+          >
+            <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+            <Text style={[styles.menuCardFoldText, { color: palette.sub }]}>
+              {showAll ? 'Show fewer' : `${folded} more`}
+            </Text>
+            <Ionicons name={showAll ? 'chevron-down' : 'chevron-forward'} size={15} color={palette.sub} />
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -2082,13 +2201,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       </BlurView>
                     </View>
                   ) : (
-                    /* A price list per category rather than a grid of tiles.
+                    <>
+                    <FindabilityCard services={services} palette={dashPalette} onEdit={openEditService} />
+                    {/* A price list per category rather than a grid of tiles.
                        It reads down like a salon's price board, fits far more
                        of the catalogue on screen, and folds hidden services
                        away instead of fading them in among the live ones.
                        Each card only gets togglingId when the row being
-                       toggled is its own, so the other cards' memo holds. */
-                    catalogue.groups.map(group => (
+                       toggled is its own, so the other cards' memo holds. */}
+                    {catalogue.groups.map(group => (
                       <ServiceCategoryCard
                         key={group.name}
                         name={group.name}
@@ -2100,7 +2221,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         onToggleActive={handleToggleActive}
                         swipe={rowSwipe}
                       />
-                    ))
+                    ))}
+                    </>
                   )}
 
                   {setup.percent === 100 ? statusSection : null}
@@ -2128,6 +2250,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         visible={editorOpen}
         initial={editorInitial}
         categoryName={editingCategory}
+        fallbackKind={providerData?.providerService ?? null}
         isNew={editingId == null}
         saving={saving}
         palette={editorPalette}

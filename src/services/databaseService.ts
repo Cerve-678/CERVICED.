@@ -14,6 +14,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
+import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
@@ -2349,8 +2350,9 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
 }
 
 /** The fields the My Services manager can set. Everything else on a service
- *  row (safety flags, tags, buffers, add-ons) is still owned by the fuller
- *  editor — this is the day-to-day set, not a second way to write all of it. */
+ *  row (safety flags, buffers, add-ons, and tags once a service has any) is
+ *  still owned by the fuller editor — this is the day-to-day set, not a
+ *  second way to write all of it. */
 export interface MyServiceDraft {
   name: string;
   price: number;
@@ -2360,6 +2362,27 @@ export interface MyServiceDraft {
    *  starts visible. Written in the same UPDATE as the other fields, so a
    *  visibility change can't land while the edit around it fails. */
   isActive?: boolean;
+  /** Only sent while a service has no tags yet (ServiceEditorSheet's "help
+   *  clients find it"). Absent = leave every tag column as it is. */
+  tags?: ServiceTagGroups;
+  /** Absent = leave services.audience as it is. */
+  audience?: Exclude<ServiceAudienceValue, ''>;
+}
+
+/** The tag/audience columns a draft carries, and nothing for what it doesn't. */
+function myServiceFindabilityColumns(draft: MyServiceDraft): Record<string, unknown> {
+  return {
+    ...(draft.tags
+      ? {
+          tags: draft.tags.styleTags,
+          technique_tags: draft.tags.techniqueTags,
+          outcome_tags: draft.tags.outcomeTags,
+          occasion_tags: draft.tags.occasionTags,
+          trend_names: draft.tags.trendNames,
+        }
+      : {}),
+    ...(draft.audience ? { audience: draft.audience } : {}),
+  };
 }
 
 export async function createMyService(
@@ -2391,6 +2414,7 @@ export async function createMyService(
       duration_minutes: draft.durationMinutes,
       sort_order: ((last?.sort_order as number | undefined) ?? -1) + 1,
       is_active: true,
+      ...myServiceFindabilityColumns(draft),
     })
     .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
@@ -2410,6 +2434,7 @@ export async function updateMyService(
       price: draft.price,
       duration_minutes: draft.durationMinutes,
       ...(draft.isActive === undefined ? {} : { is_active: draft.isActive }),
+      ...myServiceFindabilityColumns(draft),
     })
     .eq("id", serviceId)
     .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")

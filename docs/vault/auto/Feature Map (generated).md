@@ -40,14 +40,14 @@ Curated: [[Address Release]] · **95 files**
 - … +65 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **176 files**
+Curated: [[Availability & Slots]] · **177 files**
 - `src/services/AvailabilityService.ts` _(333)_
 - `src/services/databaseService.ts` _(303)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `src/screens/client/SearchScreen.tsx` _(113)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
-- `src/screens/provider/InfoRegScreen.tsx` _(93)_
+- `src/screens/provider/InfoRegScreen.tsx` _(92)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(81)_
 - `src/contexts/BookingContext.tsx` _(80)_
@@ -71,10 +71,10 @@ Curated: [[Availability & Slots]] · **176 files**
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(21)_
 - `src/types/database.ts` _(21)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- … +146 more
+- … +147 more
 
 ## Payments
-Curated: [[Payments]] · **141 files**
+Curated: [[Payments]] · **142 files**
 - `src/screens/client/CartScreen.tsx` _(530)_
 - `src/services/databaseService.ts` _(221)_
 - `src/screens/provider/PaymentsScreen.tsx` _(178)_
@@ -103,12 +103,12 @@ Curated: [[Payments]] · **141 files**
 - `src/features/bookings/BookingFeeCard.tsx` _(30)_
 - `src/utils/policyDisplay.ts` _(28)_
 - `supabase/phase1_schema.sql` _(28)_
-- `src/screens/provider/InfoRegScreen.tsx` _(27)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
-- … +111 more
+- `src/screens/client/ProviderProfileScreen.tsx` _(26)_
+- … +112 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **283 files**
+Curated: [[Booking Flow]] · **284 files**
 - `src/services/databaseService.ts` _(883)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **283 files**
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +253 more
+- … +254 more
 
 ## Notifications
 Curated: [[Notifications]] · **170 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **174 files**
 - … +144 more
 
 ## Auth
-Curated: [[Contexts]] · **187 files**
+Curated: [[Contexts]] · **188 files**
 - `src/services/databaseService.ts` _(282)_
 - `src/contexts/AuthContext.tsx` _(156)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -305,11 +305,11 @@ Curated: [[Contexts]] · **187 files**
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/WelcomeScreen.tsx` _(13)_
-- `src/screens/provider/InfoRegScreen.tsx` _(13)_
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
-- … +157 more
+- `supabase/delete_account.sql` _(12)_
+- … +158 more
 
 ## Becca / AI
 Curated: [[Services]] · **48 files**

@@ -90,6 +90,26 @@ import { RequiredLabel } from '../../features/provider-registration/RequiredLabe
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
 import { InfoRegPager } from '../../features/provider-registration/InfoRegPager';
 import {
+  CATEGORY_KINDS,
+  OCCASION_TAGS_BY_CATEGORY,
+  OCCASION_TAGS_DEFAULT,
+  OUTCOME_TAGS_BY_CATEGORY,
+  SERVICE_TEMPLATES_BY_CATEGORY,
+  STYLE_TAGS_BY_CATEGORY,
+  TECHNIQUE_TAGS_BY_CATEGORY,
+  TREND_NAMES_BY_CATEGORY,
+  DESCRIPTION_PROBLEM_COPY,
+  TAG_GROUP_KEYS,
+  descriptionProblem,
+  hasNoTags,
+  inferCategoryKind,
+  mergeTagGroups,
+  suggestServiceDetails,
+  type CategoryKind,
+  type ServiceTagGroups,
+  type ServiceTemplate,
+} from '../../features/providers/serviceTags';
+import {
   INFO_REG_SECTIONS as EDITOR_SECTIONS,
   LINK_ONLY_INFO_REG_SECTIONS as LINK_ONLY_EDITOR_SECTIONS,
   infoRegSectionIndex,
@@ -298,12 +318,6 @@ interface ServiceData {
   audience: 'women' | 'men' | 'kids' | 'everyone' | '';
 }
 
-// ─── Category kinds ──────────────────────────────────────────────────────────
-// Every category a provider adds is tied to one of these "kinds". The kind is
-// what drives the smart suggestions below (templates, tags, trend names), so a
-// category named "Braids" or "Injectables" still gets HAIR / AESTHETICS help.
-type CategoryKind = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'MUA' | 'AESTHETICS' | 'OTHER';
-
 // Categories where a patch test is standard professional practice before the
 // treatment itself (chemical colour/lightener, lash/brow tint and adhesive,
 // chemical peels and similar) — defaulted on for a brand-new service so the
@@ -313,8 +327,6 @@ type CategoryKind = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'MUA' | 'AESTHETICS'
 // adding a new service — never overrides a value the provider already set.
 const PATCH_TEST_DEFAULT_CATEGORIES: ReadonlySet<CategoryKind> = new Set(['HAIR', 'LASHES', 'BROWS', 'AESTHETICS']);
 
-
-const CATEGORY_KINDS: CategoryKind[] = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 
 // icon = an Ionicons glyph name (no emoji — rendered via <Ionicons name={...} />)
 // blurb = short label shown on the picker card itself; description = the
@@ -418,81 +430,6 @@ const CATEGORY_NAME_EXAMPLE_BY_CATEGORY: Record<CategoryKind, string> = {
   OTHER:      'e.g., Bridal Package',
 };
 
-// Keyword hints so free-text / imported category names still resolve to a kind.
-const CATEGORY_KEYWORDS: Record<CategoryKind, string[]> = {
-  HAIR:       ['hair', 'braid', 'loc', 'weave', 'wig', 'silk press', 'blow', 'cut', 'colour', 'color', 'balayage', 'extension', 'twist', 'cornrow'],
-  NAILS:      ['nail', 'mani', 'pedi', 'acrylic', 'gel', 'biab', 'polish'],
-  LASHES:     ['lash', 'extension set', 'lift'],
-  BROWS:      ['brow', 'microblad', 'lamination', 'threading'],
-  MUA:        ['makeup', 'make up', 'mua', 'glam', 'bridal face'],
-  AESTHETICS: ['aesthetic', 'facial', 'skin', 'peel', 'filler', 'botox', 'injectable', 'needling', 'wax', 'laser', 'hifu', 'derma'],
-  OTHER:      [],
-};
-
-/** Resolve a category name to a kind — exact match → keyword match → fallback. */
-const inferCategoryKind = (name: string, fallback: string = 'OTHER'): CategoryKind => {
-  const upper = (name || '').trim().toUpperCase();
-  if ((CATEGORY_KINDS as string[]).includes(upper)) return upper as CategoryKind;
-  const lower = (name || '').toLowerCase();
-  for (const kind of CATEGORY_KINDS) {
-    if (kind === 'OTHER') continue;
-    if (CATEGORY_KEYWORDS[kind].some(kw => lower.includes(kw))) return kind;
-  }
-  const fb = (fallback || '').trim().toUpperCase();
-  return (CATEGORY_KINDS as string[]).includes(fb) ? (fb as CategoryKind) : 'OTHER';
-};
-
-// ─── Tag presets per context ─────────────────────────────────────────────────
-
-// "Style / Vibe" — a shared core plus a few flavours that fit each kind.
-const STYLE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['natural', 'glam', 'sleek', 'lived-in', 'boho', 'edgy', 'classic', 'bold', 'romantic', 'textured', 'polished', 'undone', 'vintage'],
-  NAILS:      ['natural', 'glam', 'minimalist', 'y2k', 'baddie', 'soft-girl', 'editorial', 'bold', 'chrome', 'french-inspired', 'grunge', 'coquette', 'clean-girl'],
-  LASHES:     ['natural', 'glam', 'wispy', 'doll', 'baddie', 'dramatic', 'classic', 'bold', 'fluffy', 'cat-eye', 'anime', 'soft-glam'],
-  BROWS:      ['natural', 'fluffy', 'defined', 'soft-girl', 'bold', 'editorial', 'classic', 'feathered', 'sculpted', 'arched', 'minimal'],
-  MUA:        ['natural', 'glam', 'editorial', 'soft-girl', 'clean-girl', 'bridal', 'bold', 'dewy', 'matte', 'sun-kissed', 'vintage-glam', 'monochrome'],
-  AESTHETICS: ['natural', 'glow-up', 'subtle', 'preventative', 'rejuvenating', 'clinical', 'natural-enhancement', 'restorative', 'youthful', 'refined'],
-  OTHER:      ['natural', 'glam', 'editorial', 'classic', 'minimalist', 'bold', 'modern', 'timeless'],
-};
-
-// "Best for (occasion)" — universal set, with a tailored list for aesthetics.
-const OCCASION_TAGS_DEFAULT = ['bridal', 'everyday', 'date-night', 'prom', 'photoshoot', 'festival', 'birthday', 'event', 'party', 'graduation', 'holiday', 'girls-night', 'anniversary', 'vacation'];
-const OCCASION_TAGS_BY_CATEGORY: Partial<Record<CategoryKind, string[]>> = {
-  AESTHETICS: ['pre-wedding', 'event-prep', 'maintenance', 'glow-up', 'confidence-boost', 'anti-ageing', 'everyday', 'special-occasion', 'seasonal-refresh', 'first-treatment'],
-};
-
-const TECHNIQUE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['balayage', 'highlights', 'ombre', 'keratin', 'relaxer', 'braids', 'locs', 'twists', 'extensions', 'colour', 'foilyage', 'colour-correction', 'perm', 'silk-press', 'weave', 'toner'],
-  NAILS:      ['gel', 'acrylic', 'biab', 'nail-art', 'french', 'ombre', 'chrome', 'dip-powder', 'gel-x', 'polygel', 'encapsulated', 'hand-painted', '3d-art', 'cat-eye-gel'],
-  LASHES:     ['classic', 'hybrid', 'volume', 'mega-volume', 'lash-lift', 'lash-tint', 'russian', 'wispy', 'mink', 'faux-mink', 'colored-lashes', 'bottom-lashes'],
-  BROWS:      ['microblading', 'powder-brow', 'combo-brow', 'lamination', 'tinting', 'hd-brows', 'threading', 'waxing', 'nano-brows', 'brow-mapping', 'henna-brows', 'wax-and-thread'],
-  MUA:        ['airbrush', 'full-glam', 'editorial', 'natural', 'bridal', 'sfx', 'cut-crease', 'dewy', 'contour-and-highlight', 'strobing', 'baking', 'graphic-liner'],
-  AESTHETICS: ['microneedling', 'chemical-peel', 'dermaplaning', 'hifu', 'filler', 'botox', 'laser', 'hydrafacial', 'mesotherapy', 'prp', 'led-therapy', 'radiofrequency', 'cryotherapy', 'lymphatic-drainage'],
-  OTHER:      [],
-};
-
-const OUTCOME_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['volume', 'length', 'shine', 'grey-coverage', 'protection', 'growth', 'smoothness', 'definition', 'texture', 'colour-vibrancy', 'repair', 'bounce'],
-  NAILS:      ['length', 'art', 'colour', 'strength', 'natural-look', 'durability', 'shine', 'flexibility', 'precision'],
-  LASHES:     ['volume', 'length', 'definition', 'lift', 'curl', 'dramatic', 'natural-look', 'symmetry', 'longevity'],
-  BROWS:      ['definition', 'shape', 'fullness', 'natural', 'bold', 'arched', 'symmetry', 'longevity', 'precision'],
-  MUA:        ['glow', 'coverage', 'definition', 'lifted', 'natural-look', 'dramatic', 'longevity', 'radiance', 'flawless-finish', 'camera-ready'],
-  AESTHETICS: ['glow', 'firmness', 'smoothness', 'rejuvenation', 'definition', 'hydration', 'reduction', 'lifting', 'even-tone', 'collagen-boost', 'pore-refinement', 'radiance'],
-  OTHER:      ['results', 'enhancement', 'maintenance', 'confidence', 'refresh'],
-};
-
-// Viral / trend names clients actually search for — now per kind so a lash artist
-// never sees "soap-brows" and a nail tech never sees "butterfly-lashes".
-const TREND_NAMES_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['butterfly-cut', 'money-piece', 'expensive-brunette', 'old-money', 'mob-wife', 'cherry-cola', 'copper', 'lived-in', 'curtain-bangs', 'jellyfish-cut', 'clean-girl-bun', 'wolf-cut', 'chocolate-cherry', 'buttery-blonde'],
-  NAILS:      ['glazed-donut', 'blueberry-milk', 'cherry-cola', 'chrome', 'aura-nails', 'milky-white', 'strawberry-girl', 'velvet', 'lip-gloss', 'jelly-nails', 'cat-eye', 'french-tip-revival', 'mob-wife-nails'],
-  LASHES:     ['butterfly-lashes', 'manga-lashes', 'anime-lashes', 'wet-look', 'fox-eye', 'natural-classic', 'kim-k', 'angel-lashes', 'clean-girl-lashes', 'doll-eye', 'colored-tips'],
-  BROWS:      ['soap-brows', 'brow-lamination', 'fluffy-brows', 'fox-brows', 'feathered', 'snatched-arch', 'nano-brows', 'skinny-brow-revival', 'laminated-and-tinted'],
-  MUA:        ['clean-girl', 'latte-makeup', 'strawberry-girl', 'sunburn-blush', 'cold-girl', 'douyin', 'siren-eyes', 'glazed', 'tomato-girl', 'mob-wife-glam', 'espresso-makeup'],
-  AESTHETICS: ['glass-skin', 'baby-botox', 'russian-lips', 'lip-flip', 'skinboosters', 'glazed-donut-skin', 'snatched', 'fox-eye-lift', 'preventative-botox', 'liquid-facelift', 'tear-trough-filler'],
-  OTHER:      ['clean-girl', 'old-money', 'that-girl', 'quiet-luxury', 'coastal-grandma', 'mob-wife'],
-};
-
 // Starter contraindications — common, well-established conditions
 // practitioners routinely screen for, tailored to the kind of treatment the
 // service belongs to (the same catKey used for style/technique/outcome tags
@@ -558,161 +495,6 @@ const COMMON_CONTRAINDICATIONS_BY_CATEGORY: Record<CategoryKind, string[]> = {
     'Recent surgery in treatment area',
     'Uncontrolled diabetes',
     'Under 18 without guardian consent',
-  ],
-};
-
-// Pre-built service starting points offered the moment a provider taps "Add
-// Service" — pre-fills name + duration so most services are two taps to save.
-interface ServiceTemplate {
-  name: string;
-  duration: string;
-  serviceType?: ServiceData['serviceType'];
-  description?: string;
-  styleTags?: string[];
-  techniqueTags?: string[];
-  outcomeTags?: string[];
-  occasionTags?: string[];
-  trendNames?: string[];
-  /** Always offered as a starting point, regardless of which specific
-   *  subcategory is selected — e.g. a consultation. Not filtered out even
-   *  when a subcategory's template list is otherwise narrowed. */
-  generic?: boolean;
-}
-const SERVICE_TEMPLATES_BY_CATEGORY: Record<CategoryKind, ServiceTemplate[]> = {
-  HAIR: [
-    { name: 'Consultation',          duration: '20 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Cut & Blow Dry',        duration: '1 hr',      description: 'A fresh cut finished with a smooth, salon-quality blow dry.', styleTags: ['sleek'], techniqueTags: [], outcomeTags: ['shine', 'definition'] },
-    { name: 'Blow Dry',              duration: '45 min',    description: 'Wash and blow dry for a bouncy, salon-fresh finish.', styleTags: ['sleek', 'glam'], outcomeTags: ['volume', 'shine'] },
-    { name: 'Full Head Highlights',  duration: '3 hr',       description: 'Dimensional highlights all over for a lighter, sun-kissed look.', techniqueTags: ['highlights', 'colour'], outcomeTags: ['shine', 'definition'], trendNames: ['expensive-brunette', 'money-piece'] },
-    { name: 'Balayage',              duration: '3 hr',       description: 'Hand-painted, low-maintenance colour that grows out beautifully.', techniqueTags: ['balayage', 'colour'], outcomeTags: ['shine', 'definition'], trendNames: ['lived-in', 'money-piece', 'expensive-brunette'] },
-    { name: 'Root Tint',             duration: '1 hr 30',    description: 'Root touch-up to keep your colour looking fresh between full appointments.', techniqueTags: ['colour'], outcomeTags: ['grey-coverage', 'shine'] },
-    { name: 'Toner / Gloss',         duration: '30 min',     description: 'A quick gloss to refresh tone and add mirror-like shine.', techniqueTags: ['colour'], outcomeTags: ['shine'] },
-    { name: 'Keratin Treatment',     duration: '2 hr 30',    description: 'Smoothing treatment that cuts frizz and adds long-lasting shine.', techniqueTags: ['keratin'], outcomeTags: ['smoothness', 'shine', 'protection'] },
-    { name: 'Knotless Braids',       duration: '4 hr',       description: 'Tension-free knotless braids, neat at the root and lightweight to wear.', techniqueTags: ['braids'], outcomeTags: ['protection', 'length'], trendNames: [] },
-    { name: 'Silk Press',            duration: '1 hr 30',    description: 'Silky, salon-smooth press that shows off your natural length and shine.', outcomeTags: ['shine', 'smoothness'] },
-    { name: 'Wig Install',           duration: '2 hr',       description: 'Melted, natural-looking wig install customised to your hairline.', techniqueTags: ['extensions'], outcomeTags: ['definition', 'volume'] },
-    { name: 'Dry Cut',               duration: '30 min',     description: 'A precision cut with no wash or blow dry — quick shape-up between appointments.', outcomeTags: ['definition'] },
-    { name: 'Half Head Highlights',  duration: '2 hr',       description: 'Highlights around the face and crown for a lighter look without going full head.', techniqueTags: ['highlights', 'colour'], outcomeTags: ['shine', 'definition'] },
-    { name: 'Cornrows',              duration: '2 hr 30',    description: 'Neat, close-to-the-scalp cornrows — straight back or in a custom pattern.', techniqueTags: ['braids'], outcomeTags: ['protection', 'length'] },
-    { name: 'Deep Conditioning Treatment', duration: '45 min', description: 'Intensive moisture treatment to restore softness and strength to dry or damaged hair.', outcomeTags: ['smoothness', 'shine', 'growth'] },
-    { name: "Men's Haircut",         duration: '30 min',     description: "A tailored men's cut, clippers or scissor work to your preferred style.", outcomeTags: ['definition'] },
-    { name: 'Beard Trim',            duration: '20 min',     description: 'Shape and tidy for a sharp, well-defined beard line.', outcomeTags: ['definition'] },
-    { name: 'Foilyage',              duration: '2 hr 30',    description: 'Foil-placed balayage for brighter, more blended dimension.', techniqueTags: ['foilyage', 'highlights'], outcomeTags: ['shine', 'colour-vibrancy'], trendNames: ['money-piece'] },
-    { name: 'Colour Correction',     duration: '4 hr',       serviceType: 'restorative', description: 'Corrective colour work to fix tone, banding or previous colour gone wrong.', techniqueTags: ['colour-correction'], outcomeTags: ['colour-vibrancy', 'repair'] },
-    { name: 'Perm',                  duration: '2 hr',       description: 'Chemical wave treatment for lasting curl or texture.', techniqueTags: ['perm'], outcomeTags: ['texture', 'bounce'] },
-    { name: 'Weave Install',         duration: '3 hr',       description: 'Sewn-in weave for extra length and volume with a seamless blend.', techniqueTags: ['weave', 'extensions'], outcomeTags: ['length', 'volume'] },
-    { name: 'Fringe / Bangs Trim',   duration: '15 min',     description: 'Quick shape-up to keep your fringe fresh between full cuts.', outcomeTags: ['definition'] },
-  ],
-  NAILS: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Gel Manicure',          duration: '45 min',    description: 'Chip-resistant gel polish with shaping and cuticle care.', techniqueTags: ['gel'], outcomeTags: ['colour', 'durability'] },
-    { name: 'BIAB Overlay',          duration: '1 hr',       description: 'Strengthening builder gel overlay for stronger, healthier natural nails.', techniqueTags: ['biab'], outcomeTags: ['strength', 'durability'] },
-    { name: 'Acrylic Full Set',      duration: '1 hr 30',    description: 'Full set of acrylic extensions, shaped and finished to your choice of length.', techniqueTags: ['acrylic'], outcomeTags: ['length', 'durability'] },
-    { name: 'Gel-X Extensions',      duration: '1 hr 30',    description: 'Lightweight, flexible gel-x tips for a natural-feeling extension.', techniqueTags: ['gel-x'], outcomeTags: ['length', 'natural-look'], trendNames: ['milky-white'] },
-    { name: 'Infill',                duration: '1 hr',       description: 'Infill to keep your extensions neat as your natural nail grows through.', techniqueTags: ['acrylic', 'gel'], outcomeTags: ['durability'] },
-    { name: 'Soak Off & Removal',    duration: '30 min',     description: 'Gentle removal of gel or acrylic with nail and cuticle care after.', outcomeTags: ['natural-look'] },
-    { name: 'Gel Pedicure',          duration: '45 min',     description: 'Full pedicure with long-lasting gel polish and a relaxing soak.', techniqueTags: ['gel'], outcomeTags: ['colour', 'durability'] },
-    { name: 'Nail Art (per nail)',   duration: '15 min',     description: 'Custom nail art add-on, priced per nail — hand-painted or with embellishments.', techniqueTags: ['nail-art'], outcomeTags: ['art', 'colour'], trendNames: ['chrome', 'aura-nails'] },
-    { name: 'Classic Manicure',      duration: '30 min',     description: 'Shape, cuticle care and regular polish for a clean, natural finish.', outcomeTags: ['natural-look'] },
-    { name: 'Classic Pedicure',      duration: '30 min',     description: 'Soak, shape and regular polish with a relaxing foot massage.', outcomeTags: ['natural-look'] },
-    { name: 'French Tips',           duration: '45 min',     description: 'The timeless French manicure — clean white tips over a natural base.', techniqueTags: ['french'], outcomeTags: ['art', 'colour'] },
-    { name: 'Dip Powder Set',        duration: '1 hr',       description: 'Durable dip powder colour, built up in layers for strength and shine.', techniqueTags: ['dip-powder'], outcomeTags: ['colour', 'durability'] },
-    { name: 'Polygel Full Set',      duration: '1 hr 30',    description: 'Lightweight, flexible polygel extensions built up on tips or forms.', techniqueTags: ['polygel'], outcomeTags: ['length', 'flexibility'] },
-    { name: 'Cat Eye Gel Manicure',  duration: '1 hr',       description: 'Magnetic cat-eye gel polish for a shimmering, dimensional finish.', techniqueTags: ['cat-eye-gel', 'gel'], outcomeTags: ['colour', 'shine'], trendNames: ['cat-eye'] },
-    { name: '3D Nail Art (per nail)', duration: '20 min',    description: 'Sculpted 3D embellishments and charms, priced per nail.', techniqueTags: ['3d-art'], outcomeTags: ['art', 'precision'] },
-    { name: 'Encapsulated Nail Art', duration: '1 hr 15',    description: 'Delicate design or foil sealed under a clear gel layer for lasting shine.', techniqueTags: ['encapsulated', 'nail-art'], outcomeTags: ['art', 'durability'] },
-    { name: 'Nail Repair (per nail)', duration: '10 min',    description: 'Fixes a broken or lifted nail without a full new set.', outcomeTags: ['strength', 'durability'] },
-  ],
-  LASHES: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Classic Full Set',      duration: '1 hr 30',    description: 'One extension per natural lash for a subtle, everyday enhancement.', techniqueTags: ['classic'], outcomeTags: ['length', 'definition'], trendNames: ['natural-classic'] },
-    { name: 'Hybrid Full Set',       duration: '2 hr',       description: 'A mix of classic and volume fans for texture with added fullness.', techniqueTags: ['hybrid'], outcomeTags: ['volume', 'definition'] },
-    { name: 'Volume Full Set',       duration: '2 hr 30',    description: 'Lightweight fans of fine lashes for a fuller, fluffier look.', techniqueTags: ['volume'], outcomeTags: ['volume', 'dramatic'], trendNames: ['wet-look'] },
-    { name: 'Mega Volume',           duration: '2 hr 30',    description: 'Maximum density fans for a bold, glam lash look.', techniqueTags: ['mega-volume'], outcomeTags: ['volume', 'dramatic'], trendNames: ['kim-k'] },
-    { name: 'Infill (2–3 weeks)',    duration: '1 hr',       description: 'Top-up on natural lash growth to keep your set full.', outcomeTags: ['volume'] },
-    { name: 'Lash Lift & Tint',      duration: '1 hr',       description: 'Curls and tints your natural lashes for an extension-free lift.', techniqueTags: ['lash-lift', 'lash-tint'], outcomeTags: ['curl', 'definition'], trendNames: ['natural-classic'] },
-    { name: 'Lash Removal',          duration: '30 min',     description: 'Safe, gentle removal of extensions without damaging natural lashes.' },
-    { name: 'Wispy Lash Set',        duration: '2 hr',       description: 'Textured, spiky fans mixed through the set for a fluttery, wispy finish.', techniqueTags: ['wispy'], outcomeTags: ['definition', 'volume'] },
-    { name: 'Russian Volume Set',    duration: '2 hr 30',    description: 'Handmade Russian fans for ultra-fluffy, full volume lashes.', techniqueTags: ['russian'], outcomeTags: ['volume', 'dramatic'] },
-    { name: 'Lash Tint Only',        duration: '20 min',     description: 'Tints natural lashes darker — no extensions, just definition.', techniqueTags: ['lash-tint'], outcomeTags: ['definition'] },
-    { name: 'Mink Full Set',         duration: '2 hr',       description: 'Ultra-soft mink lashes for a naturally glamorous, long-lasting set.', techniqueTags: ['mink'], outcomeTags: ['volume', 'longevity'] },
-    { name: 'Faux Mink Full Set',    duration: '2 hr',       description: 'Cruelty-free faux mink lashes with a soft, natural-looking finish.', techniqueTags: ['faux-mink'], outcomeTags: ['volume', 'natural-look'] },
-    { name: 'Colored Lash Set',      duration: '2 hr',       description: 'Coloured lash extensions mixed through the set for a fun pop of colour.', techniqueTags: ['colored-lashes'], outcomeTags: ['dramatic', 'definition'], trendNames: ['colored-tips'] },
-    { name: 'Bottom Lash Set',       duration: '45 min',     description: 'Fine extensions on the lower lash line to frame the eyes.', techniqueTags: ['bottom-lashes'], outcomeTags: ['definition', 'symmetry'] },
-  ],
-  BROWS: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Brow Wax & Tint',       duration: '30 min',    description: 'Shaping wax with tint to define and fill your natural brow.', techniqueTags: ['waxing', 'tinting'], outcomeTags: ['definition', 'shape'] },
-    { name: 'Brow Lamination',       duration: '45 min',     description: 'Brushed-up, fluffy brows that hold their shape for weeks.', techniqueTags: ['lamination'], outcomeTags: ['fullness', 'shape'], trendNames: ['soap-brows', 'fluffy-brows'] },
-    { name: 'HD Brows',              duration: '45 min',     description: 'Tailored shape using tint, wax and precision trimming for a defined finish.', techniqueTags: ['hd-brows'], outcomeTags: ['definition', 'arched'] },
-    { name: 'Microblading',          duration: '2 hr',       serviceType: 'treatment', description: 'Semi-permanent hair-stroke tattoo for naturally fuller-looking brows.', techniqueTags: ['microblading'], outcomeTags: ['fullness', 'natural'] },
-    { name: 'Powder / Ombré Brows',  duration: '2 hr',       serviceType: 'treatment', description: 'Soft, powdered semi-permanent makeup finish for defined, filled-in brows.', techniqueTags: ['powder-brow', 'combo-brow'], outcomeTags: ['definition', 'bold'], trendNames: ['snatched-arch'] },
-    { name: 'Threading',             duration: '15 min',     description: 'Precise thread shaping for clean, natural brow lines.', techniqueTags: ['threading'], outcomeTags: ['shape', 'natural'] },
-    { name: 'Brow Henna',            duration: '30 min',     description: 'Natural henna tint that stains both the hairs and the skin beneath for extra fullness.', techniqueTags: ['tinting'], outcomeTags: ['fullness', 'natural'] },
-    { name: 'Combo Brows',           duration: '2 hr',       serviceType: 'treatment', description: 'Microblading strokes with shaded powder underneath for a soft, defined finish.', techniqueTags: ['combo-brow'], outcomeTags: ['definition', 'fullness'] },
-    { name: 'Brow Mapping Consultation', duration: '20 min', serviceType: 'consultation', description: 'Measuring and mapping your ideal brow shape before a semi-permanent treatment.' },
-    { name: 'Nano Brows',            duration: '2 hr',       serviceType: 'treatment', description: 'Ultra-fine hair-stroke semi-permanent brows for a crisp, natural finish.', techniqueTags: ['nano-brows'], outcomeTags: ['precision', 'fullness'], trendNames: ['nano-brows'] },
-    { name: 'Wax & Thread Combo',    duration: '25 min',     description: 'Wax for the bulk of the shape, thread for precision around the brow line.', techniqueTags: ['wax-and-thread'], outcomeTags: ['shape', 'precision'] },
-    { name: 'Brow Lamination & Tint', duration: '1 hr',      description: 'Lamination for hold plus a tint for fuller, longer-lasting definition.', techniqueTags: ['lamination', 'tinting'], outcomeTags: ['fullness', 'longevity'], trendNames: ['laminated-and-tinted'] },
-  ],
-  MUA: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Full Glam',             duration: '1 hr',       description: 'Full-coverage glam makeup built for photos and a big night out.', styleTags: ['glam'], techniqueTags: ['full-glam'], outcomeTags: ['glow', 'coverage', 'dramatic'] },
-    { name: 'Soft Glam',             duration: '1 hr',       description: 'Everyday-wearable glam with soft definition and a lit-from-within glow.', styleTags: ['soft-girl', 'glam'], outcomeTags: ['glow', 'natural-look'], trendNames: ['clean-girl', 'latte-makeup'] },
-    { name: 'Bridal Makeup',         duration: '1 hr 30',    description: 'Long-wear bridal makeup designed to look flawless all day and in photos.', styleTags: ['bridal'], techniqueTags: ['bridal'], outcomeTags: ['longevity', 'glow'], occasionTags: ['bridal'] },
-    { name: 'Bridal Trial',          duration: '1 hr 30',    description: 'Full trial run of your bridal look ahead of the big day.', styleTags: ['bridal'], techniqueTags: ['bridal'], occasionTags: ['bridal'] },
-    { name: 'Everyday Makeup',       duration: '45 min',     description: 'Fresh, skin-like makeup that enhances your features without heavy coverage.', styleTags: ['natural', 'clean-girl'], techniqueTags: ['natural'], outcomeTags: ['natural-look', 'glow'], trendNames: ['clean-girl'] },
-    { name: 'No-Makeup Makeup',      duration: '40 min',     description: 'Barely-there base and definition that looks like your skin, just better.', styleTags: ['natural'], techniqueTags: ['natural'], outcomeTags: ['natural-look', 'glow'] },
-    { name: 'Natural Glam',          duration: '1 hr',       description: 'Natural-look glam that keeps definition soft without a full-coverage face.', styleTags: ['natural', 'glam'], techniqueTags: ['natural'], outcomeTags: ['glow', 'definition', 'natural-look'] },
-    { name: 'Clean Girl Makeup',     duration: '45 min',     description: 'Skin-first, barely-there makeup with glossy lids and soft blush — the clean-girl look.', styleTags: ['clean-girl', 'natural'], techniqueTags: ['natural'], outcomeTags: ['glow', 'natural-look'], trendNames: ['clean-girl', 'latte-makeup'] },
-    { name: 'Dewy / Glowy Glam',     duration: '1 hr',       description: 'Luminous, hydrated-looking base built for maximum glow without heavy powder.', styleTags: ['dewy', 'glam'], techniqueTags: ['dewy'], outcomeTags: ['glow', 'radiance'] },
-    { name: 'Matte Glam',            duration: '1 hr',       description: 'Full-coverage matte base with softly defined eyes for a shine-free finish that lasts.', styleTags: ['matte', 'glam'], outcomeTags: ['coverage', 'longevity', 'definition'] },
-    { name: 'Makeup Lesson',         duration: '2 hr',       description: 'One-to-one lesson to learn techniques tailored to your face and routine.', outcomeTags: ['definition'] },
-    { name: 'Airbrush Makeup',       duration: '1 hr 15',    description: 'Lightweight, buildable airbrush foundation for flawless, long-wear coverage.', techniqueTags: ['airbrush'], outcomeTags: ['coverage', 'longevity'] },
-    { name: 'Editorial / Photoshoot Makeup', duration: '1 hr 30', description: 'Bold, camera-ready looks designed for photography and editorial shoots.', techniqueTags: ['editorial'], outcomeTags: ['dramatic', 'definition'], occasionTags: ['photoshoot'] },
-    { name: 'SFX Makeup',            duration: '2 hr',       description: 'Special-effects makeup for creative, theatrical or costume looks.', techniqueTags: ['sfx'], outcomeTags: ['dramatic'] },
-    { name: 'Contour & Highlight Session', duration: '45 min', description: 'Sculpted contour and highlight for a defined, camera-ready glow.', techniqueTags: ['contour-and-highlight'], outcomeTags: ['definition', 'radiance'] },
-    { name: 'Strobing Glow Makeup',  duration: '1 hr',       description: 'Dewy, light-reflecting strobing technique for a lit-from-within glow.', techniqueTags: ['strobing'], outcomeTags: ['glow', 'radiance'] },
-    { name: 'Graphic Liner Look',    duration: '45 min',     description: 'Bold graphic eyeliner styling for a striking, editorial-ready eye.', techniqueTags: ['graphic-liner'], outcomeTags: ['dramatic', 'definition'] },
-    { name: 'Baking & Setting Makeup', duration: '1 hr',     description: 'Baked, set-in-place base makeup built to last all day and photograph flawlessly.', techniqueTags: ['baking'], outcomeTags: ['flawless-finish', 'longevity'] },
-  ],
-  AESTHETICS: [
-    { name: 'Skin Consultation',        duration: '30 min', serviceType: 'consultation', description: 'In-depth skin assessment and a personalised treatment plan.', generic: true },
-    { name: 'Anti-Wrinkle (1 area)',    duration: '30 min', serviceType: 'treatment',    description: 'Targeted anti-wrinkle treatment for one area to soften fine lines.', techniqueTags: ['botox'], outcomeTags: ['smoothness'], trendNames: ['baby-botox'] },
-    { name: 'Anti-Wrinkle (3 areas)',   duration: '45 min', serviceType: 'treatment',    description: 'Full upper-face anti-wrinkle treatment across three areas.', techniqueTags: ['botox'], outcomeTags: ['smoothness', 'rejuvenation'] },
-    { name: 'Lip Filler (0.5ml)',       duration: '45 min', serviceType: 'enhancement',  description: 'Subtle lip enhancement for natural volume and hydration.', techniqueTags: ['filler'], outcomeTags: ['hydration', 'definition'], trendNames: ['lip-flip'] },
-    { name: 'Lip Filler (1ml)',         duration: '1 hr',   serviceType: 'enhancement',  description: 'Fuller lip enhancement with balanced, natural-looking volume.', techniqueTags: ['filler'], outcomeTags: ['hydration', 'definition'], trendNames: ['russian-lips'] },
-    { name: 'Cheek Filler',             duration: '45 min', serviceType: 'enhancement',  description: 'Contours and lifts the mid-face for a naturally sculpted look.', techniqueTags: ['filler'], outcomeTags: ['lifting', 'definition'], trendNames: ['snatched'] },
-    { name: 'Chemical Peel',            duration: '45 min', serviceType: 'treatment',    description: 'Resurfacing peel to brighten tone and refine texture.', techniqueTags: ['chemical-peel'], outcomeTags: ['glow', 'smoothness'], trendNames: ['glass-skin'] },
-    { name: 'Microneedling',            duration: '1 hr',   serviceType: 'treatment',    description: 'Collagen-boosting microneedling to improve texture and firmness.', techniqueTags: ['microneedling'], outcomeTags: ['firmness', 'rejuvenation'] },
-    { name: 'HydraFacial',              duration: '1 hr',   serviceType: 'treatment',    description: 'Deep cleanse, exfoliation and hydration for an instant glow.', techniqueTags: ['hydrafacial'], outcomeTags: ['glow', 'hydration'], trendNames: ['glass-skin', 'glazed-donut-skin'] },
-    { name: 'Dermaplaning',             duration: '45 min', serviceType: 'treatment',    description: 'Gentle exfoliation that removes peach fuzz for smoother, brighter skin.', techniqueTags: ['dermaplaning'], outcomeTags: ['smoothness', 'glow'] },
-    { name: 'Skin Booster Treatment',   duration: '45 min', serviceType: 'treatment',    description: 'Micro-injections of hyaluronic acid to deeply hydrate and improve skin quality over a course of sessions.', techniqueTags: ['mesotherapy'], outcomeTags: ['hydration', 'glow'] },
-    { name: 'Fat Dissolving Injections', duration: '30 min', serviceType: 'treatment',   description: 'Targeted injections to break down small pockets of stubborn fat.', techniqueTags: ['mesotherapy'], outcomeTags: ['reduction'] },
-    { name: 'Thread Lift',              duration: '1 hr',   serviceType: 'treatment',    description: 'Dissolvable threads inserted to lift and tighten sagging skin without surgery.', outcomeTags: ['lifting', 'firmness'] },
-    { name: 'HIFU Facial',              duration: '1 hr',   serviceType: 'treatment',    description: 'Ultrasound energy to lift and tighten deeper skin layers, non-invasively.', techniqueTags: ['hifu'], outcomeTags: ['lifting', 'firmness'] },
-    { name: 'Laser Skin Treatment',     duration: '30 min', serviceType: 'treatment',    description: 'Laser resurfacing to even tone, reduce pigmentation and refine texture.', techniqueTags: ['laser'], outcomeTags: ['smoothness', 'rejuvenation'] },
-    // LED Light Therapy, Radiofrequency, Cryotherapy and Lymphatic Drainage
-    // each live under their own subcategory (see SUBCATEGORY_SUGGESTIONS_BY_CATEGORY
-    // + SUBCATEGORY_SCOPE below) instead of a single flat entry here, so picking
-    // that subcategory shows every type of that treatment, not just one option.
-    { name: 'Red Light Therapy (Anti-Ageing)', duration: '30 min', serviceType: 'treatment', description: 'Red/near-infrared light to boost collagen and calm ageing skin.', techniqueTags: ['led-therapy'], outcomeTags: ['radiance', 'collagen-boost'] },
-    { name: 'Blue Light Therapy (Acne)', duration: '30 min', serviceType: 'treatment', description: 'Blue light wavelengths to target acne-causing bacteria and even tone.', techniqueTags: ['led-therapy'], outcomeTags: ['even-tone', 'pore-refinement'] },
-    { name: 'Combination LED Therapy',  duration: '45 min', serviceType: 'treatment',    description: 'Multi-wavelength LED protocol combining red and blue light for an all-round glow.', techniqueTags: ['led-therapy'], outcomeTags: ['radiance', 'even-tone'] },
-    { name: 'Radiofrequency Face Tightening', duration: '45 min', serviceType: 'treatment', description: 'Heat energy to stimulate collagen and firm sagging facial skin.', techniqueTags: ['radiofrequency'], outcomeTags: ['firmness', 'collagen-boost'] },
-    { name: 'Radiofrequency Body Contouring', duration: '1 hr', serviceType: 'treatment', description: 'Radiofrequency energy to tighten and contour looser body skin.', techniqueTags: ['radiofrequency'], outcomeTags: ['firmness', 'reduction'] },
-    { name: 'Cryotherapy Facial',       duration: '30 min', serviceType: 'treatment',    description: 'Cooling facial treatment to de-puff, tighten pores and boost radiance.', techniqueTags: ['cryotherapy'], outcomeTags: ['radiance', 'pore-refinement'] },
-    { name: 'Localised Cryotherapy (Fat Freezing)', duration: '45 min', serviceType: 'treatment', description: 'Targeted cooling to reduce stubborn fat pockets and firm the area.', techniqueTags: ['cryotherapy'], outcomeTags: ['reduction', 'firmness'] },
-    { name: 'Facial Lymphatic Drainage Massage', duration: '45 min', serviceType: 'treatment', description: 'Gentle facial massage technique to reduce puffiness and support circulation.', techniqueTags: ['lymphatic-drainage'], outcomeTags: ['reduction', 'glow'] },
-    { name: 'Full Body Lymphatic Drainage Massage', duration: '1 hr', serviceType: 'treatment', description: 'Full-body massage technique to ease fluid retention and support circulation.', techniqueTags: ['lymphatic-drainage'], outcomeTags: ['reduction', 'firmness'] },
-  ],
-  OTHER: [
-    { name: 'Consultation',          duration: '30 min', serviceType: 'consultation', description: 'A chance to talk through what you are looking for before booking in.', generic: true },
-    { name: 'Standard Appointment',  duration: '1 hr',    description: 'Standard appointment slot — details confirmed with your provider.' },
-    { name: 'Group Session',         duration: '2 hr',    description: 'A session booked for a group — details confirmed with your provider.' },
-    { name: 'Follow-up Appointment', duration: '30 min',  description: 'A shorter check-in or top-up following a previous appointment.' },
-    { name: 'Trial / Sample Session', duration: '30 min', description: 'A low-commitment taster session before booking the full service.', outcomeTags: ['confidence'] },
-    { name: 'Refresh / Top-up',      duration: '20 min',  description: 'A quick refresh between full appointments.', outcomeTags: ['refresh'] },
   ],
 };
 
@@ -850,10 +632,16 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
     setOtherValue('');
   };
 
+  // A selected tag that isn't one of this list's options — typed via Other, a
+  // template's tag under a narrowed subcategory, or a name suggestion — still
+  // gets a chip. Without it the tag was saved but invisible, so it could
+  // never be seen or unticked.
+  const chips = [...options, ...selected.filter(tag => !options.includes(tag))];
+
   return (
     <View>
       <View style={styles.chipGrid}>
-        {options.map(option => {
+        {chips.map(option => {
           const active = selected.includes(option);
           return (
             <TouchableOpacity
@@ -1180,6 +968,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [trendInput, setTrendInput] = useState('');
   const [serviceType, setServiceType] = useState<ServiceData['serviceType']>(service?.serviceType || '');
   const [audience, setAudience] = useState<ServiceData['audience']>(service?.audience || '');
+  // Until the provider changes a tag (or who it's for) themselves, those
+  // follow the name as it's typed — see the suggestion effect below. After
+  // that they're the provider's and typing changes nothing.
+  const [tagsTouched, setTagsTouched] = useState(false);
+  const [audienceTouched, setAudienceTouched] = useState(false);
   // Safety state.
   // Model: the toggle asks the provider to FLAG a service as unsafe, not to
   // attest it's safe. Off (the default) = safe/no warning; on = "not
@@ -1246,6 +1039,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setTrendInput('');
     setServiceType(service?.serviceType || '');
     setAudience(service?.audience || '');
+    setTagsTouched(false);
+    setAudienceTouched(false);
     setIsPregnancySafe(service?.isPregnancySafe ?? true);
     setPatchTestRequired(service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey)));
     setMinAge(service?.minAge?.toString() || '');
@@ -1259,8 +1054,58 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setOpenBuffer(null);
   }, [service, catKey]);
 
-  const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
+  const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) => {
+    setTagsTouched(true);
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
+  };
+  const addOtherTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) => {
+    setTagsTouched(true);
+    setArr(arr.includes(tag) ? arr : [...arr, tag]);
+  };
+
+  // Tags, who it's for and a description, read from the name and heading
+  // (suggestServiceDetails). Offered on a new service, or one that still has
+  // no tags at all — a provider who typed their own name ("Volume spikes")
+  // used to get none of what a template fills in, which is how half the live
+  // services ended up with no tags. Added to what the sheet opened with (a
+  // template's own tags), never replacing it.
+  const openedTags = useMemo<ServiceTagGroups>(() => ({
+    styleTags: service?.tags || [],
+    techniqueTags: service?.techniqueTags || [],
+    outcomeTags: service?.outcomeTags || [],
+    occasionTags: service?.occasionTags || [],
+    trendNames: service?.trendNames || [],
+  }), [service]);
+  const offerSuggestions = !isEditing || hasNoTags(openedTags);
+  const suggestion = useMemo(
+    () => suggestServiceDetails({ name, categoryName, fallbackKind }),
+    [name, categoryName, fallbackKind],
+  );
+  useEffect(() => {
+    if (!visible || !offerSuggestions || tagsTouched) return;
+    const merged = mergeTagGroups(openedTags, suggestion);
+    setSelectedTags(merged.styleTags);
+    setSelectedTechniques(merged.techniqueTags);
+    setSelectedOutcomes(merged.outcomeTags);
+    setSelectedOccasions(merged.occasionTags);
+    setTrendNames(merged.trendNames);
+  }, [visible, offerSuggestions, tagsTouched, openedTags, suggestion]);
+  useEffect(() => {
+    if (!visible || audienceTouched || service?.audience) return;
+    setAudience(suggestion.audience);
+  }, [visible, audienceTouched, service?.audience, suggestion.audience]);
+  // A suggestion outside a narrowed subcategory's list stays a chip after
+  // it's unticked, so the provider can change their mind.
+  const withSuggested = (opts: string[], suggested: string[]) =>
+    offerSuggestions ? [...opts, ...suggested.filter(t => !opts.includes(t))] : opts;
+  const suggestedCount = offerSuggestions && !tagsTouched
+    ? TAG_GROUP_KEYS.reduce((n, group) => n + suggestion[group].filter(t => !openedTags[group].includes(t)).length, 0)
+    : 0;
+  const descriptionHint = useMemo(() => {
+    if (!description.trim()) return null;
+    const problem = descriptionProblem(description, name);
+    return problem ? DESCRIPTION_PROBLEM_COPY[problem] : null;
+  }, [description, name]);
 
   // Pick one photo, crop and adjust it in the iOS crop, done. One at a time
   // because iOS offers no crop during a multi-select. The crop IS the framing,
@@ -1316,7 +1161,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
   const handleAddTrend = () => {
     const t = trendInput.trim().toLowerCase().replace(/\s+/g, '-');
-    if (t && !trendNames.includes(t)) setTrendNames([...trendNames, t]);
+    if (t && !trendNames.includes(t)) {
+      setTagsTouched(true);
+      setTrendNames([...trendNames, t]);
+    }
     setTrendInput('');
   };
 
@@ -1327,10 +1175,25 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   };
 
   const handleSave = () => {
+    const tagsNow: ServiceTagGroups = {
+      styleTags: selectedTags,
+      techniqueTags: selectedTechniques,
+      outcomeTags: selectedOutcomes,
+      occasionTags: selectedOccasions,
+      trendNames,
+    };
+    const descriptionIssue = descriptionProblem(description, name);
+    // A NEW service also needs what a client and Search need to find it.
+    // Existing ones aren't blocked on it, so editing a price never waits on an
+    // old service's tags; My Services lists those to fix instead.
     const problem =
       !name.trim() ? 'Give the service a name.'
       : !price.trim() ? 'Enter a price, or 0 if it varies.'
       : !duration.trim() ? 'Tap how long this service takes.'
+      : isEditing ? null
+      : descriptionIssue ? DESCRIPTION_PROBLEM_COPY[descriptionIssue]
+      : hasNoTags(tagsNow) ? 'Tick at least one tag below, so clients searching for it can find this service.'
+      : !audience ? 'Choose who this service is for.'
       : null;
     if (problem) {
       tapWarn();
@@ -1466,6 +1329,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
                 <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Service Name</RequiredLabel>
                 <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
+                {suggestedCount > 0 ? (
+                  <Text style={styles.serviceSheetHint}>
+                    {suggestedCount === 1 ? 'We ticked a tag' : `We ticked ${suggestedCount} tags`} from the name so clients can find this. Check them below.
+                  </Text>
+                ) : null}
               </View>
 
               {/* Price and duration share one row — they're the pair a provider
@@ -1505,6 +1373,19 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.serviceSheetLabel}>Description</Text>
                 <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
+                {/* A template's wording, offered, never written in for them. */}
+                {!description.trim() && suggestion.description ? (
+                  <TouchableOpacity
+                    style={[styles.chip, styles.serviceSheetSuggestion, { borderColor: accentColor }]}
+                    onPress={() => { tapSelect(); setDescription(suggestion.description ?? ''); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use suggested description: ${suggestion.description}`}
+                  >
+                    <Ionicons name="sparkles-outline" size={14} color={accentColor} />
+                    <Text style={[styles.chipText, styles.serviceSheetSuggestionText]} numberOfLines={2}>Use: “{suggestion.description}”</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {descriptionHint ? <Text style={styles.serviceSheetHint}>{descriptionHint}</Text> : null}
               </View>
 
               {/* Buffer time before/after — overrides the account-wide default
@@ -1583,13 +1464,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   suggest/match better, not just at the business level. */}
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Who's This For?</Text>
+                {isEditing
+                  ? <Text style={styles.serviceSheetSection}>Who's This For?</Text>
+                  : <RequiredLabel required labelStyle={styles.serviceSheetSection} styles={styles}>Who's This For?</RequiredLabel>}
                 <Text style={styles.serviceSheetHint}>Helps the app suggest this service to the right clients</Text>
                 <View style={styles.chipGrid}>
                   {SERVICE_AUDIENCE_OPTS.map(({ value, label }) => {
                     const active = audience === value;
                     return (
-                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setAudience(active ? '' : value); }}>
+                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setAudienceTouched(true); setAudience(active ? '' : value); }}>
                         <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
                       </TouchableOpacity>
                     );
@@ -1602,7 +1485,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Style / Vibe</Text>
                 <Text style={styles.serviceSheetHint}>How would you describe this service's aesthetic?</Text>
-                <TagSelectWithOther options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} onAddOther={(t) => setSelectedTags(selectedTags.includes(t) ? selectedTags : [...selectedTags, t])} accentColor={accentColor} styles={styles} />
+                <TagSelectWithOther options={withSuggested(styleOptions, suggestion.styleTags)} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} onAddOther={addOtherTag(selectedTags, setSelectedTags)} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Occasion Tags ────────────────────────────────────── */}
@@ -1610,7 +1493,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Best For (Occasion)</Text>
                 <Text style={styles.serviceSheetHint}>When would a client typically book this?</Text>
-                <TagSelectWithOther options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} onAddOther={(t) => setSelectedOccasions(selectedOccasions.includes(t) ? selectedOccasions : [...selectedOccasions, t])} accentColor={accentColor} styles={styles} />
+                <TagSelectWithOther options={withSuggested(occasionOptions, suggestion.occasionTags)} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} onAddOther={addOtherTag(selectedOccasions, setSelectedOccasions)} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Technique Tags ───────────────────────────────────── */}
@@ -1619,7 +1502,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <View style={styles.serviceSheetSectionRule} />
                   <Text style={styles.serviceSheetSection}>Techniques Used</Text>
                   <Text style={styles.serviceSheetHint}>Select every technique this service involves</Text>
-                  <TagSelectWithOther options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} onAddOther={(t) => setSelectedTechniques(selectedTechniques.includes(t) ? selectedTechniques : [...selectedTechniques, t])} accentColor={accentColor} styles={styles} />
+                  <TagSelectWithOther options={withSuggested(techniquOptions, suggestion.techniqueTags)} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} onAddOther={addOtherTag(selectedTechniques, setSelectedTechniques)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
@@ -1629,7 +1512,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <View style={styles.serviceSheetSectionRule} />
                   <Text style={styles.serviceSheetSection}>Results / Outcomes</Text>
                   <Text style={styles.serviceSheetHint}>What will the client achieve with this service?</Text>
-                  <TagSelectWithOther options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} onAddOther={(t) => setSelectedOutcomes(selectedOutcomes.includes(t) ? selectedOutcomes : [...selectedOutcomes, t])} accentColor={accentColor} styles={styles} />
+                  <TagSelectWithOther options={withSuggested(outcomeOptions, suggestion.outcomeTags)} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} onAddOther={addOtherTag(selectedOutcomes, setSelectedOutcomes)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
@@ -1641,7 +1524,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 {trendNames.length > 0 && (
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
-                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTrendNames(trendNames.filter(x => x !== t)); }}>
+                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames(trendNames.filter(x => x !== t)); }}>
                         <Text style={styles.chipTextActive}>{t} ×</Text>
                       </TouchableOpacity>
                     ))}
@@ -1655,7 +1538,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 </View>
                 <View style={styles.chipGrid}>
                   {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
-                    <TouchableOpacity key={t} style={styles.chip} onPress={() => { tapSelect(); setTrendNames([...trendNames, t]); }}>
+                    <TouchableOpacity key={t} style={styles.chip} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames([...trendNames, t]); }}>
                       <Text style={styles.chipText}>{t}</Text>
                     </TouchableOpacity>
                   ))}
@@ -7296,6 +7179,20 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     lineHeight: 17,
     color: fg(0.5),
     marginBottom: 8,
+  },
+  // "Use: '…'" under the description — a chip, dashed so it reads as an
+  // offer rather than a value already chosen.
+  serviceSheetSuggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'stretch',
+    borderStyle: 'dashed',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  serviceSheetSuggestionText: {
+    flex: 1,
   },
   serviceSheetInput: {
     fontFamily: 'Jura-VariableFont_wght',

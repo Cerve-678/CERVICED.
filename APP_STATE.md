@@ -128,6 +128,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Browse/search/filter providers | ✅ | `HomeScreen`, `SearchScreen`, `ExploreScreen` → `databaseService.getProviders()`, capped at `DEFAULT_PROVIDER_QUERY_LIMIT` (200) |
+| Service tag suggestions + findability checks | ✅ (branch) | `src/features/providers/serviceTags.ts` (tag lists, templates, `suggestServiceDetails`, `descriptionProblem`) → both service editors (InfoReg `ServiceModal`, My Services `ServiceEditorSheet`) pre-tick tags read from a typed name; a NEW service needs a real description, 1+ tag and who-it's-for; existing ones aren't blocked. My Services shows a "Help clients find your services" card listing live services missing any of those |
 | Provider profile view | ✅ | `ProviderProfileScreen` |
 | Add to cart (multi-provider) | ✅ | `CartContext` — reducer pattern, groups items by provider |
 | Cart pricing | ✅ | `CartContext.ts:554` — service fee = `max(subtotal * 0.05, £2)`. Confirmed still exactly this formula. |
