@@ -6885,6 +6885,34 @@ export interface ProviderAddressPolicy {
   address_release_policy: AddressReleasePolicy | null;
 }
 
+export interface PublicProviderAddress {
+  fullAddress: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+/**
+ * A provider's full address for their public profile — only for a live salon
+ * or studio that chose "Always visible". get_public_provider_address decides
+ * that server-side and returns no row for anyone else, so null here means
+ * "show the area only", never "not loaded".
+ */
+export async function getPublicProviderAddress(
+  providerId: string,
+): Promise<PublicProviderAddress | null> {
+  const { data, error } = await supabase.rpc("get_public_provider_address", {
+    p_provider_id: providerId,
+  });
+  if (error) throw error;
+  const row = (data as { full_address: string; latitude: number | string | null; longitude: number | string | null }[] | null)?.[0];
+  if (!row) return null;
+  return {
+    fullAddress: row.full_address,
+    latitude: row.latitude == null ? null : Number(row.latitude),
+    longitude: row.longitude == null ? null : Number(row.longitude),
+  };
+}
+
 /**
  * The calling provider's own private street address.
  * RLS on provider_private_details scopes this to the owner — it cannot return

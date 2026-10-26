@@ -74,6 +74,8 @@ import {
   setProviderFollowNotify,
   recordProviderStat,
   addMyExternalBooking,
+  getPublicProviderAddress,
+  type PublicProviderAddress,
 } from "../../services/databaseService";
 import type { ProviderStatKind } from "../../types/database";
 import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
@@ -92,6 +94,7 @@ import {
 } from "../../constants/providerThemes";
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
+import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { resolveSlotsRow } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
@@ -1682,14 +1685,31 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
+  // A salon/studio on "Always visible" shows its full address in Contact
+  // instead of the area. The server decides who qualifies and returns null for
+  // everyone else, so the area stays the default and a failed fetch just
+  // leaves it there.
+  const [publicAddress, setPublicAddress] = useState<PublicProviderAddress | null>(null);
+  useEffect(() => {
+    setPublicAddress(null);
+    if (!providerDbId || isLinkOnly) return;
+    let cancelled = false;
+    getPublicProviderAddress(providerDbId)
+      .then((address) => { if (!cancelled) setPublicAddress(address); })
+      .catch((error: unknown) => logger.error("[ProviderProfile] public address load failed:", error));
+    return () => { cancelled = true; };
+  }, [providerDbId, isLinkOnly]);
+
   const contactDetails = useMemo(() => ({
-    location: provider?.location ?? "",
+    location: publicAddress?.fullAddress ?? provider?.location ?? "",
+    locationMapUrl: publicAddress ? mapsUrlFor(publicAddress) : null,
     phone: provider?.phone ?? "",
     whatsapp: provider?.whatsapp ?? "",
     email: provider?.email ?? "",
     instagram: provider?.instagram ?? "",
     website: provider?.website ?? "",
   }), [
+    publicAddress,
     provider?.location,
     provider?.phone,
     provider?.whatsapp,

@@ -178,6 +178,9 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
 }: {
   contact: {
     location: string;
+    /** Set only when `location` is a full address the provider made public
+     *  ("Always visible"); the area alone isn't worth a map pin. */
+    locationMapUrl: string | null;
     phone: string;
     whatsapp: string;
     email: string;
@@ -190,7 +193,9 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   onGetInTouch: () => void;
 }) {
   const rows = [
-    contact.location ? { label: "Location", value: contact.location, url: null, publicLink: false } : null,
+    contact.location
+      ? { label: "Location", value: contact.locationMapUrl ? `${contact.location} ›` : contact.location, url: contact.locationMapUrl, publicLink: true }
+      : null,
     contact.phone ? { label: "Phone", value: "Message ›", url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
     contact.whatsapp ? { label: "WhatsApp", value: "Open ›", url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
     contact.email ? { label: "Email", value: "Send ›", url: `mailto:${contact.email}`, publicLink: false } : null,
@@ -210,7 +215,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
         const content = (
           <>
             <Text style={[styles.hoursLabel, { color: palette.sub }]}>{row.label}</Text>
-            <Text style={[styles.contactValue, { color: palette.text }]} numberOfLines={1}>{row.value}</Text>
+            <Text style={[styles.contactValue, { color: palette.text }]} numberOfLines={row.label === "Location" ? 2 : 1}>{row.value}</Text>
           </>
         );
         return row.url ? (

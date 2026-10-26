@@ -2596,12 +2596,23 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   style={styles.previewCardHighlight}
                 />
                 <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
-                {providerData.location ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.location}</Text>
-                  </View>
-                ) : null}
+                {/* Mirrors get_public_provider_address: a salon/studio on
+                    "Always visible" shows its full address to clients, so the
+                    preview does too. Everyone else shows the area. */}
+                {(() => {
+                  const publicAddress =
+                    providerData.addressReleasePolicy === 'always'
+                    && (providerData.businessType === 'salon' || providerData.businessType === 'studio')
+                      ? providerData.fullAddress.trim()
+                      : '';
+                  const shown = publicAddress || providerData.location;
+                  return shown ? (
+                    <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                      <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
+                      <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={publicAddress ? 2 : 1}>{publicAddress ? `${shown} ›` : shown}</Text>
+                    </View>
+                  ) : null;
+                })()}
                 {providerData.phone ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
                     <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>

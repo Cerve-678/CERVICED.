@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Written 2026-10-26, NOT applied ("Always visible" address on the profile)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261026120000 | `always_visible_address_on_profile` | **UNAPPLIED, awaiting the user's OK.** Frontier: live `20261025130000`; unapplied peers on open branches go up to `20261025212000`, so numbered above them. Re-check both and renumber if anything has landed since. Adds `get_public_provider_address(uuid)` SECURITY DEFINER (authenticated only): returns the full address + coordinates only for a live, active salon/studio on `address_release_policy = 'always'` with a non-blank address; no row otherwise. Redefines nothing. The file records its own version. **Must be applied before `feat/always-visible-address-on-profile` merges**: the provider profile calls it (a missing function only logs and falls back to the area, but every profile open would log an error). |
+
 ### Applied 2026-10-21 (daily "people saved you" count)
 
 | Authored version | Name | Status |
