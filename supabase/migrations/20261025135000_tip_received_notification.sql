@@ -10,12 +10,12 @@
 -- (send-push-notification: tip_received → providerPayments); the in-app row is
 -- always written, like every other type.
 --
--- Renumbered 2026-10-25 to 20261025200000: above 20261025120000
--- (service_search) and clear of other sessions' unapplied 20261025130000 and
--- 20261025140000 files; before
--- that above 20261024100000 (listing_claims_checked_by_instagram); neither
+-- Renumbered 2026-10-26 to 20261025135000: the lowest slot above live
+-- 20261025130000 (service_search_people_and_price), so applying it strands
+-- none of the other unapplied files queued above it (20261025140000 onwards). Before that
+-- 20261025200000; before that above 20261024100000 (listing_claims_checked_by_instagram); neither
 -- touches notifications_type_check (50 types live, checked 2026-10-25).
--- First written as 20261021195500, then 20261024110000. Verify
+-- First written as 20261021195500, then 20261024110000, then 20261025200000. Verify
 -- max(version) and the live notifications_type_check before applying: this
 -- restates the list from 20261020150000 plus 'tip_received'.
 
@@ -98,5 +98,5 @@ CREATE TRIGGER on_booking_tip_succeeded
   EXECUTE FUNCTION public.notify_provider_tip_received();
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261025200000', 'tip_received_notification')
+VALUES ('20261025135000', 'tip_received_notification')
 ON CONFLICT (version) DO NOTHING;
