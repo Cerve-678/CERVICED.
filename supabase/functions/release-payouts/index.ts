@@ -368,6 +368,7 @@ async function releaseFeePayouts() {
       continue;
     }
 
+    let madeTransfer = false;
     try {
       const intent = await stripe.paymentIntents.retrieve(fee.payment_intent_id);
       const chargeId = typeof intent.latest_charge === 'string' ? intent.latest_charge : intent.latest_charge?.id;
@@ -375,15 +376,32 @@ async function releaseFeePayouts() {
       const charge = await stripe.charges.retrieve(chargeId);
       if (charge.disputed || charge.amount_refunded > 0) { counts.skipped++; continue; }
 
-      const previous = await stripe.transfers.list({ transfer_group: `fee_payout_${fee.id}`, limit: 1 });
-      const transfer = previous.data[0] ?? await stripe.transfers.create({
-        amount: fee.payout_pence,
+      const previous = (await stripe.transfers.list({ transfer_group: `fee_payout_${fee.id}`, limit: 1 })).data[0];
+      let transferPence = 0;
+      if (!previous) {
+        // Anything the provider still owes comes out of the fee first, the
+        // same as a booking payout (user decision 2026-10-29).
+        const { data: net, error: shortfallErr } = await admin.rpc('apply_fee_payout_shortfalls', { p_fee_id: fee.id });
+        if (shortfallErr) throw shortfallErr;
+        transferPence = Number(net ?? 0);
+        if (transferPence <= 0) {
+          const { error: settleErr } = await admin.from('booking_fee_charges')
+            .update({ payout_status: 'transferred', payout_failure_reason: 'settled an earlier shortfall in full' })
+            .eq('id', fee.id).eq('payout_status', 'held');
+          if (settleErr) throw settleErr;
+          counts.transferred++;
+          continue;
+        }
+      }
+      const transfer = previous ?? await stripe.transfers.create({
+        amount: transferPence,
         currency: fee.currency ?? 'gbp',
         destination: fee.stripe_account_id,
         source_transaction: chargeId,
         transfer_group: `fee_payout_${fee.id}`,
         metadata: { fee_charge_id: fee.id, booking_id: fee.booking_id, provider_id: fee.provider_id },
       }, { idempotencyKey: `fee_payout_${fee.id}` });
+      madeTransfer = true;
 
       const { error: writeErr } = await admin.from('booking_fee_charges')
         .update({ payout_status: 'transferred', stripe_transfer_id: transfer.id, payout_failure_reason: null })
@@ -391,6 +409,17 @@ async function releaseFeePayouts() {
       if (writeErr) console.error(`[release-payouts] fee transfer ${transfer.id} succeeded but write failed for ${fee.id}: ${String(writeErr)}`);
       counts.transferred++;
     } catch (err) {
+      // As for booking payouts: if nothing was sent, give the deduction back
+      // so the debt isn't forgiven by a fee the provider never received. A
+      // timeout can hide a transfer Stripe did make, so look before giving back.
+      if (!madeTransfer) {
+        const late = await stripe.transfers.list({ transfer_group: `fee_payout_${fee.id}`, limit: 1 }).catch(() => null);
+        madeTransfer = !!late?.data[0] || late === null;
+      }
+      if (!madeTransfer) {
+        const { error: releaseErr } = await admin.rpc('release_fee_payout_shortfalls', { p_fee_id: fee.id });
+        if (releaseErr) console.error(`[release-payouts] could not give back shortfall deductions on fee ${fee.id}: ${String(releaseErr)}`);
+      }
       await admin.from('booking_fee_charges')
         .update({ payout_status: 'failed', payout_failure_reason: String(err).slice(0, 500) })
         .eq('id', fee.id).eq('payout_status', 'held');

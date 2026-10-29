@@ -40,6 +40,8 @@ const BOOKING_TYPES = new Set([
   'fee_payment_requested',
   'fee_paid_by_client',
   'fee_payment_lapsed',
+  'payout_debt_recorded',
+  'payout_debt_recovered',
   'refund_requested',
   'refund_request_updated',
   'booking_reminder',

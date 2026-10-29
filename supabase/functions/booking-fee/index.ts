@@ -225,7 +225,7 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
 
 async function refund(provider: ProviderRow, chargeId: string): Promise<Response> {
   const { data: fee, error } = await admin.from('booking_fee_charges')
-    .select('id, booking_id, provider_id, client_user_id, kind, amount_pence, status, payment_intent_id, payout_status, stripe_transfer_id, disputed_at, dispute_resolved_at')
+    .select('id, booking_id, provider_id, client_user_id, kind, amount_pence, status, payment_intent_id, payout_status, payout_pence, deducted_pence, stripe_transfer_id, disputed_at, dispute_resolved_at')
     .eq('id', chargeId).maybeSingle();
   if (error) throw error;
   if (!fee || fee.provider_id !== provider.id) return json({ error: 'Fee not found' }, 404);
@@ -243,10 +243,17 @@ async function refund(provider: ProviderRow, chargeId: string): Promise<Response
   let payoutStatus = fee.payout_status;
   if (fee.payout_status === 'held' || fee.payout_status === 'pending') {
     payoutStatus = 'cancelled';
-  } else if (fee.payout_status === 'transferred' && fee.stripe_transfer_id) {
+    // A release run that deducted from this fee and then stopped short of
+    // sending it leaves deductions behind; the provider still owes those.
+    const { error: releaseErr } = await admin.rpc('release_fee_payout_shortfalls', { p_fee_id: fee.id });
+    if (releaseErr) console.error(`[booking-fee] could not give back shortfall deductions on fee ${fee.id}: ${String(releaseErr.message ?? releaseErr)}`);
+  } else if (fee.payout_status === 'transferred' && (fee.stripe_transfer_id || fee.deducted_pence > 0)) {
     await takeBackFromProvider(admin, stripe, {
       providerId: fee.provider_id, bookingId: fee.booking_id, source: 'fee_refund',
       transferId: fee.stripe_transfer_id, key: `booking_fee_reversal_${fee.id}`,
+      // Part of this fee paid off an earlier debt instead of being sent, so
+      // the whole payout comes back, not just what the transfer carried.
+      wantPence: fee.deducted_pence > 0 ? fee.payout_pence : undefined,
       metadata: { fee_charge_id: fee.id },
     });
     payoutStatus = 'reversed';

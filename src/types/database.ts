@@ -80,6 +80,9 @@ export type NotificationType =
   | "fee_payment_requested"
   | "fee_paid_by_client"
   | "fee_payment_lapsed"
+  /** Provider owes money a take-back couldn't recover, and when some is taken from a payout. */
+  | "payout_debt_recorded"
+  | "payout_debt_recovered"
   | "refund_requested"
   | "refund_request_updated"
   /** A payout to the provider (or their own bank payout) failed; they may need to fix their account. */

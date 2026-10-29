@@ -125,7 +125,9 @@ async function handlePushError(
  *    default for a delivery gate: a missing mapping should mean "not covered
  *    by a toggle", never "silently suppressed". The provider's "Needs your
  *    answer" types (booking requests, reschedule requests, refund requests,
- *    disputes) are left out on purpose so they can't be muted.
+ *    disputes) are left out on purpose so they can't be muted. So are
+ *    payout_debt_recorded / payout_debt_recovered: money a provider owes, and
+ *    money taken from their payouts to pay it, always reaches them.
  */
 const CLIENT_PREF_KEY_BY_TYPE: Record<string, string> = {
   // "Booking Confirmed — Instant confirmation alerts"
