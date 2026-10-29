@@ -5,9 +5,9 @@
 
 #generated
 
-**2693 functions** across **369 files**.
+**2696 functions** across **370 files**.
 
-### `src/components/` (50)
+### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -28,7 +28,7 @@
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · runPendingNavigation · selectImageIndex · trackCarouselOffset
 - `IslandPillTabBar.tsx` — goToTab · IslandPillTabBar · **tabBarSpotlightRect**
-- `IssueRefundSheet.tsx` — close · formatPence · IssueRefundSheet · loadState · preview · re · submit
+- `IssueRefundSheet.tsx` — close · formatPence · IssueRefundSheet · loadState · preview · re · requestSteps · submit
 - `KeyboardDismissView.tsx` — **KeyboardDismissView**
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — LocationModal
@@ -45,6 +45,7 @@
 - `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
+- `RefundRequestTimeline.tsx` — RefundRequestTimeline
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
 - `SafeArea.tsx` — **SafeAreaView** · value · **WindowControlsInsetProvider**
 - `SafeHeader.tsx` — SafeHeader
@@ -100,7 +101,7 @@
 - `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · kindLabel · load · payFee · pounds · run
 - `bookingFeeRules.ts` — **feeChargeWindow** · **feeDisputeOpen** · **liveFee**
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
-- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · **isSupportRequestReady** · money · **passRefundRequestOn** · ticket
+- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · **isSupportRequestReady** · money · **passRefundRequestOn** · ticket
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `ExternalBookingCard.tsx` — createStyles · styles
