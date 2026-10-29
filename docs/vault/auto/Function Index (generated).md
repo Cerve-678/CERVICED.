@@ -5,7 +5,7 @@
 
 #generated
 
-**2692 functions** across **370 files**.
+**2693 functions** across **370 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -101,7 +101,7 @@
 - `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · kindLabel · load · payFee · pounds · run
 - `bookingFeeRules.ts` — **feeChargeWindow** · **feeDisputeOpen** · **liveFee**
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
-- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · **isSupportRequestReady** · money · **passRefundRequestOn** · ticket
+- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · **isSupportRequestReady** · money · **passRefundRequestOn** · ticket
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `ExternalBookingCard.tsx` — createStyles · styles
