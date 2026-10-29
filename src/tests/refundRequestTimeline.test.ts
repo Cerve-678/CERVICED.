@@ -51,4 +51,13 @@ describe('describeRefundRequestTimeline', () => {
     expect(isRefundRequestOpen({ status: 'refunded' })).toBe(false);
     expect(isRefundRequestOpen({ status: 'declined' })).toBe(false);
   });
+
+  it("speaks to the provider in the Issue a refund sheet, without the client's 'you'", () => {
+    const provider = (r: RefundRequest) => describeRefundRequestTimeline(r, null, 'provider');
+    expect(provider(base).map(s => `${s.title}:${s.state}`)).toEqual(['Refund requested:done', 'With you:current', 'Outcome:upcoming']);
+    const review = provider({ ...base, status: 'under_review', passedToCervicedAt: '2026-10-11T09:00:00Z' });
+    expect(review[1]?.detail).toMatch(/^You passed it to Cerviced/);
+    const refunded = provider({ ...base, status: 'refunded', refundedAmount: 20 });
+    expect(refunded[1]?.detail).toBe('£20.00 went back to the client.');
+  });
 });
