@@ -1244,29 +1244,14 @@ Items 1 and 2 stop money going wrong; items 3 and 4 deal with it once it has.
    is unaffected. Needs a record of "rescheduled while late" on the booking,
    the refund function to read it, and the client told before they confirm
    the reschedule. Run `cerviced-legal-flagger` because this is refund policy.
-3. **Tell providers when they owe money.** *Needed whatever is chosen in
-   item 4.* When a refund can't be fully taken back from a provider's Stripe
-   balance, the rest is recorded in `provider_shortfalls` and taken out of
-   their next payout. Providers are told nothing about this: there's no
-   notification and no app screen. Two messages: one when the debt appears
-   ("£30 left will come out of your next payments"), one each time money is
-   taken ("£15 taken, £15 left"). New notification type, so check it with
-   `cerviced-feature-coherence` first.
-4. **Let providers pay the debt back, then take it from payouts.** *Option B
-   decided 2026-10-29; card fee still open.*
-   - Day 0: message with a pay button (item 3). Reminders on days 2 and 4.
-   - Meanwhile, from payouts that come due, Cerviced holds back only up to
-     what's owed and pays the rest. If they pay, the held money is sent
-     straight away.
-   - Day 5, still unpaid: the held money, then their next payouts
-     (booking AND late/no-show fee payouts, which today are never used) pay
-     it off. This is Option A, kept as the fallback.
-   - If a payout is less than the debt, all of it goes towards the debt and
-     the rest stays owed. If it's more, only the debt is taken.
-   - Reuse the client fee-pay-request pattern (`_shared/feePayRequest.ts`:
-     Stripe invoice, in-app payment sheet + emailed Stripe page).
-   - Open: whether Cerviced absorbs the Stripe card fee on the pay-back or
-     the provider pays it on top.
-
-   Either way, a provider who never earns again on the app is never
-   recovered from automatically.
+3. **Tell providers when they owe money.** *Built on PR #181, not live.*
+   One notice when the debt is recorded ("£30.00 will come out of your next
+   payments") and one each time a payout pays some off ("£15.00 went towards
+   what you owe"). Both always push.
+4. **Late/no-show fee payouts pay off that debt.** *Built on PR #181, not
+   live.* Decided 2026-10-29: Option A, tell them and then take it
+   automatically, with no pay-back button. All of a payout goes towards the
+   debt if it's less than what's owed; only what's owed if it's more. A
+   provider who never earns again on the app is never recovered from
+   automatically. To go live: apply migration `20261029120000`, then deploy
+   `release-payouts`, `booking-fee` and `stripe-webhook`.
