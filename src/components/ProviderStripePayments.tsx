@@ -17,6 +17,9 @@ const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
   cancelled: 'Cancelled', reversed: 'Returned',
 };
+// A held payout with a refund request open waits for that request to close.
+const onRefundHold = (row: ProviderPayout) => row.status === 'held' && row.refundRequestOpen;
+const payoutLabel = (row: ProviderPayout) => (onRefundHold(row) ? 'On hold · refund request' : payoutLabels[row.status]);
 
 /** One-line summaries of the provider's own payment settings, shown as the
  *  "Your setup" tiles on Overview. PaymentsScreen owns those settings, so it
@@ -260,7 +263,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
         {payouts.slice(0, 3).map(row => <View key={row.id} style={[styles.activity, { borderColor: C.border }]}>
           <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{row.booking?.service_name_snapshot || 'Booking payment'}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>{row.booking?.customer_name || 'Client'} · {payoutLabels[row.status]}</Text></View>
+            <Text style={[styles.caption, { color: C.sub }]}>{row.booking?.customer_name || 'Client'} · {payoutLabel(row)}</Text></View>
           <Text style={[styles.label, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text>
         </View>)}
         <PaymentAction secondary label="View booking payments" disabled={false} onPress={() => setSection('bookings')} />
@@ -390,12 +393,12 @@ function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: bo
       </View>
       <View style={{ alignItems: 'flex-end', gap: 8 }}><Text style={[styles.amountSmall, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text><Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={C.accentText} /></View>
     </TouchableOpacity>
-    <StatusBadge label={payoutLabels[row.status]} attention={row.status === 'failed'} />
+    <StatusBadge label={payoutLabel(row)} attention={row.status === 'failed' || onRefundHold(row)} />
     {expanded && <View style={[styles.breakdown, { borderColor: C.border }]}>
       {[['Your share before refunds', row.payout_amount]].map(([label, amount]) => <View key={label} style={styles.row}>
         <Text style={[styles.description, { color: C.text }]}>{label}</Text><Text style={[styles.label, { color: C.text }]}>{money(Number(amount), row.currency)}</Text>
       </View>)}
-      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{row.status === 'held' ? `Eligible for release from ${date(new Date(row.release_after).getTime())}. This is not a bank arrival date.` : row.status === 'transferred' ? 'Your share has been released to Stripe. See Payouts for bank transfers.' : row.status === 'failed' ? 'Your share needs attention before it can be released. Contact support if this continues.' : 'This booking’s payout has been cancelled or returned.'}</Text>
+      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{onRefundHold(row) ? 'Your client asked for a refund, so this payment is on hold until that’s settled. Then whatever is still yours is released as normal.' : row.status === 'held' ? `Eligible for release from ${date(new Date(row.release_after).getTime())}. This is not a bank arrival date.` : row.status === 'transferred' ? 'Your share has been released to Stripe. See Payouts for bank transfers.' : row.status === 'failed' ? 'Your share needs attention before it can be released. Contact support if this continues.' : 'This booking’s payout has been cancelled or returned.'}</Text>
       {['held', 'transferred', 'failed'].includes(row.status) && <PaymentAction secondary disabled={busy} label="Refund client" onPress={onRefund} />}
     </View>}
   </View>;

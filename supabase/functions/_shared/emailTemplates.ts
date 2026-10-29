@@ -941,8 +941,11 @@ export function refundRequestedProviderEmail(params: {
   date: string;
   time: string;
   reason: string;
+  /** The provider's payout for the booking while it's held, in pence. */
+  heldPence?: number | null;
 }) {
   const P = PROVIDER;
+  const held = params.heldPence && params.heldPence > 0 ? `£${(params.heldPence / 100).toFixed(2)}` : null;
   const e = {
     clientName: esc(params.clientName),
     service: esc(params.service),
@@ -976,7 +979,8 @@ export function refundRequestedProviderEmail(params: {
         ) +
         note(
           P,
-          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy.",
+          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy." +
+            (held ? ` Your ${held} for this booking is on hold until it's settled.` : ''),
         ) +
         button(P, 'cerviced://home', 'Open CERVICED') +
         appHint(P),
