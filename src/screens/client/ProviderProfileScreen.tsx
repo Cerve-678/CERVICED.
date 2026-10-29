@@ -1845,19 +1845,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     let cancelled = false;
     const serviceRequests = allServices
       .filter((service) => !!service.dbId)
-      .map((service) => ({ serviceId: service.dbId as string, duration: service.duration }));
+      .map((service) => ({ serviceId: service.dbId as string }));
     if (serviceRequests.length === 0) return;
 
     const NEAR_TERM_HORIZON_DAYS = 14;
     const FULL_BOOKING_HORIZON_DAYS = 180;
-    // One call covering both horizons — hasNearTermAvailabilityForServices
-    // fetches the provider's settings/availability/windows/blocked-dates/
-    // overrides/bookings once and scans day-by-day regardless of which
-    // horizon(s) are asked for, so asking for both here in one call (instead
-    // of two separate calls with different horizons) halves the Supabase
-    // round-trips and the per-service/per-day scan work.
+    // One server call answers both horizons (the 14-day one comes from each
+    // service's earliest free day). It's the same check the bell's "has
+    // space again" alert uses, so Fully Booked here can't disagree with it.
     AvailabilityService.hasNearTermAvailabilityForServices(
-      providerDbId,
       serviceRequests,
       FULL_BOOKING_HORIZON_DAYS,
       NEAR_TERM_HORIZON_DAYS,

@@ -5127,6 +5127,32 @@ export async function getAvailabilityDateBundle(
   };
 }
 
+export interface ServiceOpenWithin {
+  service_id: string;
+  has_slot: boolean;
+  /** Earliest day with a free slot ('YYYY-MM-DD', UK date), or null. */
+  next_available: string | null;
+}
+
+/**
+ * The one "is there a free slot" check (get_services_open_within): per
+ * service, within `withinDays` days and never past what the provider has
+ * opened. Live providers' active services only — anything else comes back
+ * without a row.
+ */
+export async function getServicesOpenWithin(
+  serviceIds: string[],
+  withinDays: number,
+): Promise<ServiceOpenWithin[]> {
+  if (serviceIds.length === 0) return [];
+  const { data, error } = await supabase.rpc("get_services_open_within", {
+    p_service_ids: serviceIds,
+    p_within_days: withinDays,
+  });
+  if (error) throw error;
+  return (data ?? []) as ServiceOpenWithin[];
+}
+
 export async function getProviderBookingHorizon(providerId: string): Promise<BookingHorizonSettings> {
   const { data, error } = await supabase
     .from("providers")
