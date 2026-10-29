@@ -26,6 +26,7 @@ Last updated: 18 October 2026.
 | Provider told their payout is on hold (notification, email, booking, Payments) | No | Branch `feat/refund-payout-hold-notice`; migration `20261025210000` APPLIED 2026-10-29, `send-support-request` not deployed |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Failed payout retried (1, 2, 4 days) + support alerted + provider told + daily summary email | No | Branch `feat/payout-retries-and-alerts`; migration `20261025211000` APPLIED 2026-10-29; `release-payouts`, `stripe-webhook`, new `money-daily-summary` not deployed |
+| Admin Money screen (failed payouts, money owed, refund requests; retry, approve, decline) | No | Branch `feat/admin-money-screen` (on top of the line above); migration `20261025212000` APPLIED 2026-10-29; `refund-payment` not deployed. Admins = `admin_users` rows, added in SQL only; every action logged in `admin_actions` |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
 | Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
@@ -205,8 +206,14 @@ estimate of loss, not a penalty.
   not re-verified).
 - Failed payouts aren't retried or alerted on `main` yet; the fix (retries,
   support emails, provider notice, a daily 08:00 UTC summary to support@) is
-  on `feat/payout-retries-and-alerts`. There's no admin view for shortfalls or
-  refund requests yet either (next branch). A provider's own BANK payout
+  on `feat/payout-retries-and-alerts`. The admin view of shortfalls and refund
+  requests is on `feat/admin-money-screen`: a hidden "Money (admin)" settings
+  row for `admin_users` accounts. Approving a refund there goes through
+  `refund-payment` (which now accepts an admin's own sign-in, logged as
+  `approve_refund` in `admin_actions`); a full refund returns the platform
+  fee, anything less comes out of the provider's share. Declining needs a note,
+  which is what the client is told, and is only offered once the provider has
+  passed the request on. A provider's own BANK payout
   failing (`payout.failed`) is Stripe's to retry; on the branch the webhook
   tells the provider and support, but only if the webhook endpoint receives
   Connect account events, which hasn't been checked.
