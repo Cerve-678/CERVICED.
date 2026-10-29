@@ -40,11 +40,11 @@ Curated: [[Address Release]] · **95 files**
 - … +65 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **176 files**
+Curated: [[Availability & Slots]] · **177 files**
 - `src/services/AvailabilityService.ts` _(333)_
 - `src/services/databaseService.ts` _(303)_
 - `src/components/ModernBeautyCalendar.tsx` _(188)_
-- `src/screens/provider/AddBookingScreen.tsx` _(114)_
+- `src/screens/provider/AddBookingScreen.tsx` _(160)_
 - `src/screens/client/SearchScreen.tsx` _(113)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(93)_
@@ -67,11 +67,11 @@ Curated: [[Availability & Slots]] · **176 files**
 - `src/components/AvailabilityCard.tsx` _(24)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(24)_
 - `src/features/providers/useProviderProfileData.ts` _(22)_
+- `src/types/database.ts` _(22)_
 - `src/screens/client/BookingsScreen.tsx` _(21)_
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(21)_
-- `src/types/database.ts` _(21)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- … +146 more
+- … +147 more
 
 ## Payments
 Curated: [[Payments]] · **145 files**
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **145 files**
 - … +115 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **286 files**
+Curated: [[Booking Flow]] · **287 files**
 - `src/services/databaseService.ts` _(883)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -134,12 +134,12 @@ Curated: [[Booking Flow]] · **286 files**
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/booking.ts` _(102)_
 - `src/services/becca/engine.ts` _(100)_
+- `src/screens/provider/AddBookingScreen.tsx` _(98)_
 - `src/components/BookingSheet.tsx` _(97)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
-- `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
-- … +256 more
+- … +257 more
 
 ## Notifications
 Curated: [[Notifications]] · **171 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **55 files**
 - … +25 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **177 files**
+Curated: [[Booking Flow]] · **178 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
 - `src/services/databaseService.ts` _(234)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **177 files**
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_
-- … +147 more
+- … +148 more
 
 ## Auth
 Curated: [[Contexts]] · **187 files**
