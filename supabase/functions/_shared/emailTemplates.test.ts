@@ -289,3 +289,12 @@ describe('fee payment request email', () => {
     expect(html).toContain('Mon 26 Oct');
   });
 });
+
+describe('refundRequestedProviderEmail', () => {
+  it('says the payout is on hold only when there is one', () => {
+    const base = { clientName: 'Amy', service: 'Lash lift', date: '18 Oct', time: '2:30pm', reason: 'The provider cancelled' };
+    expect(refundRequestedProviderEmail({ ...base, heldPence: 4500 }).html).toContain('Your £45.00 for this booking is on hold');
+    expect(refundRequestedProviderEmail(base).html).not.toContain('on hold');
+    expect(refundRequestedProviderEmail({ ...base, heldPence: 0 }).html).not.toContain('on hold');
+  });
+});

@@ -10970,6 +10970,9 @@ export interface ProviderPayout {
   status: 'held' | 'transferred' | 'failed' | 'cancelled' | 'reversed';
   release_after: string;
   created_at: string;
+  /** The client has a refund request open on this booking, so a held payout
+   *  waits for it (release-payouts skips it until the request closes). */
+  refundRequestOpen: boolean;
 }
 
 async function connectAction(action: 'status' | 'onboard' | 'dashboard') {
@@ -11006,11 +11009,38 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
     .eq('provider_id', provider.id).order('created_at', { ascending: false }).limit(50);
   if (error) throw error;
   if (!data?.length) return [];
-  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
-    .select('id, service_name_snapshot, customer_name, booking_date')
-    .eq('provider_id', provider.id).in('id', data.map(row => row.booking_id));
+  const bookingIds = data.map(row => row.booking_id);
+  const [{ data: bookings, error: bookingsError }, { data: openRequests, error: requestsError }] = await Promise.all([
+    supabase.from('bookings')
+      .select('id, service_name_snapshot, customer_name, booking_date')
+      .eq('provider_id', provider.id).in('id', bookingIds),
+    // At most one open request per booking, so the cap matches the payouts'.
+    supabase.from('refund_requests')
+      .select('booking_id')
+      .eq('provider_id', provider.id).in('booking_id', bookingIds)
+      .in('status', ['with_provider', 'under_review'])
+      .limit(50),
+  ]);
   if (bookingsError) throw bookingsError;
-  return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
+  if (requestsError) throw requestsError;
+  const open = new Set((openRequests ?? []).map(r => r.booking_id));
+  return data.map(row => ({
+    ...row,
+    booking: bookings?.find(booking => booking.id === row.booking_id),
+    refundRequestOpen: open.has(row.booking_id),
+  }));
+}
+
+/**
+ * The provider's own payout for one booking, in pence, while it's still held
+ * (provider reading their own record). null once it's released, cancelled or
+ * returned, or when the booking has no payout row.
+ */
+export async function getHeldPayoutPence(bookingId: string): Promise<number | null> {
+  const { data, error } = await supabase.from('provider_payouts')
+    .select('status, payout_amount').eq('booking_id', bookingId).maybeSingle();
+  if (error) throw error;
+  return data?.status === 'held' ? Number(data.payout_amount) : null;
 }
 
 /**

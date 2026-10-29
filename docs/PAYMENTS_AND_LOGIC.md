@@ -23,6 +23,7 @@ Last updated: 18 October 2026.
 | Late and no-show fees | Yes | Merged to `main` (b6c0255), functions deployed |
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
+| Provider told their payout is on hold (notification, email, booking, Payments) | No | Branch `feat/refund-payout-hold-notice`; migration `20261025210000` APPLIED 2026-10-29, `send-support-request` not deployed |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Failed payout retried (1, 2, 4 days) + support alerted + provider told + daily summary email | No | Branch `feat/payout-retries-and-alerts`; migration `20261025211000` APPLIED 2026-10-29; `release-payouts`, `stripe-webhook`, new `money-daily-summary` not deployed |
 | Admin Money screen (failed payouts, money owed, refund requests; retry, approve, decline) | No | Branch `feat/admin-money-screen` (on top of the line above); migration `20261025212000` APPLIED 2026-10-29; `refund-payment` not deployed. Admins = `admin_users` rows, added in SQL only; every action logged in `admin_actions` |
@@ -172,7 +173,7 @@ estimate of loss, not a penalty.
 | Declined fee retries | Up to 3 automatic retries in those 7 days, declines only, new wording only (19 Oct) |
 | Removing a card a fee may need | Blocked until 24h after the appointment (19 Oct) |
 | Refund requests | Go to the provider first, then Cerviced if passed on |
-| Payout while a refund request is open | Held until it closes (18 Oct) |
+| Payout while a refund request is open | Held until it closes (18 Oct); the provider is told so in the Refund Requested notification and email, on the booking and on Payments (branch, not live) |
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |
 | CERVICED's fee on a partial refund | Kept; returned on a full refund |
 | Off-app payments | Never tracked by the app |
