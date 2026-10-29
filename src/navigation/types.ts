@@ -284,9 +284,15 @@ export type ProviderServicesStackParamList = {
   EditProfile: { transferProviderId?: string } | undefined;
   // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
   // builder opens with the profile editor beneath it instead of at a bare tab
-  // root — same reasoning as Policies below. Only the openTerms shape is
-  // reachable from this stack.
-  ProviderIntakeForm: { openTerms: true } | undefined;
+  // root — same reasoning as Policies below. EditProfile sends the openTerms
+  // shape; BookingDetail (below) sends the booking one.
+  ProviderIntakeForm:
+    | { bookingId: string; clientUserId: string; serviceName: string; formId?: string }
+    | { openTerms: true }
+    | undefined;
+  // Pushed from the dashboard's Today cards, so a booking opens with the
+  // profile beneath it — same reasoning as ProviderSchedule below.
+  BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;

@@ -5,7 +5,7 @@
 
 #generated
 
-**157 edges** across **47 screens**. Node-graph version: [[Screen Flow (generated)]].
+**159 edges** across **47 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -125,7 +125,9 @@ graph LR
   ProviderMyProfileScreen --> PaymentsScreen
   ProviderMyProfileScreen --> PoliciesScreen
   ProviderMyProfileScreen --> ProviderAnalyticsScreen
+  ProviderMyProfileScreen --> ProviderBookingDetailScreen
   ProviderMyProfileScreen --> ProviderClienteleScreen
+  ProviderMyProfileScreen --> ProviderHome
   ProviderMyProfileScreen --> ProviderInfoPackScreen
   ProviderMyProfileScreen --> ProviderScheduleScreen
   ProviderMyProfileScreen --> SchedulingScreen
@@ -213,7 +215,7 @@ graph LR
 - `provider/ProviderCommunicationsScreen` → `provider/BusinessInfoScreen`
 - `provider/ProviderHomeScreen` → `provider/InfoRegScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`, `shared/NotificationsScreen`
 - `provider/ProviderInboxScreen` → `provider/ProviderConversationScreen`
-- `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderScheduleScreen`, `provider/SchedulingScreen`
+- `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderScheduleScreen`, `provider/SchedulingScreen`, `ProviderHome`
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`
 - `provider/SchedulingScreen` → `provider/ProviderScheduleScreen`
 - `provider/ServicesPricingScreen` → `provider/BusinessInfoScreen`

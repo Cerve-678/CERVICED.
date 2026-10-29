@@ -5,7 +5,7 @@
 
 #generated
 
-**2718 functions** across **374 files**.
+**2744 functions** across **377 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -164,7 +164,7 @@
 - `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (15)
+### `src/features/providers/` (18)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
 - `DiaryCard.tsx` — createStyles · daySummary · **DiaryCard** · disconnect · load · openChooser · saveChoice · styles · week · weekRangeLabel
 - `diaryDays.ts` — **buildDashboardWeek** · **diaryEventMinutes** · **hoursFor** · **startOfDay**
@@ -178,7 +178,10 @@
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialitiesSection** · tileHeight · venueImages
 - `ServiceEditorSheet.tsx` — handleSave · ServiceEditorSheet · toDraft · **toEditorValue** · validateServiceValue
+- `todaySchedule.ts` — **buildTodaySchedule** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **shortClientName** · todosFrom
+- `TodayScheduleCards.tsx` — applyLeadScroll · handleContentSizeChange · handleScrollEnd · longDayLabel · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
+- `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 
 ### `src/i18n/` (3)
@@ -282,7 +285,7 @@
 - `ProviderInboxScreen.tsx` — addTemplate · ConversationRow · flatItems · handleMarkConversationRead · handleSaveTemplates · handleSendReply · initials · loadInbox · onRefresh · openTemplates · ProviderInboxScreen · removeTemplate · renderRightActions · SkeletonRow · timeAgoISO · unreadCounts · updateTemplate
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleOpenSend · handlePickBookingForSend · handleSave · PackCard · performDelete · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
-- `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeEditor · DashCard · DashEmpty · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handleOpenPayments · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hasPolicyInfo · hidden · live · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ProviderProfileLoadingShell · renderRow · reveal · row · ServiceCategoryCard · ServiceRow · serviceType · setup · startLowerSections
+- `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeEditor · DashCard · DashEmpty · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handleOpenPayments · handleOpenTodayBooking · handleOpenTodayDay · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hasPolicyInfo · hidden · live · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ProviderProfileLoadingShell · renderRow · reveal · row · ServiceCategoryCard · ServiceRow · serviceType · setup · startLowerSections
 - `ProviderNotificationSettingsScreen.tsx` — ProviderNotificationSettingsScreen
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
