@@ -186,6 +186,8 @@ export type ProfileStackParamList = {
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;
+  /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminMoney: undefined;
   Points: undefined;
   ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
@@ -380,6 +382,8 @@ export type ProviderAccountStackParamList = {
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;
+  /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminMoney: undefined;
   DevSettings: undefined;
 };
 
