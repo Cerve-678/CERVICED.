@@ -1227,13 +1227,10 @@ from checkout (`usePreventRemove`, or a `BackHandler` plus
 Found while checking `PAYMENTS_AND_LOGIC.md` §9. Ranked most important first.
 Items 1 and 2 stop money going wrong; items 3 and 4 deal with it once it has.
 
-1. **DONE 2026-10-29: a moved booking moves its payout.** Migration
-   `20261025140000` applied by the user and verified live; PR #168 to merge. Today the payout date is fixed when the client pays,
-   so a booking moved from 5 Nov to 20 Nov pays the provider around 6 Nov,
-   before the work. If the client then cancels, the money has to be taken
-   back, and that's what creates most debts in item 4. The fix moves the
-   payout by the same amount, earlier or later (user's choice). Migration
-   `20261025140000`: do a rolled-back dry run on live, then apply, then merge.
+1. **DONE 2026-10-29: a moved booking moves its payout.** A booking moved
+   from 5 Nov to 20 Nov used to pay the provider around 6 Nov, before the
+   work. The payout now moves by the same amount, earlier or later. Migration
+   `20261025140000` applied by the user and verified live; PR #168 to merge.
 2. **Rescheduling must not dodge a late-cancel charge.** *Decided, not
    built.* A client already too late to cancel for free can reschedule
    (reschedule notice is a separate, often looser setting), then cancel the
