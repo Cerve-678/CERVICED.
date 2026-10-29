@@ -13,6 +13,7 @@ import { requestMode, resolveModeChange } from './modeController';
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
+import { parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';
 
@@ -94,10 +95,17 @@ export default function RootNavigation() {
   // Track whether NavigationContainer has finished mounting
   const [isNavReady, setIsNavReady] = useState(false);
   const [connectReturn, setConnectReturn] = useState<StripeConnectReturn | null>(null);
+  const [providerProfileLink, setProviderProfileLink] = useState<{ providerId: string; receivedAt: number } | null>(null);
   const handledConnectReturn = useRef<StripeConnectReturn | null>(null);
+  const handledProviderProfileLink = useRef<{ providerId: string; receivedAt: number } | null>(null);
   useEffect(() => {
     let live = true;
     const receive = (url: string) => {
+      const providerId = parseProviderProfileDeepLink(url);
+      if (live && providerId) {
+        setProviderProfileLink({ providerId, receivedAt: Date.now() });
+        return;
+      }
       const result = parseStripeConnectReturn(url);
       if (live && result) setConnectReturn({ result, receivedAt: Date.now() });
     };
@@ -105,6 +113,21 @@ export default function RootNavigation() {
     const subscription = Linking.addEventListener('url', ({ url }) => receive(url));
     return () => { live = false; subscription.remove(); };
   }, []);
+  useEffect(() => {
+    if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !providerProfileLink ||
+        handledProviderProfileLink.current === providerProfileLink) return;
+    handledProviderProfileLink.current = providerProfileLink;
+    void requestMode('client').then(mode => {
+      if (mode !== 'client' || !navigationRef.isReady()) return;
+      navigationRef.navigate('MainTabs', {
+        screen: 'Home',
+        params: {
+          screen: 'ProviderProfile',
+          params: { providerId: providerProfileLink.providerId, source: 'profile_qr' },
+        },
+      } as never);
+    });
+  }, [providerProfileLink, isNavReady, isLoggedIn, isLoading, pendingReactivation]);
   useEffect(() => {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !connectReturn ||
         handledConnectReturn.current === connectReturn) return;
