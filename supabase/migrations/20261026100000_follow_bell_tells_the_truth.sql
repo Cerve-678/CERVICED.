@@ -19,9 +19,9 @@
 -- 2. "Has space again" for every belled provider. Hourly, for each live
 --    provider that has a bell-on follower, check
 --    whether a client could book ANY of their active services anywhere up to
---    their last bookable date (same rules as get_services_availability:
---    working windows/overrides/blocked dates, busy spans incl. live holds,
---    per-service buffers, slot interval, minimum notice). Record the answer.
+--    their last bookable date, with get_services_open_within — the same
+--    check the profile's "Fully Booked" button and Search use, so they can't
+--    disagree. Record the answer.
 --    When a provider who was fully booked at the last check now has an
 --    opening, tell their bell-on followers. The message is true at send time
 --    because it is caused by the check, not by a calendar date.
@@ -70,78 +70,93 @@ AS $$
    WHERE p.id = p_provider_id;
 $$;
 
--- ── 2b. can a client book anything with this provider before p_through? ─────
--- get_services_availability's rules, for every active service of one
--- provider, over today..p_through instead of a fixed 7 days.
-CREATE OR REPLACE FUNCTION public.provider_has_bookable_opening(p_provider_id uuid, p_through date)
-RETURNS boolean
+-- ── 2b. ONE "is there a free slot" check, for any number of days ──────────
+-- get_services_availability's slot rules (working windows/overrides/blocked
+-- dates, busy spans incl. live holds, per-service buffers, slot interval,
+-- minimum notice), with the horizon as a parameter and never past what the
+-- provider has opened (provider_last_bookable_date). The profile's "Fully
+-- Booked" button, Search's 7-day badge and the bell's "has space again" all
+-- ask THIS function, so they can't disagree about whether a provider is full.
+CREATE OR REPLACE FUNCTION public.get_services_open_within(p_service_ids uuid[], p_within_days int)
+RETURNS TABLE(service_id uuid, has_slot boolean, next_available date)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS $function$
 WITH clock AS (
-  SELECT (now() AT TIME ZONE 'Europe/London') AS local_now
+  SELECT (now() AT TIME ZONE 'Europe/London') AS local_now,
+         GREATEST(1, LEAST(COALESCE(p_within_days, 7), 180)) AS within_days
 ),
 svc AS (
   SELECT
     s.id,
+    s.provider_id,
     s.duration_minutes AS dur,
     COALESCE(s.buffer_before_mins, 0) AS buf_before,
     COALESCE(s.buffer_after_mins, p.buffer_mins, 0) AS buf_after,
     CASE WHEN p.slot_interval_mins IN (15, 30, 60) THEN p.slot_interval_mins ELSE 60 END AS step,
-    COALESCE(p.min_booking_notice_hrs, 0) AS notice_hrs
+    COALESCE(p.min_booking_notice_hrs, 0) AS notice_hrs,
+    -- Days to look at, today included: the asked-for span, never past the
+    -- provider's last bookable date. NULL last date = no limit.
+    CASE
+      WHEN public.provider_last_bookable_date(p.id) IS NULL THEN (SELECT within_days FROM clock)
+      ELSE GREATEST(0, LEAST((SELECT within_days FROM clock),
+                             public.provider_last_bookable_date(p.id) - (SELECT local_now::date FROM clock) + 1))
+    END AS horizon
   FROM public.services s
   JOIN public.providers p ON p.id = s.provider_id
-  WHERE s.provider_id = p_provider_id
+  WHERE s.id = ANY(p_service_ids[1:300])
     AND s.is_active = TRUE
-    AND s.duration_minutes > 0
     AND p.has_gone_live = TRUE
     AND p.is_active = TRUE
 ),
-days AS (
-  SELECT d::date AS day, EXTRACT(DOW FROM d)::int AS dow
-  FROM clock c
-  CROSS JOIN LATERAL generate_series(c.local_now::date, p_through, INTERVAL '1 day') AS d
+svc_days AS (
+  SELECT sv.id AS service_id, sv.provider_id,
+         (c.local_now::date + g.n) AS day,
+         EXTRACT(DOW FROM (c.local_now::date + g.n))::int AS dow
+  FROM svc sv
+  CROSS JOIN clock c
+  CROSS JOIN LATERAL generate_series(0, sv.horizon - 1) AS g(n)
   WHERE NOT EXISTS (
     SELECT 1 FROM public.provider_blocked_dates bd
-    WHERE bd.provider_id = p_provider_id AND bd.blocked_date = d::date
+    WHERE bd.provider_id = sv.provider_id AND bd.blocked_date = (c.local_now::date + g.n)
   )
 ),
 windows AS (
-  SELECT dd.day, w.start_time, w.end_time
-  FROM days dd
+  SELECT sd.service_id, sd.provider_id, sd.day, w.start_time, w.end_time
+  FROM svc_days sd
   CROSS JOIN LATERAL (
     SELECT o.start_time, o.end_time
     FROM public.provider_availability_overrides o
-    WHERE o.provider_id = p_provider_id AND o.availability_date = dd.day
+    WHERE o.provider_id = sd.provider_id AND o.availability_date = sd.day
       AND o.is_closed = FALSE AND o.start_time IS NOT NULL AND o.end_time IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM public.provider_availability_overrides c
-        WHERE c.provider_id = p_provider_id AND c.availability_date = dd.day AND c.is_closed = TRUE)
+        WHERE c.provider_id = sd.provider_id AND c.availability_date = sd.day AND c.is_closed = TRUE)
     UNION ALL
     SELECT pw.start_time, pw.end_time
     FROM public.provider_availability_windows pw
-    WHERE pw.provider_id = p_provider_id AND pw.day_of_week = dd.dow
+    WHERE pw.provider_id = sd.provider_id AND pw.day_of_week = sd.dow
       AND NOT EXISTS (
         SELECT 1 FROM public.provider_availability_overrides o
-        WHERE o.provider_id = p_provider_id AND o.availability_date = dd.day
+        WHERE o.provider_id = sd.provider_id AND o.availability_date = sd.day
           AND (o.is_closed = TRUE OR (o.start_time IS NOT NULL AND o.end_time IS NOT NULL)))
     UNION ALL
     SELECT a.open_time, a.close_time
     FROM public.provider_availability a
-    WHERE a.provider_id = p_provider_id AND a.day_of_week = dd.dow AND a.is_closed = FALSE
+    WHERE a.provider_id = sd.provider_id AND a.day_of_week = sd.dow AND a.is_closed = FALSE
       AND NOT EXISTS (
         SELECT 1 FROM public.provider_availability_windows pw
-        WHERE pw.provider_id = p_provider_id AND pw.day_of_week = dd.dow)
+        WHERE pw.provider_id = sd.provider_id AND pw.day_of_week = sd.dow)
       AND NOT EXISTS (
         SELECT 1 FROM public.provider_availability_overrides o
-        WHERE o.provider_id = p_provider_id AND o.availability_date = dd.day
+        WHERE o.provider_id = sd.provider_id AND o.availability_date = sd.day
           AND (o.is_closed = TRUE OR (o.start_time IS NOT NULL AND o.end_time IS NOT NULL)))
   ) AS w
 ),
 busy AS (
-  SELECT b.booking_date AS day,
+  SELECT b.provider_id, b.booking_date AS day,
     FLOOR(EXTRACT(EPOCH FROM (
       GREATEST(COALESCE(b.effective_start, b.booking_date + b.booking_time), b.booking_date::timestamp)
     )::time) / 60)::int AS s_min,
@@ -150,31 +165,62 @@ busy AS (
             b.booking_date::timestamp + INTERVAL '1 day' - INTERVAL '1 second')
     )::time) / 60)::int AS e_min
   FROM public.bookings b
-  WHERE b.provider_id = p_provider_id
-    AND b.booking_date BETWEEN (SELECT local_now::date FROM clock) AND p_through
+  WHERE b.provider_id IN (SELECT provider_id FROM svc)
+    AND b.booking_date BETWEEN (SELECT local_now::date FROM clock)
+                           AND (SELECT local_now::date + within_days - 1 FROM clock)
     AND b.status IN ('pending', 'confirmed', 'in_progress', 'on_hold')
     AND (b.status <> 'on_hold' OR b.hold_expires_at IS NULL OR b.hold_expires_at > NOW())
-)
-SELECT EXISTS (
-  SELECT 1
+    AND NOT (b.status = 'on_hold' AND b.hold_batch_id IS NOT NULL
+             AND auth.uid() IS NOT NULL AND b.user_id = auth.uid())
+),
+slots AS (
+  SELECT wd.service_id, wd.provider_id, wd.day, m.start_min,
+         sv.dur, sv.buf_before, sv.buf_after, sv.notice_hrs
   FROM windows wd
-  CROSS JOIN svc sv
-  CROSS JOIN clock c
+  JOIN svc sv ON sv.id = wd.service_id
   CROSS JOIN LATERAL generate_series(
     FLOOR(EXTRACT(EPOCH FROM wd.start_time) / 60)::int,
     FLOOR(EXTRACT(EPOCH FROM wd.end_time) / 60)::int - 1,
     sv.step
   ) AS m(start_min)
   WHERE m.start_min + sv.dur <= FLOOR(EXTRACT(EPOCH FROM wd.end_time) / 60)::int
-    AND (wd.day + (m.start_min * INTERVAL '1 minute')) >= (c.local_now + (sv.notice_hrs * INTERVAL '1 hour'))
+),
+open_slots AS (
+  SELECT sl.service_id, sl.day
+  FROM slots sl
+  CROSS JOIN clock c
+  WHERE (sl.day + (sl.start_min * INTERVAL '1 minute')) >= (c.local_now + (sl.notice_hrs * INTERVAL '1 hour'))
     AND NOT EXISTS (
       SELECT 1 FROM busy bz
-      WHERE bz.day = wd.day
-        AND (m.start_min - sv.buf_before) < bz.e_min
-        AND bz.s_min < (m.start_min + sv.dur + sv.buf_after)
+      WHERE bz.provider_id = sl.provider_id AND bz.day = sl.day
+        AND (sl.start_min - sl.buf_before) < bz.e_min
+        AND bz.s_min < (sl.start_min + sl.dur + sl.buf_after)
     )
-);
-$$;
+)
+SELECT sv.id AS service_id,
+       (MIN(os.day) IS NOT NULL) AS has_slot,
+       MIN(os.day) AS next_available
+FROM svc sv
+LEFT JOIN open_slots os ON os.service_id = sv.id
+GROUP BY sv.id;
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_services_open_within(uuid[], int) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_services_open_within(uuid[], int) TO authenticated;
+
+-- Search's 7-day badge is now the same check over 7 days. Same signature,
+-- same grants (CREATE OR REPLACE keeps them). One behaviour change, from the
+-- shared horizon rule: a rolling window under 7 days now includes its last
+-- day (e.g. 4 days for a 3-day window), matching what the booking trigger has
+-- always accepted.
+CREATE OR REPLACE FUNCTION public.get_services_availability(p_service_ids uuid[])
+ RETURNS TABLE(service_id uuid, has_slot boolean, next_available date)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT * FROM public.get_services_open_within(p_service_ids, 7);
+$function$;
 
 -- ── 2c. last observed state per provider (private) ──────────────────────────
 CREATE TABLE IF NOT EXISTS public.provider_follow_openings_state (
@@ -250,10 +296,16 @@ BEGIN
          OR EXISTS (SELECT 1 FROM public.provider_availability a WHERE a.provider_id = p.id AND a.is_closed = FALSE)
        )
   LOOP
-    -- No limit = look 180 days ahead, like the profile's own "Fully Booked" check.
-    v_open := public.provider_has_bookable_opening(
-      r.provider_id,
-      LEAST(COALESCE(public.provider_last_bookable_date(r.provider_id), CURRENT_DATE + 180), CURRENT_DATE + 180)
+    -- The same question the profile's "Fully Booked" button asks: any free
+    -- slot for any active service, up to 180 days and never past what the
+    -- provider has opened.
+    v_open := EXISTS (
+      SELECT 1
+        FROM public.get_services_open_within(
+               ARRAY(SELECT s.id FROM public.services s
+                      WHERE s.provider_id = r.provider_id AND s.is_active = TRUE),
+               180) o
+       WHERE o.has_slot
     );
 
     SELECT s.is_fully_booked, s.last_alert_at
@@ -489,7 +541,6 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION public.provider_last_bookable_date(uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.provider_has_bookable_opening(uuid, date) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.process_follow_openings_alerts() FROM PUBLIC, anon, authenticated;
 
 SELECT cron.schedule(
