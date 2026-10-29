@@ -5,9 +5,9 @@
 
 #generated
 
-**2685 functions** across **366 files**.
+**2693 functions** across **369 files**.
 
-### `src/components/` (49)
+### `src/components/` (50)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -41,6 +41,7 @@
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — ProviderFontPicker
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
+- `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
@@ -339,12 +340,13 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (48)
+### `src/utils/` (50)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `bottomSafeGap.ts` — **useSystemBottomInset**
+- `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `cartUtils.ts` — **getCartSummary**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **toArgbHex**
@@ -368,6 +370,7 @@
 - `performance.ts` — for
 - `policyDisplay.ts` — buildLinkOnlyPolicyRows · **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · feeLabel · **readProviderTermsSnapshot**
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
+- `providerProfileDeepLink.ts` — **parseProviderProfileDeepLink** · **providerProfileDeepLink**
 - `readCache.ts` — cachedFetch · clear · **createReadCache** · **isCacheableRead** · **isWriteRequest** · pathOf · **readRequestKey** · requestMethod · requestUrl · that · tooLargeToKeep
 - `regionStore.ts` — **getRegion** · **setRegion**
 - `reorderCategories.ts` — exists · **reorderCategoriesWithinType**
