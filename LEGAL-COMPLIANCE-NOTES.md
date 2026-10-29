@@ -633,6 +633,8 @@ changed to say so.
   value now publishes its address. Re-prompt them, or reset them to "On
   confirmation" until they re-confirm, before the migration goes live. It's
   not known whether that studio's address is also a home.
+  **Decision 2026-10-29 (the user):** left as is — choosing "Always visible"
+  is taken as wanting it public. No reset and no separate message.
 - **Terms and Privacy text are silent.** Neither tells providers that this
   option makes their address public to all users. The only explanation is the
   setting's own line.
