@@ -5,7 +5,7 @@
 
 #generated
 
-**2693 functions** across **369 files**.
+**2691 functions** across **369 files**.
 
 ### `src/components/` (50)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -112,10 +112,9 @@
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen**
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 
-### `src/features/business-details/` (3)
+### `src/features/business-details/` (2)
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
 - `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **productsPlaceholder** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
-- `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 
 ### `src/features/cart/` (3)
 - `platformFee.ts` — **calculatePlatformFee**
@@ -146,13 +145,14 @@
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
 
-### `src/features/provider-registration/` (11)
+### `src/features/provider-registration/` (12)
 - `BufferPicker.tsx` — **BufferPicker**
 - `ChipSelect.tsx` — **ChipSelect**
 - `DurationPicker.tsx` — **DurationPicker**
 - `InfoRegPager.tsx` — handleMomentumEnd · **InfoRegPager** · recordEnd
 - `infoRegSections.ts` — **infoRegSectionIndex**
 - `LogoCardFramer.tsx` — animateTo · **LogoCardFramer**
+- `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `RequiredLabel.tsx` — **RequiredLabel**
 - `SectionHeader.tsx` — **SectionHeader**
 - `serviceDraft.ts` — **createServiceDraft** · nextDraftId
@@ -281,7 +281,7 @@
 - `ProviderNotificationSettingsScreen.tsx` — ProviderNotificationSettingsScreen
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
-- `SchedulingScreen.tsx` — flash · handleSave · horizonOptions · onHorizonChange · releaseStatus · SchedulingScreen · toggleChip
+- `SchedulingScreen.tsx` — flash · handleSave · releaseStatus · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
 
 ### `src/screens/shared/` (12)

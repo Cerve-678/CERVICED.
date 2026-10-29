@@ -38,9 +38,7 @@ import {
   updateProviderScheduleSettings,
   updateProviderMaxBookingsPerDay,
   updateProviderRequestSettings,
-  mergeProviderAutomationSettings,
 } from '../../services/databaseService';
-import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
 import { lastBookableDate, nextReleaseMoment, toReleaseDay } from '../../utils/bookingHorizon';
 import { formatShortDayDate, formatTime12, ordinalSuffix } from '../../utils/dateUtils';
 import {
@@ -70,11 +68,10 @@ export default function SchedulingScreen({ navigation }: any) {
   // Booking rules (moved from ProviderAutomationsScreen)
   const [bufferMins, setBufferMins]             = useState('0');
   const [bookingWindowDays, setBookingWindowDays] = useState('60');
-  // Set = monthly release, which replaces the rolling window above (the
-  // window is still saved, so switching back restores it). Stored in
-  // automation_settings.scheduleReleaseDay — see utils/bookingHorizon.
+  // Read-only here. Set = monthly release, which replaces the rolling window
+  // below (still saved, so clearing the release day restores it). Its only
+  // editor is InfoRegScreen (Edit Profile) — see utils/bookingHorizon.
   const [releaseDay, setReleaseDay] = useState<number | null>(null);
-  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const [minBookingNoticeHrs, setMinNotice]     = useState('0');
   const [slotIntervalMins, setSlotInterval]     = useState('60');
   const [maxBookingsPerDay, setMaxPerDay]       = useState('unlimited');
@@ -187,12 +184,6 @@ export default function SchedulingScreen({ navigation }: any) {
 
         updateProviderMaxBookingsPerDay(providerId, capInt),
 
-        // Only the release day — the rest of automation_settings belongs to
-        // Automations and Payments.
-        releaseDay != null
-          ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: releaseDay })
-          : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']),
-
         updateProviderRequestSettings(providerId, {
           allow_out_of_hours_requests:  allowOutOfHours,
           allow_blocked_date_requests:  allowBlockedDates,
@@ -216,7 +207,7 @@ export default function SchedulingScreen({ navigation }: any) {
     }
   }, [
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
-    bufferMins, bookingWindowDays, releaseDay, minBookingNoticeHrs, slotIntervalMins,
+    bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
     allowBeyondWindow, requestBefore, requestAfter, navigation,
   ]);
@@ -230,21 +221,6 @@ export default function SchedulingScreen({ navigation }: any) {
     if (!openUntil) return null;
     return `Clients can book up to ${formatShortDayDate(openUntil)}. The next month opens ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
   }, [releaseDay]);
-
-  const horizonOptions = useMemo(() => [
-    ...BOOKING_WINDOW_OPTS,
-    { value: 'monthly', label: 'Monthly release', sub: 'Open next month on one day each month' },
-  ], []);
-
-  const onHorizonChange = useCallback((value: string) => {
-    if (value === 'monthly') {
-      setReleaseDay(prev => prev ?? new Date().getDate());
-      setReleaseDayPickerVisible(true);
-      return;
-    }
-    setReleaseDay(null);
-    setBookingWindowDays(value);
-  }, []);
 
   if (loading) {
     return (
@@ -341,26 +317,19 @@ export default function SchedulingScreen({ navigation }: any) {
 
             <View style={{ height: 18 }} />
             <SectionLabel text="How far ahead clients can book" />
-            <RadioGroup
-              options={horizonOptions}
-              value={releaseDay != null ? 'monthly' : bookingWindowDays}
-              onChange={onHorizonChange}
-            />
-            {releaseDay != null && (
-              <View style={{ marginTop: 10, gap: 8 }}>
-                <TouchableOpacity
-                  style={[st.releaseDayRow, { backgroundColor: C.surface, borderColor: C.border }]}
-                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setReleaseDayPickerVisible(true); }}
-                  activeOpacity={0.75}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="calendar-outline" size={15} color={C.accent} />
-                  <Text style={[st.releaseDayText, { color: C.text }]}>Opens on the {ordinalSuffix(releaseDay)} of every month</Text>
-                  <Ionicons name="chevron-forward" size={14} color={C.sub} />
-                </TouchableOpacity>
-                <Text style={[st.releaseDayHint, { color: C.sub }]}>{RELEASE_DAY_EXPLAINER}</Text>
-                {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
+            {releaseDay != null ? (
+              // A monthly release replaces the rolling window; it's set in
+              // Edit Profile, so here it's only explained.
+              <View style={[st.releaseDayRow, { backgroundColor: C.surface, borderColor: C.border }]}>
+                <Ionicons name="calendar-outline" size={15} color={C.accent} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[st.releaseDayText, { color: C.text }]}>Monthly release on the {ordinalSuffix(releaseDay)}</Text>
+                  {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
+                  <Text style={[st.releaseDayHint, { color: C.sub }]}>Change or remove it in Edit Profile.</Text>
+                </View>
               </View>
+            ) : (
+              <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
             )}
 
             <View style={{ height: 18 }} />
@@ -432,17 +401,6 @@ export default function SchedulingScreen({ navigation }: any) {
 
           <SaveButton saving={saving} onPress={handleSave} />
         </ScrollView>
-        <ReleaseDayPicker
-          visible={releaseDayPickerVisible}
-          value={releaseDay ?? new Date().getDate()}
-          accentColor={C.accent}
-          cardColor={C.card}
-          textColor={C.text}
-          subColor={C.sub}
-          borderColor={C.border}
-          onSelect={setReleaseDay}
-          onClose={() => setReleaseDayPickerVisible(false)}
-        />
       </SafeAreaView>
     </View>
   );

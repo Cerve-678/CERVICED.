@@ -61,6 +61,7 @@ import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/p
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo } from '../../components/FramedLogo';
 import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
 import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
@@ -2831,6 +2832,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // magic number left to keep in sync when the layout changes.
   const fieldNodes = useRef<Record<string, View | null>>({});
 
+  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const registerField = useCallback(
     (name: string) => (node: View | null) => { fieldNodes.current[name] = node; },
     [],
@@ -4684,20 +4686,32 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Read-only here on purpose: the monthly release day is a
-                  booking rule with one editor, SchedulingScreen ("How far
-                  ahead clients can book" → Monthly release), so no other
-                  screen can save over it. */}
-              <View style={styles.inputGroup}>
+              {/* The release day's ONLY editor. One stored value
+                  (automation_settings.scheduleReleaseDay, merged in on save)
+                  drives the booking limit (utils/bookingHorizon,
+                  provider_last_bookable_date), the profile pill and the
+                  release message. Scheduling shows it read-only. The row IS
+                  the picker: tap, choose a day, or "No release day" there. */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('scheduleReleaseDay')}
+              >
                 <View style={styles.toggleInfo}>
                   <Text style={styles.toggleLabel}>Monthly Release Day</Text>
-                  <Text style={styles.toggleHint}>
-                    {providerData.scheduleReleaseDay != null
-                      ? `The ${ordinalSuffix(providerData.scheduleReleaseDay)} of every month. `
-                      : 'Not set — clients book a rolling window ahead. '}
-                    Change it in Scheduling, under How far ahead clients can book.
-                  </Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.releaseDayBtn}
+                  onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.releaseDayBtnText}>
+                    {providerData.scheduleReleaseDay != null
+                      ? `Day ${providerData.scheduleReleaseDay} of every month`
+                      : 'Choose a day'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
+                </TouchableOpacity>
               </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
@@ -5733,6 +5747,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
             </TouchableOpacity>
           </View>
+
+          <ReleaseDayPicker
+            visible={releaseDayPickerVisible}
+            value={providerData.scheduleReleaseDay ?? new Date().getDate()}
+            accentColor={adaptiveAccentColor}
+            cardColor={editTheme.card}
+            textColor={editTheme.text}
+            subColor={editTheme.sub}
+            borderColor={editTheme.border}
+            allowClear
+            onClear={() => setProviderData(prev => ({ ...prev, scheduleReleaseDay: null }))}
+            onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
+            onClose={() => setReleaseDayPickerVisible(false)}
+          />
 
           {/* Reuses the same read-only Terms content shown from account
               settings — no separate copy to keep in sync. */}
@@ -8310,6 +8338,24 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 1,
   },
 
+
+  releaseDayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: edge(0.12),
+    backgroundColor: surf(0.04),
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  releaseDayBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: fg(0.75),
+  },
 
   // ── Tab switcher ──
   // ── Policies step ──

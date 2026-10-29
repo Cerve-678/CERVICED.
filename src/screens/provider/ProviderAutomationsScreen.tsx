@@ -64,7 +64,7 @@ interface ProviderAutomations {
   cancellationNoticeHours:string;     // '0' | '12' | '24' | '48' | '72'
   waitlistEnabled:        boolean;
   autoAcceptWaitlist:     boolean;
-  // Not here on purpose: scheduleReleaseDay (SchedulingScreen) and
+  // Not here on purpose: scheduleReleaseDay (InfoRegScreen) and
   // depositRequiredNew (PaymentsScreen) share automation_settings but belong
   // to those screens. The save below merges only this screen's keys, so
   // there's nothing to carry back.
@@ -382,7 +382,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         />
         <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you. Your setting here is also their starting interval in Beauty Maintenance, and clients who already get Maintenance reminders for that service don't get this nudge as well.</Text>
 
-        <Text style={[st.chipHint, { color: C.sub }]}>Looking for your monthly release day? It's a booking rule now: Scheduling → How far ahead clients can book → Monthly release.</Text>
+        <Text style={[st.chipHint, { color: C.sub }]}>Looking for your monthly release day? It's set in Edit Profile now, and it decides how far ahead clients can book.</Text>
 
         <AutoCard
           title="Review request"

@@ -976,7 +976,7 @@ shipped, and where it differs from the design below:
 
 - **Monthly ⇔ a release day is set.** No separate mode column:
   `automation_settings.scheduleReleaseDay` set means monthly, and it replaces
-  `booking_window_days` (which is kept, so switching back restores it).
+  `booking_window_days` (which is kept, so clearing the day restores it).
 - **The horizon is computed from the clock, not stored** (deviation from
   point 2 below). Before the Nth at 09:00 UTC: bookable to the end of this
   month. From then: to the end of next month. A day past the month's end means
@@ -991,13 +991,14 @@ shipped, and where it differs from the design below:
   opened up with … Get booking now." (the user's wording). It skips providers
   who aren't live. A time-only change to an existing booking past the horizon
   is no longer re-checked.
-- **One control, and nothing can overwrite it** (point 3): Scheduling → "How
-  far ahead clients can book" → "Monthly release" is the only editor, with the
-  day picker and a line saying what's open now and when the next month opens.
-  Automations lost its toggle; InfoReg shows the day read-only. Every screen
-  that touches `automation_settings` (Automations, Payments, Scheduling) now
-  saves only its own keys through `merge_provider_automation_settings`, so one
-  screen's save can't undo another's.
+- **One control, and nothing can overwrite it** (point 3): Edit Profile
+  (InfoReg) is the only editor — the user's call on 2026-10-29: one change
+  there moves the booking limit, the profile pill and the release message.
+  Scheduling shows it read-only in place of the rolling-window choice, with
+  what's open now and when the next month opens. Automations lost its toggle.
+  Every screen that touches `automation_settings` (Automations, Payments,
+  InfoReg) saves only its own keys through `merge_provider_automation_settings`,
+  so one screen's save can't undo another's.
 - **The wall** (point 4): the client date picker says "Dates after … open on
   … at …" when the week runs past it. The provider-side line is in Scheduling,
   not Working Hours.

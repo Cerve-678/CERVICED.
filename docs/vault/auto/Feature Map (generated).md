@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **176 files**
 - … +146 more
 
 ## Payments
-Curated: [[Payments]] · **142 files**
+Curated: [[Payments]] · **141 files**
 - `src/screens/client/CartScreen.tsx` _(530)_
 - `src/services/databaseService.ts` _(222)_
 - `src/screens/provider/PaymentsScreen.tsx` _(177)_
@@ -105,7 +105,7 @@ Curated: [[Payments]] · **142 files**
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/InfoRegScreen.tsx` _(27)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
-- … +112 more
+- … +111 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **284 files**
@@ -182,7 +182,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **80 files**
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(37)_
-- `src/screens/provider/InfoRegScreen.tsx` _(33)_
+- `src/screens/provider/InfoRegScreen.tsx` _(34)_
 - `src/contexts/RegistrationContext.tsx` _(28)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
