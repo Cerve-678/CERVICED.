@@ -89,13 +89,10 @@ export interface ProviderRegistrationData {
   customServiceType: string;
   location: string;
   aboutText: string;
-  /** Monthly release day (1-31): next month opens for booking on this day
-   *  (utils/bookingHorizon) and bell followers are told. Drives the
-   *  client-facing profile's "New slots drop on the Nth" pill. Stored in
-   *  providers.automation_settings.scheduleReleaseDay (merged in, not
-   *  overwritten — that JSONB blob also holds unrelated settings owned by
-   *  ProviderAutomationsScreen). null = no release day: a rolling
-   *  booking_window_days horizon instead. */
+  /** Monthly release day (1-31), READ-ONLY here — loaded so InfoReg's
+   *  preview pill and note can show it, never saved by this service.
+   *  SchedulingScreen is its only editor (automation_settings
+   *  .scheduleReleaseDay, merged server-side). null = rolling window. */
   scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
@@ -575,19 +572,8 @@ export async function saveProviderToSupabase(
   // edits silently split across rows. Fail loudly instead.
   let providerId: string;
 
-  // Merged in, never overwritten whole — automation_settings also holds
-  // unrelated keys (rebookingNudgeWeeks, clientReminderTiming, etc.) owned
-  // by ProviderAutomationsScreen. scheduleReleaseDay is also edited by
-  // SchedulingScreen ("Monthly release"); each screen loads it fresh on mount,
-  // so just don't let either clobber the other's keys.
-  const mergedAutomationSettings: NonNullable<DbProvider['automation_settings']> = {
-    ...(existingProvider?.automation_settings ?? {}),
-  };
-  if (data.scheduleReleaseDay != null) {
-    mergedAutomationSettings.scheduleReleaseDay = data.scheduleReleaseDay;
-  } else {
-    delete mergedAutomationSettings.scheduleReleaseDay;
-  }
+  // automation_settings is not written here at all: its keys belong to
+  // Automations, Payments and Scheduling, which each merge their own.
 
   if (existingProvider) {
     try {
@@ -648,7 +634,6 @@ export async function saveProviderToSupabase(
         address_release_policy: data.businessType
           ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
           : (data.addressReleasePolicy ?? null),
-        automation_settings: mergedAutomationSettings,
         is_active: true,
       });
     } catch (error) {
@@ -708,7 +693,6 @@ export async function saveProviderToSupabase(
         address_release_policy: data.businessType
           ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
           : (data.addressReleasePolicy ?? null),
-        automation_settings: mergedAutomationSettings,
         is_active: true,
         terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
         booking_mode: data.bookingMode ?? 'cerviced',

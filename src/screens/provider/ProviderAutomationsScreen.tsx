@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import {
   updateProviderAutoAccept,
   updateProviderCancellationPolicy,
-  updateProviderAutomationSettings,
+  mergeProviderAutomationSettings,
   getMyProviderProfileContext,
   updateCurrentUserMetadata,
 } from '../../services/databaseService';
@@ -54,11 +54,6 @@ interface ProviderAutomations {
   // What CERVICED sends on your behalf — you choose when/if
   clientReminderTiming:   string[];   // ['24h', '48h', '72h'] — push to clients
   rebookingNudgeWeeks:    string;     // 'never' | '2' | '4' | '6' | '8' | '12'
-  // Monthly release day — a BOOKING RULE now (it decides how far ahead
-  // clients can book), owned and edited by SchedulingScreen. Carried here only
-  // because saving automation_settings REPLACES the whole blob; same rule as
-  // depositRequiredNew below. Never render an editor for it here.
-  scheduleReleaseDay:     number | null;
   autoReviewRequest:      boolean;    // 2hrs after completion
   postApptCheckIn:        boolean;    // check-in message day after
   birthdayGreeting:       boolean;    // greeting on client birthday
@@ -69,17 +64,15 @@ interface ProviderAutomations {
   cancellationNoticeHours:string;     // '0' | '12' | '24' | '48' | '72'
   waitlistEnabled:        boolean;
   autoAcceptWaitlist:     boolean;
-  // Owned and edited by PoliciesScreen — carried here only because saving
-  // automation_settings REPLACES the whole blob, so a value this screen didn't
-  // read back would be deleted on the next save. Never render an editor for it
-  // here; that's what created the split this consolidation just undid.
-  depositRequiredNew:     boolean;
+  // Not here on purpose: scheduleReleaseDay (SchedulingScreen) and
+  // depositRequiredNew (PaymentsScreen) share automation_settings but belong
+  // to those screens. The save below merges only this screen's keys, so
+  // there's nothing to carry back.
 }
 
 const DEFAULTS: ProviderAutomations = {
   clientReminderTiming:    ['24h'],
   rebookingNudgeWeeks:     'never',
-  scheduleReleaseDay:      null,
   autoReviewRequest:       true,
   postApptCheckIn:         false,
   birthdayGreeting:        false,
@@ -88,7 +81,6 @@ const DEFAULTS: ProviderAutomations = {
   cancellationNoticeHours: '0',   // matches providers.cancellation_notice_hours DB default
   waitlistEnabled:         false,
   autoAcceptWaitlist:      false,
-  depositRequiredNew:      false,
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -202,7 +194,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           pa_cancellation_notice_hours?: string | number;
           pa_waitlist_enabled?: boolean;
           pa_auto_accept_waitlist?: boolean;
-          pa_deposit_required_new?: boolean;
         };
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
@@ -210,9 +201,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         setD({
           clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
-          // Providers-row only (added after automation_settings existed) —
-          // no legacy user_metadata fallback needed.
-          scheduleReleaseDay:      a.scheduleReleaseDay   ?? DEFAULTS.scheduleReleaseDay,
           autoReviewRequest:       a.autoReviewRequest    ?? m['pa_auto_review_request']    ?? DEFAULTS.autoReviewRequest,
           postApptCheckIn:         a.postApptCheckIn      ?? m['pa_post_appt_check_in']     ?? DEFAULTS.postApptCheckIn,
           birthdayGreeting:        a.birthdayGreeting     ?? m['pa_birthday_greeting']      ?? DEFAULTS.birthdayGreeting,
@@ -224,9 +212,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           cancellationNoticeHours: String(profile?.cancellation_notice_hours ?? m['pa_cancellation_notice_hours'] ?? DEFAULTS.cancellationNoticeHours),
           waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
-          // Read purely so the save below can write it back unchanged — see
-          // the note on the type above.
-          depositRequiredNew:      a.depositRequiredNew   ?? m['pa_deposit_required_new']   ?? DEFAULTS.depositRequiredNew,
         });
       } finally {
         setLoading(false);
@@ -267,20 +252,15 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         // Mirror the client-facing automations onto the providers row —
         // user_metadata is invisible to client screens and pg_cron jobs,
         // so anything that must act on these settings reads them from here.
-        saves.push(updateProviderAutomationSettings(providerId, {
+        // Merged, so only this screen's keys change — see the note on the type.
+        saves.push(mergeProviderAutomationSettings(providerId, {
           clientReminderTiming: d.clientReminderTiming,
           rebookingNudgeWeeks:  d.rebookingNudgeWeeks,
-          ...(d.scheduleReleaseDay != null ? { scheduleReleaseDay: d.scheduleReleaseDay } : {}),
           autoReviewRequest:    d.autoReviewRequest,
           postApptCheckIn:      d.postApptCheckIn,
           birthdayGreeting:     d.birthdayGreeting,
           waitlistEnabled:      d.waitlistEnabled,
           autoAcceptWaitlist:   d.autoAcceptWaitlist,
-          // Owned/edited by PoliciesScreen (in its Deposit card), but this
-          // call REPLACES the whole automation_settings blob — so the loaded
-          // value is passed straight back rather than dropped, which would
-          // delete it. Never add an editor for it here.
-          depositRequiredNew:   d.depositRequiredNew,
           // Must be mirrored here, not just to user_metadata: the
           // provider-daily-recap cron job reads this key off the providers
           // row and its COALESCE(..., TRUE) treats a missing key as "send",

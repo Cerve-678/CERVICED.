@@ -5696,42 +5696,25 @@ export async function updateProviderCancellationPolicy(
   if (error) throw error;
 }
 
-/** Mirror the Automations screen settings onto the providers row so client
- *  screens and pg_cron jobs can read them (auth user_metadata cannot be). */
-export async function updateProviderAutomationSettings(
-  providerId: string,
-  settings: NonNullable<DbProvider["automation_settings"]>,
-): Promise<void> {
-  const { error } = await supabase
-    .from("providers")
-    .update({ automation_settings: settings })
-    .eq("id", providerId);
-  if (error) throw error;
-}
+type AutomationSettings = NonNullable<DbProvider["automation_settings"]>;
 
 /**
- * Sets (or, with null, clears) the monthly release day without touching the
- * rest of automation_settings. updateProviderAutomationSettings replaces the
- * whole blob, which is right for the Automations screen (it owns most of it)
- * and wrong for SchedulingScreen, which only owns this one key.
+ * Changes only the given automation_settings keys (and removes `remove`), in
+ * one statement on the server — merge_provider_automation_settings. The
+ * bundle is edited from several screens (Automations, Payments, Scheduling's
+ * monthly release); writing the whole bundle back from a copy loaded when the
+ * screen opened let one screen's save silently undo another's change.
  */
-export async function updateProviderReleaseDay(
+export async function mergeProviderAutomationSettings(
   providerId: string,
-  releaseDay: number | null,
+  set: Partial<AutomationSettings>,
+  remove: (keyof AutomationSettings)[] = [],
 ): Promise<void> {
-  const { data, error: readError } = await supabase
-    .from("providers")
-    .select("automation_settings")
-    .eq("id", providerId)
-    .maybeSingle();
-  if (readError) throw readError;
-  const current = { ...((data?.automation_settings as Record<string, unknown> | null) ?? {}) };
-  if (releaseDay == null) delete current['scheduleReleaseDay'];
-  else current['scheduleReleaseDay'] = releaseDay;
-  const { error } = await supabase
-    .from("providers")
-    .update({ automation_settings: current })
-    .eq("id", providerId);
+  const { error } = await supabase.rpc("merge_provider_automation_settings", {
+    p_provider_id: providerId,
+    p_set: set,
+    p_remove: remove,
+  });
   if (error) throw error;
 }
 

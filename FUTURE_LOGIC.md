@@ -987,13 +987,17 @@ shipped, and where it differs from the design below:
   and Becca). Keep the two in step.
 - **The push is true when it's sent.** The cron still runs at 09:00 UTC, the
   release minute, and `process_follow_schedule_release_nudges()` now only
-  sends once `provider_last_bookable_date()` reaches next month. It names the
-  month ("… has opened bookings for December") and skips providers who aren't live. A time-only change to an existing booking past the horizon is no longer re-checked.
-- **One control** (point 3): Scheduling → "How far ahead clients can book" →
-  "Monthly release", with the day picker and a line saying what's open now and
-  when the next month opens. Automations lost its toggle (it still writes the
-  stored value back unchanged, because its save replaces the whole blob).
-  InfoReg's release-day row stays, with the same explanation.
+  sends once `provider_last_bookable_date()` reaches next month: "December has
+  opened up with … Get booking now." (the user's wording). It skips providers
+  who aren't live. A time-only change to an existing booking past the horizon
+  is no longer re-checked.
+- **One control, and nothing can overwrite it** (point 3): Scheduling → "How
+  far ahead clients can book" → "Monthly release" is the only editor, with the
+  day picker and a line saying what's open now and when the next month opens.
+  Automations lost its toggle; InfoReg shows the day read-only. Every screen
+  that touches `automation_settings` (Automations, Payments, Scheduling) now
+  saves only its own keys through `merge_provider_automation_settings`, so one
+  screen's save can't undo another's.
 - **The wall** (point 4): the client date picker says "Dates after … open on
   … at …" when the week runs past it. The provider-side line is in Scheduling,
   not Working Hours.

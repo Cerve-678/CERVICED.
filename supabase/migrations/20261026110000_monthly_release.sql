@@ -33,7 +33,10 @@
 --                                       days for a 3-day window, matching what
 --                                       the trigger has always accepted)
 --   process_follow_schedule_release_nudges (live providers only; sends only
---                                       once next month is open; names it)
+--                                       once next month is open; "December
+--                                       has opened up … Get booking now.")
+-- Adds merge_provider_automation_settings (section 5), so settings screens
+-- change only their own keys instead of writing the whole bundle back.
 --
 -- Existing bookings are untouched: before_booking_enforce_bookability only
 -- fires on INSERT or a change of date/time/provider. Live at authoring: 3
@@ -421,10 +424,9 @@ BEGIN
     VALUES (
       r.user_id,
       'announcement',
-      COALESCE(r.display_name, 'Your provider') || ' — ' || v_next_month_name || ' is open',
-      -- Only what was checked: the month is bookable. Whether any time in it
-      -- is still free isn't, so no "before it fills up".
-      COALESCE(r.display_name, 'Your provider') || ' has opened bookings for ' || v_next_month_name || '.',
+      -- Wording chosen by the user (2026-10-29).
+      COALESCE(r.display_name, 'Your provider') || ' — ' || v_next_month_name || ' has opened up',
+      v_next_month_name || ' has opened up with ' || COALESCE(r.display_name, 'your provider') || '. Get booking now.',
       'low',
       TRUE,
       r.provider_id,
@@ -433,6 +435,40 @@ BEGIN
   END LOOP;
 END;
 $function$;
+
+-- ── 5. settings screens change only their own keys ──────────────────────────
+-- automation_settings is one JSON bundle edited from several screens
+-- (Automations, Payments, Scheduling's release day). Each used to write the
+-- whole bundle back from a copy loaded when the screen opened, so saving one
+-- screen could silently undo a change made in another. This changes only the
+-- named keys, in one statement, so there's nothing stale to write back.
+-- SECURITY INVOKER: the providers RLS still applies, and the owner check is
+-- explicit too.
+CREATE OR REPLACE FUNCTION public.merge_provider_automation_settings(
+  p_provider_id uuid,
+  p_set jsonb,
+  p_remove text[] DEFAULT '{}'
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  UPDATE public.providers
+     SET automation_settings =
+           (COALESCE(automation_settings, '{}'::jsonb) - COALESCE(p_remove, '{}'::text[]))
+           || COALESCE(p_set, '{}'::jsonb)
+   WHERE id = p_provider_id
+     AND user_id = auth.uid();
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Provider not found, or not yours to change';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.merge_provider_automation_settings(uuid, jsonb, text[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.merge_provider_automation_settings(uuid, jsonb, text[]) TO authenticated;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
 VALUES ('20261026110000', 'monthly_release')

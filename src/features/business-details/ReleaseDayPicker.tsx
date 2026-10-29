@@ -17,16 +17,12 @@ interface ReleaseDayPickerProps {
   borderColor: string;
   onSelect: (day: number) => void;
   onClose: () => void;
-  /** Show an action that unsets the day entirely (back to a rolling
-   *  window). Callers that reach this picker from a separate choice don't
-   *  need it; the one that uses the picker AS the control does, or there's no
-   *  way back to "no release day" once a day has been tapped. */
-  allowClear?: boolean;
-  onClear?: () => void;
 }
 
 /** Chooses the monthly release day: next month opens for booking on this day
- *  (utils/bookingHorizon), and followers with the bell on are told.
+ *  (utils/bookingHorizon), and followers with the bell on are told. Its one
+ *  caller is SchedulingScreen — the release day's only editor; choosing a
+ *  rolling window there is how it's cleared.
  *
  *  A native single-column wheel (UIPickerView on iOS, Spinner on Android) with
  *  our own labels, rather than a date picker. The value is a monthly
@@ -43,8 +39,6 @@ export function ReleaseDayPicker({
   borderColor,
   onSelect,
   onClose,
-  allowClear = false,
-  onClear,
 }: ReleaseDayPickerProps) {
   return (
     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
@@ -81,15 +75,6 @@ export function ReleaseDayPicker({
               <Picker.Item key={day} label={`${ordinalSuffix(day)} of the month`} value={day} color={textColor} />
             ))}
           </Picker>
-          {allowClear && onClear && (
-            <TouchableOpacity
-              style={styles.releasePickerClearButton}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClear(); onClose(); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.releasePickerClearText, { color: subColor }]}>No release day — use a rolling window</Text>
-            </TouchableOpacity>
-          )}
           <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}>
             <Text style={styles.releasePickerDoneText}>Done</Text>
           </TouchableOpacity>
@@ -154,18 +139,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 10,
     marginBottom: 18,
-  },
-  releasePickerClearButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginTop: 14,
-  },
-  releasePickerClearText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 13,
-    textDecorationLine: 'underline',
   },
   releasePickerDoneButton: {
     borderRadius: 15,

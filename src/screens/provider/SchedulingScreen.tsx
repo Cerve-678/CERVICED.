@@ -38,9 +38,9 @@ import {
   updateProviderScheduleSettings,
   updateProviderMaxBookingsPerDay,
   updateProviderRequestSettings,
-  updateProviderReleaseDay,
+  mergeProviderAutomationSettings,
 } from '../../services/databaseService';
-import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
 import { lastBookableDate, nextReleaseMoment, toReleaseDay } from '../../utils/bookingHorizon';
 import { formatShortDayDate, formatTime12, ordinalSuffix } from '../../utils/dateUtils';
 import {
@@ -187,7 +187,11 @@ export default function SchedulingScreen({ navigation }: any) {
 
         updateProviderMaxBookingsPerDay(providerId, capInt),
 
-        updateProviderReleaseDay(providerId, releaseDay),
+        // Only the release day — the rest of automation_settings belongs to
+        // Automations and Payments.
+        releaseDay != null
+          ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: releaseDay })
+          : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']),
 
         updateProviderRequestSettings(providerId, {
           allow_out_of_hours_requests:  allowOutOfHours,

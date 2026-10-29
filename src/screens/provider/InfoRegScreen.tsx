@@ -77,7 +77,6 @@ import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
-import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
@@ -2922,7 +2921,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [mountedPages, setMountedPages] = useState<ReadonlySet<number>>(
     () => new Set([0]),
   );
-  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
   // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
   // moved to Business Profile → Policies. handleSubmit still writes this
@@ -4686,40 +4684,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
-              <View
-                style={styles.inputGroup}
-                ref={registerField('scheduleReleaseDay')}
-              >
-                {/* Same setting as SchedulingScreen's "Monthly release"
-                    booking-window choice — both read/write
-                    providers.automation_settings.scheduleReleaseDay. A day
-                    set here REPLACES the rolling booking window (see
-                    utils/bookingHorizon and provider_last_bookable_date), and
-                    the client-facing profile's "New slots drop on the Nth"
-                    pill is computed live from the same value. */}
-                {/* One control, not a switch plus a hidden picker. The switch
-                    only ever meant "is a day set", and flipping it on guessed
-                    today's date — a real value the provider never chose, which
-                    then had to be corrected in the picker underneath. Now the
-                    row IS the picker: tap it, choose a day (it opens on today
-                    when nothing is set yet), and choosing "No release day" in
-                    there is what clears it. */}
+              {/* Read-only here on purpose: the monthly release day is a
+                  booking rule with one editor, SchedulingScreen ("How far
+                  ahead clients can book" → Monthly release), so no other
+                  screen can save over it. */}
+              <View style={styles.inputGroup}>
                 <View style={styles.toggleInfo}>
                   <Text style={styles.toggleLabel}>Monthly Release Day</Text>
-                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.releaseDayBtn}
-                  onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.releaseDayBtnText}>
+                  <Text style={styles.toggleHint}>
                     {providerData.scheduleReleaseDay != null
-                      ? `Day ${providerData.scheduleReleaseDay} of every month`
-                      : 'Choose a day'}
+                      ? `The ${ordinalSuffix(providerData.scheduleReleaseDay)} of every month. `
+                      : 'Not set — clients book a rolling window ahead. '}
+                    Change it in Scheduling, under How far ahead clients can book.
                   </Text>
-                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
-                </TouchableOpacity>
+                </View>
               </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
@@ -5756,20 +5734,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          <ReleaseDayPicker
-            visible={releaseDayPickerVisible}
-            value={providerData.scheduleReleaseDay ?? new Date().getDate()}
-            accentColor={adaptiveAccentColor}
-            cardColor={editTheme.card}
-            textColor={editTheme.text}
-            subColor={editTheme.sub}
-            borderColor={editTheme.border}
-            allowClear
-            onClear={() => setProviderData(prev => ({ ...prev, scheduleReleaseDay: null }))}
-            onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
-            onClose={() => setReleaseDayPickerVisible(false)}
-          />
-
           {/* Reuses the same read-only Terms content shown from account
               settings — no separate copy to keep in sync. */}
           <Modal visible={showTermsModal} animationType="slide" transparent={false} onRequestClose={() => setShowTermsModal(false)}>
@@ -6559,8 +6523,8 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
 
   // ── Location picker ──
   // The city trigger deliberately matches profileInputBox's quiet tonal fill
-  // rather than releaseDayBtn's bordered pill, so it reads as the Location
-  // field itself (which it replaces) and not as a button sitting beside one.
+  // rather than a bordered pill, so it reads as the Location field itself
+  // (which it replaces) and not as a button sitting beside one.
   locationSelectRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -8344,24 +8308,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontWeight: '600',
     color: fg(0.6),
     marginTop: 1,
-  },
-
-  releaseDayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: edge(0.12),
-    backgroundColor: surf(0.04),
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 10,
-  },
-  releaseDayBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: fg(0.75),
   },
 
 
