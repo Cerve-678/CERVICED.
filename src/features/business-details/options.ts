@@ -374,7 +374,7 @@ export function providerTravelsToClient(type: BusinessType | null | undefined): 
 }
 
 export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string; sub: string }[] = [
-  { value: 'always',            label: 'Always visible',  sub: 'Your full address shows on your profile to anyone using CERVICED, and on every booking.' },
+  { value: 'always',            label: 'Always visible',  sub: 'Your full address shows in the Contact section of your profile.' },
   { value: 'on_confirmation',   label: 'On confirmation', sub: 'Shared automatically when the booking is confirmed.' },
   { value: 'day_before',        label: '24h before',      sub: 'Shared automatically 24 hours before the appointment.' },
   { value: 'two_days_before',   label: '48h before',      sub: 'Shared automatically 48 hours before the appointment.' },
