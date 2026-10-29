@@ -620,6 +620,11 @@ export interface DbBooking {
   booking_date: string; // 'YYYY-MM-DD'
   booking_time: string; // 'HH:MM:SS'
   end_time: string | null;
+  /** 'YYYY-MM-DDTHH:MM:SS', padded with the booking's own buffers by the
+   *  compute_booking_effective_range trigger. bookings_no_overlap compares
+   *  these, not the raw times. Optional: only `select('*')` reads carry it. */
+  effective_start?: string | null;
+  effective_end?: string | null;
   notes: string | null;
   booking_instructions: string | null;
   payment_type: PaymentType;
