@@ -2876,10 +2876,14 @@ async function sendProviderClientNotifications(
   return data ?? 0;
 }
 
+/** Cap on one promotion's bell-follower fan-out, so a send can't pull an
+ *  unbounded list. Far above any provider's follower count today. */
+const PROMOTION_FOLLOWER_AUDIENCE_LIMIT = 5000;
+
 /** Send in-app promotion notifications to a provider's clients */
 export async function sendPromotionNotificationsToClients(
   promotion: import("../types/database").DbPromotion,
-  audience: "all" | "repeat" | "bookmarked" | "interested",
+  audience: "all" | "repeat" | "followers" | "interested",
 ): Promise<{ sent: number }> {
   const {
     data: { user },
@@ -2900,8 +2904,9 @@ export async function sendPromotionNotificationsToClients(
   let userIds: string[] = [];
 
   if (audience === "interested") {
-    // This provider's own audience: bookmarked, followed, or previously
-    // booked THIS provider. Never reaches other providers' clients, even
+    // This provider's own audience: bell followers, or clients who
+    // previously booked THIS provider. Saving a provider is just a list and
+    // isn't included. Never reaches other providers' clients, even
     // ones into the same service category — promotions stay per-provider.
     // See supabase/promotion_interest_targeting.sql for the definition.
     const { data, error } = await supabase.rpc("get_promotion_audience", {
@@ -2909,12 +2914,16 @@ export async function sendPromotionNotificationsToClients(
     });
     if (error) throw error;
     userIds = (data ?? []).map((r: any) => r.user_id);
-  } else if (audience === "bookmarked") {
-    const { data } = await supabase
-      .from("bookmarks")
+  } else if (audience === "followers") {
+    // Bell followers — the bell is the switch for a provider's updates.
+    const { data, error } = await supabase
+      .from("provider_follows")
       .select("user_id")
-      .eq("provider_id", provider.id);
-    userIds = (data ?? []).map((r: any) => r.user_id);
+      .eq("provider_id", provider.id)
+      .eq("notify_enabled", true)
+      .limit(PROMOTION_FOLLOWER_AUDIENCE_LIMIT);
+    if (error) throw error;
+    userIds = (data ?? []).map((r: { user_id: string }) => r.user_id);
   } else {
     const { data } = await supabase
       .from("bookings")
