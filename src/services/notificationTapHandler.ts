@@ -158,6 +158,14 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Failed payout (provider-only) ────────────────────────────────────────────
+  // The fix is on Payments (Stripe account, bank details), not on the booking.
+  if (type === 'payout_failed') {
+    if (isProvider) navigateNested('ProviderHome', 'Payments');
+    else openNotifications();
+    return;
+  }
+
   // ── Intake form types (provider-only) ────────────────────────────────────────
   if (type === 'intake_form_reminder' || type === 'intake_form_completed') {
     if (isProvider && booking_id) {

@@ -249,7 +249,7 @@ describe('notification preferences gate the push', () => {
 
   it('never lets a provider mute what needs their answer', () => {
     const muted = new Set(providerMap().map(entry => entry.type));
-    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed']) {
+    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed', 'payout_failed']) {
       expect(muted).not.toContain(type);
     }
   });
