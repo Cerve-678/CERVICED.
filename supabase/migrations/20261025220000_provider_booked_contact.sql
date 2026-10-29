@@ -31,7 +31,9 @@
 -- applied service search above it (the second time at exactly 20261025130000).
 -- Then 20261025140000, which clashed with the reschedule payout migration
 -- (#168, claimed first), so moved again on 2026-10-26 to 20261025150000.
--- Frontier now 20261025130000. Re-check max(version) before applying.
+-- Then cerviced-74 applied 145000 and 210000-212000 above it, so moved again
+-- on 2026-10-29 to 20261025220000 (below cerviced-14's 20261026100000+).
+-- Frontier now 20261025212000. Re-check max(version) before applying.
 -- Redefines nothing. The file records its own version.
 -- ============================================================
 
@@ -99,7 +101,7 @@ REVOKE ALL ON FUNCTION public.get_booked_client_contact(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_booked_client_contact(uuid) TO authenticated;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261025150000', 'provider_booked_contact')
+VALUES ('20261025220000', 'provider_booked_contact')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
