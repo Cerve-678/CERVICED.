@@ -1219,3 +1219,36 @@ Confirm Your Details if the client goes back to the cart tab themselves.
 Closing this needs the address page to intercept back when it was opened
 from checkout (`usePreventRemove`, or a `BackHandler` plus
 `gestureEnabled: false`).
+
+---
+
+## 26. Payouts after a reschedule or refund: four gaps, ranked (2026-10-25)
+
+Found while checking `PAYMENTS_AND_LOGIC.md` §9. Ranked most important first.
+Items 1 and 2 stop money going wrong; items 3 and 4 deal with it once it has.
+
+1. **DONE 2026-10-29: a moved booking moves its payout.** A booking moved
+   from 5 Nov to 20 Nov used to pay the provider around 6 Nov, before the
+   work. The payout now moves by the same amount, earlier or later. Migration
+   `20261025140000` applied by the user and verified live; PR #168 to merge.
+2. **Rescheduling must not dodge a late-cancel charge.** *Decided, not
+   built.* A client already too late to cancel for free can reschedule
+   (reschedule notice is a separate, often looser setting), then cancel the
+   new date for a full refund, because `apply-cancellation-refund` only looks
+   at the current date. Decided: if they rescheduled while already inside the
+   cancellation window, the provider's late-cancel rule still applies, as if
+   they'd cancelled on the original date. Anyone who reschedules in good time
+   is unaffected. Needs a record of "rescheduled while late" on the booking,
+   the refund function to read it, and the client told before they confirm
+   the reschedule. Run `cerviced-legal-flagger` because this is refund policy.
+3. **Tell providers when they owe money.** *Built on PR #181, not live.*
+   One notice when the debt is recorded ("£30.00 will come out of your next
+   payments") and one each time a payout pays some off ("£15.00 went towards
+   what you owe"). Both always push.
+4. **Late/no-show fee payouts pay off that debt.** *Built on PR #181, not
+   live.* Decided 2026-10-29: Option A, tell them and then take it
+   automatically, with no pay-back button. All of a payout goes towards the
+   debt if it's less than what's owed; only what's owed if it's more. A
+   provider who never earns again on the app is never recovered from
+   automatically. To go live: apply migration `20261029120000`, then deploy
+   `release-payouts`, `booking-fee` and `stripe-webhook`.
