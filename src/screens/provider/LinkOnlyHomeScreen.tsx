@@ -35,6 +35,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppDialog } from '../../components/AppDialog';
 import {
@@ -61,7 +62,7 @@ import {
 } from '../../features/providers/linkOnlyDashboard';
 import { displayExternalBookingUrl, openExternalBookingPage } from '../../features/providers/externalBookingLink';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
-import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV } from '../../utils/dateUtils';
+import { dayName, monthName } from '../../utils/dateUtils';
 import type { DbProvider } from '../../types/database';
 import {
   buildLinkOnlyGoLiveSteps,
@@ -82,6 +83,7 @@ const NOT_LIVE = '#B07A3C';
 export default function LinkOnlyHomeScreen() {
   const navigation = useNavigation<Nav>();
   const { palette } = useTheme();
+  const { t, tp } = useTranslation();
   const { user } = useAuth();
   const { showToast, DialogHost } = useAppDialog();
   const P = useMemo(
@@ -218,7 +220,7 @@ export default function LinkOnlyHomeScreen() {
   const now = new Date();
   const firstName = user?.name?.trim().split(/\s+/)[0] ?? '';
   const hoursLabel = status ? todayHoursLabel(status.hours, now) : null;
-  const dateLine = `${DAY_NAMES_ABBREV[now.getDay()]} ${now.getDate()} ${MONTH_NAMES_ABBREV[now.getMonth()]}${hoursLabel ? ` · ${hoursLabel}` : ''}`;
+  const dateLine = `${dayName(now.getDay(), 'short')} ${now.getDate()} ${monthName(now.getMonth(), 'short')}${hoursLabel ? ` · ${hoursLabel}` : ''}`;
 
   const strength = useMemo(() => {
     if (!status || !profile || specialityCount == null) return null;
@@ -262,16 +264,16 @@ export default function LinkOnlyHomeScreen() {
       await openExternalBookingPage(profile.external_booking_url);
     } catch (error) {
       logger.error('[LinkOnlyHome] booking link did not open', error);
-      showToast("Your booking link didn't open. Check it in Business Info.", 'error');
+      showToast(tr('providerProfile.home.linkFailed'), 'error');
     }
   }, [profile?.external_booking_url, showToast]);
 
   const latest = enquiries?.latest;
   const enquiryPreview = latest?.message
-    ? `${latest.clientName?.trim().split(/\s+/)[0] ?? 'A client'}: ${latest.message}`
+    ? `${latest.clientName?.trim().split(/\s+/)[0] ?? t('providerProfile.home.aClient')}: ${latest.message}`
     : enquiries
-      ? 'All caught up'
-      : 'Questions from your profile';
+      ? t('providerProfile.home.allCaughtUp')
+      : t('providerProfile.home.questions');
 
   return (
     <ThemedBackground>
@@ -288,14 +290,14 @@ export default function LinkOnlyHomeScreen() {
               {status && (
                 <View style={styles.liveLine}>
                   <View style={[styles.liveDot, { backgroundColor: live ? UP : NOT_LIVE }]} />
-                  <Text style={styles.liveText}>{live ? 'Live on CERVICED' : 'Not live yet'}</Text>
+                  <Text style={styles.liveText}>{live ? t('providerProfile.home.live') : t('providerProfile.home.notLive')}</Text>
                 </View>
               )}
             </View>
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Notifications'); }}
               style={styles.iconButton}
-              accessibilityLabel="Notifications"
+              accessibilityLabel={t('providerProfile.home.notificationsA11y')}
               accessibilityRole="button"
             >
               <Ionicons name="notifications-outline" size={18} color={P.sub} />
@@ -313,19 +315,19 @@ export default function LinkOnlyHomeScreen() {
 
           {loadFailed && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Couldn't load your profile</Text>
-              <Text style={styles.body}>Check your connection and pull back to this screen to try again.</Text>
+              <Text style={styles.cardTitle}>{t('providerProfile.home.loadFailed')}</Text>
+              <Text style={styles.body}>{t('providerProfile.home.loadFailedBody')}</Text>
             </View>
           )}
 
           {hasRow === false && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Set up your profile</Text>
+              <Text style={styles.cardTitle}>{t('providerProfile.home.setupTitle')}</Text>
               <Text style={styles.body}>
-                Add your logo, a few lines about you, your booking link and some photos of your work — then clients can find you and book on your page.
+                {t('providerProfile.home.setupBody')}
               </Text>
               <TouchableOpacity style={styles.primary} onPress={() => navigation.navigate('EditProfile')} activeOpacity={0.85}>
-                <Text style={styles.primaryText}>Get started</Text>
+                <Text style={styles.primaryText}>{t('providerProfile.home.getStarted')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -333,8 +335,8 @@ export default function LinkOnlyHomeScreen() {
           {status && !live && (
             <View style={styles.card}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>Go live in {steps.length} steps</Text>
-                <Text style={styles.count}>{doneCount} of {steps.length}</Text>
+                <Text style={styles.cardTitle}>{tp('providerProfile.home.goLiveSteps', steps.length)}</Text>
+                <Text style={styles.count}>{t('providerProfile.home.doneOf', { done: doneCount, total: steps.length })}</Text>
               </View>
               <View style={styles.progress}>
                 {steps.map(step => (
@@ -361,7 +363,7 @@ export default function LinkOnlyHomeScreen() {
                   {!step.done && <Ionicons name="chevron-forward" size={16} color={P.sub} />}
                 </TouchableOpacity>
               ))}
-              <Text style={styles.footnote}>You won't appear in Search or Explore until all four are done.</Text>
+              <Text style={styles.footnote}>{t('providerProfile.home.goLiveFootnote')}</Text>
             </View>
           )}
 
@@ -372,27 +374,27 @@ export default function LinkOnlyHomeScreen() {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('LinkOnlyAnalytics'); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Book taps this week. Open analytics"
+                accessibilityLabel={t('providerProfile.home.tapsA11y')}
               >
                 <View>
-                  <Text style={styles.eyebrow}>Book taps this week</Text>
+                  <Text style={styles.eyebrow}>{t('providerProfile.home.tapsTitle')}</Text>
                   {weekFailed ? (
-                    <Text style={styles.body}>Couldn't load your numbers.</Text>
+                    <Text style={styles.body}>{t('providerProfile.home.numbersFailed')}</Text>
                   ) : !week ? (
                     <ActivityIndicator color={P.accent} style={styles.tileLoader} />
                   ) : (
                     <>
                       <Text style={styles.wideNum}>{week.comparison.thisWeek.bookTaps}</Text>
                       {tapsTrend ? (
-                        <Text style={[styles.trend, !tapsTrend.up && styles.trendDown]}>{tapsTrend.text} on last week</Text>
+                        <Text style={[styles.trend, !tapsTrend.up && styles.trendDown]}>{t('providerProfile.home.onLastWeek', { trend: tapsTrend.text })}</Text>
                       ) : (
-                        <Text style={styles.stepHint}>Clients sent to your page</Text>
+                        <Text style={styles.stepHint}>{t('providerProfile.home.tapsSub')}</Text>
                       )}
                     </>
                   )}
                 </View>
                 <View style={styles.wideRight}>
-                  <Text style={styles.count}>All analytics ›</Text>
+                  <Text style={styles.count}>{t('providerProfile.home.allAnalytics')}</Text>
                   {week && (
                     <View style={styles.bars}>
                       {week.bars.map((bar, index) => (
@@ -418,11 +420,11 @@ export default function LinkOnlyHomeScreen() {
                   onPress={openMessages}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={`${enquiries?.unread ?? 0} new enquiries. Open messages`}
+                  accessibilityLabel={t('providerProfile.home.enquiriesA11y', { count: enquiries?.unread ?? 0 })}
                 >
                   <Ionicons name="chatbubble-outline" size={20} color={P.onAccent} />
                   <Text style={[styles.tileNum, styles.onAccent]}>{enquiries ? enquiries.unread : '–'}</Text>
-                  <Text style={[styles.tileLabel, styles.onAccent]}>{enquiries?.unread === 1 ? 'New enquiry' : 'New enquiries'}</Text>
+                  <Text style={[styles.tileLabel, styles.onAccent]}>{enquiries?.unread === 1 ? t('providerProfile.home.newEnquiry') : t('providerProfile.home.newEnquiries')}</Text>
                   <Text style={[styles.tileSub, styles.onAccentSoft]} numberOfLines={1}>{enquiryPreview}</Text>
                 </TouchableOpacity>
                 <StatTile
@@ -430,9 +432,9 @@ export default function LinkOnlyHomeScreen() {
                   P={P}
                   icon="bookmark-outline"
                   value={week?.savers}
-                  label="Saved you"
+                  label={t('providerProfile.home.savedYou')}
                   // A running total, so the week shows as new saves, not a trend.
-                  sub={extras && extras.newSaversWeek > 0 ? `+${extras.newSaversWeek} this week` : 'Clients who saved you'}
+                  sub={extras && extras.newSaversWeek > 0 ? t('providerProfile.home.newThisWeek', { count: extras.newSaversWeek }) : t('providerProfile.home.savedYouSub')}
                   subUp={!!extras && extras.newSaversWeek > 0}
                 />
               </View>
@@ -444,7 +446,7 @@ export default function LinkOnlyHomeScreen() {
                   icon="eye-outline"
                   value={week?.comparison.thisWeek.profileViews}
                   before={week?.comparison.lastWeek.profileViews}
-                  label="Profile views"
+                  label={t('providerProfile.analytics.tile.views')}
                 />
                 <StatTile
                   styles={styles}
@@ -452,8 +454,8 @@ export default function LinkOnlyHomeScreen() {
                   icon="checkmark-done-outline"
                   value={extras?.saidBookedWeek}
                   before={extras?.saidBookedLastWeek}
-                  label="Said they booked"
-                  sub="Clients who tapped Book"
+                  label={t('providerProfile.home.saidBooked')}
+                  sub={t('providerProfile.home.saidBookedSub')}
                 />
               </View>
             </View>
@@ -463,7 +465,7 @@ export default function LinkOnlyHomeScreen() {
             <TouchableOpacity style={styles.beccaLine} onPress={openBecca} activeOpacity={0.85} accessibilityRole="button">
               <Ionicons name="sparkles" size={18} color={P.accent} />
               <Text style={[styles.body, styles.beccaText]}>
-                <Text style={styles.beccaName}>Becca: </Text>
+                <Text style={styles.beccaName}>{t('providerProfile.home.beccaPrefix')}</Text>
                 {beccaLine}
               </Text>
               <Ionicons name="chevron-forward" size={16} color={P.sub} />
@@ -475,13 +477,13 @@ export default function LinkOnlyHomeScreen() {
           {live && strength && nextStep && (
             <View style={styles.card}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>Profile strength</Text>
+                <Text style={styles.cardTitle}>{t('providerProfile.home.strength')}</Text>
                 <Text style={styles.percent}>{strength.percent}%</Text>
               </View>
-              <View style={styles.track} accessibilityLabel={`Profile ${strength.percent}% complete`}>
+              <View style={styles.track} accessibilityLabel={t('providerProfile.home.strengthA11y', { percent: strength.percent })}>
                 <View style={[styles.fill, { width: `${strength.percent}%` }]} />
               </View>
-              <StrengthRow styles={styles} P={P} item={nextStep} eyebrow="Next" onPress={() => goToStep(nextStep.key)} />
+              <StrengthRow styles={styles} P={P} item={nextStep} eyebrow={t('providerProfile.home.next')} onPress={() => goToStep(nextStep.key)} />
               {showAllSteps && restSteps.map(item => (
                 <StrengthRow key={item.key} styles={styles} P={P} item={item} onPress={() => goToStep(item.key)} />
               ))}
@@ -492,7 +494,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.7}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.count}>{showAllSteps ? 'Show less' : restLine}</Text>
+                  <Text style={styles.count}>{showAllSteps ? t('providerProfile.home.showLess') : restLine}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -503,8 +505,8 @@ export default function LinkOnlyHomeScreen() {
               <View style={styles.linkHead}>
                 <View style={styles.tileIcon}><Ionicons name="link-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>Your Book button</Text>
-                  <Text style={styles.stepHint} numberOfLines={1}>{bookingLink ?? 'No booking link yet'}</Text>
+                  <Text style={styles.cardTitle}>{t('providerProfile.home.bookButton')}</Text>
+                  <Text style={styles.stepHint} numberOfLines={1}>{bookingLink ?? t('providerProfile.home.noLink')}</Text>
                 </View>
               </View>
               <View style={styles.linkButtons}>
@@ -515,7 +517,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.outlineButtonText}>Test it</Text>
+                  <Text style={styles.outlineButtonText}>{t('providerProfile.home.testIt')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.softButton}
@@ -523,7 +525,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.outlineButtonText}>{bookingLink ? 'Change link' : 'Add link'}</Text>
+                  <Text style={styles.outlineButtonText}>{bookingLink ? t('providerProfile.home.changeLink') : t('providerProfile.home.addLink')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -533,26 +535,26 @@ export default function LinkOnlyHomeScreen() {
             <View style={[styles.card, styles.photoCard]}>
               <Image source={{ uri: extras.topPhoto.imageUrl }} style={styles.topPhoto} contentFit="cover" transition={0} />
               <View style={styles.flex}>
-                <Text style={styles.eyebrow}>Most-saved photo</Text>
-                <Text style={styles.cardTitle} numberOfLines={1}>{extras.topPhoto.label ?? 'Your work'}</Text>
+                <Text style={styles.eyebrow}>{t('providerProfile.home.topPhoto')}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1}>{extras.topPhoto.label ?? t('providerProfile.home.yourWork')}</Text>
                 <Text style={styles.stepHint}>
                   Saved {extras.topPhoto.saves === 1 ? 'once' : `${extras.topPhoto.saves} times`} in Explore
                 </Text>
                 <TouchableOpacity onPress={() => goToStep('photos')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button">
-                  <Text style={[styles.count, styles.photoLink]}>Add more like this</Text>
+                  <Text style={[styles.count, styles.photoLink]}>{t('providerProfile.home.addMoreLikeThis')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
 
           <View style={styles.shortcuts}>
-            <Shortcut styles={styles} P={P} icon="camera-outline" label="Add work" onPress={() => goToStep('portfolio')} />
-            <Shortcut styles={styles} P={P} icon="time-outline" label="Hours" onPress={() => goToStep('hours')} />
+            <Shortcut styles={styles} P={P} icon="camera-outline" label={t('providerProfile.home.addWork')} onPress={() => goToStep('portfolio')} />
+            <Shortcut styles={styles} P={P} icon="time-outline" label={t('providerProfile.home.hours')} onPress={() => goToStep('hours')} />
             <Shortcut
               styles={styles}
               P={P}
               icon="color-palette-outline"
-              label="Branding"
+              label={t('providerProfile.home.branding')}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Branding'); }}
             />
           </View>
@@ -564,7 +566,7 @@ export default function LinkOnlyHomeScreen() {
         onPress={openBecca}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel="Ask Becca"
+        accessibilityLabel={t('providerProfile.home.askBecca')}
       >
         <Ionicons name="sparkles" size={24} color={P.onAccent} />
       </TouchableOpacity>

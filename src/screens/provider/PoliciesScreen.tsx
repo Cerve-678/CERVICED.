@@ -48,6 +48,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import TermsScreen from '../shared/TermsScreen';
 import { getMyProviderProfile } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -150,6 +151,7 @@ const pSt = StyleSheet.create({
 export default function PoliciesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = useBusinessPalette();
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -199,7 +201,7 @@ export default function PoliciesScreen({ navigation }: any) {
         setCarriedPolicies(carried);
       } catch {
         setLoadFailed(true);
-        flash('Could not load your policies', 'error');
+        flash(tr('providerProfile.policies.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -214,7 +216,7 @@ export default function PoliciesScreen({ navigation }: any) {
     if (!userId) return;
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
+      Alert.alert(tr('providerProfile.policies.permissionTitle'), tr('providerProfile.portfolio.permissionBody'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -232,7 +234,7 @@ export default function PoliciesScreen({ navigation }: any) {
       const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
       setPolicy('policyImageUrl', publicUrl);
     } catch (e: any) {
-      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
+      Alert.alert(tr('providerProfile.portfolio.uploadFailedTitle'), toUserMessage(e, tr('providerProfile.branding.uploadFailed'), 'PoliciesScreen.uploadPolicyImage'));
     } finally {
       setPolicyImageUploading(false);
     }
@@ -241,12 +243,12 @@ export default function PoliciesScreen({ navigation }: any) {
   const handleRemovePolicyImage = useCallback(() => setPolicy('policyImageUrl', ''), [setPolicy]);
 
   const handleSave = useCallback(async () => {
-    if (!userId) { flash('No provider profile found', 'error'); return; }
+    if (!userId) { flash(tr('providerProfile.common2.noProfile'), 'error'); return; }
     // See loadFailed above: writing without a successful read would replace
     // the stored blob with defaults.
-    if (loadFailed) { flash('Your policies could not be loaded — reopen this screen before saving', 'error'); return; }
+    if (loadFailed) { flash(tr('providerProfile.policies.loadedFailedSave'), 'error'); return; }
     if (![policies.lateFee, policies.noShowFee].every(isFeeAmount)) {
-      flash('Enter fees as pounds, like 10 or 12.50', 'error');
+      flash(tr('providerProfile.policies.feeFormat'), 'error');
       return;
     }
 
@@ -263,7 +265,7 @@ export default function PoliciesScreen({ navigation }: any) {
       navigation.goBack();
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(toUserMessage(e, 'Could not save your changes.', 'PoliciesScreen.save'), 'error');
+      flash(toUserMessage(e, tr('providerProfile.common2.saveFailed'), 'PoliciesScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -285,7 +287,7 @@ export default function PoliciesScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>Policies</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{t('providerProfile.businessDetails.policies.title')}</Text>
             <TouchableOpacity
               style={[s.closeBtn, { backgroundColor: C.surface }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -303,77 +305,77 @@ export default function PoliciesScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            <Card title="Cancellation" sub="What happens if a client cancels late.">
-              <SectionLabel text="Notice required" />
+            <Card title={t('providerProfile.policies.cancel.title')} sub={t('providerProfile.policies.cancel.sub')}>
+              <SectionLabel text={t('providerProfile.policies.noticeRequired')} />
               <Pills
-                options={[{ v: 'none', l: 'None' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
+                options={[{ v: 'none', l: t('providerProfile.policies.pill.none') }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
                 value={policies.cancelNotice}
                 onChange={v => setPolicy('cancelNotice', v)}
               />
-              <SectionLabel text="If cancelled late" />
+              <SectionLabel text={t('providerProfile.policies.cancel.ifLate')} />
               <Pills
-                options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'full', l: 'Full charge' }]}
+                options={[{ v: 'none', l: t('providerProfile.policies.pill.noPenalty') }, { v: 'deposit', l: t('providerProfile.policies.pill.depositKept') }, { v: 'full', l: t('providerProfile.policies.pill.fullCharge') }]}
                 value={policies.cancelPenalty}
                 onChange={v => setPolicy('cancelPenalty', v)}
               />
-              <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
+              <Field label={t('providerProfile.policies.noteOptional')} value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder={t('providerProfile.policies.cancel.notePlaceholder')} />
             </Card>
 
-            <Card title="Rescheduling" sub="How much notice, and how many reschedules you allow per booking.">
-              <SectionLabel text="Notice required" />
+            <Card title={t('providerProfile.policies.reschedule.title')} sub={t('providerProfile.policies.reschedule.sub')}>
+              <SectionLabel text={t('providerProfile.policies.noticeRequired')} />
               <Pills
-                options={[{ v: 'same_day', l: 'Same day' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
+                options={[{ v: 'same_day', l: t('providerProfile.policies.pill.sameDay') }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
                 value={policies.rescheduleNotice}
                 onChange={v => setPolicy('rescheduleNotice', v)}
               />
-              <SectionLabel text="Max reschedules per booking" />
+              <SectionLabel text={t('providerProfile.policies.reschedule.max')} />
               <Pills
-                options={[{ v: '1', l: '1' }, { v: '2', l: '2' }, { v: 'unlimited', l: 'Unlimited' }]}
+                options={[{ v: '1', l: '1' }, { v: '2', l: '2' }, { v: 'unlimited', l: t('providerProfile.policies.pill.unlimited') }]}
                 value={policies.maxReschedules}
                 onChange={v => setPolicy('maxReschedules', v)}
               />
-              <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
+              <Field label={t('providerProfile.policies.noteOptional')} value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
             </Card>
 
             {/* Deposits live on Business Profile → Payments now, not here. */}
-            <Card title="No-show">
-              <SectionLabel text="Action" />
+            <Card title={t('providerProfile.policies.noShow.title')}>
+              <SectionLabel text={t('providerProfile.policies.noShow.action')} />
               <Pills
                 options={[
-                  { v: 'none', l: 'No action' },
-                  { v: 'warn', l: 'Warn client' },
-                  { v: 'charge_deposit', l: 'Keep deposit' },
+                  { v: 'none', l: t('providerProfile.policies.pill.noAction') },
+                  { v: 'warn', l: t('providerProfile.policies.pill.warn') },
+                  { v: 'charge_deposit', l: t('providerProfile.policies.pill.keepDeposit') },
                 ]}
                 value={policies.noShowAction}
                 onChange={v => setPolicy('noShowAction', v)}
               />
               <Field
-                label="Grace period (minutes)"
+                label={t('providerProfile.policies.noShow.grace')}
                 value={policies.noShowGraceMinutes}
                 onChange={v => setPolicy('noShowGraceMinutes', v.replace(/[^0-9]/g, ''))}
-                placeholder="e.g. 15"
+                placeholder={t('providerProfile.policies.noShow.gracePlaceholder')}
                 keyboardType="phone-pad"
-                note="How long after the booked start time before you can mark a client No Show. 0 = no grace period."
+                note={t('providerProfile.policies.noShow.graceNote')}
               />
-              <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+              <Field label={t('providerProfile.policies.noteOptional')} value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
             </Card>
 
-            <Card title="Late & no-show fees" sub="Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to them at checkout. Each fee can be at most half the service price. Leave blank for no fee.">
+            <Card title={t('providerProfile.policies.fees.title')} sub={t('providerProfile.policies.fees.sub')}>
               <Field
-                label="Late arrival fee (£)"
+                label={t('providerProfile.policies.fees.late')}
                 value={policies.lateFee}
                 onChange={v => setPolicy('lateFee', v.replace(/[^0-9.]/g, ''))}
-                placeholder="e.g. 10"
+                placeholder={t('providerProfile.policies.fees.latePlaceholder')}
                 keyboardType="decimal-pad"
-                note="For arriving after your grace period above."
+                note={t('providerProfile.policies.fees.lateNote')}
               />
               <Field
-                label="No-show fee (£)"
+                label={t('providerProfile.policies.fees.noShow')}
                 value={policies.noShowFee}
                 onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
-                placeholder="e.g. 20"
+                placeholder={t('providerProfile.policies.fees.noShowPlaceholder')}
                 keyboardType="decimal-pad"
-                note="For not turning up. You mark the booking as a no-show first."
+                note={t('providerProfile.policies.fees.noShowNote')}
               />
             </Card>
 
@@ -381,22 +383,22 @@ export default function PoliciesScreen({ navigation }: any) {
                 refund-processing infra, so there is deliberately no
                 percentage/amount field here that would imply the app
                 calculates or enforces a refund automatically. */}
-            <Card title="Refund Policy" sub="Shown to clients on their booking (optional).">
+            <Card title={t('providerProfile.policies.refund.title')} sub={t('providerProfile.policies.refund.sub')}>
               <Field
-                label="Your refund policy"
+                label={t('providerProfile.policies.refund.label')}
                 value={policies.refundPolicyNote}
                 onChange={v => setPolicy('refundPolicyNote', v)}
-                placeholder='e.g. "Refunds considered case-by-case, contact me directly"'
+                placeholder={t('providerProfile.policies.refund.placeholder')}
                 multiline
               />
             </Card>
 
-            <Card title="Booking Instructions" sub="Shown to clients on every booking (optional).">
+            <Card title={t('providerProfile.policies.instructions.title')} sub={t('providerProfile.policies.instructions.sub')}>
               <Field
-                label="Instructions"
+                label={t('providerProfile.policies.instructions.label')}
                 value={policies.bookingInstructions}
                 onChange={v => setPolicy('bookingInstructions', v)}
-                placeholder='e.g. "Please arrive 10 minutes early", parking info…'
+                placeholder={t('providerProfile.policies.instructions.placeholder')}
                 multiline
               />
             </Card>
@@ -408,8 +410,8 @@ export default function PoliciesScreen({ navigation }: any) {
                 once the feature returns is safe meanwhile. */}
             {EMERGENCY_BOOKINGS_ENABLED && (
               <Card
-                title="Emergency Booking Policy"
-                sub="Shown to a client before they ask for a time outside your normal availability (optional). Separate from your Terms & Conditions."
+                title={t('providerProfile.policies.emergency.title')}
+                sub={t('providerProfile.policies.emergency.sub')}
               >
                 {/* Placeholder deliberately does NOT exemplify a surcharge or
                     any off-app payment term — the checkout flow doesn't read
@@ -419,16 +421,16 @@ export default function PoliciesScreen({ navigation }: any) {
                     emergency-surcharge note). Keep examples to availability
                     and process. */}
                 <Field
-                  label="Your emergency booking policy"
+                  label={t('providerProfile.policies.emergency.label')}
                   value={policies.emergencyBookingPolicy}
                   onChange={v => setPolicy('emergencyBookingPolicy', v)}
-                  placeholder="e.g. I only take out-of-hours requests from existing clients, and I need at least a day's notice to say yes"
+                  placeholder={t('providerProfile.policies.emergency.placeholder')}
                   multiline
                 />
               </Card>
             )}
 
-            <Card title="Detailed Policy Image" sub="Optional — shown as a pop-up on your profile, for anything too specific for the fields above (a full house-rules sheet, a consent form, etc).">
+            <Card title={t('providerProfile.policies.image.title')} sub={t('providerProfile.policies.image.sub')}>
               <View style={imgSt.grid}>
                 {policies.policyImageUrl ? (
                   <View style={imgSt.thumbWrap}>
@@ -455,7 +457,7 @@ export default function PoliciesScreen({ navigation }: any) {
                     ) : (
                       <>
                         <Text style={[imgSt.addPlus, { color: C.sub }]}>+</Text>
-                        <Text style={[imgSt.addText, { color: C.sub }]}>Add Image</Text>
+                        <Text style={[imgSt.addText, { color: C.sub }]}>{t('providerProfile.policies.image.add')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -464,7 +466,7 @@ export default function PoliciesScreen({ navigation }: any) {
               {policies.policyImageUrl ? (
                 <TouchableOpacity onPress={handlePickPolicyImage} disabled={policyImageUploading} style={{ marginTop: 10 }}>
                   <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: C.accent }}>
-                    {policyImageUploading ? 'UPLOADING…' : 'REPLACE PHOTO'}
+                    {policyImageUploading ? t('providerProfile.policies.image.uploading') : t('providerProfile.policies.image.replace')}
                   </Text>
                 </TouchableOpacity>
               ) : null}

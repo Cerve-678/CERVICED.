@@ -11,6 +11,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation } from '../../i18n';
 
 const LIGHT = {
   bg:      '#F5F1EC',
@@ -59,6 +60,7 @@ SettingsOption.displayName = 'SettingsOption';
 
 export default function BusinessProfileScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const P = isDarkMode ? DARK : LIGHT;
 
   return (
@@ -77,23 +79,23 @@ export default function BusinessProfileScreen({ navigation }: any) {
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: P.text }]}>Business Profile</Text>
-          <Text style={[styles.subtitle, { color: P.sub }]}>Manage how your business appears on Cerviced</Text>
+          <Text style={[styles.title, { color: P.text }]}>{t('providerProfile.businessProfile.title')}</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>{t('providerProfile.businessProfile.subtitle')}</Text>
 
           {/* Profile */}
           <View style={[styles.section, { backgroundColor: P.section }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{t('providerProfile.businessProfile.section.profile')}</Text>
             <SettingsOption
               icon="storefront"
-              title="Edit Profile"
-              subtitle="Services, portfolio, pricing & location"
+              title={t('providerProfile.businessProfile.edit.title')}
+              subtitle={t('providerProfile.businessProfile.edit.sub')}
               onPress={() => navigation.navigate('EditProfile')}
               P={P}
             />
             <SettingsOption
               icon="palette"
-              title="Branding & Style"
-              subtitle="Background image, gradient & accent colour"
+              title={t('providerProfile.businessProfile.branding.title')}
+              subtitle={t('providerProfile.businessProfile.branding.sub')}
               onPress={() => navigation.navigate('Branding')}
               P={P}
             />
@@ -101,32 +103,32 @@ export default function BusinessProfileScreen({ navigation }: any) {
 
           {/* Business Details */}
           <View style={[styles.section, { backgroundColor: P.section }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Details</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{t('providerProfile.businessDetails.title')}</Text>
             <SettingsOption
               icon="badge"
-              title="Business Details"
-              subtitle="Identity, practice, credentials & accessibility"
+              title={t('providerProfile.businessDetails.title')}
+              subtitle={t('providerProfile.businessProfile.details.sub')}
               onPress={() => navigation.navigate('BusinessDetails')}
               P={P}
             />
             <SettingsOption
               icon="payment"
-              title="Payments & payouts"
-              subtitle="Your money, booking payments & payment settings"
+              title={t('providerProfile.businessProfile.payments.title')}
+              subtitle={t('providerProfile.businessProfile.payments.sub')}
               onPress={() => navigation.navigate('Payments')}
               P={P}
             />
             <SettingsOption
               icon="chat-dots"
-              title="Communications"
-              subtitle="Messaging & notification preferences"
+              title={t('providerProfile.businessProfile.comms.title')}
+              subtitle={t('providerProfile.businessProfile.comms.sub')}
               onPress={() => navigation.navigate('Communications')}
               P={P}
             />
             <SettingsOption
               icon="auto-awesome"
-              title="Automations & Preferences"
-              subtitle="Reminders, business rules & booking automation"
+              title={t('providerProfile.businessProfile.automations.title')}
+              subtitle={t('providerProfile.businessProfile.automations.sub')}
               onPress={() => navigation.navigate('Automations')}
               P={P}
             />

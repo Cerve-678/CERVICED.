@@ -5,7 +5,7 @@
  * as zero. Dates are UK calendar days (the server buckets by Europe/London).
  */
 import type { DbProviderDailyStat } from '../../types/database';
-import { DAY_NAMES_ABBREV, dateToYMD } from '../../utils/dateUtils';
+import { dateToYMD, dayName } from '../../utils/dateUtils';
 
 export type LinkOnlyPeriod = '7d' | '30d' | 'all';
 
@@ -51,7 +51,7 @@ export function lastSevenDaysOfBookTaps(rows: readonly DbProviderDailyStat[], to
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() - (6 - index));
     const ymd = dateToYMD(d);
-    return { ymd, letter: (DAY_NAMES_ABBREV[d.getDay()] ?? '').charAt(0), value: byDay.get(ymd) ?? 0 };
+    return { ymd, letter: dayName(d.getDay(), 'short').charAt(0), value: byDay.get(ymd) ?? 0 };
   });
 }
 

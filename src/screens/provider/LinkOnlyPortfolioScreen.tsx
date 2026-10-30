@@ -27,6 +27,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   addPortfolioItem,
@@ -36,7 +37,7 @@ import {
   getProviderSpecialties,
   replaceMyProviderSpecialties,
 } from '../../services/databaseService';
-import { ALL_SERVICE_TYPE_OPTS, SPECIALTIES_MAP } from '../../features/business-details/options';
+import { ALL_SERVICE_TYPE_OPTS, SPECIALTIES_MAP, optionText } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import type { DbProvider } from '../../types/database';
 import type { LinkOnlyPortfolioStackParamList } from '../../navigation/types';
@@ -51,6 +52,7 @@ type Nav = NativeStackNavigationProp<LinkOnlyPortfolioStackParamList, 'LinkOnlyP
 
 export default function LinkOnlyPortfolioScreen() {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   const styles = useMemo(() => createStyles(P), [P]);
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
@@ -98,7 +100,7 @@ export default function LinkOnlyPortfolioScreen() {
     if (!user?.id || !providerId) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      Alert.alert(tr('providerProfile.portfolio.permissionTitle'), tr('providerProfile.portfolio.permissionBody'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -120,7 +122,7 @@ export default function LinkOnlyPortfolioScreen() {
           setPhotos(prev => [item, ...(prev ?? [])]);
         } catch (error) {
           logger.error('[LinkOnlyPortfolio] upload failed', error);
-          Alert.alert('Upload failed', toUserMessage(error, 'Could not upload one of those photos.', 'LinkOnlyPortfolio.add'));
+          Alert.alert(tr('providerProfile.portfolio.uploadFailedTitle'), toUserMessage(error, tr('providerProfile.portfolio.uploadFailed'), 'LinkOnlyPortfolio.add'));
         }
       }),
     );
@@ -142,7 +144,7 @@ export default function LinkOnlyPortfolioScreen() {
   const serviceTypeLabel = profile
     ? (profile.service_category === 'OTHER' && profile.custom_service_type
       ? profile.custom_service_type
-      : ALL_SERVICE_TYPE_OPTS.find(o => o.value === profile.service_category)?.label ?? '')
+      : optionText(ALL_SERVICE_TYPE_OPTS.find(o => o.value === profile.service_category)?.label ?? '', t))
     : '';
   const initials = (profile?.display_name ?? '')
     .split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
@@ -157,7 +159,7 @@ export default function LinkOnlyPortfolioScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error) {
       logger.error('[LinkOnlyPortfolio] specialities save failed', error);
-      Alert.alert('Could not save', toUserMessage(error, "Your specialities didn't save. Please try again.", 'LinkOnlyPortfolio.specialities'));
+      Alert.alert(tr('providerProfile.portfolio.saveFailedTitle'), toUserMessage(error, tr('providerProfile.portfolio.specialitiesFailed'), 'LinkOnlyPortfolio.specialities'));
     } finally {
       setSavingSpecialties(false);
     }
@@ -166,14 +168,14 @@ export default function LinkOnlyPortfolioScreen() {
   const handleRemove = useCallback((item: DbPortfolioItem) => {
     const isLast = (photos?.length ?? 0) <= 1;
     Alert.alert(
-      'Remove photo?',
+      tr('providerProfile.portfolio.removeTitle'),
       isLast
-        ? "It's your only photo — without one you'll stop appearing to clients until you add another."
-        : 'Clients will no longer see it on your profile.',
+        ? tr('providerProfile.portfolio.removeLastBody')
+        : tr('providerProfile.portfolio.removeBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr('providerProfile.common2.cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: tr('providerProfile.portfolio.remove'),
           style: 'destructive',
           onPress: async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -183,7 +185,7 @@ export default function LinkOnlyPortfolioScreen() {
             } catch (error) {
               setPhotos(prev => [item, ...(prev ?? [])]);
               logger.error('[LinkOnlyPortfolio] delete failed', error);
-              Alert.alert('Could not remove', toUserMessage(error, "That didn't save. Please try again.", 'LinkOnlyPortfolio.remove'));
+              Alert.alert(tr('providerProfile.portfolio.removeFailedTitle'), toUserMessage(error, tr('providerProfile.portfolio.removeFailed'), 'LinkOnlyPortfolio.remove'));
             }
           },
         },
@@ -195,19 +197,19 @@ export default function LinkOnlyPortfolioScreen() {
     <ThemedBackground>
       <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
-          <Text style={styles.title}>Portfolio</Text>
+          <Text style={styles.title}>{t('providerProfile.portfolio.title')}</Text>
           <TouchableOpacity
             style={[styles.addButton, (!providerId || uploading) && styles.disabled]}
             onPress={handleAdd}
             disabled={!providerId || uploading}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Add photos"
+            accessibilityLabel={t('providerProfile.portfolio.addA11y')}
           >
             {uploading ? <ActivityIndicator color={P.onAccent} /> : (
               <>
                 <Ionicons name="add" size={18} color={P.onAccent} />
-                <Text style={styles.addText}>Add</Text>
+                <Text style={styles.addText}>{t('providerProfile.portfolio.add')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -215,7 +217,7 @@ export default function LinkOnlyPortfolioScreen() {
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}>
           {profile && (
             <>
-              <Text style={styles.sectionLabel}>How clients see you</Text>
+              <Text style={styles.sectionLabel}>{t('providerProfile.portfolio.howClientsSee')}</Text>
               <TouchableOpacity
                 style={styles.previewCard}
                 onPress={() => {
@@ -224,7 +226,7 @@ export default function LinkOnlyPortfolioScreen() {
                 }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Open your profile as clients see it"
+                accessibilityLabel={t('providerProfile.portfolio.openPreviewA11y')}
               >
                 <View style={styles.previewTop}>
                   {profile.logo_url ? (
@@ -243,7 +245,7 @@ export default function LinkOnlyPortfolioScreen() {
                 </View>
                 <View style={styles.previewActions}>
                   <View style={styles.previewBook}>
-                    <Text style={styles.addText}>Book</Text>
+                    <Text style={styles.addText}>{t('providerProfile.portfolio.book')}</Text>
                   </View>
                   {!!profile.instagram && (
                     <View style={styles.previewIcon}>
@@ -255,7 +257,7 @@ export default function LinkOnlyPortfolioScreen() {
                   </View>
                 </View>
                 <View style={styles.previewFooter}>
-                  <Text style={styles.cardAction}>Open full preview</Text>
+                  <Text style={styles.cardAction}>{t('providerProfile.portfolio.openPreview')}</Text>
                   <Ionicons name="chevron-forward" size={16} color={P.accent} />
                 </View>
               </TouchableOpacity>
@@ -264,7 +266,7 @@ export default function LinkOnlyPortfolioScreen() {
           {providerId && !failed && photos != null && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Your specialities</Text>
+                <Text style={styles.cardTitle}>{t('providerProfile.portfolio.specialities')}</Text>
                 {draftSpecialties == null ? (
                   <TouchableOpacity
                     onPress={() => { Haptics.selectionAsync().catch(() => {}); setDraftSpecialties(specialties); }}
@@ -282,12 +284,12 @@ export default function LinkOnlyPortfolioScreen() {
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     accessibilityRole="button"
                   >
-                    <Text style={styles.cardActionMuted}>Cancel</Text>
+                    <Text style={styles.cardActionMuted}>{t('providerProfile.common2.cancel')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
               <Text style={styles.cardSub}>
-                Clients find you by these in Search, and they show on your profile.
+                {t('providerProfile.portfolio.specialitiesSub')}
               </Text>
               {draftSpecialties == null ? (
                 specialties.length ? (
@@ -299,7 +301,7 @@ export default function LinkOnlyPortfolioScreen() {
                     ))}
                   </View>
                 ) : (
-                  <Text style={styles.cardSub}>None yet — add a few so clients searching for them find you.</Text>
+                  <Text style={styles.cardSub}>{t('providerProfile.portfolio.specialitiesNone')}</Text>
                 )
               ) : (
                 <>
@@ -309,7 +311,7 @@ export default function LinkOnlyPortfolioScreen() {
                     onChange={setDraftSpecialties}
                     options={specialtyOptions}
                     palette={P}
-                    placeholder="Search specialities"
+                    placeholder={t('providerProfile.portfolio.searchSpecialities')}
                   />
                   <TouchableOpacity
                     style={[styles.saveButton, savingSpecialties && styles.disabled]}
@@ -320,27 +322,27 @@ export default function LinkOnlyPortfolioScreen() {
                   >
                     {savingSpecialties
                       ? <ActivityIndicator color={P.onAccent} />
-                      : <Text style={styles.addText}>Save specialities</Text>}
+                      : <Text style={styles.addText}>{t('providerProfile.portfolio.saveSpecialities')}</Text>}
                   </TouchableOpacity>
                 </>
               )}
             </View>
           )}
           <View style={styles.photosHeading}>
-            <Text style={styles.cardTitle} accessibilityRole="header">Portfolio</Text>
-            <Text style={styles.sub}>Your work shows on your profile and in Explore.</Text>
+            <Text style={styles.cardTitle} accessibilityRole="header">{t('providerProfile.portfolio.title')}</Text>
+            <Text style={styles.sub}>{t('providerProfile.portfolio.sub')}</Text>
           </View>
           {failed ? (
-            <Text style={styles.sub}>Couldn't load your photos. Come back to this tab to try again.</Text>
+            <Text style={styles.sub}>{t('providerProfile.portfolio.loadFailed')}</Text>
           ) : photos == null ? (
             <ActivityIndicator color={P.accent} style={styles.loader} />
           ) : !providerId ? (
-            <Text style={styles.sub}>Save your profile first (Home → Get started), then add photos here.</Text>
+            <Text style={styles.sub}>{t('providerProfile.portfolio.saveProfileFirst')}</Text>
           ) : photos.length === 0 ? (
             <TouchableOpacity style={styles.empty} onPress={handleAdd} activeOpacity={0.85}>
               <Ionicons name="images-outline" size={28} color={P.accent} />
-              <Text style={styles.emptyTitle}>Add your best work</Text>
-              <Text style={styles.sub}>At least one photo is needed before clients can find you.</Text>
+              <Text style={styles.emptyTitle}>{t('providerProfile.portfolio.emptyTitle')}</Text>
+              <Text style={styles.sub}>{t('providerProfile.portfolio.emptySub')}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.grid}>
@@ -351,13 +353,13 @@ export default function LinkOnlyPortfolioScreen() {
                   delayLongPress={300}
                   activeOpacity={0.9}
                   style={{ width: tileSize, height: tileSize }}
-                  accessibilityLabel="Portfolio photo. Long-press to remove."
+                  accessibilityLabel={t('providerProfile.portfolio.photoA11y')}
                 >
                   <Image source={{ uri: item.image_url }} style={styles.photo} contentFit="cover" transition={0} />
                   <TouchableOpacity
                     style={styles.removeBadge}
                     onPress={() => handleRemove(item)}
-                    accessibilityLabel="Remove photo"
+                    accessibilityLabel={t('providerProfile.portfolio.removeA11y')}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons name="close" size={13} color="#FFFFFF" />

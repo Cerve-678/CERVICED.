@@ -28,6 +28,7 @@ import { withAlpha } from '../../constants/providerThemes';
 import * as Haptics from 'expo-haptics';
 import type { MyServiceDraft } from '../../services/databaseService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { useTranslation, tr } from '../../i18n';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -76,14 +77,14 @@ export const EMPTY_SERVICE_VALUE: ServiceEditorValue = {
 /** Null when the value is usable; otherwise the reason, phrased for the
  *  provider rather than for the column that would reject it. */
 function validateServiceValue(value: ServiceEditorValue): string | null {
-  if (!value.name.trim()) return 'Give the service a name.';
+  if (!value.name.trim()) return tr('providerProfile.serviceEditor.nameRequired');
   const price = Number(value.price);
-  if (!Number.isFinite(price) || price < 0) return 'Enter a price, or 0 if it varies.';
+  if (!Number.isFinite(price) || price < 0) return tr('providerProfile.serviceEditor.priceRequired');
   const duration = Number(value.duration);
   // A zero-length service is what made bookings look like they occupied no
   // time at all and never clash with anything — see the schedule-issues work.
   if (!Number.isInteger(duration) || duration <= 0) {
-    return 'Enter how many minutes it takes.';
+    return tr('providerProfile.serviceEditor.durationRequired');
   }
   return null;
 }
@@ -118,6 +119,7 @@ export default function ServiceEditorSheet({
   onClose: () => void;
 }) {
   const bottomInset = useSystemBottomInset();
+  const { t } = useTranslation();
   const [value, setValue] = useState<ServiceEditorValue>(initial);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,7 +159,7 @@ export default function ServiceEditorSheet({
                 {categoryName.toUpperCase()}
               </Text>
               <Text style={[styles.title, { color: palette.text }]}>
-                {isNew ? 'New service' : 'Edit service'}
+                {isNew ? t('providerProfile.serviceEditor.newTitle') : t('providerProfile.serviceEditor.editTitle')}
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -174,15 +176,15 @@ export default function ServiceEditorSheet({
               >
                 <View style={styles.visibilityText}>
                   <Text style={[styles.visibilityTitle, { color: palette.text }]}>
-                    {value.isActive ? 'On your menu' : 'Hidden from clients'}
+                    {value.isActive ? t('providerProfile.serviceEditor.onMenu') : t('providerProfile.serviceEditor.hidden')}
                   </Text>
                   <Text style={[styles.visibilityHint, { color: palette.sub }]}>
                     {/* Only what hiding actually does. Whether a shown service
                         can be BOOKED also depends on going live and on
                         availability, so this doesn't promise that. */}
                     {value.isActive
-                      ? 'Shown on your profile.'
-                      : 'Not shown on your profile. Nothing is deleted.'}
+                      ? t('providerProfile.serviceEditor.shownHint')
+                      : t('providerProfile.serviceEditor.hiddenHint')}
                   </Text>
                 </View>
                 <Switch
@@ -194,23 +196,23 @@ export default function ServiceEditorSheet({
                   trackColor={{ false: withAlpha(palette.text, 0.18), true: palette.accent }}
                   ios_backgroundColor={withAlpha(palette.text, 0.18)}
                   thumbColor={value.isActive ? '#fff' : '#E5E5EA'}
-                  accessibilityLabel="Visible to clients"
+                  accessibilityLabel={t('providerProfile.serviceEditor.visibleA11y')}
                 />
               </View>
             )}
 
-            <Text style={[styles.label, { color: palette.sub }]}>NAME</Text>
+            <Text style={[styles.label, { color: palette.sub }]}>{t('providerProfile.serviceEditor.name')}</Text>
             <TextInput
               value={value.name}
               onChangeText={name => setValue(v => ({ ...v, name }))}
-              placeholder="e.g. Gel Overlay"
+              placeholder={t('providerProfile.serviceEditor.namePlaceholder')}
               placeholderTextColor={palette.sub}
               style={[styles.input, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
             />
 
             <View style={styles.pairRow}>
               <View style={styles.pairItem}>
-                <Text style={[styles.label, { color: palette.sub }]}>PRICE (£)</Text>
+                <Text style={[styles.label, { color: palette.sub }]}>{t('providerProfile.serviceEditor.price')}</Text>
                 <TextInput
                   value={value.price}
                   onChangeText={price => setValue(v => ({ ...v, price }))}
@@ -221,7 +223,7 @@ export default function ServiceEditorSheet({
                 />
               </View>
               <View style={styles.pairItem}>
-                <Text style={[styles.label, { color: palette.sub }]}>MINUTES</Text>
+                <Text style={[styles.label, { color: palette.sub }]}>{t('providerProfile.serviceEditor.minutes')}</Text>
                 <TextInput
                   value={value.duration}
                   onChangeText={duration => setValue(v => ({ ...v, duration }))}
@@ -233,11 +235,11 @@ export default function ServiceEditorSheet({
               </View>
             </View>
 
-            <Text style={[styles.label, { color: palette.sub }]}>DESCRIPTION</Text>
+            <Text style={[styles.label, { color: palette.sub }]}>{t('providerProfile.serviceEditor.description')}</Text>
             <TextInput
               value={value.description}
               onChangeText={description => setValue(v => ({ ...v, description }))}
-              placeholder="What's included, what to expect"
+              placeholder={t('providerProfile.serviceEditor.descriptionPlaceholder')}
               placeholderTextColor={palette.sub}
               multiline
               style={[
@@ -250,8 +252,7 @@ export default function ServiceEditorSheet({
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Text style={[styles.footnote, { color: palette.sub }]}>
-              Photos, add-ons and safety details are edited with the rest of your
-              profile.
+              {t('providerProfile.serviceEditor.footnote')}
             </Text>
           </ScrollView>
 
@@ -262,7 +263,7 @@ export default function ServiceEditorSheet({
             activeOpacity={0.85}
           >
             <Text style={styles.saveButtonText}>
-              {saving ? 'Saving…' : isNew ? 'Add service' : 'Save changes'}
+              {saving ? t('providerProfile.serviceEditor.saving') : isNew ? t('providerProfile.serviceEditor.add') : t('providerProfile.serviceEditor.save')}
             </Text>
           </TouchableOpacity>
         </KeyboardAvoidingView>

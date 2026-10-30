@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { useTranslation } from '../i18n';
 import { normalizeTerm, matchesSpeciality } from '../utils/fuzzyMatch';
 
 type Palette = {
@@ -43,6 +44,8 @@ interface SpecialityMultiSelectProps {
  */
 export function SpecialityMultiSelect({ selected, onChange, options, palette: t, placeholder }: SpecialityMultiSelectProps) {
   const bottomInset = useSystemBottomInset();
+  // `t` is this component's palette prop, so the translator is `tx`.
+  const { t: tx } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -96,14 +99,14 @@ export function SpecialityMultiSelect({ selected, onChange, options, palette: t,
         onPress={() => { Haptics.selectionAsync().catch(() => {}); setVisible(true); }}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel="Choose specialities"
+        accessibilityLabel={tx('providerProfile.speciality.chooseA11y')}
       >
         <Ionicons name="sparkles-outline" size={18} color={t.sub} />
         <Text
           style={[styles.fieldText, { color: selected.length ? t.text : t.sub }]}
           numberOfLines={1}
         >
-          {selected.length ? selected.join(', ') : (placeholder ?? 'Any speciality')}
+          {selected.length ? selected.join(', ') : (placeholder ?? tx('providerProfile.speciality.any'))}
         </Text>
         {selected.length > 0 && (
           <View style={[styles.countPill, { backgroundColor: t.accent }]}>
@@ -119,8 +122,8 @@ export function SpecialityMultiSelect({ selected, onChange, options, palette: t,
           <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: bottomInset + 16 }]}>
             <View style={[styles.handle, { backgroundColor: t.border }]} />
             <View style={styles.header}>
-              <Text style={[styles.title, { color: t.text }]}>Specialities</Text>
-              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel="Close speciality picker">
+              <Text style={[styles.title, { color: t.text }]}>{tx('providerProfile.speciality.title')}</Text>
+              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel={tx('providerProfile.speciality.closeA11y')}>
                 <Ionicons name="close" size={22} color={t.text} />
               </TouchableOpacity>
             </View>
@@ -130,7 +133,7 @@ export function SpecialityMultiSelect({ selected, onChange, options, palette: t,
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search specialities..."
+                placeholder={tx('providerProfile.speciality.search')}
                 placeholderTextColor={t.sub}
                 style={[styles.searchInput, { color: t.text }]}
                 autoCapitalize="none"
@@ -167,7 +170,7 @@ export function SpecialityMultiSelect({ selected, onChange, options, palette: t,
                   >
                     <Ionicons name="add-circle" size={20} color={t.accent} />
                     <Text style={[styles.customText, { color: t.accent }]} numberOfLines={1}>
-                      Use &ldquo;{customCandidate}&rdquo;
+                      {tx('providerProfile.speciality.useTyped', { term: customCandidate })}
                     </Text>
                   </TouchableOpacity>
                 ) : null

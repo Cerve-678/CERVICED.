@@ -33,6 +33,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   getMyProviderProfileContext,
@@ -55,6 +56,7 @@ import {
   PAYMENT_OPTS,
   SERVICE_TYPE_OPTS,
   isAddressReleaseAllowed,
+  optionText,
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
   type BusinessType,
@@ -66,6 +68,7 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 export default function BusinessInfoScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = useBusinessPalette();
   const { updateUser, myBookingMode } = useAuth();
   // Only a link-only provider books through their link; for everyone else the
@@ -182,7 +185,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           }
         }
       } catch {
-        flash('Could not load business details', 'error');
+        flash(tr('providerProfile.info.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -222,9 +225,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
     && !categoryChanged
     && customServiceType.trim() !== savedCustomServiceType.trim();
   const savedCategoryLabel =
-    SERVICE_TYPE_OPTS.find(o => o.value === savedServiceCategory)?.label ?? savedServiceCategory ?? '';
+    optionText(SERVICE_TYPE_OPTS.find(o => o.value === savedServiceCategory)?.label ?? savedServiceCategory ?? '', t);
   const pendingCategoryLabel =
-    SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '';
+    optionText(SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '', t);
 
   const normalizedBookingUrl = normalizeExternalBookingUrl(externalBookingUrl);
 
@@ -240,29 +243,25 @@ export default function BusinessInfoScreen({ navigation }: any) {
    * with the Save button like every other field here.
    */
   function handleSave() {
-    if (!businessName.trim()) { flash('Enter your business name', 'error'); return; }
-    if (!isValidEmail(businessEmail)) { flash('Enter a valid business email', 'error'); return; }
-    if (!isValidEmail(bookingEmail))  { flash('Enter a valid public enquiry email', 'error'); return; }
-    if (isLinkOnly && !normalizedBookingUrl) { flash('Enter your booking link', 'error'); return; }
+    if (!businessName.trim()) { flash(tr('providerProfile.info.nameRequired'), 'error'); return; }
+    if (!isValidEmail(businessEmail)) { flash(tr('providerProfile.info.emailInvalid'), 'error'); return; }
+    if (!isValidEmail(bookingEmail))  { flash(tr('providerProfile.info.enquiryInvalid'), 'error'); return; }
+    if (isLinkOnly && !normalizedBookingUrl) { flash(tr('providerProfile.info.linkRequired'), 'error'); return; }
     // Only when the picker is actually on screen. A provider whose saved
     // type is OTHER with no label (possible for older rows) would otherwise be
     // blocked from saving anything at all on this screen, by a validation
     // pointing at a field the cooldown is hiding.
     if (!categoryLocked && serviceCategory === 'OTHER' && !customServiceType.trim()) {
-      flash('Describe the service you offer', 'error'); return;
+      flash(tr('providerProfile.info.customRequired'), 'error'); return;
     }
 
     if (categoryChanged) {
       showConfirm(
-        `Change your service type to ${pendingCategoryLabel}?`,
-        `You won't be able to change it again for ${CATEGORY_COOLDOWN_DAYS} days.\n\n`
-        + `• Clients will find you under ${pendingCategoryLabel} instead of ${savedCategoryLabel} in Explore and Search.\n`
-        + `• Your portfolio photos move across with you.\n`
-        + `• Your specialties are cleared — ${pendingCategoryLabel} offers a different list, so you'll need to pick them again in Services & Pricing.\n\n`
-        + 'Bookings you already have are unaffected.',
+        tr('providerProfile.info.changeTypeTitle', { type: pendingCategoryLabel }),
+        tr('providerProfile.info.changeTypeBody', { type: pendingCategoryLabel, saved: savedCategoryLabel, days: CATEGORY_COOLDOWN_DAYS }),
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Change it', style: 'destructive', onPress: () => { void commitSave(); } },
+          { text: tr('providerProfile.common2.cancel'), style: 'cancel' },
+          { text: tr('providerProfile.info.changeIt'), style: 'destructive', onPress: () => { void commitSave(); } },
         ],
       );
       return;
@@ -358,7 +357,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
       // AllowingDbGuard, not the plain version: the service-type cooldown
       // raises a P0001 that names the exact date the provider can change it
       // again, and that date is the only useful part of the failure.
-      flash(toUserMessageAllowingDbGuard(e, 'Could not save your changes.', 'BusinessInfoScreen.save'), 'error');
+      flash(toUserMessageAllowingDbGuard(e, tr('providerProfile.common2.saveFailed'), 'BusinessInfoScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -380,7 +379,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>Business Info</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{t('providerProfile.businessDetails.info.title')}</Text>
             <TouchableOpacity
               style={[s.closeBtn, { backgroundColor: C.surface }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -402,28 +401,28 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 own card, split out from the contact fields below, so the name
                 and experience read as the headline facts rather than one more
                 row in a list of handles and emails. */}
-            <Card title="Name & Experience" sub="Your business name and experience, shown on your public profile.">
+            <Card title={t('providerProfile.info.name.title')} sub={t('providerProfile.info.name.sub')}>
               {/* The one place a provider's public business name can be
                   changed. Locked for 14 days after each change — the note
                   says when it reopens rather than just refusing. */}
               <Field
-                label="Business Name"
+                label={t('providerProfile.info.businessName')}
                 value={businessName}
                 onChange={setBusinessName}
                 readOnly={nameLocked}
-                placeholder="Your business name"
+                placeholder={t('providerProfile.info.businessNamePlaceholder')}
                 note={nameLocked && nameUnlocksAt
                   ? `Shown on your profile. You changed it recently — you can change it again on ${formatLongDate(nameUnlocksAt)}.`
                   : 'Shown on your profile. Once you change it, you can’t change it again for 14 days.'}
               />
-              <Field label="Years of Experience" value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 5" keyboardType="phone-pad" />
+              <Field label={t('providerProfile.info.years')} value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder={t('providerProfile.info.yearsPlaceholder')} keyboardType="phone-pad" />
             </Card>
 
             {/* Contact & links — the handles and addresses clients and Cerviced
                 reach the business through. */}
-            <Card title="Contact & Links" sub="Your links and email addresses — how clients and Cerviced reach you.">
-              <Field label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap to visit your page." />
-              <Field label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
+            <Card title={t('providerProfile.info.contact.title')} sub={t('providerProfile.info.contact.sub')}>
+              <Field label={t('providerProfile.info.instagram')} value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note={t('providerProfile.info.instagramNote')} />
+              <Field label={t('providerProfile.info.website')} value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
               {/* Two emails, and the old labels had them backwards. `business_email`
                   on `users` is the account/business address — it is never rendered
                   on the public profile; it's what Cerviced writes to and what
@@ -432,8 +431,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   "Booking Notification Email", which describes a feature that does
                   not exist: nothing in the app or the edge functions ever emails a
                   provider about a booking (those are push + in-app only). */}
-              <Field label="Business Email" value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Your business address. Cerviced uses this to reach you, and it prefills the enquiry email below." />
-              <Field label="Public Enquiry Email" value={bookingEmail} onChange={setBookingEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Shown on your profile under Get In Touch. Prefilled from your business email — change it only if you'd rather enquiries went elsewhere." />
+              <Field label={t('providerProfile.info.businessEmail')} value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note={t('providerProfile.info.businessEmailNote')} />
+              <Field label={t('providerProfile.info.enquiryEmail')} value={bookingEmail} onChange={setBookingEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note={t('providerProfile.info.enquiryEmailNote')} />
             </Card>
 
             {/* Service Type. Sits between the identity card and Business Type
@@ -448,8 +447,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 between categories while leaving their portfolio and
                 specialties describing the old one. */}
             <Card
-              title="Service Type"
-              sub="The headline service your business offers. Clients browse and filter by this in Explore and Search."
+              title={t('providerProfile.info.serviceType.title')}
+              sub={t('providerProfile.info.serviceType.sub')}
             >
               {categoryLocked ? (
                 <>
@@ -464,9 +463,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   </View>
                   <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
                     {!cooldownLive
-                      ? 'Set at sign-up. Contact support if you need to change your service type.'
+                      ? t('providerProfile.info.serviceType.lockedSignup')
                       : categoryUnlocksAt
-                        ? `You changed this recently — you can change it again on ${formatLongDate(categoryUnlocksAt)}.`
+                        ? t('providerProfile.info.serviceType.lockedRecent', { date: formatLongDate(categoryUnlocksAt) })
                         : ''}
                   </Text>
                 </>
@@ -479,11 +478,11 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   />
                   {serviceCategory === 'OTHER' && (
                     <Field
-                      label="Describe your service"
+                      label={t('providerProfile.info.custom')}
                       value={customServiceType}
                       onChange={setCustomServiceType}
-                      placeholder="e.g. Massage therapy"
-                      note="Shown on your profile in place of a category name."
+                      placeholder={t('providerProfile.info.customPlaceholder')}
+                      note={t('providerProfile.info.customNote')}
                     />
                   )}
                   {categoryChanged ? (
@@ -493,14 +492,12 @@ export default function BusinessInfoScreen({ navigation }: any) {
                     <View style={[s.warnBox, { backgroundColor: C.accent + '14', borderColor: C.accent + '40' }]}>
                       <Ionicons name="alert-circle-outline" size={16} color={C.accent} />
                       <Text style={[s.warnText, { color: C.text }]}>
-                        Saving this moves you from {savedCategoryLabel} to {pendingCategoryLabel}. Your
-                        portfolio photos move with you, your specialties are cleared, and you won't be
-                        able to change your service type again for {CATEGORY_COOLDOWN_DAYS} days.
+                        {t('providerProfile.info.serviceType.changeWarning', { saved: savedCategoryLabel, type: pendingCategoryLabel, days: CATEGORY_COOLDOWN_DAYS })}
                       </Text>
                     </View>
                   ) : (
                     <Text style={[s.cardSub, { color: C.sub, marginTop: 4, marginBottom: 0 }]}>
-                      Once you change this, you can't change it again for {CATEGORY_COOLDOWN_DAYS} days.
+                      {t('providerProfile.info.serviceType.cooldown', { days: CATEGORY_COOLDOWN_DAYS })}
                     </Text>
                   )}
                 </>
@@ -512,10 +509,10 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 CERVICED's own booking flow, so a link-only provider (who books
                 on their own page) isn't shown that part. */}
             <Card
-              title="Business Type"
+              title={t('providerProfile.info.businessType.title')}
               sub={isLinkOnly
-                ? 'Where you see clients. Shown on your profile.'
-                : 'Where you see clients. This decides whether — and when — your address is shared with them.'}
+                ? t('providerProfile.info.businessType.subLinkOnly')
+                : t('providerProfile.info.businessType.sub')}
             >
               <RadioGroup
                 options={BUSINESS_TYPE_OPTS}
@@ -536,11 +533,11 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   their home. */}
               {businessType && !isLinkOnly && (
                 <View style={{ marginTop: 18 }}>
-                  <Text style={[s.cardTitle, { color: C.text, marginBottom: 4 }]}>Address Release</Text>
+                  <Text style={[s.cardTitle, { color: C.text, marginBottom: 4 }]}>{t('providerProfile.info.release.title')}</Text>
                   <Text style={[s.cardSub, { color: C.sub }]}>
                     {businessType === 'mobile'
-                      ? 'You travel to your clients, so they give you their address. Yours is never sent automatically — pick Manual release if you want the option to send it per booking.'
-                      : 'When a booked client can see your address.'}
+                      ? t('providerProfile.info.release.mobileSub')
+                      : t('providerProfile.info.release.sub')}
                   </Text>
                   {/* Mobile gets an explicit "never" choice, stored as NULL.
                       Without it, not-sharing would only ever be the initial
@@ -551,7 +548,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                     options={[
                       ...ADDRESS_RELEASE_OPTS.filter(o => isAddressReleaseAllowed(businessType, o.value)),
                       ...(businessType === 'mobile'
-                        ? [{ value: '', label: 'Never share', sub: 'Your address is never sent to clients. They give you theirs instead.' }]
+                        ? [{ value: '', label: t('providerProfile.info.release.never'), sub: t('providerProfile.info.release.neverSub') }]
                         : []),
                     ]}
                     value={addressReleasePolicy ?? ''}
@@ -562,19 +559,19 @@ export default function BusinessInfoScreen({ navigation }: any) {
             </Card>
 
             {isLinkOnly && (
-              <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">
+              <Card title={t('providerProfile.info.link.title')} sub={t('providerProfile.info.link.sub')}>
                 <Field
-                  label="Booking Link"
+                  label={t('providerProfile.info.link.label')}
                   value={externalBookingUrl}
                   onChange={setExternalBookingUrl}
-                  placeholder="e.g. your Fresha or Acuity booking page"
-                  note="When clients tap Book on your profile, this page opens inside CERVICED."
+                  placeholder={t('providerProfile.info.link.placeholder')}
+                  note={t('providerProfile.info.link.note')}
                 />
               </Card>
             )}
 
             {isLinkOnly && (
-              <Card title="Accessibility" sub="Help clients with access needs find you.">
+              <Card title={t('providerProfile.about.accessibility.title')} sub={t('providerProfile.about.accessibility.sub')}>
                 <ChipGroup
                   options={ACCESSIBILITY_OPTS}
                   selected={accessibility}
@@ -584,7 +581,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             )}
 
             {isLinkOnly && (
-              <Card title="Payment Methods" sub="Shown on your profile so clients know how they can pay you.">
+              <Card title={t('providerProfile.info.payment.title')} sub={t('providerProfile.info.payment.sub')}>
                 <ChipGroup
                   options={PAYMENT_OPTS.map(o => o.label)}
                   selected={PAYMENT_OPTS.filter(o => paymentMethods.includes(o.value)).map(o => o.label)}
@@ -621,8 +618,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
               activeOpacity={0.75}
             >
               <View style={{ flex: 1 }}>
-                <Text style={[s.cardTitle, { color: C.text }]}>Contact Preferences</Text>
-                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>How clients can best reach you — manage in Communications</Text>
+                <Text style={[s.cardTitle, { color: C.text }]}>{t('providerProfile.info.contactPrefs')}</Text>
+                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>{t('providerProfile.info.contactPrefsSub')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.sub} />
             </TouchableOpacity>

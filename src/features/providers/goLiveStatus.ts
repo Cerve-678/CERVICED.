@@ -59,6 +59,7 @@ import {
 import { resolveDepositMode } from '../../utils/depositPolicy';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import type { DbProvider, DbProviderAvailability } from '../../types/database';
+import { tr, trp } from '../../i18n';
 
 export interface GoLiveStatus {
   /** Blocking — mirrors check_and_set_provider_live() exactly. */
@@ -130,49 +131,49 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       // profile. A provider who'd just saved that one field read this as the
       // WHOLE profile being done while services/address/schedule were still
       // outstanding.
-      label: 'Write your business introduction',
+      label: tr('providerProfile.goLive.step.profile'),
       done: status.profileCompleteSet,
       required: true,
       blocking: false,
     },
     {
       key: 'schedule',
-      label: 'Set your weekly schedule',
+      label: tr('providerProfile.goLive.step.schedule'),
       done: status.scheduleSet,
       required: true,
       blocking: true,
     },
     {
       key: 'services',
-      label: 'Add at least one service',
+      label: tr('providerProfile.goLive.step.services'),
       done: status.servicesSet,
       required: true,
       blocking: true,
     },
     {
       key: 'address',
-      label: 'Add your business address',
+      label: tr('providerProfile.goLive.step.address'),
       done: status.addressSet,
       required: true,
       blocking: true,
     },
     {
       key: 'policies',
-      label: 'Set your booking policies',
+      label: tr('providerProfile.goLive.step.policies'),
       done: status.policiesSet,
       required: true,
       blocking: true,
     },
     {
       key: 'payment',
-      label: 'Set your deposit & payment options',
+      label: tr('providerProfile.goLive.step.payment'),
       done: status.paymentSet,
       required: true,
       blocking: true,
     },
     {
       key: 'logo',
-      label: 'Add your logo',
+      label: tr('providerProfile.goLive.step.logo'),
       done: status.brandingSet,
       required: true,
       blocking: true,
@@ -186,7 +187,7 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
   if (status.stripeSet !== undefined) {
     steps.push({
       key: 'stripe',
-      label: 'Set up Stripe payouts',
+      label: tr('providerProfile.goLive.step.stripe'),
       done: status.stripeSet,
       required: true,
       blocking: true,
@@ -198,7 +199,7 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
   if (status.portfolioSet !== undefined) {
     steps.push({
       key: 'portfolio',
-      label: 'Add portfolio photos',
+      label: tr('providerProfile.goLive.step.portfolio'),
       done: status.portfolioSet,
       required: true,
       blocking: false,
@@ -207,7 +208,7 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
   if (status.termsSet !== undefined) {
     steps.push({
       key: 'terms',
-      label: 'Set your Terms & Conditions',
+      label: tr('providerProfile.goLive.step.terms'),
       done: status.termsSet,
       required: true,
       blocking: false,
@@ -247,39 +248,37 @@ export function buildGoLiveHeadline(status: GoLiveStatus): GoLiveHeadline {
 
   if (status.isLive) {
     if (recommendedOutstanding.length === 0) {
-      return { tone: 'live', title: 'Live — clients can find you', detail: null };
+      return { tone: 'live', title: tr('providerProfile.goLive.live'), detail: null };
     }
     return {
       tone: 'liveWithExtras',
-      title: 'Live — a few things left to finish',
-      detail: `Clients can already find and book you. ${recommendedOutstanding.length} more recommended step${recommendedOutstanding.length === 1 ? '' : 's'} below.`,
+      title: tr('providerProfile.goLive.liveWithExtras'),
+      detail: trp('providerProfile.goLive.liveWithExtrasDetail', recommendedOutstanding.length),
     };
   }
 
   if (blockingOutstanding.length === 0) {
     return {
       tone: 'stalled',
-      title: 'Almost live',
+      title: tr('providerProfile.goLive.stalled'),
       // Used to name the address specifically ("couldn't confirm your
       // address on the map") — accurate back when address was the only
       // step prone to this client/server drift. Now six steps are blocking,
       // any of them could be the one that hasn't re-synced yet, so the copy
       // stays generic rather than pointing at a field that usually isn't
       // the actual cause any more.
-      detail:
-        "Everything looks filled in, but we haven't confirmed it with the server yet. " +
-        "Try re-saving in Business Details and we'll publish you.",
+      detail: tr('providerProfile.goLive.stalledDetail'),
     };
   }
 
   return {
     tone: 'blocked',
-    title: `Not live yet — ${blockingOutstanding.length} step${blockingOutstanding.length === 1 ? '' : 's'} left`,
+    title: trp('providerProfile.goLive.blocked', blockingOutstanding.length),
     // The schedule is the hard blocker and the least obvious one, so it gets
     // said out loud rather than left to a tick box.
     detail: status.scheduleSet
-      ? "You won't appear to clients or be bookable until these are completed."
-      : "Clients can't see any time slots or book you until your schedule is set.",
+      ? tr('providerProfile.goLive.blockedDetail')
+      : tr('providerProfile.goLive.blockedNoSchedule'),
   };
 }
 
@@ -395,10 +394,10 @@ export interface LinkOnlyGoLiveStep {
 
 export function buildLinkOnlyGoLiveSteps(status: LinkOnlyGoLiveStatus): LinkOnlyGoLiveStep[] {
   return [
-    { key: 'logo', label: 'Add your logo', hint: 'It shows on your profile and in search', done: status.logoSet },
-    { key: 'about', label: 'Write your About', hint: 'A few lines about you and your work', done: status.aboutSet },
-    { key: 'hours', label: 'Set your opening hours', hint: 'Shown to clients on your profile', done: status.hoursSet },
-    { key: 'portfolio', label: 'Add portfolio photos', hint: 'At least one photo of your work', done: status.portfolioSet },
+    { key: 'logo', label: tr('providerProfile.goLive.step.logo'), hint: tr('providerProfile.goLive.hint.logo'), done: status.logoSet },
+    { key: 'about', label: tr('providerProfile.goLive.step.about'), hint: tr('providerProfile.goLive.hint.about'), done: status.aboutSet },
+    { key: 'hours', label: tr('providerProfile.goLive.step.hours'), hint: tr('providerProfile.goLive.hint.hours'), done: status.hoursSet },
+    { key: 'portfolio', label: tr('providerProfile.goLive.step.portfolio'), hint: tr('providerProfile.goLive.hint.portfolio'), done: status.portfolioSet },
   ];
 }
 

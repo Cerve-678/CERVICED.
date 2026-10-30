@@ -4,7 +4,8 @@
  * database. Design: https://claude.ai/artifact/DrnMGFGGk5HJZW9ij1F9FN
  */
 import type { DbProviderAvailability, DbProviderDailyStat } from '../../types/database';
-import { DAY_NAMES_FULL, dateToYMD, formatTime12Safe } from '../../utils/dateUtils';
+import { dateToYMD, dayName, formatTime12Safe } from '../../utils/dateUtils';
+import { tr, trp } from '../../i18n';
 import { DASHBOARD_WEEK_DAYS, hoursFor, startOfDay } from './diaryDays';
 import { sumLinkOnlyStats, type DayBar, type LinkOnlyTotals } from './linkOnlyAnalytics';
 
@@ -13,10 +14,10 @@ import { sumLinkOnlyStats, type DayBar, type LinkOnlyTotals } from './linkOnlyAn
 export function todayHoursLabel(hours: readonly DbProviderAvailability[], today: Date): string | null {
   const row = hoursFor(hours, today);
   if (!row) return null;
-  if (row.is_closed) return 'Closed today';
+  if (row.is_closed) return tr('providerProfile.dashboard.closedToday');
   const open = compactTime(row.open_time);
   const close = compactTime(row.close_time);
-  return open && close ? `Open today ${open}–${close}` : null;
+  return open && close ? tr('providerProfile.dashboard.openToday', { open, close }) : null;
 }
 
 /** "09:00:00" → "9am", "17:30:00" → "5:30pm". Takes a Date too. */
@@ -26,9 +27,9 @@ export function compactTime(value: string | Date): string | null {
 
 export function greetingFor(now: Date): string {
   const hour = now.getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return tr('providerProfile.dashboard.goodMorning');
+  if (hour < 18) return tr('providerProfile.dashboard.goodAfternoon');
+  return tr('providerProfile.dashboard.goodEvening');
 }
 
 export interface WeekComparison {
@@ -66,8 +67,8 @@ export function busiestBookTapLine(bars: readonly DayBar[], today: Date): string
   const leader = leaders[0]!;
   const [y, m, d] = leader.ymd.split('-').map(Number);
   const date = new Date(y!, m! - 1, d!);
-  const name = leader.ymd === dateToYMD(today) ? 'Today' : DAY_NAMES_FULL[date.getDay()];
-  return `${name} brought you the most Book taps: ${max} of your ${total} this week.`;
+  const name = leader.ymd === dateToYMD(today) ? tr('providerProfile.dashboard.today') : dayName(date.getDay(), 'full');
+  return tr('providerProfile.dashboard.busiestDay', { day: name, max, total });
 }
 
 export type ProfileStrengthKey =
@@ -83,6 +84,16 @@ export interface ProfileStrengthItem {
   /** Lower-case name for the "2 more: …" line. */
   shortLabel: string;
   done: boolean;
+}
+
+/** The four lines each fixed profile-strength step shows, in the app language. */
+function strengthCopy(key: Exclude<ProfileStrengthKey, 'photos'>): Pick<ProfileStrengthItem, 'label' | 'hint' | 'doneLabel' | 'shortLabel'> {
+  return {
+    label: tr(`providerProfile.dashboard.strength.${key}.label` as const),
+    hint: tr(`providerProfile.dashboard.strength.${key}.hint` as const),
+    doneLabel: tr(`providerProfile.dashboard.strength.${key}.done` as const),
+    shortLabel: tr(`providerProfile.dashboard.strength.${key}.short` as const),
+  };
 }
 
 /** Photos that fill the profile's grid. */
@@ -105,22 +116,22 @@ export interface ProfileStrengthInput {
 export function buildProfileStrength(input: ProfileStrengthInput): { items: ProfileStrengthItem[]; percent: number } {
   const photosToGo = Math.max(0, FULL_PORTFOLIO_COUNT - input.portfolioCount);
   const items: ProfileStrengthItem[] = [
-    { key: 'logo', label: 'Add your logo', hint: 'It shows on your profile and in search', doneLabel: 'Logo', shortLabel: 'logo', done: input.logoSet },
-    { key: 'about', label: 'Write your About', hint: 'A few lines about you and your work', doneLabel: 'About', shortLabel: 'About', done: input.aboutSet },
-    { key: 'hours', label: 'Set your opening hours', hint: 'Shown to clients on your profile', doneLabel: 'Opening hours', shortLabel: 'opening hours', done: input.hoursSet },
-    { key: 'specialities', label: 'Add your specialities', hint: 'Show up in more Search filters', doneLabel: 'Specialities', shortLabel: 'specialities', done: input.specialityCount > 0 },
-    { key: 'instagram', label: 'Link your Instagram', hint: 'Clients can see more of your work', doneLabel: 'Instagram', shortLabel: 'Instagram', done: !!input.instagram?.trim() },
-    { key: 'policies', label: 'Add your policies', hint: 'Cancellation and deposit rules', doneLabel: 'Policies', shortLabel: 'policies', done: input.policiesSet },
+    { key: 'logo', ...strengthCopy('logo'), done: input.logoSet },
+    { key: 'about', ...strengthCopy('about'), done: input.aboutSet },
+    { key: 'hours', ...strengthCopy('hours'), done: input.hoursSet },
+    { key: 'specialities', ...strengthCopy('specialities'), done: input.specialityCount > 0 },
+    { key: 'instagram', ...strengthCopy('instagram'), done: !!input.instagram?.trim() },
+    { key: 'policies', ...strengthCopy('policies'), done: input.policiesSet },
     {
       key: 'photos',
-      label: photosToGo === 1 ? 'Add 1 more photo' : `Add ${photosToGo} more photos`,
-      hint: `${input.portfolioCount} so far, ${FULL_PORTFOLIO_COUNT} fills your profile grid`,
-      doneLabel: `${FULL_PORTFOLIO_COUNT}+ photos`,
-      shortLabel: photosToGo === 1 ? '1 more photo' : `${photosToGo} more photos`,
+      label: trp('providerProfile.dashboard.strength.photos.label', photosToGo),
+      hint: tr('providerProfile.dashboard.strength.photos.hint', { count: input.portfolioCount, full: FULL_PORTFOLIO_COUNT }),
+      doneLabel: tr('providerProfile.dashboard.strength.photos.done', { full: FULL_PORTFOLIO_COUNT }),
+      shortLabel: trp('providerProfile.dashboard.strength.photos.short', photosToGo),
       done: photosToGo === 0,
     },
-    { key: 'accessibility', label: 'Add accessibility info', hint: 'Step-free access, parking and more', doneLabel: 'Accessibility', shortLabel: 'accessibility info', done: !!input.accessibilityNotes?.trim() },
-    { key: 'payments', label: 'State preferred payment method', hint: 'How clients can pay you', doneLabel: 'Payment method', shortLabel: 'payment method', done: (input.paymentMethods?.length ?? 0) > 0 },
+    { key: 'accessibility', ...strengthCopy('accessibility'), done: !!input.accessibilityNotes?.trim() },
+    { key: 'payments', ...strengthCopy('payments'), done: (input.paymentMethods?.length ?? 0) > 0 },
   ];
   const done = items.filter(item => item.done).length;
   return { items, percent: Math.round((done / items.length) * 100) };
@@ -131,5 +142,5 @@ export function buildProfileStrength(input: ProfileStrengthInput): { items: Prof
 export function remainingStepsLine(rest: readonly ProfileStrengthItem[]): string | null {
   if (rest.length === 0) return null;
   const names = rest.slice(0, 3).map(item => item.shortLabel).join(', ');
-  return `${rest.length} more: ${names}${rest.length > 3 ? '…' : ''}`;
+  return `${tr('providerProfile.dashboard.remaining', { count: rest.length, names })}${rest.length > 3 ? '…' : ''}`;
 }

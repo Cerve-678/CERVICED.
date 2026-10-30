@@ -20,6 +20,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation } from '../../i18n';
+import { optionText } from './options';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Kept identical to the values the original Business Details screen used, so
@@ -150,6 +152,7 @@ const tgSt = StyleSheet.create({
 
 export function RadioGroup({ options, value, onChange }: { options: { value: string; label: string; sub?: string }[]; value: string; onChange: (v: string) => void }) {
   const C = useBusinessPalette();
+  const { t } = useTranslation();
   return (
     <View style={{ gap: 8, marginBottom: 4 }}>
       {options.map(opt => {
@@ -165,8 +168,8 @@ export function RadioGroup({ options, value, onChange }: { options: { value: str
               {active && <View style={[rdSt.dotFill, { backgroundColor: C.accent }]} />}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[rdSt.label, { color: active ? C.accentText : C.text }]}>{opt.label}</Text>
-              {opt.sub ? <Text style={[rdSt.sub, { color: C.sub }]}>{opt.sub}</Text> : null}
+              <Text style={[rdSt.label, { color: active ? C.accentText : C.text }]}>{optionText(opt.label, t)}</Text>
+              {opt.sub ? <Text style={[rdSt.sub, { color: C.sub }]}>{optionText(opt.sub, t)}</Text> : null}
             </View>
           </TouchableOpacity>
         );
@@ -187,6 +190,7 @@ const rdSt = StyleSheet.create({
 
 export function ChipGroup({ options, selected, onToggle }: { options: string[]; selected: string[]; onToggle: (v: string) => void }) {
   const C = useBusinessPalette();
+  const { t } = useTranslation();
   return (
     <View style={chSt.wrap}>
       {options.map(opt => {
@@ -198,7 +202,7 @@ export function ChipGroup({ options, selected, onToggle }: { options: string[]; 
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggle(opt); }}
             activeOpacity={0.75}
           >
-            <Text style={[chSt.label, { color: active ? C.ice : C.sub }]}>{opt}</Text>
+            <Text style={[chSt.label, { color: active ? C.ice : C.sub }]}>{optionText(opt, t)}</Text>
           </TouchableOpacity>
         );
       })}
@@ -240,6 +244,7 @@ export function SectionLabel({ text }: { text: string }) {
 
 export function SaveButton({ saving, onPress }: { saving: boolean; onPress: () => void }) {
   const C = useBusinessPalette();
+  const { t } = useTranslation();
   return (
     <TouchableOpacity
       style={[s.saveBtn, { backgroundColor: C.accent, borderColor: C.ice + '30' }, saving && s.saveBtnDim]}
@@ -249,7 +254,7 @@ export function SaveButton({ saving, onPress }: { saving: boolean; onPress: () =
     >
       {saving
         ? <ActivityIndicator color={C.ice} size="small" />
-        : <Text style={[s.saveTxt, { color: C.ice }]}>Save Changes</Text>
+        : <Text style={[s.saveTxt, { color: C.ice }]}>{t('providerProfile.kit.saveChanges')}</Text>
       }
     </TouchableOpacity>
   );

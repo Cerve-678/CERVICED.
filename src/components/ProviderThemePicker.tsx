@@ -5,7 +5,10 @@ import * as Haptics from 'expo-haptics';
 import {
   PROVIDER_THEMES,
   SHEET_OPTIONS,
+  themeDisplayName,
+  sheetDisplayName,
 } from '../constants/providerThemes';
+import { useTranslation } from '../i18n';
 
 // Swatch options for the Custom colour set builder.
 // Backdrop = hero colour behind the profile top (becomes the gradient).
@@ -64,6 +67,8 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
   value, onChange, onColorsResolved, textColor, subColor, borderColor, sepColor,
 }) => {
   const { themeChoice, customBackdrop, customCard, customAccent, sheetColor } = value;
+  // `t` names a theme in the loops below, so the translator is `tx`.
+  const { t: tx } = useTranslation();
 
   const select = (patch: Partial<ThemeSelection>, resolved: { accent: string; backdrop: string }) => {
     Haptics.selectionAsync().catch(() => {});
@@ -99,7 +104,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
             >
               <ThemeSwatch accent={t.tokens.accent} gradient={t.tokens.gradient} borderColor={borderColor} />
               <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={1}>
-                {t.name}
+                {themeDisplayName(t.key, t.name, tx)}
               </Text>
             </TouchableOpacity>
           );
@@ -119,7 +124,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
         >
           <ThemeSwatch accent={customAccent} gradient={[customBackdrop, customCard]} borderColor={borderColor} />
           <Text style={[styles.optionName, { color: themeChoice === 'custom' ? textColor : subColor }]} numberOfLines={1}>
-            Custom
+            {tx('providerProfile.themePicker.custom')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -127,7 +132,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
       {/* Custom builder */}
       {themeChoice === 'custom' && (
         <View style={[styles.customPanel, { borderTopColor: sepColor }]}>
-          <Text style={[styles.rowLabel, { color: subColor }]}>ACCENT</Text>
+          <Text style={[styles.rowLabel, { color: subColor }]}>{tx('providerProfile.themePicker.accent')}</Text>
           <View style={styles.swatchRow}>
             {CUSTOM_ACCENT_OPTIONS.map(c => (
               <TouchableOpacity
@@ -142,7 +147,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
             ))}
           </View>
 
-          <Text style={[styles.rowLabel, { color: subColor }]}>CARD COLOUR</Text>
+          <Text style={[styles.rowLabel, { color: subColor }]}>{tx('providerProfile.themePicker.cardColour')}</Text>
           <View style={styles.swatchRow}>
             {CUSTOM_CARD_OPTIONS.map(c => (
               <TouchableOpacity
@@ -157,7 +162,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
             ))}
           </View>
 
-          <Text style={[styles.rowLabel, { color: subColor }]}>BACKDROP</Text>
+          <Text style={[styles.rowLabel, { color: subColor }]}>{tx('providerProfile.themePicker.backdrop')}</Text>
           <View style={styles.swatchRow}>
             {CUSTOM_BACKDROP_OPTIONS.map(c => (
               <TouchableOpacity
@@ -176,7 +181,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
 
       {/* Content-area colour (the page behind the cards) */}
       <View style={[styles.customPanel, { borderTopColor: sepColor }]}>
-        <Text style={[styles.rowLabel, { color: subColor }]}>CONTENT AREA</Text>
+        <Text style={[styles.rowLabel, { color: subColor }]}>{tx('providerProfile.themePicker.contentArea')}</Text>
         <View style={styles.swatchRow}>
           {SHEET_OPTIONS.map(opt => (
             <TouchableOpacity
@@ -195,7 +200,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
                 sheetColor === opt.color && { borderColor: textColor, borderWidth: 2.5 },
               ]} />
               <Text style={[styles.optionName, { color: sheetColor === opt.color ? textColor : subColor }]}>
-                {opt.name}
+                {sheetDisplayName(opt.key, opt.name, tx)}
               </Text>
             </TouchableOpacity>
           ))}

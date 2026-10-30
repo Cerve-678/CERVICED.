@@ -30,6 +30,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import { toUserMessage } from '../../utils/userFacingError';
 import {
   getMyProviderProfileContext,
@@ -53,6 +54,7 @@ import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 export default function SchedulingScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = useBusinessPalette();
 
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export default function SchedulingScreen({ navigation }: any) {
             : (m['pa_max_bookings_per_day'] ?? 'unlimited'),
         );
       } catch {
-        flash('Could not load your scheduling settings', 'error');
+        flash(tr('providerProfile.scheduling.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -143,7 +145,7 @@ export default function SchedulingScreen({ navigation }: any) {
   }
 
   const handleSave = useCallback(async () => {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash(tr('providerProfile.common2.noProfile'), 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -194,7 +196,7 @@ export default function SchedulingScreen({ navigation }: any) {
       navigation.goBack();
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(toUserMessage(e, 'Could not save your changes.', 'SchedulingScreen.save'), 'error');
+      flash(toUserMessage(e, tr('providerProfile.common2.saveFailed'), 'SchedulingScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -220,7 +222,7 @@ export default function SchedulingScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={[s.header, { borderBottomColor: C.border }]}>
-          <Text style={[s.headerTitle, { color: C.text }]}>Scheduling & Availability</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t('providerProfile.businessDetails.scheduling.title')}</Text>
           <TouchableOpacity
             style={[s.closeBtn, { backgroundColor: C.surface }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -254,20 +256,20 @@ export default function SchedulingScreen({ navigation }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 0.3, color: C.text }}>
-                Working Hours & Blocked Dates
+                {t('providerProfile.scheduling.hoursLink')}
               </Text>
               <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 2, lineHeight: 16, color: C.sub }}>
-                Your day-by-day hours, breaks, blocked dates and one-off changes
+                {t('providerProfile.scheduling.hoursLinkSub')}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={C.sub} style={{ opacity: 0.5 }} />
           </TouchableOpacity>
 
           <Card
-            title="Availability"
-            sub="The shape of your typical week. Your actual bookable slots come from Working Hours above."
+            title={t('providerProfile.scheduling.availability.title')}
+            sub={t('providerProfile.scheduling.availability.sub')}
           >
-            <SectionLabel text="When you're typically available" />
+            <SectionLabel text={t('providerProfile.scheduling.typicallyAvailable')} />
             <ChipGroup
               options={AVAILABILITY_OPTS}
               selected={availWindows}
@@ -275,35 +277,35 @@ export default function SchedulingScreen({ navigation }: any) {
             />
 
             <View style={{ height: 18 }} />
-            <SectionLabel text="New clients" />
+            <SectionLabel text={t('providerProfile.scheduling.newClients')} />
             <RadioGroup options={NEW_CLIENTS_OPTS} value={acceptsNew} onChange={setAcceptsNew} />
 
             <View style={{ height: 14 }} />
-            <ToggleRow label="Walk-ins welcome" sub="Clients can book without advance notice" value={walkIns} onChange={setWalkIns} />
-            <ToggleRow label="Group bookings" sub="Bridal parties, hen dos, group sessions" value={groupBookings} onChange={setGroupBookings} />
+            <ToggleRow label={t('providerProfile.scheduling.walkIns')} sub={t('providerProfile.scheduling.walkInsSub')} value={walkIns} onChange={setWalkIns} />
+            <ToggleRow label={t('providerProfile.scheduling.groupBookings')} sub={t('providerProfile.scheduling.groupBookingsSub')} value={groupBookings} onChange={setGroupBookings} />
           </Card>
 
           <Card
-            title="Booking Rules"
-            sub="How bookings land in your calendar — these are enforced when a client picks a slot."
+            title={t('providerProfile.scheduling.rules.title')}
+            sub={t('providerProfile.scheduling.rules.sub')}
           >
-            <SectionLabel text="Buffer time between appointments" />
+            <SectionLabel text={t('providerProfile.scheduling.buffer')} />
             <RadioGroup options={BUFFER_OPTS} value={bufferMins} onChange={setBufferMins} />
 
             <View style={{ height: 18 }} />
-            <SectionLabel text="Appointment start-time intervals" />
+            <SectionLabel text={t('providerProfile.scheduling.interval')} />
             <RadioGroup options={SLOT_INTERVAL_OPTS} value={slotIntervalMins} onChange={setSlotInterval} />
 
             <View style={{ height: 18 }} />
-            <SectionLabel text="Minimum notice before booking" />
+            <SectionLabel text={t('providerProfile.scheduling.minNotice')} />
             <RadioGroup options={MIN_NOTICE_OPTS} value={minBookingNoticeHrs} onChange={setMinNotice} />
 
             <View style={{ height: 18 }} />
-            <SectionLabel text="How far ahead clients can book" />
+            <SectionLabel text={t('providerProfile.scheduling.bookingWindow')} />
             <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
 
             <View style={{ height: 18 }} />
-            <SectionLabel text="Maximum bookings per day" />
+            <SectionLabel text={t('providerProfile.scheduling.maxPerDay')} />
             <RadioGroup options={MAX_PER_DAY_OPTS} value={maxBookingsPerDay} onChange={setMaxPerDay} />
           </Card>
 
@@ -313,32 +315,32 @@ export default function SchedulingScreen({ navigation }: any) {
               stored choices survive; the control is just hidden meanwhile. */}
           {EMERGENCY_BOOKINGS_ENABLED && (
           <Card
-            title="Requests Outside Your Availability"
-            sub="Every rule above normally stops a client dead. Turn one on here and they can ask instead — you decide each time, and nothing is ever booked automatically."
+            title={t('providerProfile.scheduling.requests.title')}
+            sub={t('providerProfile.scheduling.requests.sub')}
           >
             <ToggleRow
-              label="Outside your working hours"
-              sub="On a day you do work — before you open or after you close. Also covers days of the week you never work."
+              label={t('providerProfile.scheduling.requests.outsideHours')}
+              sub={t('providerProfile.scheduling.requests.outsideHoursSub')}
               value={allowOutOfHours}
               onChange={setAllowOutOfHours}
             />
             <ToggleRow
-              label="On dates you've blocked"
-              sub="One-off dates you marked unavailable — a holiday, or a single day off. Separate from the setting above."
+              label={t('providerProfile.scheduling.requests.blocked')}
+              sub={t('providerProfile.scheduling.requests.blockedSub')}
               value={allowBlockedDates}
               onChange={setAllowBlockedDates}
             />
             <ToggleRow
-              label="At short notice"
+              label={t('providerProfile.scheduling.requests.shortNotice')}
               sub={minBookingNoticeHrs === '0'
-                ? "You have no minimum notice set, so there's nothing for this to relax"
-                : `Clients can ask for a time inside your ${minBookingNoticeHrs}-hour notice period`}
+                ? t('providerProfile.scheduling.requests.shortNoticeNone')
+                : t('providerProfile.scheduling.requests.shortNoticeSub', { hours: minBookingNoticeHrs })}
               value={allowShortNotice}
               onChange={setAllowShortNotice}
             />
             <ToggleRow
-              label="Further ahead than you take bookings"
-              sub={`Clients can ask for a date beyond your ${bookingWindowDays}-day booking window`}
+              label={t('providerProfile.scheduling.requests.beyond')}
+              sub={t('providerProfile.scheduling.requests.beyondSub', { days: bookingWindowDays })}
               value={allowBeyondWindow}
               onChange={setAllowBeyondWindow}
             />
@@ -349,16 +351,15 @@ export default function SchedulingScreen({ navigation }: any) {
             {allowOutOfHours && (
               <>
                 <View style={{ height: 18 }} />
-                <SectionLabel text="How early they can ask" />
+                <SectionLabel text={t('providerProfile.scheduling.requests.early')} />
                 <RadioGroup options={REQUEST_WINDOW_OPTS} value={requestBefore} onChange={setRequestBefore} />
 
                 <View style={{ height: 18 }} />
-                <SectionLabel text="How late they can ask" />
+                <SectionLabel text={t('providerProfile.scheduling.requests.late')} />
                 <RadioGroup options={REQUEST_WINDOW_OPTS} value={requestAfter} onChange={setRequestAfter} />
 
                 <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16, marginTop: 8, color: C.sub }}>
-                  Measured from your opening and closing time on the day being booked.
-                  On a day you don't work at all, the whole day is requestable.
+                  {t('providerProfile.scheduling.requests.measuredNote')}
                 </Text>
               </>
             )}

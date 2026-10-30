@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   PROVIDER_THEMES,
@@ -68,6 +69,7 @@ async function uploadBackgroundImage(
 
 export default function BrandingScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const P = isDarkMode ? DARK : LIGHT;
 
@@ -146,13 +148,13 @@ export default function BrandingScreen({ navigation }: any) {
   }, [user?.id]);
 
   const pickImage = useCallback(async () => {
-    if (!userId) { Alert.alert('Not signed in'); return; }
+    if (!userId) { Alert.alert(tr('providerProfile.branding.notSignedIn')); return; }
     // Avoid asking the native permission service again once access is already
     // granted. That extra hop delayed the picker even for returning providers.
     let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (!permission.granted) permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow access to your photo library to set a background image.');
+      Alert.alert(tr('providerProfile.portfolio.permissionTitle'), tr('providerProfile.branding.permissionBody'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -175,7 +177,7 @@ export default function BrandingScreen({ navigation }: any) {
       setBackgroundImage(url);
     } catch (e: any) {
       setBackgroundImage(previousImage);
-      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'BrandingScreen.upload'));
+      Alert.alert(tr('providerProfile.portfolio.uploadFailedTitle'), toUserMessage(e, tr('providerProfile.branding.uploadFailed'), 'BrandingScreen.upload'));
     } finally {
       setUploadingImage(false);
     }
@@ -228,7 +230,7 @@ export default function BrandingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Save failed', toUserMessage(e, 'Could not save your changes.', 'BrandingScreen.save'));
+      Alert.alert(tr('providerProfile.branding.saveFailedTitle'), toUserMessage(e, tr('providerProfile.common2.saveFailed'), 'BrandingScreen.save'));
     } finally {
       setSaving(false);
     }
@@ -273,9 +275,9 @@ export default function BrandingScreen({ navigation }: any) {
           >
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: P.text }]}>Branding & Style</Text>
+          <Text style={[styles.title, { color: P.text }]}>{t('providerProfile.businessProfile.branding.title')}</Text>
           <Text style={[styles.subtitle, { color: P.sub }]}>
-            Customise how your profile looks to clients
+            {t('providerProfile.branding.subtitle')}
           </Text>
 
           {/* Live preview */}
@@ -299,18 +301,18 @@ export default function BrandingScreen({ navigation }: any) {
             )}
             <View style={styles.previewContent}>
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
-                <Text style={styles.previewAccentLabel}>ACCENT</Text>
+                <Text style={styles.previewAccentLabel}>{t('providerProfile.themePicker.accent')}</Text>
               </View>
-              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont) }]}>Your Profile</Text>
-              <Text style={styles.previewSub}>Background preview</Text>
+              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont) }]}>{t('providerProfile.branding.previewName')}</Text>
+              <Text style={styles.previewSub}>{t('providerProfile.branding.previewSub')}</Text>
             </View>
           </View>
 
           {/* Profile theme — accent + card colour + backdrop sets */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{t('providerProfile.branding.theme')}</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Each preset is a matched set of accent, card, and backdrop colours.
+              {t('providerProfile.branding.themeSub')}
               Pick one or tap Custom to build your own.
             </Text>
             <ProviderThemePicker
@@ -324,8 +326,8 @@ export default function BrandingScreen({ navigation }: any) {
           </View>
 
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>Choose how your business name appears on your public profile.</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{t('providerProfile.branding.font')}</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>{t('providerProfile.branding.fontSub')}</Text>
             <ProviderFontPicker
               value={brandFont}
               onChange={setBrandFont}
@@ -339,16 +341,16 @@ export default function BrandingScreen({ navigation }: any) {
 
           {/* Background image */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{t('providerProfile.branding.image')}</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              A photo background overrides the gradient. Clients see it behind your profile.
+              {t('providerProfile.branding.imageSub')}
             </Text>
             <View style={styles.imageRow}>
               {backgroundImage ? (
                 <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" fadeDuration={0} />
               ) : (
                 <View style={[styles.imagePlaceholder, { backgroundColor: P.surface, borderColor: P.border }]}>
-                  <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>No image set</Text>
+                  <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>{t('providerProfile.branding.noImage')}</Text>
                 </View>
               )}
               <View style={styles.imageActions}>
@@ -361,7 +363,7 @@ export default function BrandingScreen({ navigation }: any) {
                   {uploadingImage ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.imageBtnText}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
+                    <Text style={styles.imageBtnText}>{backgroundImage ? t('providerProfile.branding.change') : t('providerProfile.branding.chooseImage')}</Text>
                   )}
                 </TouchableOpacity>
                 {backgroundImage && (
@@ -370,7 +372,7 @@ export default function BrandingScreen({ navigation }: any) {
                     onPress={removeImage}
                     activeOpacity={0.8}
                   >
-                    <Text style={[styles.imageBtnText, { color: P.sub }]}>Remove</Text>
+                    <Text style={[styles.imageBtnText, { color: P.sub }]}>{t('providerProfile.portfolio.remove')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -387,7 +389,7 @@ export default function BrandingScreen({ navigation }: any) {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.saveBtnText}>Save Changes</Text>
+              <Text style={styles.saveBtnText}>{t('providerProfile.kit.saveChanges')}</Text>
             )}
           </TouchableOpacity>
 

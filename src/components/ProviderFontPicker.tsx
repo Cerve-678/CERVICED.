@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { PROVIDER_FONTS } from '../constants/providerFonts';
+import { PROVIDER_FONTS, fontDisplayName } from '../constants/providerFonts';
+import { useTranslation } from '../i18n';
 
 interface ProviderFontPickerProps {
   value: string;
@@ -22,7 +23,9 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
   subColor,
   borderColor,
   cardColor,
-}) => (
+}) => {
+  const { t } = useTranslation();
+  return (
   <View style={styles.grid}>
     {PROVIDER_FONTS.map(font => {
       const isSelected = value === font.key;
@@ -40,19 +43,20 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
           ]}
           accessibilityRole="radio"
           accessibilityState={{ checked: isSelected }}
-          accessibilityLabel={font.name}
+          accessibilityLabel={fontDisplayName(font.key, font.name, t)}
         >
           <Text style={[styles.preview, { fontFamily: font.fontFamily, color: textColor }]} numberOfLines={1}>
-            Your Business
+            {t('providerProfile.fontPicker.preview')}
           </Text>
           <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={1}>
-            {font.name}
+            {fontDisplayName(font.key, font.name, t)}
           </Text>
         </TouchableOpacity>
       );
     })}
   </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

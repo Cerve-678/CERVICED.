@@ -26,13 +26,14 @@ import { Image } from 'expo-image';
 import { isDarkColor } from '../../constants/providerThemes';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
-  DAY_NAMES_ABBREV,
-  MONTH_NAMES_ABBREV,
+  dayName,
+  monthName,
   dateToYMD,
   formatShortDayDate,
   formatTime12,
 } from '../../utils/dateUtils';
 import { EXTERNAL_BOOKING_DISCLAIMER } from '../bookings/externalBookings';
+import { useTranslation } from '../../i18n';
 
 export interface DidYouBookResult {
   bookingDate: string;
@@ -84,6 +85,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
   onClose,
 }) => {
   const bottomInset = useSystemBottomInset();
+  const { t } = useTranslation();
   const onAccent = isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740';
 
   const [step, setStep] = useState<'ask' | 'details'>('ask');
@@ -199,25 +201,25 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                     </View>
                   )}
                   <Text style={[styles.askTitle, { color: tokens.text }]}>
-                    Did you book with {providerName}?
+                    {t('providerProfile.didYouBook.askTitle', { name: providerName })}
                   </Text>
                 </View>
                 <Text style={[styles.askSub, { color: tokens.sub }]}>
-                  Tell us and we'll add it to your Upcoming bookings, so everything stays in one place. {providerName} only sees how many clients said yes, never who.
+                  {t('providerProfile.didYouBook.askSub', { name: providerName })}
                 </Text>
                 <TouchableOpacity
                   style={[styles.primaryButton, { backgroundColor: accentColor }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setStep('details'); }}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.primaryButtonText, { color: onAccent }]}>YES, I BOOKED</Text>
+                  <Text style={[styles.primaryButtonText, { color: onAccent }]}>{t('providerProfile.didYouBook.yes')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.secondaryButton, { borderColor: tokens.border }]}
                   onPress={onClose}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.secondaryButtonText, { color: tokens.text }]}>NOT YET</Text>
+                  <Text style={[styles.secondaryButtonText, { color: tokens.text }]}>{t('providerProfile.didYouBook.notYet')}</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -228,11 +230,11 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.detailsHeader}>
-                  <Text style={[styles.detailsTitle, { color: tokens.text }]}>When is it?</Text>
+                  <Text style={[styles.detailsTitle, { color: tokens.text }]}>{t('providerProfile.didYouBook.whenTitle')}</Text>
                   <TouchableOpacity
                     onPress={onClose}
                     style={[styles.closeButton, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
-                    accessibilityLabel="Close"
+                    accessibilityLabel={t('providerProfile.didYouBook.close')}
                     accessibilityRole="button"
                   >
                     <Ionicons name="close" size={18} color={tokens.text} />
@@ -240,7 +242,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                 </View>
                 <Text style={[styles.detailsProvider, { color: tokens.sub }]}>{providerName}</Text>
 
-                <Text style={[styles.label, { color: accentColor }]}>DAY</Text>
+                <Text style={[styles.label, { color: accentColor }]}>{t('providerProfile.didYouBook.day')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}>
                   {days.map(d => {
                     const selected = dateToYMD(d) === dateToYMD(day);
@@ -259,7 +261,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                         ]}
                       >
                         <Text style={[styles.dayName, { color: selected ? onAccent : tokens.sub }]}>
-                          {DAY_NAMES_ABBREV[d.getDay()]?.toUpperCase()}
+                          {dayName(d.getDay(), 'short').toUpperCase()}
                         </Text>
                         <Text style={[styles.dayNumber, { color: selected ? onAccent : tokens.text }]}>
                           {d.getDate()}
@@ -271,12 +273,12 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                 <TouchableOpacity onPress={() => setPicker('date')} style={styles.linkButton} activeOpacity={0.7}>
                   <Text style={[styles.linkText, { color: accentColor }]}>
                     {dayIsInStrip
-                      ? 'Pick another date'
-                      : `${DAY_NAMES_ABBREV[day.getDay()]} ${day.getDate()} ${MONTH_NAMES_ABBREV[day.getMonth()]} · change`}
+                      ? t('providerProfile.didYouBook.pickAnother')
+                      : t('providerProfile.didYouBook.changeDate', { date: `${dayName(day.getDay(), 'short')} ${day.getDate()} ${monthName(day.getMonth(), 'short')}` })}
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={[styles.label, { color: accentColor }]}>TIME</Text>
+                <Text style={[styles.label, { color: accentColor }]}>{t('providerProfile.didYouBook.time')}</Text>
                 <TouchableOpacity
                   onPress={() => { if (!time) setTime(defaultTime()); setPicker('time'); }}
                   style={[styles.timeButton, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
@@ -284,7 +286,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                 >
                   <Ionicons name="time-outline" size={18} color={tokens.sub} />
                   <Text style={[styles.timeText, { color: time ? tokens.text : tokens.sub }]}>
-                    {time ? formatTime12(time) : 'Choose a time'}
+                    {time ? formatTime12(time) : t('providerProfile.didYouBook.chooseTime')}
                   </Text>
                 </TouchableOpacity>
 
@@ -300,20 +302,20 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                 )}
                 {picker && Platform.OS === 'ios' && (
                   <TouchableOpacity onPress={() => setPicker(null)} style={styles.linkButton} activeOpacity={0.7}>
-                    <Text style={[styles.linkText, { color: accentColor }]}>Done</Text>
+                    <Text style={[styles.linkText, { color: accentColor }]}>{t('providerProfile.didYouBook.done')}</Text>
                   </TouchableOpacity>
                 )}
 
-                <Text style={[styles.label, { color: accentColor }]}>WHAT ARE YOU HAVING?</Text>
+                <Text style={[styles.label, { color: accentColor }]}>{t('providerProfile.didYouBook.whatService')}</Text>
                 <View style={styles.chipWrap}>
                   {services.map(label => chip(label, service === label, () => setService(label)))}
-                  {chip('Something else', service === SOMETHING_ELSE, () => setService(SOMETHING_ELSE), true)}
+                  {chip(t('providerProfile.didYouBook.somethingElse'), service === SOMETHING_ELSE, () => setService(SOMETHING_ELSE), true)}
                 </View>
                 {service === SOMETHING_ELSE && (
                   <TextInput
                     value={otherService}
                     onChangeText={setOtherService}
-                    placeholder="e.g. Lash infill"
+                    placeholder={t('providerProfile.didYouBook.otherPlaceholder')}
                     placeholderTextColor={tokens.sub}
                     maxLength={80}
                     autoFocus
@@ -335,7 +337,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                   {saving ? (
                     <ActivityIndicator color={onAccent} />
                   ) : (
-                    <Text style={[styles.primaryButtonText, { color: onAccent }]}>ADD TO MY BOOKINGS</Text>
+                    <Text style={[styles.primaryButtonText, { color: onAccent }]}>{t('providerProfile.didYouBook.add')}</Text>
                   )}
                 </TouchableOpacity>
               </ScrollView>

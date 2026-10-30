@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { getMyProviderAccountEditorInfo, updateUserContactDetails, updateUserDob } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -32,6 +33,7 @@ const CP_LIGHT = {
 
 export default function ProviderAccountInfoScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const { user, updateUser, deleteProviderProfile, hatState } = useAuth();
 
@@ -63,7 +65,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
   }, []);
 
   async function handleSave() {
-    if (!name.trim()) { Alert.alert('Full name is required'); return; }
+    if (!name.trim()) { Alert.alert(tr('providerProfile.account.nameRequired')); return; }
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
@@ -78,7 +80,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Could not save changes', toUserMessage(e, 'Please try again.', 'ProviderAccountInfoScreen.save'));
+      Alert.alert(tr('providerProfile.account.saveFailedTitle'), toUserMessage(e, tr('providerProfile.account.tryAgain'), 'ProviderAccountInfoScreen.save'));
     } finally {
       setSaving(false);
     }
@@ -90,14 +92,14 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     // has a client profile, it's kept untouched and the user stays signed in.
     const isDualRole = hatState.canSwitch;
     Alert.alert(
-      'Delete Account',
+      tr('providerProfile.account.delete'),
       isDualRole
-        ? 'This removes your business profile, services, portfolio and provider bookings. Your client account is not affected and you\'ll remain signed in.'
-        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.',
+        ? tr('providerProfile.account.deleteDualBody')
+        : tr('providerProfile.account.deleteBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: tr('providerProfile.account.deleteConfirm'),
           style: 'destructive',
           onPress: async () => {
             setDeletingAccount(true);
@@ -109,7 +111,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
               // client mode and this screen unmounts the same way.
             } catch (err: any) {
               setDeletingAccount(false);
-              Alert.alert('Account not deleted', toUserMessage(err, 'Your account is still here — please try again.', 'ProviderAccountInfoScreen.deleteProfile'));
+              Alert.alert(tr('providerProfile.account.notDeletedTitle'), toUserMessage(err, tr('providerProfile.account.notDeletedBody'), 'ProviderAccountInfoScreen.deleteProfile'));
             }
           },
         },
@@ -137,7 +139,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
         <KeyboardDismissView style={{ flex: 1 }}>
 
           <View style={[styles.header, { borderBottomColor: C.border }]}>
-            <Text style={[styles.headerTitle, { color: C.text }]}>Account Info</Text>
+            <Text style={[styles.headerTitle, { color: C.text }]}>{t('providerProfile.account.title')}</Text>
             <TouchableOpacity
               style={[styles.closeBtn, { backgroundColor: C.surface }]}
               onPress={() => navigation.goBack()}
@@ -155,8 +157,8 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
             {/* Business Name */}
             {!!businessName && (
               <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-                <Text style={[styles.cardTitle, { color: C.text }]}>Business Name</Text>
-                <Text style={[styles.cardSub, { color: C.sub }]}>Your public provider name. Edit in My Profile.</Text>
+                <Text style={[styles.cardTitle, { color: C.text }]}>{t('providerProfile.account.businessName')}</Text>
+                <Text style={[styles.cardSub, { color: C.sub }]}>{t('providerProfile.account.businessNameSub')}</Text>
                 <View style={[styles.lockedRow, { backgroundColor: C.card, borderColor: C.border, marginTop: 10 }]}>
                   <Text style={[styles.lockedText, { color: C.text }]}>{businessName}</Text>
                   <Ionicons name="storefront-outline" size={14} color={C.sub} />
@@ -166,20 +168,20 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
 
             {/* Personal Details */}
             <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Text style={[styles.cardTitle, { color: C.text }]}>Personal Details</Text>
-              <Text style={[styles.cardSub, { color: C.sub }]}>Your sign-up details. Never shown publicly.</Text>
+              <Text style={[styles.cardTitle, { color: C.text }]}>{t('providerProfile.account.personal')}</Text>
+              <Text style={[styles.cardSub, { color: C.sub }]}>{t('providerProfile.account.personalSub')}</Text>
 
-              <Text style={labelStyle}>FULL NAME</Text>
+              <Text style={labelStyle}>{t('providerProfile.account.fullName')}</Text>
               <TextInput
                 style={inputStyle}
                 value={name}
                 onChangeText={setName}
-                placeholder="Your full name"
+                placeholder={t('providerProfile.account.fullNamePlaceholder')}
                 placeholderTextColor={C.sub}
                 autoCapitalize="words"
               />
 
-              <Text style={[labelStyle, { marginTop: 14 }]}>PHONE</Text>
+              <Text style={[labelStyle, { marginTop: 14 }]}>{t('providerProfile.account.phone')}</Text>
               <TextInput
                 style={inputStyle}
                 value={phone}
@@ -189,20 +191,20 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
                 keyboardType="phone-pad"
               />
 
-              <Text style={[labelStyle, { marginTop: 14 }]}>DATE OF BIRTH</Text>
+              <Text style={[labelStyle, { marginTop: 14 }]}>{t('providerProfile.account.dob')}</Text>
               <TextInput
                 style={inputStyle}
                 value={dob}
                 onChangeText={setDob}
-                placeholder="DD/MM/YYYY"
+                placeholder={t('providerProfile.account.dobPlaceholder')}
                 placeholderTextColor={C.sub}
               />
             </View>
 
             {/* Login Email */}
             <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Text style={[styles.cardTitle, { color: C.text }]}>Login Email</Text>
-              <Text style={[styles.cardSub, { color: C.sub }]}>Your account sign-in email. To change this, contact support.</Text>
+              <Text style={[styles.cardTitle, { color: C.text }]}>{t('providerProfile.account.loginEmail')}</Text>
+              <Text style={[styles.cardSub, { color: C.sub }]}>{t('providerProfile.account.loginEmailSub')}</Text>
               <View style={[styles.lockedRow, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Text style={[styles.lockedText, { color: C.text }]}>{authEmail}</Text>
                 <Ionicons name="lock-closed-outline" size={14} color={C.sub} />
@@ -217,7 +219,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
             >
               {saving
                 ? <ActivityIndicator color={C.ice} size="small" />
-                : <Text style={[styles.saveTxt, { color: C.ice }]}>Save Changes</Text>
+                : <Text style={[styles.saveTxt, { color: C.ice }]}>{t('providerProfile.kit.saveChanges')}</Text>
               }
             </TouchableOpacity>
 
@@ -230,7 +232,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
             >
               {deletingAccount
                 ? <ActivityIndicator color="#c0392b" size="small" />
-                : <Text style={styles.deleteAccountText}>Delete Account</Text>
+                : <Text style={styles.deleteAccountText}>{t('providerProfile.account.delete')}</Text>
               }
             </TouchableOpacity>
           </ScrollView>

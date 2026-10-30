@@ -12,6 +12,7 @@
  */
 
 import type { BusinessType, ServiceCategory } from '../../types/database';
+import type { TranslationKey } from '../../i18n/types';
 
 // Specialities are the specific, often culturally-named things a provider is
 // known for — narrower than the macro service_category, broader than one
@@ -460,3 +461,123 @@ export const REQUEST_WINDOW_OPTS = [
   { value: '240', label: '4 hrs'  },
   { value: '360', label: '6 hrs'  },
 ];
+
+// ── Display text ────────────────────────────────────────────────────────────
+// The English labels above are what gets stored and what signup (which stays
+// English) shows, so they never change. Screens show them through
+// optionText / localizeOptions, which look each one up here. Specialities,
+// style aesthetics, languages and the patch-test options (health) aren't
+// listed, so they show as written.
+
+const OPTION_TEXT_KEYS: Readonly<Record<string, TranslationKey>> = {
+  "Women": 'providerProfile.opt.women',
+  "Straight": 'providerProfile.opt.hair.straight',
+  "Wavy": 'providerProfile.opt.hair.wavy',
+  "Curly": 'providerProfile.opt.hair.curly',
+  "Coily": 'providerProfile.opt.hair.coily',
+  "Men": 'providerProfile.opt.men',
+  "Children": 'providerProfile.opt.children',
+  "Seniors": 'providerProfile.opt.seniors',
+  "Bridal & wedding parties": 'providerProfile.opt.bridalParties',
+  "All welcome": 'providerProfile.opt.allWelcome',
+  "Weekday mornings": 'providerProfile.opt.weekdayMornings',
+  "Weekday afternoons": 'providerProfile.opt.weekdayAfternoons',
+  "Weekday evenings": 'providerProfile.opt.weekdayEvenings',
+  "Saturdays": 'providerProfile.opt.saturdays',
+  "Sundays": 'providerProfile.opt.sundays',
+  "Same-day bookings": 'providerProfile.opt.sameDay',
+  "Wheelchair accessible": 'providerProfile.opt.wheelchair',
+  "Parking available": 'providerProfile.opt.parking',
+  "Ground floor access": 'providerProfile.opt.groundFloor',
+  "Home visits for mobility": 'providerProfile.opt.homeVisits',
+  "Step-free entrance": 'providerProfile.opt.stepFree',
+  "£  · Great value": 'providerProfile.opt.price.budget',
+  "££  · Mid-range": 'providerProfile.opt.price.mid',
+  "£££  · Premium": 'providerProfile.opt.price.premium',
+  "££££  · Luxury": 'providerProfile.opt.price.luxury',
+  "Just me": 'providerProfile.opt.team.solo',
+  "2–5 people": 'providerProfile.opt.team.small',
+  "6+ people": 'providerProfile.opt.team.large',
+  "Card": 'providerProfile.opt.pay.card',
+  "Cash": 'providerProfile.opt.pay.cash',
+  "Bank transfer": 'providerProfile.opt.pay.bank',
+  "Yes, open to new clients": 'providerProfile.opt.newClients.yes',
+  "Waitlist only": 'providerProfile.opt.newClients.waitlist',
+  "Not currently taking new clients": 'providerProfile.opt.newClients.no',
+  "None": 'providerProfile.opt.none',
+  "10 min": 'providerProfile.opt.min10',
+  "15 min": 'providerProfile.opt.min15',
+  "30 min": 'providerProfile.opt.min30',
+  "45 min": 'providerProfile.opt.min45',
+  "1 hr": 'providerProfile.opt.hr1',
+  "2 hrs": 'providerProfile.opt.hr2',
+  "3 hrs": 'providerProfile.opt.hr3',
+  "4 hrs": 'providerProfile.opt.hr4',
+  "6 hrs": 'providerProfile.opt.hr6',
+  "12 hrs": 'providerProfile.opt.hr12',
+  "24 hrs": 'providerProfile.opt.hr24',
+  "My default": 'providerProfile.opt.myDefault',
+  "Every 15 min": 'providerProfile.opt.every15',
+  "Every 30 min": 'providerProfile.opt.every30',
+  "Every hour": 'providerProfile.opt.everyHour',
+  "2 weeks": 'providerProfile.opt.weeks2',
+  "1 month": 'providerProfile.opt.month1',
+  "2 months": 'providerProfile.opt.months2',
+  "3 months": 'providerProfile.opt.months3',
+  "6 months": 'providerProfile.opt.months6',
+  "Any time": 'providerProfile.opt.anyTime',
+  "Unlimited": 'providerProfile.opt.unlimited',
+  "Hair": 'providerProfile.opt.cat.hair',
+  "Nails": 'providerProfile.opt.cat.nails',
+  "Lashes": 'providerProfile.opt.cat.lashes',
+  "Brows": 'providerProfile.opt.cat.brows',
+  "Makeup": 'providerProfile.opt.cat.makeup',
+  "Aesthetics": 'providerProfile.opt.cat.aesthetics',
+  "Other": 'providerProfile.opt.cat.somethingElse',
+  "Cuts, colour, braids, extensions, styling": 'providerProfile.opt.cat.hairSub',
+  "Manicures, pedicures, extensions, nail art": 'providerProfile.opt.cat.nailsSub',
+  "Extensions, lifts, tints": 'providerProfile.opt.cat.lashesSub',
+  "Shaping, lamination, microblading, tinting": 'providerProfile.opt.cat.browsSub',
+  "Bridal, occasion, editorial, SFX": 'providerProfile.opt.cat.makeupSub',
+  "Facials, peels, microneedling, injectables": 'providerProfile.opt.cat.aestheticsSub',
+  "Massage, waxing, tanning, holistic therapies": 'providerProfile.opt.cat.otherSub',
+  "Salon": 'providerProfile.opt.bt.salon',
+  "Studio": 'providerProfile.opt.bt.studio',
+  "Home Studio": 'providerProfile.opt.bt.homeBased',
+  "Mobile": 'providerProfile.opt.bt.mobile',
+  "Clients come to a commercial salon premises.": 'providerProfile.opt.bt.salonSub',
+  "Clients come to a dedicated studio space.": 'providerProfile.opt.bt.studioSub',
+  "Clients come to your home — address stays private until you release it.": 'providerProfile.opt.bt.homeBasedSub',
+  "You travel to the client. Your address is never sent automatically — only if you send it yourself.": 'providerProfile.opt.bt.mobileSub',
+  "Not set": 'providerProfile.opt.notSet',
+  "Always visible": 'providerProfile.opt.release.always',
+  "On confirmation": 'providerProfile.opt.release.onConfirmation',
+  "24h before": 'providerProfile.opt.release.dayBefore',
+  "48h before": 'providerProfile.opt.release.twoDays',
+  "72h before": 'providerProfile.opt.release.threeDays',
+  "5 days before": 'providerProfile.opt.release.fiveDays',
+  "1 week before": 'providerProfile.opt.release.week',
+  "Manual release": 'providerProfile.opt.release.manual',
+  "Your address is always visible to booked clients.": 'providerProfile.opt.release.alwaysSub',
+  "Shared automatically when the booking is confirmed.": 'providerProfile.opt.release.onConfirmationSub',
+  "Shared automatically 24 hours before the appointment.": 'providerProfile.opt.release.dayBeforeSub',
+  "Shared automatically 48 hours before the appointment.": 'providerProfile.opt.release.twoDaysSub',
+  "Shared automatically 72 hours before the appointment.": 'providerProfile.opt.release.threeDaysSub',
+  "Shared automatically 5 days before the appointment.": 'providerProfile.opt.release.fiveDaysSub',
+  "Shared automatically 1 week before the appointment.": 'providerProfile.opt.release.weekSub',
+  "Nothing is sent automatically — you send your address per booking from that booking’s detail page.": 'providerProfile.opt.release.manualSub',
+};
+
+/** An option label or sub-line in the app language (as written if unlisted). */
+export function optionText(text: string, t: (key: TranslationKey) => string): string {
+  const key = OPTION_TEXT_KEYS[text];
+  return key ? t(key) : text;
+}
+
+/** The same options with their label and sub-line in the app language. */
+export function localizeOptions<T extends { label: string; sub?: string }>(
+  opts: readonly T[],
+  t: (key: TranslationKey) => string,
+): T[] {
+  return opts.map(o => ({ ...o, label: optionText(o.label, t), ...(o.sub ? { sub: optionText(o.sub, t) } : {}) }));
+}

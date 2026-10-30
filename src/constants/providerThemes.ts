@@ -11,6 +11,8 @@
 //   custom:#RRGGBB:#RRGGBB:#RRGGBB   (backdrop : card : accent)
 
 // Default beige content backdrop — matches the app background.
+import type { TranslationKey } from '../i18n/types';
+
 export const SHEET_BG = '#F5F1EC';
 
 // Shared neutral card tone. Content cards (About / Services / Reviews) use this
@@ -284,4 +286,42 @@ export function themeBrandingColours(key: string | null | undefined): {
 } {
   const tokens = resolveProviderTheme(key);
   return { gradient: [...tokens.gradient], accentColor: tokens.accent };
+}
+
+// ── Display names ───────────────────────────────────────────────────────────
+// Theme and sheet keys are what's stored; `name` above is the English label.
+// Pickers show names through themeDisplayName / sheetDisplayName so they
+// follow the app language. Descriptions are never shown, so stay English.
+const THEME_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
+  "app": 'providerProfile.theme.app',
+  "blush": 'providerProfile.theme.blush',
+  "grey": 'providerProfile.theme.grey',
+  "charcoal": 'providerProfile.theme.charcoal',
+  "black": 'providerProfile.theme.black',
+  "pinkolive": 'providerProfile.theme.pinkolive',
+  "burgundyblue": 'providerProfile.theme.burgundyblue',
+  "ocean": 'providerProfile.theme.ocean',
+  "berry": 'providerProfile.theme.berry',
+  "clay": 'providerProfile.theme.clay',
+  "thyme": 'providerProfile.theme.thyme',
+  "harbour": 'providerProfile.theme.harbour',
+  "garnet": 'providerProfile.theme.garnet',
+  "fig": 'providerProfile.theme.fig',
+  "fern": 'providerProfile.theme.fern',
+  "greypink": 'providerProfile.theme.greypink',
+};
+const SHEET_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
+  "beige": 'providerProfile.sheet.beige',
+  "blush": 'providerProfile.sheet.blush',
+  "ivory": 'providerProfile.sheet.ivory',
+  "mist": 'providerProfile.sheet.mist',
+  "sagemist": 'providerProfile.sheet.sagemist',
+};
+export function themeDisplayName(key: string, fallback: string, translate: (key: TranslationKey) => string): string {
+  const k = THEME_NAME_KEYS[key];
+  return k ? translate(k) : fallback;
+}
+export function sheetDisplayName(key: string, fallback: string, translate: (key: TranslationKey) => string): string {
+  const k = SHEET_NAME_KEYS[key];
+  return k ? translate(k) : fallback;
 }
