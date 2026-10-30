@@ -259,22 +259,29 @@ function resolveOrdinalReference(
  */
 export async function converse(input: EngineInput): Promise<EngineReply> {
   const reply = await respond(input);
-  return { message: reply, context: lastContext };
+  return { message: reply, context: lastContextByHat[input.hat] };
 }
 
 /**
- * Context produced by the most recent `respond()` call.
+ * Context produced by the most recent `respond()` call for each hat.
  *
  * `respond` has many early returns (confirmations, dismissals, ambiguity,
  * fallbacks) and threading a return-tuple through all of them would obscure
- * the actual logic. This is written once per call and read immediately by
- * `converse`, which is the only supported way to read it.
+ * the actual logic. Keeping one slot per hat means a background client reply
+ * cannot overwrite the context returned by a provider turn (or vice versa).
  */
-let lastContext: ConversationContext = { entities: {} };
+const lastContextByHat: Record<BeccaHat, ConversationContext> = {
+  client: { hat: "client", entities: {} },
+  provider: { hat: "provider", entities: {} },
+};
+
+function setLastContext(hat: BeccaHat, context: ConversationContext): void {
+  lastContextByHat[hat] = { ...context, hat };
+}
 
 /**
  * Whether this turn is a link-only provider's. Set once at the top of
- * `respond()`, same reasoning as `lastContext`: every early return and every
+ * `respond()`, same reasoning as `lastContextByHat`: every early return and every
  * chip helper needs it, and threading it through all of them would bury the
  * logic. Read through `isLinkOnlyTurn()`, which also checks the hat.
  */
@@ -286,8 +293,19 @@ function isLinkOnlyTurn(hat: BeccaHat): boolean {
 
 export async function respond(input: EngineInput): Promise<ChatMessage> {
   const now = input.now ?? new Date();
-  const { message, hat, bookings, userId, conversation, interpreter } = input;
+  const { message, hat, bookings, userId, interpreter } = input;
+  // A provider conversation cannot continue a client thread (or vice versa).
+  // BeccaScreen resets its state on a switch, but this is the engine's own
+  // boundary for callers, restored state, and future surfaces.
+  const conversation = input.conversation?.hat && input.conversation.hat !== hat
+    ? undefined
+    : input.conversation;
   turnLinkOnly = hat === "provider" && input.linkOnly === true;
+  // Early returns (confirmation, safety boundary, social reply) still need
+  // to hand the caller context from THIS hat. Leaving a module-global context
+  // from the prior turn here was enough for a fast hat switch to revive an
+  // old client thread on the next provider message.
+  setLastContext(hat, conversation ?? { hat, entities: {} });
 
   // A confirmation short-circuits everything: it's not natural language and
   // must never be re-parsed as an intent.
@@ -334,7 +352,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   ) {
     // Preserve the active thread: the provider may use Back after changing
     // the setting and should land in the same capacity conversation.
-    lastContext = conversation ?? { entities: {} };
+    setLastContext(hat, conversation ?? { hat, entities: {} });
     return message_(
       {
         content: "You can set it under Booking Rules — choose the maximum bookings per day.",
@@ -426,7 +444,8 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // (ambiguity, low confidence, a capability that threw) then still hands the
   // next turn the topic and the last shown list — losing them on a fallback
   // is what would make one unclear message reset the whole conversation.
-  lastContext = {
+  setLastContext(hat, {
+    hat,
     entities,
     ...(conversation?.lastCapabilityId
       ? { lastCapabilityId: conversation.lastCapabilityId }
@@ -441,7 +460,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     ...(conversation?.offeredSuggestions
       ? { offeredSuggestions: conversation.offeredSuggestions }
       : {}),
-  };
+  });
 
   // "the first one" / "that one" — resolve an ordinal against the list Becca
   // last showed, before intent matching, so the reference behaves like a
@@ -684,7 +703,8 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // Hand the next turn everything it needs to resolve a follow-up: what was
   // being discussed, what was answered, and what was shown (so "the first
   // one" points at a real provider).
-  lastContext = {
+  setLastContext(hat, {
+    hat,
     entities,
     lastCapabilityId: capability.id,
     ...(entities.booking ? { lastBooking: entities.booking } : conversation?.lastBooking ? { lastBooking: conversation.lastBooking } : {}),
@@ -697,7 +717,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       conversation?.offeredSuggestions,
       suggestions,
     ),
-  };
+  });
 
   const factualContent = assumption ? `${assumption}\n\n${result.text}` : result.text;
   const content = await composeWithFallback(interpreter, {
@@ -1393,12 +1413,24 @@ function message_(
   const suggestions = options?.exactSuggestions || own.length > 0
     ? own
     : defaultFollowUps(hat);
+  // Provider Becca is a business copilot, never marketplace discovery. This
+  // is deliberately enforced at the message envelope as well as by the
+  // provider-only capability registry: a malformed or future capability
+  // cannot make another provider's card or portfolio appear in this hat.
+  const { providerRecommendations, inspiration, ...rest } = parts;
+  const safeParts = hat === "provider"
+    ? rest
+    : {
+      ...rest,
+      ...(providerRecommendations ? { providerRecommendations } : {}),
+      ...(inspiration ? { inspiration } : {}),
+    };
   return {
     id: `becca-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     role: "assistant",
     timestamp: new Date(),
-    ...parts,
-    content: formatForChat(parts.content, options?.title),
+    ...safeParts,
+    content: formatForChat(safeParts.content, options?.title),
     suggestions,
   };
 }

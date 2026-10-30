@@ -5,7 +5,7 @@
 
 #generated
 
-**2751 functions** across **379 files**.
+**2754 functions** across **379 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -295,7 +295,7 @@
 ### `src/screens/shared/` (13)
 - `AboutScreen.tsx` — AboutScreen · ExpandableSection
 - `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · decline · failed · load · now · onRefresh · owed · RefundReview · refunds · retry
-- `BeccaScreen.tsx` — BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · refreshSessions · scheduleNextTick · steps · thinkingStepsFor
+- `BeccaScreen.tsx` — BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · isActiveTurn · persistResponse · refreshSessions · scheduleNextTick · steps · thinkingStepsFor
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave
 - `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · didn · exportBookings · fullClientReset · fullProviderReset · is · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
@@ -329,7 +329,7 @@
 ### `src/services/becca/` (9)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
 - `askNormaliser.ts` — **normalizeAsk**
-- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
+- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
 - `matcher.ts` — scoreEntities · scorePhrases · **understand**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
