@@ -2877,10 +2877,14 @@ async function sendProviderClientNotifications(
   return data ?? 0;
 }
 
+/** Cap on one promotion's bell-follower fan-out, so a send can't pull an
+ *  unbounded list. Far above any provider's follower count today. */
+const PROMOTION_FOLLOWER_AUDIENCE_LIMIT = 5000;
+
 /** Send in-app promotion notifications to a provider's clients */
 export async function sendPromotionNotificationsToClients(
   promotion: import("../types/database").DbPromotion,
-  audience: "all" | "repeat" | "bookmarked" | "interested",
+  audience: "all" | "repeat" | "followers" | "interested",
 ): Promise<{ sent: number }> {
   const {
     data: { user },
@@ -2901,8 +2905,9 @@ export async function sendPromotionNotificationsToClients(
   let userIds: string[] = [];
 
   if (audience === "interested") {
-    // This provider's own audience: bookmarked, followed, or previously
-    // booked THIS provider. Never reaches other providers' clients, even
+    // This provider's own audience: bell followers, or clients who
+    // previously booked THIS provider. Saving a provider is just a list and
+    // isn't included. Never reaches other providers' clients, even
     // ones into the same service category — promotions stay per-provider.
     // See supabase/promotion_interest_targeting.sql for the definition.
     const { data, error } = await supabase.rpc("get_promotion_audience", {
@@ -2910,12 +2915,16 @@ export async function sendPromotionNotificationsToClients(
     });
     if (error) throw error;
     userIds = (data ?? []).map((r: any) => r.user_id);
-  } else if (audience === "bookmarked") {
-    const { data } = await supabase
-      .from("bookmarks")
+  } else if (audience === "followers") {
+    // Bell followers — the bell is the switch for a provider's updates.
+    const { data, error } = await supabase
+      .from("provider_follows")
       .select("user_id")
-      .eq("provider_id", provider.id);
-    userIds = (data ?? []).map((r: any) => r.user_id);
+      .eq("provider_id", provider.id)
+      .eq("notify_enabled", true)
+      .limit(PROMOTION_FOLLOWER_AUDIENCE_LIMIT);
+    if (error) throw error;
+    userIds = (data ?? []).map((r: { user_id: string }) => r.user_id);
   } else {
     const { data } = await supabase
       .from("bookings")
@@ -5103,6 +5112,32 @@ export async function getAvailabilityDateBundle(
     overrides: exceptions.overrides,
     serviceBuffer: serviceBuffers[0] ?? null,
   };
+}
+
+export interface ServiceOpenWithin {
+  service_id: string;
+  has_slot: boolean;
+  /** Earliest day with a free slot ('YYYY-MM-DD', UK date), or null. */
+  next_available: string | null;
+}
+
+/**
+ * The one "is there a free slot" check (get_services_open_within): per
+ * service, within `withinDays` days and never past what the provider has
+ * opened. Live providers' active services only — anything else comes back
+ * without a row.
+ */
+export async function getServicesOpenWithin(
+  serviceIds: string[],
+  withinDays: number,
+): Promise<ServiceOpenWithin[]> {
+  if (serviceIds.length === 0) return [];
+  const { data, error } = await supabase.rpc("get_services_open_within", {
+    p_service_ids: serviceIds,
+    p_within_days: withinDays,
+  });
+  if (error) throw error;
+  return (data ?? []) as ServiceOpenWithin[];
 }
 
 export async function getProviderBookingWindowDays(providerId: string): Promise<number> {
@@ -7356,81 +7391,12 @@ export async function removeMyExternalBooking(id: string): Promise<void> {
 // PROVIDER FOLLOWS
 // ─────────────────────────────────────────────────────────
 
-/** Follow a provider */
-export async function followProvider(providerId: string): Promise<void> {
-  if (!UUID_RE.test(providerId)) return;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
-  const { error } = await supabase
-    .from("provider_follows")
-    .insert({ user_id: user.id, provider_id: providerId });
-  if (error && error.code !== "23505") throw error;
-}
-
-/** Unfollow a provider */
-export async function unfollowProvider(providerId: string): Promise<void> {
-  if (!UUID_RE.test(providerId)) return;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
-  const { error } = await supabase
-    .from("provider_follows")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId);
-  if (error) throw error;
-}
-
-/** Check if the current user follows a provider */
-export async function checkIsFollowing(providerId: string): Promise<boolean> {
-  if (!UUID_RE.test(providerId)) return false;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) return false;
-  const { data } = await supabase
-    .from("provider_follows")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId)
-    .maybeSingle();
-  return !!data;
-}
-
 /**
- * Whether the current user has the "notify me" bell on for this provider —
- * distinct from checkIsFollowing: a client can follow without notifications
- * on. False (not just "not following") when there's no row at all, so
- * ProviderProfileScreen's bell can seed its initial state from one query
- * instead of two.
- */
-export async function checkFollowNotifyEnabled(
-  providerId: string,
-): Promise<boolean> {
-  if (!UUID_RE.test(providerId)) return false;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) return false;
-  const { data } = await supabase
-    .from("provider_follows")
-    .select("notify_enabled")
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId)
-    .maybeSingle();
-  return (data as { notify_enabled: boolean } | null)?.notify_enabled ?? false;
-}
-
-/**
- * Turns the "notify me about this provider's availability" bell on/off.
- * Turning on implicitly follows (upsert) if the client wasn't already —
- * the bell is a single tap, not a two-step follow-then-enable flow.
- * Turning off leaves the follow row in place (only clears the flag) so a
- * client who was following before tapping the bell doesn't get silently
- * unfollowed by turning notifications back off.
+ * Turns the provider-profile bell on/off. The bell IS the follow: on creates
+ * the provider_follows row, off deletes it. Clearing a flag instead used to
+ * leave the row behind, and every other reader of provider_follows
+ * (promotion/announcement audiences, follower counts) kept counting a client
+ * who had switched the bell off.
  */
 export async function setProviderFollowNotify(
   providerId: string,
@@ -7442,12 +7408,18 @@ export async function setProviderFollowNotify(
   } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
   await assertNotOwnProvider(providerId, user.id);
-  const { error } = await supabase
-    .from("provider_follows")
-    .upsert(
-      { user_id: user.id, provider_id: providerId, notify_enabled: enabled },
-      { onConflict: "user_id,provider_id" },
-    );
+  const { error } = enabled
+    ? await supabase
+        .from("provider_follows")
+        .upsert(
+          { user_id: user.id, provider_id: providerId, notify_enabled: true },
+          { onConflict: "user_id,provider_id" },
+        )
+    : await supabase
+        .from("provider_follows")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("provider_id", providerId);
   if (error) throw error;
 }
 

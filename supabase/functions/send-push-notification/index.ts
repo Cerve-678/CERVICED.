@@ -227,12 +227,24 @@ const PUSH_TITLE_OVERRIDES: Record<string, string> = {
   'Booking Request — Outside Your Hours': 'Outside Hours Request',
 };
 
+/**
+ * What a provider's bell covers: everything that provider sends — "has space
+ * again", their monthly release, promotions and announcements. Tapping the
+ * bell for one provider is a yes for that provider, so these push even when
+ * "Offers & Promotions" (off by default) is off; turning the bell off is how
+ * to stop them (it deletes the follow). Saving a provider is just a list and
+ * sends nothing.
+ */
+const BELL_COVERED_TYPES = new Set(['announcement', 'promotion']);
+
 /** True when this notification may be pushed to this user. */
 function pushAllowedByPrefs(
   type: string | undefined,
   recipientRole: string | undefined,
   prefs: Record<string, boolean> | null,
+  belled = false,
 ): boolean {
+  if (belled && type && BELL_COVERED_TYPES.has(type)) return true;
   const map = recipientRole === 'client' ? CLIENT_PREF_KEY_BY_TYPE
     : recipientRole === 'provider' ? PROVIDER_PREF_KEY_BY_TYPE
     : null;
@@ -319,11 +331,26 @@ serve(async (req) => {
     // nothing on the send path read these toggles at all, so every switch on
     // that screen was decorative. The notifications row itself is already
     // written and untouched — only the push is suppressed.
+    // Only looked up for the two types the bell can override, so every other
+    // push keeps its single round trip.
+    let belled = false;
+    if (BELL_COVERED_TYPES.has(payload.record.type) && payload.record.provider_id) {
+      const { data: follow } = await supabase
+        .from('provider_follows')
+        .select('id')
+        .eq('user_id', user_id)
+        .eq('provider_id', payload.record.provider_id)
+        .eq('notify_enabled', true)
+        .maybeSingle();
+      belled = !!follow;
+    }
+
     if (
       !pushAllowedByPrefs(
         payload.record.type,
         payload.record.recipient_role,
         userRow.notification_preferences as Record<string, boolean> | null,
+        belled,
       )
     ) {
       console.log(
