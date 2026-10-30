@@ -11,6 +11,8 @@ tags: [screen, provider]
 - [[PaymentsScreen\|Payments]]
 - [[ProviderScheduleScreen\|ProviderSchedule]]
 - [[BrandingScreen\|Branding]]
+- [[ProviderBookingDetailScreen\|BookingDetail]]
+- `ProviderHome` _(navigator / dynamic)_
 - [[ProviderAnalyticsScreen\|Analytics]]
 - [[PoliciesScreen\|Policies]]
 - [[BusinessInfoScreen\|BusinessInfo]]

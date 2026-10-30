@@ -112,6 +112,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Provider profile creation/edit | ✅ | `src/screens/provider/ProviderMyProfileScreen.tsx` |
+| My Profile "Today" cards (day summary + swipeable booking cards) | ✅ code, ⚠️ not device-run | `src/features/providers/TodayScheduleCards.tsx`, timing rules in `todaySchedule.ts`. Summary leads the Dashboard until 2pm, booking cards lead from 2pm, summary leads again once the last client is done (cards then show tomorrow); the other card sits under Your work. "Needs a patch test" comes from `services.patch_test_required` — nothing records whether one was done |
 | Service management | ✅ | Provider profile / services screens |
 | Portfolio photos | ✅ | Upload service, `portfolios/` storage bucket |
 | Weekly hours + blocked dates | ✅ | `src/screens/provider/ProviderScheduleScreen.tsx` → `provider_availability`, `provider_blocked_dates` |

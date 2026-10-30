@@ -23,7 +23,10 @@ Last updated: 18 October 2026.
 | Late and no-show fees | Yes | Merged to `main` (b6c0255), functions deployed |
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
+| Provider told their payout is on hold (notification, email, booking, Payments) | No | Branch `feat/refund-payout-hold-notice`; migration `20261025210000` APPLIED 2026-10-29, `send-support-request` not deployed |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
+| Failed payout retried (1, 2, 4 days) + support alerted + provider told + daily summary email | No | Branch `feat/payout-retries-and-alerts`; migration `20261025211000` APPLIED 2026-10-29; `release-payouts`, `stripe-webhook`, new `money-daily-summary` not deployed |
+| Admin Money screen (failed payouts, money owed, refund requests; retry, approve, decline) | No | Branch `feat/admin-money-screen` (on top of the line above); migration `20261025212000` APPLIED 2026-10-29; `refund-payment` not deployed. Admins = `admin_users` rows, added in SQL only; every action logged in `admin_actions` |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
 | Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
@@ -63,10 +66,11 @@ checkout. The provider never pays the fee and never sees it.
 | 4 | Collect | Stripe `CardForm` / Apple Pay / Google Pay / **PayPal**, inside the app's Complete Payment sheet | Client authorises payment. Card details go straight from Stripe's own field to Stripe; PayPal opens PayPal's page and returns to the app (`cerviced://safepay`, forwarded to Stripe in `App.tsx`); the PayPal button is hidden when the checkout has fees. A decline stays in the sheet and retries the same intent; closing the sheet cancels the unconfirmed intent |
 | 5 | Capture & confirm | `finalize-payment-intent` | Captures, then promotes bookings `on_hold` → `pending`/`confirmed`, then records `bookings.payment_method` (card / apple / google / paypal) from the Stripe payment method for receipts. If a PayPal return lands before Stripe marks it ready, the app shows "checking your payment" and the webhook finishes it |
 | 6 | Hold payout | `create_held_payout_on_finalize` | Creates a held payout row. Release time = appointment end + **the provider's chosen hold** (`providers.payout_hold_days`: 1, 3, 7, 14 or 30 days; default 1) |
-| 7 | Release | `process_due_payouts` → `release-payouts` | Every 15 min: re-checks the booking, skips it while a refund request is open*, takes out anything the provider owes*, transfers the rest to their Stripe account |
+| 7 | Release | `process_due_payouts` → `release-payouts` | Every 15 min: re-checks the booking, skips it while a refund request is open*, takes out anything the provider owes*, transfers the rest to their Stripe account. A failed transfer is tried again 1, 2 and 4 days later (row stays `held`, `attempt_count` counts tries) and only becomes `failed` after the 4th; support is emailed every time, and the provider is told when it's their Stripe account† |
 | 8 | Bank payout | Stripe | Stripe pays the provider's bank on its own default schedule (CERVICED doesn't set it) |
 
 \* Live since 18 Oct (38c6e8b9).
+† On a branch, not live: see the status table.
 
 **Changing payout timing:** a longer choice also pushes back payouts already
 waiting. A shorter one applies to new bookings only, so a held payout can never
@@ -169,7 +173,7 @@ estimate of loss, not a penalty.
 | Declined fee retries | Up to 3 automatic retries in those 7 days, declines only, new wording only (19 Oct) |
 | Removing a card a fee may need | Blocked until 24h after the appointment (19 Oct) |
 | Refund requests | Go to the provider first, then Cerviced if passed on |
-| Payout while a refund request is open | Held until it closes (18 Oct) |
+| Payout while a refund request is open | Held until it closes (18 Oct); the provider is told so in the Refund Requested notification and email, on the booking and on Payments (branch, not live) |
 | Provider can't cover a reversal | Taken from their next payout (18 Oct) |
 | CERVICED's fee on a partial refund | Kept; returned on a full refund |
 | Off-app payments | Never tracked by the app |
@@ -200,5 +204,16 @@ estimate of loss, not a penalty.
   applied AFTER that deploy.
 - A reschedule to a later date may not move the payout release date (per 3 Oct;
   not re-verified).
-- Failed payouts aren't retried or alerted; there's no admin view for
-  shortfalls.
+- Failed payouts aren't retried or alerted on `main` yet; the fix (retries,
+  support emails, provider notice, a daily 08:00 UTC summary to support@) is
+  on `feat/payout-retries-and-alerts`. The admin view of shortfalls and refund
+  requests is on `feat/admin-money-screen`: a hidden "Money (admin)" settings
+  row for `admin_users` accounts. Approving a refund there goes through
+  `refund-payment` (which now accepts an admin's own sign-in, logged as
+  `approve_refund` in `admin_actions`); a full refund returns the platform
+  fee, anything less comes out of the provider's share. Declining needs a note,
+  which is what the client is told, and is only offered once the provider has
+  passed the request on. A provider's own BANK payout
+  failing (`payout.failed`) is Stripe's to retry; on the branch the webhook
+  tells the provider and support, but only if the webhook endpoint receives
+  Connect account events, which hasn't been checked.

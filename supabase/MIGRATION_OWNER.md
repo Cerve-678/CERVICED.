@@ -25,11 +25,24 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
-### Written 2026-10-26, NOT applied ("Always visible" address on the profile)
+### Applied 2026-10-30 ("Always visible" address on the profile)
 
 | Authored version | Name | Status |
 |---|---|---|
 | 20261026120000 | `always_visible_address_on_profile` | **APPLIED 2026-10-30** by the user (SQL editor), after `20261026110000`, version recorded by the file. Verified live: `anon` cannot execute it; 1 live salon/studio on `always` (stays public, user's call). Frontier: live `20261025130000`; unapplied peers on open branches go up to `20261025212000`, so numbered above them. Re-check both and renumber if anything has landed since. Adds `get_public_provider_address(uuid)` SECURITY DEFINER (authenticated only): returns the full address + coordinates only for a live, active salon/studio on `address_release_policy = 'always'` with a non-blank address; no row otherwise. Redefines nothing. The file records its own version. **Must be applied before `feat/always-visible-address-on-profile` merges**: the provider profile calls it (a missing function only logs and falls back to the area, but every profile open would log an error). |
+
+### Applied 2026-10-29 (tip notification, refund hold notice, payout retries, admin Money screen)
+
+Applied by cerviced-74 on the user's direct OK, in this order. Each one ran in a single transaction behind a guard (it aborts unless `max(version)` and the `notifications_type_check` type count are what the file expects, and 210000 also checks `request_booking_refund`'s live md5). Each was first dry-run in a rolled-back transaction and verified live afterwards. Every file records its own version.
+
+| Version | Name | Verified live after |
+|---|---|---|
+| 20261025145000 | `tip_received_notification` (cerviced-a8, PR #163) | 51 types, the same set as the file; trigger `on_booking_tip_succeeded` present. `send-push-notification` NOT deployed yet. |
+| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` NOT deployed yet. |
+| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts`, `stripe-webhook`, `money-daily-summary` NOT deployed yet. |
+| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` NOT deployed yet. |
+
+Frontier after: **20261025212000**. Still unapplied and now below it: `20261025150000_provider_booked_contact` (#174, cerviced-3f; must renumber). Queued above it: cerviced-14's `20261026100000` / `110000` / `120000`.
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 

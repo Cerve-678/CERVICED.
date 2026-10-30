@@ -2,6 +2,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 import { lapseFeePayRequests, retryDueFees } from '../_shared/feePayRequest.ts';
+import {
+  classifyTransferFailure, describeTransferFailure, nextPayoutRetryAt, PAYOUT_MAX_ATTEMPTS,
+} from '../_shared/payoutRetry.ts';
+import { sendSupportAlert } from '../_shared/supportAlert.ts';
+import { payoutFailedSupportEmail } from '../_shared/emailTemplates.ts';
 
 // Step 3 of the Connect build (handoff: stripe-connect-payouts-build-handoff):
 // the release job. It finds 'held' payout rows whose hold has elapsed
@@ -60,7 +65,7 @@ Deno.serve(async (req: Request) => {
   try {
     const { data: due, error: dueError } = await admin
       .from('provider_payouts')
-      .select('id, booking_id, provider_id, stripe_account_id, payout_amount, currency')
+      .select('id, booking_id, provider_id, stripe_account_id, payout_amount, currency, attempt_count')
       .eq('status', 'held')
       .lte('release_after', new Date().toISOString())
       .order('release_after', { ascending: true })
@@ -220,11 +225,10 @@ Deno.serve(async (req: Request) => {
         transferred++;
       } catch (err) {
         // A real transfer failure (e.g. insufficient platform balance, account
-        // restricted). Mark failed with the real reason for admin follow-up;
-        // it won't be auto-retried (status leaves 'held'). If no transfer was
-        // made, whatever was deducted for shortfalls goes back on the provider's
-        // balance owed, so it isn't forgiven by a payout that never went out.
-        // A timeout can hide a transfer Stripe did make, so look before giving back.
+        // restricted). If no transfer was made, whatever was deducted for
+        // shortfalls goes back on the provider's balance owed, so it isn't
+        // forgiven by a payout that never went out. A timeout can hide a
+        // transfer Stripe did make, so look before giving back.
         if (!madeTransfer) {
           const late = await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 }).catch(() => null);
           madeTransfer = !!late?.data[0] || late === null;
@@ -233,13 +237,25 @@ Deno.serve(async (req: Request) => {
           const { error: releaseErr } = await admin.rpc('release_provider_shortfalls', { p_payout_id: row.id });
           if (releaseErr) console.error(`[release-payouts] could not give back shortfall deductions on ${row.id}: ${String(releaseErr)}`);
         }
+        // Try again later, up to PAYOUT_MAX_ATTEMPTS tries, by leaving the row
+        // 'held' with a later release_after. Only when we know no transfer
+        // went out: if we couldn't tell (madeTransfer), a person checks Stripe.
+        const attempts = Number(row.attempt_count ?? 0) + 1;
+        const retryAt = madeTransfer ? null : nextPayoutRetryAt(attempts, new Date());
         const { error: failWriteErr } = await admin
           .from('provider_payouts')
-          .update({ status: 'failed', failure_reason: String(err).slice(0, 500) })
+          .update({
+            ...(retryAt ? { release_after: retryAt.toISOString() } : { status: 'failed' }),
+            failure_reason: String(err).slice(0, 500),
+            failure_cause: classifyTransferFailure(err),
+            attempt_count: attempts,
+            last_failed_at: new Date().toISOString(),
+          })
           .eq('id', row.id)
           .eq('status', 'held');
         if (failWriteErr) console.error(`[release-payouts] fail-status write errored for ${row.id}: ${String(failWriteErr)}`);
-        console.error(`[release-payouts] transfer failed for payout ${row.id}: ${String(err)}`);
+        console.error(`[release-payouts] transfer failed for payout ${row.id} (try ${attempts}): ${String(err)}`);
+        await reportPayoutFailure(row, err, attempts, retryAt, madeTransfer);
         failed++;
       }
     }
@@ -265,6 +281,59 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
+
+// Tells support about a failed provider payout straight away, and tells the
+// provider the first time it fails for a reason only they can fix. Never
+// throws: the payout row is already written by the time this runs.
+async function reportPayoutFailure(
+  row: { id: string; booking_id: string; provider_id: string; payout_amount: number },
+  err: unknown,
+  attempts: number,
+  retryAt: Date | null,
+  uncertain: boolean,
+) {
+  try {
+    const cause = classifyTransferFailure(err);
+    const [{ data: provider }, { data: booking }] = await Promise.all([
+      admin.from('providers').select('user_id, display_name').eq('id', row.provider_id).maybeSingle(),
+      admin.from('bookings').select('service_name_snapshot, booking_date').eq('id', row.booking_id).maybeSingle(),
+    ]);
+    const amount = `£${(Number(row.payout_amount) / 100).toFixed(2)}`;
+    const day = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
+    const nextStep = uncertain
+      ? "We couldn't tell whether Stripe sent it, so it won't be tried again by itself. Check the provider's transfers in Stripe before retrying it from the admin screen."
+      : retryAt
+        ? `It will be tried again by itself on ${day(retryAt)}.${cause === 'provider_account' ? ' The provider has been asked to fix their Stripe account.' : ''} You don't need to do anything yet.`
+        : 'That was the last automatic try. Retry it from the admin screen once the cause is fixed.';
+    await sendSupportAlert(payoutFailedSupportEmail({
+      kind: 'transfer',
+      provider: provider?.display_name || 'Unknown provider',
+      amount,
+      booking: booking ? `${booking.service_name_snapshot ?? 'Booking'} · ${booking.booking_date}` : null,
+      why: describeTransferFailure(cause),
+      tries: `${attempts} of ${PAYOUT_MAX_ATTEMPTS}`,
+      nextStep,
+    }), 'release-payouts');
+
+    if (cause === 'provider_account' && attempts === 1 && provider?.user_id) {
+      const { error } = await admin.from('notifications').insert({
+        user_id: provider.user_id,
+        type: 'payout_failed',
+        title: `We couldn't send your ${amount}`,
+        message: "Your Stripe account can't receive payments yet. Open Payments to finish setting it up, and we'll send it again by itself.",
+        priority: 'high',
+        is_actionable: true,
+        booking_id: row.booking_id,
+        provider_id: row.provider_id,
+        recipient_role: 'provider',
+        metadata: { payout_id: row.id },
+      });
+      if (error) console.error(`[release-payouts] provider not told about failed payout ${row.id}: ${String(error)}`);
+    }
+  } catch (e) {
+    console.error(`[release-payouts] could not report failed payout ${row.id}: ${String(e)}`);
+  }
+}
 
 // Late/no-show fee payouts (booking_fee_charges, not provider_payouts — see the
 // fees migration for why). Same money-safety rules as above: re-check the fee
