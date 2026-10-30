@@ -65,6 +65,7 @@ import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
+import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -2877,10 +2878,14 @@ async function sendProviderClientNotifications(
   return data ?? 0;
 }
 
+/** Cap on one promotion's bell-follower fan-out, so a send can't pull an
+ *  unbounded list. Far above any provider's follower count today. */
+const PROMOTION_FOLLOWER_AUDIENCE_LIMIT = 5000;
+
 /** Send in-app promotion notifications to a provider's clients */
 export async function sendPromotionNotificationsToClients(
   promotion: import("../types/database").DbPromotion,
-  audience: "all" | "repeat" | "bookmarked" | "interested",
+  audience: "all" | "repeat" | "followers" | "interested",
 ): Promise<{ sent: number }> {
   const {
     data: { user },
@@ -2901,8 +2906,9 @@ export async function sendPromotionNotificationsToClients(
   let userIds: string[] = [];
 
   if (audience === "interested") {
-    // This provider's own audience: bookmarked, followed, or previously
-    // booked THIS provider. Never reaches other providers' clients, even
+    // This provider's own audience: bell followers, or clients who
+    // previously booked THIS provider. Saving a provider is just a list and
+    // isn't included. Never reaches other providers' clients, even
     // ones into the same service category — promotions stay per-provider.
     // See supabase/promotion_interest_targeting.sql for the definition.
     const { data, error } = await supabase.rpc("get_promotion_audience", {
@@ -2910,12 +2916,16 @@ export async function sendPromotionNotificationsToClients(
     });
     if (error) throw error;
     userIds = (data ?? []).map((r: any) => r.user_id);
-  } else if (audience === "bookmarked") {
-    const { data } = await supabase
-      .from("bookmarks")
+  } else if (audience === "followers") {
+    // Bell followers — the bell is the switch for a provider's updates.
+    const { data, error } = await supabase
+      .from("provider_follows")
       .select("user_id")
-      .eq("provider_id", provider.id);
-    userIds = (data ?? []).map((r: any) => r.user_id);
+      .eq("provider_id", provider.id)
+      .eq("notify_enabled", true)
+      .limit(PROMOTION_FOLLOWER_AUDIENCE_LIMIT);
+    if (error) throw error;
+    userIds = (data ?? []).map((r: { user_id: string }) => r.user_id);
   } else {
     const { data } = await supabase
       .from("bookings")
@@ -4847,8 +4857,16 @@ export async function getAvailabilityEmergencyPolicyRow(providerId: string): Pro
   return selectProviderColumns(providerId, EMERGENCY_POLICY_COLUMNS);
 }
 
+/** The two columns that decide how far ahead a provider can be booked —
+ *  read together everywhere, since a release day overrides the window. */
+const BOOKING_HORIZON_COLUMNS =
+  "booking_window_days, schedule_release_day:automation_settings->scheduleReleaseDay";
+
 export interface AvailabilityProviderSettingsRow {
   booking_window_days: number;
+  /** automation_settings.scheduleReleaseDay — set = monthly release, which
+   *  replaces booking_window_days. See utils/bookingHorizon. */
+  schedule_release_day: number | null;
   slot_interval_mins: number;
   buffer_mins: number;
   min_booking_notice_hrs: number;
@@ -4916,13 +4934,17 @@ async function fetchAvailabilityProviderCore(providerId: string): Promise<{
   windowRows: { day_of_week: number; start_time: string; end_time: string }[];
   legacyRows: { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
 }> {
-  const baseColumns = "booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs";
+  const baseColumns = `${BOOKING_HORIZON_COLUMNS}, slot_interval_mins, buffer_mins, min_booking_notice_hrs`;
   const [settingsRow, weeklyRows] = await Promise.all([
     selectProviderColumns(providerId, `${baseColumns}, ${EMERGENCY_POLICY_COLUMNS}`),
     getAvailabilityWeeklyScheduleRows(providerId),
   ]);
   return {
-    settings: settingsRow as AvailabilityProviderSettingsRow | null,
+    // The release day is a JSON value inside automation_settings — normalise it
+    // to the number-or-null the row type promises.
+    settings: settingsRow
+      ? { ...(settingsRow as unknown as AvailabilityProviderSettingsRow), schedule_release_day: toReleaseDay(settingsRow['schedule_release_day']) }
+      : null,
     ...weeklyRows,
   };
 }
@@ -4945,8 +4967,9 @@ async function fetchAvailabilityProviderCore(providerId: string): Promise<{
  */
 const AVAILABILITY_RANGE_CACHE_TTL_MS = 15_000;
 const AVAILABILITY_RANGE_CACHE_MAX_ENTRIES = 40;
-// Booking windows cap at 60 days (getProviderBookingWindowDays' default); the
-// slack covers resolveNextAvailableSlot's "+1..+3 day" rescue scan past that.
+// Booking windows cap at 60 days (the default window), and a monthly release
+// reaches at most the end of next month (62 days); the slack covers
+// resolveNextAvailableSlot's "+1..+3 day" rescue scan past that.
 const AVAILABILITY_RANGE_HORIZON_DAYS = 66;
 
 const toIsoDate = (d: Date): string =>
@@ -5105,14 +5128,44 @@ export async function getAvailabilityDateBundle(
   };
 }
 
-export async function getProviderBookingWindowDays(providerId: string): Promise<number> {
+export interface ServiceOpenWithin {
+  service_id: string;
+  has_slot: boolean;
+  /** Earliest day with a free slot ('YYYY-MM-DD', UK date), or null. */
+  next_available: string | null;
+}
+
+/**
+ * The one "is there a free slot" check (get_services_open_within): per
+ * service, within `withinDays` days and never past what the provider has
+ * opened. Live providers' active services only — anything else comes back
+ * without a row.
+ */
+export async function getServicesOpenWithin(
+  serviceIds: string[],
+  withinDays: number,
+): Promise<ServiceOpenWithin[]> {
+  if (serviceIds.length === 0) return [];
+  const { data, error } = await supabase.rpc("get_services_open_within", {
+    p_service_ids: serviceIds,
+    p_within_days: withinDays,
+  });
+  if (error) throw error;
+  return (data ?? []) as ServiceOpenWithin[];
+}
+
+export async function getProviderBookingHorizon(providerId: string): Promise<BookingHorizonSettings> {
   const { data, error } = await supabase
     .from("providers")
-    .select("booking_window_days")
+    .select(BOOKING_HORIZON_COLUMNS)
     .eq("id", providerId)
     .maybeSingle();
   if (error) throw error;
-  return data?.booking_window_days ?? 60;
+  const row = data as { booking_window_days: number | null; schedule_release_day: unknown } | null;
+  return {
+    booking_window_days: row?.booking_window_days ?? 60,
+    schedule_release_day: toReleaseDay(row?.schedule_release_day),
+  };
 }
 
 export interface ProviderBusySpan {
@@ -5670,16 +5723,25 @@ export async function updateProviderCancellationPolicy(
   if (error) throw error;
 }
 
-/** Mirror the Automations screen settings onto the providers row so client
- *  screens and pg_cron jobs can read them (auth user_metadata cannot be). */
-export async function updateProviderAutomationSettings(
+type AutomationSettings = NonNullable<DbProvider["automation_settings"]>;
+
+/**
+ * Changes only the given automation_settings keys (and removes `remove`), in
+ * one statement on the server — merge_provider_automation_settings. The
+ * bundle is edited from several screens (Automations, Payments, Scheduling's
+ * monthly release); writing the whole bundle back from a copy loaded when the
+ * screen opened let one screen's save silently undo another's change.
+ */
+export async function mergeProviderAutomationSettings(
   providerId: string,
-  settings: NonNullable<DbProvider["automation_settings"]>,
+  set: Partial<AutomationSettings>,
+  remove: (keyof AutomationSettings)[] = [],
 ): Promise<void> {
-  const { error } = await supabase
-    .from("providers")
-    .update({ automation_settings: settings })
-    .eq("id", providerId);
+  const { error } = await supabase.rpc("merge_provider_automation_settings", {
+    p_provider_id: providerId,
+    p_set: set,
+    p_remove: remove,
+  });
   if (error) throw error;
 }
 
@@ -7384,81 +7446,12 @@ export async function removeMyExternalBooking(id: string): Promise<void> {
 // PROVIDER FOLLOWS
 // ─────────────────────────────────────────────────────────
 
-/** Follow a provider */
-export async function followProvider(providerId: string): Promise<void> {
-  if (!UUID_RE.test(providerId)) return;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
-  const { error } = await supabase
-    .from("provider_follows")
-    .insert({ user_id: user.id, provider_id: providerId });
-  if (error && error.code !== "23505") throw error;
-}
-
-/** Unfollow a provider */
-export async function unfollowProvider(providerId: string): Promise<void> {
-  if (!UUID_RE.test(providerId)) return;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
-  const { error } = await supabase
-    .from("provider_follows")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId);
-  if (error) throw error;
-}
-
-/** Check if the current user follows a provider */
-export async function checkIsFollowing(providerId: string): Promise<boolean> {
-  if (!UUID_RE.test(providerId)) return false;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) return false;
-  const { data } = await supabase
-    .from("provider_follows")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId)
-    .maybeSingle();
-  return !!data;
-}
-
 /**
- * Whether the current user has the "notify me" bell on for this provider —
- * distinct from checkIsFollowing: a client can follow without notifications
- * on. False (not just "not following") when there's no row at all, so
- * ProviderProfileScreen's bell can seed its initial state from one query
- * instead of two.
- */
-export async function checkFollowNotifyEnabled(
-  providerId: string,
-): Promise<boolean> {
-  if (!UUID_RE.test(providerId)) return false;
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) return false;
-  const { data } = await supabase
-    .from("provider_follows")
-    .select("notify_enabled")
-    .eq("user_id", user.id)
-    .eq("provider_id", providerId)
-    .maybeSingle();
-  return (data as { notify_enabled: boolean } | null)?.notify_enabled ?? false;
-}
-
-/**
- * Turns the "notify me about this provider's availability" bell on/off.
- * Turning on implicitly follows (upsert) if the client wasn't already —
- * the bell is a single tap, not a two-step follow-then-enable flow.
- * Turning off leaves the follow row in place (only clears the flag) so a
- * client who was following before tapping the bell doesn't get silently
- * unfollowed by turning notifications back off.
+ * Turns the provider-profile bell on/off. The bell IS the follow: on creates
+ * the provider_follows row, off deletes it. Clearing a flag instead used to
+ * leave the row behind, and every other reader of provider_follows
+ * (promotion/announcement audiences, follower counts) kept counting a client
+ * who had switched the bell off.
  */
 export async function setProviderFollowNotify(
   providerId: string,
@@ -7470,12 +7463,18 @@ export async function setProviderFollowNotify(
   } = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
   await assertNotOwnProvider(providerId, user.id);
-  const { error } = await supabase
-    .from("provider_follows")
-    .upsert(
-      { user_id: user.id, provider_id: providerId, notify_enabled: enabled },
-      { onConflict: "user_id,provider_id" },
-    );
+  const { error } = enabled
+    ? await supabase
+        .from("provider_follows")
+        .upsert(
+          { user_id: user.id, provider_id: providerId, notify_enabled: true },
+          { onConflict: "user_id,provider_id" },
+        )
+    : await supabase
+        .from("provider_follows")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("provider_id", providerId);
   if (error) throw error;
 }
 
@@ -8053,6 +8052,8 @@ export async function getProviderSchedulingConstraints(
   providerIdOrDisplayName: string,
 ): Promise<{
   bookingWindowDays: number;
+  /** Set = monthly release, which replaces bookingWindowDays. */
+  scheduleReleaseDay: number | null;
   minBookingNoticeHrs: number;
 }> {
   // Prefer the real UUID when the caller has one — exact display_name
@@ -8061,12 +8062,13 @@ export async function getProviderSchedulingConstraints(
   // provider with no constraints set instead of a failed lookup.
   const query = supabase
     .from("providers")
-    .select("booking_window_days, min_booking_notice_hrs");
+    .select(`${BOOKING_HORIZON_COLUMNS}, min_booking_notice_hrs`);
   const { data } = UUID_RE.test(providerIdOrDisplayName)
     ? await query.eq("id", providerIdOrDisplayName).maybeSingle()
     : await query.eq("display_name", providerIdOrDisplayName).maybeSingle();
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
+    scheduleReleaseDay: toReleaseDay((data as any)?.schedule_release_day),
     minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,
   };
 }
