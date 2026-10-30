@@ -23,10 +23,10 @@ Last updated: 18 October 2026.
 | Late and no-show fees | Yes | Merged to `main` (b6c0255), functions deployed |
 | Client refund requests → provider → Cerviced | Yes | Merged to `main` (940e3cb8); `send-support-request` deployed |
 | Payout held while a refund request is open | Yes | Merged to `main` (38c6e8b9), deployed 18 Oct |
-| Provider told their payout is on hold (notification, email, booking, Payments) | No | Branch `feat/refund-payout-hold-notice`; migration `20261025210000` APPLIED 2026-10-29, `send-support-request` not deployed |
+| Provider told their payout is on hold (notification, email, booking, Payments) | Yes | Merged #165; migration `20261025210000` applied 2026-10-29; `send-support-request` v10 deployed 2026-10-30. App side needs a new build |
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
-| Failed payout retried (1, 2, 4 days) + support alerted + provider told + daily summary email | No | Branch `feat/payout-retries-and-alerts`; migration `20261025211000` APPLIED 2026-10-29; `release-payouts`, `stripe-webhook`, new `money-daily-summary` not deployed |
-| Admin Money screen (failed payouts, money owed, refund requests; retry, approve, decline) | No | Branch `feat/admin-money-screen` (on top of the line above); migration `20261025212000` APPLIED 2026-10-29; `refund-payment` not deployed. Admins = `admin_users` rows, added in SQL only; every action logged in `admin_actions` |
+| Failed payout retried (1, 2, 4 days) + support alerted + provider told + daily summary email | Yes | Merged #166; migration `20261025211000` applied 2026-10-29; `release-payouts` v12, `stripe-webhook` v11, `money-daily-summary` v1 deployed 2026-10-30. Bank `payout.failed` only fires if the webhook endpoint receives Connect events (unchecked) |
+| Admin Money screen (failed payouts, money owed, refund requests; retry, approve, decline) | Yes | Merged #169; migration `20261025212000` applied 2026-10-29; `refund-payment` v9 deployed 2026-10-30. App side needs a new build. Admins = `admin_users` rows, added in SQL only; every action logged in `admin_actions` |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
 | Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
