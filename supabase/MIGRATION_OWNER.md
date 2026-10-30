@@ -50,6 +50,12 @@ Applied by cerviced-74 on the user's direct OK, in this order. Each one ran in a
 
 Frontier after: **20261025212000**. Still unapplied and now below it: `20261025150000_provider_booked_contact` (#174, cerviced-3f; must renumber). Queued above it: cerviced-14's `20261026100000` / `110000` / `120000`.
 
+### Applied 2026-10-30 (provider debt notices + fee payouts pay off debt)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261029120000 | `provider_debt_notices_and_fee_recovery` | **APPLIED 2026-10-30** by the user (SQL editor; the file's own INSERT records the version). Verified live: version recorded and now the frontier; `booking_fee_charges.deducted_pence` + `release_claimed_at`; `provider_shortfall_recoveries.fee_charge_id` with `payout_id` nullable and the one-target CHECK + per-fee UNIQUE; `notifications_type_check` has 54 types (rebuilt from the live list at apply time, `tip_received` and `payout_failed` kept); three triggers; nine functions; `apply_provider_shortfalls` calls the shared `take_provider_shortfalls`; none executable by anon/authenticated, `apply_/release_fee_payout_shortfalls` granted to service_role. Frontier at authoring: `20261025212000` (re-checked 2026-10-30: `20261026120000`). Edge functions `release-payouts`, `booking-fee`, `stripe-webhook` still to deploy, after #169 and #181 merge. |
+
 ### Applied 2026-10-21 (daily "people saved you" count)
 
 | Authored version | Name | Status |

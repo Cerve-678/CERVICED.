@@ -27,6 +27,7 @@ Last updated: 18 October 2026.
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Failed payout retried (1, 2, 4 days) + support alerted + provider told + daily summary email | No | Branch `feat/payout-retries-and-alerts`; migration `20261025211000` APPLIED 2026-10-29; `release-payouts`, `stripe-webhook`, new `money-daily-summary` not deployed |
 | Admin Money screen (failed payouts, money owed, refund requests; retry, approve, decline) | No | Branch `feat/admin-money-screen` (on top of the line above); migration `20261025212000` APPLIED 2026-10-29; `refund-payment` not deployed. Admins = `admin_users` rows, added in SQL only; every action logged in `admin_actions` |
+| Provider told when they owe money; fee payouts pay it off | Partly | Branch `feat/provider-debt-notices` (on top of the line above); migration `20261029120000` APPLIED 2026-10-30, so both notices are live; `release-payouts`, `booking-fee`, `stripe-webhook` not deployed, so fee payouts don't pay off debt yet |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
 | Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
@@ -116,7 +117,15 @@ Payment settings.
 **Taking money back from a paid provider:** if the provider was already paid,
 their Stripe transfer is reversed. If their Stripe balance can't cover it
 (daily-payout providers are most exposed), the amount is recorded in
-`provider_shortfalls` and taken out of their next booking payout. Gap: late/no-show fee payouts aren't used to settle shortfalls.
+`provider_shortfalls` and taken out of their next payouts: booking payouts
+and, from migration 20261029120000, late/no-show fee payouts too (oldest debt
+first; all of a payout if it's less than what's owed, only what's owed if it's
+more). The provider is told when the debt is recorded ("£30.00 will come out of
+your next payments") and each time a payout pays some of it off. Both notices
+always push; the Payment Updates switch can't mute them. A fee payout that paid
+off debt and is later refunded or charged back is taken back in full. Decided
+2026-10-29 (no pay-back button). Migration applied 2026-10-30; fee payouts
+pay off debt once `release-payouts` / `booking-fee` / `stripe-webhook` are deployed.
 
 ## 6. Late and no-show fees (live)
 
@@ -184,7 +193,6 @@ estimate of loss, not a penalty.
   Terms or LEGAL-COMPLIANCE-NOTES, and Stripe Connect may limit how long a
   platform can delay transfers. Ask a solicitor and Stripe before the 14/30-day
   options go live.
-- Late/no-show fee payouts aren't netted against shortfalls.
 - A fee the saved card can't pay
   (declined, or the bank wants the client to approve it) becomes a Stripe
   invoice on the client's Customer, open 7 days. The client pays it from the
