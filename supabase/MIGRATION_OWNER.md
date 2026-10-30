@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-10-30 (monthly release actually releases)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261026110000 | `monthly_release` | **APPLIED 2026-10-30** by the user (SQL editor), straight after `20261026100000`, version recorded by the file. Verified live: the 3 release-day providers (5th/14th/20th) bookable to 2026-11-30, `enforce_booking_bookability` reads `provider_last_bookable_date`, the release nudge carries the "has opened up" copy, `merge_provider_automation_settings` not executable by `anon`. Known gap until the new build ships: from 1 Nov until each release day, the current app's rolling picker offers early-December dates for those 3 providers that the server refuses (accepted by the user). Needs `20261026100000` applied first (it redefines that file's `provider_last_bookable_date`). Frontier: live `20261025130000`; unapplied peers up to `20261025212000`. Re-check both and renumber if anything has landed since. Redefines, each from its live definition on 2026-10-26: `provider_last_bookable_date` (monthly branch), `enforce_booking_bookability` (window check → that helper; everything else verbatim), `process_follow_schedule_release_nudges` (live providers only; sends only once next month is open; names the month). Also adds `merge_provider_automation_settings(uuid, jsonb, text[])` (SECURITY INVOKER, owner-checked, authenticated only), which the app now uses for every automation_settings write — so it must be applied **before** this branch merges or Automations/Payments/Scheduling saves fail. No new tables or columns. Before applying, diff each redefined function against live again — `enforce_booking_bookability` is the gate every booking passes through. The file records its own version. Apply before `feat/monthly-release` merges. |
+
 ### Applied 2026-10-30 (the profile bell tells the truth)
 
 | Authored version | Name | Status |

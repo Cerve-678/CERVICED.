@@ -12,13 +12,14 @@ import {
   getMyUpcomingBookedSpans,
   getAvailabilityWeeklyScheduleRows,
   getProviderBusySpans,
-  getProviderBookingWindowDays,
+  getProviderBookingHorizon,
   getServicesOpenWithin,
   resolveActiveProviderIdByDisplayName,
 } from './databaseService';
 import type { ClientBookedSpan } from './databaseService';
 import type { BookingConflictResult } from '../types/booking';
 import { logger } from '../utils/logger';
+import { bookableDayCount, isBeyondHorizon, type BookingHorizonSettings } from '../utils/bookingHorizon';
 import { formatTime12, formatShortDate } from '../utils/dateUtils';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -726,13 +727,7 @@ async function findBackToBackSlotsForDate(
 
   const settings = bundle.settings;
 
-  const windowDays = settings?.booking_window_days ?? 60;
-  if (windowDays > 0) {
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + windowDays);
-    maxDate.setHours(23, 59, 59, 999);
-    if (dateObj > maxDate) return null;
-  }
+  if (isBeyondHorizon(settings, date)) return null;
 
   const intervalMins = settings?.slot_interval_mins ?? 60;
   const bufferMins = settings?.buffer_mins ?? 0;
@@ -830,6 +825,27 @@ export const AvailabilityService = {
    */
   async resolveProvider(providerIdOrName: string): Promise<string | null> {
     return resolveProviderId(providerIdOrName);
+  },
+
+  /**
+   * How far ahead this provider can be booked (rolling window or monthly
+   * release) — the inputs to utils/bookingHorizon, so a picker can say WHY
+   * dates past the edge are empty and, for a monthly release, when they open.
+   * Read from the same cached settings row the slot lookups use. Null when
+   * the provider can't be resolved or read; callers just show nothing extra.
+   */
+  async getBookingHorizon(providerIdOrName: string): Promise<BookingHorizonSettings | null> {
+    const providerId = providerIdOrName ? await resolveProviderId(providerIdOrName) : null;
+    if (!providerId) return null;
+    try {
+      const settings = (await getAvailabilityProviderCore(providerId)).settings;
+      return settings
+        ? { booking_window_days: settings.booking_window_days, schedule_release_day: settings.schedule_release_day }
+        : null;
+    } catch (error) {
+      logger.error('Error reading booking horizon:', error);
+      return null;
+    }
   },
 
   /**
@@ -936,16 +952,11 @@ export const AvailabilityService = {
         dateReasons.push('blocked_date');
       }
 
-      // Enforce booking window — reject dates too far ahead
-      const windowDays = settings?.booking_window_days ?? 60;
-      if (windowDays > 0) {
-        const maxDate = new Date();
-        maxDate.setDate(maxDate.getDate() + windowDays);
-        maxDate.setHours(23, 59, 59, 999);
-        if (dateObj > maxDate) {
-          if (!policy.beyondWindow) return [];
-          dateReasons.push('beyond_window');
-        }
+      // Enforce booking window (rolling, or what a monthly release has
+      // opened so far) — reject dates too far ahead
+      if (isBeyondHorizon(settings, date)) {
+        if (!policy.beyondWindow) return [];
+        dateReasons.push('beyond_window');
       }
 
       const intervalMins = settings?.slot_interval_mins ?? 60;
@@ -1559,8 +1570,8 @@ export const AvailabilityService = {
       // and resolveNextAvailableSlot then hands the client a slot in the past.
       const earliestStart = earliestBookableStartMs(settings?.min_booking_notice_hrs);
 
-      const windowDays = settings?.booking_window_days ?? 60;
-      const horizon = windowDays > 0 ? Math.min(searchDays, windowDays) : searchDays;
+      const openDays = bookableDayCount(settings);
+      const horizon = openDays !== null ? Math.min(searchDays, openDays) : searchDays;
       if (horizon <= 0) return null;
 
       const endDate = new Date(today);
@@ -1745,8 +1756,8 @@ export const AvailabilityService = {
 
   /**
    * Same as findBackToBackSlots but walks forward from today looking for
-   * the FIRST day the whole chain fits, up to `withinDays` (bounded by the
-   * provider's own booking_window_days, same horizon rule as
+   * the FIRST day the whole chain fits, up to `withinDays` (bounded by what
+   * the provider has opened — utils/bookingHorizon — same horizon rule as
    * hasNearTermAvailabilityForServices). Powers a "schedule these together"
    * action from the cart: a client shouldn't have to guess which day even
    * has room for every service before finding out slot-by-slot that the
@@ -1762,8 +1773,8 @@ export const AvailabilityService = {
       const providerId = await resolveProviderId(providerIdOrName);
       if (!providerId) return null;
 
-      const windowDays = await getProviderBookingWindowDays(providerId);
-      const horizon = windowDays > 0 ? Math.min(withinDays, windowDays) : withinDays;
+      const openDays = bookableDayCount(await getProviderBookingHorizon(providerId));
+      const horizon = openDays !== null ? Math.min(withinDays, openDays) : withinDays;
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
