@@ -25,9 +25,11 @@ import Stripe from 'npm:stripe@17.4.0';
 // here would risk double-notifying, the classic booking-domain trap). Pair a
 // refund with the cancel action; this is the money half only.
 //
-// AUTH: the owning provider (their JWT) OR an admin (service-role bearer —
-// there is no in-app 'admin' user role, so admin refunds are a server/tooling
-// call with the service role key). A client can never invoke this.
+// AUTH: the owning provider (their JWT), a CERVICED admin (their JWT, listed
+// in admin_users: the admin Money screen's "Approve refund"), or the service
+// role (server/tooling). A client can never invoke this. An admin can only
+// refund a booking whose refund request is waiting on Cerviced, and the
+// approval is written to admin_actions before Stripe is called.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,6 +63,9 @@ Deno.serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get('Authorization') ?? '';
     const isServiceCaller = await isServiceRoleRequest(authHeader);
+    // Set when the caller is a CERVICED admin rather than the booking's provider.
+    let adminUserId: string | null = null;
+    let adminRequestId: string | null = null;
 
     const body: RequestBody = await req.json();
     if (!body.bookingId) {
@@ -95,7 +100,20 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (provErr) throw provErr;
       if (!provider || provider.id !== booking.provider_id) {
-        return json({ error: 'You can only refund your own bookings.' }, 403);
+        const { data: adminRow, error: adminErr } = await admin
+          .from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
+        if (adminErr) throw adminErr;
+        if (!adminRow) return json({ error: 'You can only refund your own bookings.' }, 403);
+        // An admin only answers a refund request the provider passed to
+        // Cerviced: never an arbitrary booking, so one admin session can't
+        // refund anything it likes.
+        const { data: openRequest, error: requestErr } = await admin
+          .from('refund_requests').select('id')
+          .eq('booking_id', booking.id).eq('status', 'under_review').maybeSingle();
+        if (requestErr) throw requestErr;
+        if (!openRequest) return json({ error: "This booking has no refund request waiting on Cerviced." }, 409);
+        adminUserId = user.id;
+        adminRequestId = openRequest.id;
       }
     }
 
@@ -157,6 +175,18 @@ Deno.serve(async (req: Request) => {
     // none and only ever ask for 'full', so the booking id alone is the key —
     // the same key this function always used for its one full refund.
     const idempotencyKey = requestId ? `refund_${booking.id}_${requestId}` : `refund_${booking.id}`;
+    if (adminUserId) {
+      // The record comes BEFORE the money: if it can't be written, nothing is
+      // refunded. A retry of the same tap writes a second 'started' row, which
+      // is harmless; Stripe's idempotency key still makes it one refund.
+      const { error: logErr } = await admin.from('admin_actions').insert({
+        admin_user_id: adminUserId,
+        action: 'approve_refund',
+        target_id: adminRequestId,
+        detail: { booking_id: booking.id, amount_pence: plan.refundPence, kind: request === 'full' ? 'full' : 'partial', idempotency_key: idempotencyKey, state: 'started' },
+      });
+      if (logErr) throw logErr;
+    }
     const refund = await stripe.refunds.create(
       {
         payment_intent: booking.payment_intent_id,
@@ -164,7 +194,7 @@ Deno.serve(async (req: Request) => {
         metadata: {
           booking_id: booking.id,
           reason: (typeof body.reason === 'string' && body.reason ? body.reason : 'provider_or_admin_refund').slice(0, 450),
-          kind: isServiceCaller ? 'admin' : 'provider',
+          kind: isServiceCaller || adminUserId ? 'admin' : 'provider',
           payout_adjust_pence: String(plan.payoutAdjustPence),
           ...(requestId ? { request_id: requestId } : {}),
         },
