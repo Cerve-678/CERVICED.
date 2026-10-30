@@ -385,10 +385,14 @@ async function releaseFeePayouts() {
         if (shortfallErr) throw shortfallErr;
         transferPence = Number(net ?? 0);
         if (transferPence <= 0) {
-          const { error: settleErr } = await admin.from('booking_fee_charges')
+          const { data: settled, error: settleErr } = await admin.from('booking_fee_charges')
             .update({ payout_status: 'transferred', payout_failure_reason: 'settled an earlier shortfall in full' })
-            .eq('id', fee.id).eq('payout_status', 'held');
+            .eq('id', fee.id).eq('payout_status', 'held')
+            .select('id');
           if (settleErr) throw settleErr;
+          // The claim stops a refund cancelling it, so this shouldn't happen;
+          // if it does, nothing was sent and the deduction must go back.
+          if (!settled?.length) throw new Error('fee payout no longer held while settling a shortfall');
           counts.transferred++;
           continue;
         }
@@ -403,10 +407,14 @@ async function releaseFeePayouts() {
       }, { idempotencyKey: `fee_payout_${fee.id}` });
       madeTransfer = true;
 
-      const { error: writeErr } = await admin.from('booking_fee_charges')
+      const { data: written, error: writeErr } = await admin.from('booking_fee_charges')
         .update({ payout_status: 'transferred', stripe_transfer_id: transfer.id, payout_failure_reason: null })
-        .eq('id', fee.id).eq('payout_status', 'held');
+        .eq('id', fee.id).eq('payout_status', 'held')
+        .select('id');
       if (writeErr) console.error(`[release-payouts] fee transfer ${transfer.id} succeeded but write failed for ${fee.id}: ${String(writeErr)}`);
+      // Money went out but the row had already left 'held' (the claim should
+      // prevent this). Nothing will take this transfer back by itself.
+      else if (!written?.length) console.error(`[release-payouts] fee transfer ${transfer.id} sent but fee ${fee.id} was no longer held; check it by hand`);
       counts.transferred++;
     } catch (err) {
       // As for booking payouts: if nothing was sent, give the deduction back

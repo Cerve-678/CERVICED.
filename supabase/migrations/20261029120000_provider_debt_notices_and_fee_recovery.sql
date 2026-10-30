@@ -1,8 +1,10 @@
 -- Tell providers when they owe money, and let late/no-show fee payouts pay
 -- it off.
 --
--- Frontier at authoring: 20261025140000 (verified live 2026-10-29). Check the
--- lock in MIGRATION_OWNER.md and re-check max(version) before applying.
+-- Frontier at authoring: 20261025212000 (verified live 2026-10-29). Branched
+-- from feat/admin-money-screen, whose two migrations (20261025211000,
+-- 20261025212000) are applied. Check the lock in MIGRATION_OWNER.md and
+-- re-check max(version) before applying.
 --
 -- Background (PAYMENTS_AND_LOGIC.md §5): when money has to come back from a
 -- provider who was already paid and their Stripe balance can't cover it, the
@@ -24,7 +26,10 @@
 -- being taken.
 --
 -- What this adds:
---   - booking_fee_charges.deducted_pence, mirroring provider_payouts.
+--   - booking_fee_charges.deducted_pence and release_claimed_at, mirroring
+--     provider_payouts. The claim stops a refund cancelling a fee payout
+--     while a release run is part-way through sending it (the refund is
+--     refused and retried, then takes the money back from the transfer).
 --   - provider_shortfall_recoveries.fee_charge_id; payout_id becomes nullable
 --     and exactly one of the two is set.
 --   - take_provider_shortfalls(): the shared loop that pays off the oldest
@@ -33,8 +38,11 @@
 --   - apply_fee_payout_shortfalls() / release_fee_payout_shortfalls(): the
 --     fee-payout twins of apply_/release_provider_shortfalls().
 --   - Notification types payout_debt_recorded and payout_debt_recovered. The
---     CHECK is rebuilt from the live constraint (read 2026-10-29) plus these
---     two. Any later rebuild must keep them.
+--     CHECK is rebuilt FROM THE LIVE CONSTRAINT AT APPLY TIME plus these two,
+--     not from a list copied into this file: other sessions add types between
+--     writing and applying (tip_received and payout_failed landed while this
+--     was being written, and a hard-coded list would have dropped them). Any
+--     later rebuild must keep both.
 --   - Triggers that write the two notices. A failed notice is logged as a
 --     WARNING and never rolls back the money record it describes.
 --
@@ -48,8 +56,13 @@ ALTER TABLE public.booking_fee_charges
   ADD COLUMN IF NOT EXISTS deducted_pence integer NOT NULL DEFAULT 0
   CONSTRAINT booking_fee_charges_deducted_pence_check CHECK (deducted_pence >= 0);
 
+ALTER TABLE public.booking_fee_charges
+  ADD COLUMN IF NOT EXISTS release_claimed_at timestamptz;
+
 COMMENT ON COLUMN public.booking_fee_charges.deducted_pence IS
   'Pence of this fee payout used to pay off what the provider owed (provider_shortfalls) instead of being transferred. Set by apply_fee_payout_shortfalls().';
+COMMENT ON COLUMN public.booking_fee_charges.release_claimed_at IS
+  'Set when release-payouts starts sending this fee payout (apply_fee_payout_shortfalls), cleared if it gives up without sending (release_fee_payout_shortfalls). While set, a refund may not cancel the payout.';
 
 ALTER TABLE public.provider_shortfall_recoveries
   ALTER COLUMN payout_id DROP NOT NULL,
@@ -141,6 +154,7 @@ BEGIN
   IF NOT FOUND OR v_fee.payout_status <> 'held' THEN
     RAISE EXCEPTION 'fee payout % is not held', p_fee_id;
   END IF;
+  UPDATE public.booking_fee_charges SET release_claimed_at = COALESCE(release_claimed_at, now()) WHERE id = p_fee_id;
   -- A retry after a run that deducted but didn't transfer: same answer again.
   IF EXISTS (SELECT 1 FROM public.provider_shortfall_recoveries WHERE fee_charge_id = p_fee_id) THEN
     RETURN GREATEST(v_fee.payout_pence - v_fee.deducted_pence, 0);
@@ -176,32 +190,50 @@ BEGIN
      WHERE id = v_recovery.shortfall_id;
     DELETE FROM public.provider_shortfall_recoveries WHERE id = v_recovery.id;
   END LOOP;
-  UPDATE public.booking_fee_charges SET deducted_pence = 0 WHERE id = p_fee_id;
+  UPDATE public.booking_fee_charges SET deducted_pence = 0, release_claimed_at = NULL WHERE id = p_fee_id;
 END;
 $function$;
 
 -- ── Notification types ──────────────────────────────────────────────────────
-ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
-ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check CHECK (type = ANY (ARRAY[
-  'cancel_window_closing', 'booking_pending', 'booking_confirmed', 'booking_declined', 'booking_cancelled',
-  'booking_reminder', 'booking_in_progress', 'booking_not_started', 'no_show', 'payment_success',
-  'new_provider', 'reschedule_request', 'reschedule_provider_response', 'reschedule_confirmed',
-  'reschedule_declined', 'reschedule_expired', 'review_request', 'review_received', 'promotion',
-  'intake_form_reminder', 'intake_form_received', 'intake_form_completed', 'info_pack_received',
-  'provider_message', 'announcement', 'balance_reminder', 'waitlist_slot_available', 'new_message',
-  'address_released', 'birthday_greeting', 'post_appt_check_in', 'rebooking_nudge', 'daily_recap',
-  'schedule_fully_booked', 'pending_booking_reminder', 'provider_no_show', 'no_show_disputed',
-  'points_earned', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved',
-  'refund_requested', 'refund_request_updated', 'maintenance_due', 'aftercare_available',
-  'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'provider_saved',
-  'payout_debt_recorded', 'payout_debt_recovered'
-]::text[]));
+-- Every type the live constraint allows right now, plus the two new ones. Read
+-- at apply time so a type another session added since this was written
+-- (tip_received, payout_failed, ...) is kept rather than silently dropped.
+DO $$
+DECLARE
+  v_def text;
+  v_types text[];
+BEGIN
+  SELECT pg_get_constraintdef(oid) INTO v_def
+    FROM pg_constraint
+   WHERE conrelid = 'public.notifications'::regclass AND conname = 'notifications_type_check';
+  IF v_def IS NULL THEN
+    RAISE EXCEPTION 'notifications_type_check not found; refusing to rebuild it blind';
+  END IF;
+
+  SELECT array_agg(DISTINCT r.m[1]) INTO v_types
+    FROM regexp_matches(v_def, '''([a-z_]+)''::text', 'g') AS r(m);
+  -- 52 types live at authoring. Far fewer means the definition wasn't read
+  -- the way this expects; stop rather than shrink the list.
+  IF COALESCE(array_length(v_types, 1), 0) < 50 THEN
+    RAISE EXCEPTION 'read only % types from notifications_type_check; refusing to rebuild it',
+      COALESCE(array_length(v_types, 1), 0);
+  END IF;
+
+  v_types := ARRAY(
+    SELECT DISTINCT t FROM unnest(v_types || ARRAY['payout_debt_recorded', 'payout_debt_recovered']) AS t ORDER BY t
+  );
+  ALTER TABLE public.notifications DROP CONSTRAINT notifications_type_check;
+  EXECUTE format(
+    'ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check CHECK (type = ANY (%L::text[]))',
+    v_types);
+END $$;
 
 -- ── The two notices ─────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.format_pounds(p_pence integer)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE
+ SET search_path TO 'pg_catalog'
 AS $function$
   SELECT '£' || to_char(p_pence / 100.0, 'FM999999990.00');
 $function$;
@@ -253,7 +285,7 @@ BEGIN
       public.format_pounds(NEW.amount_pence) || ' will come out of your next payments',
       COALESCE(v_client || '''s ', 'A client''s ') || v_what
         || ' after you''d been paid, and ' || public.format_pounds(NEW.amount_pence)
-        || ' of it couldn''t be taken back from your Stripe balance. It will come out of your next payments.'
+        || ' of it is still to be paid back. It will come out of your next payments.'
         || CASE WHEN v_owed > NEW.amount_pence
              THEN ' In total you owe ' || public.format_pounds(v_owed) || '.'
              ELSE '' END,
@@ -379,6 +411,7 @@ REVOKE ALL ON FUNCTION public.apply_provider_shortfalls(uuid) FROM PUBLIC, anon,
 REVOKE ALL ON FUNCTION public.apply_fee_payout_shortfalls(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.release_fee_payout_shortfalls(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.provider_owed_pence(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.format_pounds(integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.notify_provider_debt_recorded() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.notify_provider_debt_recovered(uuid, uuid, integer, integer, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.notify_payout_debt_recovered() FROM PUBLIC, anon, authenticated;
