@@ -27,7 +27,7 @@ Last updated: 18 October 2026.
 | Money owed by a provider taken from next payout | Yes | Same; migration 20261018190000 applied |
 | Failed payout retried (1, 2, 4 days) + support alerted + provider told + daily summary email | No | Branch `feat/payout-retries-and-alerts`; migration `20261025211000` APPLIED 2026-10-29; `release-payouts`, `stripe-webhook`, new `money-daily-summary` not deployed |
 | Admin Money screen (failed payouts, money owed, refund requests; retry, approve, decline) | No | Branch `feat/admin-money-screen` (on top of the line above); migration `20261025212000` APPLIED 2026-10-29; `refund-payment` not deployed. Admins = `admin_users` rows, added in SQL only; every action logged in `admin_actions` |
-| Provider told when they owe money; fee payouts pay it off | No | Branch `feat/provider-debt-notices` (on top of the line above); migration `20261029120000` not applied; `release-payouts`, `booking-fee`, `stripe-webhook` not deployed |
+| Provider told when they owe money; fee payouts pay it off | Partly | Branch `feat/provider-debt-notices` (on top of the line above); migration `20261029120000` APPLIED 2026-10-30, so both notices are live; `release-payouts`, `booking-fee`, `stripe-webhook` not deployed, so fee payouts don't pay off debt yet |
 | Client saved cards (Payment Methods) | Yes | Migration 20261019120000 applied, `client-saved-cards` / `create-payment-intent` / `booking-fee` deployed 19 Oct; app needs `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` |
 | Client asked to pay a fee the card couldn't | Yes | Migration 20261019170000 applied; `booking-fee` v4, `stripe-webhook` v8, `release-payouts` v9 deployed 19 Oct; app side on PR #101 |
 | Automatic retries of a declined fee | Yes | Migration 20261019210000 applied; `booking-fee` v5, `client-saved-cards` v3, `release-payouts` v10 deployed 19 Oct; app wording on PR #116 |
@@ -124,8 +124,8 @@ more). The provider is told when the debt is recorded ("£30.00 will come out of
 your next payments") and each time a payout pays some of it off. Both notices
 always push; the Payment Updates switch can't mute them. A fee payout that paid
 off debt and is later refunded or charged back is taken back in full. Decided
-2026-10-29 (no pay-back button). **Not live yet:** migration unapplied,
-`release-payouts` / `booking-fee` / `stripe-webhook` not deployed.
+2026-10-29 (no pay-back button). Migration applied 2026-10-30; fee payouts
+pay off debt once `release-payouts` / `booking-fee` / `stripe-webhook` are deployed.
 
 ## 6. Late and no-show fees (live)
 
