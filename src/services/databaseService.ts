@@ -62,6 +62,7 @@ import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
+import type { AdminMoneyOverview } from "../types/adminMoney";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
 
@@ -10941,6 +10942,9 @@ export interface ProviderPayout {
   status: 'held' | 'transferred' | 'failed' | 'cancelled' | 'reversed';
   release_after: string;
   created_at: string;
+  /** The client has a refund request open on this booking, so a held payout
+   *  waits for it (release-payouts skips it until the request closes). */
+  refundRequestOpen: boolean;
 }
 
 async function connectAction(action: 'status' | 'onboard' | 'dashboard') {
@@ -10977,11 +10981,38 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
     .eq('provider_id', provider.id).order('created_at', { ascending: false }).limit(50);
   if (error) throw error;
   if (!data?.length) return [];
-  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
-    .select('id, service_name_snapshot, customer_name, booking_date')
-    .eq('provider_id', provider.id).in('id', data.map(row => row.booking_id));
+  const bookingIds = data.map(row => row.booking_id);
+  const [{ data: bookings, error: bookingsError }, { data: openRequests, error: requestsError }] = await Promise.all([
+    supabase.from('bookings')
+      .select('id, service_name_snapshot, customer_name, booking_date')
+      .eq('provider_id', provider.id).in('id', bookingIds),
+    // At most one open request per booking, so the cap matches the payouts'.
+    supabase.from('refund_requests')
+      .select('booking_id')
+      .eq('provider_id', provider.id).in('booking_id', bookingIds)
+      .in('status', ['with_provider', 'under_review'])
+      .limit(50),
+  ]);
   if (bookingsError) throw bookingsError;
-  return data.map(row => ({ ...row, booking: bookings?.find(booking => booking.id === row.booking_id) }));
+  if (requestsError) throw requestsError;
+  const open = new Set((openRequests ?? []).map(r => r.booking_id));
+  return data.map(row => ({
+    ...row,
+    booking: bookings?.find(booking => booking.id === row.booking_id),
+    refundRequestOpen: open.has(row.booking_id),
+  }));
+}
+
+/**
+ * The provider's own payout for one booking, in pence, while it's still held
+ * (provider reading their own record). null once it's released, cancelled or
+ * returned, or when the booking has no payout row.
+ */
+export async function getHeldPayoutPence(bookingId: string): Promise<number | null> {
+  const { data, error } = await supabase.from('provider_payouts')
+    .select('status, payout_amount').eq('booking_id', bookingId).maybeSingle();
+  if (error) throw error;
+  return data?.status === 'held' ? Number(data.payout_amount) : null;
 }
 
 /**
@@ -11095,6 +11126,40 @@ export async function refundProviderBooking(input: RefundRequestInput): Promise<
     throw new Error('The refund could not be confirmed. Refresh before trying again.');
   }
   return data?.status === 'refunded' || data?.status === 'already_refunded';
+}
+
+// ── Admin Money screen (admin_users accounts only) ─────────────────────────
+// The server enforces who is an admin; these just call it. An admin approves
+// a refund with refundProviderBooking above: refund-payment accepts admins.
+
+/** Whether the signed-in account is a CERVICED admin. Only ever about the caller. */
+export async function isCervicedAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_cerviced_admin');
+  if (error) throw error;
+  return data === true;
+}
+
+/** Failed payouts, money providers owe and open refund requests. Throws for a non-admin. */
+export async function getAdminMoneyOverview(): Promise<AdminMoneyOverview> {
+  const { data, error } = await supabase.rpc('admin_money_overview');
+  if (error) throw error;
+  const overview = data as Partial<AdminMoneyOverview> | null;
+  if (!overview || !Array.isArray(overview.failed) || !Array.isArray(overview.owed) || !Array.isArray(overview.refunds)) {
+    throw new Error('The money lists came back in an unexpected shape.');
+  }
+  return overview as AdminMoneyOverview;
+}
+
+/** Puts a failed or waiting payout back as due now; the next release run sends it. */
+export async function adminRetryPayout(payoutId: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_retry_payout', { p_payout_id: payoutId });
+  if (error) throw error;
+}
+
+/** Cerviced's "no" to a passed-on refund request. The note is what the client is told. */
+export async function adminDeclineRefundRequest(requestId: string, note: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_decline_refund_request', { p_request_id: requestId, p_note: note });
+  if (error) throw error;
 }
 
 /** What the Issue Refund sheet needs to know about one of the provider's own bookings. */
