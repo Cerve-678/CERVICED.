@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
-  Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,13 +9,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   updateProviderAutoAccept,
   updateProviderCancellationPolicy,
-  updateProviderAutomationSettings,
+  mergeProviderAutomationSettings,
   getMyProviderProfileContext,
   updateCurrentUserMetadata,
 } from '../../services/databaseService';
@@ -57,7 +54,6 @@ interface ProviderAutomations {
   // What CERVICED sends on your behalf — you choose when/if
   clientReminderTiming:   string[];   // ['24h', '48h', '72h'] — push to clients
   rebookingNudgeWeeks:    string;     // 'never' | '2' | '4' | '6' | '8' | '12'
-  scheduleReleaseDay:     number | null; // 1-31, day of month clients with the profile bell on get notified; null = off
   autoReviewRequest:      boolean;    // 2hrs after completion
   postApptCheckIn:        boolean;    // check-in message day after
   birthdayGreeting:       boolean;    // greeting on client birthday
@@ -68,17 +64,15 @@ interface ProviderAutomations {
   cancellationNoticeHours:string;     // '0' | '12' | '24' | '48' | '72'
   waitlistEnabled:        boolean;
   autoAcceptWaitlist:     boolean;
-  // Owned and edited by PoliciesScreen — carried here only because saving
-  // automation_settings REPLACES the whole blob, so a value this screen didn't
-  // read back would be deleted on the next save. Never render an editor for it
-  // here; that's what created the split this consolidation just undid.
-  depositRequiredNew:     boolean;
+  // Not here on purpose: scheduleReleaseDay (InfoRegScreen) and
+  // depositRequiredNew (PaymentsScreen) share automation_settings but belong
+  // to those screens. The save below merges only this screen's keys, so
+  // there's nothing to carry back.
 }
 
 const DEFAULTS: ProviderAutomations = {
   clientReminderTiming:    ['24h'],
   rebookingNudgeWeeks:     'never',
-  scheduleReleaseDay:      null,
   autoReviewRequest:       true,
   postApptCheckIn:         false,
   birthdayGreeting:        false,
@@ -87,7 +81,6 @@ const DEFAULTS: ProviderAutomations = {
   cancellationNoticeHours: '0',   // matches providers.cancellation_notice_hours DB default
   waitlistEnabled:         false,
   autoAcceptWaitlist:      false,
-  depositRequiredNew:      false,
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -178,7 +171,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   const [toast, setToast]       = useState<{ msg: string; ok: boolean } | null>(null);
   const [d, setD]               = useState<ProviderAutomations>(DEFAULTS);
   const [providerId, setProviderId] = useState<string | null>(null);
-  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -202,7 +194,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           pa_cancellation_notice_hours?: string | number;
           pa_waitlist_enabled?: boolean;
           pa_auto_accept_waitlist?: boolean;
-          pa_deposit_required_new?: boolean;
         };
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
@@ -210,9 +201,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         setD({
           clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
-          // Providers-row only (added after automation_settings existed) —
-          // no legacy user_metadata fallback needed.
-          scheduleReleaseDay:      a.scheduleReleaseDay   ?? DEFAULTS.scheduleReleaseDay,
           autoReviewRequest:       a.autoReviewRequest    ?? m['pa_auto_review_request']    ?? DEFAULTS.autoReviewRequest,
           postApptCheckIn:         a.postApptCheckIn      ?? m['pa_post_appt_check_in']     ?? DEFAULTS.postApptCheckIn,
           birthdayGreeting:        a.birthdayGreeting     ?? m['pa_birthday_greeting']      ?? DEFAULTS.birthdayGreeting,
@@ -224,9 +212,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           cancellationNoticeHours: String(profile?.cancellation_notice_hours ?? m['pa_cancellation_notice_hours'] ?? DEFAULTS.cancellationNoticeHours),
           waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
-          // Read purely so the save below can write it back unchanged — see
-          // the note on the type above.
-          depositRequiredNew:      a.depositRequiredNew   ?? m['pa_deposit_required_new']   ?? DEFAULTS.depositRequiredNew,
         });
       } finally {
         setLoading(false);
@@ -267,20 +252,15 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         // Mirror the client-facing automations onto the providers row —
         // user_metadata is invisible to client screens and pg_cron jobs,
         // so anything that must act on these settings reads them from here.
-        saves.push(updateProviderAutomationSettings(providerId, {
+        // Merged, so only this screen's keys change — see the note on the type.
+        saves.push(mergeProviderAutomationSettings(providerId, {
           clientReminderTiming: d.clientReminderTiming,
           rebookingNudgeWeeks:  d.rebookingNudgeWeeks,
-          ...(d.scheduleReleaseDay != null ? { scheduleReleaseDay: d.scheduleReleaseDay } : {}),
           autoReviewRequest:    d.autoReviewRequest,
           postApptCheckIn:      d.postApptCheckIn,
           birthdayGreeting:     d.birthdayGreeting,
           waitlistEnabled:      d.waitlistEnabled,
           autoAcceptWaitlist:   d.autoAcceptWaitlist,
-          // Owned/edited by PoliciesScreen (in its Deposit card), but this
-          // call REPLACES the whole automation_settings blob — so the loaded
-          // value is passed straight back rather than dropped, which would
-          // delete it. Never add an editor for it here.
-          depositRequiredNew:   d.depositRequiredNew,
           // Must be mirrored here, not just to user_metadata: the
           // provider-daily-recap cron job reads this key off the providers
           // row and its COALESCE(..., TRUE) treats a missing key as "send",
@@ -402,30 +382,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         />
         <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you. Your setting here is also their starting interval in Beauty Maintenance, and clients who already get Maintenance reminders for that service don't get this nudge as well.</Text>
 
-        {/* Schedule release day — the day of the month clients who've
-            turned on the notification bell on your profile get notified,
-            so they know to check back for new availability. Independent of
-            rebooking nudges: this goes to anyone following you, not just
-            clients with a completed booking. */}
-        <AutoCard
-          title="Notify followers on schedule release day"
-          description="Clients who turned on notifications for your profile get a reminder to check your availability on this day each month."
-          value={d.scheduleReleaseDay != null}
-          onToggle={(v) => set('scheduleReleaseDay', v ? new Date().getDate() : null)}
-          C={C}
-        >
-          {d.scheduleReleaseDay != null && (
-            <TouchableOpacity
-              style={[st.dateBtn, { backgroundColor: C.surface, borderColor: C.border }]}
-              onPress={() => setReleaseDayPickerVisible(true)}
-            >
-              <Ionicons name="calendar-outline" size={15} color={C.accent} />
-              <Text style={[st.dateBtnText, { color: C.text }]}>
-                Day {d.scheduleReleaseDay} of every month
-              </Text>
-            </TouchableOpacity>
-          )}
-        </AutoCard>
+        <Text style={[st.chipHint, { color: C.sub }]}>Looking for your monthly release day? It's set in Edit Profile now, and it decides how far ahead clients can book.</Text>
 
         <AutoCard
           title="Review request"
@@ -531,52 +488,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* Schedule release day picker — date-of-month only, same
-          Modal-on-iOS/inline-on-Android pattern as ProviderScheduleScreen's
-          pickers. onChange writes straight through; there's no separate
-          "confirm" step since the day is the only thing being chosen. */}
-      {releaseDayPickerVisible && (
-        Platform.OS === 'ios' ? (
-          <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="fade" visible={releaseDayPickerVisible}>
-            <View style={st.pickerModalWrap}>
-              <TouchableOpacity
-                style={st.pickerDismiss}
-                activeOpacity={1}
-                onPress={() => setReleaseDayPickerVisible(false)}
-              />
-              <View style={[st.pickerSheet, { backgroundColor: C.surface }]}>
-                <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
-                  <Text style={[st.pickerLabel, { color: C.text }]}>Release Day</Text>
-                  <TouchableOpacity onPress={() => setReleaseDayPickerVisible(false)}>
-                    <Text style={[st.pickerDone, { color: C.accentText }]}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  mode="date"
-                  value={new Date(2020, 0, d.scheduleReleaseDay ?? 1)}
-                  onChange={(_: DateTimePickerEvent, date?: Date) => {
-                    if (date) set('scheduleReleaseDay', date.getDate());
-                  }}
-                  display="spinner"
-                  themeVariant={isDarkMode ? 'dark' : 'light'}
-                  textColor={C.text}
-                  style={{ width: '100%' }}
-                />
-              </View>
-            </View>
-          </Modal>
-        ) : (
-          <DateTimePicker
-            mode="date"
-            value={new Date(2020, 0, d.scheduleReleaseDay ?? 1)}
-            onChange={(_: DateTimePickerEvent, date?: Date) => {
-              setReleaseDayPickerVisible(false);
-              if (date) set('scheduleReleaseDay', date.getDate());
-            }}
-            display="default"
-          />
-        )
-      )}
     </SafeAreaView>
     </ThemedBackground>
   );
@@ -638,24 +549,4 @@ const st = StyleSheet.create({
     marginBottom: 12,
   },
   toastText: { fontSize: 13, fontWeight: '500', flex: 1 },
-
-  dateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 12,
-    alignSelf: 'flex-start',
-  },
-  dateBtnText: { fontSize: 13, fontWeight: '600' },
-
-  pickerModalWrap: { flex: 1, flexDirection: 'column' },
-  pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
-  pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  pickerLabel:     { fontSize: 15, fontWeight: '600' },
-  pickerDone:      { fontSize: 15, fontWeight: '700' },
 });

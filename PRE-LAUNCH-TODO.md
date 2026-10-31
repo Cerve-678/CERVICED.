@@ -1219,3 +1219,26 @@ Confirm Your Details if the client goes back to the cart tab themselves.
 Closing this needs the address page to intercept back when it was opened
 from checkout (`usePreventRemove`, or a `BackHandler` plus
 `gestureEnabled: false`).
+
+## 28. My Profile "Today" cards — the user's design update isn't built yet (2026-10-30)
+
+(Numbered 28 because §26 and §27 are on other branches.)
+
+The Today cards (the summary card and swipe cards on the provider Dashboard)
+were merged as PR #182 (e970d034). After that, the user updated the design
+canvas, adding ideas from the earlier mockups such as "ranges." The session
+that built the feature couldn't open the canvas: the link returns "not found"
+for the account Claude Code is signed in to.
+
+**To do:**
+
+- Get the updated design. Either share the canvas with the Claude Code
+  account, or paste screenshots, or describe what changed. That includes
+  what "ranges" means: each booking's time range, price ranges, or
+  something else.
+- Build the changes on a new branch off `main`. The code is in
+  `src/features/providers/TodayScheduleCards.tsx`, with the rules in
+  `todaySchedule.ts` and tests in `src/tests/todaySchedule.test.ts`.
+- Run the Today cards on a device. That hasn't been done yet. Check the
+  2pm swap, the switch to tomorrow after the last client, and that a tap
+  opens the booking and the full day.
