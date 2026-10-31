@@ -1408,6 +1408,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [didYouBookKey, setDidYouBookKey] = useState(0);
   const [joinNudgePending, setJoinNudgePending] = useState(false);
   const [joinNudgeSent, setJoinNudgeSent] = useState(false);
+  // The bar's ✕ — hides it for this visit only; it's back next time.
+  const [joinNudgeDismissed, setJoinNudgeDismissed] = useState(false);
 
   // Counters behind a link-only provider's Analytics. Never for the owner
   // looking at their own profile; a failed count is logged, never shown.
@@ -2008,7 +2010,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // A client can ask a link-only provider to take bookings on CERVICED. The
   // database records at most one nudge per client/provider/day, so rapid taps
   // or a stale app state cannot inflate the provider's Analytics.
-  const sendJoinNudge = useCallback(async () => {
+  const handleJoinNudge = useCallback(async () => {
     if (!providerDbId || !isLinkOnly || isOwnProvider || joinNudgePending || joinNudgeSent) return;
     setJoinNudgePending(true);
     try {
@@ -2022,20 +2024,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       setJoinNudgePending(false);
     }
   }, [providerDbId, isLinkOnly, isOwnProvider, joinNudgePending, joinNudgeSent, showAlert]);
-  // The round icon has no words of its own, so the question is asked here
-  // before anything is sent. The provider only ever sees an anonymous count
-  // in their Analytics — the copy promises nothing more than that.
-  const handleJoinNudge = useCallback(() => {
-    if (joinNudgePending || joinNudgeSent || !provider) return;
-    showConfirm(
-      `Want ${provider.displayName} on CERVICED?`,
-      `${provider.displayName} will see in their stats that a client would like to book them here. Your name isn't shown.`,
-      [
-        { text: "Not now", style: "cancel" },
-        { text: "Send", onPress: () => { void sendJoinNudge(); } },
-      ],
-    );
-  }, [joinNudgePending, joinNudgeSent, provider, showConfirm, sendJoinNudge]);
   const hasUnsavedSelection =
     (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
   usePreventRemove(hasUnsavedSelection, ({ data }) => {
@@ -4899,6 +4887,42 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             "Book" becomes untappable. */}
         {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
 
+        {/* Join nudge — a link-only provider can't be booked here, so this
+            never shares the spot with the selection bar above. */}
+        {isLinkOnly && viewerChecked && currentUserId && !isOwnProvider && !joinNudgeDismissed && (
+          <View style={[styles.joinNudgeBar, { bottom: FLOATING_TAB_BAR_CLEARANCE }]}>
+            <Ionicons
+              name={joinNudgeSent ? "checkmark-circle" : "megaphone-outline"}
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.joinNudgeBarText} numberOfLines={1}>
+              {joinNudgeSent ? "Nudge sent" : "Want them on CERVICED?"}
+            </Text>
+            {!joinNudgeSent && (
+              <TouchableOpacity
+                style={[styles.joinNudgeBarButton, joinNudgePending && styles.joinNudgeButtonMuted]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); void handleJoinNudge(); }}
+                disabled={joinNudgePending}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Nudge ${provider.displayName} to take bookings on CERVICED`}
+              >
+                <Text style={styles.joinNudgeBarButtonText}>{joinNudgePending ? "Sending…" : "Nudge"}</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.joinNudgeBarClose}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); setJoinNudgeDismissed(true); }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss"
+            >
+              <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* No bottom edge inset — the pink sheet must run under the home indicator */}
         <SafeAreaView style={styles.safeArea} edges={[]}>
           <ScrollView
@@ -5134,30 +5158,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               })
                             : null}
                           {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
-                          {viewerChecked && currentUserId && !isOwnProvider && (
-                            <TouchableOpacity
-                              style={[
-                                styles.linkOnlySocialButton,
-                                { backgroundColor: adaptiveAccentColor },
-                                (joinNudgePending || joinNudgeSent) && styles.joinNudgeButtonMuted,
-                              ]}
-                              onPress={() => { Haptics.selectionAsync().catch(() => {}); handleJoinNudge(); }}
-                              disabled={joinNudgePending || joinNudgeSent}
-                              activeOpacity={0.8}
-                              accessibilityRole="button"
-                              accessibilityLabel={
-                                joinNudgeSent
-                                  ? `Sent: you'd like ${provider.displayName} on CERVICED`
-                                  : `Want ${provider.displayName} on CERVICED?`
-                              }
-                            >
-                              <Ionicons
-                                name={joinNudgeSent ? "checkmark" : "megaphone-outline"}
-                                size={20}
-                                color={onAccentHero}
-                              />
-                            </TouchableOpacity>
-                          )}
                         </View>
                         <Text
                           style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
@@ -5850,6 +5850,54 @@ const styles = StyleSheet.create({
   },
   joinNudgeButtonMuted: {
     opacity: 0.55,
+  },
+  // Floating "Want them on CERVICED? [Nudge] ✕" bar — same spot and shadow
+  // as the selection bar, fixed dark so it reads on every provider theme.
+  joinNudgeBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 999,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#26201E",
+    paddingLeft: 18,
+    paddingRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  joinNudgeBarText: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  joinNudgeBarButton: {
+    height: 42,
+    borderRadius: 21,
+    paddingHorizontal: 18,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  joinNudgeBarButtonText: {
+    color: "#26201E",
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  joinNudgeBarClose: {
+    width: 36,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   instagramButtonOutside: {
     borderRadius: 20,
