@@ -362,6 +362,10 @@ export interface ConfirmedBooking {
   /** £ the provider kept under their cancellation policy, set by the server
    *  when a client's late cancellation was settled. */
   policyRetainedAmount?: number | undefined;
+  /** Set when the client moved this booking while already inside the
+   *  provider's cancellation window: the late-cancel policy then applies
+   *  whenever it's cancelled (bookings.late_reschedule_from). */
+  lateRescheduleFrom?: string | undefined;
   /** Who cancelled — stamped by the DB when the booking became cancelled. */
   cancelledBy?: 'client' | 'provider' | 'system' | undefined;
 

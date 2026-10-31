@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { describeSettlementTiming } from '../features/bookings/paymentPresentation';
 import { cancellationNoticeHours } from '../utils/policyDisplay';
 
@@ -26,5 +28,30 @@ describe('describeSettlementTiming', () => {
     expect(describeSettlementTiming(-0.5, 24)).toBe('Cancelled after the appointment start time.');
     expect(describeSettlementTiming(30, 0)).toBe('Cancelled 30 hours before.');
     expect(describeSettlementTiming(null, 24)).toBeNull();
+  });
+
+  it('says the booking was moved inside the notice, whatever the cancel timing', () => {
+    expect(describeSettlementTiming(120, 24, true)).toBe('Moved inside your 24-hour notice, then cancelled.');
+    expect(describeSettlementTiming(null, 0, true)).toBe('Moved inside your notice period, then cancelled.');
+  });
+});
+
+// The server half of the rule lives in Deno and SQL, outside jest's reach, so
+// pin the pieces that must agree: the refund function reads the column the
+// migration adds, and only a client's own late request sets it.
+describe('rescheduling inside the cancellation window', () => {
+  const root = join(__dirname, '..', '..');
+  const fn = readFileSync(join(root, 'supabase/functions/apply-cancellation-refund/index.ts'), 'utf8');
+  const sql = readFileSync(join(root, 'supabase/migrations/20261031200000_late_reschedule_keeps_cancel_charge.sql'), 'utf8');
+
+  it('settles a late-moved booking as a late cancel', () => {
+    expect(fn).toMatch(/late_reschedule_from/);
+    expect(fn).toMatch(/const isLateCancel = movedLate \|\|/);
+  });
+
+  it('only stamps the booking for a request the client made inside the window', () => {
+    expect(sql).toMatch(/requested_by = 'user' AND requested_inside_cancel_window/);
+    expect(sql).toMatch(/GRANT SELECT \(late_reschedule_from\) ON public\.bookings TO authenticated/);
+    expect(sql).toMatch(/b\.late_reschedule_from\s+FROM/);
   });
 });

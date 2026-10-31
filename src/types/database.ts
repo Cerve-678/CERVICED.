@@ -681,6 +681,9 @@ export interface DbBooking {
   no_show_disputed_at?: string | null;
   refunded_amount?: number | null;
   policy_retained_amount?: number | null;
+  /** Start of the appointment the client moved away from while already
+   *  inside its cancellation window (migration 20261031200000). */
+  late_reschedule_from?: string | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;

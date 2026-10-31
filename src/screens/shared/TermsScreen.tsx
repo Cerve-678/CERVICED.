@@ -105,7 +105,7 @@ const SECTIONS = [
   {
     heading: '13. Cancellations by You',
     body: [
-      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest.',
+      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest. If you ask to reschedule once their notice period has already started, their policy still applies if you later cancel the new date, as if you\'d cancelled on the original one.',
       'Cancelling late or missing appointments is recorded, and the provider you booked with can see how often this has happened with them.',
     ].join('\n\n'),
   },
@@ -278,7 +278,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 21 October 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 31 October 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>

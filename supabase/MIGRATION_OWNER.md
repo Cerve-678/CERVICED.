@@ -22,8 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-4b (2026-10-31) — 20261031200000 and 20261031201000, both written, NOT applied
 ```
+
+### Pending 2026-10-31 (rescheduling can't dodge a late-cancel charge)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261031200000 | `late_reschedule_keeps_cancel_charge` | **NOT APPLIED.** Branch `feat/late-reschedule-keeps-cancel-charge`. Frontier at authoring: live `20261031173214`; no open PR branch has an unapplied migration above it. Adds `booking_reschedule_requests.requested_inside_cancel_window` and `bookings.late_reschedule_from` (both readable by `authenticated` via column grants). Redefines from live, md5-guarded (the file aborts if any changed): `request_reschedule_own_booking`, `confirm_reschedule_own_booking`, `cancel_own_booking`, `process_cancel_window_closing_warnings`; replaces the `client_bookings` view with one column added at the end (`security_invoker` kept). Records its own version. **Apply before deploying `apply-cancellation-refund`** from this branch, which selects the new column. |
 
 ### Applied 2026-10-30 ("Always visible" address on the profile)
 

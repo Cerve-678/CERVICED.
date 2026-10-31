@@ -237,6 +237,15 @@ Pay or PayPal.
 - **Cancellation window:** set by the provider (none, or 24, 48 or 72 hours
   before the appointment). The policy at the time of booking is frozen onto
   the booking.
+- **Rescheduling doesn't reset the window.** If the client *asks* to
+  reschedule once the window has already started, and the move goes ahead,
+  the booking is marked (`bookings.late_reschedule_from`). Cancelling it
+  later counts as a late cancel, however far off the new date is, as if they
+  had cancelled on the original date. The client is warned before they ask,
+  the cancel sheet warns again, and both settlement notices say why. A
+  reschedule asked for in good time, or one the provider started, never marks
+  the booking. Client Terms §13 says so. *Live once migration
+  `20261031200000` is applied and `apply-cancellation-refund` redeployed.*
 - When a late cancellation keeps money, both sides are told: the provider
   ("You kept the £20 deposit…") and the client ("£40 refunded…").
 - **PayPal:** the same rules apply. Stripe allows PayPal refunds up to 180
@@ -667,7 +676,7 @@ so Stripe retries.
 | Table | Holds | Statuses |
 |---|---|---|
 | `checkout_batches` | One checkout: amount due, platform fee | Starts `prepared` |
-| `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id` | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` |
+| `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id`, `late_reschedule_from` (moved inside the cancellation window; never cleared) | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` |
 | `provider_payouts` | One per paid booking: `gross_amount`, `platform_fee`, `payout_amount`, `deducted_pence`, `release_after`, `release_claimed_at`, `attempt_count`, `failure_cause` | `held` → `transferred` / `cancelled` / `reversed` / `failed` |
 | `booking_refunds` | A ledger of every refund (pence, and whether it has been applied to the payout) | — |
 | `refund_requests` | Client requests | `with_provider` → `under_review` → `refunded` / `declined` (a decline needs a note) |
@@ -735,9 +744,9 @@ Ranked, most important first.
 | # | Gap | Impact | Next step |
 |---|---|---|---|
 | 1 | **Stripe is in test mode.** No real money has moved | Launch blocker | Switch one project to live keys (PRE-LAUNCH-TODO §24), after the items below |
-| 2 | **No admins exist** | Nobody can use the Money screen to retry payouts or answer refund requests | Add at least two admins (runbook R10) |
+| 2 | **Only one admin** (the owner, added 31 October) | If they're away, nobody can retry payouts or answer refund requests | Add a second admin before launch (runbook R10) |
 | 3 | **Legal flag:** holding provider money for up to 30 days isn't covered in the Terms, and Stripe may limit how long a platform can delay transfers | A possible breach of Stripe's terms or consumer law | Ask a solicitor and Stripe before the 14- and 30-day options are used with real money |
-| 4 | **Rescheduling can dodge a late-cancel charge.** A client already inside the cancellation window can reschedule (a separate, often looser setting), then cancel the new date for a full refund | The provider loses money they're owed | Decided 25 October that the late-cancel rule still applies. Not built (PRE-LAUNCH-TODO §26) |
+| 4 | **Rescheduling can dodge a late-cancel charge.** A client already inside the cancellation window can reschedule (a separate, often looser setting), then cancel the new date for a full refund | The provider loses money they're owed | Built on `feat/late-reschedule-keeps-cancel-charge` (section 2.3). Apply migration `20261031200000`, then deploy `apply-cancellation-refund` |
 | 5 | **Events from providers' Stripe accounts may not arrive** (`STRIPE_CONNECT_WEBHOOK_SECRET` isn't set) | Bank payout failures and account status changes aren't pushed to the app. A provider's status only refreshes when they open Payments | Set up a Connect webhook endpoint in Stripe and add the secret |
 | 6 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
 | 7 | **Refund requests have no deadline** for the provider | The client waits indefinitely and the provider's payout stays held | Decide a deadline, e.g. pass it to CERVICED automatically after a set number of days |
@@ -770,7 +779,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 21 Oct | Failed payouts are retried after about 1, 2 and 4 days, then wait for a person | Most failures are temporary |
 | 21 Oct | Tips are real money. The provider gets 100%, CERVICED pays the card fee, tipping closes 48 hours after the appointment, tips are non-refundable | A tip is a gift to the provider; CERVICED shouldn't profit from it or shrink it |
 | 22 Oct | A moved booking moves its payout, earlier or later | Never pay before the work is done |
-| 25 Oct | Rescheduling inside the cancellation window keeps the late-cancel rule | Closes a loophole (not built yet) |
+| 25 Oct | Asking to reschedule once the cancellation window has started keeps the late-cancel rule on the booking. Only the client's own request counts; a provider-started move never does | Closes a loophole without punishing anyone who reschedules in good time |
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |

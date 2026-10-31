@@ -454,6 +454,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     // numeric columns arrive as strings from PostgREST; Number() both.
     refundedAmount: db.refunded_amount != null ? Number(db.refunded_amount) : undefined,
     policyRetainedAmount: db.policy_retained_amount != null ? Number(db.policy_retained_amount) : undefined,
+    lateRescheduleFrom: db.late_reschedule_from ?? undefined,
     cancelledBy: db.cancelled_by ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
     clientUserId: (db as any).user_id ?? undefined,

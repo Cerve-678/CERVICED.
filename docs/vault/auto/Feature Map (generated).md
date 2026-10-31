@@ -109,13 +109,13 @@ Curated: [[Payments]] · **147 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **294 files**
-- `src/services/databaseService.ts` _(900)_
+- `src/services/databaseService.ts` _(901)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(645)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(547)_
 - `src/services/becca/capabilities/client.ts` _(504)_
-- `src/screens/client/BookingDetailScreen.tsx` _(428)_
+- `src/screens/client/BookingDetailScreen.tsx` _(446)_
 - `src/screens/client/BookingsScreen.tsx` _(367)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **294 files**
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/types/booking.ts` _(102)_
+- `src/types/booking.ts` _(104)_
 - `src/services/becca/engine.ts` _(100)_
 - `src/screens/provider/AddBookingScreen.tsx` _(98)_
 - `src/components/BookingSheet.tsx` _(97)_
@@ -247,10 +247,10 @@ Curated: [[Booking Flow]] · **55 files**
 Curated: [[Booking Flow]] · **179 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
-- `src/services/databaseService.ts` _(235)_
+- `src/services/databaseService.ts` _(238)_
+- `src/screens/client/BookingDetailScreen.tsx` _(198)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
-- `src/screens/client/BookingDetailScreen.tsx` _(160)_
 - `src/screens/client/RescheduleScreen.tsx` _(143)_
 - `src/services/becca/capabilities/client.ts` _(132)_
 - `src/screens/client/CartScreen.tsx` _(124)_
@@ -261,9 +261,9 @@ Curated: [[Booking Flow]] · **179 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
 - `src/screens/provider/InfoRegScreen.tsx` _(61)_
 - `src/utils/policyDisplay.ts` _(61)_
+- `src/services/bookingService.ts` _(56)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
-- `src/services/bookingService.ts` _(54)_
 - `src/screens/client/BookingsScreen.tsx` _(53)_
 - `src/screens/provider/PoliciesScreen.tsx` _(48)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
@@ -272,9 +272,9 @@ Curated: [[Booking Flow]] · **179 files**
 - `supabase/fix_provider_no_show_status.sql` _(42)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
+- `src/types/booking.ts` _(37)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
-- `supabase/phase1_schema.sql` _(33)_
-- `src/services/becca/capabilities/provider.ts` _(32)_
+- `src/types/database.ts` _(33)_
 - … +149 more
 
 ## Auth
