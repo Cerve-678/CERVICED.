@@ -25,14 +25,20 @@
 --     confirm_reschedule_own_booking only when the request was the client's
 --     and was stamped late. Sticky: a later reschedule never clears it, and
 --     the earliest original start is kept.
---   - authenticated can read the new booking column (column grants), and
---     client_bookings exposes it so the client's cancel sheet can warn.
+--   - client_bookings exposes the new booking column so the client's cancel
+--     sheet can warn. (authenticated already holds table-level SELECT on both
+--     tables, so the column GRANTs below are belt-and-braces; RLS has no
+--     client INSERT/UPDATE policy on either, so only these SECURITY DEFINER
+--     functions ever write the new columns.)
 --
 -- Redefines, each from its live definition on 2026-10-31 (md5 guarded):
 --   - request_reschedule_own_booking: stamps the new request column. Nothing
 --     else changes.
 --   - confirm_reschedule_own_booking: sets bookings.late_reschedule_from.
 --     Nothing else changes.
+--   - confirm_group_reschedule: the same, per booking, so a group booking
+--     can't be moved around the stamp (security review 2026-10-31). Nothing
+--     else changes.
 --   - cancel_own_booking: a cancel of a late-rescheduled confirmed booking
 --     counts as a late cancel in the reliability record, the same as a cancel
 --     inside the window. Nothing else changes.
@@ -58,6 +64,10 @@ BEGIN
   SELECT md5(pg_get_functiondef('public.confirm_reschedule_own_booking(uuid,date,time,time)'::regprocedure)) INTO v_md5;
   IF v_md5 <> 'b5582a6a0d74f7ae0b3abd9c909d178a' THEN
     RAISE EXCEPTION 'confirm_reschedule_own_booking changed since this file was written (md5 %). Re-diff before applying.', v_md5;
+  END IF;
+  SELECT md5(pg_get_functiondef('public.confirm_group_reschedule(uuid,jsonb)'::regprocedure)) INTO v_md5;
+  IF v_md5 <> 'fbebafe7dccb34a1b474d3eee18fb518' THEN
+    RAISE EXCEPTION 'confirm_group_reschedule changed since this file was written (md5 %). Re-diff before applying.', v_md5;
   END IF;
   SELECT md5(pg_get_functiondef('public.cancel_own_booking(uuid)'::regprocedure)) INTO v_md5;
   IF v_md5 <> '1edce41092538fc2c52d299ff1e96434' THEN
@@ -297,6 +307,80 @@ BEGIN
   UPDATE public.booking_reschedule_requests
      SET status = 'confirmed', updated_at = NOW()
    WHERE booking_id = p_booking_id;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.confirm_group_reschedule(p_group_booking_id uuid, p_selections jsonb)
+ RETURNS TABLE(booking_id uuid)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_selection JSONB;
+  v_booking_id UUID;
+  v_found BOOLEAN;
+  v_old_start TIMESTAMPTZ;
+  v_moved_late BOOLEAN;
+BEGIN
+  IF jsonb_array_length(p_selections) = 0 THEN
+    RAISE EXCEPTION 'No selections supplied';
+  END IF;
+
+  FOR v_selection IN SELECT * FROM jsonb_array_elements(p_selections)
+  LOOP
+    v_booking_id := (v_selection->>'booking_id')::UUID;
+
+    SELECT EXISTS (
+      SELECT 1
+      FROM public.booking_reschedule_requests r
+      JOIN public.bookings b ON b.id = r.booking_id
+      WHERE r.booking_id = v_booking_id
+        AND b.user_id = auth.uid()
+        AND b.group_booking_id = p_group_booking_id
+        AND r.status = 'provider_responded'
+      FOR UPDATE OF r, b
+    ) INTO v_found;
+
+    IF NOT v_found THEN
+      RAISE EXCEPTION 'No provider-responded reschedule request found for booking % in this group', v_booking_id;
+    END IF;
+  END LOOP;
+
+  FOR v_selection IN SELECT * FROM jsonb_array_elements(p_selections)
+  LOOP
+    v_booking_id := (v_selection->>'booking_id')::UUID;
+
+    -- Same rule as confirm_reschedule_own_booking: only the client's own
+    -- request, made inside the cancellation window, carries the late-cancel rule.
+    SELECT ((b.booking_date + b.booking_time)::timestamp AT TIME ZONE 'Europe/London'),
+           COALESCE(r.requested_by = 'user' AND r.requested_inside_cancel_window, false)
+      INTO v_old_start, v_moved_late
+      FROM public.bookings b
+      JOIN public.booking_reschedule_requests r ON r.booking_id = b.id
+     WHERE b.id = v_booking_id;
+
+    UPDATE public.bookings
+       SET booking_date = (v_selection->>'new_date')::DATE,
+           booking_time = (v_selection->>'new_time')::TIME,
+           end_time = (v_selection->>'new_end_time')::TIME,
+           reschedule_count = COALESCE(reschedule_count, 0) + 1,
+           last_rescheduled_at = NOW(),
+           late_reschedule_from = CASE
+             WHEN v_moved_late THEN LEAST(COALESCE(late_reschedule_from, v_old_start), v_old_start)
+             ELSE late_reschedule_from
+           END
+     WHERE id = v_booking_id;
+
+    UPDATE public.booking_reschedule_requests
+       SET status = 'confirmed',
+           updated_at = NOW()
+     WHERE booking_id = v_booking_id;
+  END LOOP;
+
+  RETURN QUERY
+    SELECT (v_selection->>'booking_id')::UUID
+    FROM jsonb_array_elements(p_selections) v_selection;
 END;
 $function$;
 

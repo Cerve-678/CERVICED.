@@ -51,6 +51,9 @@ describe('rescheduling inside the cancellation window', () => {
 
   it('only stamps the booking for a request the client made inside the window', () => {
     expect(sql).toMatch(/requested_by = 'user' AND requested_inside_cancel_window/);
+    // Both confirm paths stamp it, so a group booking can't be moved around it.
+    expect(sql.match(/late_reschedule_from = CASE/g)).toHaveLength(2);
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.confirm_group_reschedule/);
     expect(sql).toMatch(/GRANT SELECT \(late_reschedule_from\) ON public\.bookings TO authenticated/);
     expect(sql).toMatch(/b\.late_reschedule_from\s+FROM/);
   });
