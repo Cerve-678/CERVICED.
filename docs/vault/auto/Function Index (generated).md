@@ -5,7 +5,7 @@
 
 #generated
 
-**2756 functions** across **381 files**.
+**2757 functions** across **381 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -247,7 +247,7 @@
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
 - `ExploreScreen.tsx` — columnWidth · dedupeByImageUri · filters · filterTabs · finishTour · getItemHeight · handleBookNow · handleCloseDetail · handleDiscoverScrollSettled · handleFavouritesScrollSettled · handleImagePress · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · prepareDetailItem · renderPortfolioCard · SkeletonMasonryGrid · tourCardId · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
 - `ExternalBookingDetailScreen.tsx` — createStyles · ExternalBookingDetailScreen · handleAddToCalendar · handleMessage · handleOpenPage · handleRemove · load · retry
-- `HomeScreen.tsx` — allCategorizedProviders · currentOffers · finishTour · handleBackPress · handleSelectRegion · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · kidsSectionRelevant · loadSecondaryRails · loadUnreadCount · maleProvidersDisplay · maleSectionRelevant · navigateToAudienceService · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · previouslyBookedProviders · ProviderRail · recommendationCandidates · recommendedProvidersList · renderKidsSection · renderMaleSection · resetFilters · RoundProviderRail · serviceProviders · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData · visibleTourSteps
+- `HomeScreen.tsx` — allCategorizedProviders · availableThisWeekProviders · currentOffers · finishTour · handleBackPress · handleSelectRegion · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · kidsSectionRelevant · loadSecondaryRails · loadUnreadCount · maleProvidersDisplay · maleSectionRelevant · navigateToAudienceService · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · previouslyBookedProviders · ProviderRail · recommendationCandidates · recommendedProvidersList · renderKidsSection · renderMaleSection · resetFilters · RoundProviderRail · serviceProviders · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData · visibleTourSteps
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo
 - `NotificationsSettingsScreen.tsx` — NotificationsSettingsScreen
 - `OffersScreen.tsx` — allOffers · expDate · filteredOffers · goToProvider · handleRefresh · load · mapPromotion · OffersScreen
