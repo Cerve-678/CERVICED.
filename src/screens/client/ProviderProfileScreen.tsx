@@ -1406,6 +1406,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [didYouBookVisible, setDidYouBookVisible] = useState(false);
   // Bumped on every open so the sheet remounts with a fresh question.
   const [didYouBookKey, setDidYouBookKey] = useState(0);
+  const [joinNudgePending, setJoinNudgePending] = useState(false);
+  const [joinNudgeSent, setJoinNudgeSent] = useState(false);
 
   // Counters behind a link-only provider's Analytics. Never for the owner
   // looking at their own profile; a failed count is logged, never shown.
@@ -2003,6 +2005,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // coordinates with native-stack to prevent that. showConfirm is the
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  // A client can ask a link-only provider to take bookings on CERVICED. The
+  // database records at most one nudge per client/provider/day, so rapid taps
+  // or a stale app state cannot inflate the provider's Analytics.
+  const handleJoinNudge = useCallback(async () => {
+    if (!providerDbId || !isLinkOnly || isOwnProvider || joinNudgePending || joinNudgeSent) return;
+    setJoinNudgePending(true);
+    try {
+      await recordProviderStat([providerDbId], 'join_nudge');
+      setJoinNudgeSent(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (error) {
+      logger.warn('[ProviderProfile] could not record join nudge', error);
+      showAlert("Couldn't send your nudge", 'Please try again in a moment.');
+    } finally {
+      setJoinNudgePending(false);
+    }
+  }, [providerDbId, isLinkOnly, isOwnProvider, joinNudgePending, joinNudgeSent, showAlert]);
   const hasUnsavedSelection =
     (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
   usePreventRemove(hasUnsavedSelection, ({ data }) => {
@@ -5107,6 +5126,37 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         >
                           Books on their own page — opens inside CERVICED
                         </Text>
+                        {viewerChecked && currentUserId && !isOwnProvider && (
+                          <TouchableOpacity
+                            style={[
+                              styles.joinNudgeButton,
+                              { borderColor: OP.border, backgroundColor: OP.card },
+                              (joinNudgePending || joinNudgeSent) && styles.joinNudgeButtonMuted,
+                            ]}
+                            onPress={handleJoinNudge}
+                            disabled={joinNudgePending || joinNudgeSent}
+                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              joinNudgeSent
+                                ? `Nudge sent to ${provider.displayName}`
+                                : `Nudge ${provider.displayName} to join CERVICED`
+                            }
+                          >
+                            <Ionicons
+                              name={joinNudgeSent ? 'checkmark-circle' : 'megaphone-outline'}
+                              size={15}
+                              color={joinNudgeSent ? OP.sub : OP.text}
+                            />
+                            <Text style={[styles.joinNudgeText, { color: joinNudgeSent ? OP.sub : OP.text }]}>
+                              {joinNudgePending
+                                ? 'Sending…'
+                                : joinNudgeSent
+                                  ? 'Nudge sent'
+                                  : 'Nudge'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     );
                   }
@@ -5790,6 +5840,24 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     fontWeight: "600",
+  },
+  joinNudgeButton: {
+    minHeight: 36,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  joinNudgeButtonMuted: {
+    opacity: 0.7,
+  },
+  joinNudgeText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    fontWeight: "700",
   },
   instagramButtonOutside: {
     borderRadius: 20,

@@ -1033,13 +1033,16 @@ export interface DbProviderDailyStat {
   book_taps: number;
   search_appearances: number;
   instagram_taps: number;
+  /** Clients who asked this link-only provider to take bookings on CERVICED. */
+  join_nudges: number;
 }
 
 export type ProviderStatKind =
   | 'profile_view'
   | 'book_tap'
   | 'search_appearance'
-  | 'instagram_tap';
+  | 'instagram_tap'
+  | 'join_nudge';
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {
