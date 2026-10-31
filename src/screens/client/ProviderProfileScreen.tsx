@@ -2008,7 +2008,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // A client can ask a link-only provider to take bookings on CERVICED. The
   // database records at most one nudge per client/provider/day, so rapid taps
   // or a stale app state cannot inflate the provider's Analytics.
-  const handleJoinNudge = useCallback(async () => {
+  const sendJoinNudge = useCallback(async () => {
     if (!providerDbId || !isLinkOnly || isOwnProvider || joinNudgePending || joinNudgeSent) return;
     setJoinNudgePending(true);
     try {
@@ -2022,6 +2022,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       setJoinNudgePending(false);
     }
   }, [providerDbId, isLinkOnly, isOwnProvider, joinNudgePending, joinNudgeSent, showAlert]);
+  // The round icon has no words of its own, so the question is asked here
+  // before anything is sent. The provider only ever sees an anonymous count
+  // in their Analytics — the copy promises nothing more than that.
+  const handleJoinNudge = useCallback(() => {
+    if (joinNudgePending || joinNudgeSent || !provider) return;
+    showConfirm(
+      `Want ${provider.displayName} on CERVICED?`,
+      `${provider.displayName} will see in their stats that a client would like to book them here. Your name isn't shown.`,
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Send", onPress: () => { void sendJoinNudge(); } },
+      ],
+    );
+  }, [joinNudgePending, joinNudgeSent, provider, showConfirm, sendJoinNudge]);
   const hasUnsavedSelection =
     (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
   usePreventRemove(hasUnsavedSelection, ({ data }) => {
@@ -5120,43 +5134,36 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               })
                             : null}
                           {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
+                          {viewerChecked && currentUserId && !isOwnProvider && (
+                            <TouchableOpacity
+                              style={[
+                                styles.linkOnlySocialButton,
+                                { backgroundColor: adaptiveAccentColor },
+                                (joinNudgePending || joinNudgeSent) && styles.joinNudgeButtonMuted,
+                              ]}
+                              onPress={() => { Haptics.selectionAsync().catch(() => {}); handleJoinNudge(); }}
+                              disabled={joinNudgePending || joinNudgeSent}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                joinNudgeSent
+                                  ? `Sent: you'd like ${provider.displayName} on CERVICED`
+                                  : `Want ${provider.displayName} on CERVICED?`
+                              }
+                            >
+                              <Ionicons
+                                name={joinNudgeSent ? "checkmark" : "megaphone-outline"}
+                                size={20}
+                                color={onAccentHero}
+                              />
+                            </TouchableOpacity>
+                          )}
                         </View>
                         <Text
                           style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
                         >
                           Books on their own page — opens inside CERVICED
                         </Text>
-                        {viewerChecked && currentUserId && !isOwnProvider && (
-                          <TouchableOpacity
-                            style={[
-                              styles.joinNudgeButton,
-                              { borderColor: OP.border, backgroundColor: OP.card },
-                              (joinNudgePending || joinNudgeSent) && styles.joinNudgeButtonMuted,
-                            ]}
-                            onPress={handleJoinNudge}
-                            disabled={joinNudgePending || joinNudgeSent}
-                            activeOpacity={0.8}
-                            accessibilityRole="button"
-                            accessibilityLabel={
-                              joinNudgeSent
-                                ? `Nudge sent to ${provider.displayName}`
-                                : `Nudge ${provider.displayName} to join CERVICED`
-                            }
-                          >
-                            <Ionicons
-                              name={joinNudgeSent ? 'checkmark-circle' : 'megaphone-outline'}
-                              size={15}
-                              color={joinNudgeSent ? OP.sub : OP.text}
-                            />
-                            <Text style={[styles.joinNudgeText, { color: joinNudgeSent ? OP.sub : OP.text }]}>
-                              {joinNudgePending
-                                ? 'Sending…'
-                                : joinNudgeSent
-                                  ? 'Nudge sent'
-                                  : 'Nudge'}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
                       </View>
                     );
                   }
@@ -5841,23 +5848,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-  joinNudgeButton: {
-    minHeight: 36,
-    borderWidth: 1,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-  },
   joinNudgeButtonMuted: {
-    opacity: 0.7,
-  },
-  joinNudgeText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    fontWeight: "700",
+    opacity: 0.55,
   },
   instagramButtonOutside: {
     borderRadius: 20,
