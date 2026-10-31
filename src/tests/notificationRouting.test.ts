@@ -166,7 +166,7 @@ describe('notification preferences gate the push', () => {
   const prefKeys = ['bookingConfirm', 'bookingReminder', 'bookingUpdates', 'promotions', 'newProviders', 'weeklySummary', 'maintenanceReminders'];
   const providerPrefKeys = [
     'providerNewBookings', 'providerBookingChanges', 'providerReminders', 'providerForms',
-    'providerMessages', 'providerPayments', 'providerReviews', 'providerDailyRecap', 'providerFullyBooked',
+    'providerMessages', 'providerPayments', 'providerReviews', 'providerDailyRecap', 'providerFullyBooked', 'providerSaves',
   ];
 
   it('reads preferences on the send path', () => {
@@ -249,8 +249,20 @@ describe('notification preferences gate the push', () => {
 
   it('never lets a provider mute what needs their answer', () => {
     const muted = new Set(providerMap().map(entry => entry.type));
-    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed']) {
+    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed', 'payout_failed']) {
       expect(muted).not.toContain(type);
+    }
+  });
+
+  it('never lets a provider mute money they owe or money taken to pay it', () => {
+    // Muting "Payment Updates" must not hide a debt or a deduction from payouts.
+    const muted = new Set(providerMap().map(entry => entry.type));
+    for (const type of ['payout_debt_recorded', 'payout_debt_recovered']) {
+      expect(muted).not.toContain(type);
+      // Written by DB triggers, so the CHECK constraint must allow them or every
+      // insert fails while tsc and jest stay green.
+      expect(read('supabase', 'migrations', '20261029120000_provider_debt_notices_and_fee_recovery.sql')).toContain(`'${type}'`);
+      expect(tapHandler()).toContain(`'${type}'`);
     }
   });
 
@@ -319,5 +331,29 @@ describe('notification routing — Beauty Maintenance', () => {
     expect(edgeFunction()).toContain("maintenance_due: 'maintenanceReminders'");
     expect(edgeFunction()).toContain("aftercare_available: 'maintenanceReminders'");
     expect(databaseService()).toMatch(/maintenanceReminders: false,\n};/);
+  });
+});
+
+describe('notification routing — daily saves count', () => {
+  // A new type is four places, and only the DB CHECK rejects a miss: tsc and
+  // jest stay green while every insert fails (memory: new-notification-type-
+  // is-four-places).
+  it('declares provider_saved in the DB check, both type unions and the push map', () => {
+    const migration = read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql');
+    expect(migration).toMatch(/notifications_type_check[\s\S]*'provider_saved'/);
+    expect(read('src', 'types', 'database.ts')).toContain('| "provider_saved"');
+    expect(read('src', 'screens', 'shared', 'NotificationsScreen.tsx')).toContain("| 'provider_saved'");
+    expect(edgeFunction()).toContain("provider_saved: 'providerSaves'");
+  });
+
+  it('never names who saved the provider', () => {
+    const migration = read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql');
+    const insert = migration.slice(migration.indexOf('insert into public.notifications'));
+    expect(insert).not.toMatch(/users\b|\.name\b|display_name/);
+  });
+
+  it('sends a link-only pro to their own analytics', () => {
+    const source = read('src', 'screens', 'shared', 'NotificationsScreen.tsx');
+    expect(source).toContain("navigateProviderHome('LinkOnlyAnalytics')");
   });
 });

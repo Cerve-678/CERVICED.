@@ -89,7 +89,11 @@ async function notifyProviderOfRefundRequest(
     if (linkError) throw linkError;
     if (!linked?.provider_id) return false;
 
-    const [{ data: booking, error: bookingError }, { data: provider, error: providerError }] = await Promise.all([
+    const [
+      { data: booking, error: bookingError },
+      { data: provider, error: providerError },
+      { data: payout, error: payoutError },
+    ] = await Promise.all([
       supabase
         .from('bookings')
         .select('customer_name, service_name_snapshot, booking_date, booking_time')
@@ -100,9 +104,16 @@ async function notifyProviderOfRefundRequest(
         .select('user_id')
         .eq('id', linked.provider_id)
         .single(),
+      // release-payouts holds this back while the request is open.
+      supabase
+        .from('provider_payouts')
+        .select('status, payout_amount')
+        .eq('booking_id', linked.booking_id)
+        .maybeSingle(),
     ]);
     if (bookingError) throw bookingError;
     if (providerError) throw providerError;
+    if (payoutError) throw payoutError;
 
     // The provider's LOGIN address, same as every other provider email: the
     // business address is unvalidated (see email-is-server-owned).
@@ -121,6 +132,7 @@ async function notifyProviderOfRefundRequest(
       date: formatLongDate(booking.booking_date),
       time: formatTime12(booking.booking_time),
       reason: linked.reason,
+      heldPence: payout?.status === 'held' ? Number(payout.payout_amount) : null,
     });
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',

@@ -49,6 +49,7 @@ import {
   getRefundRequestsForBooking,
 } from '../../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
+import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
@@ -1105,35 +1106,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {refundTimeline && (
               <View style={[st.refundNotice, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Text style={{ color: C.text, fontWeight: '700', fontSize: 14, marginBottom: 4 }}>Your refund request</Text>
-                <View>
-                {refundTimeline.map((step, i) => {
-                  const last = i === refundTimeline.length - 1;
-                  const dot = step.state === 'done' ? '#34C759'
-                    : step.state === 'declined' ? '#F44336'
-                    : step.state === 'current' ? '#FF9500'
-                    : C.border;
-                  return (
-                    <View key={step.key} style={{ flexDirection: 'row', gap: 10 }}>
-                      <View style={{ alignItems: 'center', width: 16 }}>
-                        <View style={[st.refundStepDot, step.state === 'upcoming'
-                          ? { borderColor: dot, borderWidth: 2, backgroundColor: 'transparent' }
-                          : { backgroundColor: dot }]}>
-                          {step.state === 'done' && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
-                          {step.state === 'declined' && <Ionicons name="close" size={10} color="#FFFFFF" />}
-                        </View>
-                        {!last && <View style={[st.refundStepLine, { backgroundColor: C.border }]} />}
-                      </View>
-                      <View style={{ flex: 1, paddingBottom: last ? 0 : 12 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-                          <Text style={{ color: step.state === 'upcoming' ? C.sub : C.text, fontWeight: '600', fontSize: 13, flex: 1 }}>{step.title}</Text>
-                          {step.date && <Text style={{ color: C.sub, fontSize: 12 }}>{step.date}</Text>}
-                        </View>
-                        {step.detail && <Text style={{ color: C.sub, fontSize: 12, lineHeight: 17, marginTop: 2 }}>{step.detail}</Text>}
-                      </View>
-                    </View>
-                  );
-                })}
-                </View>
+                <RefundRequestTimeline steps={refundTimeline} colors={C} />
               </View>
             )}
             {!showReceipt ? (
@@ -2198,8 +2171,6 @@ const st = StyleSheet.create({
   // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
   sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
   refundNotice: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6, marginBottom: 10 },
-  refundStepDot: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  refundStepLine: { width: 2, flex: 1, marginTop: 2 },
   disputeInput: {
     width: '100%', minHeight: 96, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14,

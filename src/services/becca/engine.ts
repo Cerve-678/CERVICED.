@@ -30,7 +30,7 @@ import userLearningService from "../userLearningService";
 import { resolveEntities } from "./entityResolver";
 import { understand } from "./matcher";
 import { normalizeAsk } from "./askNormaliser";
-import { capabilitiesFor, getCapability, toToolSchema } from "./registry";
+import { capabilitiesFor, fitsSetup, getCapability, toToolSchema } from "./registry";
 import { askChip, chip, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
@@ -51,6 +51,13 @@ export interface EngineInput {
   conversation?: ConversationContext;
   /** Exact booking selected from a Becca action card, never free text. */
   selectedBookingId?: string;
+  /**
+   * Provider hat only: the provider is link-only (takes bookings on their
+   * own booking site). Becca then only runs capabilities marked
+   * `fitsLinkOnly` and only offers chips that lead to one; anything else
+   * gets "that isn't part of your setup". Ignored for the client hat.
+   */
+  linkOnly?: boolean;
   /**
    * Optional future AI router. It can select a registered capability only;
    * the deterministic matcher remains the fallback when it is absent, unsure
@@ -265,9 +272,22 @@ export async function converse(input: EngineInput): Promise<EngineReply> {
  */
 let lastContext: ConversationContext = { entities: {} };
 
+/**
+ * Whether this turn is a link-only provider's. Set once at the top of
+ * `respond()`, same reasoning as `lastContext`: every early return and every
+ * chip helper needs it, and threading it through all of them would bury the
+ * logic. Read through `isLinkOnlyTurn()`, which also checks the hat.
+ */
+let turnLinkOnly = false;
+
+function isLinkOnlyTurn(hat: BeccaHat): boolean {
+  return hat === "provider" && turnLinkOnly;
+}
+
 export async function respond(input: EngineInput): Promise<ChatMessage> {
   const now = input.now ?? new Date();
   const { message, hat, bookings, userId, conversation, interpreter } = input;
+  turnLinkOnly = hat === "provider" && input.linkOnly === true;
 
   // A confirmation short-circuits everything: it's not natural language and
   // must never be re-parsed as an intent.
@@ -301,6 +321,9 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
 
   if (
     hat === "provider" &&
+    // Link-only pros have no booking rules; the ask falls through to the
+    // matcher and gets the not-in-your-setup reply.
+    !isLinkOnlyTurn(hat) &&
     (
       SET_DAILY_LIMIT_DIRECT_RE.test(message.trim()) ||
       (
@@ -499,6 +522,17 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const capability = getCapability(understanding.capabilityId, hat);
   if (!capability) return buildFallback(understanding, hat);
 
+  // Understood, but not something a link-only pro has. Say so plainly rather
+  // than answer about CERVICED bookings, clients or prices they don't keep
+  // here, and never run the capability.
+  if (!fitsSetup(capability, isLinkOnlyTurn(hat))) {
+    return message_({
+      content:
+        "That isn't part of your setup. Your bookings, clients and prices live on your own booking site, so I can't see them here.",
+      suggestions: defaultStarters(hat),
+    }, hat, { title: "Not part of your setup" });
+  }
+
   // A required entity that never resolved means we can't run the capability
   // honestly — ask for the missing piece instead of running it half-blind.
   const missing = (capability.needs ?? []).find(
@@ -514,6 +548,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const ctx: CapabilityContext = {
     entities,
     hat,
+    linkOnly: isLinkOnlyTurn(hat),
     // The repaired ask, not the raw keystrokes: a capability testing its own
     // modifiers ("walk-in", "vegan", "near me") should see the same text the
     // matcher scored, or a typo that Becca understood well enough to route
@@ -590,7 +625,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // also covered by tests, but filtering here keeps a malformed future
   // capability from reaching a user while development is in progress.
   const routable = offered.filter((suggestion) =>
-    isBeccaNavigationSuggestion(hat, suggestion),
+    isBeccaNavigationSuggestion(hat, suggestion, isLinkOnlyTurn(hat)),
   );
 
   // Don't offer back the thing the user just asked for. Chips send their
@@ -699,6 +734,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
  * than no chip at all.
  */
 function discoveryChips(hat: BeccaHat): ChatSuggestion[] {
+  if (isLinkOnlyTurn(hat)) return linkOnlyStarterChips();
   if (hat === "provider") {
     return [
       askChip("p-today", "What's on today?", "What's on today?"),
@@ -760,6 +796,7 @@ function rememberOffered(
  * steps — offering a client "Today's bookings" would be meaningless.
  */
 function defaultFollowUps(hat: BeccaHat) {
+  if (isLinkOnlyTurn(hat)) return linkOnlyStarterChips().slice(0, 3);
   if (hat === "provider") {
     return [
       chip("d-today", "Today's bookings", "What's on today?"),
@@ -1207,7 +1244,8 @@ function buildAmbiguityReply(
  * when nothing scored at all.
  */
 function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
-  const all = capabilitiesFor(hat);
+  const linkOnly = isLinkOnlyTurn(hat);
+  const all = capabilitiesFor(hat).filter((c) => fitsSetup(c, linkOnly));
 
   const ranked = u.alternatives.length > 0 || u.capabilityId
     ? [
@@ -1293,7 +1331,22 @@ function buildAssumption(
   return `Assuming you meant ${unstated.join(", ")} —`;
 }
 
+/**
+ * A link-only pro's starting points. Every message routes to a capability
+ * marked `fitsLinkOnly` (beccaLinkOnly.test.ts checks this).
+ */
+function linkOnlyStarterChips(): ChatSuggestion[] {
+  return [
+    askChip("lo-inbox", "Any unread messages?", "Any unread messages?"),
+    askChip("lo-notifs", "Anything I've missed?", "Any updates?"),
+    askChip("lo-hours", "What are my hours?", "What are my working hours?"),
+    askChip("lo-reach", "How's my reach?", "How many followers have I got?"),
+    askChip("lo-help", "What can you do?", "What can you do?"),
+  ];
+}
+
 function defaultStarters(hat: BeccaHat) {
+  if (isLinkOnlyTurn(hat)) return linkOnlyStarterChips().slice(0, 3);
   return hat === "provider"
     ? [
         askChip("today", "What's on today?", "What's on today?"),
@@ -1331,7 +1384,12 @@ function message_(
   // an invitation to mis-tap.
   options?: { exactSuggestions?: boolean; title?: string },
 ): ChatMessage {
-  const own = parts.suggestions ?? [];
+  // Last line of defence for a link-only pro: drop any chip that would lead
+  // to "not part of your setup". Exact suggestions (confirm/cancel) are
+  // never filtered.
+  const own = (parts.suggestions ?? []).filter(
+    (s) => options?.exactSuggestions || !isLinkOnlyTurn(hat) || suggestionFitsLinkOnly(s, hat),
+  );
   const suggestions = options?.exactSuggestions || own.length > 0
     ? own
     : defaultFollowUps(hat);
@@ -1343,6 +1401,17 @@ function message_(
     content: formatForChat(parts.content, options?.title),
     suggestions,
   };
+}
+
+/** Whether a chip leads somewhere a link-only pro has. */
+function suggestionFitsLinkOnly(suggestion: ChatSuggestion, hat: BeccaHat): boolean {
+  if (suggestion.action === "navigate") return isBeccaNavigationSuggestion(hat, suggestion, true);
+  const ask = suggestion.data?.message;
+  if (!ask || ask.startsWith(CONFIRM_PREFIX)) return true;
+  const u = understand(normalizeAsk(ask), {}, hat);
+  if (!u.capabilityId) return true;
+  const capability = getCapability(u.capabilityId, hat);
+  return !capability || fitsSetup(capability, true);
 }
 
 /**

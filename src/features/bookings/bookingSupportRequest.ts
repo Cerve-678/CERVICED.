@@ -187,6 +187,26 @@ export async function fileBookingSupportRequest(
   }
 }
 
+/** Why a provider isn't refunding a client's request. Picked on the Pass to
+ *  Cerviced sheet; 'Other' needs a note, the rest take an optional one. */
+export const PASS_ON_REASONS = [
+  'Service was done as booked',
+  "Client didn't turn up",
+  'Client cancelled too late',
+  'Outside my refund policy',
+  'Other',
+] as const;
+export type PassOnReason = typeof PASS_ON_REASONS[number];
+
+/** The one reason string pass_refund_request_to_cerviced() stores, or null
+ *  while the sheet can't be sent yet. */
+export function composePassOnReason(reason: PassOnReason | null, note: string): string | null {
+  const extra = note.trim();
+  if (!reason || (reason === 'Other' && !extra)) return null;
+  if (reason === 'Other') return extra;
+  return extra ? `${reason}. ${extra}` : reason;
+}
+
 /**
  * The provider isn't refunding a client's request, so it goes to Cerviced.
  * Same two steps as a client's request: pass_refund_request_to_cerviced() is

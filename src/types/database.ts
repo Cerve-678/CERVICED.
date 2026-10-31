@@ -80,8 +80,13 @@ export type NotificationType =
   | "fee_payment_requested"
   | "fee_paid_by_client"
   | "fee_payment_lapsed"
+  /** Provider owes money a take-back couldn't recover, and when some is taken from a payout. */
+  | "payout_debt_recorded"
+  | "payout_debt_recovered"
   | "refund_requested"
   | "refund_request_updated"
+  /** A payout to the provider (or their own bank payout) failed; they may need to fix their account. */
+  | "payout_failed"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"
@@ -115,7 +120,9 @@ export type NotificationType =
   | "maintenance_due"
   /** Beauty Maintenance: the completed booking's provider wrote aftercare
    *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
-  | "aftercare_available";
+  | "aftercare_available"
+  /** Provider: a daily count of the people who saved them. Never names. */
+  | "provider_saved";
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -616,6 +623,11 @@ export interface DbBooking {
   booking_date: string; // 'YYYY-MM-DD'
   booking_time: string; // 'HH:MM:SS'
   end_time: string | null;
+  /** 'YYYY-MM-DDTHH:MM:SS', padded with the booking's own buffers by the
+   *  compute_booking_effective_range trigger. bookings_no_overlap compares
+   *  these, not the raw times. Optional: only `select('*')` reads carry it. */
+  effective_start?: string | null;
+  effective_end?: string | null;
   notes: string | null;
   booking_instructions: string | null;
   payment_type: PaymentType;

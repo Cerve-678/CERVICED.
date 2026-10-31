@@ -58,7 +58,8 @@ interface Notification {
       | 'cancellation_settled'
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
       | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed'
-      | 'refund_requested' | 'refund_request_updated'
+      | 'payout_debt_recorded' | 'payout_debt_recovered'
+      | 'refund_requested' | 'refund_request_updated' | 'payout_failed'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
@@ -70,7 +71,8 @@ interface Notification {
       | 'info_pack_received' | 'intake_form_completed' | 'address_released'
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
       | 'schedule_fully_booked' | 'points_earned'
-      | 'maintenance_due'    | 'aftercare_available';
+      | 'maintenance_due'    | 'aftercare_available'
+      | 'provider_saved';
   title: string;
   message: string;
   timestamp: string;
@@ -169,11 +171,13 @@ const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { textStyles } = useFont();
-  const { user, hatState } = useAuth();
+  const { user, hatState, myBookingMode } = useAuth();
   const activeMode = hatState.active;
   const isProvider = activeMode === 'provider';
   const isProviderRef = useRef(false);
   isProviderRef.current = isProvider;
+  const myBookingModeRef = useRef(myBookingMode);
+  myBookingModeRef.current = myBookingMode;
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -349,7 +353,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'refund_requested', 'refund_request_updated', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -541,6 +545,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'fee_payment_requested' ||
         notification.type === 'fee_paid_by_client' ||
         notification.type === 'fee_payment_lapsed' ||
+        notification.type === 'payout_debt_recorded' ||
+        notification.type === 'payout_debt_recovered' ||
         notification.type === 'refund_requested' ||
         notification.type === 'refund_request_updated' ||
         notification.type === 'booking_reminder' ||
@@ -740,6 +746,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
         );
       }, 300);
+    } else if (notification.type === 'payout_failed') {
+      // Provider-only. The fix (Stripe account or bank details) lives on
+      // Payments, not on the booking the payout was for.
+      defer(() => {
+        navigateProviderHome('Payments');
+      }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
@@ -747,13 +759,15 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
-    } else if (notification.type === 'points_earned') {
-      // Loyalty points earned — open the Rewards screen, which lives in the
-      // client Profile tab's stack. Client-only (already guarded above via
-      // CLIENT_ONLY_TYPES), so no provider branch is needed. Same dismiss-then-
-      // navigate-via-root-ref pattern as the other client deep-links.
+    } else if (notification.type === 'provider_saved') {
+      // The daily saves count. Both analytics screens show saves; a link-only
+      // pro's lives on Home, a full provider's on the Profile tab.
       defer(() => {
-        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+        if (myBookingModeRef.current === 'external') {
+          navigateProviderHome('LinkOnlyAnalytics');
+        } else {
+          dismissThenNavigate(() => navigateNested('Profile', 'Analytics'));
+        }
       }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
@@ -817,16 +831,21 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     if (type === 'fee_charged' || type === 'fee_disputed' || type === 'fee_payment_requested') return '#FF9500';
     if (type === 'fee_dispute_resolved' || type === 'fee_payment_lapsed') return P.accentText;
     if (type === 'fee_paid_by_client') return '#4CAF50';
+    // Money owed needs attention; money taken towards it is a receipt.
+    if (type === 'payout_debt_recorded') return '#FF9500';
+    if (type === 'payout_debt_recovered') return P.accentText;
     // Amber: a request someone still has to act on or decide.
     if (type === 'refund_requested') return '#FF9500';
     if (type === 'refund_request_updated') return P.accentText;
+    // Money that didn't reach the provider: they need to act.
+    if (type === 'payout_failed') return '#FF9500';
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available'].includes(type)) return P.accentText;
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved'].includes(type)) return P.accentText;
     return '#FF9800';
   };
 
@@ -857,6 +876,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'fee_dispute_resolved':
       case 'fee_paid_by_client':
       case 'fee_payment_lapsed':
+      case 'payout_debt_recorded':
+      case 'payout_debt_recovered':
       case 'refund_requested':
       case 'refund_request_updated':
         return 'View Booking';
@@ -909,6 +930,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'payout_failed':
+        return 'Open Payments';
+      case 'provider_saved':
+        return 'View Analytics';
       case 'points_earned':
         return 'View Points';
       case 'maintenance_due':
@@ -1105,7 +1130,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {/* ✅ Filter Tabs */}
         <View style={styles.filterContainer}>
           <SlidingTabs
-            tabs={(isProvider
+            tabs={(isProvider && myBookingMode === 'external'
+              // Link-only: no CERVICED bookings and no reviews, so those two
+              // tabs would always be empty.
+              ? [
+                  { key: 'all', label: 'All' },
+                  { key: 'unread', label: 'Unread', count: unreadCount },
+                ]
+              : isProvider
               ? [
                   { key: 'all', label: 'All' },
                   { key: 'unread', label: 'Unread', count: unreadCount },

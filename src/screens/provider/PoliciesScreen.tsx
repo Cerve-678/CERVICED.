@@ -48,6 +48,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import TermsScreen from '../shared/TermsScreen';
 import { getMyProviderProfile } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -94,6 +95,18 @@ interface PolicyState {
   // round-trips through save regardless so a stored value is never lost.
   emergencyBookingPolicy: string;
 }
+
+// What CERVICED itself applies or charges. A link-only provider's bookings
+// happen on their own site, so none of it can apply to them: it's hidden
+// from their editor, cleared when they save, and left out of their profile
+// (buildPolicyDisplayRows' linkOnly option).
+const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'noShowAction' | 'noShowGraceMinutes' | 'lateFee' | 'noShowFee'> = {
+  cancelPenalty: '',
+  noShowAction: '',
+  noShowGraceMinutes: '',
+  lateFee: '',
+  noShowFee: '',
+};
 
 const DEFAULT_POLICIES: PolicyState = {
   cancelNotice:     '',
@@ -151,6 +164,8 @@ export default function PoliciesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
+  const { myBookingMode } = useAuth();
+  const isLinkOnly = myBookingMode === 'external';
 
   const [userId, setUserId] = useState<string | null>(null);
   const [policies, setPolicies] = useState<PolicyState>(DEFAULT_POLICIES);
@@ -258,6 +273,7 @@ export default function PoliciesScreen({ navigation }: any) {
       await saveProviderPolicies(userId, {
         ...carriedPolicies,
         ...policies,
+        ...(isLinkOnly ? LINK_ONLY_CLEARED : {}),
       } as unknown as Record<string, unknown>);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
@@ -267,7 +283,7 @@ export default function PoliciesScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [userId, policies, carriedPolicies, loadFailed, navigation]);
+  }, [userId, policies, carriedPolicies, loadFailed, navigation, isLinkOnly]);
 
   if (loading) {
     return (
@@ -303,19 +319,25 @@ export default function PoliciesScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            <Card title="Cancellation" sub="What happens if a client cancels late.">
+            {isLinkOnly && (
+              <Card title="Your own policies" sub="These show on your profile so clients know them before they book. Clients book and pay on your own booking site, so CERVICED doesn't apply them or charge anything.">{null}</Card>
+            )}
+
+            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask for.' : 'What happens if a client cancels late.'}>
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'none', l: 'None' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
                 value={policies.cancelNotice}
                 onChange={v => setPolicy('cancelNotice', v)}
               />
-              <SectionLabel text="If cancelled late" />
-              <Pills
-                options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'full', l: 'Full charge' }]}
-                value={policies.cancelPenalty}
-                onChange={v => setPolicy('cancelPenalty', v)}
-              />
+              {!isLinkOnly && (<>
+                <SectionLabel text="If cancelled late" />
+                <Pills
+                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'full', l: 'Full charge' }]}
+                  value={policies.cancelPenalty}
+                  onChange={v => setPolicy('cancelPenalty', v)}
+                />
+              </>)}
               <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
             </Card>
 
@@ -335,53 +357,55 @@ export default function PoliciesScreen({ navigation }: any) {
               <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
             </Card>
 
-            {/* Deposits live on Business Profile → Payments now, not here. */}
-            <Card title="No-show">
-              <SectionLabel text="Action" />
-              <Pills
-                options={[
-                  { v: 'none', l: 'No action' },
-                  { v: 'warn', l: 'Warn client' },
-                  { v: 'charge_deposit', l: 'Keep deposit' },
-                ]}
-                value={policies.noShowAction}
-                onChange={v => setPolicy('noShowAction', v)}
-              />
-              <Field
-                label="Grace period (minutes)"
-                value={policies.noShowGraceMinutes}
-                onChange={v => setPolicy('noShowGraceMinutes', v.replace(/[^0-9]/g, ''))}
-                placeholder="e.g. 15"
-                keyboardType="phone-pad"
-                note="How long after the booked start time before you can mark a client No Show. 0 = no grace period."
-              />
-              <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
-            </Card>
+            {!isLinkOnly && (<>
+              {/* Deposits live on Business Profile → Payments now, not here. */}
+              <Card title="No-show">
+                <SectionLabel text="Action" />
+                <Pills
+                  options={[
+                    { v: 'none', l: 'No action' },
+                    { v: 'warn', l: 'Warn client' },
+                    { v: 'charge_deposit', l: 'Keep deposit' },
+                  ]}
+                  value={policies.noShowAction}
+                  onChange={v => setPolicy('noShowAction', v)}
+                />
+                <Field
+                  label="Grace period (minutes)"
+                  value={policies.noShowGraceMinutes}
+                  onChange={v => setPolicy('noShowGraceMinutes', v.replace(/[^0-9]/g, ''))}
+                  placeholder="e.g. 15"
+                  keyboardType="phone-pad"
+                  note="How long after the booked start time before you can mark a client No Show. 0 = no grace period."
+                />
+                <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+              </Card>
 
-            <Card title="Late & no-show fees" sub="Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to them at checkout. Each fee can be at most half the service price. Leave blank for no fee.">
-              <Field
-                label="Late arrival fee (£)"
-                value={policies.lateFee}
-                onChange={v => setPolicy('lateFee', v.replace(/[^0-9.]/g, ''))}
-                placeholder="e.g. 10"
-                keyboardType="decimal-pad"
-                note="For arriving after your grace period above."
-              />
-              <Field
-                label="No-show fee (£)"
-                value={policies.noShowFee}
-                onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
-                placeholder="e.g. 20"
-                keyboardType="decimal-pad"
-                note="For not turning up. You mark the booking as a no-show first."
-              />
-            </Card>
+              <Card title="Late & no-show fees" sub="Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to them at checkout. Each fee can be at most half the service price. Leave blank for no fee.">
+                <Field
+                  label="Late arrival fee (£)"
+                  value={policies.lateFee}
+                  onChange={v => setPolicy('lateFee', v.replace(/[^0-9.]/g, ''))}
+                  placeholder="e.g. 10"
+                  keyboardType="decimal-pad"
+                  note="For arriving after your grace period above."
+                />
+                <Field
+                  label="No-show fee (£)"
+                  value={policies.noShowFee}
+                  onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
+                  placeholder="e.g. 20"
+                  keyboardType="decimal-pad"
+                  note="For not turning up. You mark the booking as a no-show first."
+                />
+              </Card>
+            </>)}
 
             {/* Refund policy — free-text disclosure only. This app has no
                 refund-processing infra, so there is deliberately no
                 percentage/amount field here that would imply the app
                 calculates or enforces a refund automatically. */}
-            <Card title="Refund Policy" sub="Shown to clients on their booking (optional).">
+            <Card title="Refund Policy" sub={isLinkOnly ? 'Shown on your profile (optional).' : 'Shown to clients on their booking (optional).'}>
               <Field
                 label="Your refund policy"
                 value={policies.refundPolicyNote}
@@ -391,15 +415,18 @@ export default function PoliciesScreen({ navigation }: any) {
               />
             </Card>
 
-            <Card title="Booking Instructions" sub="Shown to clients on every booking (optional).">
-              <Field
-                label="Instructions"
-                value={policies.bookingInstructions}
-                onChange={v => setPolicy('bookingInstructions', v)}
-                placeholder='e.g. "Please arrive 10 minutes early", parking info…'
-                multiline
-              />
-            </Card>
+            {/* Shown on CERVICED bookings, which link-only pros don't have. */}
+            {!isLinkOnly && (
+              <Card title="Booking Instructions" sub="Shown to clients on every booking (optional).">
+                <Field
+                  label="Instructions"
+                  value={policies.bookingInstructions}
+                  onChange={v => setPolicy('bookingInstructions', v)}
+                  placeholder='e.g. "Please arrive 10 minutes early", parking info…'
+                  multiline
+                />
+              </Card>
+            )}
 
             {/* Emergency / out-of-hours requests are pulled from the client app
                 for now (EMERGENCY_BOOKINGS_ENABLED — see FUTURE_LOGIC.md), so

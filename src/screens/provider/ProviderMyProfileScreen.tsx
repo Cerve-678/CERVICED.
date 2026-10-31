@@ -88,6 +88,14 @@ import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
+import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
+import {
+  TodayBookingCards,
+  TodaySummaryCard,
+  type TodayCardsPalette,
+} from '../../features/providers/TodayScheduleCards';
+import type { BookingWithAddOns } from '../../types/database';
+import { ProviderProfileQrSheet } from '../../components/ProviderProfileQrSheet';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useDarkTopArea } from '../../contexts/StatusBarTintContext';
@@ -597,7 +605,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // Measured per render, not captured at module load: the paired tiles and the
   // quick-action row both divide the screen width between them.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
   const [services, setServices] = useState<DbService[]>([]);
@@ -644,6 +652,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [profileQrVisible, setProfileQrVisible] = useState(false);
 
   // Which half of the sheet is showing. Not navigation state: both halves read
   // the same already-loaded data, so switching must not refetch or reset the
@@ -889,8 +898,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     return buildPolicyDisplayRows(
       providerData.bookingPolicies,
       providerData.cancellationNoticeHours,
+      { linkOnly: myBookingMode === 'external' },
     );
-  }, [providerData]);
+  }, [providerData, myBookingMode]);
 
   /** goLive plus the two Profile-Health-only fields it never fetches itself
    *  (see GoLiveStatus's portfolioSet/termsSet doc comment) — merged here
@@ -950,6 +960,29 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Branding');
   }, [navigation]);
+
+  // Today's two cards. They haptick on their own presses, so these only
+  // navigate.
+  const todaySchedule = useTodaySchedule(providerId);
+
+  const handleOpenTodayBooking = useCallback(
+    (booking: BookingWithAddOns) => {
+      navigation.navigate('BookingDetail', { bookingId: booking.id, booking });
+    },
+    [navigation],
+  );
+
+  // The day itself lives on the Home tab's calendar, the same jump Add
+  // Booking makes after saving.
+  const handleOpenTodayDay = useCallback(
+    (ymd: string) => {
+      navigation.getParent()?.navigate('ProviderHome', {
+        screen: 'ProviderHomeMain',
+        params: { jumpToDate: ymd },
+      });
+    },
+    [navigation],
+  );
 
   const handleOpenAnalytics = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
@@ -1241,6 +1274,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     ],
   );
 
+  const todayPalette = useMemo<TodayCardsPalette>(
+    () => ({ card: cardSolid, text: PP.text, sub: PP.sub, border: PP.border, accent: accentColor }),
+    [cardSolid, PP.text, PP.sub, PP.border, accentColor],
+  );
+
   const editorPalette = useMemo<ServiceEditorPalette>(
     () => ({
       bg: PP.bg,
@@ -1338,6 +1376,22 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   /* The go-live card. It leads the dashboard while anything is still
      outstanding and drops to the bottom once the profile is finished —
      at that point it's a receipt, not an instruction. */
+  const todaySummaryCard = todaySchedule ? (
+    <TodaySummaryCard
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenTodayBooking}
+      onOpenDay={handleOpenTodayDay}
+    />
+  ) : null;
+  const todayBookingCards = todaySchedule ? (
+    <TodayBookingCards
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenTodayBooking}
+    />
+  ) : null;
+
   const statusSection = (
     <>
       {/* ── Status hero ────────────────────────────────────────
@@ -1643,6 +1697,17 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               >
                 <Ionicons name="color-palette-outline" size={19} color={PP.text} />
               </TouchableOpacity>
+              {providerId ? (
+                <TouchableOpacity
+                  style={[styles.circleAction, { backgroundColor: withAlpha(PP.card, 0.9), borderColor: PP.border }]}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setProfileQrVisible(true); }}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show your profile QR code"
+                >
+                  <Ionicons name="qr-code-outline" size={19} color={PP.text} />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
 
@@ -1686,6 +1751,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               {tab === 'dashboard' ? (
                 <>
                   {setup.percent === 100 ? null : statusSection}
+
+                  {/* ── Today ──────────────────────────────────────────────────
+                      Two cards around the rest of the dashboard: the summary
+                      leads until 2pm and again once the last client is done,
+                      the booking cards lead in between. Whichever isn't on
+                      top sits under Your work. */}
+                  {todaySchedule?.phase === 'cardsLead' ? todayBookingCards : todaySummaryCard}
 
                   {/* ── What clients say ───────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
@@ -1945,6 +2017,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </BlurView>
                   </View>
 
+                  {/* ── Today, the other card ──────────────────────────────── */}
+                  {todaySchedule?.phase === 'cardsLead' ? todaySummaryCard : todayBookingCards}
+
                   {/* ── Manage ─────────────────────────────────────────────── */}
                   <View style={styles.rowHeader}>
                     <Text style={[styles.sectionLabel, { color: PP.sub }]}>MANAGE</Text>
@@ -2095,6 +2170,19 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             </View>
           </View>
         </ScrollView>
+        {providerId ? (
+          <ProviderProfileQrSheet
+            visible={profileQrVisible}
+            providerId={providerId}
+            providerName={providerData.providerName || 'your business'}
+            accentColor={accentColor}
+            backgroundColor={PP.card}
+            textColor={PP.text}
+            subtextColor={PP.sub}
+            borderColor={PP.border}
+            onClose={() => setProfileQrVisible(false)}
+          />
+        ) : null}
       </SafeAreaView>
 
       <ServiceEditorSheet

@@ -19,6 +19,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
 import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
+import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -50,8 +51,12 @@ serve(async (req) => {
   }
 
   try {
-    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-    if (!jwt || jwt !== SERVICE_ROLE_KEY) {
+    // Not a plain string compare: the vault holds the legacy eyJ… service key
+    // while the runtime may be handed the newer sb_secret_… one, and an exact
+    // match 403'd every call from 10 Oct 2026 (no confirmation email went out
+    // for three weeks). isServiceRoleRequest accepts either, as release-payouts
+    // has since its own 403 on 11 Oct.
+    if (!(await isServiceRoleRequest(req.headers.get('Authorization')))) {
       return json({ error: 'This endpoint is called by the database only.' }, 403);
     }
 

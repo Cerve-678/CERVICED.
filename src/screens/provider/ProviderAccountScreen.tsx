@@ -33,6 +33,7 @@ import {
 } from '../../services/biometricService';
 import { getCurrentRefreshToken, getProviderDisplayNameByUserId, getUnreadNotificationCount } from '../../services/databaseService';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
+import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 import { dobToParts } from '../../utils/dateUtils';
 
 // ─── Brand palette (unchanged — provider hat's real theme.ts values) ─────────
@@ -129,6 +130,7 @@ CarouselCard.displayName = 'CarouselCard';
 
 export default function ProviderAccountScreen({ navigation }: any) {
   const { user, logout, switchMode, hatState, myBookingMode } = useAuth();
+  const isAdmin = useIsCervicedAdmin(user?.id);
   // This screen is a link-only provider's Profile tab. The CERVICED-booking
   // shortcuts (Analytics, Offers, Clientele, Schedule, Booking history) don't
   // apply to them — their analytics are on Home — so they get Edit profile and
@@ -449,7 +451,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="badge" title={t('providerAccount.account.info.title')} subtitle={t('providerAccount.account.info.sub')} onPress={() => navigation.navigate('AccountInfo')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t('providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
+              <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.notifications.sub' : 'providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
             </View>
 
             {/* ── Accessibility & Support ─────────────────────────────────── */}
@@ -511,6 +513,13 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <SettingsOption icon="gavel" title={t('providerAccount.appInfo.terms.title')} subtitle={t('providerAccount.appInfo.terms.sub')} onPress={() => navigation.navigate('Terms')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="bug-report" title={t('providerAccount.appInfo.report.title')} subtitle={t('providerAccount.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} P={P} />
+              {/* Admin accounts only, so English only like the screen it opens. */}
+              {isAdmin && (
+                <>
+                  <View style={[styles.sep, { backgroundColor: P.sep }]} />
+                  <SettingsOption icon="receipt" title="Money (admin)" subtitle="Failed payments, money owed, refund requests" onPress={() => navigation.navigate('AdminMoney')} P={P} />
+                </>
+              )}
             </View>
 
             <TouchableOpacity

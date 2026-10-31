@@ -11,6 +11,7 @@ import {
   dateToYMD,
   formatShortDate,
   formatTime12,
+  ordinalSuffix,
   relativeDayLabel,
 } from "../../../utils/dateUtils";
 import {
@@ -1714,11 +1715,18 @@ const providerBookingTiming: Capability = {
     const notice = rules.minBookingNoticeHrs > 0
       ? `${rules.minBookingNoticeHrs} hours’ notice`
       : "no minimum notice";
+    // Same horizon shapes as utils/bookingHorizon: a release day replaces the
+    // rolling window, and a 0 window has no limit at all.
+    const bookAhead = rules.scheduleReleaseDay != null
+      ? `a month at a time — next month opens on the **${ordinalSuffix(rules.scheduleReleaseDay)}**`
+      : rules.bookingWindowDays > 0
+        ? `up to **${rules.bookingWindowDays} days**`
+        : "**no limit**";
 
     return {
       text:
         `## Booking timing with ${provider.displayName}\n` +
-        `- **Book ahead:** up to **${rules.bookingWindowDays} days**\n` +
+        `- **Book ahead:** ${bookAhead}\n` +
         `- **Minimum notice:** **${notice}**\n\n` +
         "Availability still depends on open slots at the time you book.",
       suggestions: [
