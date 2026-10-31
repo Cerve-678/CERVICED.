@@ -57,8 +57,8 @@ Curated: [[Availability & Slots]] · **179 files**
 - `src/screens/client/RescheduleScreen.tsx` _(55)_
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/client/CartScreen.tsx` _(48)_
+- `src/screens/client/HomeScreen.tsx` _(44)_
 - `src/screens/provider/SchedulingScreen.tsx` _(44)_
-- `src/screens/client/HomeScreen.tsx` _(43)_
 - `supabase/waitlist_holds.sql` _(43)_
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
 - `src/components/BookingSheet.tsx` _(35)_

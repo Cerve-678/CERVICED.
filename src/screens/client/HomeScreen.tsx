@@ -1693,15 +1693,6 @@ export default function HomeScreen() {
             </View>
             )}
 
-            {availableThisWeekProviders.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>AVAILABLE THIS WEEK</Text>
-                </View>
-                <ProviderRail providers={availableThisWeekProviders.slice(0, 15)} keyPrefix="available" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
-              </View>
-            )}
-
             {/* § config-driven — see src/config/homeSections.ts (id: 'trending') */}
             {/* TRENDING THIS WEEK */}
             {trending.length > 0 && (
@@ -1743,6 +1734,16 @@ export default function HomeScreen() {
                   <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
                 </View>
                 <RoundProviderRail providers={recentlyViewed} keyPrefix="recent" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
+              </View>
+            )}
+
+            {/* AVAILABLE THIS WEEK — directly under Recently viewed */}
+            {availableThisWeekProviders.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>AVAILABLE THIS WEEK</Text>
+                </View>
+                <ProviderRail providers={availableThisWeekProviders.slice(0, 15)} keyPrefix="available" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               </View>
             )}
 
