@@ -164,6 +164,7 @@ DECLARE
   v_amount        text;
   v_title         text;
   v_message       text;
+  v_held_pence    integer;
 BEGIN
   IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
     RETURN NEW;
@@ -215,13 +216,20 @@ BEGIN
   -- ── The provider, when it went to Cerviced without them ──
   IF NEW.status = 'under_review' AND NEW.passed_automatically THEN
     SELECT p.user_id INTO v_provider_user FROM public.providers p WHERE p.id = NEW.provider_id;
+    -- Only say the payment is on hold when there is one still held.
+    SELECT pp.payout_amount INTO v_held_pence
+      FROM public.provider_payouts pp
+     WHERE pp.booking_id = NEW.booking_id AND pp.status = 'held';
     IF v_provider_user IS NOT NULL THEN
       INSERT INTO public.notifications
         (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role, metadata)
       VALUES (
         v_provider_user, 'refund_request_updated', 'Refund Request With Cerviced',
         'You didn''t reply to ' || v_customer_name || '''s refund request for ' || v_service_name ||
-          ' within 3 days, so Cerviced is now reviewing it against your policy. Your payment for this booking stays on hold until it''s settled.',
+          ' within 3 days, so Cerviced is now reviewing it against your policy.' ||
+          CASE WHEN COALESCE(v_held_pence, 0) > 0
+            THEN ' Your £' || TO_CHAR(v_held_pence / 100.0, 'FM999990.00') || ' for this booking stays on hold until it''s settled.'
+            ELSE '' END,
         'high', FALSE, NEW.booking_id, NEW.provider_id, 'provider',
         jsonb_build_object('refund_request_id', NEW.id, 'status', NEW.status, 'passed_automatically', true)
       );
