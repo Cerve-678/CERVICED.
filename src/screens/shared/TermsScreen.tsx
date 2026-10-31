@@ -116,7 +116,7 @@ const SECTIONS = [
   {
     heading: '15. Refunds and Refund Requests',
     body: [
-      'A provider can refund you in full or in part at any time. If you\'d like a refund, you can request one from the booking. Your request goes to the provider first. They have 3 days to refund you or pass it to Cerviced. If they pass it to us, or don\'t reply in time, we\'ll review it and let you know the outcome.',
+      'A provider can refund you in full or in part at any time. If you\'d like a refund, you can request one from the booking. Your request goes to the provider first. They have 3 days to refund you or pass it to Cerviced. If they pass it to us, or don\'t reply in time, we\'ll review it, aiming to decide within 5 working days, and let you know the outcome.',
       'Refunds go back to the way you paid: to your card, or to your PayPal account if you paid with PayPal. A card refund usually takes 5 to 10 working days to appear, depending on your bank.',
     ].join('\n\n'),
   },

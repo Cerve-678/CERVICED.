@@ -25,6 +25,9 @@ export interface RefundStep {
  *  Cerviced by itself (process_refund_request_deadlines). */
 export const REFUND_REPLY_DAYS = 3;
 
+/** What Cerviced aims for once it has a request (Terms §15). */
+export const REFUND_REVIEW_PROMISE = 'We aim to decide within 5 working days.';
+
 /** When a request still with the provider goes to Cerviced. */
 export function refundReplyDeadline(createdAt: string): string | null {
   const ms = Date.parse(createdAt);
@@ -78,10 +81,10 @@ export function describeRefundRequestTimeline(
       detail: r.status !== 'under_review' ? null
         : r.passedAutomatically
           ? forProvider
-            ? `You didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against your policy and will let you both know.`
-            : `${provider} didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against their policy.`
-        : forProvider ? "You passed it to Cerviced. We'll review it against your policy and let you both know."
-        : `${provider} passed it to Cerviced. We'll review it against their policy.`,
+            ? `You didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against your policy and will let you both know. ${REFUND_REVIEW_PROMISE}`
+            : `${provider} didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against their policy. ${REFUND_REVIEW_PROMISE}`
+        : forProvider ? `You passed it to Cerviced. We'll review it against your policy and let you both know. ${REFUND_REVIEW_PROMISE}`
+        : `${provider} passed it to Cerviced. We'll review it against their policy. ${REFUND_REVIEW_PROMISE}`,
       date: day(r.passedToCervicedAt),
       state: r.status === 'under_review' ? 'current' : 'done',
     });

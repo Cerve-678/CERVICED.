@@ -80,7 +80,7 @@ describe('the 3-day reply deadline', () => {
 
   it('says the provider did not reply, not that they passed it on', () => {
     const r: RefundRequest = { ...base, status: 'under_review', passedToCervicedAt: '2026-10-13T09:25:00Z', passedAutomatically: true };
-    expect(describeRefundRequestTimeline(r, 'Braids by Amara')[1]?.detail).toBe("Braids by Amara didn't reply within 3 days, so we're reviewing it against their policy.");
+    expect(describeRefundRequestTimeline(r, 'Braids by Amara')[1]?.detail).toBe("Braids by Amara didn't reply within 3 days, so we're reviewing it against their policy. We aim to decide within 5 working days.");
     expect(describeRefundRequestTimeline(r, 'Braids by Amara', 'provider')[1]?.detail).toMatch(/^You didn't reply within 3 days/);
   });
 

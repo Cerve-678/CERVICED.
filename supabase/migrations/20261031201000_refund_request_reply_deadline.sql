@@ -32,7 +32,9 @@
 --   - request_booking_refund: the provider's notice says they have 3 days.
 --     Nothing else changes.
 --   - notify_refund_request_status: wording for an automatic pass, plus a
---     provider notice for it. Nothing else changes.
+--     provider notice for it; every "with Cerviced" notice says Cerviced aims
+--     to decide within 5 working days (user, 2026-10-31; Terms §15). Nothing
+--     else changes.
 
 BEGIN;
 
@@ -181,11 +183,11 @@ BEGIN
   IF NEW.status = 'under_review' AND NEW.passed_automatically THEN
     v_title := 'Refund Request With Cerviced';
     v_message := v_provider_name || ' didn''t reply to your refund request for ' || v_service_name ||
-      ' within 3 days, so it''s now with Cerviced. We''ll review it against their policy.';
+      ' within 3 days, so it''s now with Cerviced. We''ll review it against their policy and aim to decide within 5 working days.';
   ELSIF NEW.status = 'under_review' THEN
     v_title := 'Refund Request With Cerviced';
     v_message := v_provider_name || ' passed your refund request for ' || v_service_name ||
-      ' to Cerviced. We''ll review it against their policy.';
+      ' to Cerviced. We''ll review it against their policy and aim to decide within 5 working days.';
   ELSIF NEW.status = 'refunded' THEN
     v_title := 'Refunded';
     v_message := v_amount || ' is on its way back to you for ' || v_service_name ||
@@ -226,7 +228,7 @@ BEGIN
       VALUES (
         v_provider_user, 'refund_request_updated', 'Refund Request With Cerviced',
         'You didn''t reply to ' || v_customer_name || '''s refund request for ' || v_service_name ||
-          ' within 3 days, so Cerviced is now reviewing it against your policy.' ||
+          ' within 3 days, so Cerviced is now reviewing it against your policy and aims to decide within 5 working days.' ||
           CASE WHEN COALESCE(v_held_pence, 0) > 0
             THEN ' Your £' || TO_CHAR(v_held_pence / 100.0, 'FM999990.00') || ' for this booking stays on hold until it''s settled.'
             ELSE '' END,

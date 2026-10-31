@@ -501,7 +501,9 @@ added. Every admin action (retry, approve, decline) is permanently logged in
 1. Admin Money screen → refund requests → the request. Read the client's
    reason and message, and the provider's note. If there's no note, the
    provider didn't reply within 3 days and it came to CERVICED by itself.
-2. Decide. If it's unclear, contact both sides first.
+2. Decide **within 5 working days** of it arriving: client Terms §15 and
+   every "with Cerviced" notice promise that. If it's unclear, contact both
+   sides first, and tell the client if you need longer.
 3. **Approve:** choose a full refund (returns CERVICED's fee too) or a
    partial amount (from the provider's share; CERVICED keeps its fee).
 4. **Decline:** write the note the client will see. Be factual and polite;
@@ -783,7 +785,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 22 Oct | A moved booking moves its payout, earlier or later | Never pay before the work is done |
 | 25 Oct | Rescheduling inside the cancellation window keeps the late-cancel rule | Closes a loophole (not built yet) |
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
-| 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED | The client isn't left waiting and the payout isn't held indefinitely |
+| 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 
