@@ -366,6 +366,15 @@ export function hasUsefulHistory(p: PersonalContext | undefined): boolean {
  * conversation — that's an LLM's job (§3.1).
  */
 export interface ConversationContext {
+  /**
+   * The hat that created this context. Context is account-role specific:
+   * provider and client turns must never carry entities, result lists or
+   * suggestion memory into one another after a hat switch.
+   *
+   * Optional for backwards-compatible restoration of older local sessions;
+   * the engine treats an unstamped context as safe only for the current turn.
+   */
+  hat?: BeccaHat;
   /** Entities resolved on the previous turn, available for reuse. */
   entities: EntityBag;
   /** What Becca answered last, so "the first one" knows what list it means. */
