@@ -21,6 +21,16 @@ export interface RefundStep {
   state: RefundStepState;
 }
 
+/** Days the provider has to refund or pass a request on before it goes to
+ *  Cerviced by itself (process_refund_request_deadlines). */
+export const REFUND_REPLY_DAYS = 3;
+
+/** When a request still with the provider goes to Cerviced. */
+export function refundReplyDeadline(createdAt: string): string | null {
+  const ms = Date.parse(createdAt);
+  return Number.isFinite(ms) ? new Date(ms + REFUND_REPLY_DAYS * 86_400_000).toISOString() : null;
+}
+
 /** Open = still waiting on someone. Only one can be open per booking. */
 export function isRefundRequestOpen(r: Pick<RefundRequest, 'status'>): boolean {
   return r.status === 'with_provider' || r.status === 'under_review';
@@ -51,12 +61,13 @@ export function describeRefundRequestTimeline(
   ];
 
   if (r.status === 'with_provider') {
+    const by = day(refundReplyDeadline(r.createdAt));
     steps.push({
       key: 'provider',
       title: forProvider ? 'With you' : `With ${provider}`,
       detail: forProvider
-        ? 'Refund it, or pass it to Cerviced to review.'
-        : `${provider} has been told. They can refund you, or pass it to Cerviced to review.`,
+        ? `Refund it, or pass it to Cerviced to review.${by ? ` If you haven't by ${by}, it goes to Cerviced.` : ''}`
+        : `${provider} has been told. They can refund you, or pass it to Cerviced to review.${by ? ` If they haven't replied by ${by}, it comes to Cerviced.` : ''}`,
       date: null,
       state: 'current',
     });
@@ -65,6 +76,10 @@ export function describeRefundRequestTimeline(
       key: 'review',
       title: 'Under review by Cerviced',
       detail: r.status !== 'under_review' ? null
+        : r.passedAutomatically
+          ? forProvider
+            ? `You didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against your policy and will let you both know.`
+            : `${provider} didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against their policy.`
         : forProvider ? "You passed it to Cerviced. We'll review it against your policy and let you both know."
         : `${provider} passed it to Cerviced. We'll review it against their policy.`,
       date: day(r.passedToCervicedAt),

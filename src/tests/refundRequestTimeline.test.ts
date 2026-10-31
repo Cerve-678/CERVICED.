@@ -1,4 +1,6 @@
-import { describeRefundRequestTimeline, isRefundRequestOpen } from '../features/bookings/refundRequestTimeline';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { describeRefundRequestTimeline, isRefundRequestOpen, refundReplyDeadline } from '../features/bookings/refundRequestTimeline';
 import type { RefundRequest } from '../types/booking';
 
 const base: RefundRequest = {
@@ -11,6 +13,7 @@ const base: RefundRequest = {
   refundedAmount: null,
   createdAt: '2026-10-10T09:00:00Z',
   passedToCervicedAt: null,
+  passedAutomatically: false,
   resolvedAt: null,
 };
 
@@ -59,5 +62,32 @@ describe('describeRefundRequestTimeline', () => {
     expect(review[1]?.detail).toMatch(/^You passed it to Cerviced/);
     const refunded = provider({ ...base, status: 'refunded', refundedAmount: 20 });
     expect(refunded[1]?.detail).toBe('£20.00 went back to the client.');
+  });
+});
+
+describe('the 3-day reply deadline', () => {
+  it('goes to Cerviced 3 days after the client asked', () => {
+    expect(refundReplyDeadline('2026-10-10T09:00:00Z')).toBe('2026-10-13T09:00:00.000Z');
+    expect(refundReplyDeadline('not a date')).toBeNull();
+  });
+
+  it('tells both sides the date while it is with the provider', () => {
+    const client = describeRefundRequestTimeline(base, 'Braids by Amara');
+    const provider = describeRefundRequestTimeline(base, 'Braids by Amara', 'provider');
+    expect(client[1]?.detail).toMatch(/If they haven't replied by .+, it comes to Cerviced\./);
+    expect(provider[1]?.detail).toMatch(/If you haven't by .+, it goes to Cerviced\./);
+  });
+
+  it('says the provider did not reply, not that they passed it on', () => {
+    const r: RefundRequest = { ...base, status: 'under_review', passedToCervicedAt: '2026-10-13T09:25:00Z', passedAutomatically: true };
+    expect(describeRefundRequestTimeline(r, 'Braids by Amara')[1]?.detail).toBe("Braids by Amara didn't reply within 3 days, so we're reviewing it against their policy.");
+    expect(describeRefundRequestTimeline(r, 'Braids by Amara', 'provider')[1]?.detail).toMatch(/^You didn't reply within 3 days/);
+  });
+
+  it('matches the hourly job: reminder at 2 days, Cerviced at 3', () => {
+    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/20261031201000_refund_request_reply_deadline.sql'), 'utf8');
+    expect(sql).toMatch(/created_at <= now\(\) - interval '2 days'/);
+    expect(sql).toMatch(/created_at <= now\(\) - interval '3 days';/);
+    expect(sql).toMatch(/GRANT SELECT \(passed_automatically\) ON public\.refund_requests TO authenticated/);
   });
 });

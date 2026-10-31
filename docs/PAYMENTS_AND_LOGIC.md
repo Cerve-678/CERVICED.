@@ -261,8 +261,9 @@ cancellation.
 
 ```
 Client asks  ──►  WITH PROVIDER  ──► provider refunds ───────────────► REFUNDED
-(6 fixed reasons)      │
-                       └─► provider passes it to CERVICED, with a note ──► UNDER REVIEW
+(6 fixed reasons)      │   (3 days)
+                       ├─► provider passes it to CERVICED, with a note ──► UNDER REVIEW
+                       └─► no reply after 3 days (automatic) ────────────► UNDER REVIEW
                                                                             │
                                            admin approves (refund) ◄────────┤──► REFUNDED
                                            admin declines (note to client) ◄┘──► DECLINED
@@ -282,8 +283,16 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
 - Any refund on the booking automatically closes the request as refunded.
 - CERVICED can only decline a request the provider has passed on, and must
   write the reason the client will see.
-- **There's no deadline:** a request can sit with the provider indefinitely
-  (Part 6).
+- **The provider has 3 days** from when the client asked. After 2 days they
+  get a "one day left" reminder (`refund_requested`, always pushed). At 3
+  days the request goes to CERVICED by itself, marked
+  `passed_automatically`, and both sides are told why. The hourly job is
+  `refund-request-deadlines` → `process_refund_request_deadlines()`. The
+  first notice, the email, the booking's timeline and both sets of Terms say
+  so (decided 31 October). *Live once migration `20261031201000` is applied;
+  the email wording needs `send-support-request` redeployed.*
+- An automatically passed request has no provider note. Treat it in R3 like
+  any other, and contact the provider for their side if it matters.
 
 ### 2.5 Late and no-show fees
 
@@ -490,7 +499,8 @@ added. Every admin action (retry, approve, decline) is permanently logged in
 ### R3. A refund request was passed to CERVICED
 
 1. Admin Money screen → refund requests → the request. Read the client's
-   reason and message, and the provider's note.
+   reason and message, and the provider's note. If there's no note, the
+   provider didn't reply within 3 days and it came to CERVICED by itself.
 2. Decide. If it's unclear, contact both sides first.
 3. **Approve:** choose a full refund (returns CERVICED's fee too) or a
    partial amount (from the provider's share; CERVICED keeps its fee).
@@ -629,6 +639,7 @@ Keep the list short and review it monthly.
 | `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 48h, or once past the start time) and fully refunds them |
 | `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
 | `money-daily-summary` | 08:00 daily | Triggers the summary email when anything needs attention |
+| `refund-request-deadlines` | Hourly at :25 | `process_refund_request_deadlines()`: reminds the provider at 2 days, passes the request to CERVICED at 3 |
 
 **Key database functions and triggers**
 
@@ -670,7 +681,7 @@ so Stripe retries.
 | `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id` | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` |
 | `provider_payouts` | One per paid booking: `gross_amount`, `platform_fee`, `payout_amount`, `deducted_pence`, `release_after`, `release_claimed_at`, `attempt_count`, `failure_cause` | `held` → `transferred` / `cancelled` / `reversed` / `failed` |
 | `booking_refunds` | A ledger of every refund (pence, and whether it has been applied to the payout) | — |
-| `refund_requests` | Client requests | `with_provider` → `under_review` → `refunded` / `declined` (a decline needs a note) |
+| `refund_requests` | Client requests; `passed_automatically` (no reply in 3 days), `provider_reminded_at` | `with_provider` → `under_review` → `refunded` / `declined` (a decline needs a note) |
 | `booking_fee_charges` | Late/no-show fees: `kind`, `amount_pence`, `stripe_fee_pence`, `payout_pence`, `deducted_pence`, `release_claimed_at`, dispute fields, pay-request fields | `status`: `processing`, `awaiting_client`, `succeeded`, `failed`, `refunded`. `payout_status`: `pending`, `held`, `transferred`, `cancelled`, `reversed`, `failed` |
 | `fee_consent_records` / `fee_terms_versions` | Fee agreements, and the exact wording versions | — |
 | `booking_tips` | Tips (£1–£500) | `pending`, `succeeded`, `failed`, `refunded`; payouts work like fee payouts |
@@ -685,7 +696,7 @@ so Stripe retries.
 |---|---|---|
 | `payment_success` | Client | Payment taken |
 | `cancellation_settled` | Both | A late cancellation kept money |
-| `refund_requested` / `refund_request_updated` | Provider / client | A refund request was opened / moved on |
+| `refund_requested` / `refund_request_updated` | Provider / both | A refund request was opened, or has a day left (provider) / moved on, including to CERVICED after 3 days with no reply (both) |
 | `fee_charged`, `fee_disputed`, `fee_dispute_resolved` | Client / provider | The late/no-show fee lifecycle |
 | `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed` | Client / provider | The card couldn't pay a fee |
 | `payout_failed` | Provider | The first failed transfer caused by their Stripe account |
@@ -740,7 +751,7 @@ Ranked, most important first.
 | 4 | **Rescheduling can dodge a late-cancel charge.** A client already inside the cancellation window can reschedule (a separate, often looser setting), then cancel the new date for a full refund | The provider loses money they're owed | Decided 25 October that the late-cancel rule still applies. Not built (PRE-LAUNCH-TODO §26) |
 | 5 | **Events from providers' Stripe accounts may not arrive** (`STRIPE_CONNECT_WEBHOOK_SECRET` isn't set) | Bank payout failures and account status changes aren't pushed to the app. A provider's status only refreshes when they open Payments | Set up a Connect webhook endpoint in Stripe and add the secret |
 | 6 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
-| 7 | **Refund requests have no deadline** for the provider | The client waits indefinitely and the provider's payout stays held | Decide a deadline, e.g. pass it to CERVICED automatically after a set number of days |
+| 7 | **Refund requests: the 3-day deadline isn't live yet** | Until it is, a request can sit with the provider indefinitely | Built on `feat/refund-request-reply-deadline`. Apply migration `20261031201000`, deploy `send-support-request`, merge |
 | 8 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
 | 9 | **Tip chargebacks land on CERVICED**, and providers can't see their tips in the app (PR #159) | Small losses; provider confusion | Decide whether to take a lost tip dispute back from the provider; merge #159 |
 | 10 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |
@@ -772,6 +783,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 22 Oct | A moved booking moves its payout, earlier or later | Never pay before the work is done |
 | 25 Oct | Rescheduling inside the cancellation window keeps the late-cancel rule | Closes a loophole (not built yet) |
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
+| 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED | The client isn't left waiting and the payout isn't held indefinitely |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 

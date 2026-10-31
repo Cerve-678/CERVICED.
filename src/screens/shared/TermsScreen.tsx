@@ -116,7 +116,7 @@ const SECTIONS = [
   {
     heading: '15. Refunds and Refund Requests',
     body: [
-      'A provider can refund you in full or in part at any time. If you\'d like a refund, you can request one from the booking. Your request goes to the provider first. They can refund you or pass it to Cerviced, and if it\'s passed to us, we\'ll review it and let you know the outcome.',
+      'A provider can refund you in full or in part at any time. If you\'d like a refund, you can request one from the booking. Your request goes to the provider first. They have 3 days to refund you or pass it to Cerviced. If they pass it to us, or don\'t reply in time, we\'ll review it and let you know the outcome.',
       'Refunds go back to the way you paid: to your card, or to your PayPal account if you paid with PayPal. A card refund usually takes 5 to 10 working days to appear, depending on your bank.',
     ].join('\n\n'),
   },
@@ -217,7 +217,7 @@ const SECTIONS = [
     body: [
       'Your business. You run your own independent business and aren\'t employed by Cerviced. You\'re responsible for your services and any licences, qualifications and insurance they need, for following the law (including health and safety, consumer law and minimum-age rules), and for keeping your profile, prices, opening hours and policies accurate.',
       'Bookings and policies. You must honour bookings you accept, at the price and on the terms shown when the client booked. If you can\'t, cancel as early as you can; the client will be refunded in full. Your cancellation, deposit, late arrival and no-show policies must be fair, and must be shown on your profile before clients book.',
-      'Payments and payouts. To take payments in the app you need a Stripe account, and Stripe\'s terms apply to it. Clients pay Cerviced\'s service fee on top of your price, so it\'s never taken from what you earn. After each appointment, your share is held for the payout period you choose in Payment settings, then sent to your Stripe account. Stripe then pays your bank on its own schedule. A payout is held while a client\'s refund request is open. If money is refunded or reversed after you\'ve been paid, for example a refund or a bank chargeback, it\'s taken back from your Stripe balance or from your next payout. For late arrival and no-show fees, Cerviced takes no cut, but Stripe\'s card fee comes out of your share. Tips clients leave in the app are yours in full: Cerviced takes no cut and covers the card processing fee. A tip is paid out to you 24 hours after the client pays, whatever payout period you\'ve chosen. Clients can tip for up to 48 hours after the appointment, and tips can\'t be refunded.',
+      'Payments and payouts. To take payments in the app you need a Stripe account, and Stripe\'s terms apply to it. Clients pay Cerviced\'s service fee on top of your price, so it\'s never taken from what you earn. After each appointment, your share is held for the payout period you choose in Payment settings, then sent to your Stripe account. Stripe then pays your bank on its own schedule. A payout is held while a client\'s refund request is open. You have 3 days to refund a request or pass it to Cerviced; after that it comes to us to review. If money is refunded or reversed after you\'ve been paid, for example a refund or a bank chargeback, it\'s taken back from your Stripe balance or from your next payout. For late arrival and no-show fees, Cerviced takes no cut, but Stripe\'s card fee comes out of your share. Tips clients leave in the app are yours in full: Cerviced takes no cut and covers the card processing fee. A tip is paid out to you 24 hours after the client pays, whatever payout period you\'ve chosen. Clients can tip for up to 48 hours after the appointment, and tips can\'t be refunded.',
       'Taxes. You\'re responsible for your own tax, including any VAT, on the money you earn.',
       'Your clients\' information. Use the details clients share with you, including any health information, only for their bookings. Keep them secure and confidential, and follow data protection law. Don\'t add clients to marketing lists unless they\'ve agreed.',
       'Your own booking link. If you take bookings on your own booking page, you\'re responsible for that page, its terms and the bookings, payments and data handled there. Your booking link must lead to your own genuine booking page, and you must keep it up to date.',
@@ -278,7 +278,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 21 October 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 31 October 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>

@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Pending 2026-10-31 (refund requests go to Cerviced after 3 days)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261031201000 | `refund_request_reply_deadline` | **NOT APPLIED.** Branch `feat/refund-request-reply-deadline`; lock held by cerviced-4b (taken on `feat/late-reschedule-keeps-cancel-charge`). Frontier at authoring: live `20261031173214`. Independent of `20261031200000`, so either order works. Adds `refund_requests.passed_automatically` (granted to `authenticated`) and `provider_reminded_at`; `process_refund_request_deadlines()` (service role only) and cron `refund-request-deadlines` at `25 * * * *`. Redefines from live, md5-guarded: `request_booking_refund` (3-day sentence), `notify_refund_request_status` (automatic-pass wording + provider notice). No new notification types. Records its own version. **Apply before this branch merges**: the app selects `passed_automatically`, so without it every refund-request read fails. |
+
 ### Applied 2026-10-30 ("Always visible" address on the profile)
 
 | Authored version | Name | Status |
