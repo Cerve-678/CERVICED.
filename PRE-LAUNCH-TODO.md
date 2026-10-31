@@ -1230,7 +1230,8 @@ Items 1 and 2 stop money going wrong; items 3 and 4 deal with it once it has.
 1. **DONE 2026-10-29: a moved booking moves its payout.** A booking moved
    from 5 Nov to 20 Nov used to pay the provider around 6 Nov, before the
    work. The payout now moves by the same amount, earlier or later. Migration
-   `20261025140000` applied by the user and verified live; PR #168 to merge.
+   `20261025140000` applied by the user and verified live; PR #168 merged
+   2026-10-31.
 2. **Rescheduling must not dodge a late-cancel charge.** *Decided, not
    built.* A client already too late to cancel for free can reschedule
    (reschedule notice is a separate, often looser setting), then cancel the
@@ -1241,14 +1242,40 @@ Items 1 and 2 stop money going wrong; items 3 and 4 deal with it once it has.
    is unaffected. Needs a record of "rescheduled while late" on the booking,
    the refund function to read it, and the client told before they confirm
    the reschedule. Run `cerviced-legal-flagger` because this is refund policy.
-3. **Tell providers when they owe money.** *Built on PR #181, not live.*
+3. **DONE 2026-10-30: tell providers when they owe money.** PR #181 merged;
+   migration `20261029120000` applied and functions deployed.
    One notice when the debt is recorded ("£30.00 will come out of your next
    payments") and one each time a payout pays some off ("£15.00 went towards
    what you owe"). Both always push.
-4. **Late/no-show fee payouts pay off that debt.** *Built on PR #181, not
-   live.* Decided 2026-10-29: Option A, tell them and then take it
+4. **DONE 2026-10-30: late/no-show fee payouts pay off that debt.** Live
+   with item 3. Decided 2026-10-29: Option A, tell them and then take it
    automatically, with no pay-back button. All of a payout goes towards the
    debt if it's less than what's owed; only what's owed if it's more. A
    provider who never earns again on the app is never recovered from
-   automatically. To go live: apply migration `20261029120000`, then deploy
-   `release-payouts`, `booking-fee` and `stripe-webhook`.
+   automatically. `release-payouts` v13, `booking-fee` v6 and
+   `stripe-webhook` v12 deployed from main 2026-10-30.
+
+---
+
+## 28. My Profile "Today" cards — the user's design update isn't built yet (2026-10-30)
+
+(Numbered 28 because §26 and §27 are on other branches.)
+
+The Today cards (the summary card and swipe cards on the provider Dashboard)
+were merged as PR #182 (e970d034). After that, the user updated the design
+canvas, adding ideas from the earlier mockups such as "ranges." The session
+that built the feature couldn't open the canvas: the link returns "not found"
+for the account Claude Code is signed in to.
+
+**To do:**
+
+- Get the updated design. Either share the canvas with the Claude Code
+  account, or paste screenshots, or describe what changed. That includes
+  what "ranges" means: each booking's time range, price ranges, or
+  something else.
+- Build the changes on a new branch off `main`. The code is in
+  `src/features/providers/TodayScheduleCards.tsx`, with the rules in
+  `todaySchedule.ts` and tests in `src/tests/todaySchedule.test.ts`.
+- Run the Today cards on a device. That hasn't been done yet. Check the
+  2pm swap, the switch to tomorrow after the last client, and that a tap
+  opens the booking and the full day.

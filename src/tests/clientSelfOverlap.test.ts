@@ -17,7 +17,7 @@ jest.mock('../services/databaseService', () => ({
   getAvailabilityServiceBufferRows: jest.fn(),
   getAvailabilityWeeklyScheduleRows: jest.fn(),
   getProviderBusySpans: jest.fn(),
-  getProviderBookingWindowDays: jest.fn(),
+  getProviderBookingHorizon: jest.fn(),
   resolveActiveProviderIdByDisplayName: jest.fn(),
 }));
 

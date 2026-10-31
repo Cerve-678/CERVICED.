@@ -33,6 +33,7 @@ import { getCurrentRefreshToken, getUnreadNotificationCount } from '../../servic
 import { useFocusEffect } from '@react-navigation/native';
 import { dobToParts } from '../../utils/dateUtils';
 import { useMaintenanceDueCount } from '../../features/maintenance/useMaintenanceDueCount';
+import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 
 // ── Settings row ────────────────────────────────────────────────────────────
 
@@ -76,6 +77,7 @@ SettingsOption.displayName = 'SettingsOption';
 
 export default function UserProfileScreen({ navigation }: any) {
   const { isLoggedIn, logout, user, switchMode, hatState } = useAuth();
+  const isAdmin = useIsCervicedAdmin(user?.id);
   const { isDarkMode, toggleTheme, theme: appTheme, palette: P } = useTheme();
   const { resetData, updateData } = useRegistration();
   const { t } = useTranslation();
@@ -317,6 +319,10 @@ export default function UserProfileScreen({ navigation }: any) {
             {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
             <SettingsOption icon="gavel" title={t('profile.appInfo.terms.title')} subtitle={t('profile.appInfo.terms.sub')} onPress={() => navigation.navigate('Terms')} palette={P} />
             <SettingsOption icon="bug-report" title={t('profile.appInfo.report.title')} subtitle={t('profile.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} palette={P} />
+            {/* Admin accounts only, so English only like the screen it opens. */}
+            {isAdmin && (
+              <SettingsOption icon="receipt" title="Money (admin)" subtitle="Failed payments, money owed, refund requests" onPress={() => navigation.navigate('AdminMoney')} palette={P} />
+            )}
           </View>
 
           {isLoggedIn && (

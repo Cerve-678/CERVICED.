@@ -617,3 +617,28 @@ Methods were updated in the same change.
   PayPal's rate hasn't been compared with card. This is a margin question, not
   a client-facing one.
 - **Not lawyer-reviewed**, like the rest of the Terms and Privacy text.
+
+## 21. "Always visible" now publishes a provider's full address (2026-10-26)
+
+Branch `feat/always-visible-address-on-profile` (migration `20261026120000`).
+A salon or studio on address release "Always visible" now shows its full
+street address and map pin on its public profile (Contact → Location) to any
+signed-in user, not only to booked clients. Home-based and mobile providers
+can't pick it, and the server checks that too. The setting's own wording was
+changed to say so.
+
+**Gaps to raise (not resolved):**
+- **Consent for providers who chose it before.** One live studio picked
+  "Always visible" when it said "visible to booked clients". The same stored
+  value now publishes its address. Re-prompt them, or reset them to "On
+  confirmation" until they re-confirm, before the migration goes live. It's
+  not known whether that studio's address is also a home.
+  **Decision 2026-10-29 (the user):** left as is — choosing "Always visible"
+  is taken as wanting it public. No reset and no separate message.
+- **Terms and Privacy text are silent.** Neither tells providers that this
+  option makes their address public to all users. The only explanation is the
+  setting's own line.
+- **No undo for exposure.** Switching away from "Always visible" stops it
+  showing, but can't recall screenshots or saved map pins. The setting doesn't
+  say so.
+- **Not lawyer-reviewed**, like the rest of this list.

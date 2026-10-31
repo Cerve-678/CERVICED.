@@ -88,6 +88,13 @@ import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
+import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
+import {
+  TodayBookingCards,
+  TodaySummaryCard,
+  type TodayCardsPalette,
+} from '../../features/providers/TodayScheduleCards';
+import type { BookingWithAddOns } from '../../types/database';
 import { ProviderProfileQrSheet } from '../../components/ProviderProfileQrSheet';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -954,6 +961,29 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('Branding');
   }, [navigation]);
 
+  // Today's two cards. They haptick on their own presses, so these only
+  // navigate.
+  const todaySchedule = useTodaySchedule(providerId);
+
+  const handleOpenTodayBooking = useCallback(
+    (booking: BookingWithAddOns) => {
+      navigation.navigate('BookingDetail', { bookingId: booking.id, booking });
+    },
+    [navigation],
+  );
+
+  // The day itself lives on the Home tab's calendar, the same jump Add
+  // Booking makes after saving.
+  const handleOpenTodayDay = useCallback(
+    (ymd: string) => {
+      navigation.getParent()?.navigate('ProviderHome', {
+        screen: 'ProviderHomeMain',
+        params: { jumpToDate: ymd },
+      });
+    },
+    [navigation],
+  );
+
   const handleOpenAnalytics = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Analytics');
@@ -1244,6 +1274,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     ],
   );
 
+  const todayPalette = useMemo<TodayCardsPalette>(
+    () => ({ card: cardSolid, text: PP.text, sub: PP.sub, border: PP.border, accent: accentColor }),
+    [cardSolid, PP.text, PP.sub, PP.border, accentColor],
+  );
+
   const editorPalette = useMemo<ServiceEditorPalette>(
     () => ({
       bg: PP.bg,
@@ -1341,6 +1376,22 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   /* The go-live card. It leads the dashboard while anything is still
      outstanding and drops to the bottom once the profile is finished —
      at that point it's a receipt, not an instruction. */
+  const todaySummaryCard = todaySchedule ? (
+    <TodaySummaryCard
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenTodayBooking}
+      onOpenDay={handleOpenTodayDay}
+    />
+  ) : null;
+  const todayBookingCards = todaySchedule ? (
+    <TodayBookingCards
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenTodayBooking}
+    />
+  ) : null;
+
   const statusSection = (
     <>
       {/* ── Status hero ────────────────────────────────────────
@@ -1701,6 +1752,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 <>
                   {setup.percent === 100 ? null : statusSection}
 
+                  {/* ── Today ──────────────────────────────────────────────────
+                      Two cards around the rest of the dashboard: the summary
+                      leads until 2pm and again once the last client is done,
+                      the booking cards lead in between. Whichever isn't on
+                      top sits under Your work. */}
+                  {todaySchedule?.phase === 'cardsLead' ? todayBookingCards : todaySummaryCard}
+
                   {/* ── What clients say ───────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
 
@@ -1958,6 +2016,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       </ScrollView>
                     </BlurView>
                   </View>
+
+                  {/* ── Today, the other card ──────────────────────────────── */}
+                  {todaySchedule?.phase === 'cardsLead' ? todaySummaryCard : todayBookingCards}
 
                   {/* ── Manage ─────────────────────────────────────────────── */}
                   <View style={styles.rowHeader}>

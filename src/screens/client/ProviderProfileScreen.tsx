@@ -74,6 +74,8 @@ import {
   setProviderFollowNotify,
   recordProviderStat,
   addMyExternalBooking,
+  getPublicProviderAddress,
+  type PublicProviderAddress,
 } from "../../services/databaseService";
 import type { ProviderStatKind } from "../../types/database";
 import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
@@ -92,6 +94,7 @@ import {
 } from "../../constants/providerThemes";
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
+import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { resolveSlotsRow } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
@@ -1682,14 +1685,31 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
+  // A salon/studio on "Always visible" shows its full address in Contact
+  // instead of the area. The server decides who qualifies and returns null for
+  // everyone else, so the area stays the default and a failed fetch just
+  // leaves it there.
+  const [publicAddress, setPublicAddress] = useState<PublicProviderAddress | null>(null);
+  useEffect(() => {
+    setPublicAddress(null);
+    if (!providerDbId || isLinkOnly) return;
+    let cancelled = false;
+    getPublicProviderAddress(providerDbId)
+      .then((address) => { if (!cancelled) setPublicAddress(address); })
+      .catch((error: unknown) => logger.error("[ProviderProfile] public address load failed:", error));
+    return () => { cancelled = true; };
+  }, [providerDbId, isLinkOnly]);
+
   const contactDetails = useMemo(() => ({
-    location: provider?.location ?? "",
+    location: publicAddress?.fullAddress ?? provider?.location ?? "",
+    locationMapUrl: publicAddress ? mapsUrlFor(publicAddress) : null,
     phone: provider?.phone ?? "",
     whatsapp: provider?.whatsapp ?? "",
     email: provider?.email ?? "",
     instagram: provider?.instagram ?? "",
     website: provider?.website ?? "",
   }), [
+    publicAddress,
     provider?.location,
     provider?.phone,
     provider?.whatsapp,
@@ -1834,7 +1854,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   //
   // Fired alongside a second, much wider check (the provider's whole
   // booking window, clamped internally by hasNearTermAvailabilityForServices
-  // to whatever booking_window_days actually is) — that's the only one
+  // to what the provider has opened — rolling window or monthly release, see
+  // utils/bookingHorizon) — that's the only one
   // strict enough to disable Book itself, since "nothing in 14 days" is not
   // the same claim as "nothing ever."
   useEffect(() => {
@@ -1844,19 +1865,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     let cancelled = false;
     const serviceRequests = allServices
       .filter((service) => !!service.dbId)
-      .map((service) => ({ serviceId: service.dbId as string, duration: service.duration }));
+      .map((service) => ({ serviceId: service.dbId as string }));
     if (serviceRequests.length === 0) return;
 
     const NEAR_TERM_HORIZON_DAYS = 14;
     const FULL_BOOKING_HORIZON_DAYS = 180;
-    // One call covering both horizons — hasNearTermAvailabilityForServices
-    // fetches the provider's settings/availability/windows/blocked-dates/
-    // overrides/bookings once and scans day-by-day regardless of which
-    // horizon(s) are asked for, so asking for both here in one call (instead
-    // of two separate calls with different horizons) halves the Supabase
-    // round-trips and the per-service/per-day scan work.
+    // One server call answers both horizons (the 14-day one comes from each
+    // service's earliest free day). It's the same check the bell's "has
+    // space again" alert uses, so Fully Booked here can't disagree with it.
     AvailabilityService.hasNearTermAvailabilityForServices(
-      providerDbId,
       serviceRequests,
       FULL_BOOKING_HORIZON_DAYS,
       NEAR_TERM_HORIZON_DAYS,
@@ -3363,9 +3380,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       if (!isNotificationsEnabled) {
         return `You'll no longer be notified about ${fullName}`;
       }
+      // The bell is the one switch for this provider's updates: space opening
+      // up after they're fully booked (process_follow_openings_alerts), their
+      // offers and announcements, and — with a release day — each new month.
       return releaseDay != null
-        ? `We'll tell you when ${fullName} releases new slots on the ${ordinalSuffix(releaseDay)}`
-        : `We'll tell you when ${fullName} releases new slots`;
+        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their offers`
+        : `You'll hear when ${fullName} has space open up, and about their offers`;
     } else {
       return providerIsBookmarked
         ? `Added to Your Providers`
