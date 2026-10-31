@@ -10,10 +10,11 @@ import { newRequestId } from '../utils/requestId';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
 import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, refundProviderBooking, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
+import { useTranslation, tr, localeForLanguage, type TranslationKey } from '../i18n';
 
-const payoutLabels: Record<ProviderPayout['status'], string> = {
-  held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
-  cancelled: 'Cancelled', reversed: 'Returned',
+const payoutLabels: Record<ProviderPayout['status'], TranslationKey> = {
+  held: 'providerBusiness.stripe.payout.held', transferred: 'providerBusiness.stripe.payout.transferred', failed: 'providerBusiness.stripe.payout.failed',
+  cancelled: 'providerBusiness.stripe.payout.cancelled', reversed: 'providerBusiness.stripe.payout.reversed',
 };
 
 /** One-line summaries of the provider's own payment settings, shown as the
@@ -23,6 +24,7 @@ export interface PaymentSetupSummary { deposit: string; inPerson: string }
 
 export default function ProviderStripePayments({ stripeReturn, setup, children }: { stripeReturn?: StripeConnectReturn; setup?: PaymentSetupSummary | undefined; children?: React.ReactNode }) {
   const C = useBusinessPalette();
+  const { t } = useTranslation();
   const [section, setSection] = useState<'overview' | 'bookings' | 'payouts' | 'settings'>('overview');
   const [finance, setFinance] = useState<ProviderFinance | null>(null);
   const [financeError, setFinanceError] = useState('');
@@ -49,25 +51,25 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         if (sequence !== loadSequence.current) return;
         setFinance(data); setFinanceError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setFinanceError('Balances and bank payouts could not load. Refresh to try again.');
+        if (sequence === loadSequence.current) setFinanceError(tr('providerBusiness.stripe.err.finance'));
       }),
       getConnectStatus().then(status => {
         if (sequence !== loadSequence.current) return;
         setAccount(status); setError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setError('We could not check your Stripe account. Refresh to try again.');
+        if (sequence === loadSequence.current) setError(tr('providerBusiness.stripe.err.account'));
       }),
       getProviderPayouts().then(rows => {
         if (sequence !== loadSequence.current) return;
         setPayouts(rows); setPayoutError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setPayoutError('Booking payments could not load. Refresh to try again.');
+        if (sequence === loadSequence.current) setPayoutError(tr('providerBusiness.stripe.err.payouts'));
       }),
       getPayoutHoldDays().then(days => {
         if (sequence !== loadSequence.current) return;
         setHoldDays(days); setHoldUnavailable(days === null); setHoldError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setHoldError('Your payout timing could not load. Refresh to try again.');
+        if (sequence === loadSequence.current) setHoldError(tr('providerBusiness.stripe.err.holdLoad'));
       }),
       // Fees are a secondary list: a failed read leaves it empty rather than
       // replacing the booking payments error above.
@@ -89,7 +91,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         setFinance(current => current ? { ...next, payouts: [...current.payouts, ...next.payouts.filter(p => !current.payouts.some(existing => existing.id === p.id))] } : next);
         setFinanceError('');
       }
-    } catch { if (sequence === loadSequence.current) setFinanceError('Earlier payouts could not load. Please try again.'); }
+    } catch { if (sequence === loadSequence.current) setFinanceError(tr('providerBusiness.stripe.err.more')); }
     finally { setMoreLoading(false); }
   };
   const openStripe = useCallback(async (action: 'onboard' | 'dashboard') => {
@@ -112,7 +114,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         await Linking.openURL(url);
       }
     }
-    catch (error) { setError(error instanceof PaymentRequestError ? error.message : 'Stripe could not open. Please try again.'); }
+    catch (error) { setError(error instanceof PaymentRequestError ? error.message : tr('providerBusiness.stripe.err.open')); }
     finally { opening.current = false; setBusy(false); }
   }, [C.bg, C.accent, load]);
   useEffect(() => {
@@ -141,7 +143,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     } catch (err) {
       // The server's own guard wording ("Choose 24 hours, 3, 7, 14 or 30
       // days.") says what to do; anything else gets the generic retry line.
-      setHoldError(toUserMessageAllowingDbGuard(err, 'Your payout timing was not changed. Please try again.', 'setPayoutHoldDays'));
+      setHoldError(toUserMessageAllowingDbGuard(err, tr('providerBusiness.stripe.err.holdSave'), 'setPayoutHoldDays'));
     } finally {
       setHoldSaving(false);
     }
@@ -149,41 +151,41 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
 
   const requestRefund = (row: ProviderPayout) => {
     const share = new Intl.NumberFormat('en-GB', { style: 'currency', currency: row.currency }).format(row.payout_amount / 100);
-    Alert.alert('Refund this payment?', `This refunds ${row.booking?.customer_name || 'the client'} in full for ${row.booking?.service_name_snapshot || 'this booking'} and reverses your ${share} share. It does not cancel their appointment.`, [
-      { text: 'Keep payment', style: 'cancel' },
-      { text: 'Refund payment', style: 'destructive', onPress: async () => {
+    Alert.alert(tr('providerBusiness.stripe.refund.title'), tr('providerBusiness.stripe.refund.body', { name: row.booking?.customer_name || tr('providerBusiness.stripe.refund.theClient'), service: row.booking?.service_name_snapshot || tr('providerBusiness.stripe.refund.thisBooking'), share }), [
+      { text: tr('providerBusiness.stripe.refund.keep'), style: 'cancel' },
+      { text: tr('providerBusiness.stripe.refund.confirm'), style: 'destructive', onPress: async () => {
         if (opening.current) return;
         opening.current = true;
         setBusy(true);
         try {
           const completed = await refundProviderBooking({ bookingId: row.booking_id, reason: 'Refunded from Payments', requestId: newRequestId() });
           await load();
-          Alert.alert(completed ? 'Refund issued' : 'Refund processing', completed
-            ? 'The refund has been issued. Their bank may take a few days to show it.'
-            : 'Stripe is processing the refund. Please check again later.');
+          Alert.alert(completed ? tr('providerBusiness.stripe.refund.issued') : tr('providerBusiness.stripe.refund.processing'), completed
+            ? tr('providerBusiness.stripe.refund.issuedBody')
+            : tr('providerBusiness.stripe.refund.processingBody'));
         } catch {
-          setError('We could not confirm the refund. Refresh payment status before trying again.');
+          setError(tr('providerBusiness.stripe.refund.unconfirmed'));
         } finally { opening.current = false; setBusy(false); }
       } },
     ]);
   };
   const tabs = [
-    { key: 'overview', label: 'Overview', icon: 'grid-outline' },
-    { key: 'bookings', label: 'Booking payments', icon: 'receipt-outline' },
-    { key: 'payouts', label: 'Payouts', icon: 'wallet-outline' },
-    { key: 'settings', label: 'Payment settings', icon: 'options-outline' },
+    { key: 'overview', label: t('providerBusiness.stripe.tab.overview'), icon: 'grid-outline' },
+    { key: 'bookings', label: t('providerBusiness.stripe.tab.bookings'), icon: 'receipt-outline' },
+    { key: 'payouts', label: t('providerBusiness.stripe.tab.payouts'), icon: 'wallet-outline' },
+    { key: 'settings', label: t('providerBusiness.stripe.tab.settings'), icon: 'options-outline' },
   ] as const;
   const setupReady = account?.payoutsEnabled;
   const manageAccount = !!account && (!!setupReady || (account.detailsSubmitted && !account.requirementsDue));
-  const accountTitle = !account ? 'Checking your payout account' : setupReady ? 'Your payout account is connected'
-    : account.detailsSubmitted && !account.requirementsDue ? 'Your details are submitted' : 'Set up your payout account';
+  const accountTitle = !account ? t('providerBusiness.stripe.account.checking') : setupReady ? t('providerBusiness.stripe.account.connected')
+    : account.detailsSubmitted && !account.requirementsDue ? t('providerBusiness.stripe.account.submitted') : t('providerBusiness.stripe.account.setUp');
   const nextPayout = finance?.payouts.filter(p => p.status === 'pending' || p.status === 'in_transit')
     .sort((a, b) => a.arrivalDate - b.arrivalDate)[0];
   return <>
     <View style={styles.intro}>
-      <Text style={[styles.eyebrow, { color: C.accentText }]}>YOUR BUSINESS, IN BALANCE</Text>
-      <Text style={[styles.description, { color: C.text }]}>A little clarity for every payment.</Text>
-      {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>Test mode · no real money moves</Text>}
+      <Text style={[styles.eyebrow, { color: C.accentText }]}>{t('providerBusiness.stripe.intro.eyebrow')}</Text>
+      <Text style={[styles.description, { color: C.text }]}>{t('providerBusiness.stripe.intro.body')}</Text>
+      {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>{t('providerBusiness.stripe.testMode')}</Text>}
     </View>
     <View style={styles.tabs}>
       {tabs.map(tab => {
@@ -199,8 +201,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       })}
     </View>
     <View style={styles.refreshRow}>
-      <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: C.sub }]}>{loading ? 'Updating your payments…' : 'Your payment information'}</Text>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh all payment information" disabled={loading || busy}
+      <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: C.sub }]}>{loading ? t('providerBusiness.stripe.updating') : t('providerBusiness.stripe.info')}</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('providerBusiness.stripe.refreshA11y')} disabled={loading || busy}
         onPress={() => { setLoading(true); void load(); }} style={styles.refresh}>
         {loading ? <ActivityIndicator size="small" color={C.accentText} /> : <Ionicons name="refresh-outline" size={20} color={C.accentText} />}
       </TouchableOpacity>
@@ -210,56 +212,56 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     {section === 'overview' && <>
       {!!financeError && <Notice text={financeError} />}
       <View style={[styles.hero, { backgroundColor: C.accent }]}>
-        <Text style={[styles.heroLabel, { color: C.bg }]}>AVAILABLE IN STRIPE</Text>
+        <Text style={[styles.heroLabel, { color: C.bg }]}>{t('providerBusiness.stripe.hero.available')}</Text>
         <Text style={[styles.heroAmount, { color: C.bg }]}>{finance?.connected ? balances(finance.available) : '—'}</Text>
-        <Text style={[styles.heroNote, { color: C.bg }]}>{finance?.connected ? 'Ready for your Stripe payout schedule.' : !finance ? (loading ? 'Checking your Stripe balance…' : 'Balance unavailable. Refresh to try again.') : 'Connect your payout account to see your balance.'}</Text>
+        <Text style={[styles.heroNote, { color: C.bg }]}>{finance?.connected ? t('providerBusiness.stripe.hero.ready') : !finance ? (loading ? t('providerBusiness.stripe.hero.checking') : t('providerBusiness.stripe.hero.unavailable')) : t('providerBusiness.stripe.hero.connect')}</Text>
         <View style={[styles.heroDivider, { borderColor: C.bg }]} />
         <View style={styles.heroRow}>
-          <Text style={[styles.heroNote, { color: C.bg }]}>Clearing in Stripe</Text>
+          <Text style={[styles.heroNote, { color: C.bg }]}>{t('providerBusiness.stripe.hero.clearing')}</Text>
           <Text style={[styles.heroPending, { color: C.bg }]}>{finance?.connected ? balances(finance.pending) : '—'}</Text>
         </View>
       </View>
 
       {account && <>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? 'Manage payout account' : 'Continue with Stripe'}`}
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? t('providerBusiness.stripe.manageAccount') : t('providerBusiness.stripe.continueStripe')}`}
           disabled={busy} onPress={() => void openStripe(manageAccount ? 'dashboard' : 'onboard')} activeOpacity={0.75}
           style={[styles.rowCard, { backgroundColor: C.card, borderColor: C.border }]}>
           <View style={[styles.iconChip, { backgroundColor: C.surface }]}><Ionicons name="business-outline" size={18} color={C.accentText} /></View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: C.text }]}>{accountTitle}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? 'Finish with Stripe to receive online booking payments'
-              : account.bankAccount ? `Paid to ${account.bankAccount.bankName ?? 'your bank'} ••${account.bankAccount.last4}. Tap Manage to change it.`
-              : 'Bank details managed securely by Stripe'}</Text>
+            <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? t('providerBusiness.stripe.account.finish')
+              : account.bankAccount ? t('providerBusiness.stripe.account.paidTo', { bank: account.bankAccount.bankName ?? t('providerBusiness.stripe.account.yourBank'), last4: account.bankAccount.last4 })
+              : t('providerBusiness.stripe.account.managedByStripe')}</Text>
           </View>
           {busy ? <ActivityIndicator size="small" color={C.accentText} />
-            : <Text style={[styles.rowAction, { color: C.accentText }]}>{manageAccount ? 'Manage' : 'Continue'}</Text>}
+            : <Text style={[styles.rowAction, { color: C.accentText }]}>{manageAccount ? t('providerBusiness.stripe.manage') : t('common.continue')}</Text>}
         </TouchableOpacity>
-        {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
+        {!!account.requirementsDue && <PaymentAction disabled={busy} label={t('providerBusiness.stripe.updateDetails')} onPress={() => void openStripe('onboard')} secondary />}
       </>}
 
-      <IconCard icon="calendar-outline" title="On its way to your bank" sub="An estimated arrival, once Stripe has scheduled a payout.">
+      <IconCard icon="calendar-outline" title={t('providerBusiness.stripe.next.title')} sub={t('providerBusiness.stripe.next.sub')}>
         {nextPayout ? <View style={[styles.amountPanel, { backgroundColor: C.bg }]}>
           <Text style={[styles.amount, { color: C.text }]}>{money(nextPayout.amount, nextPayout.currency)}</Text>
-          <Text style={[styles.caption, { color: C.text }]}>Expected {date(nextPayout.arrivalDate * 1000)}</Text>
-        </View> : <Text style={[styles.description, { color: C.text }]}>{financeError ? 'Payout information is unavailable. Refresh to try again.' : loading ? 'Checking scheduled payouts…' : 'No upcoming payout in your recent Stripe activity.'}</Text>}
-        <PaymentAction secondary label="View payouts" disabled={false} onPress={() => setSection('payouts')} />
+          <Text style={[styles.caption, { color: C.text }]}>{t('providerBusiness.stripe.next.expected', { date: date(nextPayout.arrivalDate * 1000) })}</Text>
+        </View> : <Text style={[styles.description, { color: C.text }]}>{financeError ? t('providerBusiness.stripe.next.unavailable') : loading ? t('providerBusiness.stripe.next.checking') : t('providerBusiness.stripe.next.none')}</Text>}
+        <PaymentAction secondary label={t('providerBusiness.stripe.viewPayouts')} disabled={false} onPress={() => setSection('payouts')} />
       </IconCard>
-      <IconCard icon="receipt-outline" title="Recent booking activity" sub="Your latest online booking payments.">
+      <IconCard icon="receipt-outline" title={t('providerBusiness.stripe.recent.title')} sub={t('providerBusiness.stripe.recent.sub')}>
         {!!payoutError && <Notice text={payoutError} />}
-        {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
+        {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title={t('providerBusiness.stripe.recent.emptyTitle')} detail={t('providerBusiness.stripe.recent.emptyBody')} />}
         {payouts.slice(0, 3).map(row => <View key={row.id} style={[styles.activity, { borderColor: C.border }]}>
-          <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{row.booking?.service_name_snapshot || 'Booking payment'}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>{row.booking?.customer_name || 'Client'} · {payoutLabels[row.status]}</Text></View>
+          <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{row.booking?.service_name_snapshot || t('providerBusiness.stripe.bookingPayment')}</Text>
+            <Text style={[styles.caption, { color: C.sub }]}>{row.booking?.customer_name || t('providerBusiness.stripe.client')} · {t(payoutLabels[row.status])}</Text></View>
           <Text style={[styles.label, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text>
         </View>)}
-        <PaymentAction secondary label="View booking payments" disabled={false} onPress={() => setSection('bookings')} />
+        <PaymentAction secondary label={t('providerBusiness.stripe.viewBookings')} disabled={false} onPress={() => setSection('bookings')} />
       </IconCard>
 
       {setup && <>
-        <Text style={[styles.groupTitle, { color: C.text }]}>Your setup</Text>
+        <Text style={[styles.groupTitle, { color: C.text }]}>{t('providerBusiness.stripe.setup.title')}</Text>
         <View style={styles.setupGrid}>
-          {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
-            <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
+          {([[t('providerBusiness.stripe.setup.deposits'), setup.deposit], [t('providerBusiness.stripe.setup.inPerson'), setup.inPerson]] as const).map(([label, value]) =>
+            <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={t('providerBusiness.stripe.setup.a11y', { label, value })}
               onPress={() => { void Haptics.selectionAsync().catch(() => {}); setSection('settings'); }} activeOpacity={0.75}
               style={[styles.setupTile, { backgroundColor: C.card, borderColor: C.border }]}>
               <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
@@ -270,20 +272,20 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     </>}
 
     {section === 'bookings' && <>
-      <Text style={[styles.sectionTitle, { color: C.text }]}>Booking payments</Text>
-      <Text style={[styles.sectionNote, { color: C.sub }]}>Latest 50 online payments. Open a booking payment to see your share and release status.</Text>
+      <Text style={[styles.sectionTitle, { color: C.text }]}>{t('providerBusiness.stripe.tab.bookings')}</Text>
+      <Text style={[styles.sectionNote, { color: C.sub }]}>{t('providerBusiness.stripe.bookings.note')}</Text>
       {!!payoutError && <Notice text={payoutError} />}
-      {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
+      {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title={t('providerBusiness.stripe.bookings.emptyTitle')} detail={t('providerBusiness.stripe.bookings.emptyBody')} />}
       {payouts.map(row => <BookingPayment key={row.id} row={row} busy={busy} onRefund={() => requestRefund(row)} />)}
       {feeEarnings.length > 0 && <>
-        <Text style={[styles.sectionTitle, { color: C.text }]}>Late & no-show fees</Text>
-        <Text style={[styles.sectionNote, { color: C.sub }]}>Your share after Stripe's card fee. Refund or answer a dispute from the booking itself.</Text>
+        <Text style={[styles.sectionTitle, { color: C.text }]}>{t('providerBusiness.stripe.fees.title')}</Text>
+        <Text style={[styles.sectionNote, { color: C.sub }]}>{t('providerBusiness.stripe.fees.note')}</Text>
         {feeEarnings.map(fee => <View key={fee.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
           <View style={styles.bookingHead}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: C.text }]}>{fee.kind === 'late' ? 'Late arrival fee' : 'No-show fee'}{fee.serviceName ? ` · ${fee.serviceName}` : ''}</Text>
-              <Text style={[styles.description, { color: C.text }]}>{fee.customerName || 'Client'}</Text>
-              {!!fee.chargedAt && <Text style={[styles.caption, { color: C.sub }]}>Charged {date(new Date(fee.chargedAt).getTime())}</Text>}
+              <Text style={[styles.label, { color: C.text }]}>{fee.kind === 'late' ? t('providerBusiness.stripe.fees.late') : t('providerBusiness.stripe.fees.noShow')}{fee.serviceName ? ` · ${fee.serviceName}` : ''}</Text>
+              <Text style={[styles.description, { color: C.text }]}>{fee.customerName || t('providerBusiness.stripe.client')}</Text>
+              {!!fee.chargedAt && <Text style={[styles.caption, { color: C.sub }]}>{t('providerBusiness.stripe.fees.charged', { date: date(new Date(fee.chargedAt).getTime()) })}</Text>}
             </View>
             <Text style={[styles.amountSmall, { color: C.text }]}>{fee.payoutPence != null ? money(fee.payoutPence, 'gbp') : money(fee.amountPence, 'gbp')}</Text>
           </View>
@@ -293,36 +295,36 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     </>}
 
     {section === 'payouts' && <>
-      <Text style={[styles.sectionTitle, { color: C.text }]}>From booking to bank</Text>
+      <Text style={[styles.sectionTitle, { color: C.text }]}>{t('providerBusiness.stripe.journey.title')}</Text>
       <View style={[styles.journey, { backgroundColor: C.surface }]}>
         {[
-          ['1', 'Booking completed', `${holdDays ? payoutHoldSentence(holdDays) : 'Your share is held for the payout timing you choose.'} Change this in Payment settings.`],
-          ['2', 'Released to Stripe', 'Your share moves to Stripe and clears into your available balance.'],
-          ['3', 'Paid to your bank', 'Stripe sends a payout according to your payout schedule.'],
+          ['1', t('providerBusiness.stripe.journey.step1'), `${holdDays ? payoutHoldSentence(holdDays) : t('providerBusiness.stripe.journey.step1Default')} ${t('providerBusiness.stripe.journey.step1Change')}`],
+          ['2', t('providerBusiness.stripe.payout.transferred'), t('providerBusiness.stripe.journey.step2Body')],
+          ['3', t('providerBusiness.stripe.journey.step3'), t('providerBusiness.stripe.journey.step3Body')],
         ].map(([step, title, detail]) => <View key={step} style={styles.step}>
           <View style={[styles.stepNumber, { backgroundColor: C.card }]}><Text style={[styles.label, { color: C.accentText }]}>{step}</Text></View>
           <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{title}</Text><Text style={[styles.caption, { color: C.text }]}>{detail}</Text></View>
         </View>)}
       </View>
-      <Card title="Bank payouts" sub="Actual payouts from Stripe to your bank. Arrival dates are estimates.">
+      <Card title={t('providerBusiness.stripe.bank.title')} sub={t('providerBusiness.stripe.bank.sub')}>
         {!!financeError && <Notice text={financeError} />}
-        {!loading && !financeError && !finance?.payouts.length && <EmptyState icon="wallet-outline" title="No bank payouts yet" detail="Once Stripe schedules your first payout, you can follow its progress here." />}
+        {!loading && !financeError && !finance?.payouts.length && <EmptyState icon="wallet-outline" title={t('providerBusiness.stripe.bank.emptyTitle')} detail={t('providerBusiness.stripe.bank.emptyBody')} />}
         {finance?.payouts.map(p => <View key={p.id} style={[styles.bankRow, { borderColor: C.border }]}>
           <View style={styles.row}><Text style={[styles.amountSmall, { color: C.text }]}>{money(p.amount, p.currency)}</Text>
-            <StatusBadge label={bankLabels[p.status] ?? 'Status unavailable'} attention={p.status === 'failed'} /></View>
-          <Text style={[styles.description, { color: C.text }]}>{p.status === 'paid' ? 'Arrival date' : 'Expected arrival'} · {date(p.arrivalDate * 1000)}</Text>
-          <Text style={[styles.caption, { color: C.sub }]}>{p.automatic ? 'Scheduled payout' : 'Manual payout'} · Created {date(p.created * 1000)}</Text>
-          {p.status === 'failed' && <Text style={[styles.description, { color: C.text }]}>Check your bank details in Manage payout account.</Text>}
+            <StatusBadge label={bankLabels[p.status] ? t(bankLabels[p.status]!) : t('providerBusiness.stripe.bank.unknown')} attention={p.status === 'failed'} /></View>
+          <Text style={[styles.description, { color: C.text }]}>{p.status === 'paid' ? t('providerBusiness.stripe.bank.arrival') : t('providerBusiness.stripe.bank.expected')} · {date(p.arrivalDate * 1000)}</Text>
+          <Text style={[styles.caption, { color: C.sub }]}>{p.automatic ? t('providerBusiness.stripe.bank.scheduled') : t('providerBusiness.stripe.bank.manual')} · {t('providerBusiness.stripe.bank.created', { date: date(p.created * 1000) })}</Text>
+          {p.status === 'failed' && <Text style={[styles.description, { color: C.text }]}>{t('providerBusiness.stripe.bank.failedHint')}</Text>}
         </View>)}
-        {finance?.hasMore && <PaymentAction secondary disabled={moreLoading || loading} label={moreLoading ? 'Loading…' : 'Load earlier payouts'} onPress={() => void loadMore()} />}
-        {account?.connected && <PaymentAction disabled={busy} label="Manage payout account" onPress={() => void openStripe('dashboard')} />}
+        {finance?.hasMore && <PaymentAction secondary disabled={moreLoading || loading} label={moreLoading ? t('providerBusiness.stripe.loading') : t('providerBusiness.stripe.loadEarlier')} onPress={() => void loadMore()} />}
+        {account?.connected && <PaymentAction disabled={busy} label={t('providerBusiness.stripe.manageAccount')} onPress={() => void openStripe('dashboard')} />}
       </Card>
     </>}
     {section === 'settings' && <>
-      <Card title="When you get paid" sub="How long after an appointment your share is released to our payment partners. They then pay it into your bank, which usually takes a few more working days.">
+      <Card title={t('providerBusiness.stripe.hold.title')} sub={t('providerBusiness.stripe.hold.sub')}>
         {!!holdError && <Notice text={holdError} />}
         {holdUnavailable
-          ? <Notice text="Finish setting up your professional profile to choose when you get paid." />
+          ? <Notice text={t('providerBusiness.stripe.hold.unavailable')} />
           : <>
             <View style={styles.holdOptions}>
               {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
@@ -334,7 +336,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
                 </TouchableOpacity>;
               })}
             </View>
-            <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
+            <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>{t('providerBusiness.stripe.hold.note')}</Text>
           </>}
       </Card>
       {children}
@@ -343,41 +345,42 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
 }
 
 function feeStatusLabel(fee: ProviderFeeEarning): string {
-  if (fee.status === 'refunded') return 'Refunded to client';
-  if (fee.openDispute) return 'Disputed — waiting on your answer';
+  if (fee.status === 'refunded') return tr('providerBusiness.stripe.fee.refunded');
+  if (fee.openDispute) return tr('providerBusiness.stripe.fee.disputed');
   switch (fee.payoutStatus) {
-    case 'held': return fee.releaseAfter ? `Released from ${date(new Date(fee.releaseAfter).getTime())}` : 'Held';
-    case 'transferred': return 'Released to Stripe';
-    case 'reversed': return 'Taken back after a bank dispute';
-    case 'failed': return 'Needs attention';
-    case 'cancelled': return 'Cancelled';
-    default: return 'Processing';
+    case 'held': return fee.releaseAfter ? tr('providerBusiness.stripe.fee.releasedFrom', { date: date(new Date(fee.releaseAfter).getTime()) }) : tr('providerBusiness.stripe.fee.held');
+    case 'transferred': return tr('providerBusiness.stripe.payout.transferred');
+    case 'reversed': return tr('providerBusiness.stripe.fee.reversed');
+    case 'failed': return tr('providerBusiness.stripe.payout.failed');
+    case 'cancelled': return tr('providerBusiness.stripe.payout.cancelled');
+    default: return tr('providerBusiness.stripe.fee.processing');
   }
 }
-const bankLabels: Record<string, string> = { pending: 'Scheduled', in_transit: 'On the way', paid: 'Paid', failed: 'Needs attention', canceled: 'Cancelled' };
+const bankLabels: Partial<Record<string, TranslationKey>> = { pending: 'providerBusiness.stripe.bank.status.pending', in_transit: 'providerBusiness.stripe.bank.status.inTransit', paid: 'providerBusiness.stripe.bank.status.paid', failed: 'providerBusiness.stripe.payout.failed', canceled: 'providerBusiness.stripe.payout.cancelled' };
 const money = (amount: number, currency: string) => new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(amount / 100);
 const balances = (rows: { amount: number; currency: string }[]) => rows.length ? rows.map(row => money(row.amount, row.currency)).join('\n') : '£0.00';
-const date = (value: number) => new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const date = (value: number) => new Date(value).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: boolean; onRefund: () => void }) {
   const C = useBusinessPalette();
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   return <View style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
     <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.bookingHead}>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.label, { color: C.text }]}>{row.booking?.service_name_snapshot || 'Booking payment'}</Text>
-        <Text style={[styles.description, { color: C.text }]}>{row.booking?.customer_name || 'Client'}</Text>
-        <Text style={[styles.caption, { color: C.sub }]}>Payment recorded {date(new Date(row.created_at).getTime())}</Text>
+        <Text style={[styles.label, { color: C.text }]}>{row.booking?.service_name_snapshot || t('providerBusiness.stripe.bookingPayment')}</Text>
+        <Text style={[styles.description, { color: C.text }]}>{row.booking?.customer_name || t('providerBusiness.stripe.client')}</Text>
+        <Text style={[styles.caption, { color: C.sub }]}>{t('providerBusiness.stripe.recorded', { date: date(new Date(row.created_at).getTime()) })}</Text>
       </View>
       <View style={{ alignItems: 'flex-end', gap: 8 }}><Text style={[styles.amountSmall, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text><Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={C.accentText} /></View>
     </TouchableOpacity>
-    <StatusBadge label={payoutLabels[row.status]} attention={row.status === 'failed'} />
+    <StatusBadge label={t(payoutLabels[row.status])} attention={row.status === 'failed'} />
     {expanded && <View style={[styles.breakdown, { borderColor: C.border }]}>
-      {[['Your share before refunds', row.payout_amount]].map(([label, amount]) => <View key={label} style={styles.row}>
+      {[[t('providerBusiness.stripe.shareBeforeRefunds'), row.payout_amount]].map(([label, amount]) => <View key={label} style={styles.row}>
         <Text style={[styles.description, { color: C.text }]}>{label}</Text><Text style={[styles.label, { color: C.text }]}>{money(Number(amount), row.currency)}</Text>
       </View>)}
-      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{row.status === 'held' ? `Eligible for release from ${date(new Date(row.release_after).getTime())}. This is not a bank arrival date.` : row.status === 'transferred' ? 'Your share has been released to Stripe. See Payouts for bank transfers.' : row.status === 'failed' ? 'Your share needs attention before it can be released. Contact support if this continues.' : 'This booking’s payout has been cancelled or returned.'}</Text>
-      {['held', 'transferred', 'failed'].includes(row.status) && <PaymentAction secondary disabled={busy} label="Refund client" onPress={onRefund} />}
+      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{row.status === 'held' ? t('providerBusiness.stripe.detail.held', { date: date(new Date(row.release_after).getTime()) }) : row.status === 'transferred' ? t('providerBusiness.stripe.detail.transferred') : row.status === 'failed' ? t('providerBusiness.stripe.detail.failed') : t('providerBusiness.stripe.detail.cancelled')}</Text>
+      {['held', 'transferred', 'failed'].includes(row.status) && <PaymentAction secondary disabled={busy} label={t('providerBusiness.stripe.refundClient')} onPress={onRefund} />}
     </View>}
   </View>;
 }

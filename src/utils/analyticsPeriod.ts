@@ -1,4 +1,5 @@
-import { dateToYMD } from './dateUtils';
+import { dateToYMD, dayName, monthName } from './dateUtils';
+import { tr } from '../i18n';
 
 /** The range selector on the provider analytics screen. Only "7d" is a
  *  day-level window. Despite the label, '30d' is bucketed as the last six
@@ -63,8 +64,8 @@ function calendarBuckets(
     const isCurrent = i === barCount - 1;
     const label =
       monthsPerBar === 1
-        ? startMonth.toLocaleDateString('en-GB', { month: 'short' })
-        : `${startMonth.toLocaleDateString('en-GB', { month: 'short' })}–${endMonth.toLocaleDateString('en-GB', { month: 'short' })}`;
+        ? monthName(startMonth.getMonth(), 'short')
+        : `${monthName(startMonth.getMonth(), 'short')}–${monthName(endMonth.getMonth(), 'short')}`;
     return {
       label,
       start: dateToYMD(startMonth),
@@ -110,9 +111,9 @@ export function inWindow(date: string, window: PeriodWindow | null): boolean {
 /** Copy for "vs X" under the hero number. `null` when there's nothing to compare. */
 export function previousPeriodLabel(range: AnalyticsRange): string | null {
   switch (range) {
-    case '7d': return 'previous 7 days';
-    case '30d': return 'previous 6 months';
-    case '90d': return 'previous 5 quarters';
+    case '7d': return tr('providerBusiness.analytics.period.7d');
+    case '30d': return tr('providerBusiness.analytics.period.30d');
+    case '90d': return tr('providerBusiness.analytics.period.90d');
     case 'all': return null;
   }
 }
@@ -133,7 +134,7 @@ export function chartBuckets(
     return Array.from({ length: 7 }, (_, i) => {
       const day = addDays(today, i - 6);
       return {
-        label: parseYMD(day).toLocaleDateString('en-GB', { weekday: 'short' }),
+        label: dayName(parseYMD(day).getDay(), 'short'),
         start: day,
         end: day,
       };

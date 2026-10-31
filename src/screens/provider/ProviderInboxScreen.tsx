@@ -36,27 +36,28 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
+import { useTranslation, tr, localeForLanguage, type TranslationKey } from '../../i18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FilterKey = 'enquiries' | 'messages';
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'enquiries', label: 'General enquiries' },
-  { key: 'messages', label: 'Messages' },
+const FILTERS: { key: FilterKey; label: TranslationKey }[] = [
+  { key: 'enquiries', label: 'providerBusiness.inbox.filter.enquiries' },
+  { key: 'messages', label: 'providerBusiness.inbox.filter.messages' },
 ];
 
 function timeAgoISO(iso: string | null): string {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1)  return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1)  return tr('providerBusiness.inbox.ago.now');
+  if (mins < 60) return tr('providerBusiness.inbox.ago.minutes', { count: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
+  if (hrs < 24)  return tr('providerBusiness.inbox.ago.hours', { count: hrs });
   const days = Math.floor(hrs / 24);
-  if (days < 7)  return `${days}d ago`;
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  if (days < 7)  return tr('providerBusiness.inbox.ago.days', { count: days });
+  return new Date(iso).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' });
 }
 
 function initials(name: string): string {
@@ -146,6 +147,7 @@ function ConversationRow({
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const swipeRef  = useRef<Swipeable>(null);
+  const { t: tx } = useTranslation();
 
   useEffect(() => {
     const delay = Math.min(index * 45, 300);
@@ -156,7 +158,7 @@ function ConversationRow({
   }, [fadeAnim, index, slideAnim]);
 
   const isUnread = conversation.unread_count_provider > 0;
-  const clientName = conversation.client?.name ?? 'Client';
+  const clientName = conversation.client?.name ?? tx('providerBusiness.inbox.client');
   const init = initials(clientName);
 
   const renderRightActions = () => (
@@ -166,14 +168,14 @@ function ConversationRow({
         onPress={() => { swipeRef.current?.close(); onMarkRead(); }}
       >
         <Ionicons name="checkmark-done" size={18} color="#fff" />
-        <Text style={row.swipeBtnText}>Mark read</Text>
+        <Text style={row.swipeBtnText}>{tx('providerBusiness.inbox.markRead')}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[row.swipeBtn, { backgroundColor: accent }]}
         onPress={() => { swipeRef.current?.close(); onReply(); }}
       >
         <Ionicons name="arrow-undo" size={18} color="#fff" />
-        <Text style={row.swipeBtnText}>Reply</Text>
+        <Text style={row.swipeBtnText}>{tx('providerBusiness.inbox.reply')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -203,7 +205,7 @@ function ConversationRow({
             </View>
 
             <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
-              {conversation.last_message ?? 'No messages yet'}
+              {conversation.last_message ?? tx('providerBusiness.inbox.noMessages')}
             </Text>
           </View>
 
@@ -240,6 +242,7 @@ const DARK_P = {
 
 export default function ProviderInboxScreen({ navigation, route }: any) {
   const { showToast, DialogHost } = useAppDialog();
+  const { t: tx } = useTranslation();
   const { isDarkMode: dark } = useTheme();
   const { user, myBookingMode } = useAuth();
   // A link-only pro takes no CERVICED bookings, so their inbox is one list of
@@ -289,7 +292,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       }
     } catch (error) {
       if (sequence !== loadSequence.current) return;
-      setLoadError(toUserMessage(error, "We couldn't refresh your inbox just now.", '[ProviderInbox] load failed'));
+      setLoadError(toUserMessage(error, tr('providerBusiness.inbox.loadFailed'), '[ProviderInbox] load failed'));
     }
   }, [route?.params?.initialFilter]);
 
@@ -314,7 +317,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       .then(() => loadInbox())
       .catch((err) => {
         logger.error('[ProviderInbox] mark-read failed:', err);
-        Alert.alert('Could not mark as read', 'Check your connection and try again.');
+        Alert.alert(tr('providerBusiness.inbox.markReadFailed'), tr('providerBusiness.inbox.checkConnection'));
       });
   }, [loadInbox]);
 
@@ -334,10 +337,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       void loadInbox();
     } catch (err) {
       logger.error('[ProviderInbox] quick reply failed:', err);
-      showToast('Message not sent. Check your connection and try again.', 'error');
+      showToast(tx('providerBusiness.inbox.sendFailed'), 'error');
     }
     setReplySending(false);
-  }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast]);
+  }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast, tx]);
 
   const openTemplates = useCallback(async () => {
     setTemplatesOpen(true);
@@ -347,7 +350,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       setTemplates(data.map(({ label, content }) => ({ label, content })));
     } catch (err) {
       logger.error('[ProviderInbox] load templates failed:', err);
-      showToast(toUserMessage(err, "We couldn't load your templates just now.", '[ProviderInbox] templates load'), 'error');
+      showToast(toUserMessage(err, tx('providerBusiness.inbox.templatesLoadFailed'), '[ProviderInbox] templates load'), 'error');
       setTemplatesOpen(false);
     } finally {
       setTemplatesLoading(false);
@@ -364,13 +367,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       setTemplates(cleaned);
       setTemplatesOpen(false);
       Keyboard.dismiss();
-      showToast('Templates saved.', 'success');
+      showToast(tx('providerBusiness.inbox.templatesSaved'), 'success');
     } catch (err) {
       logger.error('[ProviderInbox] save templates failed:', err);
-      showToast(toUserMessage(err, "We couldn't save your templates just now.", '[ProviderInbox] templates save'), 'error');
+      showToast(toUserMessage(err, tx('providerBusiness.inbox.templatesSaveFailed'), '[ProviderInbox] templates save'), 'error');
     }
     setTemplatesSaving(false);
-  }, [templates, templatesSaving, showToast]);
+  }, [templates, templatesSaving, showToast, tx]);
 
   const updateTemplate = useCallback((index: number, field: 'label' | 'content', value: string) => {
     setTemplates(prev => prev.map((t, i) => (i === index ? { ...t, [field]: value } : t)));
@@ -430,7 +433,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           )}
 
           <View style={s.headerCenter}>
-            <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? 'General enquiries' : 'Inbox'}</Text>
+            <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? tx('providerBusiness.inbox.filter.enquiries') : tx('providerBusiness.inbox.title')}</Text>
             {outstandingCount > 0 && (
               <View style={[s.badge, { backgroundColor: '#FF3B30' }]}>
                 <Text style={s.badgeText}>{outstandingCount}</Text>
@@ -442,7 +445,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             onPress={openTemplates}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[s.iconBtn, { backgroundColor: P.iconBg }]}
-            accessibilityLabel="Message templates"
+            accessibilityLabel={tx('providerBusiness.inbox.templatesA11y')}
           >
             <Ionicons name="documents-outline" size={18} color={P.text} />
           </TouchableOpacity>
@@ -464,10 +467,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 }}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={`${f.label}, ${badgeCount} unread conversations`}
+                accessibilityLabel={tx('providerBusiness.inbox.filterA11y', { label: tx(f.label), count: badgeCount })}
                 style={[s.filterChip, active && { borderBottomColor: P.accent, borderBottomWidth: 2 }]}
               >
-                <Text style={[s.filterLabel, { color: active ? P.accent : P.sub }]}>{f.label}</Text>
+                <Text style={[s.filterLabel, { color: active ? P.accent : P.sub }]}>{tx(f.label)}</Text>
                 {isNew && (
                   <View style={[s.filterBadge, { backgroundColor: '#FF3B30' }]}>
                     <Text style={s.filterBadgeText}>{badgeCount}</Text>
@@ -505,7 +508,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 onPress={() => navigation.navigate('ProviderConversation', {
                   conversationId: item.id,
                   clientUserId: item.user_id,
-                  clientName: item.client?.name ?? 'Client',
+                  clientName: item.client?.name ?? tx('providerBusiness.inbox.client'),
                 })}
                 onReply={() => { setReplyText(''); setReplyTarget(item); }}
                 onMarkRead={() => handleMarkConversationRead(item)}
@@ -517,10 +520,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               loadError && flatItems.length > 0 ? (
                 <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
                   <Text style={[s.errorBannerText, { color: P.text }]}>
-                    {loadError} This list may be out of date.
+                    {loadError} {tx('providerBusiness.inbox.outOfDate')}
                   </Text>
                   <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={[s.errorRetry, { color: P.accent }]}>Retry</Text>
+                    <Text style={[s.errorRetry, { color: P.accent }]}>{tx('providerBusiness.inbox.retry')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : null
@@ -531,13 +534,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name="cloud-offline-outline" size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>Couldn't load your inbox</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{tx('providerBusiness.inbox.loadFailedTitle')}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>{loadError}</Text>
                   <TouchableOpacity
                     onPress={onRefresh}
                     style={[s.retryBtn, { borderColor: P.border }]}
                   >
-                    <Text style={[s.retryBtnText, { color: P.accent }]}>Try again</Text>
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>{tx('providerBusiness.inbox.tryAgain')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -545,13 +548,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name={showEnquiries ? 'mail-open-outline' : 'chatbubble-outline'} size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>{showEnquiries ? 'No general enquiries yet' : 'No client messages yet'}</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{showEnquiries ? tx('providerBusiness.inbox.empty.enquiries') : tx('providerBusiness.inbox.empty.messages')}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
                     {isLinkOnly
-                      ? 'Questions clients send you through Get In Touch on your profile appear here.'
+                      ? tx('providerBusiness.inbox.empty.linkOnlySub')
                       : filter === 'messages'
-                        ? 'Conversations with clients who have booked with you appear here.'
-                        : 'Questions sent through Get In Touch appear here until the person books with you.'}
+                        ? tx('providerBusiness.inbox.empty.messagesSub')
+                        : tx('providerBusiness.inbox.empty.enquiriesSub')}
                   </Text>
                 </View>
               )
@@ -575,13 +578,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             <KeyboardDismissView style={m.positioner}>
               <View style={[m.replyDialog, { backgroundColor: P.card }]}>
                 <Text style={[m.dialogTitle, { color: P.text }]}>
-                  Reply to {replyTarget.client?.name ?? 'client'}
+                  {tx('providerBusiness.inbox.replyTo', { name: replyTarget.client?.name ?? tx('providerBusiness.inbox.clientLower') })}
                 </Text>
                 <TextInput
                   style={[m.replyInput, { color: P.text, borderColor: P.border }]}
                   value={replyText}
                   onChangeText={setReplyText}
-                  placeholder="Type a reply…"
+                  placeholder={tx('providerBusiness.inbox.replyPlaceholder')}
                   placeholderTextColor={P.sub}
                   multiline
                   autoFocus
@@ -593,7 +596,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     activeOpacity={0.7}
                     onPress={() => { setReplyTarget(null); setReplyText(''); Keyboard.dismiss(); }}
                   >
-                    <Text style={[m.dialogBtnText, { color: P.sub }]}>Cancel</Text>
+                    <Text style={[m.dialogBtnText, { color: P.sub }]}>{tx('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[m.replySendBtn, { backgroundColor: P.accent, opacity: replyText.trim() && !replySending ? 1 : 0.5 }]}
@@ -601,7 +604,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     onPress={handleSendReply}
                     disabled={!replyText.trim() || replySending}
                   >
-                    <Text style={m.replySendText}>{replySending ? 'Sending…' : 'Send'}</Text>
+                    <Text style={m.replySendText}>{replySending ? tx('providerBusiness.inbox.sending') : tx('providerBusiness.inbox.send')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -624,7 +627,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             />
             <View style={[t.sheet, { backgroundColor: P.bg }]}>
               <View style={[t.sheetHeader, { borderBottomColor: P.border }]}>
-                <Text style={[t.sheetTitle, { color: P.text }]}>Message Templates</Text>
+                <Text style={[t.sheetTitle, { color: P.text }]}>{tx('providerBusiness.inbox.templatesTitle')}</Text>
                 <TouchableOpacity
                   onPress={() => { setTemplatesOpen(false); Keyboard.dismiss(); }}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -648,14 +651,12 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     keyboardDismissMode="interactive"
                   >
                     <Text style={[t.intro, { color: P.sub }]}>
-                      Private to you. Tapping a template fills the message box in a
-                      conversation — you can always edit it before sending.
+                      {tx('providerBusiness.inbox.templatesIntro')}
                     </Text>
 
                     {templates.length === 0 ? (
                       <Text style={[t.empty, { color: P.sub }]}>
-                        No templates yet. Create reusable replies for confirming an
-                        address, availability, or booking details.
+                        {tx('providerBusiness.inbox.templatesEmpty')}
                       </Text>
                     ) : templates.map((template, index) => (
                       <View key={index} style={[t.item, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -664,7 +665,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                             style={[t.labelInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
                             value={template.label}
                             onChangeText={value => updateTemplate(index, 'label', value)}
-                            placeholder="Template name"
+                            placeholder={tx('providerBusiness.inbox.templateName')}
                             placeholderTextColor={P.sub}
                             maxLength={60}
                           />
@@ -676,7 +677,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                           style={[t.contentInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
                           value={template.content}
                           onChangeText={value => updateTemplate(index, 'content', value)}
-                          placeholder="Message text"
+                          placeholder={tx('providerBusiness.inbox.templateText')}
                           placeholderTextColor={P.sub}
                           maxLength={1000}
                           multiline
@@ -694,7 +695,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     >
                       <Ionicons name="add" size={18} color={P.accent} />
                       <Text style={[t.addText, { color: P.accent }]}>
-                        {templates.length >= 12 ? 'Template limit reached' : 'Add template'}
+                        {templates.length >= 12 ? tx('providerBusiness.inbox.templateLimit') : tx('providerBusiness.inbox.addTemplate')}
                       </Text>
                     </TouchableOpacity>
                   </ScrollView>
@@ -708,7 +709,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     >
                       {templatesSaving
                         ? <ActivityIndicator color="#FFFFFF" size="small" />
-                        : <Text style={t.saveText}>Save Templates</Text>}
+                        : <Text style={t.saveText}>{tx('providerBusiness.inbox.saveTemplates')}</Text>}
                     </TouchableOpacity>
                   </View>
                 </KeyboardDismissView>

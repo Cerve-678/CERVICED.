@@ -1,3 +1,5 @@
+import { tr } from '../i18n';
+
 /**
  * How long after an appointment CERVICED holds a provider's share before
  * releasing it to their Stripe account. Mirrors the CHECK constraint on
@@ -14,10 +16,10 @@ export function isPayoutHoldDays(value: unknown): value is PayoutHoldDays {
 
 /** "24 hours", "3 days", … — the option's own label. */
 export function payoutHoldLabel(days: PayoutHoldDays): string {
-  return days === 1 ? '24 hours' : `${days} days`;
+  return days === 1 ? tr('providerBusiness.payoutTiming.hours24') : tr('providerBusiness.payoutTiming.days', { count: days });
 }
 
 /** The sentence under step 1 of "From booking to bank". */
 export function payoutHoldSentence(days: PayoutHoldDays): string {
-  return `Your share is released to Stripe ${payoutHoldLabel(days)} after the appointment ends.`;
+  return tr('providerBusiness.payoutTiming.sentence', { period: payoutHoldLabel(days) });
 }

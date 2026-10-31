@@ -62,7 +62,7 @@ describe('provider management performance contracts', () => {
     expect(coreLoad).not.toContain('getProviderClientele()');
     expect(source).toContain('await getMyPromotionManagerCore()');
     expect(source).toContain('void getProviderClientele()');
-    expect(source).toContain("clientsLoading ? '…' : clients.length");
+    expect(source).toContain("clientsLoading ? t('providerBusiness.promotions.subtitle.loading'");
   });
 
   it('bounds owner promotion and nested service collections', () => {

@@ -21,6 +21,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from '../../i18n';
 import type { useTheme } from '../../contexts/ThemeContext';
 
 export type AnalyticsTheme = ReturnType<typeof useTheme>['theme'];
@@ -267,12 +268,13 @@ export function AnalyticsHeader({
   dark: boolean;
   theme: AnalyticsTheme;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={header.row}>
       <PressScale
         onPress={onBack}
         haptic="light"
-        accessibilityLabel="Back"
+        accessibilityLabel={t('common.back')}
         style={[header.backBtn, { backgroundColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
       >
         <Ionicons name="chevron-back" size={18} color={theme.text} />

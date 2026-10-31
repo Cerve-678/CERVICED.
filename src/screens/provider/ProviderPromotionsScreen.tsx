@@ -41,6 +41,7 @@ import {
 } from '../../services/databaseService';
 import type { DbPromotion, ClienteleMember, DbService } from '../../types/database';
 import { formatTime12 } from '../../utils/dateUtils';
+import { useTranslation, tr, localeForLanguage } from '../../i18n';
 import { toUserMessage } from '../../utils/userFacingError';
 import { uploadToStorage } from '../../services/providerRegistrationService';
 
@@ -80,52 +81,54 @@ const CP = CP_DARK;
 const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS', 'MALE', 'KIDS', 'OTHER'];
 
 // ── Templates ─────────────────────────────────────────────────────────────────
+// name/tagline are catalog keys; prefill text is promotion content clients
+// read, so it stays as written.
 
 const TEMPLATES = [
   {
     id: 'flash',
-    name: 'Flash Sale',
-    tagline: 'Limited time discount',
+    name: 'providerBusiness.promotions.template.flash',
+    tagline: 'providerBusiness.promotions.template.flashTagline',
     icon: 'flash-outline' as const,
     gradient: ['#C0392B', '#922B21'] as [string, string],
     prefill: { title: 'Flash Sale', description: "Limited time only — book before it's gone!", discountType: 'percent' as const, discountPercent: '20' },
   },
   {
     id: 'loyalty',
-    name: 'Loyalty Reward',
-    tagline: 'Reward your regulars',
+    name: 'providerBusiness.promotions.template.loyalty',
+    tagline: 'providerBusiness.promotions.template.loyaltyTagline',
     icon: 'star-outline' as const,
     gradient: ['#5B1E32', '#3D1420'] as [string, string],
     prefill: { title: 'Loyalty Reward', description: 'A thank you to our valued clients — you deserve it.', discountType: 'percent' as const, discountPercent: '15' },
   },
   {
     id: 'new_client',
-    name: 'New Client',
-    tagline: 'Attract first-timers',
+    name: 'providerBusiness.promotions.template.newClient',
+    tagline: 'providerBusiness.promotions.template.newClientTagline',
     icon: 'person-add-outline' as const,
     gradient: ['#1A5C4E', '#0D3D34'] as [string, string],
     prefill: { title: 'New Client Welcome', description: 'Special offer for first-time bookings.', discountType: 'percent' as const, discountPercent: '10' },
   },
   {
     id: 'seasonal',
-    name: 'Seasonal Special',
-    tagline: 'Season-themed offer',
+    name: 'providerBusiness.promotions.template.seasonal',
+    tagline: 'providerBusiness.promotions.template.seasonalTagline',
     icon: 'sparkles-outline' as const,
     gradient: ['#4A1942', '#2E0F28'] as [string, string],
     prefill: { title: 'Seasonal Special', description: 'Make the most of the season with an exclusive offer.', discountType: 'text' as const, discountText: 'Special Rate' },
   },
   {
     id: 'bundle',
-    name: 'Bundle Deal',
-    tagline: 'Book more, save more',
+    name: 'providerBusiness.promotions.template.bundle',
+    tagline: 'providerBusiness.promotions.template.bundleTagline',
     icon: 'gift-outline' as const,
     gradient: ['#1A3A5C', '#0D2240'] as [string, string],
     prefill: { title: 'Bundle & Save', description: 'Book multiple services and save.', discountType: 'text' as const, discountText: 'Bundle Offer' },
   },
   {
     id: 'custom',
-    name: 'Custom',
-    tagline: 'Start from scratch',
+    name: 'providerBusiness.promotions.template.custom',
+    tagline: 'providerBusiness.promotions.template.customTagline',
     icon: 'create-outline' as const,
     gradient: ['#3D2230', '#2A1520'] as [string, string],
     prefill: { title: '', description: '', discountType: 'text' as const, discountText: '' },
@@ -141,15 +144,15 @@ function isUpcoming(validFrom: string) { return new Date(validFrom) > new Date()
 
 function formatDate(iso: string) {
   try {
-    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(iso).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' });
   } catch { return iso; }
 }
 
 function discountLabel(p: DbPromotion) {
   if (p.discount_text) return p.discount_text;
-  if (p.discount_percent) return `${p.discount_percent}% OFF`;
-  if (p.discount_amount) return `£${p.discount_amount} OFF`;
-  return 'OFFER';
+  if (p.discount_percent) return tr('providerBusiness.promotions.badge.percent', { percent: p.discount_percent });
+  if (p.discount_amount) return tr('providerBusiness.promotions.badge.amount', { amount: p.discount_amount });
+  return tr('providerBusiness.promotions.badge.offer');
 }
 
 async function uploadPromoImage(uri: string): Promise<string | null> {
@@ -170,10 +173,11 @@ function PromoTabBar({ active, onChange, counts, P }: {
   counts: Record<PromoTab, number>;
   P: typeof CP_LIGHT;
 }) {
+  const { t: tx } = useTranslation();
   const tabs: { key: PromoTab; label: string }[] = [
-    { key: 'live', label: 'Live' },
-    { key: 'upcoming', label: 'Upcoming' },
-    { key: 'past', label: 'Past' },
+    { key: 'live', label: tx('providerBusiness.promotions.tab.live') },
+    { key: 'upcoming', label: tx('providerBusiness.promotions.tab.upcoming') },
+    { key: 'past', label: tx('providerBusiness.promotions.tab.past') },
   ];
   return (
     <View style={[tabSt.row, { backgroundColor: P.surface }]}>
@@ -217,6 +221,7 @@ function PromoCard({ promo, services, onToggle, onEdit, onDelete, onNotify, onDu
   onExtend: (p: DbPromotion) => void;
 }) {
   const { isDarkMode } = useTheme();
+  const { t, tp } = useTranslation();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const expired = isExpired(promo.valid_until);
   const upcoming = isUpcoming(promo.valid_from);
@@ -244,12 +249,12 @@ function PromoCard({ promo, services, onToggle, onEdit, onDelete, onNotify, onDu
           )}
           {expired && (
             <View style={[pcSt.statusBadge, { backgroundColor: 'rgba(255,104,104,0.25)' }]}>
-              <Text style={[pcSt.statusBadgeText, { color: C.danger }]}>EXPIRED</Text>
+              <Text style={[pcSt.statusBadgeText, { color: C.danger }]}>{t('providerBusiness.promotions.card.expired')}</Text>
             </View>
           )}
           {upcoming && !expired && (
             <View style={[pcSt.statusBadge, { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.25)' : 'rgba(92,64,51,0.25)') }]}>
-              <Text style={[pcSt.statusBadgeText, { color: C.accent }]}>UPCOMING</Text>
+              <Text style={[pcSt.statusBadgeText, { color: C.accent }]}>{t('providerBusiness.promotions.card.upcoming')}</Text>
             </View>
           )}
         </View>
@@ -279,10 +284,10 @@ function PromoCard({ promo, services, onToggle, onEdit, onDelete, onNotify, onDu
 
         <Text style={[pcSt.date, { color: expired ? C.danger : C.sub }]}>
           {expired
-            ? `Expired ${formatDate(promo.valid_until)}`
+            ? t('providerBusiness.promotions.card.expiredOn', { date: formatDate(promo.valid_until) })
             : upcoming
-            ? `Starts ${formatDate(promo.valid_from)} · Ends ${formatDate(promo.valid_until)}`
-            : `Live until ${formatDate(promo.valid_until)}`
+            ? t('providerBusiness.promotions.card.startsEnds', { start: formatDate(promo.valid_from), end: formatDate(promo.valid_until) })
+            : t('providerBusiness.promotions.card.liveUntil', { date: formatDate(promo.valid_until) })
           }
         </Text>
 
@@ -299,7 +304,7 @@ function PromoCard({ promo, services, onToggle, onEdit, onDelete, onNotify, onDu
               const names = promo.service_ids
                 .map(id => services.find(s => s.id === id)?.name)
                 .filter(Boolean) as string[];
-              const display = names.length > 0 ? names : [`${promo.service_ids.length} service${promo.service_ids.length > 1 ? 's' : ''}`];
+              const display = names.length > 0 ? names : [tp('providerBusiness.promotions.card.services', promo.service_ids.length)];
               return display.map((name, i) => (
                 <View key={i} style={[pcSt.svcBadge, { backgroundColor: C.card, borderColor: C.border }]}>
                   <Text style={[pcSt.svcText, { color: C.sub }]}>{name}</Text>
@@ -310,14 +315,14 @@ function PromoCard({ promo, services, onToggle, onEdit, onDelete, onNotify, onDu
               <View style={[pcSt.schedBadge, { backgroundColor: C.accent + '15' }]}>
                 <Ionicons name="alarm-outline" size={10} color={C.accent} />
                 <Text style={[pcSt.schedText, { color: C.accent }]}>
-                  Sends {formatDate(promo.scheduled_notify_at.substring(0, 10))}
+                  {t('providerBusiness.promotions.card.sends', { date: formatDate(promo.scheduled_notify_at.substring(0, 10)) })}
                 </Text>
               </View>
             )}
             {promo.notify_sent_at && (
               <View style={[pcSt.schedBadge, { backgroundColor: 'rgba(48,209,88,0.12)' }]}>
                 <Ionicons name="checkmark-circle-outline" size={10} color="#30D158" />
-                <Text style={[pcSt.schedText, { color: '#30D158' }]}>Notified</Text>
+                <Text style={[pcSt.schedText, { color: '#30D158' }]}>{t('providerBusiness.promotions.card.notified')}</Text>
               </View>
             )}
           </View>
@@ -329,29 +334,29 @@ function PromoCard({ promo, services, onToggle, onEdit, onDelete, onNotify, onDu
           <TouchableOpacity style={[pcSt.actionBtn, { borderColor: C.border }]}
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onEdit(promo); }} activeOpacity={0.7}>
             <Ionicons name="pencil-outline" size={12} color={C.sub} />
-            <Text style={[pcSt.actionText, { color: C.sub }]}>Edit</Text>
+            <Text style={[pcSt.actionText, { color: C.sub }]}>{t('common.edit')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[pcSt.actionBtn, { borderColor: C.accent + '50' }]}
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onNotify(promo); }} activeOpacity={0.7}>
             <Ionicons name="notifications-outline" size={12} color={C.accent} />
-            <Text style={[pcSt.actionText, { color: C.accent }]}>Notify</Text>
+            <Text style={[pcSt.actionText, { color: C.accent }]}>{t('providerBusiness.promotions.card.notify')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[pcSt.actionBtn, { borderColor: C.border }]}
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onDuplicate(promo); }} activeOpacity={0.7}>
             <Ionicons name="copy-outline" size={12} color={C.sub} />
-            <Text style={[pcSt.actionText, { color: C.sub }]}>Copy</Text>
+            <Text style={[pcSt.actionText, { color: C.sub }]}>{t('providerBusiness.promotions.card.copy')}</Text>
           </TouchableOpacity>
           {(expired || !promo.is_active) && (
             <TouchableOpacity style={[pcSt.actionBtn, { borderColor: C.accent + '50' }]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); onExtend(promo); }} activeOpacity={0.7}>
               <Ionicons name="time-outline" size={12} color={C.accent} />
-              <Text style={[pcSt.actionText, { color: C.accent }]}>Extend</Text>
+              <Text style={[pcSt.actionText, { color: C.accent }]}>{t('providerBusiness.promotions.card.extend')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[pcSt.actionBtn, { borderColor: 'rgba(255,104,104,0.3)' }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onDelete(promo.id); }} activeOpacity={0.7}>
             <Ionicons name="trash-outline" size={12} color={C.danger} />
-            <Text style={[pcSt.actionText, { color: C.danger }]}>Delete</Text>
+            <Text style={[pcSt.actionText, { color: C.danger }]}>{t('common.delete')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -396,6 +401,7 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
   onClose: () => void;
 }) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   // Measured per render, not captured at module load, so the two-up template
   // grid still splits the screen correctly after a rotation.
@@ -407,8 +413,8 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <View style={[tpSt.sheet, { backgroundColor: C.surface }]}>
         <View style={[tpSt.handle, { backgroundColor: C.border }]} />
-        <Text style={[tpSt.heading, { color: C.text }]}>Start with a template</Text>
-        <Text style={[tpSt.sub, { color: C.sub }]}>Choose a style and we'll pre-fill the details</Text>
+        <Text style={[tpSt.heading, { color: C.text }]}>{t('providerBusiness.promotions.picker.title')}</Text>
+        <Text style={[tpSt.sub, { color: C.sub }]}>{t('providerBusiness.promotions.picker.sub')}</Text>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={tpSt.grid}>
           {TEMPLATES.map(tmpl => (
@@ -425,8 +431,8 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
                 end={{ x: 1, y: 1 }}
               >
                 <Ionicons name={tmpl.icon} size={24} color="#FFFFFF" />
-                <Text style={[tpSt.cardName, { color: '#FFFFFF' }]}>{tmpl.name}</Text>
-                <Text style={[tpSt.cardTagline, { color: 'rgba(255,255,255,0.8)' }]}>{tmpl.tagline}</Text>
+                <Text style={[tpSt.cardName, { color: '#FFFFFF' }]}>{t(tmpl.name)}</Text>
+                <Text style={[tpSt.cardTagline, { color: 'rgba(255,255,255,0.8)' }]}>{t(tmpl.tagline)}</Text>
               </LinearGradient>
             </TouchableOpacity>
           ))}
@@ -469,6 +475,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   onSend: (audience: Audience, scheduledAt?: string) => Promise<void>;
 }) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const [audience, setAudience] = useState<Audience>('interested');
   const [sending, setSending] = useState(false);
@@ -491,10 +498,10 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   const repeatCount = clients.filter(c => c.booking_count >= 2).length;
 
   const audienceOptions: { key: Audience; label: string; sub: string; count: number | null }[] = [
-    { key: 'interested', label: 'Interested', sub: 'Booked, saved, or following you', count: null },
-    { key: 'all',        label: 'All',       sub: 'Everyone who has booked you',    count: clients.length },
-    { key: 'repeat',     label: 'Repeat',    sub: '2+ bookings with you',           count: repeatCount },
-    { key: 'bookmarked', label: 'Followers', sub: 'People who saved your profile',  count: null },
+    { key: 'interested', label: t('providerBusiness.promotions.notify.interested'), sub: t('providerBusiness.promotions.notify.interestedSub'), count: null },
+    { key: 'all',        label: t('providerBusiness.promotions.notify.all'),        sub: t('providerBusiness.promotions.notify.allSub'),    count: clients.length },
+    { key: 'repeat',     label: t('providerBusiness.promotions.notify.repeat'),     sub: t('providerBusiness.promotions.notify.repeatSub'),           count: repeatCount },
+    { key: 'bookmarked', label: t('providerBusiness.promotions.notify.followers'),  sub: t('providerBusiness.promotions.notify.followersSub'),  count: null },
   ];
 
   const handleSend = async () => {
@@ -510,7 +517,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
         <View style={[nmSt.sheet, { backgroundColor: C.surface }]}>
         <View style={[nmSt.handle, { backgroundColor: C.border }]} />
         <View style={nmSt.header}>
-          <Text style={[nmSt.title, { color: C.text }]}>Notify Clients</Text>
+          <Text style={[nmSt.title, { color: C.text }]}>{t('providerBusiness.promotions.notify.title')}</Text>
           <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={C.sub} />
           </TouchableOpacity>
@@ -525,7 +532,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
           </View>
         )}
 
-        <Text style={[nmSt.sectionLabel, { color: C.sub }]}>AUDIENCE</Text>
+        <Text style={[nmSt.sectionLabel, { color: C.sub }]}>{t('providerBusiness.promotions.notify.audience')}</Text>
 
         {audienceOptions.map(opt => {
           const selected = audience === opt.key;
@@ -556,8 +563,8 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
         <View style={[nmSt.option, { marginTop: 4, backgroundColor: C.card, borderColor: C.border }]}>
           <Ionicons name="alarm-outline" size={16} color={scheduleMode ? C.accent : C.sub} style={{ marginRight: 10 }} />
           <View style={{ flex: 1 }}>
-            <Text style={[nmSt.optLabel, { color: C.text }]}>Schedule Send</Text>
-            <Text style={[nmSt.optSub, { color: C.sub }]}>Send at a specific date & time</Text>
+            <Text style={[nmSt.optLabel, { color: C.text }]}>{t('providerBusiness.promotions.notify.schedule')}</Text>
+            <Text style={[nmSt.optSub, { color: C.sub }]}>{t('providerBusiness.promotions.notify.scheduleSub')}</Text>
           </View>
           <Switch value={scheduleMode} onValueChange={setScheduleMode}
             trackColor={{ false: C.border, true: C.accent }} thumbColor={C.ice} />
@@ -572,7 +579,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
             >
               <Ionicons name="calendar-outline" size={14} color={C.accent} />
               <Text style={[nmSt.pickerText, { color: C.text }]}>
-                {schedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {schedAt.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -626,7 +633,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
             ? <ActivityIndicator color={C.ice} size="small" />
             : <>
                 <Ionicons name={scheduleMode ? 'alarm-outline' : 'notifications-outline'} size={16} color={C.ice} />
-                <Text style={nmSt.sendBtnText}>{scheduleMode ? 'Schedule' : 'Send Now'}</Text>
+                <Text style={nmSt.sendBtnText}>{scheduleMode ? t('providerBusiness.promotions.notify.scheduleBtn') : t('providerBusiness.promotions.notify.sendNow')}</Text>
               </>
           }
         </TouchableOpacity>
@@ -766,6 +773,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
   onSave: (input: UpsertPromotionInput) => Promise<void>;
 }) {
   const { isDarkMode } = useTheme();
+  const { t: tx } = useTranslation();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -878,13 +886,13 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
         {/* Header */}
         <View style={[fmSt.header, { borderBottomColor: C.border, backgroundColor: C.bg }]}>
           <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={fmSt.headerClose}>
-            <Text style={[fmSt.headerCloseText, { color: C.sub }]}>Cancel</Text>
+            <Text style={[fmSt.headerCloseText, { color: C.sub }]}>{tx('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={[fmSt.headerTitle, { color: C.text }]}>{editing ? 'Edit Promotion' : 'New Promotion'}</Text>
+          <Text style={[fmSt.headerTitle, { color: C.text }]}>{editing ? tx('providerBusiness.promotions.form.editTitle') : tx('providerBusiness.promotions.form.newTitle')}</Text>
           <TouchableOpacity onPress={handleSave} activeOpacity={0.8} disabled={saving} style={fmSt.headerSave}>
             {saving
               ? <ActivityIndicator color={C.accent} size="small" />
-              : <Text style={[fmSt.headerSaveText, { color: C.accent }]}>{editing ? 'Save' : 'Create'}</Text>
+              : <Text style={[fmSt.headerSaveText, { color: C.accent }]}>{editing ? tx('common.save') : tx('providerBusiness.promotions.form.create')}</Text>
             }
           </TouchableOpacity>
         </View>
@@ -904,73 +912,73 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
               ) : (
                 <View style={[fmSt.coverEmpty, { backgroundColor: C.card }]}>
                   <Ionicons name="image-outline" size={30} color={C.sub} />
-                  <Text style={[fmSt.coverEmptyText, { color: C.sub }]}>Add Cover Photo</Text>
-                  <Text style={[fmSt.coverEmptyHint, { color: C.sub }]}>Makes your promotion stand out</Text>
+                  <Text style={[fmSt.coverEmptyText, { color: C.sub }]}>{tx('providerBusiness.promotions.form.addCover')}</Text>
+                  <Text style={[fmSt.coverEmptyHint, { color: C.sub }]}>{tx('providerBusiness.promotions.form.addCoverHint')}</Text>
                 </View>
               )}
               {coverUri && (
                 <View style={fmSt.coverEditBadge}>
                   <Ionicons name="pencil-outline" size={13} color="#FFFFFF" />
-                  <Text style={fmSt.coverEditText}>Change Photo</Text>
+                  <Text style={fmSt.coverEditText}>{tx('providerBusiness.promotions.form.changePhoto')}</Text>
                 </View>
               )}
             </TouchableOpacity>
             {uploadingImage && (
               <View style={fmSt.uploadingRow}>
                 <ActivityIndicator color={C.accent} size="small" />
-                <Text style={[fmSt.uploadingText, { color: C.sub }]}>Uploading image…</Text>
+                <Text style={[fmSt.uploadingText, { color: C.sub }]}>{tx('providerBusiness.promotions.form.uploading')}</Text>
               </View>
             )}
 
             {/* Title */}
-            <Text style={[fmSt.label, { color: C.sub }]}>Title *</Text>
+            <Text style={[fmSt.label, { color: C.sub }]}>{tx('providerBusiness.promotions.form.title')}</Text>
             <TextInput style={[fmSt.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-              placeholder="e.g. Summer Hair Special"
+              placeholder={tx('providerBusiness.promotions.form.titlePlaceholder')}
               placeholderTextColor={C.sub} value={form.title}
               onChangeText={v => field('title', v)} maxLength={80} />
 
             {/* Description */}
-            <Text style={[fmSt.label, { color: C.sub }]}>Description</Text>
+            <Text style={[fmSt.label, { color: C.sub }]}>{tx('providerBusiness.promotions.form.description')}</Text>
             <TextInput style={[fmSt.input, { height: 80, textAlignVertical: 'top', paddingTop: 12, backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-              placeholder="Tell clients what's included…" placeholderTextColor={C.sub}
+              placeholder={tx('providerBusiness.promotions.form.descriptionPlaceholder')} placeholderTextColor={C.sub}
               value={form.description} onChangeText={v => field('description', v)}
               multiline maxLength={200} />
 
             {/* Discount type */}
-            <Text style={[fmSt.label, { color: C.sub }]}>Discount Type</Text>
+            <Text style={[fmSt.label, { color: C.sub }]}>{tx('providerBusiness.promotions.form.discountType')}</Text>
             <View style={[fmSt.segRow, { backgroundColor: C.surface }]}>
               {(['text', 'percent', 'amount'] as const).map(t => (
                 <TouchableOpacity key={t} style={[fmSt.seg, form.discountType === t && [fmSt.segActive, { backgroundColor: C.accent }]]}
                   onPress={() => field('discountType', t)} activeOpacity={0.7}>
                   <Text style={[fmSt.segText, { color: form.discountType === t ? C.ice : C.sub }]}>
-                    {t === 'text' ? 'Custom' : t === 'percent' ? '% Off' : '£ Off'}
+                    {t === 'text' ? tx('providerBusiness.promotions.form.typeCustom') : t === 'percent' ? tx('providerBusiness.promotions.form.typePercent') : tx('providerBusiness.promotions.form.typeAmount')}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
             {form.discountType === 'text' && (
               <TextInput style={[fmSt.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-                placeholder='"20% OFF" or "Free Toner"'
+                placeholder={tx('providerBusiness.promotions.form.customPlaceholder')}
                 placeholderTextColor={C.sub} value={form.discountText}
                 onChangeText={v => field('discountText', v)} maxLength={40} />
             )}
             {form.discountType === 'percent' && (
               <TextInput style={[fmSt.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-                placeholder="e.g. 20" placeholderTextColor={C.sub}
+                placeholder={tx('providerBusiness.promotions.form.percentPlaceholder')} placeholderTextColor={C.sub}
                 value={form.discountPercent} onChangeText={v => field('discountPercent', v)} keyboardType="numeric" />
             )}
             {form.discountType === 'amount' && (
               <TextInput style={[fmSt.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-                placeholder="e.g. 15" placeholderTextColor={C.sub}
+                placeholder={tx('providerBusiness.promotions.form.amountPlaceholder')} placeholderTextColor={C.sub}
                 value={form.discountAmount} onChangeText={v => field('discountAmount', v)} keyboardType="numeric" />
             )}
 
             {/* Promo Code */}
-            <Text style={[fmSt.label, { color: C.sub }]}>Promo Code <Text style={fmSt.labelOptional}>(optional)</Text></Text>
+            <Text style={[fmSt.label, { color: C.sub }]}>{tx('providerBusiness.promotions.form.code')} <Text style={fmSt.labelOptional}>{tx('providerBusiness.promotions.form.optional')}</Text></Text>
             <View style={fmSt.codeRow}>
               <TextInput
                 style={[fmSt.input, { flex: 1, letterSpacing: 2, textTransform: 'uppercase', backgroundColor: C.card, borderColor: C.border, color: C.text }]}
-                placeholder="e.g. SUMMER20"
+                placeholder={tx('providerBusiness.promotions.form.codePlaceholder')}
                 placeholderTextColor={C.sub}
                 value={form.promoCode}
                 onChangeText={v => field('promoCode', v.toUpperCase())}
@@ -983,7 +991,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                 activeOpacity={0.7}
               >
                 <Ionicons name="refresh-outline" size={14} color={C.accent} />
-                <Text style={[fmSt.genBtnText, { color: C.accent }]}>Generate</Text>
+                <Text style={[fmSt.genBtnText, { color: C.accent }]}>{tx('providerBusiness.promotions.form.generate')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -993,19 +1001,19 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                 {/* Section header with count + All button on right */}
                 <View style={fmSt.serviceHeader}>
                   <View>
-                    <Text style={fmSt.label}>Applies to Services</Text>
+                    <Text style={fmSt.label}>{tx('providerBusiness.promotions.form.appliesTo')}</Text>
                     <Text style={fmSt.serviceSub}>
                       {form.serviceIds.length === 0
-                        ? 'Tap services to include in this promotion'
+                        ? tx('providerBusiness.promotions.form.servicesTap')
                         : form.serviceIds.length === services.length
-                        ? 'All services included'
-                        : `${form.serviceIds.length} of ${services.length} selected`}
+                        ? tx('providerBusiness.promotions.form.servicesAll')
+                        : tx('providerBusiness.promotions.form.servicesSome', { selected: form.serviceIds.length, total: services.length })}
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                     {form.serviceIds.length > 0 && (
                       <TouchableOpacity onPress={() => field('serviceIds', [])} activeOpacity={0.7}>
-                        <Text style={fmSt.clearAll}>Clear</Text>
+                        <Text style={fmSt.clearAll}>{tx('providerBusiness.promotions.form.clear')}</Text>
                       </TouchableOpacity>
                     )}
                     {form.serviceIds.length < services.length && (
@@ -1015,7 +1023,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                         activeOpacity={0.7}
                       >
                         <View style={fmSt.selectAllDot} />
-                        <Text style={fmSt.selectAllText}>All</Text>
+                        <Text style={fmSt.selectAllText}>{tx('providerBusiness.promotions.notify.all')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1045,7 +1053,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
             )}
 
             {/* Category */}
-            <Text style={[fmSt.label, { color: C.sub }]}>Service Category</Text>
+            <Text style={[fmSt.label, { color: C.sub }]}>{tx('providerBusiness.promotions.form.category')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
               {SERVICE_CATEGORIES.map(cat => (
                 <TouchableOpacity key={cat}
@@ -1057,10 +1065,10 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
             </ScrollView>
 
             {/* Dates */}
-            <Text style={[fmSt.label, { color: C.sub }]}>Promotion Dates *</Text>
+            <Text style={[fmSt.label, { color: C.sub }]}>{tx('providerBusiness.promotions.form.dates')}</Text>
             <View style={fmSt.datePickerRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[fmSt.datePickerLabel, { color: C.sub }]}>FROM</Text>
+                <Text style={[fmSt.datePickerLabel, { color: C.sub }]}>{tx('providerBusiness.promotions.form.from')}</Text>
                 <TouchableOpacity
                   style={[fmSt.datePickerBtn, { backgroundColor: C.card, borderColor: C.border }, showFromPicker && fmSt.datePickerBtnActive]}
                   onPress={() => { setShowFromPicker(v => !v); setShowUntilPicker(false); }}
@@ -1068,7 +1076,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                 >
                   <Ionicons name="calendar-outline" size={15} color={C.accent} />
                   <Text style={[fmSt.datePickerText, { color: C.text }]}>
-                    {fromDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {fromDate.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' })}
                   </Text>
                   <Ionicons name={showFromPicker ? 'chevron-up' : 'chevron-down'} size={12} color={C.sub} style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>
@@ -1077,7 +1085,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                 <Text style={[fmSt.dateSepText, { color: C.sub }]}>→</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[fmSt.datePickerLabel, { color: C.sub }]}>UNTIL</Text>
+                <Text style={[fmSt.datePickerLabel, { color: C.sub }]}>{tx('providerBusiness.promotions.form.until')}</Text>
                 <TouchableOpacity
                   style={[fmSt.datePickerBtn, { backgroundColor: C.card, borderColor: C.border }, showUntilPicker && fmSt.datePickerBtnActive]}
                   onPress={() => { setShowUntilPicker(v => !v); setShowFromPicker(false); }}
@@ -1085,7 +1093,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                 >
                   <Ionicons name="calendar-outline" size={15} color={C.accent} />
                   <Text style={[fmSt.datePickerText, { color: C.text }]}>
-                    {untilDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {untilDate.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' })}
                   </Text>
                   <Ionicons name={showUntilPicker ? 'chevron-up' : 'chevron-down'} size={12} color={C.sub} style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>
@@ -1108,7 +1116,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                   }}
                 />
                 <TouchableOpacity style={fmSt.calendarDoneBtn} onPress={() => setShowFromPicker(false)} activeOpacity={0.7}>
-                  <Text style={[fmSt.calendarDoneText, { color: C.accent }]}>Done</Text>
+                  <Text style={[fmSt.calendarDoneText, { color: C.accent }]}>{tx('common.done')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1127,7 +1135,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                   }}
                 />
                 <TouchableOpacity style={fmSt.calendarDoneBtn} onPress={() => setShowUntilPicker(false)} activeOpacity={0.7}>
-                  <Text style={[fmSt.calendarDoneText, { color: C.accent }]}>Done</Text>
+                  <Text style={[fmSt.calendarDoneText, { color: C.accent }]}>{tx('common.done')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1137,8 +1145,8 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
               <View style={fmSt.toggleLeft}>
                 <Ionicons name="toggle-outline" size={18} color={C.accent} />
                 <View>
-                  <Text style={[fmSt.toggleLabel, { color: C.text }]}>Active</Text>
-                  <Text style={[fmSt.toggleSub, { color: C.sub }]}>Visible to clients on the Offers screen</Text>
+                  <Text style={[fmSt.toggleLabel, { color: C.text }]}>{tx('providerBusiness.promotions.form.active')}</Text>
+                  <Text style={[fmSt.toggleSub, { color: C.sub }]}>{tx('providerBusiness.promotions.form.activeSub')}</Text>
                 </View>
               </View>
               <Switch value={form.isActive} onValueChange={v => field('isActive', v)}
@@ -1150,8 +1158,8 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
               <View style={fmSt.toggleLeft}>
                 <Ionicons name="alarm-outline" size={18} color={C.accent} />
                 <View>
-                  <Text style={[fmSt.toggleLabel, { color: C.text }]}>Schedule Notification</Text>
-                  <Text style={[fmSt.toggleSub, { color: C.sub }]}>Send to clients at a specific time</Text>
+                  <Text style={[fmSt.toggleLabel, { color: C.text }]}>{tx('providerBusiness.promotions.form.scheduleNotify')}</Text>
+                  <Text style={[fmSt.toggleSub, { color: C.sub }]}>{tx('providerBusiness.promotions.form.scheduleNotifySub')}</Text>
                 </View>
               </View>
               <Switch value={form.scheduleNotify} onValueChange={v => field('scheduleNotify', v)}
@@ -1160,7 +1168,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
 
             {form.scheduleNotify && (
               <>
-                <Text style={[fmSt.label, { marginTop: 14, color: C.sub }]}>Send At</Text>
+                <Text style={[fmSt.label, { marginTop: 14, color: C.sub }]}>{tx('providerBusiness.promotions.form.sendAt')}</Text>
                 <View style={fmSt.datePickerRow}>
                   <TouchableOpacity
                     style={[fmSt.datePickerBtn, { flex: 1, backgroundColor: C.card, borderColor: C.border }]}
@@ -1169,7 +1177,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                   >
                     <Ionicons name="calendar-outline" size={15} color={C.accent} />
                     <Text style={[fmSt.datePickerText, { color: C.text }]}>
-                      {schedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {schedAt.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' })}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -1224,7 +1232,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
               onPress={handleSave} activeOpacity={0.8} disabled={saving}>
               {saving
                 ? <ActivityIndicator color={C.ice} size="small" />
-                : <Text style={fmSt.saveBtnText}>{editing ? 'Save Changes' : 'Create Promotion'}</Text>
+                : <Text style={fmSt.saveBtnText}>{editing ? tx('common.saveChanges') : tx('providerBusiness.promotions.form.createPromotion')}</Text>
               }
             </TouchableOpacity>
           </ScrollView>
@@ -1363,6 +1371,7 @@ const toastSt = StyleSheet.create({
 
 export default function ProviderPromotionsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t, tp } = useTranslation();
   const P = isDarkMode ? CP_DARK : CP_LIGHT;
   const { showConfirm, DialogHost } = useAppDialog();
   const [promos, setPromos] = useState<DbPromotion[]>([]);
@@ -1434,11 +1443,11 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
       })();
     } catch (e: any) {
       if (generation === loadGenerationRef.current) setClientsLoading(false);
-      showToast(toUserMessage(e, 'Could not load promotions.', 'ProviderPromotionsScreen.load'));
+      showToast(toUserMessage(e, t('providerBusiness.promotions.err.load'), 'ProviderPromotionsScreen.load'));
     } finally {
       if (generation === loadGenerationRef.current) setLoading(false);
     }
-  }, [fadeAnim, showToast]);
+  }, [fadeAnim, showToast, t]);
 
   useFocusEffect(useCallback(() => {
     fadeAnim.setValue(0);
@@ -1456,23 +1465,23 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
     try {
       await togglePromotion(id, active);
     } catch (e: any) {
-      showToast(toUserMessage(e, 'Could not update that promotion.', 'ProviderPromotionsScreen.update'));
+      showToast(toUserMessage(e, t('providerBusiness.promotions.err.update'), 'ProviderPromotionsScreen.update'));
       setPromos(prev => prev.map(p => p.id === id ? { ...p, is_active: !active } : p));
     }
   }, [showToast]);
 
   const handleDelete = useCallback((id: string) => {
-    showConfirm('Delete Promotion', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    showConfirm(t('providerBusiness.promotions.delete.title'), t('providerBusiness.promotions.delete.body'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive', onPress: async () => {
+        text: t('common.delete'), style: 'destructive', onPress: async () => {
           setPromos(prev => prev.filter(p => p.id !== id));
           try { await deletePromotion(id); }
-          catch (e: any) { showToast(toUserMessage(e, 'Could not delete that promotion.', 'ProviderPromotionsScreen.delete')); load(); }
+          catch (e: any) { showToast(toUserMessage(e, t('providerBusiness.promotions.err.delete'), 'ProviderPromotionsScreen.delete')); load(); }
         },
       },
     ]);
-  }, [load, showConfirm, showToast]);
+  }, [load, showConfirm, showToast, t]);
 
   const handleSave = useCallback(async (input: UpsertPromotionInput) => {
     await upsertPromotion(input);
@@ -1522,17 +1531,17 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
       const newUntil = base.toISOString().substring(0, 10);
       try {
         await patchPromotion(p.id, { valid_until: newUntil, is_active: true });
-        showToast(`Extended by ${days} days`);
+        showToast(t('providerBusiness.promotions.extend.done', { days }));
         await load();
-      } catch (e: any) { showToast((e as Error).message ?? 'Could not extend'); }
+      } catch (e: any) { showToast((e as Error).message ?? t('providerBusiness.promotions.extend.failed')); }
     };
-    showConfirm('Extend Promotion', 'How long would you like to extend it?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: '+7 days',  onPress: () => extendBy(7)  },
-      { text: '+14 days', onPress: () => extendBy(14) },
-      { text: '+30 days', onPress: () => extendBy(30) },
+    showConfirm(t('providerBusiness.promotions.extend.title'), t('providerBusiness.promotions.extend.body'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('providerBusiness.promotions.extend.by', { days: 7 }),  onPress: () => extendBy(7)  },
+      { text: t('providerBusiness.promotions.extend.by', { days: 14 }), onPress: () => extendBy(14) },
+      { text: t('providerBusiness.promotions.extend.by', { days: 30 }), onPress: () => extendBy(30) },
     ]);
-  }, [load, showToast, showConfirm]);
+  }, [load, showToast, showConfirm, t]);
 
   const handleNotifySend = useCallback(async (audience: Audience, scheduledAt?: string) => {
     if (!notifyPromo) return;
@@ -1545,7 +1554,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
           : p
         ));
         setNotifyPromo(null);
-        showToast(`Notification scheduled`);
+        showToast(t('providerBusiness.promotions.notify.scheduled'));
       } else {
         const { sent } = await sendPromotionNotificationsToClients(notifyPromo, audience);
         await markScheduledNotifSent(notifyPromo.id);
@@ -1554,12 +1563,12 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
           : p
         ));
         setNotifyPromo(null);
-        showToast(`Sent to ${sent} client${sent !== 1 ? 's' : ''}`);
+        showToast(tp('providerBusiness.promotions.notify.sent', sent));
       }
     } catch (e: any) {
-      showToast(toUserMessage(e, 'Could not send that notification.', 'ProviderPromotionsScreen.notify'));
+      showToast(toUserMessage(e, t('providerBusiness.promotions.err.notify'), 'ProviderPromotionsScreen.notify'));
     }
-  }, [notifyPromo, showToast]);
+  }, [notifyPromo, showToast, t, tp]);
 
   const counts = { live: livePromos.length, upcoming: upcomingPromos.length, past: pastPromos.length };
 
@@ -1570,7 +1579,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
 
         {/* Header */}
         <View style={scSt.header}>
-          <Text style={[scSt.headerTitle, { color: P.text }]}>Promotions</Text>
+          <Text style={[scSt.headerTitle, { color: P.text }]}>{t('providerBusiness.promotions.title')}</Text>
           <View style={scSt.headerRight}>
             <TouchableOpacity
               style={[scSt.iconBtn, { backgroundColor: P.surface }]}
@@ -1591,7 +1600,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
 
         {/* Subtitle */}
         <Text style={[scSt.headerSub, { color: P.sub }]}>
-          {livePromos.length} live · {clientsLoading ? '…' : clients.length} clients
+          {clientsLoading ? t('providerBusiness.promotions.subtitle.loading', { live: livePromos.length }) : tp('providerBusiness.promotions.subtitle.clients', clients.length, { live: livePromos.length })}
         </Text>
 
         <PromoTabBar active={tab} onChange={setTab} counts={counts} P={P} />
@@ -1612,14 +1621,14 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
                   <Ionicons name="pricetag-outline" size={32} color={P.sub} />
                 </View>
                 <Text style={[scSt.emptyTitle, { color: P.text }]}>
-                  {tab === 'live' ? 'No live promotions' : tab === 'upcoming' ? 'Nothing scheduled' : 'No past promotions'}
+                  {tab === 'live' ? t('providerBusiness.promotions.empty.live') : tab === 'upcoming' ? t('providerBusiness.promotions.empty.upcoming') : t('providerBusiness.promotions.empty.past')}
                 </Text>
                 <Text style={[scSt.emptySub, { color: P.sub }]}>
                   {tab === 'live'
-                    ? 'Tap + to create your first promotion and reach your clients'
+                    ? t('providerBusiness.promotions.empty.liveSub')
                     : tab === 'upcoming'
-                    ? 'Schedule a future promotion by setting a future start date'
-                    : 'Expired and disabled promotions will appear here'}
+                    ? t('providerBusiness.promotions.empty.upcomingSub')
+                    : t('providerBusiness.promotions.empty.pastSub')}
                 </Text>
                 {tab === 'live' && (
                   <TouchableOpacity
@@ -1628,7 +1637,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="add" size={16} color={P.ice} />
-                    <Text style={[scSt.emptyBtnText, { color: P.ice }]}>Create Promotion</Text>
+                    <Text style={[scSt.emptyBtnText, { color: P.ice }]}>{t('providerBusiness.promotions.form.createPromotion')}</Text>
                   </TouchableOpacity>
                 )}
               </View>

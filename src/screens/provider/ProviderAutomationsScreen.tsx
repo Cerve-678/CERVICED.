@@ -23,6 +23,7 @@ import {
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { useTranslation } from '../../i18n';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C_DARK = {
@@ -171,6 +172,7 @@ function Toast({ msg, ok, C }: { msg: string; ok: boolean; C: typeof C_DARK }) {
 
 export default function ProviderAutomationsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t, tp } = useTranslation();
   const C = isDarkMode ? C_DARK : C_LIGHT;
 
   const [loading, setLoading]   = useState(true);
@@ -293,11 +295,11 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
       navigation.goBack();
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      showToast('Could not save — try again', false);
+      showToast(t('providerBusiness.automations.saveFailed'), false);
     } finally {
       setSaving(false);
     }
-  }, [d, providerId, navigation]);
+  }, [d, providerId, navigation, t]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
     setD(prev => ({ ...prev, [key]: val }));
@@ -307,7 +309,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
     setD(prev => ({
       ...prev,
       clientReminderTiming: prev.clientReminderTiming.includes(v)
-        ? prev.clientReminderTiming.filter(t => t !== v)
+        ? prev.clientReminderTiming.filter(x => x !== v)
         : [...prev.clientReminderTiming, v],
     }));
   }, []);
@@ -328,7 +330,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={24} color={C.text} />
         </TouchableOpacity>
-        <Text style={[st.headerTitle, { color: C.text }]}>Automations & Preferences</Text>
+        <Text style={[st.headerTitle, { color: C.text }]}>{t('providerBusiness.automations.title')}</Text>
         <TouchableOpacity
           style={[st.saveBtn, { backgroundColor: C.accent, opacity: saving ? 0.6 : 1 }]}
           onPress={handleSave}
@@ -336,7 +338,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         >
           {saving
             ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={st.saveBtnText}>Save</Text>
+            : <Text style={st.saveBtnText}>{t('common.save')}</Text>
           }
         </TouchableOpacity>
       </View>
@@ -347,25 +349,25 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         {/* ── WHAT CERVICED SENDS FOR YOU ─────────────────────────────── */}
         <SectionHeader
           icon="sparkles-outline"
-          label="WHAT CERVICED SENDS FOR YOU"
-          sub="These are automated messages the platform sends to your clients on your behalf. Toggle each on or off, and configure timing where applicable."
+          label={t('providerBusiness.automations.sendsTitle')}
+          sub={t('providerBusiness.automations.sendsSub')}
           C={C}
         />
 
         {/* Client appointment reminders */}
         <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, marginBottom: 8 }]}>
-          <Text style={[st.cardTitle, { color: C.text, marginBottom: 4 }]}>Appointment reminders to clients</Text>
+          <Text style={[st.cardTitle, { color: C.text, marginBottom: 4 }]}>{t('providerBusiness.automations.reminders')}</Text>
           <Text style={[st.cardDesc, { color: C.sub, marginBottom: 12 }]}>
-            Cerviced sends a push notification to clients at each selected interval before their appointment.
+            {t('providerBusiness.automations.remindersSub')}
           </Text>
           <View style={st.chipRow}>
             {([
-              { v: '1h',  l: '1 hr'   },
-              { v: '3h',  l: '3 hrs'  },
-              { v: '24h', l: '24 hrs' },
-              { v: '48h', l: '48 hrs' },
-              { v: '72h', l: '72 hrs' },
-              { v: '1w',  l: '1 week' },
+              { v: '1h',  l: tp('providerBusiness.automations.hoursShort', 1) },
+              { v: '3h',  l: tp('providerBusiness.automations.hoursShort', 3) },
+              { v: '24h', l: tp('providerBusiness.automations.hoursShort', 24) },
+              { v: '48h', l: tp('providerBusiness.automations.hoursShort', 48) },
+              { v: '72h', l: tp('providerBusiness.automations.hoursShort', 72) },
+              { v: '1w',  l: t('providerBusiness.automations.oneWeek') },
             ] as const).map(({ v, l }) => {
               const on = d.clientReminderTiming.includes(v);
               return (
@@ -380,27 +382,27 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             })}
           </View>
           {d.clientReminderTiming.length === 0 && (
-            <Text style={[st.hint, { color: C.sub }]}>No reminders selected — clients won't receive any automated reminders.</Text>
+            <Text style={[st.hint, { color: C.sub }]}>{t('providerBusiness.automations.noReminders')}</Text>
           )}
         </View>
 
         {/* Rebooking nudges */}
         <ChipSelect
-          label="Rebooking nudges"
+          label={t('providerBusiness.automations.rebooking')}
           options={[
-            { v: 'never', l: 'Never'    },
-            { v: '2',     l: '2 wks'   },
-            { v: '4',     l: '4 wks'   },
-            { v: '6',     l: '6 wks'   },
-            { v: '8',     l: '8 wks'   },
-            { v: '12',    l: '12 wks'  },
+            { v: 'never', l: t('providerBusiness.automations.never') },
+            { v: '2',     l: tp('providerBusiness.automations.weeksShort', 2) },
+            { v: '4',     l: tp('providerBusiness.automations.weeksShort', 4) },
+            { v: '6',     l: tp('providerBusiness.automations.weeksShort', 6) },
+            { v: '8',     l: tp('providerBusiness.automations.weeksShort', 8) },
+            { v: '12',    l: tp('providerBusiness.automations.weeksShort', 12) },
           ]}
           selected={d.rebookingNudgeWeeks}
           multi={false}
           onSelect={v => set('rebookingNudgeWeeks', v)}
           C={C}
         />
-        <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you. Your setting here is also their starting interval in Beauty Maintenance, and clients who already get Maintenance reminders for that service don't get this nudge as well.</Text>
+        <Text style={[st.chipHint, { color: C.sub }]}>{t('providerBusiness.automations.rebookingSub')}</Text>
 
         {/* Schedule release day — the day of the month clients who've
             turned on the notification bell on your profile get notified,
@@ -408,8 +410,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             rebooking nudges: this goes to anyone following you, not just
             clients with a completed booking. */}
         <AutoCard
-          title="Notify followers on schedule release day"
-          description="Clients who turned on notifications for your profile get a reminder to check your availability on this day each month."
+          title={t('providerBusiness.automations.releaseDay')}
+          description={t('providerBusiness.automations.releaseDaySub')}
           value={d.scheduleReleaseDay != null}
           onToggle={(v) => set('scheduleReleaseDay', v ? new Date().getDate() : null)}
           C={C}
@@ -421,39 +423,39 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             >
               <Ionicons name="calendar-outline" size={15} color={C.accent} />
               <Text style={[st.dateBtnText, { color: C.text }]}>
-                Day {d.scheduleReleaseDay} of every month
+                {t('providerBusiness.automations.releaseDayValue', { day: d.scheduleReleaseDay })}
               </Text>
             </TouchableOpacity>
           )}
         </AutoCard>
 
         <AutoCard
-          title="Review request"
-          description="2 hours after an appointment is marked completed, Cerviced asks the client to leave a star rating and review."
+          title={t('providerBusiness.automations.review')}
+          description={t('providerBusiness.automations.reviewSub')}
           value={d.autoReviewRequest}
           onToggle={v => set('autoReviewRequest', v)}
           C={C}
         />
 
         <AutoCard
-          title="Post-appointment check-in"
-          description="The day after a treatment, Cerviced sends a short follow-up asking the client how they're feeling."
+          title={t('providerBusiness.automations.checkIn')}
+          description={t('providerBusiness.automations.checkInSub')}
           value={d.postApptCheckIn}
           onToggle={v => set('postApptCheckIn', v)}
           C={C}
         />
 
         <AutoCard
-          title="Birthday greeting"
-          description="Cerviced sends a personalised birthday message to clients who have their birthday on file — a simple way to stay front of mind."
+          title={t('providerBusiness.automations.birthday')}
+          description={t('providerBusiness.automations.birthdaySub')}
           value={d.birthdayGreeting}
           onToggle={v => set('birthdayGreeting', v)}
           C={C}
         />
 
         <AutoCard
-          title="Daily booking recap"
-          description="Each morning, Cerviced sends you a push notification summarising your appointments for the day."
+          title={t('providerBusiness.automations.recap')}
+          description={t('providerBusiness.automations.recapSub')}
           value={d.newBookingRecap}
           onToggle={v => set('newBookingRecap', v)}
           C={C}
@@ -462,14 +464,14 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         {/* ── YOUR BUSINESS RULES ─────────────────────────────────────── */}
         <SectionHeader
           icon="settings-outline"
-          label="YOUR BUSINESS RULES"
-          sub="These settings control how bookings flow through your calendar and what clients experience when they book with you."
+          label={t('providerBusiness.automations.rulesTitle')}
+          sub={t('providerBusiness.automations.rulesSub')}
           C={C}
         />
 
         <AutoCard
-          title="Auto-confirm bookings"
-          description="New booking requests are confirmed instantly without manual approval. Best for providers with a fixed open schedule."
+          title={t('providerBusiness.automations.autoConfirm')}
+          description={t('providerBusiness.automations.autoConfirmSub')}
           value={d.autoConfirmBookings}
           onToggle={v => set('autoConfirmBookings', v)}
           C={C}
@@ -479,8 +481,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             alongside the payment-type preferences it belongs with. */}
 
         <AutoCard
-          title="Enable waitlist"
-          description="When your day is fully booked, clients can join a waitlist. Cerviced notifies them if a slot opens up."
+          title={t('providerBusiness.automations.waitlist')}
+          description={t('providerBusiness.automations.waitlistSub')}
           value={d.waitlistEnabled}
           onToggle={v => set('waitlistEnabled', v)}
           C={C}
@@ -488,8 +490,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         {d.waitlistEnabled && (
           <AutoCard
-            title="Auto-invite from waitlist"
-            description="When a booking is cancelled, automatically invite and schedule the next person in the queue."
+            title={t('providerBusiness.automations.autoInvite')}
+            description={t('providerBusiness.automations.autoInviteSub')}
             value={d.autoAcceptWaitlist}
             onToggle={v => set('autoAcceptWaitlist', v)}
             C={C}
@@ -505,13 +507,13 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         {/* Cancellation notice */}
         <ChipSelect
-          label="Cancellation notice required"
+          label={t('providerBusiness.automations.cancelNotice')}
           options={[
-            { v: '0',  l: 'Any time' },
-            { v: '12', l: '12 hrs'   },
-            { v: '24', l: '24 hrs'   },
-            { v: '48', l: '48 hrs'   },
-            { v: '72', l: '72 hrs'   },
+            { v: '0',  l: t('providerBusiness.automations.anyTime') },
+            { v: '12', l: tp('providerBusiness.automations.hoursShort', 12) },
+            { v: '24', l: tp('providerBusiness.automations.hoursShort', 24) },
+            { v: '48', l: tp('providerBusiness.automations.hoursShort', 48) },
+            { v: '72', l: tp('providerBusiness.automations.hoursShort', 72) },
           ]}
           selected={d.cancellationNoticeHours}
           multi={false}
@@ -519,14 +521,14 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           C={C}
         />
         <Text style={[st.chipHint, { color: C.sub }]}>
-          Clients who cancel within this window will be shown your cancellation policy.
+          {t('providerBusiness.automations.cancelNoticeSub')}
         </Text>
 
         {/* Info note */}
         <View style={[st.infoBox, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Ionicons name="information-circle-outline" size={15} color={C.sub} style={{ marginTop: 1 }} />
           <Text style={[st.infoText, { color: C.sub }]}>
-            Automated messages (reminders, nudges, review requests) are sent by Cerviced — not from your personal number or email. Rules such as buffer time and daily caps are applied automatically to every message we send on your behalf.
+            {t('providerBusiness.automations.infoNote')}
           </Text>
         </View>
       </ScrollView>
@@ -546,9 +548,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
               />
               <View style={[st.pickerSheet, { backgroundColor: C.surface }]}>
                 <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
-                  <Text style={[st.pickerLabel, { color: C.text }]}>Release Day</Text>
+                  <Text style={[st.pickerLabel, { color: C.text }]}>{t('providerBusiness.automations.releaseDayPicker')}</Text>
                   <TouchableOpacity onPress={() => setReleaseDayPickerVisible(false)}>
-                    <Text style={[st.pickerDone, { color: C.accentText }]}>Done</Text>
+                    <Text style={[st.pickerDone, { color: C.accentText }]}>{t('common.done')}</Text>
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker

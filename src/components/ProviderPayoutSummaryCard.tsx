@@ -16,6 +16,7 @@ import {
   type ProviderPayout,
 } from '../services/providerPaymentService';
 import { logger } from '../utils/logger';
+import { useTranslation, localeForLanguage } from '../i18n';
 
 export interface ProviderPayoutSummaryCardProps {
   cardBg: string;
@@ -40,7 +41,7 @@ const total = (rows: { amount: number; currency: string }[]): string => {
 };
 
 const arrival = (unixSeconds: number) =>
-  new Date(unixSeconds * 1000).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  new Date(unixSeconds * 1000).toLocaleDateString(localeForLanguage(), { weekday: 'short', day: 'numeric', month: 'short' });
 
 const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
   cardBg,
@@ -57,6 +58,7 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const sequence = useRef(0);
+  const { t, tp } = useTranslation();
 
   // Refreshed on every focus, but behind what's already shown — the
   // placeholder is for the very first load only, so returning to My Profile
@@ -95,15 +97,15 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
 
   let body: React.ReactNode;
   if (!loaded) {
-    body = <Text style={[styles.note, { color: subTextColor }]}>Checking your payouts…</Text>;
+    body = <Text style={[styles.note, { color: subTextColor }]}>{t('providerBusiness.payoutCard.checking')}</Text>;
   } else if (failed) {
-    body = <Text style={[styles.note, { color: subTextColor }]}>Payouts couldn't load. Tap to open Payments.</Text>;
+    body = <Text style={[styles.note, { color: subTextColor }]}>{t('providerBusiness.payoutCard.loadFailed')}</Text>;
   } else if (connected === false) {
     body = (
       <>
-        <Text style={[styles.headline, { color: textColor }]}>Set up payouts</Text>
+        <Text style={[styles.headline, { color: textColor }]}>{t('providerBusiness.payoutCard.setUp')}</Text>
         <Text style={[styles.note, { color: subTextColor }]}>
-          Connect a bank account through Stripe to get paid for online bookings.
+          {t('providerBusiness.payoutCard.setUpBody')}
         </Text>
       </>
     );
@@ -112,14 +114,14 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
       <>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: subTextColor }]}>IN STRIPE</Text>
+            <Text style={[styles.statLabel, { color: subTextColor }]}>{t('providerBusiness.payoutCard.inStripe')}</Text>
             <Text style={[styles.statValue, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>
               {finance ? total(finance.available) : '—'}
             </Text>
           </View>
           <View style={[styles.divider, { backgroundColor: borderColor }]} />
           <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: subTextColor }]}>HELD</Text>
+            <Text style={[styles.statLabel, { color: subTextColor }]}>{t('providerBusiness.payoutCard.held')}</Text>
             <Text style={[styles.statValue, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>
               {payouts ? heldTotal : '—'}
             </Text>
@@ -127,13 +129,13 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
         </View>
         <Text style={[styles.note, { color: subTextColor }]}>
           {nextPayout
-            ? `Next to your bank: ${money(nextPayout.amount, nextPayout.currency)}, expected ${arrival(nextPayout.arrivalDate)}`
+            ? t('providerBusiness.payoutCard.next', { amount: money(nextPayout.amount, nextPayout.currency), date: arrival(nextPayout.arrivalDate) })
             : held.length > 0
-              ? `${held.length} booking payment${held.length === 1 ? '' : 's'} release after the appointment.`
-              : 'No payout on its way right now.'}
+              ? tp('providerBusiness.payoutCard.heldRelease', held.length)
+              : t('providerBusiness.payoutCard.none')}
         </Text>
         {finance && !finance.livemode && (
-          <Text style={[styles.testMode, { color: subTextColor }]}>Test mode · no real money moves</Text>
+          <Text style={[styles.testMode, { color: subTextColor }]}>{t('providerBusiness.payoutCard.testMode')}</Text>
         )}
       </>
     );
@@ -144,16 +146,16 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
       onPress={handlePress}
       activeOpacity={0.85}
       accessibilityRole="button"
-      accessibilityLabel="Payouts. Open Payments."
+      accessibilityLabel={t('providerBusiness.payoutCard.a11y')}
     >
       <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
             <Ionicons name="wallet-outline" size={15} color={accentColor} />
-            <Text style={[styles.title, { color: textColor }]}>Payouts</Text>
+            <Text style={[styles.title, { color: textColor }]}>{t('providerBusiness.payoutCard.title')}</Text>
           </View>
           <View style={[styles.chip, { borderColor }]}>
-            <Text style={[styles.chipText, { color: accentColor }]}>VIEW</Text>
+            <Text style={[styles.chipText, { color: accentColor }]}>{t('providerBusiness.payoutCard.view')}</Text>
             <Ionicons name="chevron-forward" size={11} color={accentColor} />
           </View>
         </View>

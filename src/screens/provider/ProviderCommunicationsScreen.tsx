@@ -20,6 +20,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { toUserMessage } from '../../utils/userFacingError';
+import { useTranslation, type TranslationKey } from '../../i18n';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const CP_DARK = {
@@ -55,11 +56,11 @@ const CP = CP_DARK; // static fallback for StyleSheet.create
 
 type ContactMethod = 'in_app' | 'email' | 'whatsapp' | 'phone';
 
-const METHOD_META: Record<ContactMethod, { icon: string; label: string; description: string }> = {
-  in_app:   { icon: 'chatbubble-ellipses-outline', label: 'In-app messaging',  description: 'Booked clients chat with you inside Cerviced. Anyone browsing your profile can also start a general enquiry via Get In Touch' },
-  email:    { icon: 'mail-outline',                label: 'Email',              description: 'Clients can email you via your public contact email' },
-  whatsapp: { icon: 'logo-whatsapp',               label: 'WhatsApp',           description: 'Clients open a WhatsApp chat with your number' },
-  phone:    { icon: 'call-outline',                label: 'Phone call',         description: 'Clients can call your profile phone number' },
+const METHOD_META: Record<ContactMethod, { icon: string; label: TranslationKey; description: TranslationKey; missing?: TranslationKey }> = {
+  in_app:   { icon: 'chatbubble-ellipses-outline', label: 'providerBusiness.comms.method.inApp',    description: 'providerBusiness.comms.method.inAppSub' },
+  email:    { icon: 'mail-outline',                label: 'providerBusiness.comms.method.email',    description: 'providerBusiness.comms.method.emailSub',    missing: 'providerBusiness.comms.method.emailMissing' },
+  whatsapp: { icon: 'logo-whatsapp',               label: 'providerBusiness.comms.method.whatsapp', description: 'providerBusiness.comms.method.whatsappSub', missing: 'providerBusiness.comms.method.whatsappMissing' },
+  phone:    { icon: 'call-outline',                label: 'providerBusiness.comms.method.phone',    description: 'providerBusiness.comms.method.phoneSub',    missing: 'providerBusiness.comms.method.phoneMissing' },
 };
 
 const ALL_METHODS: ContactMethod[] = ['in_app', 'email', 'whatsapp', 'phone'];
@@ -92,6 +93,7 @@ const tSt = StyleSheet.create({
 
 export default function ProviderCommunicationsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -118,7 +120,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         setEnabled(new Set(methods));
         setWhatsappNumber((provider as any).whatsapp_number ?? '');
       } catch {
-        flash('Could not load contact preferences', 'error');
+        flash(t('providerBusiness.comms.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -153,9 +155,9 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
       (m === 'email' && !profileEmail) ||
       (m === 'phone' && !profilePhone)
     );
-    const firstMissing = missing[0];
-    if (firstMissing) {
-      flash(`Add your ${METHOD_META[firstMissing].label.toLowerCase()} details before switching it on`, 'error');
+    const firstMissingKey = missing[0] && METHOD_META[missing[0]].missing;
+    if (firstMissingKey) {
+      flash(t(firstMissingKey), 'error');
       return;
     }
 
@@ -168,7 +170,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'ProviderCommunicationsScreen.save'), 'error');
+      flash(toUserMessage(e, t('providerBusiness.comms.saveFailed'), 'ProviderCommunicationsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -191,7 +193,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         <KeyboardDismissView>
           {/* Header */}
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>Contact Preferences</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{t('providerBusiness.comms.title')}</Text>
             <TouchableOpacity style={[s.closeBtn, { backgroundColor: C.surface }]} onPress={() => navigation.goBack()}>
               <Ionicons name="close" size={22} color={C.sub} />
             </TouchableOpacity>
@@ -210,9 +212,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
               <Ionicons name="information-circle-outline" size={18} color={C.accent} />
               <Text style={[s.infoText, { color: C.sub }]}>
-                These are for clients who already have a booking with you — on
-                appointment day they see a Contact button in Booking Details with
-                these options. Enable at least one channel.
+                {t('providerBusiness.comms.bookedNote')}
               </Text>
             </View>
 
@@ -223,16 +223,13 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
               <Ionicons name="globe-outline" size={18} color={C.accent} />
               <Text style={[s.infoText, { color: C.sub }]}>
-                Not the same as your public contact details. Anyone browsing your
-                profile uses Get In Touch, which shows the phone, email, Instagram
-                and website you set in Business Profile → Contact — for general
-                enquiries, not booking admin.
+                {t('providerBusiness.comms.publicNote')}
               </Text>
             </View>
 
             {/* Contact method toggles */}
             <View style={[s.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Text style={[s.cardTitle, { color: C.text }]}>Booked-Client Contact Channels</Text>
+              <Text style={[s.cardTitle, { color: C.text }]}>{t('providerBusiness.comms.channels')}</Text>
               {ALL_METHODS.map((method, idx) => {
                 const meta = METHOD_META[method];
                 const isOn = enabled.has(method);
@@ -258,18 +255,18 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                       </View>
                       <View style={s.rowText}>
                         <View style={s.rowLabelRow}>
-                          <Text style={[s.rowLabel, { color: C.text }]}>{meta.label}</Text>
+                          <Text style={[s.rowLabel, { color: C.text }]}>{t(meta.label)}</Text>
                           {isLocked && (
                             <View style={[s.alwaysOnBadge, { backgroundColor: C.accent }]}>
-                              <Text style={[s.alwaysOnText, { color: C.ice }]}>Always on</Text>
+                              <Text style={[s.alwaysOnText, { color: C.ice }]}>{t('providerBusiness.comms.alwaysOn')}</Text>
                             </View>
                           )}
                         </View>
-                        <Text style={[s.rowDesc, { color: C.sub }]} numberOfLines={2}>{meta.description}</Text>
+                        <Text style={[s.rowDesc, { color: C.sub }]} numberOfLines={2}>{t(meta.description)}</Text>
                         {method !== 'in_app' && (
                           value
                             ? <Text style={[s.rowValue, { color: C.text }]} numberOfLines={1}>{value}</Text>
-                            : <Text style={s.rowWarn}>Not added yet</Text>
+                            : <Text style={s.rowWarn}>{t('providerBusiness.comms.notAdded')}</Text>
                         )}
                       </View>
                       <Switch
@@ -289,7 +286,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                 rows above show the real values; this is only for changing them. */}
             <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessInfo')} activeOpacity={0.7}>
               <Ionicons name="create-outline" size={16} color={C.accent} />
-              <Text style={[s.linkText, { color: C.text }]}>Edit these contact details</Text>
+              <Text style={[s.linkText, { color: C.text }]}>{t('providerBusiness.comms.editDetails')}</Text>
               <Ionicons name="chevron-forward" size={14} color={C.sub} />
             </TouchableOpacity>
 
@@ -301,7 +298,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             >
               {saving
                 ? <ActivityIndicator color={C.ice} size="small" />
-                : <Text style={[s.saveTxt, { color: C.ice }]}>Save Preferences</Text>
+                : <Text style={[s.saveTxt, { color: C.ice }]}>{t('providerBusiness.comms.save')}</Text>
               }
             </TouchableOpacity>
           </ScrollView>
