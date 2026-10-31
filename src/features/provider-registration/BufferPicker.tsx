@@ -1,6 +1,8 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from '../../i18n';
+import { optionText } from '../business-details/options';
 
 interface BufferOption {
   /** Minutes as a string, or '' for the nullable "no override" state. */
@@ -39,8 +41,9 @@ interface BufferPickerProps {
  * silently dropped — same handling DurationPicker gives a legacy duration.
  */
 export function BufferPicker({ value, onChange, options, accentColor = '#AF9197', styles }: BufferPickerProps) {
+  const { t } = useTranslation();
   const known = options.some(opt => opt.value === value);
-  const resolved = known ? options : [{ value, label: `${value} min` }, ...options];
+  const resolved = known ? options : [{ value, label: t('providerSetup.minutes', { minutes: value }) }, ...options];
   return (
     <View style={styles.chipGrid}>
       {resolved.map(option => {
@@ -54,7 +57,7 @@ export function BufferPicker({ value, onChange, options, accentColor = '#AF9197'
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
-            <Text style={[styles.durationChipText, active && styles.durationChipTextActive]}>{option.label}</Text>
+            <Text style={[styles.durationChipText, active && styles.durationChipTextActive]}>{optionText(option.label, t)}</Text>
           </TouchableOpacity>
         );
       })}

@@ -3,7 +3,8 @@ import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
-import { ordinalSuffix } from '../../utils/dateUtils';
+import { ordinalDay } from '../../utils/dateUtils';
+import { useTranslation } from '../../i18n';
 
 const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
 
@@ -47,6 +48,7 @@ export function ReleaseDayPicker({
   onClear,
   styles,
 }: ReleaseDayPickerProps) {
+  const { t } = useTranslation();
   return (
     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
       <View style={styles.releasePickerOverlay}>
@@ -54,14 +56,14 @@ export function ReleaseDayPicker({
         <View style={[styles.releasePickerSheet, { backgroundColor: cardColor, borderColor }]}>
           <View style={styles.releasePickerHeader}>
             <View>
-              <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING NOTIFICATIONS</Text>
-              <Text style={[styles.releasePickerTitle, { color: textColor }]}>Choose release day</Text>
+              <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>{t('providerSetup.releaseDay.eyebrow')}</Text>
+              <Text style={[styles.releasePickerTitle, { color: textColor }]}>{t('providerSetup.releaseDay.title')}</Text>
             </View>
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClose(); }} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel="Close release day picker">
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClose(); }} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel={t('providerSetup.releaseDay.closeA11y')}>
               <Ionicons name="close" size={20} color={textColor} />
             </TouchableOpacity>
           </View>
-          <Text style={[styles.releasePickerSubtext, { color: subColor }]}>Followers will be reminded when your next month of slots opens.</Text>
+          <Text style={[styles.releasePickerSubtext, { color: subColor }]}>{t('providerSetup.releaseDay.sub')}</Text>
           <Picker
             selectedValue={value}
             onValueChange={(day) => {
@@ -79,7 +81,7 @@ export function ReleaseDayPicker({
             style={Platform.OS === 'android' ? { color: textColor } : localStyles.wheel}
           >
             {DAYS.map(day => (
-              <Picker.Item key={day} label={`${ordinalSuffix(day)} of the month`} value={day} color={textColor} />
+              <Picker.Item key={day} label={t('providerSetup.releaseDay.ofMonth', { day: ordinalDay(day) })} value={day} color={textColor} />
             ))}
           </Picker>
           {allowClear && onClear && (
@@ -88,11 +90,11 @@ export function ReleaseDayPicker({
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClear(); onClose(); }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.releasePickerClearText, { color: subColor }]}>Don’t notify followers</Text>
+              <Text style={[styles.releasePickerClearText, { color: subColor }]}>{t('providerSetup.releaseDay.clear')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}>
-            <Text style={styles.releasePickerDoneText}>Done</Text>
+            <Text style={styles.releasePickerDoneText}>{t('common.done')}</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -1,3 +1,5 @@
+import type { TranslationKey } from '../../i18n/types';
+
 /**
  * Canonical order and copy for the public-profile editor.
  *
@@ -24,3 +26,13 @@ export type InfoRegSectionKey = InfoRegSection['key'];
 export function infoRegSectionIndex(key: InfoRegSectionKey): number {
   return INFO_REG_SECTIONS.findIndex(section => section.key === key);
 }
+
+/** Display copy for each section, in the app language (the English above is
+ *  the source and what the tests read). */
+export const INFO_REG_SECTION_TEXT: Readonly<Record<InfoRegSectionKey, { title: TranslationKey; short: TranslationKey }>> = {
+  identity: { title: 'providerSetup.section.identity.title', short: 'providerSetup.section.identity.short' },
+  about: { title: 'providerSetup.section.about.title', short: 'providerSetup.section.about.short' },
+  contact: { title: 'providerSetup.section.contact.title', short: 'providerSetup.section.contact.short' },
+  services: { title: 'providerSetup.section.services.title', short: 'providerSetup.section.services.short' },
+  policies: { title: 'providerSetup.section.policies.title', short: 'providerSetup.section.policies.short' },
+};

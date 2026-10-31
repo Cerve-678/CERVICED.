@@ -10,6 +10,7 @@ import {
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import type { ServiceImageDraft } from '../../services/providerRegistrationService';
+import { useTranslation } from '../../i18n';
 
 interface ServiceImageCarouselProps {
   images: ServiceImageDraft[];
@@ -50,6 +51,7 @@ export function ServiceImageCarousel({
   size = 80,
   styles,
 }: ServiceImageCarouselProps) {
+  const { t } = useTranslation();
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const pitch = size + GAP;
@@ -263,7 +265,7 @@ export function ServiceImageCarousel({
               </TouchableOpacity>
               {index === 0 && dragIndex == null && (
                 <View style={styles.coverBadge}>
-                  <Text style={styles.coverBadgeText}>Cover</Text>
+                  <Text style={styles.coverBadgeText}>{t('providerSetup.images.cover')}</Text>
                 </View>
               )}
               {dragIndex == null && (
@@ -276,7 +278,7 @@ export function ServiceImageCarousel({
                   activeOpacity={0.7}
                 >
                   <Text style={styles.fitToggleText}>
-                    {image.fit === 'cover' ? 'Show whole' : 'Fill frame'}
+                    {image.fit === 'cover' ? t('providerSetup.images.showWhole') : t('providerSetup.images.fillFrame')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -294,14 +296,12 @@ export function ServiceImageCarousel({
           activeOpacity={0.7}
         >
           <Text style={styles.addImageIcon}>+</Text>
-          <Text style={styles.addImageText}>Add</Text>
+          <Text style={styles.addImageText}>{t('providerSetup.images.add')}</Text>
         </TouchableOpacity>
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Tap a photo to crop it, or hold it to drag — the first one leads
-          your service. Use Show whole to keep every edge, or Fill frame for a
-          tighter crop.
+          {t('providerSetup.images.hint')}
         </Text>
       )}
       {images.length > 0 && (

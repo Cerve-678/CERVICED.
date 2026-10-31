@@ -30,6 +30,7 @@ import {
   uploadPublicStorageObject,
 } from './databaseService';
 import type { DbProvider, BusinessType, ProviderBookingMode } from '../types/database';
+import { tr } from '../i18n';
 import {
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
@@ -417,10 +418,10 @@ export async function geocodeAndValidateUkAddress(
 ): Promise<{ latitude: number; longitude: number }> {
   const trimmed = address.trim();
   if (!trimmed) {
-    throw new Error('Please enter your business address.');
+    throw new Error(tr('providerSetup.address.required'));
   }
   if (!UK_POSTCODE_PATTERN.test(trimmed)) {
-    throw new Error('Please include a valid UK postcode in your address.');
+    throw new Error(tr('providerSetup.address.postcode'));
   }
 
   // A picker selection gives us the exact coordinates that produced the
@@ -436,7 +437,7 @@ export async function geocodeAndValidateUkAddress(
       match = undefined;
     }
     if (!match) {
-      throw new Error("We couldn't find that address — please check it and try again.");
+      throw new Error(tr('providerSetup.address.notFound'));
     }
     latitude = match.latitude;
     longitude = match.longitude;
@@ -445,7 +446,7 @@ export async function geocodeAndValidateUkAddress(
     latitude < UK_BOUNDS.minLat || latitude > UK_BOUNDS.maxLat ||
     longitude < UK_BOUNDS.minLng || longitude > UK_BOUNDS.maxLng
   ) {
-    throw new Error("That address doesn't look like it's in the UK — please check it and try again.");
+    throw new Error(tr('providerSetup.address.notUk'));
   }
 
   return { latitude, longitude };
@@ -1087,7 +1088,7 @@ export async function saveProviderPolicies(userId: string, policies: Record<stri
   // let PoliciesScreen/PaymentsScreen fire their success haptic and navigate
   // back having saved nothing. Callers decide how to degrade — so throw.
   if (!saved) {
-    throw new Error('Could not find your provider profile to save these policies to.');
+    throw new Error(tr('providerSetup.address.noProfile'));
   }
   // Keep local copy in sync
   await AsyncStorage.setItem(`provider_policies_${userId}`, JSON.stringify(policies));
