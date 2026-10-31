@@ -87,6 +87,8 @@ export type NotificationType =
   | "refund_request_updated"
   /** A payout to the provider (or their own bank payout) failed; they may need to fix their account. */
   | "payout_failed"
+  /** One-off notice that Terms people already accepted have changed (send_terms_updated_notice). */
+  | "terms_updated"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"

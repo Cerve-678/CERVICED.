@@ -160,6 +160,13 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Terms changed (both hats) ────────────────────────────────────────────────
+  // Each hat's Profile tab stack has its own Terms screen.
+  if (type === 'terms_updated') {
+    navigateNested('Profile', 'Terms');
+    return;
+  }
+
   // ── Failed payout (provider-only) ────────────────────────────────────────────
   // The fix is on Payments (Stripe account, bank details), not on the booking.
   if (type === 'payout_failed') {
