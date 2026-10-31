@@ -22,13 +22,14 @@ const everything = {
 
 test('a link-only profile shows only plain policy text, no deposits, penalties or fees', () => {
   const rows = buildPolicyDisplayRows(everything, 24, { linkOnly: true });
-  expect(labels(rows)).toEqual(['Cancellation', 'Reschedule', 'Note', 'Refunds']);
+  expect(labels(rows)).toEqual(['Cancellation', 'Reschedule', 'Refunds']);
   expect(rows.find(r => r.label === 'Cancellation')?.value).toBe('48h notice');
+  expect(rows.find(r => r.label === 'Cancellation')?.notes).toEqual(['Message me to cancel']);
 });
 
 test('a link-only profile ignores the enforced notice column, which defaults to 24 for everyone', () => {
   const rows = buildPolicyDisplayRows({ cancelNote: 'Text me' }, 24, { linkOnly: true });
-  expect(labels(rows)).toEqual(['Note']);
+  expect(rows).toEqual([{ icon: 'time-outline', label: 'Cancellation', value: 'Text me' }]);
 });
 
 test('a full provider still sees every row', () => {

@@ -5376,6 +5376,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 >
                                   {row.value}
                                 </Text>
+                                {row.notes?.map((note) => (
+                                  <Text
+                                    key={note}
+                                    style={[styles.policyNote, { color: OP.sub }]}
+                                  >
+                                    {note}
+                                  </Text>
+                                ))}
                               </View>
                             </View>
                           ))}
@@ -6457,6 +6465,13 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     fontWeight: "700",
+  },
+  // The section's own note (and the no-show grace period) under its value.
+  policyNote: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 3,
   },
   // Floating circular button, bottom-right of the About/Policy card — opens
   // the provider's uploaded policy photo. Absolutely positioned so it stays
