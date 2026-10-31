@@ -366,6 +366,9 @@ export interface ConfirmedBooking {
    *  provider's cancellation window: the late-cancel policy then applies
    *  whenever it's cancelled (bookings.late_reschedule_from). */
   lateRescheduleFrom?: string | undefined;
+  /** Booked after that rule went live, so a late reschedule request would
+   *  mark it. Older bookings are never covered. */
+  lateRescheduleRuleApplies?: boolean | undefined;
   /** Who cancelled — stamped by the DB when the booking became cancelled. */
   cancelledBy?: 'client' | 'provider' | 'system' | undefined;
 

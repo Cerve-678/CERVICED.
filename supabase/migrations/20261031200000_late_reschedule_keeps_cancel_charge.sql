@@ -16,6 +16,13 @@
 -- Anyone who asks in good time is unaffected, and so is any reschedule the
 -- provider started.
 --
+-- Decided with the user 2026-10-31 (after the legal and security reviews):
+--   - Only bookings made after this is applied are covered. Older bookings
+--     were agreed under the old Terms. late_reschedule_rule_starts_at() holds
+--     the moment this file ran.
+--   - A later move the provider proposes, and the client accepts, clears the
+--     mark: the provider chose the new date.
+--
 -- What this adds:
 --   - booking_reschedule_requests.requested_inside_cancel_window: stamped by
 --     request_reschedule_own_booking at the moment the client asks, measured
@@ -23,10 +30,12 @@
 --   - bookings.late_reschedule_from: the start (UTC) of the appointment the
 --     client moved away from while inside its window. Set by
 --     confirm_reschedule_own_booking only when the request was the client's
---     and was stamped late. Sticky: a later reschedule never clears it, and
---     the earliest original start is kept.
---   - client_bookings exposes the new booking column so the client's cancel
---     sheet can warn. (authenticated already holds table-level SELECT on both
+--     and was stamped late. A later client reschedule keeps it (earliest
+--     original start wins); a later provider-proposed move clears it.
+--   - late_reschedule_rule_starts_at(): the moment this migration ran.
+--   - client_bookings exposes the new booking column, and
+--     late_reschedule_rule_applies (made on or after that moment), so the
+--     client's sheets warn only where the rule is real. (authenticated already holds table-level SELECT on both
 --     tables, so the column GRANTs below are belt-and-braces; RLS has no
 --     client INSERT/UPDATE policy on either, so only these SECURITY DEFINER
 --     functions ever write the new columns.)
@@ -89,7 +98,20 @@ ALTER TABLE public.bookings
 COMMENT ON COLUMN public.booking_reschedule_requests.requested_inside_cancel_window IS
   'True when the client asked to reschedule while already inside the provider''s cancellation window (UK time). Read by confirm_reschedule_own_booking.';
 COMMENT ON COLUMN public.bookings.late_reschedule_from IS
-  'Start (UTC) of the appointment the client moved away from while inside its cancellation window. When set, a client cancellation is settled as late. Never cleared.';
+  'Start (UTC) of the appointment the client moved away from while inside its cancellation window. When set, a client cancellation is settled as late. Cleared by a later provider-proposed move.';
+
+-- Fixed at the moment this file runs: bookings made before then were agreed
+-- under the old Terms and are never covered.
+DO $starts$
+BEGIN
+  EXECUTE format(
+    'CREATE OR REPLACE FUNCTION public.late_reschedule_rule_starts_at() RETURNS timestamptz '
+    'LANGUAGE sql IMMUTABLE SET search_path TO ''pg_catalog'' AS $f$ SELECT %L::timestamptz $f$',
+    now()
+  );
+END
+$starts$;
+GRANT EXECUTE ON FUNCTION public.late_reschedule_rule_starts_at() TO authenticated, service_role;
 
 GRANT SELECT (requested_inside_cancel_window) ON public.booking_reschedule_requests TO authenticated;
 GRANT SELECT (late_reschedule_from) ON public.bookings TO authenticated;
@@ -120,7 +142,7 @@ DECLARE
   v_inside_cancel_window BOOLEAN := false;
 BEGIN
   SELECT b.status, b.booking_date, b.booking_time, b.end_time, b.provider_id,
-         b.reschedule_count, b.last_rescheduled_at
+         b.reschedule_count, b.last_rescheduled_at, b.created_at
     INTO v_booking
     FROM public.bookings b
    WHERE b.id = p_booking_id
@@ -188,11 +210,13 @@ BEGIN
 
   -- Asking while already too late to cancel for free keeps the late-cancel
   -- rule on this booking once the move is confirmed (decided 2026-10-25).
+  -- Only bookings made since the rule started (decided 2026-10-31).
   -- Booking dates/times are UK wall-clock.
   SELECT public.cancel_notice_hours(p.cancellation_notice_hours, p.booking_policies)
     INTO v_cancel_hrs
     FROM public.providers p WHERE p.id = v_booking.provider_id;
-  IF COALESCE(v_cancel_hrs, 0) > 0 THEN
+  IF COALESCE(v_cancel_hrs, 0) > 0
+     AND v_booking.created_at >= public.late_reschedule_rule_starts_at() THEN
     v_cancel_hours_until := EXTRACT(EPOCH FROM (
       ((v_booking.booking_date + v_booking.booking_time)::timestamp AT TIME ZONE 'Europe/London') - NOW()
     )) / 3600;
@@ -256,6 +280,7 @@ DECLARE
   v_has_active_request BOOLEAN;
   v_old_start TIMESTAMPTZ;
   v_moved_late BOOLEAN;
+  v_by_provider BOOLEAN;
 BEGIN
   SELECT b.status,
          ((b.booking_date + b.booking_time)::timestamp AT TIME ZONE 'Europe/London')
@@ -282,10 +307,11 @@ BEGIN
     RAISE EXCEPTION 'No provider-approved reschedule request found for this booking';
   END IF;
 
-  -- Only the client's own late request carries the late-cancel rule; a move
-  -- the provider started never does.
-  SELECT COALESCE(bool_or(requested_by = 'user' AND requested_inside_cancel_window), false)
-    INTO v_moved_late
+  -- Only the client's own late request carries the late-cancel rule. A move
+  -- the provider proposed clears it: they chose the new date (2026-10-31).
+  SELECT COALESCE(bool_or(requested_by = 'user' AND requested_inside_cancel_window), false),
+         COALESCE(bool_or(requested_by = 'provider'), false)
+    INTO v_moved_late, v_by_provider
     FROM public.booking_reschedule_requests
    WHERE booking_id = p_booking_id AND status = 'provider_responded';
 
@@ -300,6 +326,7 @@ BEGIN
          last_rescheduled_at = NOW(),
          late_reschedule_from = CASE
            WHEN v_moved_late THEN LEAST(COALESCE(late_reschedule_from, v_old_start), v_old_start)
+           WHEN v_by_provider THEN NULL
            ELSE late_reschedule_from
          END
    WHERE id = p_booking_id;
@@ -322,6 +349,7 @@ DECLARE
   v_found BOOLEAN;
   v_old_start TIMESTAMPTZ;
   v_moved_late BOOLEAN;
+  v_by_provider BOOLEAN;
 BEGIN
   IF jsonb_array_length(p_selections) = 0 THEN
     RAISE EXCEPTION 'No selections supplied';
@@ -352,10 +380,12 @@ BEGIN
     v_booking_id := (v_selection->>'booking_id')::UUID;
 
     -- Same rule as confirm_reschedule_own_booking: only the client's own
-    -- request, made inside the cancellation window, carries the late-cancel rule.
+    -- request, made inside the cancellation window, carries the late-cancel
+    -- rule, and a provider-proposed move clears it.
     SELECT ((b.booking_date + b.booking_time)::timestamp AT TIME ZONE 'Europe/London'),
-           COALESCE(r.requested_by = 'user' AND r.requested_inside_cancel_window, false)
-      INTO v_old_start, v_moved_late
+           COALESCE(r.requested_by = 'user' AND r.requested_inside_cancel_window, false),
+           COALESCE(r.requested_by = 'provider', false)
+      INTO v_old_start, v_moved_late, v_by_provider
       FROM public.bookings b
       JOIN public.booking_reschedule_requests r ON r.booking_id = b.id
      WHERE b.id = v_booking_id;
@@ -368,6 +398,7 @@ BEGIN
            last_rescheduled_at = NOW(),
            late_reschedule_from = CASE
              WHEN v_moved_late THEN LEAST(COALESCE(late_reschedule_from, v_old_start), v_old_start)
+             WHEN v_by_provider THEN NULL
              ELSE late_reschedule_from
            END
      WHERE id = v_booking_id;
@@ -561,7 +592,8 @@ CREATE OR REPLACE VIEW public.client_bookings WITH (security_invoker = true) AS
     b.refunded_amount,
     b.cancelled_by,
     b.policy_retained_amount,
-    b.late_reschedule_from
+    b.late_reschedule_from,
+    (b.created_at >= late_reschedule_rule_starts_at()) AS late_reschedule_rule_applies
    FROM ((bookings b
      LEFT JOIN providers p ON ((p.id = b.provider_id)))
      LEFT JOIN booking_client_addresses ca ON ((ca.booking_id = b.id)))

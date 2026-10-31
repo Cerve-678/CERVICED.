@@ -670,9 +670,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         }
       }
     }
-    // Same measurement request_reschedule_own_booking stamps on the request.
+    // Same measurement request_reschedule_own_booking stamps on the request,
+    // which only covers bookings made since the rule went live.
     const noticeHrs = cancellationNoticeHrs || (await metadataRef.current)?.cancellationNoticeHours || 0;
-    if (noticeHrs > 0 && !booking.lateRescheduleFrom && booking.bookingDate && booking.bookingTime) {
+    if (noticeHrs > 0 && booking.lateRescheduleRuleApplies && !booking.lateRescheduleFrom && booking.bookingDate && booking.bookingTime) {
       const start = createBookingDateTime(booking.bookingDate, booking.bookingTime);
       if ((start.getTime() - Date.now()) / 3_600_000 < noticeHrs) {
         setLateRescheduleNoticeHrs(noticeHrs);

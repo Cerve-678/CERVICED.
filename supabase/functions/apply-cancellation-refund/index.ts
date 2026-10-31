@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
     const hoursUntil = Number.isFinite(apptMs) && Number.isFinite(cancelledMs) ? (apptMs - cancelledMs) / 3_600_000 : 0;
     // A client who asked to move this booking while already inside the window
     // stays inside it (decided 2026-10-25): stamped by
-    // confirm_reschedule_own_booking, never cleared.
+    // confirm_reschedule_own_booking; only a later provider-proposed move clears it.
     const movedLate = hours > 0 && !!booking.late_reschedule_from;
     const isLateCancel = movedLate || (hours > 0 && hoursUntil >= 0 && hoursUntil < hours);
 

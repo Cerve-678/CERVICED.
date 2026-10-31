@@ -54,7 +54,13 @@ describe('rescheduling inside the cancellation window', () => {
     // Both confirm paths stamp it, so a group booking can't be moved around it.
     expect(sql.match(/late_reschedule_from = CASE/g)).toHaveLength(2);
     expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.confirm_group_reschedule/);
+  });
+
+  it('covers only bookings made after the rule went live, and lets a provider-proposed move clear it', () => {
+    expect(sql).toMatch(/v_booking\.created_at >= public\.late_reschedule_rule_starts_at\(\)/);
+    expect(sql.match(/WHEN v_by_provider THEN NULL/g)).toHaveLength(2);
+    expect(sql).toMatch(/AS late_reschedule_rule_applies/);
     expect(sql).toMatch(/GRANT SELECT \(late_reschedule_from\) ON public\.bookings TO authenticated/);
-    expect(sql).toMatch(/b\.late_reschedule_from\s+FROM/);
+    expect(sql).toMatch(/b\.late_reschedule_from,\s+\(b\.created_at/);
   });
 });

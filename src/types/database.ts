@@ -684,6 +684,8 @@ export interface DbBooking {
   /** Start of the appointment the client moved away from while already
    *  inside its cancellation window (migration 20261031200000). */
   late_reschedule_from?: string | null;
+  /** client_bookings only: booked after that rule went live, so it applies. */
+  late_reschedule_rule_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;
