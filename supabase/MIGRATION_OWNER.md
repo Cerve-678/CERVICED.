@@ -62,6 +62,13 @@ Frontier after: **20261025212000**. Still unapplied and now below it: `202610251
 |---|---|---|
 | 20261029120000 | `provider_debt_notices_and_fee_recovery` | **APPLIED 2026-10-30** by the user (SQL editor; the file's own INSERT records the version). Verified live: version recorded and now the frontier; `booking_fee_charges.deducted_pence` + `release_claimed_at`; `provider_shortfall_recoveries.fee_charge_id` with `payout_id` nullable and the one-target CHECK + per-fee UNIQUE; `notifications_type_check` has 54 types (rebuilt from the live list at apply time, `tip_received` and `payout_failed` kept); three triggers; nine functions; `apply_provider_shortfalls` calls the shared `take_provider_shortfalls`; none executable by anon/authenticated, `apply_/release_fee_payout_shortfalls` granted to service_role. Frontier at authoring: `20261025212000` (re-checked 2026-10-30: `20261026120000`). Edge functions `release-payouts`, `booking-fee`, `stripe-webhook` still to deploy, after #169 and #181 merge. |
 
+### Applied 2026-10-29 (a moved booking moves its payout)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261025140000 | `reschedule_moves_payout_release` | **APPLIED 2026-10-29** by the user (SQL editor; the file's own INSERT records the version). Verified live: version recorded and now the frontier, trigger `after_booking_move_held_payout` on `bookings` (AFTER UPDATE OF booking_date, booking_time, end_time, only when they change), `move_held_payout_with_booking()` SECURITY DEFINER with `search_path=public, pg_temp`, `authenticated` cannot execute it, the one held payout unchanged. Frontier at authoring: `20261025130000` (first written as 20261022100000, renumbered). Adds the function + trigger only; redefines nothing. Shifts a held, unclaimed payout's `release_after` by as much as the appointment moved, either way. |
+
+
 ### Applied 2026-10-21 (daily "people saved you" count)
 
 | Authored version | Name | Status |
