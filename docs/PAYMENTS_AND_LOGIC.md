@@ -58,8 +58,8 @@ CERVICED never sees or stores card numbers.
 | Who | Pays | Receives |
 |---|---|---|
 | Client | The service price (or a deposit) **plus** CERVICED's service fee | Refunds, when they're owed |
-| Provider | Nothing to CERVICED. Stripe's card fee comes out of late/no-show fees and tips only | The service price (or deposit), late/no-show fees, tips |
-| CERVICED | Stripe's processing costs on bookings, and any losses it can't recover | The service fee |
+| Provider | Nothing to CERVICED. Stripe's card fee comes out of late/no-show fees only | The service price (or deposit), late/no-show fees, the whole of every tip |
+| CERVICED | Stripe's processing costs on bookings and tips, and any losses it can't recover | The service fee |
 
 The provider never pays the service fee and never sees it.
 
@@ -327,18 +327,26 @@ a penalty (LEGAL-COMPLIANCE-NOTES §17).
 
 | Rule | Detail |
 |---|---|
-| When | After a **completed** appointment. One tip per booking |
+| When | After a **completed** appointment, until **48 hours** after it ends (UK time). After that the app shows "Tip closed" and the server refuses. One tip per booking |
 | Amount | £1 to £500 |
 | How | Card only, through the app |
 | The provider | Must have a working Stripe account; otherwise tipping isn't offered |
-| The provider receives | The tip **minus Stripe's actual card fee**, held 24 hours, then sent. If Stripe's fee can't be read, the payout waits rather than guessing |
-| CERVICED | Takes nothing |
-| Refunds | There's no in-app tip refund |
+| The provider receives | The **whole tip**, held 24 hours (not their chosen payout hold), then sent |
+| CERVICED | Takes nothing, and **pays Stripe's card fee** on the tip (about 1.5% + 20p on a UK card). The fee is recorded in `booking_tips.stripe_fee_pence` for CERVICED's books |
+| Refunds | **Non-refundable.** The client Terms and the tip sheet say so, and no refund path touches `booking_tips` |
+| Tip notice | The database writes a `tip_received` notification (trigger `on_booking_tip_succeeded`, live). The app can't show or push it until PR #163 merges and `send-push-notification` is redeployed |
 
-**Changing, not yet live:** PR #156 makes CERVICED pay the card fee (so the
-provider gets 100%) and adds a 48-hour tipping window. PR #163 tells the
-provider when they've been tipped. Until those merge and deploy, the table
-above is what happens.
+- **Changing the amount** before paying updates or replaces the open payment,
+  so an old payment sheet can never charge the old amount.
+- The app says "paid" only once the tip is recorded; until then it says
+  "processing" and the Stripe webhook finishes it.
+- The payout never waits on Stripe's fee: the provider's amount is the tip
+  itself, so it's held from the moment the tip is recorded.
+
+**Gaps:** a client can still dispute a tip with their bank. A chargeback
+after the payout lands on CERVICED and isn't taken back from the provider. A
+disputed tip still on hold is skipped rather than marked reversed. Providers
+can't see a list of their tips in the app yet (PR #159).
 
 ### 2.7 Chargebacks (bank disputes)
 
@@ -734,7 +742,7 @@ Ranked, most important first.
 | 6 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
 | 7 | **Refund requests have no deadline** for the provider | The client waits indefinitely and the provider's payout stays held | Decide a deadline, e.g. pass it to CERVICED automatically after a set number of days |
 | 8 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
-| 9 | **Tips:** the provider pays the card fee and there's no tipping window (PRs #156 and #163 open) | Differs from the intended model | Merge and deploy #156 and #163 |
+| 9 | **Tip chargebacks land on CERVICED**, and providers can't see their tips in the app (PR #159) | Small losses; provider confusion | Decide whether to take a lost tip dispute back from the provider; merge #159 |
 | 10 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |
 | 11 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 12 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
@@ -760,7 +768,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 19 Oct | A fee the card can't pay becomes a 7-day payment request, with up to 3 automatic retries on declines | A fair chance to pay before it lapses |
 | 19 Oct | A saved card can't be removed until 24 hours after its appointment | It may be needed for a fee |
 | 21 Oct | Failed payouts are retried after about 1, 2 and 4 days, then wait for a person | Most failures are temporary |
-| 21 Oct | Tips are real money; the provider pays the card fee (changing with #156) | First version |
+| 21 Oct | Tips are real money. The provider gets 100%, CERVICED pays the card fee, tipping closes 48 hours after the appointment, tips are non-refundable | A tip is a gift to the provider; CERVICED shouldn't profit from it or shrink it |
 | 22 Oct | A moved booking moves its payout, earlier or later | Never pay before the work is done |
 | 25 Oct | Rescheduling inside the cancellation window keeps the late-cancel rule | Closes a loophole (not built yet) |
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |

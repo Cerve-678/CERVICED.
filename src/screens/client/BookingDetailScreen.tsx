@@ -66,6 +66,7 @@ import { formatBookingDisplayDate } from '../../features/bookings/datePresentati
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
+import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 
 const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -291,13 +292,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         setHasRated(true);
         setRatedBookings(prev => new Set(prev).add(bookingId));
       })
-      .catch(() => {});
+      // The buttons just stay in their default state; the server still blocks a second review or tip.
+      .catch(err => logger.warn('[BookingDetail] review state failed to load:', err));
     getBookingTip(bookingId)
       .then(tip => {
         if (cancelled || tip == null || tip <= 0) return;
         setTippedBookings(prev => new Set(prev).add(bookingId));
       })
-      .catch(() => {});
+      .catch(err => logger.warn('[BookingDetail] tip state failed to load:', err));
     return () => { cancelled = true; };
   }, [bookingId]);
 
@@ -821,10 +823,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         if (paymentError.code === 'Canceled') return;
         throw new Error(paymentError.message || 'Your tip did not go through.');
       }
-      await confirmBookingTipPayment(sheet.tipId);
-      setTippedBookings(prev => new Set(prev).add(booking.id));
+      const tipStatus = await confirmBookingTipPayment(sheet.tipId);
+      if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(booking.id));
       setShowTipModal(false);
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been paid to ${booking.providerName}.`);
+      setSuccessMessage(tipStatus === 'succeeded'
+        ? `Your £${tipAmount.toFixed(2)} tip has been paid to ${booking.providerName}.`
+        : `Your £${tipAmount.toFixed(2)} tip for ${booking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -880,6 +884,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const payment = calculateBookingPaymentBreakdown(booking);
   const hasBeenRated = ratedBookings.has(booking.id);
   const hasBeenTipped = tippedBookings.has(booking.id);
+  // Tipping closes 48 hours after the appointment (the server enforces it too).
+  const tipClosed = !hasBeenTipped && !isTipWindowOpen(booking.bookingDate, booking.endTime || booking.bookingTime);
   const isUpcoming = booking.status === BookingStatus.UPCOMING && !booking.isPendingReschedule;
   const isCompleted = booking.status === BookingStatus.COMPLETED;
   const isPending = booking.status === BookingStatus.PENDING;
@@ -1467,12 +1473,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[st.mapActionBtn, { backgroundColor: '#4CAF5050', borderColor: '#2b6a2eff' }, hasBeenTipped && st.mapActionBtnDisabled, hasBeenTipped && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
-                  disabled={hasBeenTipped}
+                  style={[st.mapActionBtn, { backgroundColor: '#4CAF5050', borderColor: '#2b6a2eff' }, (hasBeenTipped || tipClosed) && st.mapActionBtnDisabled, (hasBeenTipped || tipClosed) && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
+                  disabled={hasBeenTipped || tipClosed}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowTipModal(true); }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
+                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : tipClosed ? 'Tip closed' : 'Tip'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[st.mapActionBtn, { backgroundColor: '#f28f0c58', borderColor: '#b9550dff' }, rebookBusy && st.mapActionBtnDisabled]}
@@ -1913,7 +1919,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 <Text style={[st.sheetTitle, { color: C.text }]}>Leave a Tip</Text>
-                <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}</Text>
+                <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}. It's paid by card and all of it goes to them: CERVICED covers the card fee. You can tip for 48 hours after your appointment. Tips can't be refunded.</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
                   {[5, 10, 15, 20].map(amt => (
                     <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); setTipAmount(amt); }} activeOpacity={0.7}>

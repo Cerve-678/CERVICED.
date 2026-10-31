@@ -439,7 +439,7 @@ async function releaseFeePayouts() {
 }
 
 // Tips follow the same 24-hour hold as fee payouts. The provider receives the
-// client-paid amount less Stripe's actual fee (never a guessed percentage).
+// whole tip; CERVICED covers Stripe's fee out of its own balance.
 async function releaseTipPayouts() {
   const counts = { transferred: 0, cancelled: 0, failed: 0, skipped: 0, considered: 0 };
   const { data: due, error } = await admin.from('booking_tips')

@@ -65,6 +65,8 @@ import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
+import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
+export type { BookingReviewState } from "../features/bookings/reviewState";
 import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
@@ -4550,22 +4552,20 @@ export async function submitReview(review: {
 export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
   // maybeSingle, not single: "no review yet" is the normal case and single()
   // treats it as a PGRST116 error. This is called on every booking-detail mount.
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("reviews")
     .select("id")
     .eq("booking_id", bookingId)
     .maybeSingle();
 
+  // A failed read must not look like "not reviewed yet": that re-shows Rate.
+  if (error) throw error;
   return !!data;
 }
 
-export type BookingReviewState = {
-  bookingId: string;
-  tipAmount: number | null;
-};
-
 /**
- * Review state for a set of bookings, fetched together for the Bookings list.
+ * Review and tip state for a set of bookings, fetched together for the
+ * Bookings list.
  *
  * The list used to initialise its rated/tipped buttons from empty component
  * state on every mount. The database rows existed, but the next visit showed
@@ -4580,68 +4580,33 @@ export async function getBookingReviewStates(
   if (ids.length === 0) return [];
 
   const [{ data: reviews, error: reviewError }, { data: tips, error: tipError }] = await Promise.all([
-    supabase.from("reviews").select("booking_id, tip_amount").in("booking_id", ids),
-    supabase.from("booking_tips").select("booking_id, amount_pence").in("booking_id", ids).eq("status", "succeeded"),
+    supabase.from("reviews").select("booking_id").in("booking_id", ids),
+    supabase.from("booking_tips").select("booking_id").in("booking_id", ids).eq("status", "succeeded"),
   ]);
   if (reviewError) throw reviewError;
   if (tipError) throw tipError;
-  const states = (reviews ?? []).map((row: { booking_id: string; tip_amount: number | null }) => ({
-    bookingId: row.booking_id,
-    tipAmount: row.tip_amount == null ? null : Number(row.tip_amount),
-  }));
-  for (const tip of tips ?? []) {
-    const row = tip as { booking_id: string; amount_pence: number };
-    const existing = states.find(state => state.bookingId === row.booking_id);
-    if (existing) existing.tipAmount = Number(row.amount_pence) / 100;
-    else states.push({ bookingId: row.booking_id, tipAmount: Number(row.amount_pence) / 100 });
-  }
-  return states;
+  return mergeBookingReviewStates(
+    (reviews ?? []).map((row: { booking_id: string }) => row.booking_id),
+    (tips ?? []).map((row: { booking_id: string }) => row.booking_id),
+  );
 }
 
-/** The tip recorded against a booking, or null when there's no review/tip yet. */
+/**
+ * The tip actually paid for a booking, or null when there isn't one.
+ *
+ * Only booking_tips counts. reviews.tip_amount is the old recorded-only
+ * amount (no money moved, and the client could write any value to it), so it
+ * must not make a booking read as tipped.
+ */
 export async function getBookingTip(bookingId: string): Promise<number | null> {
-  const { data: paidTip, error: tipError } = await supabase
+  const { data, error } = await supabase
     .from("booking_tips")
     .select("amount_pence")
     .eq("booking_id", bookingId)
     .eq("status", "succeeded")
     .maybeSingle();
-  if (tipError) throw tipError;
-  if (paidTip) return Number((paidTip as { amount_pence: number }).amount_pence) / 100;
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("tip_amount")
-    .eq("booking_id", bookingId)
-    .maybeSingle();
   if (error) throw error;
-  const tip = (data as { tip_amount?: number | null } | null)?.tip_amount;
-  return tip == null ? null : Number(tip);
-}
-
-/**
- * Record a tip against a booking's review.
- *
- * Tips live on the reviews row (reviews.tip_amount) — that table has
- * UNIQUE(booking_id) and a NOT NULL rating, so a tip cannot exist without a
- * review. Returns false when there is no review to attach to, so the caller can
- * ask the client to rate first rather than dropping the tip silently (which is
- * what the UI did before: it only ever set local state).
- *
- * NOTE: this records the AMOUNT only. No payment provider is wired up for tips,
- * so no money moves — the copy shown to the client must not claim otherwise.
- */
-export async function setBookingTip(
-  bookingId: string,
-  tipAmount: number,
-): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("reviews")
-    .update({ tip_amount: tipAmount })
-    .eq("booking_id", bookingId)
-    .select("id");
-
-  if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  return data ? Number((data as { amount_pence: number }).amount_pence) / 100 : null;
 }
 
 export interface BookingTipPaymentSheet {
@@ -4670,9 +4635,12 @@ export async function startBookingTipPayment(bookingId: string, amountPence: num
 }
 
 /** The webhook is authoritative; this closes the normal app path promptly. */
-export async function confirmBookingTipPayment(tipId: string): Promise<void> {
+export async function confirmBookingTipPayment(tipId: string): Promise<'succeeded' | 'processing'> {
   const { data, error } = await supabase.functions.invoke('booking-tip', { body: { action: 'confirm', tipId } });
   if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your tip is processing. Please check again shortly.');
+  // 'processing' = Stripe has it but it isn't recorded yet (the webhook will
+  // finish it). Only 'succeeded' may be shown to the client as paid.
+  return data?.status === 'succeeded' ? 'succeeded' : 'processing';
 }
 
 // ─────────────────────────────────────────────────────────
