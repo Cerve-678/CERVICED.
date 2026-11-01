@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FieldRow, FormCard, ScreenTitle, useFieldInputStyle } from '../../components/signup/FormKit';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { toUserMessage } from '../../utils/userFacingError';
 
 type Props = StackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
@@ -44,8 +45,12 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     try {
       await sendPasswordReset(trimmed);
       navigation.navigate('ResetPasswordOTP', { email: trimmed });
-    } catch {
-      Alert.alert('Error', "We couldn't send a reset email. Please check your email address and try again.");
+    } catch (error) {
+      Alert.alert('Could not send reset code', toUserMessage(
+        error,
+        "We couldn't send a reset email. Please check your email address and try again.",
+        'ForgotPasswordScreen.sendPasswordReset',
+      ));
     } finally {
       setLoading(false);
     }
@@ -55,7 +60,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <KeyboardDismissView>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]}>

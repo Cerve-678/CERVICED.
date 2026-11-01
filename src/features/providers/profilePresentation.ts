@@ -48,7 +48,7 @@ export function hasProviderPolicyInfo(provider: ProviderProfileData): boolean {
   const policy = provider.bookingPolicies;
   if (!policy) return false;
   return (
-    buildPolicyDisplayRows(policy, provider.cancellationNoticeHours).length > 0 ||
+    buildPolicyDisplayRows(policy, provider.cancellationNoticeHours, { linkOnly: provider.isLinkOnly }).length > 0 ||
     Boolean(policy.policyImageUrl)
   );
 }

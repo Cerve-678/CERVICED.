@@ -129,9 +129,16 @@ raising with counsel if the assistant's framing is ever questioned.
 `CartScreen.tsx`'s `PaymentModal` collects raw card number/expiry/CVC directly
 into component state via a custom form — this is not a PCI-DSS-compliant flow
 (card data should be tokenized by a processor like Stripe/Adyen and never
-touch app-controlled state in the clear). Per existing project notes, no real
-payment provider is wired up yet and tips record an amount with no money
-actually moving. Before this handles real transactions: integrate a proper
+touch app-controlled state in the clear). (Update 21 Oct 2026: bookings,
+PayPal and tips now go through Stripe in test mode — Stripe's CardForm /
+PaymentSheet, no raw card fields in app state. Tips became a real Stripe card
+payment on 21 Oct, see docs/PAYMENTS_AND_LOGIC.md §6a. Tips are non-refundable,
+go to the provider in full (CERVICED covers the card fee) and can only be
+left for 48 hours after the appointment (user decisions 21 Oct; Terms §9,
+§31 and the tip sheet say so). Open on tips: no
+chargeback path exists for one, and §31's "money reversed after you've been
+paid is taken back" isn't true for tips yet. The original wording below predates all of that.) Before
+this handles real transactions: integrate a proper
 processor, remove raw card-field collection from app state entirely, and make
 sure marketing/T&Cs copy doesn't imply a payment guarantee that isn't real yet.
 
@@ -614,6 +621,86 @@ Methods were updated in the same change.
 - **PayPal's Acceptable Use Policy** hasn't been checked against the kinds of
   services providers sell. PayPal requires pre-approval for some categories.
 - **Processing fee.** CERVICED absorbs Stripe's fee out of its service fee.
-  PayPal's rate hasn't been compared with card. This is a margin question, not
-  a client-facing one.
+  Compared 2026-11-01: PayPal through Stripe costs about 3.1% + 40p against
+  about 1.5% + 20p by card, and PayPal keeps its fee on refunds. Answered by
+  the percentage fee and the £600 PayPal limit (§22).
 - **Not lawyer-reviewed**, like the rest of the Terms and Privacy text.
+
+## 21. "Always visible" now publishes a provider's full address (2026-10-26)
+
+Branch `feat/always-visible-address-on-profile` (migration `20261026120000`).
+A salon or studio on address release "Always visible" now shows its full
+street address and map pin on its public profile (Contact → Location) to any
+signed-in user, not only to booked clients. Home-based and mobile providers
+can't pick it, and the server checks that too. The setting's own wording was
+changed to say so.
+
+**Gaps to raise (not resolved):**
+- **Consent for providers who chose it before.** One live studio picked
+  "Always visible" when it said "visible to booked clients". The same stored
+  value now publishes its address. Re-prompt them, or reset them to "On
+  confirmation" until they re-confirm, before the migration goes live. It's
+  not known whether that studio's address is also a home.
+  **Decision 2026-10-29 (the user):** left as is — choosing "Always visible"
+  is taken as wanting it public. No reset and no separate message.
+- **Terms and Privacy text are silent.** Neither tells providers that this
+  option makes their address public to all users. The only explanation is the
+  setting's own line.
+- **No undo for exposure.** Switching away from "Always visible" stops it
+  showing, but can't recall screenshots or saved map pins. The setting doesn't
+  say so.
+- **Not lawyer-reviewed**, like the rest of this list.
+
+## 22. The service fee becomes a percentage, and PayPal gets a £600 limit (2026-11-01)
+
+Live 2026-11-01 (PR #204, migration `20261101150000`, Stripe test mode). The
+client's service fee changes from £1.99 / £3.99 / £5.99 tiers to **5% of what
+the card is charged + 40p, at least £1.99 and at most £24.99**. A deposit
+booking is charged its deposit, so the fee is on the deposit, not the full
+price. PayPal isn't offered when the checkout total is over £600; card, Apple
+Pay and Google Pay always are. The fee is the same whichever way the client
+pays. Refunds of the fee are unchanged: back on a full refund (provider
+cancels or declines, or the client cancels early), kept on a partial refund or
+a late cancellation.
+
+**Gaps to raise (not resolved):**
+- **Surcharge ban.** UK law (Consumer Rights (Payment Surcharges) Regulations
+  2012, as amended in 2018, covering PayPal too) bans charging more for a
+  payment method, which is why there's no PayPal-only fee. Limiting PayPal by
+  amount isn't a surcharge, but confirm that reading.
+- **Terms §10 names no amount or formula.** The fee is shown before payment,
+  so the Terms stay accurate, but whether they should state "5% + 40p, £1.99
+  to £24.99" and the PayPal limit is a solicitor's call.
+- **Price transparency.** The fee is now a different amount on every
+  checkout. It's shown on the cart and payment sheet before paying; check
+  that's enough under the CMA's drip-pricing rules (DMCC Act 2024).
+- **PayPal named without the limit.** Terms (TermsScreen §6 and the
+  payments section) list PayPal as a way to pay, qualified only for
+  late/no-show-fee bookings, not for totals over £600; the payment sheet just
+  doesn't show the button and says nothing about why. Whether PayPal-only
+  clients are disadvantaged is also open.
+- **One fee per checkout, shared.** Terms §10 says a fee is added "to each
+  booking". It's now one fee split across the bookings, so a provider
+  declining one booking refunds only that booking's share (§12's "refunded in
+  full, including the service fee" is true per booking).
+- **Bigger forfeited fee.** A late cancellation or partial refund keeps the
+  fee, which can now be up to £24.99 rather than £5.99. Fairness under the
+  CRA 2015, and whether §13's "you're refunded the rest" is clear enough.
+- **Minimum fee on small deposits.** A £5 deposit pays the £1.99 minimum,
+  about 40% of what's charged.
+- **Notice of the change.** The Terms still say "Last updated 21 October
+  2026". Does a change to a charge need a notice or re-acceptance (§10)?
+- **One name for the fee.** The user chose "Platform Fee" (2026-11-01). The
+  Terms now say platform fee instead of service fee. That is the only Terms
+  wording changed here; §10's "added to each booking" and the rest above are
+  still open.
+- **Rollout order.** The app shows a fee it works out itself, and the server
+  charges its own. Between applying the migration and every client updating
+  the app, the cart screen can show a different fee from the one charged.
+  The payment sheet always shows the server's total (`prepareCheckout`
+  reads `checkout_batches.amount_due`), so what the client confirms is what
+  they pay; the earlier cart figure can still disagree.
+- **VAT.** Once CERVICED's fee income passes the VAT threshold (£90,000 a
+  year), a sixth of every fee is VAT. Not a Terms question, but it changes
+  what the fee earns. Ask an accountant. (Assumes the fee is VAT-inclusive; confirm.)
+- **Not lawyer-reviewed**, like the rest of this list.

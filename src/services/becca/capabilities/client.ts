@@ -11,6 +11,7 @@ import {
   dateToYMD,
   formatShortDate,
   formatTime12,
+  ordinalSuffix,
   relativeDayLabel,
 } from "../../../utils/dateUtils";
 import {
@@ -25,6 +26,7 @@ import {
   getOlderBookings,
   getProviderConsultationService,
   getProviderContactByDisplayName,
+  getBookedClientContact,
   getProviderReschedulePolicyByDisplayName,
   getSavedPortfolioIds,
   validatePromoCode,
@@ -1199,7 +1201,7 @@ const appointmentPlan: Capability = {
   hat: "client",
   describe: "Plan a booking around a service, date and budget",
   phrases: [
-    "plan my appointment", "plan a booking", "help me plan", "help me book",
+    "plan my appointment", "plan my", "plan a booking", "help me plan", "help me book",
     "plan my beauty appointment", "book me something", "help me find someone",
     "i need someone for", "i need a provider for", "make me a booking plan",
   ],
@@ -1714,11 +1716,18 @@ const providerBookingTiming: Capability = {
     const notice = rules.minBookingNoticeHrs > 0
       ? `${rules.minBookingNoticeHrs} hours’ notice`
       : "no minimum notice";
+    // Same horizon shapes as utils/bookingHorizon: a release day replaces the
+    // rolling window, and a 0 window has no limit at all.
+    const bookAhead = rules.scheduleReleaseDay != null
+      ? `a month at a time — next month opens on the **${ordinalSuffix(rules.scheduleReleaseDay)}**`
+      : rules.bookingWindowDays > 0
+        ? `up to **${rules.bookingWindowDays} days**`
+        : "**no limit**";
 
     return {
       text:
         `## Booking timing with ${provider.displayName}\n` +
-        `- **Book ahead:** up to **${rules.bookingWindowDays} days**\n` +
+        `- **Book ahead:** ${bookAhead}\n` +
         `- **Minimum notice:** **${notice}**\n\n` +
         "Availability still depends on open slots at the time you book.",
       suggestions: [
@@ -1881,6 +1890,7 @@ const notifications: Capability = {
   describe: "Have I missed anything / any updates",
   phrases: [
     "notifications", "any updates", "have i missed", "anything new",
+    "anything i've missed", "anything ive missed",
     "what's happened", "whats happened", "alerts", "what did i miss",
     "anything i should know", "any news", "catch me up", "what's new",
     "whats new", "unread", "any alerts",
@@ -2518,15 +2528,31 @@ const providerContact: Capability = {
     "their email", "get in touch", "how do i reach", "whatsapp",
   ],
   needs: [{ kind: "provider", required: true }],
-  async run({ entities }): Promise<CapabilityResult> {
+  async run({ entities, bookings }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
-    const [contact, providerDbId] = await Promise.all([
+    const [publicContact, providerDbId] = await Promise.all([
       getProviderContactByDisplayName(provider.displayName),
       // An ordinal/pronoun reference contains slug + name but not always the
       // UUID required by ProviderChat. Resolve it before offering a message
       // action rather than navigating with an empty id that cannot load.
       resolveProviderDbId(provider),
     ]);
+
+    // A client with a live booking gets what that booking's Contact sheet
+    // shows: the provider's booked-client details from Communications, which
+    // can differ from the public ones. Soonest booking first; matched by id
+    // where the booking carries one, by name for older rows.
+    const liveBooking = bookings
+      .filter((b) =>
+        (b.status === BookingStatus.UPCOMING || b.status === BookingStatus.PENDING || b.status === BookingStatus.IN_PROGRESS)
+        && (b.providerId && providerDbId ? b.providerId === providerDbId : b.providerName === provider.displayName))
+      .sort((a, b) =>
+        a.bookingDate === b.bookingDate
+          ? a.bookingTime.localeCompare(b.bookingTime)
+          : a.bookingDate.localeCompare(b.bookingDate))[0];
+    const contact = liveBooking
+      ? await getBookedClientContact(liveBooking.id)
+      : publicContact;
 
     // Messaging in-app is always available and keeps the thread attached to
     // the booking, so it's offered whenever we can resolve its real id. If

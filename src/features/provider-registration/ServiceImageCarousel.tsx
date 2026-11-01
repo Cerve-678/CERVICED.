@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import type { ServiceImageDraft } from '../../services/providerRegistrationService';
@@ -45,7 +46,7 @@ export function ServiceImageCarousel({
   styles,
 }: ServiceImageCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const pitch = size + GAP;
 
   // ── Drag-to-reorder ────────────────────────────────────────────────────

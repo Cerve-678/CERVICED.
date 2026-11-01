@@ -713,7 +713,7 @@ const myCapacity: Capability = {
   describe: "How many bookings can I take a day / am I full",
   phrases: [
     "how many bookings a day", "my daily limit", "am i full", "my capacity",
-    "max bookings", "booking limit", "how many can i take",
+    "max bookings", "booking limit", "how many can i take", "fully booked",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();

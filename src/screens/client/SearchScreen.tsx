@@ -32,8 +32,9 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { forgetCachedReads, getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
-import type { ProviderAvailabilityStatus } from '../../services/databaseService';
+import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
+import type { ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
+import { formatDurationMinutes } from '../../utils/dateUtils';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
 import { matchesAnySpeciality, normalizeTerm } from '../../utils/fuzzyMatch';
@@ -44,6 +45,7 @@ import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
+import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
@@ -175,18 +177,6 @@ function titleCaseSpeciality(raw: string): string {
     .split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
-}
-
-function specialtiesFor(service: string): string[] {
-  const map: Record<string, string[]> = {
-    HAIR: ['Braids', 'Weaves', 'Wigs'],
-    NAILS: ['Acrylics', 'Gel', 'Nail Art'],
-    MUA: ['Bridal', 'Editorial', 'Glam'],
-    LASHES: ['Classic', 'Volume', 'Hybrid'],
-    BROWS: ['Microblading', 'Lamination', 'Tinting'],
-    AESTHETICS: ['Facials', 'Peels', 'Injectables'],
-  };
-  return map[service] ?? ['Beauty', 'Style'];
 }
 
 // Formats a real £min–£max service-price range for the card — "£25" when
@@ -344,6 +334,19 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
             </Text>
           </View>
 
+          <View style={styles.specialtiesSlot}>
+            {provider.specialties.length > 0 && (
+              <Text style={[styles.specialtiesText, { color: P.sub }]} numberOfLines={2}>
+                {provider.specialties.map((specialty, i) => (
+                  <React.Fragment key={specialty}>
+                    {i > 0 ? ' · ' : null}
+                    <Text style={styles.specialtyUnderlined}>{specialty}</Text>
+                  </React.Fragment>
+                ))}
+              </Text>
+            )}
+          </View>
+
           {provider.isLinkOnly ? (
             <View style={styles.metaRow}>
               <Text style={[styles.reviewCount, { color: P.sub }]}>Books on their own page</Text>
@@ -403,6 +406,115 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
 });
 ProviderCard.displayName = 'ProviderCard';
 
+// ── Service Card — one matching service, full width, scattered between the
+// provider rows (see searchResultsLayout). The description is shown because
+// it's often where the match came from ("Short white French tips" under
+// "Classic French"), with the searched words in bold. ──
+interface ServiceResultCardProps {
+  service: ServiceSearchResult;
+  imageUrl: string | null;
+  rating: number | null;
+  availability: ProviderAvailabilityStatus | null;
+  highlightQuery: string;
+  onPress: (service: ServiceSearchResult) => void;
+  onProviderPress: (service: ServiceSearchResult) => void;
+  P: AppTheme;
+}
+
+const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rating, availability, highlightQuery, onPress, onProviderPress, P }) => {
+  const availInfo = availability ? AVAILABILITY_INFO[availability] : null;
+  const price = service.isLinkOnly || service.price == null
+    ? null
+    : formatPriceRange({ min: service.price, max: service.priceMax ?? service.price });
+  const meta = service.isLinkOnly
+    ? 'Books on their own page'
+    : [
+        service.durationMinutes ? formatDurationMinutes(service.durationMinutes) : null,
+        service.category ? service.category.charAt(0) + service.category.slice(1).toLowerCase() : null,
+      ].filter(Boolean).join(' · ');
+  const thumb = imageUrl ?? service.providerLogoUrl;
+  const description = useMemo(
+    () => (service.description ? highlightSearchTerms(service.description, highlightQuery) : []),
+    [service.description, highlightQuery],
+  );
+  return (
+    <View style={[styles.serviceCard, { backgroundColor: P.card, borderColor: P.border }]}>
+      <TouchableOpacity
+        onPress={() => onPress(service)}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel={`${service.name} with ${service.providerName}`}
+      >
+        <Text style={[styles.serviceEyebrow, { color: P.sub }]}>SERVICE</Text>
+        <View style={styles.serviceCardTop}>
+          <Image
+            source={thumb ? { uri: thumb } : require('../../../assets/icon.png')}
+            style={styles.serviceCardThumb}
+            contentFit="cover"
+            transition={0}
+          />
+          <View style={styles.serviceCardHeading}>
+            <View style={styles.serviceCardTitleRow}>
+              <Text style={[styles.serviceCardName, { color: P.text }]} numberOfLines={2}>{service.name}</Text>
+              {price ? <Text style={[styles.serviceCardPrice, { color: P.text }]}>{price}</Text> : null}
+            </View>
+            {description.length > 0 ? (
+              <Text style={[styles.serviceCardDesc, { color: P.sub }]} numberOfLines={3}>
+                {description.map((part, i) => (part.match
+                  ? <Text key={i} style={[styles.serviceCardMatch, { color: P.text, backgroundColor: `${P.accent}1F` }]}>{part.text}</Text>
+                  : part.text))}
+              </Text>
+            ) : null}
+            {/* minHeight holds the row's height, so the tag landing after the
+                card has rendered doesn't shift the list (same reason as
+                availBadgeSlot on the provider card). */}
+            <View style={styles.serviceCardMetaRow}>
+              {meta ? <Text style={[styles.serviceCardMeta, { color: P.text }]} numberOfLines={1}>{meta}</Text> : null}
+              {availInfo ? (
+                <View style={[styles.availBadge, { backgroundColor: `${availInfo.color}22` }]}>
+                  <Text style={[styles.availBadgeText, { color: availInfo.color }]} numberOfLines={1}>{availInfo.label}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+      <View style={[styles.serviceCardFoot, { borderTopColor: P.sep }]}>
+        <TouchableOpacity
+          style={styles.serviceCardProvider}
+          onPress={() => onProviderPress(service)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${service.providerName}`}
+        >
+          <Image
+            source={service.providerLogoUrl ? { uri: service.providerLogoUrl } : require('../../../assets/icon.png')}
+            style={styles.serviceCardLogo}
+            contentFit="cover"
+            transition={0}
+          />
+          <Text style={[styles.serviceCardProviderName, { color: P.text }]} numberOfLines={1}>
+            {service.providerName}
+            {!service.isLinkOnly && rating ? (
+              <Text style={{ color: P.sub, fontWeight: '600' }}>{'  '}<Text style={styles.star}>★</Text> {rating.toFixed(1)}</Text>
+            ) : null}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.serviceCardBook, { backgroundColor: P.accent }]}
+          onPress={() => onPress(service)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`${service.isLinkOnly ? 'View' : 'Book'} ${service.name}`}
+        >
+          <Text style={[styles.bookBtnText, { color: P.onAccent }]}>{service.isLinkOnly ? 'View' : 'Book'}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+ServiceResultCard.displayName = 'ServiceResultCard';
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
   const bottomInset = useSystemBottomInset();
@@ -450,6 +562,11 @@ export default function SearchScreen({ navigation, route }: Props) {
   const [providerData, setProviderData]   = useState<ProviderCardData[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState<string | null>(null);
+  // Individual services matching a typed query, best first, plus the query
+  // as the server read it after fixing typos ("frsnch" → "french"). Both
+  // arrive with providerData from the same search, so they never disagree.
+  const [serviceResults, setServiceResults] = useState<ServiceSearchResult[]>([]);
+  const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
   // The header filters button opens this single sheet — no more per-pill
   // popovers anchored under an always-visible row.
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -551,7 +668,10 @@ export default function SearchScreen({ navigation, route }: Props) {
       priceRange: null,
       priceTier: p.price_tier,
       businessType: p.business_type,
-      specialties: specialtiesFor(p.service_category),
+      // Real provider/service specialities arrive in the batched facets read
+      // below. Keep this empty until then rather than showing category-based
+      // placeholder claims on the card.
+      specialties: [],
       // Resolved separately once the batched RPC returns — see
       // providersWithAvailability below.
       availability: null,
@@ -616,14 +736,16 @@ export default function SearchScreen({ navigation, route }: Props) {
       setProvidersError(null);
       try {
         const q = searchQuery.trim();
-        const data = q ? await searchProviders(q, catCode) : await getProviders(catCode);
+        const result = await searchProvidersAndServices(q, catCode);
         if (requestId !== providerRequestIdRef.current) return;
-        setProviderData(data.map(mapDbToCardData));
+        setProviderData(result.providers.map(mapDbToCardData));
+        setServiceResults(result.services);
+        setCorrectedQuery(result.correctedQuery);
         if (q) {
           // Zero-result searches are valuable learning signals too.
           logSearchEvent({
             query: q,
-            resultsCount: data.length,
+            resultsCount: result.providers.length,
             ...(catCode && { categoryFilter: catCode }),
             ...(user?.id && { userId: user.id }),
           });
@@ -631,9 +753,12 @@ export default function SearchScreen({ navigation, route }: Props) {
             logger.error('[Search] trackSearch failed:', error),
           );
         }
-      } catch {
+      } catch (err) {
         if (requestId !== providerRequestIdRef.current) return;
+        logger.error('[Search] search failed:', err);
         setProviderData([]);
+        setServiceResults([]);
+        setCorrectedQuery(null);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       } finally {
         if (requestId === providerRequestIdRef.current) setProvidersLoading(false);
@@ -815,6 +940,17 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
 
+  // Provider-defined specialities and service tags are already in the facets
+  // request used by the filter. Reuse that response rather than making every
+  // card fetch its own profile data. A small cap keeps the two-column cards
+  // readable while still showing the provider's actual specialties.
+  const providersWithSpecialties = useMemo(() => (
+    providersWithPriceRange.map(provider => ({
+      ...provider,
+      specialties: [...(specialityLabelsByProviderId.get(provider.providerId) ?? [])].slice(0, 4),
+    }))
+  ), [providersWithPriceRange, specialityLabelsByProviderId]);
+
   // Audience matches, derived from the tags already fetched above rather than
   // re-queried. Toggling this filter used to cost a round trip each time even
   // though the answer was a re-read of the same services rows; now it is a
@@ -903,7 +1039,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // above); rating/price/distance/service-type/availability/sort narrow that
   // result set further, the same way HomeScreen's filter dropdown does. ─────
   const filteredProviders = useMemo(() => {
-    let list = [...providersWithPriceRange];
+    let list = [...providersWithSpecialties];
     if (!filtersAllowLinkOnly(activeFilters)) {
       list = list.filter(p => !p.isLinkOnly);
     }
@@ -994,7 +1130,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
+  }, [providersWithSpecialties, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
 
   // "In search" on a link-only provider's Analytics. Counted once per provider
   // per search (query + category), and only once the result set has settled —
@@ -1096,18 +1232,20 @@ export default function SearchScreen({ navigation, route }: Props) {
     setRefreshing(true);
     const requestId = ++providerRequestIdRef.current;
     const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
-    const fn = searchQuery.trim()
-      ? searchProviders(searchQuery.trim(), catCode)
-      : getProviders(catCode);
-    fn
-      .then(data => {
+    searchProvidersAndServices(searchQuery.trim(), catCode)
+      .then(result => {
         if (requestId !== providerRequestIdRef.current) return;
-        setProviderData(data.map(mapDbToCardData));
+        setProviderData(result.providers.map(mapDbToCardData));
+        setServiceResults(result.services);
+        setCorrectedQuery(result.correctedQuery);
         setProvidersError(null);
       })
-      .catch(() => {
+      .catch((err) => {
         if (requestId !== providerRequestIdRef.current) return;
+        logger.error('[Search] refresh failed:', err);
         setProviderData([]);
+        setServiceResults([]);
+        setCorrectedQuery(null);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       })
       .finally(() => {
@@ -1126,9 +1264,98 @@ export default function SearchScreen({ navigation, route }: Props) {
     navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
   }, [navigation]);
 
-  const renderCard: ListRenderItem<ProviderCardData> = useCallback(({ item, index }) => (
-    <ProviderCard provider={item} onPress={() => handleProviderPress(item)} index={index} P={P} widthStyle={cardWidthStyle} />
-  ), [handleProviderPress, P, cardWidthStyle]);
+  // Opens the provider on that exact service's booking sheet — the same
+  // openServiceId deep link Explore's "Book Now" uses.
+  const handleServicePress = useCallback((service: ServiceSearchResult) => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    prefetchProviderBySlug(service.providerSlug);
+    navigation.navigate('ProviderProfile', {
+      providerId: service.providerSlug,
+      source: 'search',
+      openServiceId: service.serviceId,
+    });
+  }, [navigation]);
+
+  // Services only from providers still in the grid, so the filter sheet
+  // (rating, distance, city…) narrows both lists the same way.
+  const visibleServices = useMemo(() => {
+    if (serviceResults.length === 0) return serviceResults;
+    const shownProviderIds = new Set(filteredProviders.map(p => p.providerId));
+    return serviceResults.filter(s => shownProviderIds.has(s.providerId));
+  }, [serviceResults, filteredProviders]);
+
+  // The provider strip on a service card opens the profile itself, not the
+  // booking sheet the rest of the card opens.
+  const handleServiceProviderPress = useCallback((service: ServiceSearchResult) => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    prefetchProviderBySlug(service.providerSlug);
+    navigation.navigate('ProviderProfile', { providerId: service.providerSlug, source: 'search' });
+  }, [navigation]);
+
+  // Each service card's photo — the search RPC returns none, so they're
+  // fetched in one batch once the services are known. A card shows the
+  // provider's logo until (or unless) a photo arrives.
+  const [serviceCovers, setServiceCovers] = useState<Record<string, string>>({});
+  const serviceIdsKey = useMemo(() => serviceResults.map(s => s.serviceId).join(','), [serviceResults]);
+  useEffect(() => {
+    if (!serviceIdsKey) return;
+    let cancelled = false;
+    getServiceCoverImages(serviceIdsKey.split(','))
+      .then(covers => { if (!cancelled) setServiceCovers(prev => ({ ...prev, ...covers })); })
+      .catch(err => logger.error('[SearchScreen] service photos failed to load', err));
+    return () => { cancelled = true; };
+  }, [serviceIdsKey]);
+
+  const providerRatings = useMemo(() => {
+    const ratings = new Map<string, number>();
+    for (const p of providerData) if (p.rating > 0) ratings.set(p.providerId, p.rating);
+    return ratings;
+  }, [providerData]);
+
+  const highlightQuery = correctedQuery ?? searchQuery;
+
+  // Provider rows with matching services scattered between them, two after
+  // each row (see searchResultsLayout).
+  const resultRows = useMemo(
+    () => (providersLoading ? [] : scatterServicesBetweenProviders(filteredProviders, visibleServices, {
+      columns: gridColumns,
+      servicesPerGap: 2,
+      providerKey: p => p.id,
+      serviceKey: s => s.serviceId,
+    })),
+    [providersLoading, filteredProviders, visibleServices, gridColumns],
+  );
+
+  const renderRow: ListRenderItem<SearchResultRow<ProviderCardData, ServiceSearchResult>> = useCallback(({ item }) => {
+    if (item.kind === 'service') {
+      return (
+        <ServiceResultCard
+          service={item.service}
+          imageUrl={serviceCovers[item.service.serviceId] ?? null}
+          rating={providerRatings.get(item.service.providerId) ?? null}
+          availability={availabilityBySlug.get(item.service.providerSlug) ?? null}
+          highlightQuery={highlightQuery}
+          onPress={handleServicePress}
+          onProviderPress={handleServiceProviderPress}
+          P={P}
+        />
+      );
+    }
+    return (
+      <View style={styles.providerRow}>
+        {item.providers.map((provider, i) => (
+          <ProviderCard
+            key={provider.id}
+            provider={provider}
+            onPress={() => handleProviderPress(provider)}
+            index={item.firstIndex + i}
+            P={P}
+            widthStyle={cardWidthStyle}
+          />
+        ))}
+      </View>
+    );
+  }, [serviceCovers, providerRatings, availabilityBySlug, highlightQuery, handleServicePress, handleServiceProviderPress, handleProviderPress, P, cardWidthStyle]);
 
   // Each active (non-default) filter as a dismissible chip — key, label, and
   // the callback to clear just that one. distance's "Any" value is 999, not
@@ -1250,14 +1477,28 @@ export default function SearchScreen({ navigation, route }: Props) {
     });
   }, [navigation, P, hasActiveFilters, activeFilterChips.length]);
 
-  // ── List header: just result count ─────────────────────────────────────────
+  // ── List header: typo note, then how many services and providers matched ──
   const renderHeader = useCallback(() => (
-    <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
-      <Text style={[styles.countText, { color: P.sub }]}>
-        {providersLoading ? 'Searching…' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
-      </Text>
-    </View>
-  ), [filteredProviders.length, providersLoading, P]);
+    <>
+      {!providersLoading && correctedQuery ? (
+        <Text style={[styles.correctedText, { color: P.sub }]} accessibilityLiveRegion="polite">
+          Showing results for <Text style={[styles.correctedQuery, { color: P.text }]}>{correctedQuery}</Text>
+        </Text>
+      ) : null}
+      <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
+        <Text style={[styles.countText, { color: P.sub }]}>
+          {providersLoading
+            ? 'Searching…'
+            : [
+                visibleServices.length > 0
+                  ? `${visibleServices.length} ${visibleServices.length === 1 ? 'service' : 'services'}`
+                  : null,
+                `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`,
+              ].filter(Boolean).join(' · ')}
+        </Text>
+      </View>
+    </>
+  ), [filteredProviders.length, providersLoading, P, correctedQuery, visibleServices.length]);
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1654,16 +1895,13 @@ export default function SearchScreen({ navigation, route }: Props) {
       {/* ── Results area — wraps the FlatList. ── */}
       <ReAnimated.View style={[{ flex: 1 }, resultsAnimatedStyle]}>
 
-      {/* ── Provider grid — two columns (three on iPad), matches the provider-grid layout used
-          on the bookmarked-providers screen ── */}
+      {/* ── Results — rows of provider cards, two across (three on iPad) like
+          the bookmarked-providers grid, with full-width service cards
+          scattered between the rows ── */}
       <FlatList
-        data={providersLoading ? [] : filteredProviders}
-        renderItem={renderCard}
-        keyExtractor={item => item.id}
-        // FlatList can't change numColumns on the fly — remount on rotation.
-        key={`grid-${gridColumns}`}
-        numColumns={gridColumns}
-        columnWrapperStyle={styles.columnWrapper}
+        data={resultRows}
+        renderItem={renderRow}
+        keyExtractor={item => item.key}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -1963,13 +2201,126 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  correctedText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    paddingTop: 10,
+  },
+  correctedQuery: {
+    fontWeight: '700',
+  },
+  // Matching service — full width, between provider rows. Same radius,
+  // hairline and shadow as the provider card beside it.
+  serviceCard: {
+    marginBottom: 10,
+    borderRadius: 13,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 0,
+  },
+  serviceEyebrow: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 9,
+    letterSpacing: 1.2,
+  },
+  serviceCardTop: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 6,
+    paddingBottom: 10,
+  },
+  serviceCardThumb: {
+    width: 76,
+    height: 76,
+    borderRadius: 10,
+  },
+  serviceCardHeading: {
+    flex: 1,
+    gap: 4,
+  },
+  serviceCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  serviceCardName: {
+    flex: 1,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+  },
+  serviceCardPrice: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+  },
+  serviceCardDesc: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  serviceCardMatch: {
+    fontWeight: '700',
+  },
+  serviceCardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    minHeight: 18,
+  },
+  serviceCardMeta: {
+    flexShrink: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  serviceCardFoot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  serviceCardProvider: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    minHeight: 32,
+  },
+  serviceCardLogo: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  serviceCardProviderName: {
+    flexShrink: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  serviceCardBook: {
+    minHeight: 32,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // List — two columns, matches BookmarkedProvidersScreen's provider grid
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 110,
     paddingTop: 4,
   },
-  columnWrapper: {
+  providerRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
   },
 
@@ -2014,6 +2365,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.1,
   },
+  specialtyUnderlined: {
+    textDecorationLine: 'underline',
+  },
   servicePill: {
     alignSelf: 'flex-start',
     borderRadius: 6,
@@ -2026,6 +2380,15 @@ const styles = StyleSheet.create({
     fontSize: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  specialtiesText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 10,
+    fontWeight: '600',
+    lineHeight: 14,
+  },
+  specialtiesSlot: {
+    height: 28,
   },
   metaRow: {
     flexDirection: 'row',

@@ -63,7 +63,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
 
   return (
     <View style={[st.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={[st.header, { borderBottomColor: C.border }]}>
           <Text style={[st.headerTitle, { color: C.text }]}>Business Details</Text>

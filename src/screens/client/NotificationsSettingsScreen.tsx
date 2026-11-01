@@ -30,7 +30,7 @@ const SECTIONS: NotificationPreferenceSection<NotificationPreferences>[] = [
   {
     title: 'DISCOVER',
     rows: [
-      { key: 'promotions', icon: 'local-offer', title: 'Offers & Promotions', subtitle: 'Deals from your saved providers' },
+      { key: 'promotions', icon: 'local-offer', title: 'Offers & Promotions', subtitle: 'Deals from providers you\'ve booked. Providers you\'ve turned the bell on for always come through' },
       { key: 'newProviders', icon: 'people', title: 'New Providers', subtitle: 'Professionals near you' },
       { key: 'weeklySummary', icon: 'bar-chart', title: 'Weekly Summary', subtitle: 'Your beauty activity recap' },
     ],

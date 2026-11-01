@@ -22,12 +22,14 @@ tags: [screen, provider]
 - [[ChangePasswordScreen\|ChangePassword]]
 - [[ProviderAccountInfoScreen\|AccountInfo]]
 - [[ProviderNotificationSettingsScreen\|NotificationSettings]]
+- [[ProviderAchievementsScreen\|Achievements]]
 - [[TextSizingScreen\|TextSizing]]
 - [[LanguageRegionScreen\|LanguageRegion]]
 - [[HelpCentreScreen\|HelpCentre]]
 - [[AboutScreen\|About]]
 - [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
+- [[AdminMoneyScreen\|AdminMoney]]
 - `SignUpStep3` _(navigator / dynamic)_
 
 ## Map

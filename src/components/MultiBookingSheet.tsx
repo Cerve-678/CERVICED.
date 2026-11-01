@@ -32,6 +32,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from './SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardDismissView } from './KeyboardDismissView';
@@ -259,7 +260,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     typeof bookingPolicies?.['emergencyBookingPolicy'] === 'string'
       ? (bookingPolicies['emergencyBookingPolicy'] as string).trim()
       : '';
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   // Reset local state each time the sheet OPENS — keyed on `isVisible` alone.
   // Unlike BookingSheet, `services` is set once by the caller right before

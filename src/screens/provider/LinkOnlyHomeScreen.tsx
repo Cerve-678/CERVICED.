@@ -230,7 +230,7 @@ export default function LinkOnlyHomeScreen() {
       specialityCount,
       instagram: profile.instagram,
       policiesSet:
-        buildPolicyDisplayRows(profile.booking_policies, profile.cancellation_notice_hours).length > 0 ||
+        buildPolicyDisplayRows(profile.booking_policies, profile.cancellation_notice_hours, { linkOnly: true }).length > 0 ||
         !!profile.booking_policies?.policyImageUrl,
       accessibilityNotes: profile.accessibility_notes,
       paymentMethods: profile.preferred_payment_methods,

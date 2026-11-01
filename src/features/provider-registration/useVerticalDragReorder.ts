@@ -3,7 +3,6 @@ import {
   Animated,
   LayoutChangeEvent,
   PanResponder,
-  ViewStyle,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -224,7 +223,7 @@ export function useVerticalDragReorder({ keys, onReorder }: Options) {
    *  one it's over slides into the carried row's old slot — the swap it'll
    *  drop as. Every other row stays still. */
   const getItemStyle = useCallback(
-    (key: string): Animated.WithAnimatedObject<ViewStyle> => {
+    (key: string) => {
       if (!draggingKey) return {};
       if (key === draggingKey) {
         return {

@@ -23,8 +23,8 @@
  *      silently does nothing.
  * Both must be written. See the load path below for the same precedence order.
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +39,8 @@ import {
   updateProviderMaxBookingsPerDay,
   updateProviderRequestSettings,
 } from '../../services/databaseService';
+import { lastBookableDate, nextReleaseMoment, toReleaseDay } from '../../utils/bookingHorizon';
+import { formatShortDayDate, formatTime12, ordinalSuffix } from '../../utils/dateUtils';
 import {
   Card, ChipGroup, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
@@ -66,6 +68,10 @@ export default function SchedulingScreen({ navigation }: any) {
   // Booking rules (moved from ProviderAutomationsScreen)
   const [bufferMins, setBufferMins]             = useState('0');
   const [bookingWindowDays, setBookingWindowDays] = useState('60');
+  // Read-only here. Set = monthly release, which replaces the rolling window
+  // below (still saved, so clearing the release day restores it). Its only
+  // editor is InfoRegScreen (Edit Profile) — see utils/bookingHorizon.
+  const [releaseDay, setReleaseDay] = useState<number | null>(null);
   const [minBookingNoticeHrs, setMinNotice]     = useState('0');
   const [slotIntervalMins, setSlotInterval]     = useState('60');
   const [maxBookingsPerDay, setMaxPerDay]       = useState('unlimited');
@@ -112,6 +118,7 @@ export default function SchedulingScreen({ navigation }: any) {
           setAllowBeyondWindow(profile.allow_beyond_window_requests ?? false);
           setRequestBefore(profile.request_window_before_mins == null ? 'any' : String(profile.request_window_before_mins));
           setRequestAfter(profile.request_window_after_mins == null ? 'any' : String(profile.request_window_after_mins));
+          setReleaseDay(toReleaseDay(profile.automation_settings?.scheduleReleaseDay));
         }
         // Same precedence as ProviderAutomationsScreen: the providers row is
         // the real answer (it's what gets enforced), user_metadata is only a
@@ -205,6 +212,16 @@ export default function SchedulingScreen({ navigation }: any) {
     allowBeyondWindow, requestBefore, requestAfter, navigation,
   ]);
 
+  // What a monthly release means right now, in dates — the wall clients hit.
+  const releaseStatus = useMemo(() => {
+    if (releaseDay == null) return null;
+    const now = new Date();
+    const openUntil = lastBookableDate({ schedule_release_day: releaseDay }, now);
+    const next = nextReleaseMoment(releaseDay, now);
+    if (!openUntil) return null;
+    return `Clients can book up to ${formatShortDayDate(openUntil)}. The next month opens ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
+  }, [releaseDay]);
+
   if (loading) {
     return (
       <View style={[s.root, { backgroundColor: C.bg }]}>
@@ -217,7 +234,7 @@ export default function SchedulingScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={[s.header, { borderBottomColor: C.border }]}>
           <Text style={[s.headerTitle, { color: C.text }]}>Scheduling & Availability</Text>
@@ -300,7 +317,20 @@ export default function SchedulingScreen({ navigation }: any) {
 
             <View style={{ height: 18 }} />
             <SectionLabel text="How far ahead clients can book" />
-            <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
+            {releaseDay != null ? (
+              // A monthly release replaces the rolling window; it's set in
+              // Edit Profile, so here it's only explained.
+              <View style={[st.releaseDayRow, { backgroundColor: C.surface, borderColor: C.border }]}>
+                <Ionicons name="calendar-outline" size={15} color={C.accent} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[st.releaseDayText, { color: C.text }]}>Monthly release on the {ordinalSuffix(releaseDay)}</Text>
+                  {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
+                  <Text style={[st.releaseDayHint, { color: C.sub }]}>Change or remove it in Edit Profile.</Text>
+                </View>
+              </View>
+            ) : (
+              <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
+            )}
 
             <View style={{ height: 18 }} />
             <SectionLabel text="Maximum bookings per day" />
@@ -338,7 +368,11 @@ export default function SchedulingScreen({ navigation }: any) {
             />
             <ToggleRow
               label="Further ahead than you take bookings"
-              sub={`Clients can ask for a date beyond your ${bookingWindowDays}-day booking window`}
+              sub={releaseDay != null
+                ? "Clients can ask for a date in a month you haven't opened yet"
+                : bookingWindowDays === '0'
+                  ? "You take bookings any time ahead, so there's nothing for this to relax"
+                  : `Clients can ask for a date beyond your ${bookingWindowDays}-day booking window`}
               value={allowBeyondWindow}
               onChange={setAllowBeyondWindow}
             />
@@ -371,3 +405,16 @@ export default function SchedulingScreen({ navigation }: any) {
     </View>
   );
 }
+
+const st = StyleSheet.create({
+  releaseDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  releaseDayText: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  releaseDayHint: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17 },
+});
