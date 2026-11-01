@@ -82,8 +82,7 @@ What the client later pays the provider in person never counts.
 | £800 bridal party | £800 | £24.99 (the maximum) | £824.99 |
 
 - **Several bookings in one checkout:** one fee on the total charged, shared
-  across every booking by what each is charged. That share is each booking's
-  `service_charge`, which refunds and payouts read.
+  across every booking (section 1.3.1).
 - **Why this shape:** Stripe's card fee (~1.5% + 20p), PayPal through Stripe
   (~3.1% + 40p, not returned on refunds) and the payout to the provider's bank
   (~0.25% + 10p) all grow with the amount, so a flat fee lost money on larger
@@ -102,6 +101,77 @@ paying), says the fee is added "to each booking" though it's now one fee per
 checkout shared across bookings, and §6 lists PayPal without the £600 limit.
 Whether any of that needs rewording is for the user and a solicitor
 (LEGAL-COMPLIANCE-NOTES §22), not settled here.
+
+### 1.3.1 How the fee is split across bookings
+
+A client pays **one fee per checkout**, worked out on everything charged in
+that checkout. The fee is then shared between the bookings by how much each
+one is charged. That share is stored on the booking as `service_charge`, and
+refunds, payouts and receipts all read it.
+
+**Example: three providers, £30 + £45 + £60, all paid in full.** £135 is
+charged, so the fee is 5% of £135 + 40p = **£7.15**.
+
+| Booking | Share of the fee | Client pays for this booking |
+|---|---|---|
+| £30 | £1.59 | £31.59 |
+| £45 | £2.38 | £47.38 |
+| £60 | £3.18 | £63.18 |
+| **Total** | **£7.15** | **£142.15** |
+
+**Example: a deposit in the same cart.** A £120 service paid in full, plus a
+£300 service with a £60 deposit. £180 is charged, so the fee is **£9.40**: £6.27
+on the £120 booking and £3.13 on the deposit booking. The card is charged
+£189.40. The remaining £240 is paid to the provider in person and never counts.
+
+**The rules:**
+
+- Each share is rounded to the penny. The last booking takes whatever is left,
+  so the shares always add up to the fee exactly. Bookings are taken in order
+  of booking id, so which booking takes a stray penny isn't meaningful.
+- A share is never negative, and a booking charged nothing gets no share.
+- The server's split is the one that counts
+  (`apply_checkout_platform_fee`). The app mirrors the same rules
+  (`splitPlatformFeePence`).
+
+**Why it's split:** each booking has its own refund and its own payout. If the
+£45 provider declines, the client gets back £47.38 for that booking, including
+its £2.38 share, and the other two bookings carry on with theirs. The provider
+is paid their price or deposit, with the share taken off what the client paid,
+so the fee never comes out of their money.
+
+### 1.3.2 Where the fee shows up
+
+| Where | Who sees it | What it shows |
+|---|---|---|
+| Cart review screen | Client | The **whole** fee as one line, "Platform Fee £7.15", worked out by the app |
+| Payment sheet | Client | The total to pay, £142.15, read from the server, so it's always the amount charged |
+| Bank or card statement | Client | **One** payment of £142.15, however many bookings it covers |
+| Booking details, receipt and confirmation email | Client | **That booking's share only**, as "Cerviced platform fee" (or "Platform Fee" on booking details). There's one for each booking |
+| Provider invoice, booking details and payouts | Provider | Never. Only the provider's own money |
+
+**A receipt paid in full** (the £45 booking above):
+
+```
+Service                     £45.00
+Cerviced platform fee        £2.38
+Total                       £47.38
+Paid today                  £47.38
+```
+
+**A deposit receipt** (the £300 booking above):
+
+```
+Service                            £300.00
+Cerviced platform fee                £3.13
+Total                              £303.13
+Deposit paid to provider            £60.00
+Due to provider at appointment     £240.00
+```
+
+The deposit and balance deliberately don't add up to the total. The deposit
+line shows the provider's money only, and the fee is listed once above it.
+The gaps in what receipts show are in Part 6.
 
 ### 1.4 The life of one booking's money (worked example)
 
@@ -812,6 +882,9 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
+| 12 | **A confirmation email for a booking paid in full says it hasn't been paid.** The email checks for `paid_in_full`, but the database stores `fully_paid`, so it reads "Awaiting payment", "Total paid £0.00" and the full amount as due to the provider. Deposit emails are right. The email's test uses the wrong value, so it never failed | Clients are told they still owe money they've paid | Fix `bookingConfirmationEmail` and its test, then deploy `send-booking-confirmation` |
+| 13 | **No receipt shows a whole checkout.** Each booking has its own, while the bank shows one payment | A client with several bookings has to add them up to match their statement | Not decided. Say "Part of a £142.15 payment for 3 bookings" on the receipt, or add a combined receipt |
+| 14 | **A deposit receipt doesn't state what the card was charged.** It lists the deposit and the fee separately, never the sum (£63.13 in section 1.3.2) | The receipt doesn't match the statement | Not decided. Add a "Charged to your card" line |
 
 ---
 
