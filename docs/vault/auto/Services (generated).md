@@ -71,7 +71,7 @@ _no named exports_
 `authenticateWithBiometrics` · `disableBiometric` · `enableBiometric` · `getBiometricLabel` · `getBiometricRefreshToken` · `isBiometricAvailable` · `isBiometricEnabled` · `updateBiometricToken`
 
 ### `src/services/bookingService.ts`
-`applyRescheduleRequestRow` · `calculatePerItemServiceCharge` · `calculateServiceCharge` · `DEPOSIT_PERCENTAGE` · `fetchBookingsFromSupabase` · `mapDbBookingToConfirmed`
+`applyRescheduleRequestRow` · `DEPOSIT_PERCENTAGE` · `fetchBookingsFromSupabase` · `mapDbBookingToConfirmed`
 
 ### `src/services/checkoutService.ts`
 _no named exports_

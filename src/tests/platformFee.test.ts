@@ -1,27 +1,32 @@
 import { calculatePlatformFee } from '../features/cart/platformFee';
 
-describe('platform fee tiers', () => {
-  it('matches the server three-tier scale on the full-payment subtotal', () => {
+describe('platform fee', () => {
+  it('is 5% of what the card is charged plus 40p', () => {
+    expect(calculatePlatformFee(50)).toBe(2.9);
+    expect(calculatePlatformFee(90)).toBe(4.9);
+    expect(calculatePlatformFee(150)).toBe(7.9);
+    expect(calculatePlatformFee(135)).toBe(7.15);
+    // An £80 deposit on a £400 service: the deposit is what's charged.
+    expect(calculatePlatformFee(80)).toBe(4.4);
+  });
+
+  it('never goes below £1.99', () => {
+    expect(calculatePlatformFee(0.01)).toBe(1.99);
+    expect(calculatePlatformFee(25)).toBe(1.99);
+    expect(calculatePlatformFee(31.8)).toBe(1.99);
+    expect(calculatePlatformFee(32)).toBe(2);
+  });
+
+  it('never goes above £24.99', () => {
+    expect(calculatePlatformFee(491)).toBe(24.95);
+    expect(calculatePlatformFee(491.8)).toBe(24.99);
+    expect(calculatePlatformFee(800)).toBe(24.99);
+    expect(calculatePlatformFee(5000)).toBe(24.99);
+  });
+
+  it('charges nothing on a free or empty checkout', () => {
     expect(calculatePlatformFee(0)).toBe(0);
-    expect(calculatePlatformFee(49.99)).toBe(1.99);
-    expect(calculatePlatformFee(99.99)).toBe(1.99);
-    expect(calculatePlatformFee(100)).toBe(3.99);
-    expect(calculatePlatformFee(250)).toBe(3.99);
-    expect(calculatePlatformFee(300)).toBe(3.99);
-    expect(calculatePlatformFee(300.01)).toBe(5.99);
-    expect(calculatePlatformFee(1000)).toBe(5.99);
-  });
-
-  it('tiers a deposit-only checkout on the full service price, not the deposit', () => {
-    // £20 deposit on an £80 service -> under £100 tier.
-    expect(calculatePlatformFee(0, 80)).toBe(1.99);
-    // £50 deposit on a £250 service -> £100–£300 tier.
-    expect(calculatePlatformFee(0, 250)).toBe(3.99);
-    expect(calculatePlatformFee(0, 400)).toBe(5.99);
-    expect(calculatePlatformFee(0, 0)).toBe(0);
-  });
-
-  it('ignores deposit services once anything is paid in full', () => {
-    expect(calculatePlatformFee(60, 500)).toBe(1.99);
+    expect(calculatePlatformFee(-5)).toBe(0);
+    expect(calculatePlatformFee(Number.NaN)).toBe(0);
   });
 });

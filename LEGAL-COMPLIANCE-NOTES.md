@@ -621,8 +621,9 @@ Methods were updated in the same change.
 - **PayPal's Acceptable Use Policy** hasn't been checked against the kinds of
   services providers sell. PayPal requires pre-approval for some categories.
 - **Processing fee.** CERVICED absorbs Stripe's fee out of its service fee.
-  PayPal's rate hasn't been compared with card. This is a margin question, not
-  a client-facing one.
+  Compared 2026-11-01: PayPal through Stripe costs about 3.1% + 40p against
+  about 1.5% + 20p by card, and PayPal keeps its fee on refunds. Answered by
+  the percentage fee and the £600 PayPal limit (§22).
 - **Not lawyer-reviewed**, like the rest of the Terms and Privacy text.
 
 ## 21. "Always visible" now publishes a provider's full address (2026-10-26)
@@ -648,4 +649,32 @@ changed to say so.
 - **No undo for exposure.** Switching away from "Always visible" stops it
   showing, but can't recall screenshots or saved map pins. The setting doesn't
   say so.
+- **Not lawyer-reviewed**, like the rest of this list.
+
+## 22. The service fee becomes a percentage, and PayPal gets a £600 limit (2026-11-01)
+
+Branch `feat/percentage-platform-fee` (migration `20261101150000`). The
+client's service fee changes from £1.99 / £3.99 / £5.99 tiers to **5% of what
+the card is charged + 40p, at least £1.99 and at most £24.99**. A deposit
+booking is charged its deposit, so the fee is on the deposit, not the full
+price. PayPal isn't offered when the checkout total is over £600; card, Apple
+Pay and Google Pay always are. The fee is the same whichever way the client
+pays. Refunds of the fee are unchanged: back on a full refund (provider
+cancels or declines, or the client cancels early), kept on a partial refund or
+a late cancellation.
+
+**Gaps to raise (not resolved):**
+- **Surcharge ban.** UK law (Consumer Rights (Payment Surcharges) Regulations
+  2012, as amended in 2018, covering PayPal too) bans charging more for a
+  payment method, which is why there's no PayPal-only fee. Limiting PayPal by
+  amount isn't a surcharge, but confirm that reading.
+- **Terms §10 names no amount or formula.** The fee is shown before payment,
+  so the Terms stay accurate, but whether they should state "5% + 40p, £1.99
+  to £24.99" and the PayPal limit is a solicitor's call.
+- **Price transparency.** The fee is now a different amount on every
+  checkout. It's shown on the cart and payment sheet before paying; check
+  that's enough under the CMA's drip-pricing rules (DMCC Act 2024).
+- **VAT.** Once CERVICED's fee income passes the VAT threshold (£90,000 a
+  year), a sixth of every fee is VAT. Not a Terms question, but it changes
+  what the fee earns. Ask an accountant.
 - **Not lawyer-reviewed**, like the rest of this list.

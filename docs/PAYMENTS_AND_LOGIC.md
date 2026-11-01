@@ -65,19 +65,41 @@ The provider never pays the service fee and never sees it.
 
 ### 1.3 The service fee
 
-There's one fee per checkout, based on the value of what's being paid in full:
+There's one fee per checkout: **5% of what the card is charged, plus 40p, at
+least £1.99 and at most £24.99.**
 
-| Value of the booking(s) | Fee |
-|---|---|
-| Under £100 | £1.99 |
-| £100 to £300 | £3.99 |
-| Over £300 | £5.99 |
+"What the card is charged" means the in-app amount before the fee: the full
+price for a service paid in full, and the **deposit** for a deposit service.
+What the client later pays the provider in person never counts.
 
-- **Deposit-only checkout:** the fee is based on the services' **full
-  price**, not the deposit. A £30 deposit on a £100 service pays £3.99.
-- **Mixed basket** (some services paid in full, some by deposit): the fee is
-  based on the pay-in-full services only and spread across them.
+| Booking | Charged in the app | Fee | Client pays |
+|---|---|---|---|
+| £25 brow lamination | £25 | £1.99 (the minimum) | £26.99 |
+| £50 gel nails | £50 | £2.90 | £52.90 |
+| £150 colour and cut | £150 | £7.90 | £157.90 |
+| £400 bridal, paid in full | £400 | £20.40 | £420.40 |
+| £400 bridal, £80 deposit | £80 | £4.40 | £84.40 (+ £320 in person) |
+| £800 bridal party | £800 | £24.99 (the maximum) | £824.99 |
+
+- **Several bookings in one checkout:** one fee on the total charged, shared
+  across every booking by what each is charged. That share is each booking's
+  `service_charge`, which refunds and payouts read.
+- **Why this shape:** Stripe's card fee (~1.5% + 20p), PayPal through Stripe
+  (~3.1% + 40p, not returned on refunds) and the payout to the provider's bank
+  (~0.25% + 10p) all grow with the amount, so a flat fee lost money on larger
+  bookings. The fee always covers those costs on card, and on PayPal up to the
+  £600 PayPal limit (section 2.1).
+- The UK bans charging more for a payment method (PayPal included), so the
+  fee is the same whichever way the client pays.
 - CERVICED takes **no cut** of late/no-show fees or tips.
+
+**Status:** built on `feat/percentage-platform-fee` (migration
+`20261101150000_platform_fee_percentage`, `create-payment-intent`). Until that
+migration is applied, live checkouts still use the old £1.99 / £3.99 / £5.99
+tiers. Terms §10 names no amount (the fee is shown before paying) and its
+refund wording already matches, so it stays accurate. **Legal flag:** whether
+the Terms should state the 5% + 40p formula, and the PayPal limit, is a
+solicitor's call.
 
 ### 1.4 The life of one booking's money (worked example)
 
@@ -87,12 +109,12 @@ the default, 24 hours.
 | When | What happens | Money |
 |---|---|---|
 | Checkout | Amy's slot is held for 10 minutes while she pays | — |
-| Amy pays | Her card is authorised, then captured | Amy pays **£61.99** (£60 + £1.99 fee) |
+| Amy pays | Her card is authorised, then captured | Amy pays **£63.40** (£60 + £3.40 fee) |
 | Booking confirmed | A **held payout** is created for Jo | CERVICED holds £60 |
 | The appointment ends, Tue 3pm | The hold clock starts | — |
 | Wed 3pm (+24h) | The payout job sends Jo's share to her Stripe account | Jo receives **£60** in Stripe |
 | A few working days later | Stripe pays Jo's bank | £60 in Jo's bank |
-| — | CERVICED keeps the fee | CERVICED earns **£1.99** |
+| — | CERVICED keeps the fee | CERVICED earns **£3.40**, and pays Stripe's costs out of it (about £1.40 on a UK card, card fee plus payout) |
 
 If anything changes before Wed 3pm (a cancellation, a refund request, a
 reschedule), CERVICED still holds the money, so it's easy to put right. After
@@ -132,8 +154,13 @@ that, putting it right means taking money back from Jo (section 2.8).
 4. **Pay.** Payment methods offered:
    - Card, Apple Pay and Google Pay: always.
    - PayPal: only when no late/no-show fees apply, because a fee needs a saved
-     card to charge later. PayPal is in **test mode** and needs a new app
-     build. Real PayPal money also needs Stripe's marketplace approval.
+     card to charge later, **and the checkout total (fee included) is £600 or
+     less**, because above that PayPal's cost is more than the capped fee
+     (`PAYPAL_MAX_CHECKOUT_PENCE` in `create-payment-intent`; the app hides
+     the button by the same limit). PayPal is in **test mode** and needs a new
+     app build. Real PayPal money also needs Stripe's marketplace approval.
+     **Legal flag:** limiting a payment method by amount is not a surcharge,
+     but confirm it with the solicitor along with the fee.
 5. **Late/no-show fee agreement.** If the provider has these fees, the client
    must tick to agree before paying. The agreement is stored (section 2.5)
    and the card is saved for a possible later charge.
@@ -254,10 +281,17 @@ Pay or PayPal.
 - **PayPal:** the same rules apply. Stripe allows PayPal refunds up to 180
   days after payment.
 
-**Worked example.** Amy pays £61.99 for a £60 service whose deposit is set at
+**Worked example.** Amy pays £63.40 for a £60 service whose deposit is set at
 £20, then cancels 3 hours before. Jo's policy is a 24-hour window, keep the
-deposit. Jo keeps £20 (sent straight away), CERVICED keeps £1.99, and Amy
+deposit. Jo keeps £20 (sent straight away), CERVICED keeps £3.40, and Amy
 gets £40 back.
+
+**The fee on a cancellation works like Uber's:** the client gets it back when
+the provider cancels or declines, or when the client cancels early or the
+policy is "no charge"; CERVICED keeps it on a late cancellation that keeps
+money, or a no-show. Stripe and PayPal keep their processing fee on every
+refund, so a refunded booking costs CERVICED that processing fee (about £0.99
+by card or £2.04 by PayPal on a £50 booking).
 
 **Where the provider's money comes from in a refund:**
 
@@ -531,9 +565,10 @@ provider's own policy, so the policy needs a solicitor's input.
 
 1. Open the booking. Compare the service price, the fee and what Stripe says
    was captured.
-2. The fee follows the tiers in section 1.3, and deposits are tiered on the
-   full price. Most "wrong amount" reports turn out to be the fee or the
-   deposit.
+2. The fee follows section 1.3: 5% of what was charged in the app + 40p,
+   between £1.99 and £24.99, and a deposit counts as the deposit, not the
+   full price. A checkout prepared before the change used the old tiers.
+   Most "wrong amount" reports turn out to be the fee or the deposit.
 3. If it's genuinely wrong, the provider (or an admin, through a refund
    request) refunds the difference as a partial refund. Escalate to
    engineering: the server should never charge a wrong amount (Part 3,
@@ -796,6 +831,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 31 Oct | The reschedule rule covers only bookings made after it went live, and a later move the provider proposes clears it | Older bookings were agreed under the old Terms; a date the provider chose is a fresh start |
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
+| 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 
