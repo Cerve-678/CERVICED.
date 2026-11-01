@@ -674,7 +674,31 @@ a late cancellation.
 - **Price transparency.** The fee is now a different amount on every
   checkout. It's shown on the cart and payment sheet before paying; check
   that's enough under the CMA's drip-pricing rules (DMCC Act 2024).
+- **PayPal named without the limit.** Terms (TermsScreen §6 and the
+  payments section) list PayPal as a way to pay, qualified only for
+  late/no-show-fee bookings, not for totals over £600; the payment sheet just
+  doesn't show the button and says nothing about why. Whether PayPal-only
+  clients are disadvantaged is also open.
+- **One fee per checkout, shared.** Terms §10 says a fee is added "to each
+  booking". It's now one fee split across the bookings, so a provider
+  declining one booking refunds only that booking's share (§12's "refunded in
+  full, including the service fee" is true per booking).
+- **Bigger forfeited fee.** A late cancellation or partial refund keeps the
+  fee, which can now be up to £24.99 rather than £5.99. Fairness under the
+  CRA 2015, and whether §13's "you're refunded the rest" is clear enough.
+- **Minimum fee on small deposits.** A £5 deposit pays the £1.99 minimum,
+  about 40% of what's charged.
+- **Notice of the change.** The Terms still say "Last updated 21 October
+  2026". Does a change to a charge need a notice or re-acceptance (§10)?
+- **Two names for one fee.** Terms and receipts say "service fee"; the cart,
+  booking detail and receipt email say "Platform Fee".
+- **Rollout order.** The app shows a fee it works out itself, and the server
+  charges its own. Between applying the migration and every client updating
+  the app, the cart screen can show a different fee from the one charged.
+  The payment sheet always shows the server's total (`prepareCheckout`
+  reads `checkout_batches.amount_due`), so what the client confirms is what
+  they pay; the earlier cart figure can still disagree.
 - **VAT.** Once CERVICED's fee income passes the VAT threshold (£90,000 a
   year), a sixth of every fee is VAT. Not a Terms question, but it changes
-  what the fee earns. Ask an accountant.
+  what the fee earns. Ask an accountant. (Assumes the fee is VAT-inclusive; confirm.)
 - **Not lawyer-reviewed**, like the rest of this list.

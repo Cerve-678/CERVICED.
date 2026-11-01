@@ -348,7 +348,7 @@ Curated: [[Services]] · **48 files**
 ## Cart & checkout
 Curated: [[Payments]] · **73 files**
 - `src/screens/client/CartScreen.tsx` _(408)_
-- `src/services/databaseService.ts` _(96)_
+- `src/services/databaseService.ts` _(97)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(62)_
 - `src/components/BookingSheet.tsx` _(34)_
@@ -362,10 +362,10 @@ Curated: [[Payments]] · **73 files**
 - `src/features/cart/presentation.ts` _(13)_
 - `src/services/becca/capabilities/client.ts` _(13)_
 - `src/screens/client/PaymentMethodsScreen.tsx` _(11)_
+- `src/features/cart/platformFee.ts` _(8)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/navigation/types.ts` _(7)_
 - `src/types/booking.ts` _(7)_
-- `src/features/cart/platformFee.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/features/bookings/paymentPresentation.ts` _(5)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(5)_

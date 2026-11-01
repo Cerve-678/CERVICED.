@@ -17,8 +17,9 @@
 --      service price, and in a mixed basket the deposit part counted for
 --      nothing and its booking got no share of the fee.
 --   3. The fee is shared across EVERY booking in the checkout by what that
---      booking is charged (the last booking, by id, takes the rounding
---      remainder), so each booking's service_charge is its own share.
+--      booking is charged (the last charged booking, by id, takes the
+--      rounding remainder; a share is never negative, and a booking charged
+--      nothing gets none), so each booking's service_charge is its own share.
 --
 -- Unchanged: deposits stay exactly the provider's amount (the fee sits on
 -- top); payouts are still amount_paid - service_charge
@@ -92,7 +93,8 @@ BEGIN
   -- writes into amount_due.
   SELECT COALESCE(sum(CASE WHEN b.payment_type = 'deposit' THEN b.deposit_amount
                            ELSE b.base_price + b.add_ons_total END), 0),
-         count(*)
+         count(*) FILTER (WHERE CASE WHEN b.payment_type = 'deposit' THEN b.deposit_amount
+                                     ELSE b.base_price + b.add_ons_total END > 0)
     INTO v_charged_subtotal, v_remaining_count
     FROM public.bookings b
    WHERE b.hold_batch_id = NEW.id
@@ -107,11 +109,19 @@ BEGIN
        AND b.status = 'on_hold'
      ORDER BY b.id FOR UPDATE
   LOOP
-    v_remaining_count := v_remaining_count - 1;
     v_charged := CASE WHEN v_booking.payment_type = 'deposit' THEN v_booking.deposit_amount
                       ELSE v_booking.base_price + v_booking.add_ons_total END;
-    v_item_fee := CASE WHEN v_remaining_count = 0 THEN v_platform_fee - v_allocated
-      ELSE round(v_platform_fee * (v_charged / v_charged_subtotal), 2) END;
+    -- A booking charged nothing gets no share. Every other share is rounded
+    -- but never more than what's left, and the last charged booking takes the
+    -- remainder, so no share is ever negative and they add up to the fee.
+    -- Mirrors splitPlatformFeePence in src/features/cart/platformFee.ts.
+    IF v_charged <= 0 THEN
+      v_item_fee := 0;
+    ELSE
+      v_remaining_count := v_remaining_count - 1;
+      v_item_fee := CASE WHEN v_remaining_count = 0 THEN v_platform_fee - v_allocated
+        ELSE LEAST(round(v_platform_fee * (v_charged / v_charged_subtotal), 2), v_platform_fee - v_allocated) END;
+    END IF;
     v_allocated := v_allocated + v_item_fee;
     UPDATE public.bookings
        SET service_charge = v_item_fee,

@@ -15,7 +15,7 @@ import type { ProviderLocationData } from './databaseService';
 import { getMyBookings } from './databaseService';
 import { logger } from '../utils/logger';
 import { formatTime12, formatShortDate, formatDurationMinutes } from '../utils/dateUtils';
-import { calculatePlatformFee } from '../features/cart/platformFee';
+import { calculatePlatformFeePence, splitPlatformFeePence, toPence } from '../features/cart/platformFee';
 
 
 export interface DepositPolicy {
@@ -96,8 +96,8 @@ export class BookingService {
    * 1. Each item has its own subtotal (base price + add-ons)
    * 2. Each item is charged either that subtotal or its deposit
    * 3. One platform fee is calculated on the total charged, then shared across
-   *    every item by what it's charged (the last item takes the rounding
-   *    remainder), the same split apply_checkout_platform_fee makes
+   *    every item by what it's charged (splitPlatformFeePence), the same split
+   *    apply_checkout_platform_fee makes
    * 4. All items are paid in ONE checkout transaction
    */
   static createAppointmentData(
@@ -127,27 +127,22 @@ export class BookingService {
       return { item, booking, basePrice, addOnsTotal, itemSubtotal, depositAmount, charged };
     });
 
-    const chargedSubtotal = priced.reduce((sum, p) => sum + p.charged, 0);
-    const totalServiceCharge = calculatePlatformFee(chargedSubtotal);
+    // Whole pence throughout, so the fee and its shares round like the server.
+    const chargedPence = priced.map(p => toPence(p.charged));
+    const totalServiceChargePence = calculatePlatformFeePence(chargedPence.reduce((sum, p) => sum + p, 0));
+    const sharesPence = splitPlatformFeePence(totalServiceChargePence, chargedPence);
 
     logger.log('Cart totals:', {
-      chargedSubtotal,
-      totalServiceCharge,
+      chargedPence,
+      totalServiceChargePence,
       itemCount: items.length
     });
 
-    let allocatedServiceCharge = 0;
     return priced.map(({ item, booking, basePrice, addOnsTotal, itemSubtotal, depositAmount, charged }, index) => {
       logger.log('Processing:', item.serviceName);
 
       // This item's share of the fee, by what it's charged.
-      const isLast = index === priced.length - 1;
-      const itemServiceCharge = chargedSubtotal <= 0
-        ? 0
-        : isLast
-          ? Math.round((totalServiceCharge - allocatedServiceCharge) * 100) / 100
-          : Math.round(totalServiceCharge * (charged / chargedSubtotal) * 100) / 100;
-      allocatedServiceCharge += itemServiceCharge;
+      const itemServiceCharge = (sharesPence[index] ?? 0) / 100;
 
       const paymentType: 'full' | 'deposit' = booking.isDepositOnly ? 'deposit' : 'full';
       const amountPaid = Math.round((charged + itemServiceCharge) * 100) / 100;

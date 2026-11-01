@@ -96,10 +96,11 @@ What the client later pays the provider in person never counts.
 **Status:** built on `feat/percentage-platform-fee` (migration
 `20261101150000_platform_fee_percentage`, `create-payment-intent`). Until that
 migration is applied, live checkouts still use the old £1.99 / £3.99 / £5.99
-tiers. Terms §10 names no amount (the fee is shown before paying) and its
-refund wording already matches, so it stays accurate. **Legal flag:** whether
-the Terms should state the 5% + 40p formula, and the PayPal limit, is a
-solicitor's call.
+tiers. **Legal flag:** Terms §10 names no amount (the fee is shown before
+paying), says the fee is added "to each booking" though it's now one fee per
+checkout shared across bookings, and §6 lists PayPal without the £600 limit.
+Whether any of that needs rewording is for the user and a solicitor
+(LEGAL-COMPLIANCE-NOTES §22), not settled here.
 
 ### 1.4 The life of one booking's money (worked example)
 
