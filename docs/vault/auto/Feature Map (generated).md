@@ -45,7 +45,7 @@ Curated: [[Availability & Slots]] · **180 files**
 - `src/services/AvailabilityService.ts` _(304)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/screens/provider/AddBookingScreen.tsx` _(160)_
-- `src/screens/client/SearchScreen.tsx` _(113)_
+- `src/screens/client/SearchScreen.tsx` _(122)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(91)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
