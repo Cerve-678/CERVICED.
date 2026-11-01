@@ -1121,16 +1121,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {!showReceipt ? (
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
-                <View style={[st.row, payment.remainingBalance <= 0 && { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
-                {/* Three rows, deliberately: Total, what's paid, what's left.
-                    The platform fee gets no row of its own — it's inside
-                    Total and itemised in the receipt below, and repeating it
-                    here read as a second charge. A settled booking ends at
-                    the paid row, since "Due at Appointment £0.00" only
-                    invites the question. */}
-                {payment.remainingBalance > 0 && (
-                  <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: '#FF9500' }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
-                )}
+                <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
+                {/* Three rows: Total, Paid (what left the card, fee included)
+                    and Remaining. Paid + Remaining = Total. */}
+                <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Remaining</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
               </View>
             ) : (
               <View style={[st.receiptContainer, { backgroundColor: C.surface }]}>
@@ -1200,12 +1194,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
-                  {payment.remainingBalance > 0 && (
-                    <View style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
-                      <Text style={{ color: '#FF9500', fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
-                    </View>
-                  )}
+                  <View style={st.rcptRow}>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Remaining</Text>
+                    <Text style={{ color: payment.remainingBalance > 0 ? '#FF9500' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
+                  </View>
                   <View style={st.rcptRow}>
                     <Text style={{ color: C.sub, fontSize: 13 }}>Payment Method</Text>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>

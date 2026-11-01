@@ -147,7 +147,7 @@ so the fee never comes out of their money.
 | Cart review screen | Client | The **whole** fee as one line, "Platform Fee £7.15", worked out by the app |
 | Payment sheet | Client | The total to pay, £142.15, read from the server, so it's always the amount charged |
 | Bank or card statement | Client | **One** payment of £142.15, however many bookings it covers |
-| Booking details, receipt and confirmation email | Client | **That booking's share only**, as "Cerviced platform fee" (or "Platform Fee" on booking details). There's one for each booking |
+| Booking details, receipt and confirmation email | Client | **That booking's share only**, as "Cerviced platform fee" (or "Platform Fee" on booking details), then Paid and Remaining. There's one for each booking |
 | Provider invoice, booking details and payouts | Provider | Never. Only the provider's own money |
 
 **A receipt paid in full** (the £45 booking above):
@@ -156,7 +156,8 @@ so the fee never comes out of their money.
 Service                     £45.00
 Cerviced platform fee        £2.38
 Total                       £47.38
-Paid today                  £47.38
+Paid                        £47.38
+Remaining                    £0.00
 ```
 
 **A deposit receipt** (the £300 booking above):
@@ -165,13 +166,17 @@ Paid today                  £47.38
 Service                            £300.00
 Cerviced platform fee                £3.13
 Total                              £303.13
-Deposit paid to provider            £60.00
-Due to provider at appointment     £240.00
+Paid                                £63.13
+Remaining                          £240.00
 ```
 
-The deposit and balance deliberately don't add up to the total. The deposit
-line shows the provider's money only, and the fee is listed once above it.
-The gaps in what receipts show are in Part 6.
+Every receipt (in the app, on booking details, and in the confirmation email)
+ends with the same two figures: **Paid**, what left the card with the fee
+included, so it matches the bank statement; and **Remaining**, what's still to
+pay. Paid + Remaining always equals Total. On a deposit, a one-line note says
+the remaining amount is paid to the provider directly, not through CERVICED.
+Each booking has its own receipt, so a checkout covering several bookings has
+several receipts whose Paid figures add up to the one bank payment.
 
 ### 1.4 The life of one booking's money (worked example)
 
@@ -882,8 +887,6 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
-| 12 | **No receipt shows a whole checkout.** Each booking has its own, while the bank shows one payment | A client with several bookings has to add them up to match their statement | Not decided. Say "Part of a £142.15 payment for 3 bookings" on the receipt, or add a combined receipt |
-| 13 | **A deposit receipt doesn't state what the card was charged.** It lists the deposit and the fee separately, never the sum (£63.13 in section 1.3.2) | The receipt doesn't match the statement | Not decided. Add a "Charged to your card" line |
 
 ---
 
@@ -912,6 +915,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 1 Nov | Receipts end with just Paid (what left the card, fee included) and Remaining. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
