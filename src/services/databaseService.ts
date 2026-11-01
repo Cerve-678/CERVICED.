@@ -64,6 +64,7 @@ import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
+import type { ProviderAchievements } from "../types/achievements";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
@@ -7849,6 +7850,14 @@ export async function saveNotificationPreferences(
 export async function getProviderNotificationPreferences(): Promise<ProviderNotificationPreferences> {
   const { stored } = await readStoredNotificationPreferences();
   return pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, stored);
+}
+
+/** The signed-in provider's achievements. The server owns the rules and records
+ *  anything newly earned as part of this call. */
+export async function getMyProviderAchievements(): Promise<ProviderAchievements> {
+  const { data, error } = await supabase.rpc('get_my_provider_achievements');
+  if (error) throw error;
+  return data as ProviderAchievements;
 }
 
 /** Persist the provider hat's notification switches, leaving the client's alone. */

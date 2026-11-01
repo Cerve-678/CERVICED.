@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Not applied (provider achievements)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101180000 | `provider_achievements` | **UNAPPLIED.** Branch `feat/achievements-screen`. Frontier at authoring: live `20261101160000`, with `20261101170000_close_schedule_by_hand` unapplied on `feat/close-schedule`; touches none of the same objects, so the order between them doesn't matter. Adds `provider_achievements` (RLS on, no policies, no grants) and `get_my_provider_achievements()` (`SECURITY DEFINER`, executable by `authenticated` only), and records existing live providers' `live` achievement. Redefines nothing. Records its own version. **Apply before this branch merges**: the Achievements screen calls the function. |
+
 ### Applied 2026-11-01 (platform fee becomes 5% + 40p)
 
 | Authored version | Name | Status |

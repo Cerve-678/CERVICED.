@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderAccountScreen from '../../../screens/provider/ProviderAccountScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import ProviderNotificationSettingsScreen from '../../../screens/provider/ProviderNotificationSettingsScreen';
+import ProviderAchievementsScreen from '../../../screens/provider/ProviderAchievementsScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
@@ -80,6 +81,12 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="NotificationSettings"
         component={ProviderNotificationSettingsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Achievements"
+        component={ProviderAchievementsScreen}
         options={{ headerShown: false }}
       />
 
