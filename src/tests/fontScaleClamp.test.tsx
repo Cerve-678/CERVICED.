@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, TextInput } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { applyFontScaleClamp, MAX_FONT_SCALE } from '../utils/fontScaleClamp';
 
@@ -24,7 +25,7 @@ describe('font scale clamp', () => {
   });
 
   it('still delivers a ref to the wrapped input, so focus() keeps working', () => {
-    const ref = React.createRef<TextInput>();
+    const ref = React.createRef<TextInputInstance>();
     render(<TextInput ref={ref} placeholder="Notes" />);
     expect(ref.current).not.toBeNull();
   });

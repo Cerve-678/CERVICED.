@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
 import Svg, { Defs, Mask, Rect as SvgRect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -45,7 +46,7 @@ export interface CoachMarkStep {
   body: string;
   /** Either a live element to measure, or a precomputed screen rect (for
    *  targets like the floating tab bar that live outside the caller's tree). */
-  target: { ref: React.RefObject<View | null> } | { rect: Rect };
+  target: { ref: React.RefObject<ViewInstance | null> } | { rect: Rect };
   /** Corner radius of the spotlight cutout. Defaults to a rounded-card look. */
   radius?: number;
   /** Ionicons glyph shown in the caption card's header tile. */

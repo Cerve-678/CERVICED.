@@ -20,6 +20,8 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
@@ -277,7 +279,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [pastCategoryFilter, setPastCategoryFilter] = useState<string | null>(null);
   const [pastFilterOpen, setPastFilterOpen] = useState(false);
   const [pastFilterAnchor, setPastFilterAnchor] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const pastFilterButtonRef = useRef<View>(null);
+  const pastFilterButtonRef = useRef<ViewInstance>(null);
 
   const openPastFilterMenu = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -302,7 +304,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const mapRef = useRef<MapView>(null);
   const mainScrollRef = useRef<FlatList<BookingsListRow>>(null);
-  const modalScrollRef = useRef<ScrollView>(null);
+  const modalScrollRef = useRef<ScrollViewInstance>(null);
 
   // Category-pill (Upcoming/Past) entrance — the pill row itself used to
   // just appear at rest; this brings it in line with the fade+slide-up

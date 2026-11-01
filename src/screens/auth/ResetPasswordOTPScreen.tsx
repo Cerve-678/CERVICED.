@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { sendPasswordReset, verifyRecoveryOtp } from '../../services/databaseService';
@@ -37,7 +38,7 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   // The preceding screen has just requested the first reset email. Do not
   // offer a resend until the provider will accept one.
   const [resendIn, setResendIn] = useState(RESEND_WAIT_S);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -111,7 +112,7 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <KeyboardDismissView>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>

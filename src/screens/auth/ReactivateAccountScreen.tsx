@@ -44,7 +44,7 @@ export default function ReactivateAccountScreen() {
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={t.statusBar} translucent />
+        <StatusBar barStyle={t.statusBar} />
 
         <View style={styles.content}>
           <Text style={[styles.title, { color: P.text }]}>Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}.</Text>
