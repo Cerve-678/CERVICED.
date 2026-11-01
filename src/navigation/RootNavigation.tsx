@@ -13,7 +13,7 @@ import { requestMode, resolveModeChange } from './modeController';
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
-import { parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
+import { isProviderProfileUuid, parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
 import { getProviderBasicById } from '../services/databaseService';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';
@@ -96,15 +96,15 @@ export default function RootNavigation() {
   // Track whether NavigationContainer has finished mounting
   const [isNavReady, setIsNavReady] = useState(false);
   const [connectReturn, setConnectReturn] = useState<StripeConnectReturn | null>(null);
-  const [providerProfileLink, setProviderProfileLink] = useState<{ providerId: string; receivedAt: number } | null>(null);
+  const [providerProfileLink, setProviderProfileLink] = useState<{ providerKey: string; receivedAt: number } | null>(null);
   const handledConnectReturn = useRef<StripeConnectReturn | null>(null);
-  const handledProviderProfileLink = useRef<{ providerId: string; receivedAt: number } | null>(null);
+  const handledProviderProfileLink = useRef<{ providerKey: string; receivedAt: number } | null>(null);
   useEffect(() => {
     let live = true;
     const receive = (url: string) => {
-      const providerId = parseProviderProfileDeepLink(url);
-      if (live && providerId) {
-        setProviderProfileLink({ providerId, receivedAt: Date.now() });
+      const providerKey = parseProviderProfileDeepLink(url);
+      if (live && providerKey) {
+        setProviderProfileLink({ providerKey, receivedAt: Date.now() });
         return;
       }
       const result = parseStripeConnectReturn(url);
@@ -118,19 +118,20 @@ export default function RootNavigation() {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !providerProfileLink ||
         handledProviderProfileLink.current === providerProfileLink) return;
     handledProviderProfileLink.current = providerProfileLink;
-    // Provider QR codes deliberately encode the stable database UUID. The
-    // public profile loader, however, uses the human-readable slug, so resolve
-    // the UUID before navigating instead of presenting the client with an
-    // avoidable "Provider not found" screen.
-    void getProviderBasicById(providerProfileLink.providerId).then(provider => {
-      if (!provider) return;
+    // New QR codes carry the public slug used by ProviderProfile. Resolve only
+    // legacy UUID QR codes so old printed cards continue to work.
+    const resolveSlug = isProviderProfileUuid(providerProfileLink.providerKey)
+      ? getProviderBasicById(providerProfileLink.providerKey).then(provider => provider?.slug ?? null)
+      : Promise.resolve(providerProfileLink.providerKey);
+    void resolveSlug.then(providerSlug => {
+      if (!providerSlug) return;
       return requestMode('client').then(mode => {
         if (mode !== 'client' || !navigationRef.isReady()) return;
         navigationRef.navigate('MainTabs', {
           screen: 'Home',
           params: {
             screen: 'ProviderProfile',
-            params: { providerId: provider.slug, source: 'profile_qr' },
+            params: { providerId: providerSlug, source: 'profile_qr' },
           },
         } as never);
       });

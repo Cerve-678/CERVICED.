@@ -105,10 +105,11 @@ describe('notification routing — deep-link payload', () => {
     expect(source).toContain('getProviderBasicById(provider_id)');
   });
 
-  it('resolves a QR provider UUID to its public slug before opening the profile', () => {
+  it('opens slug QR links directly and keeps a UUID fallback for printed legacy QR codes', () => {
     const source = rootNavigation();
-    expect(source).toContain('getProviderBasicById(providerProfileLink.providerId)');
-    expect(source).toContain("params: { providerId: provider.slug, source: 'profile_qr' }");
+    expect(source).toContain('isProviderProfileUuid(providerProfileLink.providerKey)');
+    expect(source).toContain('getProviderBasicById(providerProfileLink.providerKey)');
+    expect(source).toContain("params: { providerId: providerSlug, source: 'profile_qr' }");
   });
 
   it('routes review_request to the rating form, not just the booking', () => {

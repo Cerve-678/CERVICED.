@@ -15,7 +15,7 @@ import { providerProfileDeepLink } from "../utils/providerProfileDeepLink";
 
 type Props = {
   visible: boolean;
-  providerId: string;
+  providerSlug: string;
   providerName: string;
   accentColor: string;
   backgroundColor: string;
@@ -28,7 +28,7 @@ type Props = {
 /** Provider-owned, print-friendly QR for their public in-app profile. */
 export function ProviderProfileQrSheet({
   visible,
-  providerId,
+  providerSlug,
   providerName,
   accentColor,
   backgroundColor,
@@ -37,7 +37,7 @@ export function ProviderProfileQrSheet({
   borderColor,
   onClose,
 }: Props) {
-  const deepLink = providerProfileDeepLink(providerId);
+  const deepLink = providerProfileDeepLink(providerSlug);
   const share = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await Share.share({
