@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-11-01 (public "How to get there" on the profile)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101140000 | `provider_public_directions` | **APPLIED 2026-11-01** by cerviced-72 (MCP, on the user's OK), behind a guard that aborted unless the frontier was still `20261101115322`; dry-run in a rolled-back transaction first. Verified live: column `text` nullable, 0 of 11 providers filled, `authenticated` can select it, a 301-character value is refused by the CHECK. Frontier after: **20261101140000**. cerviced-e3 (formerly 4b) applied its `20261101130000`/`130100`/`130200` the same afternoon, after this one; they touch none of the same objects, so the order doesn't matter and all five 2026-11-01 versions are recorded live. Branch `feat/profile-how-to-get-there` (stacked on `feat/booking-directions`, #196). Frontier: live `20261101115322` (2026-11-01); cerviced-4b's unapplied `20261101130000`/`130100`/`130200` sit below it and touch none of the same objects, so apply order between them doesn't matter. Adds nullable `providers.public_directions text` with a 300-character CHECK. No backfill, no policy or grant change (table-level grants). Redefines nothing. Records its own version. **Apply before this branch merges**: the profile's public select names the column, so without it every provider profile fails to load. |
+
 ### Applied 2026-10-30 ("Always visible" address on the profile)
 
 | Authored version | Name | Status |
@@ -50,9 +56,9 @@ Applied by cerviced-74 on the user's direct OK, in this order. Each one ran in a
 | Version | Name | Verified live after |
 |---|---|---|
 | 20261025145000 | `tip_received_notification` (cerviced-a8, PR #163) | 51 types, the same set as the file; trigger `on_booking_tip_succeeded` present. `send-push-notification` NOT deployed yet. |
-| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` NOT deployed yet. |
-| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts`, `stripe-webhook`, `money-daily-summary` NOT deployed yet. |
-| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` NOT deployed yet. |
+| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` v10 deployed 2026-10-30. |
+| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts` v12, `stripe-webhook` v11, `money-daily-summary` v1 deployed 2026-10-30. |
+| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` v9 deployed 2026-10-30. |
 
 Frontier after: **20261025212000**. Still unapplied and now below it: `20261025150000_provider_booked_contact` (#174, cerviced-3f; must renumber). Queued above it: cerviced-14's `20261026100000` / `110000` / `120000`.
 
@@ -68,6 +74,12 @@ Frontier after: **20261025212000**. Still unapplied and now below it: `202610251
 |---|---|---|
 | 20261025140000 | `reschedule_moves_payout_release` | **APPLIED 2026-10-29** by the user (SQL editor; the file's own INSERT records the version). Verified live: version recorded and now the frontier, trigger `after_booking_move_held_payout` on `bookings` (AFTER UPDATE OF booking_date, booking_time, end_time, only when they change), `move_held_payout_with_booking()` SECURITY DEFINER with `search_path=public, pg_temp`, `authenticated` cannot execute it, the one held payout unchanged. Frontier at authoring: `20261025130000` (first written as 20261022100000, renumbered). Adds the function + trigger only; redefines nothing. Shifts a held, unclaimed payout's `release_after` by as much as the appointment moved, either way. |
 
+### Applied 2026-10-25 (service search)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261025130000 | `service_search_people_and_price` | **APPLIED 2026-10-25** by Claude (cerviced-16), CLI `db query --linked -f`; the file records its own version. Frontier at apply: `20261025120000` (also mine). Redefines only the `search_*` functions from 20261025120000, plus new `search_audience_words` and `search_clean_query`. Drops the 4-argument `search_services_ranked` for the new one, which adds `p_max_price` (only the unmerged PR #171 calls it). Verified live: one overload remains, eval 102/103, and an anon REST call works with `p_max_price`. |
+| 20261025120000 | `service_search` | **APPLIED 2026-10-25** by Claude (cerviced-16), Supabase CLI `db query --linked -f`, on the user's OK. The file records its own version. Frontier at apply: `20261024100000`; cerviced-3f confirmed it would renumber its unapplied `provider_booked_contact` above whatever is live when it applies. Adds `search_edit_distance`, `search_category_words`, `search_synonym_map`, `search_rewrite_query` and `search_services_ranked` (all SECURITY INVOKER, has_gone_live-gated). Redefines nothing. Verified live: the version is recorded, anon can execute, `supabase/tests/service_search_eval.sql` 91/92, and an anon REST call returns results. PR #171's app code needs this, and can merge now. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 
