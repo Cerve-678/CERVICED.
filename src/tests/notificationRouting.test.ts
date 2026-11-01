@@ -357,3 +357,41 @@ describe('notification routing — daily saves count', () => {
     expect(source).toContain("navigateProviderHome('LinkOnlyAnalytics')");
   });
 });
+
+describe('notification routing — tip received', () => {
+  const migration = () => read('supabase', 'migrations', '20261025145000_tip_received_notification.sql');
+
+  it('declares tip_received in the DB check, both type unions, the tap handler and the push map', () => {
+    expect(migration()).toMatch(/notifications_type_check[\s\S]*'tip_received'/);
+    expect(read('src', 'types', 'database.ts')).toContain('| "tip_received"');
+    expect(read('src', 'screens', 'shared', 'NotificationsScreen.tsx')).toContain("| 'tip_received'");
+    expect(read('src', 'services', 'notificationTapHandler.ts')).toContain("'tip_received'");
+    expect(edgeFunction()).toContain("tip_received: 'providerPayments'");
+  });
+
+  it('keeps every type the previous check allowed', () => {
+    const list = (sql: string) => {
+      const check = sql.slice(sql.indexOf('ADD CONSTRAINT notifications_type_check'));
+      return new Set([...check.slice(0, check.indexOf(']));')).matchAll(/'(\w+)'/g)].map(m => m[1]));
+    };
+    const before = list(read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql'));
+    const after = list(migration());
+    for (const type of before) expect(after).toContain(type);
+  });
+
+  it('never lets a failed notification undo recording the tip', () => {
+    expect(migration()).toMatch(/EXCEPTION WHEN OTHERS THEN\s+RAISE WARNING/);
+  });
+
+  it('fires once, when the tip is paid, and tells the provider it is all theirs', () => {
+    expect(migration()).toMatch(/AFTER UPDATE OF status[\s\S]*NEW\.status = 'succeeded' AND OLD\.status IS DISTINCT FROM 'succeeded'/);
+    expect(migration()).toContain("'It''s all yours. '");
+    const insert = migration().slice(migration().indexOf('INSERT INTO public.notifications'));
+    expect(insert.slice(0, insert.indexOf('EXCEPTION'))).not.toMatch(/fee/i);
+  });
+
+  it('never names Stripe to the provider', () => {
+    const insert = migration().slice(migration().indexOf('INSERT INTO public.notifications'));
+    expect(insert.slice(0, insert.indexOf('EXCEPTION'))).not.toMatch(/stripe/i);
+  });
+});
