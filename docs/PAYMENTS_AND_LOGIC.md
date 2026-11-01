@@ -445,8 +445,8 @@ one broken, it's a top-severity bug: stop and escalate.
 
 **Who is an admin:** anyone with a row in the `admin_users` table. There's no
 in-app way to add one; an engineer adds them in SQL (runbook R10). **There
-are currently no admins**, so nobody can use the Money screen until one is
-added. Every admin action (retry, approve, decline) is permanently logged in
+is one admin (the founder), added 2026-10-30.** Support staff need their own
+rows before they can use the Money screen. Every admin action (retry, approve, decline) is permanently logged in
 `admin_actions` and can't be edited or deleted.
 
 ### R1. A payout failed
@@ -735,7 +735,7 @@ Ranked, most important first.
 | # | Gap | Impact | Next step |
 |---|---|---|---|
 | 1 | **Stripe is in test mode.** No real money has moved | Launch blocker | Switch one project to live keys (PRE-LAUNCH-TODO §24), after the items below |
-| 2 | **No admins exist** | Nobody can use the Money screen to retry payouts or answer refund requests | Add at least two admins (runbook R10) |
+| 2 | **Only one admin exists** (the founder, added 2026-10-30) | If they're away, nobody can retry payouts or answer refund requests | Add a second admin before launch (runbook R10) |
 | 3 | **Legal flag:** holding provider money for up to 30 days isn't covered in the Terms, and Stripe may limit how long a platform can delay transfers | A possible breach of Stripe's terms or consumer law | Ask a solicitor and Stripe before the 14- and 30-day options are used with real money |
 | 4 | **Rescheduling can dodge a late-cancel charge.** A client already inside the cancellation window can reschedule (a separate, often looser setting), then cancel the new date for a full refund | The provider loses money they're owed | Decided 25 October that the late-cancel rule still applies. Not built (PRE-LAUNCH-TODO §26) |
 | 5 | **Events from providers' Stripe accounts may not arrive** (`STRIPE_CONNECT_WEBHOOK_SECRET` isn't set) | Bank payout failures and account status changes aren't pushed to the app. A provider's status only refreshes when they open Payments | Set up a Connect webhook endpoint in Stripe and add the secret |

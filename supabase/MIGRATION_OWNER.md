@@ -50,9 +50,9 @@ Applied by cerviced-74 on the user's direct OK, in this order. Each one ran in a
 | Version | Name | Verified live after |
 |---|---|---|
 | 20261025145000 | `tip_received_notification` (cerviced-a8, PR #163) | 51 types, the same set as the file; trigger `on_booking_tip_succeeded` present. `send-push-notification` NOT deployed yet. |
-| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` NOT deployed yet. |
-| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts`, `stripe-webhook`, `money-daily-summary` NOT deployed yet. |
-| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` NOT deployed yet. |
+| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` v10 deployed 2026-10-30. |
+| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts` v12, `stripe-webhook` v11, `money-daily-summary` v1 deployed 2026-10-30. |
+| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` v9 deployed 2026-10-30. |
 
 Frontier after: **20261025212000**. Still unapplied and now below it: `20261025150000_provider_booked_contact` (#174, cerviced-3f; must renumber). Queued above it: cerviced-14's `20261026100000` / `110000` / `120000`.
 
